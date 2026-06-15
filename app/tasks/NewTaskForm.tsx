@@ -36,12 +36,14 @@ const PROJECT_AREAS = [
   "Other",
 ];
 
+// Unified status list used across the whole task module
 const STATUSES = [
   "Not Started",
   "In Progress",
   "Waiting Reply",
-  "Decision Required",
-  "Approval Required",
+  "Submitted",
+  "Completed",
+  "Cancelled",
 ];
 
 function todayDate() {
@@ -155,6 +157,9 @@ export default function NewTaskForm() {
       alert("Error saving task: " + error.message);
       return;
     }
+
+    // EMAIL HOOK: when email notifications are built, trigger
+    // "you have a new task" email to assignedToEmail here.
 
     setDescription("");
     setProject("");

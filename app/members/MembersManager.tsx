@@ -42,6 +42,11 @@ const BUSINESS_UNITS = [
   "Nursing College",
 ];
 
+// Basic but solid email format check
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
 function fullName(firstName: string | null, lastName: string | null, oldName?: string | null) {
   const combined = `${firstName || ""} ${lastName || ""}`.trim();
   return combined || oldName || "Unnamed";
@@ -90,6 +95,12 @@ export default function MembersManager() {
   async function addMember(e: React.FormEvent) {
     e.preventDefault();
 
+    // Email is mandatory and must be valid — no user without a valid email
+    if (!isValidEmail(email)) {
+      alert("A valid email address is required to add a member.");
+      return;
+    }
+
     setSaving(true);
 
     const displayName = `${firstName} ${lastName}`.trim();
@@ -98,7 +109,7 @@ export default function MembersManager() {
       first_name: firstName,
       last_name: lastName,
       name: displayName,
-      email,
+      email: email.trim(),
       role,
       department: department || null,
       business_unit: businessUnit || null,
@@ -122,6 +133,13 @@ export default function MembersManager() {
   }
 
   async function updateMember(id: string, updates: Partial<Member>) {
+    // If this update is changing the email, block invalid/blank values
+    if (updates.email !== undefined && !isValidEmail(updates.email || "")) {
+      alert("A valid email address is required. The email cannot be left blank.");
+      loadData(); // reload to discard the invalid edit in the input
+      return;
+    }
+
     const member = members.find((m) => m.id === id);
 
     const updatedFirstName =
@@ -136,6 +154,7 @@ export default function MembersManager() {
       .from("members")
       .update({
         ...updates,
+        ...(updates.email !== undefined ? { email: (updates.email || "").trim() } : {}),
         name: updatedName || member?.name || null,
       })
       .eq("id", id);
@@ -179,7 +198,7 @@ export default function MembersManager() {
     minWidth: "120px",
   };
 
-  if (loading) return <p>Loading members…</p>;
+  if (loading) return <p>Loading members</p>;
 
   return (
     <div>
@@ -234,6 +253,7 @@ export default function MembersManager() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
             />
 
             <select
@@ -281,7 +301,7 @@ export default function MembersManager() {
                 cursor: "pointer",
               }}
             >
-              {saving ? "Adding…" : "Add"}
+              {saving ? "Adding" : "Add"}
             </button>
           </div>
         </form>
@@ -332,13 +352,13 @@ export default function MembersManager() {
 
                   <input
                     style={smallInputStyle}
-                    value={m.email || ""}
+                    defaultValue={m.email || ""}
                     placeholder="Email"
-                    onChange={(e) =>
-                      updateMember(m.id, {
-                        email: e.target.value,
-                      })
-                    }
+                    onBlur={(e) => {
+                      if (e.target.value.trim() !== (m.email || "")) {
+                        updateMember(m.id, { email: e.target.value });
+                      }
+                    }}
                   />
 
                   <select

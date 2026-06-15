@@ -2,40 +2,52 @@
 
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { useRouter } from "next/navigation";
 
 type Task = {
   id: string;
   status: string;
+  due_date: string | null;
   reply_required: boolean | null;
   reply_text: string | null;
   corrective_action: string | null;
   recovery_date: string | null;
   impact_on_monthly_target: string | null;
 };
+
 const STATUSES = [
   "Not Started",
   "In Progress",
   "Waiting Reply",
-  "Decision Required",
-  "Approval Required",
+  "Submitted",
   "Completed",
   "Cancelled",
 ];
 
-export default function TaskStatus({ task }: { task: Task }) {
-  const router = useRouter();
-
+export default function TaskStatus({
+  task,
+  currentRole,
+  onChanged,
+}: {
+  task: Task;
+  currentRole: string;
+  onChanged: () => void;
+}) {
   const [status, setStatus] = useState(task.status);
   const [replyText, setReplyText] = useState(task.reply_text || "");
   const [correctiveAction, setCorrectiveAction] = useState(task.corrective_action || "");
   const [recoveryDate, setRecoveryDate] = useState(task.recovery_date || "");
-  const [impactOnMonthlyTarget, setImpactOnMonthlyTarget] = useState(
-    task.impact_on_monthly_target || ""
-  );
+
+  // Due-date editing (Admin / Executive only)
+  const [dueDate, setDueDate] = useState(task.due_date || "");
+  const [savingDate, setSavingDate] = useState(false);
+  const [dateMessage, setDateMessage] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
+
+  const isReviewer = currentRole === "Admin" || currentRole === "Executive";
+  // Only Admin / Executive may change due dates. Managers and Members cannot.
+  const canEditDate = currentRole === "Admin" || currentRole === "Executive";
 
   async function saveStatus(newStatus: string) {
     setSaving(true);
@@ -58,17 +70,39 @@ export default function TaskStatus({ task }: { task: Task }) {
 
     setStatus(newStatus);
     setSavedMessage("Saved ✓");
-    router.refresh();
-
+    onChanged();
     setTimeout(() => setSavedMessage(""), 2000);
   }
 
-  async function saveReply() {
+  async function saveDueDate() {
+    setSavingDate(true);
+    setDateMessage("");
+
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        due_date: dueDate || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", task.id);
+
+    setSavingDate(false);
+
+    if (error) {
+      alert("Error updating due date: " + error.message);
+      return;
+    }
+
+    setDateMessage("Date saved ✓");
+    onChanged();
+    setTimeout(() => setDateMessage(""), 2000);
+  }
+
+  async function submitExplanation() {
     if (!replyText.trim()) {
       alert("Please write an explanation before submitting.");
       return;
     }
-
     if (!correctiveAction.trim()) {
       alert("Please enter corrective action.");
       return;
@@ -85,10 +119,9 @@ export default function TaskStatus({ task }: { task: Task }) {
         reply_text: replyText,
         corrective_action: correctiveAction,
         recovery_date: recoveryDate || null,
-        impact_on_monthly_target: impactOnMonthlyTarget || null,
         reply_by: userData.user?.email || "unknown",
         reply_at: new Date().toISOString(),
-        status: "In Progress",
+        status: "Submitted", // ball goes to the reviewer, not "In Progress"
         updated_at: new Date().toISOString(),
       })
       .eq("id", task.id);
@@ -100,17 +133,13 @@ export default function TaskStatus({ task }: { task: Task }) {
       return;
     }
 
-    setStatus("In Progress");
-    setSavedMessage("Response saved ✓");
-    router.refresh();
+    // EMAIL HOOK: notify the reviewer (Admin/Executive) that an
+    // explanation has been submitted and awaits review.
 
-    setTimeout(() => {
-      setSavedMessage("");
-    }, 2000);
-  }
-
-  function handleStatusChange(newStatus: string) {
-    saveStatus(newStatus);
+    setStatus("Submitted");
+    setSavedMessage("Response submitted ✓");
+    onChanged();
+    setTimeout(() => setSavedMessage(""), 2000);
   }
 
   const controlStyle = {
@@ -133,34 +162,14 @@ export default function TaskStatus({ task }: { task: Task }) {
   };
 
   return (
-    <div
-      style={{
-        marginTop: "12px",
-        paddingTop: "12px",
-        borderTop: "1px solid #eee",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          flexWrap: "wrap",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "14px",
-            fontWeight: "bold",
-          }}
-        >
-          Update status:
-        </span>
+    <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #eee" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "14px", fontWeight: "bold" }}>Update status:</span>
 
         <select
           style={controlStyle}
           value={status}
-          onChange={(e) => handleStatusChange(e.target.value)}
+          onChange={(e) => saveStatus(e.target.value)}
           disabled={saving}
         >
           {STATUSES.map((s) => (
@@ -168,13 +177,51 @@ export default function TaskStatus({ task }: { task: Task }) {
           ))}
         </select>
 
-        {savedMessage && (
-          <span style={{ color: "green", fontSize: "14px" }}>{savedMessage}</span>
-        )}
-
+        {savedMessage && <span style={{ color: "green", fontSize: "14px" }}>{savedMessage}</span>}
         {saving && <span style={{ color: "#888", fontSize: "14px" }}>Saving…</span>}
       </div>
 
+      {/* Due-date editor: Admin / Executive only */}
+      {canEditDate && (
+        <div
+          style={{
+            marginTop: "12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ fontSize: "14px", fontWeight: "bold" }}>Due date:</span>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            style={controlStyle}
+            disabled={savingDate}
+          />
+          <button
+            onClick={saveDueDate}
+            disabled={savingDate}
+            style={{
+              backgroundColor: "#2563eb",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              padding: "6px 14px",
+              fontSize: "14px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            Save date
+          </button>
+          {dateMessage && <span style={{ color: "green", fontSize: "14px" }}>{dateMessage}</span>}
+          {savingDate && <span style={{ color: "#888", fontSize: "14px" }}>Saving…</span>}
+        </div>
+      )}
+
+      {/* The assignee fills in their explanation while status is Waiting Reply */}
       {task.reply_required && status === "Waiting Reply" && (
         <div style={{ marginTop: "12px" }}>
           <label style={{ fontSize: "14px", fontWeight: "bold" }}>
@@ -208,7 +255,7 @@ export default function TaskStatus({ task }: { task: Task }) {
           </label>
 
           <button
-            onClick={saveReply}
+            onClick={submitExplanation}
             disabled={saving}
             style={{
               marginTop: "8px",
@@ -223,6 +270,45 @@ export default function TaskStatus({ task }: { task: Task }) {
             }}
           >
             Submit Explanation
+          </button>
+        </div>
+      )}
+
+      {/* Reviewer (Admin/Executive) closes or reopens a Submitted task */}
+      {isReviewer && status === "Submitted" && (
+        <div style={{ marginTop: "12px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <button
+            onClick={() => saveStatus("Completed")}
+            disabled={saving}
+            style={{
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              padding: "8px 16px",
+              fontSize: "14px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            Accept & Close
+          </button>
+
+          <button
+            onClick={() => saveStatus("Waiting Reply")}
+            disabled={saving}
+            style={{
+              backgroundColor: "white",
+              color: "#dc2626",
+              border: "1px solid #dc2626",
+              borderRadius: "6px",
+              padding: "8px 16px",
+              fontSize: "14px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            Reopen (send back)
           </button>
         </div>
       )}

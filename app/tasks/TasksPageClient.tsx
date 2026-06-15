@@ -39,8 +39,9 @@ export default function TasksPageClient() {
 
   if (loading) return <p>Loading tasks…</p>;
 
-  const canCreateAssignments =
-    member?.role === "Admin" || member?.role === "PA";
+  const role = member?.role || "Member";
+  // Admin and Executive (the PA) can create and assign tasks
+  const canCreateAssignments = role === "Admin" || role === "Executive";
 
   return (
     <>
@@ -61,7 +62,7 @@ export default function TasksPageClient() {
         </div>
       )}
 
-      <TasksList />
+      <TasksList currentRole={role} />
     </>
   );
 }

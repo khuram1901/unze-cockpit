@@ -21,9 +21,29 @@ type Task = {
   reply_text: string | null;
   reply_by: string | null;
   reply_at: string | null;
+  corrective_action: string | null;
+  recovery_date: string | null;
+  impact_on_monthly_target: string | null;
 };
 
-export default function TasksList() {
+function statusColor(status: string) {
+  switch (status) {
+    case "Completed":
+      return "#16a34a";
+    case "Submitted":
+      return "#d97706";
+    case "Waiting Reply":
+      return "#dc2626";
+    case "Cancelled":
+      return "#888";
+    case "In Progress":
+      return "#0070f3";
+    default:
+      return "#64748b"; // Not Started
+  }
+}
+
+export default function TasksList({ currentRole }: { currentRole: string }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
@@ -55,7 +75,6 @@ export default function TasksList() {
     <div style={{ display: "grid", gap: "12px" }}>
       {tasks.map((task) => {
         const type = task.task_type || "Task";
-        const isReplyTask = task.reply_required;
 
         return (
           <div
@@ -84,14 +103,7 @@ export default function TasksList() {
                   borderRadius: "12px",
                   color: "white",
                   height: "fit-content",
-                  backgroundColor:
-                    task.status === "Completed"
-                      ? "#16a34a"
-                      : task.status === "Stuck"
-                      ? "#d97706"
-                      : task.status === "Pending Reply"
-                      ? "#dc2626"
-                      : "#0070f3",
+                  backgroundColor: statusColor(task.status),
                 }}
               >
                 {task.status}
@@ -113,13 +125,7 @@ export default function TasksList() {
               </div>
             )}
 
-            {task.status === "Stuck" && task.stuck_reason && (
-              <div style={{ marginTop: "8px", color: "#d97706", fontSize: "14px" }}>
-                Stuck reason: {task.stuck_reason}
-              </div>
-            )}
-
-            {isReplyTask && task.reply_text && (
+            {task.reply_text && (
               <div
                 style={{
                   marginTop: "12px",
@@ -131,14 +137,25 @@ export default function TasksList() {
                   fontSize: "14px",
                 }}
               >
-                <strong>Reply:</strong> {task.reply_text}
+                <strong>Explanation:</strong> {task.reply_text}
+                {task.corrective_action && (
+                  <div style={{ marginTop: "6px" }}>
+                    <strong>Corrective action:</strong> {task.corrective_action}
+                  </div>
+                )}
+                {task.recovery_date && (
+                  <div style={{ marginTop: "6px" }}>
+                    <strong>Expected recovery:</strong> {task.recovery_date}
+                  </div>
+                )}
                 <div style={{ marginTop: "6px", fontSize: "12px" }}>
-                  By {task.reply_by || "unknown"} {task.reply_at ? `on ${task.reply_at}` : ""}
+                  By {task.reply_by || "unknown"}{" "}
+                  {task.reply_at ? `on ${task.reply_at.slice(0, 10)}` : ""}
                 </div>
               </div>
             )}
 
-            <TaskStatus task={task} />
+            <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} />
           </div>
         );
       })}
