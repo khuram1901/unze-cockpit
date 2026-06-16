@@ -72,7 +72,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
   if (tasks.length === 0) return <p>No assignments yet.</p>;
 
   return (
-    <div style={{ display: "grid", gap: "12px" }}>
+       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "10px", alignItems: "start" }}>
       {tasks.map((task) => {
         const type = task.task_type || "Task";
 

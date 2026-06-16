@@ -176,32 +176,33 @@ export default function NewTaskForm() {
   const inputStyle = {
     display: "block",
     width: "100%",
-    maxWidth: "440px",
-    padding: "8px",
-    marginTop: "4px",
-    marginBottom: "12px",
-    border: "1px solid #ccc",
+    padding: "6px 8px",
+    marginTop: "3px",
+    marginBottom: "10px",
+    border: "1px solid #e2e8f0",
     borderRadius: "6px",
-    fontSize: "14px",
+    fontSize: "13px",
   };
 
   const selectedMember = members.find((m) => m.name === assignedTo);
   const selectedOwner = departmentOwners.find((d) => d.department_name === project);
 
   return (
-    <form
+        <form
       onSubmit={handleSubmit}
       style={{
-        border: "1px solid #e0e0e0",
+        border: "1px solid #e2e8f0",
         borderRadius: "8px",
-        padding: "20px",
-        marginBottom: "32px",
-        maxWidth: "480px",
+        padding: "16px",
+        marginBottom: "20px",
+        backgroundColor: "white",
       }}
     >
-      <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "16px" }}>
+      <h2 style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b", marginBottom: "12px", paddingLeft: "9px", borderLeft: "3px solid #1e293b" }}>
         Create task
       </h2>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0 16px" }}>
 
       <label>
         What needs to be done?
@@ -354,18 +355,21 @@ export default function NewTaskForm() {
         />
       </label>
 
+            </div>
+
       <button
         type="submit"
         disabled={saving}
         style={{
-          backgroundColor: "#0070f3",
+          backgroundColor: "#1e293b",
           color: "white",
           border: "none",
           borderRadius: "6px",
-          padding: "10px 20px",
-          fontSize: "14px",
+          padding: "8px 18px",
+          fontSize: "13px",
           cursor: "pointer",
-          fontWeight: "bold",
+          fontWeight: 700,
+          marginTop: "4px",
         }}
       >
         {saving ? "Saving..." : "Create Task"}
