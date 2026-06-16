@@ -712,26 +712,32 @@ export default function ExecutiveDashboardPage() {
 
             <SectionTitle title="Executive Escalations" />
             <EscalationTrafficLights escalations={escalations} />
+            {/* Two-column row: Attention (left) + Daily Snapshot (right) */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: "16px", marginTop: "8px" }}>
+              <div>
+                <SectionTitle title="Executive Attention" />
+                <div style={squareGrid}>
+                  <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" />
+                  <Card title="Waiting Replies" value={waitingReplies.length} color="#dc2626" />
+                  <Card title="Machines Down" value={downMachines.length} color="#dc2626" />
+                  <Card title="Plants Missing" value={missingPlants.length} color="#ef4444" />
+                  <Card title="Escalations" value={escalations.length} color="#dc2626" />
+                  <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" />
+                  <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" />
+                </div>
+              </div>
 
-            <SectionTitle title="Executive Attention" />
-            <div style={cardGrid}>
-              <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" />
-              <Card title="Waiting Replies" value={waitingReplies.length} color="#dc2626" />
-              <Card title="Machines Down" value={downMachines.length} color="#dc2626" />
-              <Card title="Plants Missing" value={missingPlants.length} color="#ef4444" />
-              <Card title="Escalations" value={escalations.length} color="#dc2626" />
-              <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" />
-              <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" />
-            </div>
-
-            <SectionTitle title="Operations Daily Snapshot" />
-            <div style={cardGrid}>
-              <Card title="Produced Today" value={produced} color="#16a34a" />
-              <Card title="Broken Today" value={broken} color="#dc2626" />
-              <Card title="Dispatched Today" value={dispatched} color="#7c3aed" />
-              <Card title="Machine Issues" value={machineIssues.length} color="#b91c1c" />
-              <Card title="Closing Good Stock" value={closingGoodStock} color="#0070f3" />
-              <Card title="Closing Broken Stock" value={closingBrokenStock} color="#d97706" />
+              <div>
+                <SectionTitle title="Operations Daily Snapshot" />
+                <div style={squareGrid}>
+                  <Card title="Produced Today" value={produced} color="#16a34a" />
+                  <Card title="Broken Today" value={broken} color="#dc2626" />
+                  <Card title="Dispatched Today" value={dispatched} color="#7c3aed" />
+                  <Card title="Machine Issues" value={machineIssues.length} color="#b91c1c" />
+                  <Card title="Closing Good Stock" value={closingGoodStock} color="#0070f3" />
+                  <Card title="Closing Broken Stock" value={closingBrokenStock} color="#d97706" />
+                </div>
+              </div>
             </div>
 
             {/* Two-column row: Finance + Receivables side by side on wide screens */}
@@ -816,6 +822,12 @@ export default function ExecutiveDashboardPage() {
 const cardGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fill, minmax(118px, 1fr))",
+  gap: "8px",
+  marginBottom: "18px",
+};
+const squareGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, 1fr)",
   gap: "8px",
   marginBottom: "18px",
 };
