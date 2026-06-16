@@ -87,6 +87,32 @@ type PerformanceRow = {
   total: number;
 };
 
+// ---- Finance types (mirror FinanceManager) ----
+type OpeningBalance = {
+  id: string;
+  as_of_date: string;
+  opening_amount: number;
+  currency: string;
+};
+
+type MonthlyPlan = {
+  id: string;
+  plan_month: string;
+  tentative_receivables: number;
+  tentative_payouts: number;
+};
+
+type DailyPosition = {
+  id: string;
+  position_date: string;
+  opening_balance: number;
+  total_receipts: number;
+  total_payments: number;
+  closing_balance: number;
+  post_dated_total: number;
+  closing_after_post_dated: number;
+};
+
 function formatDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -129,6 +155,10 @@ function quarterEndDate(monthStart: string, quarter: 1 | 2 | 3 | 4) {
   if (quarter === 3) return `${monthStart.slice(0, 7)}-21`;
   const lastDay = new Date(year, month, 0).getDate();
   return `${monthStart.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
+}
+
+function fmtMoney(n: number) {
+  return n.toLocaleString();
 }
 
 const today = formatDate(new Date());
@@ -257,6 +287,11 @@ export default function ExecutiveDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [cashPlanMissing, setCashPlanMissing] = useState(false);
 
+  // ---- Finance state ----
+  const [cashOpening, setCashOpening] = useState<OpeningBalance | null>(null);
+  const [cashPlan, setCashPlan] = useState<MonthlyPlan | null>(null);
+  const [cashPositions, setCashPositions] = useState<DailyPosition[]>([]);
+
   async function autoCreateEscalationTask(
     esc: Escalation,
     allTasks: Task[],
@@ -354,14 +389,18 @@ export default function ExecutiveDashboardPage() {
     setMachineIssues(activeMachineIssues);
     setTasks(taskData);
 
-    // Check whether the finance manager has entered this month's cash plan
+    // ---- Finance data (mirrors FinanceManager queries exactly) ----
     const currentMonthForCash = formatDate(new Date()).slice(0, 7);
-    const { data: cashPlanRow } = await supabase
-      .from("monthly_cash_plan")
-      .select("id")
-      .eq("plan_month", currentMonthForCash)
-      .maybeSingle();
-    setCashPlanMissing(!cashPlanRow);
+    const [cashOpenRes, cashPlanRes, cashPosRes] = await Promise.all([
+      supabase.from("cash_opening_balance").select("*").order("as_of_date", { ascending: true }).limit(1),
+      supabase.from("monthly_cash_plan").select("*").eq("plan_month", currentMonthForCash).maybeSingle(),
+      supabase.from("daily_cash_position").select("*").order("position_date", { ascending: false }).limit(30),
+    ]);
+
+    setCashOpening(cashOpenRes.data && cashOpenRes.data.length > 0 ? cashOpenRes.data[0] : null);
+    setCashPlan(cashPlanRes.data || null);
+    setCashPositions(cashPosRes.data || []);
+    setCashPlanMissing(!cashPlanRes.data);
 
     // Sum a metric for a plant between two dates (inclusive)
     function sumBetween(rows: any[], plantId: string, fromDate: string, toDate: string): number {
@@ -542,6 +581,8 @@ export default function ExecutiveDashboardPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => loadExecutiveData(selectedDate))
       .on("postgres_changes", { event: "*", schema: "public", table: "monthly_production_targets" }, () => loadExecutiveData(selectedDate))
       .on("postgres_changes", { event: "*", schema: "public", table: "monthly_dispatch_targets" }, () => loadExecutiveData(selectedDate))
+      .on("postgres_changes", { event: "*", schema: "public", table: "monthly_cash_plan" }, () => loadExecutiveData(selectedDate))
+      .on("postgres_changes", { event: "*", schema: "public", table: "daily_cash_position" }, () => loadExecutiveData(selectedDate))
       .subscribe();
 
     return () => {
@@ -578,6 +619,26 @@ export default function ExecutiveDashboardPage() {
 
   const selectedMonth = getMonthFromDate(selectedDate);
   const currentQuarter = getMonthQuarter(selectedDate);
+
+  // ---- Finance derived figures (mirror FinanceManager month-to-date logic) ----
+  const financeMonth = formatDate(new Date()).slice(0, 7);
+  const monthCashPositions = cashPositions.filter(
+    (p) => p.position_date.slice(0, 7) === financeMonth
+  );
+  const actualReceiptsMTD = monthCashPositions.reduce((s, p) => s + p.total_receipts, 0);
+  const actualPaymentsMTD = monthCashPositions.reduce((s, p) => s + p.total_payments, 0);
+  const latestCashPosition = cashPositions[0] || null;
+
+  const plannedRecv = cashPlan?.tentative_receivables || 0;
+  const plannedPay = cashPlan?.tentative_payouts || 0;
+
+  const recvBehind = plannedRecv > 0 && actualReceiptsMTD < plannedRecv;
+  const payOver = plannedPay > 0 && actualPaymentsMTD > plannedPay;
+
+  const cashOpeningAmount = cashOpening?.opening_amount || 0;
+  const projectedClosing = cashOpeningAmount + plannedRecv - plannedPay;
+  const latestClosing = latestCashPosition?.closing_balance ?? cashOpeningAmount;
+  const cashHeadlineRed = recvBehind || payOver;
 
   return (
     <AuthWrapper>
@@ -681,34 +742,69 @@ export default function ExecutiveDashboardPage() {
               <Card title="Closing Broken Stock" value={closingBrokenStock} color="#d97706" />
             </div>
 
-            <SectionTitle title="Other Alerts" />
-            <div style={{ display: "grid", gap: "14px", marginBottom: "32px" }}>
-              {missingPlants.length > 0 && (
-                <AlertBox type="bad" title={`${missingPlants.length} plant(s) did not update`} text={missingPlants.map((s) => s.plant.name).join(", ")} />
-              )}
-              {downMachines.length > 0 && (
-                <AlertBox type="bad" title={`${downMachines.length} machine(s) down`} text={downMachines.map((i) => `${i.plant_name} - ${i.machine_name}`).join(" | ")} />
-              )}
-              {partialMachines.length > 0 && (
-                <AlertBox type="warning" title={`${partialMachines.length} machine(s) partially working`} text={partialMachines.map((i) => `${i.plant_name} - ${i.machine_name}`).join(" | ")} />
-              )}
-              {overdueTasks.length > 0 && (
-                <AlertBox type="bad" title={`${overdueTasks.length} overdue task(s)`} text={overdueTasks.slice(0, 5).map((t) => `${t.assigned_to || "Unassigned"}: ${t.description}`).join(" | ")} />
-              )}
-            </div>
-
             <SectionTitle title="Department Performance" />
             <PerformanceTable rows={departmentRows} />
 
             <SectionTitle title="People Performance" />
             <PerformanceTable rows={peopleRows} />
 
-            <SectionTitle title="Finance" />
-            <div style={gridStyle}>
-              <ComingSoonCard title="Cash Received" />
-              <ComingSoonCard title="Current Cash Position" />
-              <ComingSoonCard title="Cashflow Forecast" />
-            </div>
+            <SectionTitle title="Finance — Cash Position (this month)" />
+            {!cashPlan && !cashOpening && cashPositions.length === 0 ? (
+              <p style={{ color: "#666", marginBottom: "32px" }}>
+                No finance data yet. Set the opening balance and monthly plan on the Finance page.
+              </p>
+            ) : (
+              <>
+                <div
+                  style={{
+                    border: "1px solid #e0e0e0",
+                    borderTop: `4px solid ${cashHeadlineRed ? "#dc2626" : "#16a34a"}`,
+                    borderRadius: "10px",
+                    padding: "20px",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <div style={{ fontSize: "15px", fontWeight: "bold", marginBottom: "12px" }}>
+                    Cash Health:{" "}
+                    <span style={{ color: cashHeadlineRed ? "#dc2626" : "#16a34a" }}>
+                      {cashHeadlineRed ? "ATTENTION" : "ON TRACK"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: "30px", flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ color: "#666", fontSize: "13px" }}>Money In (actual / plan)</div>
+                      <div style={{ fontSize: "20px", fontWeight: "bold", color: recvBehind ? "#dc2626" : "#16a34a" }}>
+                        {fmtMoney(actualReceiptsMTD)} / {fmtMoney(plannedRecv)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: "#666", fontSize: "13px" }}>Money Out (actual / plan)</div>
+                      <div style={{ fontSize: "20px", fontWeight: "bold", color: payOver ? "#dc2626" : "#16a34a" }}>
+                        {fmtMoney(actualPaymentsMTD)} / {fmtMoney(plannedPay)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: "#666", fontSize: "13px" }}>Latest Closing Balance</div>
+                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#0070f3" }}>
+                        {fmtMoney(latestClosing)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: "#666", fontSize: "13px" }}>Projected Month-End</div>
+                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#555" }}>
+                        {fmtMoney(projectedClosing)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div style={gridStyle}>
+                  <Card title="Opening Balance" value={cashOpeningAmount} color="#0070f3" />
+                  <Card title="Money In (MTD)" value={actualReceiptsMTD} color="#16a34a" />
+                  <Card title="Money Out (MTD)" value={actualPaymentsMTD} color="#dc2626" />
+                  <Card title="Latest Closing" value={latestClosing} color="#7c3aed" />
+                </div>
+              </>
+            )}
           </>
         )}
       </main>
