@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Manrope } from "next/font/google";
+import { Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
-const manrope = Manrope({
-  variable: "--font-manrope",
+const sourceSans = Source_Sans_3({
+  variable: "--font-source-sans",
   subsets: ["latin"],
 });
 
@@ -18,12 +18,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${manrope.variable} h-full antialiased`}>
+    <html lang="en" className={`${sourceSans.variable} h-full antialiased`}>
       <body
         className="min-h-full flex flex-col"
         style={{
-          fontFamily: "var(--font-manrope), system-ui, sans-serif",
-          backgroundColor: "#f8fafc",
+          fontFamily: "var(--font-source-sans), system-ui, sans-serif",
+                    backgroundColor: "#eef2f7",
           color: "#0f172a",
           margin: 0,
         }}

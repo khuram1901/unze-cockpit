@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
+import EscalationTrafficLights from "./EscalationTrafficLights";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number; meter: number };
@@ -70,7 +71,6 @@ type PlantExecutiveSummary = {
   enteredOnDate: boolean;
 };
 
-// One escalation finding for a plant + metric
 type Escalation = {
   plantId: string;
   plantName: string;
@@ -87,7 +87,6 @@ type PerformanceRow = {
   total: number;
 };
 
-// ---- Finance types (mirror FinanceManager) ----
 type OpeningBalance = {
   id: string;
   as_of_date: string;
@@ -113,7 +112,6 @@ type DailyPosition = {
   closing_after_post_dated: number;
 };
 
-// ---- Receivables types ----
 type ReceivableStage = {
   id: string;
   stage_order: number;
@@ -134,7 +132,6 @@ type Receivable = {
   status: string;
 };
 
-// Accumulative receivables breakdown per customer
 type ReceivableCustomerRow = {
   customer: string;
   greenAmount: number;
@@ -144,14 +141,19 @@ type ReceivableCustomerRow = {
   redCount: number;
 };
 
+const NAVY = "#1e293b";
+const SLATE = "#64748b";
+const BORDER = "#e2e8f0";
+
 function formatDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+// UK display format DD-MM-YYYY
 function formatDateUK(dateString: string | null) {
   if (!dateString) return "—";
-  const [year, month, day] = dateString.split("-");
-  return `${day}/${month}/${year}`;
+  const [year, month, day] = dateString.slice(0, 10).split("-");
+  return `${day}-${month}-${year}`;
 }
 
 function getMonthFromDate(dateString: string) {
@@ -168,8 +170,6 @@ function getMonthEndFromDate(dateString: string) {
   return d.toISOString().slice(0, 10);
 }
 
-// Month-quarter logic (Option 1): which quarter-of-month is a date in?
-// Q1 = days 1-7, Q2 = 8-14, Q3 = 15-21, Q4 = 22-end.
 function getMonthQuarter(dateString: string): 1 | 2 | 3 | 4 {
   const day = Number(dateString.slice(8, 10));
   if (day <= 7) return 1;
@@ -178,7 +178,6 @@ function getMonthQuarter(dateString: string): 1 | 2 | 3 | 4 {
   return 4;
 }
 
-// The last calendar day (within the month) of a given quarter.
 function quarterEndDate(monthStart: string, quarter: 1 | 2 | 3 | 4) {
   const [year, month] = monthStart.slice(0, 7).split("-").map(Number);
   if (quarter === 1) return `${monthStart.slice(0, 7)}-07`;
@@ -192,7 +191,6 @@ function fmtMoney(n: number) {
   return n.toLocaleString();
 }
 
-// Count working days (Mon–Fri) elapsed in the current stage.
 function workingDaysSince(dateStr: string): number {
   const start = new Date(dateStr + "T00:00:00");
   const now = new Date();
@@ -251,32 +249,6 @@ function targetTotal(t?: MonthlyTarget) {
   return (t.target_31 || 0) + (t.target_36 || 0) + (t.target_45 || 0) + (t.target_meter || 0);
 }
 
-function achievementStatus(achievement: number, hasTarget: boolean): Status {
-  if (!hasTarget) return "none";
-  if (achievement >= 95) return "green";
-  if (achievement >= 85) return "amber";
-  return "red";
-}
-
-function breakageStatus(rate: number, produced: number): Status {
-  if (produced <= 0) return "none";
-  if (rate <= 1) return "green";
-  if (rate <= 1.5) return "amber";
-  return "red";
-}
-
-function statusColor(status: Status) {
-  if (status === "green") return "#16a34a";
-  if (status === "amber") return "#d97706";
-  if (status === "red") return "#dc2626";
-  return "#666";
-}
-
-function statusLabel(status: Status) {
-  if (status === "none") return "No Target";
-  return status.toUpperCase();
-}
-
 function isCompleted(task: Task) {
   return task.status === "Completed";
 }
@@ -301,23 +273,19 @@ function taskColor(task: Task): "red" | "amber" | "green" {
 
 function buildPerformanceRows(tasks: Task[], groupBy: "department" | "person"): PerformanceRow[] {
   const map = new Map<string, PerformanceRow>();
-
   for (const task of tasks) {
     const key =
       groupBy === "department"
         ? task.assigned_to_department || "Unassigned Department"
         : task.assigned_to || "Unassigned Person";
-
     if (!map.has(key)) {
       map.set(key, { name: key, red: 0, amber: 0, green: 0, total: 0 });
     }
-
     const row = map.get(key)!;
     const color = taskColor(task);
     row[color] += 1;
     row.total += 1;
   }
-
   return Array.from(map.values()).sort((a, b) => {
     if (b.red !== a.red) return b.red - a.red;
     if (b.amber !== a.amber) return b.amber - a.amber;
@@ -334,12 +302,9 @@ export default function ExecutiveDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [cashPlanMissing, setCashPlanMissing] = useState(false);
 
-  // ---- Finance state ----
   const [cashOpening, setCashOpening] = useState<OpeningBalance | null>(null);
   const [cashPlan, setCashPlan] = useState<MonthlyPlan | null>(null);
   const [cashPositions, setCashPositions] = useState<DailyPosition[]>([]);
-
-  // ---- Receivables state ----
   const [receivableRows, setReceivableRows] = useState<ReceivableCustomerRow[]>([]);
 
   async function autoCreateEscalationTask(
@@ -348,14 +313,10 @@ export default function ExecutiveDashboardPage() {
     owner: DepartmentOwner | null
   ) {
     if (!owner?.primary_owner_name || !owner?.primary_owner_email) return;
-
     const alreadyExists = allTasks.some(
-      (task) =>
-        task.source_type === "kpi_escalation" &&
-        task.source_label === esc.sourceLabel
+      (task) => task.source_type === "kpi_escalation" && task.source_label === esc.sourceLabel
     );
     if (alreadyExists) return;
-
     await supabase.from("tasks").insert({
       task_type: "Explanation Required",
       exception_type: esc.metric.toLowerCase(),
@@ -379,7 +340,6 @@ export default function ExecutiveDashboardPage() {
     });
   }
 
-  // Create one task for a stuck (red) receivable bill, guarded against duplicates.
   async function autoCreateReceivableTask(
     bill: Receivable,
     stageName: string,
@@ -387,15 +347,11 @@ export default function ExecutiveDashboardPage() {
     owner: DepartmentOwner | null
   ) {
     if (!owner?.primary_owner_name || !owner?.primary_owner_email) return;
-
     const sourceLabel = `receivable_stuck:${bill.id}:${bill.current_stage_order}`;
     const alreadyExists = allTasks.some(
-      (task) =>
-        task.source_type === "receivable_escalation" &&
-        task.source_label === sourceLabel
+      (task) => task.source_type === "receivable_escalation" && task.source_label === sourceLabel
     );
     if (alreadyExists) return;
-
     await supabase.from("tasks").insert({
       task_type: "Explanation Required",
       exception_type: "receivable",
@@ -421,27 +377,14 @@ export default function ExecutiveDashboardPage() {
 
   async function loadExecutiveData(dateToView: string) {
     setLoading(true);
-
     const selectedMonth = getMonthFromDate(dateToView);
     const selectedMonthStart = getMonthStartFromDate(dateToView);
     const selectedMonthEnd = getMonthEndFromDate(dateToView);
 
     const [
-      plantsRes,
-      openRes,
-      brokenOpenRes,
-      prodRes,
-      dispRes,
-      brkRes,
-      scrapRes,
-      machineIssuesRes,
-      tasksRes,
-      ownerRes,
-      monthlyProductionTargetsRes,
-      monthlyDispatchTargetsRes,
-      monthlyProductionRes,
-      monthlyDispatchRes,
-      monthlyBreakageRes,
+      plantsRes, openRes, brokenOpenRes, prodRes, dispRes, brkRes, scrapRes,
+      machineIssuesRes, tasksRes, ownerRes, monthlyProductionTargetsRes,
+      monthlyDispatchTargetsRes, monthlyProductionRes, monthlyDispatchRes, monthlyBreakageRes,
     ] = await Promise.all([
       supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
       supabase.from("opening_balances").select("*"),
@@ -479,20 +422,17 @@ export default function ExecutiveDashboardPage() {
     setMachineIssues(activeMachineIssues);
     setTasks(taskData);
 
-    // ---- Finance data (mirrors FinanceManager queries exactly) ----
     const currentMonthForCash = formatDate(new Date()).slice(0, 7);
     const [cashOpenRes, cashPlanRes, cashPosRes] = await Promise.all([
       supabase.from("cash_opening_balance").select("*").order("as_of_date", { ascending: true }).limit(1),
       supabase.from("monthly_cash_plan").select("*").eq("plan_month", currentMonthForCash).maybeSingle(),
       supabase.from("daily_cash_position").select("*").order("position_date", { ascending: false }).limit(30),
     ]);
-
     setCashOpening(cashOpenRes.data && cashOpenRes.data.length > 0 ? cashOpenRes.data[0] : null);
     setCashPlan(cashPlanRes.data || null);
     setCashPositions(cashPosRes.data || []);
     setCashPlanMissing(!cashPlanRes.data);
 
-    // ---- Receivables data (active bills + stage budgets) ----
     const [stagesRes, billsRes] = await Promise.all([
       supabase.from("receivable_stages").select("*").order("stage_order"),
       supabase.from("receivables").select("*").neq("status", "Collected"),
@@ -515,19 +455,11 @@ export default function ExecutiveDashboardPage() {
       return "green";
     }
 
-    // Accumulate by customer (the utility field stores the customer)
     const custMap = new Map<string, ReceivableCustomerRow>();
     for (const bill of bills) {
       const key = bill.utility || "Unknown";
       if (!custMap.has(key)) {
-        custMap.set(key, {
-          customer: key,
-          greenAmount: 0,
-          amberAmount: 0,
-          redAmount: 0,
-          totalAmount: 0,
-          redCount: 0,
-        });
+        custMap.set(key, { customer: key, greenAmount: 0, amberAmount: 0, redAmount: 0, totalAmount: 0, redCount: 0 });
       }
       const row = custMap.get(key)!;
       const rag = billRagStatus(bill);
@@ -535,24 +467,19 @@ export default function ExecutiveDashboardPage() {
       row.totalAmount += amt;
       if (rag === "green") row.greenAmount += amt;
       else if (rag === "amber") row.amberAmount += amt;
-      else {
-        row.redAmount += amt;
-        row.redCount += 1;
-      }
+      else { row.redAmount += amt; row.redCount += 1; }
     }
     const recRows = Array.from(custMap.values()).sort(
       (a, b) => b.redAmount - a.redAmount || b.totalAmount - a.totalAmount
     );
     setReceivableRows(recRows);
 
-    // Auto-create a task for each red (stuck) bill, guarded against duplicates
     for (const bill of bills) {
       if (billRagStatus(bill) === "red") {
         await autoCreateReceivableTask(bill, stageNameFor(bill.current_stage_order), taskData, owner);
       }
     }
 
-    // Sum a metric for a plant between two dates (inclusive)
     function sumBetween(rows: any[], plantId: string, fromDate: string, toDate: string): number {
       let t = 0;
       for (const r of rows) {
@@ -562,7 +489,6 @@ export default function ExecutiveDashboardPage() {
       }
       return t;
     }
-
     function sumForDate(rows: any[], plantId: string, onlyDate: boolean): SizeTotals {
       const t = emptyTotals();
       for (const r of rows) {
@@ -575,12 +501,9 @@ export default function ExecutiveDashboardPage() {
       }
       return t;
     }
-
     function openingFor(rows: any[], plantId: string): SizeTotals {
       const t = emptyTotals();
-      const forPlant = rows
-        .filter((r) => r.plant_id === plantId)
-        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+      const forPlant = rows.filter((r) => r.plant_id === plantId).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
       if (forPlant.length > 0) {
         const latest = forPlant[0];
         t.s31 = latest.bal_31 || 0;
@@ -591,39 +514,31 @@ export default function ExecutiveDashboardPage() {
       return t;
     }
 
-    // ---- Plant stock summaries (unchanged behaviour) ----
     const result: PlantExecutiveSummary[] = plants.map((plant) => {
       const openingGood = openingFor(opening, plant.id);
       const openingBroken = openingFor(brokenOpening, plant.id);
-
       const totalProduced = sumForDate(production, plant.id, false);
       const totalDispatched = sumForDate(dispatch, plant.id, false);
       const totalBroken = sumForDate(breakage, plant.id, false);
       const totalScrap = sumForDate(scrap, plant.id, false);
-
       const closingGoodStock: SizeTotals = {
         s31: openingGood.s31 + totalProduced.s31 - totalBroken.s31 - totalDispatched.s31,
         s36: openingGood.s36 + totalProduced.s36 - totalBroken.s36 - totalDispatched.s36,
         s45: openingGood.s45 + totalProduced.s45 - totalBroken.s45 - totalDispatched.s45,
         meter: openingGood.meter + totalProduced.meter - totalDispatched.meter,
       };
-
       const closingBrokenStock: SizeTotals = {
         s31: openingBroken.s31 + totalBroken.s31 - totalScrap.s31,
         s36: openingBroken.s36 + totalBroken.s36 - totalScrap.s36,
         s45: openingBroken.s45 + totalBroken.s45 - totalScrap.s45,
         meter: 0,
       };
-
       const enteredOnDate =
         production.some((r) => r.plant_id === plant.id && r.entry_date === dateToView) ||
         dispatch.some((r) => r.plant_id === plant.id && r.entry_date === dateToView) ||
         breakage.some((r) => r.plant_id === plant.id && r.entry_date === dateToView);
-
       return {
-        plant,
-        closingGoodStock,
-        closingBrokenStock,
+        plant, closingGoodStock, closingBrokenStock,
         producedOnDate: sumForDate(production, plant.id, true),
         dispatchedOnDate: sumForDate(dispatch, plant.id, true),
         brokenOnDate: sumForDate(breakage, plant.id, true),
@@ -631,20 +546,12 @@ export default function ExecutiveDashboardPage() {
       };
     });
 
-    // ---- Escalation engine (Option 1: month-quarters, cumulative) ----
     const currentQuarter = getMonthQuarter(dateToView);
     const q1End = quarterEndDate(selectedMonthStart, 1);
     const q2End = quarterEndDate(selectedMonthStart, 2);
-
     const foundEscalations: Escalation[] = [];
 
-    function behindAtQuarter(
-      entries: any[],
-      targetTotalForMonth: number,
-      plantId: string,
-      quarter: 1 | 2 | 3 | 4,
-      checkpointEnd: string
-    ): boolean {
+    function behindAtQuarter(entries: any[], targetTotalForMonth: number, plantId: string, quarter: 1 | 2 | 3 | 4, checkpointEnd: string): boolean {
       if (targetTotalForMonth <= 0) return false;
       const cumulativeTarget = (targetTotalForMonth / 4) * quarter;
       const cumulativeActual = sumBetween(entries, plantId, selectedMonthStart, checkpointEnd);
@@ -662,15 +569,12 @@ export default function ExecutiveDashboardPage() {
           const cumTargetNow = (prodTarget / 4) * currentQuarter;
           const ach = cumTargetNow > 0 ? Math.round((cumActual / cumTargetNow) * 100) : 0;
           foundEscalations.push({
-            plantId: plant.id,
-            plantName: plant.name,
-            metric: "Production",
+            plantId: plant.id, plantName: plant.name, metric: "Production",
             detail: `Behind in Q1 and Q2. Now Q${currentQuarter}: ${cumActual} of ${Math.round(cumTargetNow)} expected (${ach}%).`,
             sourceLabel: `kpi_escalation:production:${plant.id}:${selectedMonth}`,
           });
         }
       }
-
       const dispTarget = targetTotal(monthlyDispatchTargets.find((t) => t.plant_id === plant.id));
       if (dispTarget > 0 && currentQuarter >= 3) {
         const behindQ1 = behindAtQuarter(monthlyDispatch, dispTarget, plant.id, 1, q1End);
@@ -680,24 +584,19 @@ export default function ExecutiveDashboardPage() {
           const cumTargetNow = (dispTarget / 4) * currentQuarter;
           const ach = cumTargetNow > 0 ? Math.round((cumActual / cumTargetNow) * 100) : 0;
           foundEscalations.push({
-            plantId: plant.id,
-            plantName: plant.name,
-            metric: "Dispatch",
+            plantId: plant.id, plantName: plant.name, metric: "Dispatch",
             detail: `Behind in Q1 and Q2. Now Q${currentQuarter}: ${cumActual} of ${Math.round(cumTargetNow)} expected (${ach}%).`,
             sourceLabel: `kpi_escalation:dispatch:${plant.id}:${selectedMonth}`,
           });
         }
       }
-
       const producedMTD = sumBetween(monthlyProduction, plant.id, selectedMonthStart, dateToView);
       const brokenMTD = sumBetween(monthlyBreakage, plant.id, selectedMonthStart, dateToView);
       if (producedMTD > 0) {
         const rate = (brokenMTD / producedMTD) * 100;
         if (rate > 1.5) {
           foundEscalations.push({
-            plantId: plant.id,
-            plantName: plant.name,
-            metric: "Breakage",
+            plantId: plant.id, plantName: plant.name, metric: "Breakage",
             detail: `Breakage rate ${rate.toFixed(2)}% (${brokenMTD} broken of ${producedMTD} produced) exceeds 1.5% limit.`,
             sourceLabel: `kpi_escalation:breakage:${plant.id}:${selectedMonth}`,
           });
@@ -716,7 +615,6 @@ export default function ExecutiveDashboardPage() {
 
   useEffect(() => {
     loadExecutiveData(selectedDate);
-
     const channel = supabase
       .channel("executive-dashboard-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "production_entries" }, () => loadExecutiveData(selectedDate))
@@ -730,10 +628,7 @@ export default function ExecutiveDashboardPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "daily_cash_position" }, () => loadExecutiveData(selectedDate))
       .on("postgres_changes", { event: "*", schema: "public", table: "receivables" }, () => loadExecutiveData(selectedDate))
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [selectedDate]);
 
   const produced = summaries.reduce((sum, s) => sum + total(s.producedOnDate), 0);
@@ -750,8 +645,7 @@ export default function ExecutiveDashboardPage() {
   const waitingReplies = tasks.filter((t) => t.status === "Waiting Reply");
   const dueThisWeekTasks = tasks.filter((t) => isDueThisWeek(t));
   const completedThisMonth = tasks.filter(
-    (t) =>
-      t.status === "Completed" &&
+    (t) => t.status === "Completed" &&
       ((t.updated_at && t.updated_at.slice(0, 10) >= currentMonthStart) ||
         (!t.updated_at && t.created_at && t.created_at.slice(0, 10) >= currentMonthStart))
   );
@@ -766,27 +660,20 @@ export default function ExecutiveDashboardPage() {
   const selectedMonth = getMonthFromDate(selectedDate);
   const currentQuarter = getMonthQuarter(selectedDate);
 
-  // ---- Finance derived figures (mirror FinanceManager month-to-date logic) ----
   const financeMonth = formatDate(new Date()).slice(0, 7);
-  const monthCashPositions = cashPositions.filter(
-    (p) => p.position_date.slice(0, 7) === financeMonth
-  );
+  const monthCashPositions = cashPositions.filter((p) => p.position_date.slice(0, 7) === financeMonth);
   const actualReceiptsMTD = monthCashPositions.reduce((s, p) => s + p.total_receipts, 0);
   const actualPaymentsMTD = monthCashPositions.reduce((s, p) => s + p.total_payments, 0);
   const latestCashPosition = cashPositions[0] || null;
-
   const plannedRecv = cashPlan?.tentative_receivables || 0;
   const plannedPay = cashPlan?.tentative_payouts || 0;
-
   const recvBehind = plannedRecv > 0 && actualReceiptsMTD < plannedRecv;
   const payOver = plannedPay > 0 && actualPaymentsMTD > plannedPay;
-
   const cashOpeningAmount = cashOpening?.opening_amount || 0;
   const projectedClosing = cashOpeningAmount + plannedRecv - plannedPay;
   const latestClosing = latestCashPosition?.closing_balance ?? cashOpeningAmount;
   const cashHeadlineRed = recvBehind || payOver;
 
-  // ---- Receivables grand totals ----
   const recGreen = receivableRows.reduce((s, r) => s + r.greenAmount, 0);
   const recAmber = receivableRows.reduce((s, r) => s + r.amberAmount, 0);
   const recRed = receivableRows.reduce((s, r) => s + r.redAmount, 0);
@@ -795,98 +682,53 @@ export default function ExecutiveDashboardPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: "40px", fontFamily: "sans-serif" }}>
-        <h1 style={{ fontSize: "36px", fontWeight: "bold", marginBottom: "8px" }}>
-          Good Morning Khuram
-        </h1>
-
-        <p style={{ color: "#666", marginBottom: "20px" }}>
-          Executive escalations only surface lagging indicators (Quarter 3 onwards for production and
-          dispatch, and breakage over 1.5%). Earlier-quarter issues stay with the operations manager.
-        </p>
-
-        <div style={{ marginBottom: "32px" }}>
-          <label style={{ fontWeight: "bold", display: "block", marginBottom: "6px" }}>
-            View date
-          </label>
-          <input
-            type="date"
-            value={selectedDate}
-            min={minDate}
-            max={today}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            style={{ padding: "10px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "15px" }}
-          />
-          <div style={{ marginTop: "8px", color: "#666", fontSize: "14px" }}>
-            Selected month: <strong>{selectedMonth}</strong> | Month quarter:{" "}
-            <strong>Q{currentQuarter}</strong>
+      <main style={{ padding: "24px 28px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
+          <div>
+            <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
+            <p style={{ color: SLATE, fontSize: "13px", marginTop: "6px", maxWidth: "640px" }}>
+              Executive escalations surface lagging indicators (Q3+ for production and dispatch, breakage over 1.5%). Earlier issues stay with operations.
+            </p>
+          </div>
+          <div style={{ backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "10px", padding: "10px 14px" }}>
+            <label style={{ fontWeight: 700, display: "block", marginBottom: "4px", fontSize: "12px", color: SLATE }}>View date</label>
+            <input
+              type="date"
+              value={selectedDate}
+              min={minDate}
+              max={today}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              style={{ padding: "7px 10px", border: `1px solid ${BORDER}`, borderRadius: "6px", fontSize: "13px" }}
+            />
+            <div style={{ marginTop: "6px", color: SLATE, fontSize: "12px" }}>
+              {selectedMonth} · Q{currentQuarter}
+            </div>
           </div>
         </div>
 
         {loading ? (
-          <p>Loading executive dashboard…</p>
+          <p style={{ color: SLATE }}>Loading executive dashboard…</p>
         ) : (
           <>
             {cashPlanMissing && (
-              <div
-                style={{
-                  border: "1px solid #fecaca",
-                  backgroundColor: "#fef2f2",
-                  color: "#991b1b",
-                  borderRadius: "10px",
-                  padding: "16px",
-                  fontWeight: "bold",
-                  marginBottom: "24px",
-                }}
-              >
-                ⚠️ This month&apos;s cash plan has not been entered yet. The finance manager needs to
-                set the expected receivables and payouts on the Finance page.
-              </div>
+              <SlimAlert color="#dc2626" text="This month's cash plan has not been entered. The finance manager needs to set expected receivables and payouts on the Finance page." />
             )}
-
-            <SectionTitle title="Executive Escalations (Lagging Indicators)" />
-
-            {escalations.length === 0 ? (
-              <div
-                style={{
-                  border: "1px solid #bbf7d0",
-                  backgroundColor: "#f0fdf4",
-                  color: "#166534",
-                  borderRadius: "10px",
-                  padding: "16px",
-                  fontWeight: "bold",
-                  marginBottom: "32px",
-                }}
-              >
-                No escalations. Nothing has reached executive level this month.
-              </div>
-            ) : (
-              <div style={{ display: "grid", gap: "14px", marginBottom: "32px" }}>
-                {productionEscalations.map((e) => (
-                  <AlertBox key={e.sourceLabel} type="bad" title={`Production lagging — ${e.plantName}`} text={`${e.detail} An Explanation Required task has been raised with the department owner.`} />
-                ))}
-                {dispatchEscalations.map((e) => (
-                  <AlertBox key={e.sourceLabel} type="bad" title={`Dispatch lagging — ${e.plantName}`} text={`${e.detail} An Explanation Required task has been raised with the department owner.`} />
-                ))}
-                {breakageEscalations.map((e) => (
-                  <AlertBox key={e.sourceLabel} type="bad" title={`Breakage over limit — ${e.plantName}`} text={`${e.detail} An Explanation Required task has been raised with the department owner.`} />
-                ))}
-              </div>
-            )}
+                       <SectionTitle title="Executive Escalations" />
+            <EscalationTrafficLights escalations={escalations} />
 
             <SectionTitle title="Executive Attention" />
-            <div style={gridStyle}>
+            <div style={cardGrid}>
               <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" />
               <Card title="Waiting Replies" value={waitingReplies.length} color="#dc2626" />
               <Card title="Machines Down" value={downMachines.length} color="#dc2626" />
-              <Card title="Plants Missing Updates" value={missingPlants.length} color="#ef4444" />
+              <Card title="Plants Missing" value={missingPlants.length} color="#ef4444" />
               <Card title="Escalations" value={escalations.length} color="#dc2626" />
-              <Card title="Tasks Due This Week" value={dueThisWeekTasks.length} color="#d97706" />
-              <Card title="Completed This Month" value={completedThisMonth.length} color="#16a34a" />
+              <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" />
+              <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" />
             </div>
 
             <SectionTitle title="Operations Daily Snapshot" />
-            <div style={gridStyle}>
+            <div style={cardGrid}>
               <Card title="Produced Today" value={produced} color="#16a34a" />
               <Card title="Broken Today" value={broken} color="#dc2626" />
               <Card title="Dispatched Today" value={dispatched} color="#7c3aed" />
@@ -895,146 +737,78 @@ export default function ExecutiveDashboardPage() {
               <Card title="Closing Broken Stock" value={closingBrokenStock} color="#d97706" />
             </div>
 
-            <SectionTitle title="Department Performance" />
-            <PerformanceTable rows={departmentRows} />
-
-            <SectionTitle title="People Performance" />
-            <PerformanceTable rows={peopleRows} />
-
-            <SectionTitle title="Finance — Cash Position (this month)" />
-            {!cashPlan && !cashOpening && cashPositions.length === 0 ? (
-              <p style={{ color: "#666", marginBottom: "32px" }}>
-                No finance data yet. Set the opening balance and monthly plan on the Finance page.
-              </p>
-            ) : (
-              <>
-                <div
-                  style={{
-                    border: "1px solid #e0e0e0",
-                    borderTop: `4px solid ${cashHeadlineRed ? "#dc2626" : "#16a34a"}`,
-                    borderRadius: "10px",
-                    padding: "20px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <div style={{ fontSize: "15px", fontWeight: "bold", marginBottom: "12px" }}>
-                    Cash Health:{" "}
-                    <span style={{ color: cashHeadlineRed ? "#dc2626" : "#16a34a" }}>
-                      {cashHeadlineRed ? "ATTENTION" : "ON TRACK"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", gap: "30px", flexWrap: "wrap" }}>
-                    <div>
-                      <div style={{ color: "#666", fontSize: "13px" }}>Money In (actual / plan)</div>
-                      <div style={{ fontSize: "20px", fontWeight: "bold", color: recvBehind ? "#dc2626" : "#16a34a" }}>
-                        {fmtMoney(actualReceiptsMTD)} / {fmtMoney(plannedRecv)}
-                      </div>
+            {/* Two-column row: Finance + Receivables side by side on wide screens */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))", gap: "20px", marginTop: "8px" }}>
+              <div>
+                <SectionTitle title="Finance — Cash Position" />
+                {!cashPlan && !cashOpening && cashPositions.length === 0 ? (
+                  <p style={{ color: SLATE, fontSize: "13px" }}>No finance data yet.</p>
+                ) : (
+                  <div style={panelCard(cashHeadlineRed)}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "10px", color: NAVY }}>
+                      Cash Health: <span style={{ color: cashHeadlineRed ? "#dc2626" : "#16a34a" }}>{cashHeadlineRed ? "ATTENTION" : "ON TRACK"}</span>
                     </div>
-                    <div>
-                      <div style={{ color: "#666", fontSize: "13px" }}>Money Out (actual / plan)</div>
-                      <div style={{ fontSize: "20px", fontWeight: "bold", color: payOver ? "#dc2626" : "#16a34a" }}>
-                        {fmtMoney(actualPaymentsMTD)} / {fmtMoney(plannedPay)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: "#666", fontSize: "13px" }}>Latest Closing Balance</div>
-                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#0070f3" }}>
-                        {fmtMoney(latestClosing)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: "#666", fontSize: "13px" }}>Projected Month-End</div>
-                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#555" }}>
-                        {fmtMoney(projectedClosing)}
-                      </div>
+                    <div style={miniGrid}>
+                      <Mini label="Money In (act/plan)" value={`${fmtMoney(actualReceiptsMTD)} / ${fmtMoney(plannedRecv)}`} color={recvBehind ? "#dc2626" : "#16a34a"} />
+                      <Mini label="Money Out (act/plan)" value={`${fmtMoney(actualPaymentsMTD)} / ${fmtMoney(plannedPay)}`} color={payOver ? "#dc2626" : "#16a34a"} />
+                      <Mini label="Latest Closing" value={fmtMoney(latestClosing)} color="#0070f3" />
+                      <Mini label="Projected Month-End" value={fmtMoney(projectedClosing)} color={NAVY} />
                     </div>
                   </div>
-                </div>
-                <div style={gridStyle}>
-                  <Card title="Opening Balance" value={cashOpeningAmount} color="#0070f3" />
-                  <Card title="Money In (MTD)" value={actualReceiptsMTD} color="#16a34a" />
-                  <Card title="Money Out (MTD)" value={actualPaymentsMTD} color="#dc2626" />
-                  <Card title="Latest Closing" value={latestClosing} color="#7c3aed" />
-                </div>
-              </>
-            )}
+                )}
+              </div>
 
-            <SectionTitle title="Receivables — Bills in Progress" />
-            {receivableRows.length === 0 ? (
-              <p style={{ color: "#666", marginBottom: "32px" }}>
-                No receivable bills in progress. Bills are added by operations on the Daily Entry page.
-              </p>
-            ) : (
-              <>
-                <div
-                  style={{
-                    border: "1px solid #e0e0e0",
-                    borderTop: `4px solid ${recRed > 0 ? "#dc2626" : "#16a34a"}`,
-                    borderRadius: "10px",
-                    padding: "20px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <div style={{ fontSize: "15px", fontWeight: "bold", marginBottom: "12px" }}>
-                    Receivables Health:{" "}
-                    <span style={{ color: recRed > 0 ? "#dc2626" : "#16a34a" }}>
-                      {recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}
-                    </span>
+              <div>
+                <SectionTitle title="Receivables — Bills in Progress" />
+                {receivableRows.length === 0 ? (
+                  <p style={{ color: SLATE, fontSize: "13px" }}>No receivable bills in progress.</p>
+                ) : (
+                  <div style={panelCard(recRed > 0)}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "10px", color: NAVY }}>
+                      Receivables: <span style={{ color: recRed > 0 ? "#dc2626" : "#16a34a" }}>{recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}</span>
+                    </div>
+                    <div style={miniGrid}>
+                      <Mini label="Total Tracked" value={fmtMoney(recTotal)} color="#0070f3" />
+                      <Mini label="On Time" value={fmtMoney(recGreen)} color="#16a34a" />
+                      <Mini label="Due Soon" value={fmtMoney(recAmber)} color="#d97706" />
+                      <Mini label="Stuck" value={fmtMoney(recRed)} color="#dc2626" />
+                    </div>
+                    {receivableRows.length > 0 && (
+                      <table style={{ borderCollapse: "collapse", width: "100%", marginTop: "12px" }}>
+                        <thead>
+                          <tr style={{ backgroundColor: "#f8fafc" }}>
+                            <th style={th}>Customer</th><th style={th}>On Time</th><th style={th}>Due Soon</th><th style={th}>Stuck</th><th style={th}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {receivableRows.map((r) => (
+                            <tr key={r.customer}>
+                              <td style={tdBold}>{r.customer}</td>
+                              <td style={{ ...td, color: "#16a34a" }}>{fmtMoney(r.greenAmount)}</td>
+                              <td style={{ ...td, color: "#d97706" }}>{fmtMoney(r.amberAmount)}</td>
+                              <td style={{ ...td, color: "#dc2626" }}>{fmtMoney(r.redAmount)}</td>
+                              <td style={td}>{fmtMoney(r.totalAmount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
-                  <div style={{ display: "flex", gap: "30px", flexWrap: "wrap" }}>
-                    <div>
-                      <div style={{ color: "#666", fontSize: "13px" }}>Total Tracked</div>
-                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#0070f3" }}>
-                        {fmtMoney(recTotal)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: "#666", fontSize: "13px" }}>On Time (green)</div>
-                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#16a34a" }}>
-                        {fmtMoney(recGreen)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: "#666", fontSize: "13px" }}>Due Soon (amber)</div>
-                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#d97706" }}>
-                        {fmtMoney(recAmber)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ color: "#666", fontSize: "13px" }}>Stuck (red)</div>
-                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#dc2626" }}>
-                        {fmtMoney(recRed)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                )}
+              </div>
+            </div>
 
-                <div style={{ overflowX: "auto", marginBottom: "32px" }}>
-                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "640px" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "#fafafa" }}>
-                        <th style={tableHeaderStyle}>Customer</th>
-                        <th style={tableHeaderStyle}>On Time</th>
-                        <th style={tableHeaderStyle}>Due Soon</th>
-                        <th style={tableHeaderStyle}>Stuck</th>
-                        <th style={tableHeaderStyle}>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {receivableRows.map((r) => (
-                        <tr key={r.customer}>
-                          <td style={tableCellStyle}><strong>{r.customer}</strong></td>
-                          <td style={{ ...tableCellStyle, color: "#16a34a", fontWeight: "bold" }}>{fmtMoney(r.greenAmount)}</td>
-                          <td style={{ ...tableCellStyle, color: "#d97706", fontWeight: "bold" }}>{fmtMoney(r.amberAmount)}</td>
-                          <td style={{ ...tableCellStyle, color: "#dc2626", fontWeight: "bold" }}>{fmtMoney(r.redAmount)}</td>
-                          <td style={tableCellStyle}>{fmtMoney(r.totalAmount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
+            {/* Two-column row: Department + People performance */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))", gap: "20px", marginTop: "8px" }}>
+              <div>
+                <SectionTitle title="Department Performance" />
+                <PerformanceTable rows={departmentRows} />
+              </div>
+              <div>
+                <SectionTitle title="People Performance" />
+                <PerformanceTable rows={peopleRows} />
+              </div>
+            </div>
           </>
         )}
       </main>
@@ -1042,79 +816,95 @@ export default function ExecutiveDashboardPage() {
   );
 }
 
-const gridStyle = {
+const cardGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-  gap: "16px",
-  marginBottom: "32px",
+  gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+  gap: "10px",
+  marginBottom: "24px",
 };
+
+const miniGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+  gap: "12px",
+};
+
+function panelCard(red: boolean): React.CSSProperties {
+  return {
+    border: `1px solid ${BORDER}`,
+    borderTop: `3px solid ${red ? "#dc2626" : "#16a34a"}`,
+    borderRadius: "10px",
+    padding: "16px",
+    backgroundColor: "white",
+    marginBottom: "16px",
+  };
+}
 
 function SectionTitle({ title }: { title: string }) {
   return (
-    <h2 style={{ fontSize: "22px", fontWeight: "bold", marginTop: "28px", marginBottom: "14px" }}>
+    <h2 style={{ fontSize: "15px", fontWeight: 700, color: NAVY, margin: "20px 0 10px", paddingLeft: "10px", borderLeft: `3px solid ${NAVY}` }}>
       {title}
     </h2>
   );
 }
 
-function Card({ title, value, color, suffix = "" }: { title: string; value: number; color: string; suffix?: string }) {
+function Card({ title, value, color }: { title: string; value: number; color: string }) {
   return (
-    <div style={{ border: "1px solid #e0e0e0", borderTop: `4px solid ${color}`, borderRadius: "10px", padding: "20px" }}>
-      <div style={{ color: "#666", fontSize: "14px", marginBottom: "8px" }}>{title}</div>
-      <div style={{ fontSize: "34px", fontWeight: "bold", color }}>
-        {value.toLocaleString()}
-        {suffix}
+    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "8px", padding: "12px 14px", backgroundColor: "white" }}>
+      <div style={{ color: SLATE, fontSize: "12px", marginBottom: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+      <div style={{ fontSize: "24px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
+    </div>
+  );
+}
+
+function Mini({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div>
+      <div style={{ color: SLATE, fontSize: "11px", marginBottom: "2px" }}>{label}</div>
+      <div style={{ fontSize: "16px", fontWeight: 700, color }}>{value}</div>
+    </div>
+  );
+}
+
+function SlimAlert({ color, text }: { color: string; text: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "10px", borderLeft: `4px solid ${color}`, backgroundColor: "white", border: `1px solid ${BORDER}`, borderLeftWidth: "4px", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px" }}>
+      <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
+      <span style={{ fontSize: "13px", color: NAVY }}>{text}</span>
+    </div>
+  );
+}
+
+function EscalationRow({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", borderLeft: "4px solid #dc2626", backgroundColor: "white", border: `1px solid ${BORDER}`, borderLeftWidth: "4px", borderRadius: "6px", padding: "10px 14px" }}>
+      <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#dc2626", flexShrink: 0, marginTop: "4px" }} />
+      <div>
+        <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{title}</div>
+        <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>{detail} A task has been raised with the owner.</div>
       </div>
     </div>
   );
 }
 
-function ComingSoonCard({ title }: { title: string }) {
-  return (
-    <div style={{ border: "1px solid #e0e0e0", borderRadius: "10px", padding: "20px", backgroundColor: "#fafafa" }}>
-      <div style={{ color: "#666", fontSize: "14px", marginBottom: "8px" }}>{title}</div>
-      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#999" }}>Coming Soon</div>
-    </div>
-  );
-}
-
-function AlertBox({ type, title, text }: { type: "good" | "bad" | "warning"; title: string; text: string }) {
-  const styles = {
-    good: { border: "#bbf7d0", background: "#f0fdf4", color: "#166534" },
-    bad: { border: "#fecaca", background: "#fef2f2", color: "#991b1b" },
-    warning: { border: "#fed7aa", background: "#fff7ed", color: "#9a3412" },
-  };
-  const s = styles[type];
-  return (
-    <div style={{ border: `1px solid ${s.border}`, backgroundColor: s.background, color: s.color, borderRadius: "10px", padding: "16px" }}>
-      <strong>{title}</strong>
-      <div style={{ marginTop: "6px", fontSize: "14px" }}>{text}</div>
-    </div>
-  );
-}
-
 function PerformanceTable({ rows }: { rows: PerformanceRow[] }) {
-  if (rows.length === 0) return <p style={{ color: "#666" }}>No task data yet.</p>;
+  if (rows.length === 0) return <p style={{ color: SLATE, fontSize: "13px" }}>No task data yet.</p>;
   return (
-    <div style={{ overflowX: "auto", marginBottom: "32px" }}>
-      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "520px" }}>
+    <div style={{ overflowX: "auto", marginBottom: "16px", backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "10px" }}>
+      <table style={{ borderCollapse: "collapse", width: "100%" }}>
         <thead>
-          <tr style={{ backgroundColor: "#fafafa" }}>
-            <th style={tableHeaderStyle}>Name</th>
-            <th style={tableHeaderStyle}>Red</th>
-            <th style={tableHeaderStyle}>Amber</th>
-            <th style={tableHeaderStyle}>Green</th>
-            <th style={tableHeaderStyle}>Total</th>
+          <tr style={{ backgroundColor: "#f8fafc" }}>
+            <th style={th}>Name</th><th style={th}>Red</th><th style={th}>Amber</th><th style={th}>Green</th><th style={th}>Total</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.name}>
-              <td style={tableCellStyle}><strong>{r.name}</strong></td>
-              <td style={{ ...tableCellStyle, color: "#dc2626", fontWeight: "bold" }}>{r.red}</td>
-              <td style={{ ...tableCellStyle, color: "#d97706", fontWeight: "bold" }}>{r.amber}</td>
-              <td style={{ ...tableCellStyle, color: "#16a34a", fontWeight: "bold" }}>{r.green}</td>
-              <td style={tableCellStyle}>{r.total}</td>
+              <td style={tdBold}>{r.name}</td>
+              <td style={{ ...td, color: "#dc2626", fontWeight: 700 }}>{r.red}</td>
+              <td style={{ ...td, color: "#d97706", fontWeight: 700 }}>{r.amber}</td>
+              <td style={{ ...td, color: "#16a34a", fontWeight: 700 }}>{r.green}</td>
+              <td style={td}>{r.total}</td>
             </tr>
           ))}
         </tbody>
@@ -1123,15 +913,23 @@ function PerformanceTable({ rows }: { rows: PerformanceRow[] }) {
   );
 }
 
-const tableHeaderStyle = {
-  textAlign: "left" as const,
-  border: "1px solid #e0e0e0",
-  padding: "10px",
-  fontSize: "14px",
+const th: React.CSSProperties = {
+  textAlign: "left",
+  borderBottom: `1px solid ${BORDER}`,
+  padding: "8px 10px",
+  fontSize: "12px",
+  color: SLATE,
+  fontWeight: 700,
 };
 
-const tableCellStyle = {
-  border: "1px solid #e0e0e0",
-  padding: "10px",
-  fontSize: "14px",
+const td: React.CSSProperties = {
+  borderBottom: `1px solid #f1f5f9`,
+  padding: "8px 10px",
+  fontSize: "13px",
+};
+
+const tdBold: React.CSSProperties = {
+  ...td,
+  fontWeight: 700,
+  color: NAVY,
 };
