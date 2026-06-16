@@ -10,6 +10,7 @@ type Member = {
   first_name: string | null;
   last_name: string | null;
   role: string;
+  department: string | null;
 };
 
 type NavItem = {
@@ -52,7 +53,7 @@ export default function AuthWrapper({
 
       const { data: memberData } = await supabase
         .from("members")
-        .select("name, first_name, last_name, role")
+        .select("name, first_name, last_name, role, department")
         .eq("email", user.email)
         .single();
 
@@ -103,20 +104,20 @@ export default function AuthWrapper({
       allowedRoles: ["Admin", "Executive", "Manager", "Member"],
     },
     {
-  label: "Monthly Targets",
-  href: "/monthly-operations-targets",
-  allowedRoles: ["Admin", "Executive"],
-},
+      label: "Monthly Targets",
+      href: "/monthly-operations-targets",
+      allowedRoles: ["Admin", "Executive"],
+    },
     {
       label: "Tasks",
       href: "/tasks",
       allowedRoles: ["Admin", "Executive", "Manager", "Member"],
     },
     {
-  label: "Exceptions",
-  href: "/exceptions",
-  allowedRoles: ["Admin", "Executive", "Manager", "Member"],
-},
+      label: "Exceptions",
+      href: "/exceptions",
+      allowedRoles: ["Admin", "Executive", "Manager", "Member"],
+    },
     {
       label: "Opening Balances",
       href: "/opening-balances",
@@ -132,11 +133,26 @@ export default function AuthWrapper({
       href: "/department-owners",
       allowedRoles: ["Admin", "Executive"],
     },
+    {
+      label: "Finance",
+      href: "/finance",
+      allowedRoles: ["Admin", "Executive"],
+    },
   ];
 
-  const visibleNavItems = navItems.filter((item) =>
-    item.allowedRoles.includes(currentRole)
-  );
+  const currentDepartment = member?.department || null;
+
+  const visibleNavItems = navItems.filter((item) => {
+    // Finance is visible to Admin/Executive OR a Manager in the Finance department.
+    if (item.href === "/finance") {
+      return (
+        currentRole === "Admin" ||
+        currentRole === "Executive" ||
+        (currentRole === "Manager" && currentDepartment === "Finance")
+      );
+    }
+    return item.allowedRoles.includes(currentRole);
+  });
 
   const roleColor =
     currentRole === "Admin"
