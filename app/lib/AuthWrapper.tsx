@@ -143,7 +143,6 @@ export default function AuthWrapper({
   const currentDepartment = member?.department || null;
 
   const visibleNavItems = navItems.filter((item) => {
-    // Finance is visible to Admin/Executive OR a Manager in the Finance department.
     if (item.href === "/finance") {
       return (
         currentRole === "Admin" ||
