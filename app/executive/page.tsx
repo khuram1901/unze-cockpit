@@ -739,9 +739,9 @@ export default function ExecutiveDashboardPage() {
                 </div>
               </div>
             </div>
-
-            {/* Two-column row: Finance + Receivables side by side on wide screens */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px" }}>
+            {/* Two continuous columns: left = Finance + Department, right = Receivables + People */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
+              {/* LEFT COLUMN */}
               <div>
                 <SectionTitle title="Finance — Cash Position" />
                 {!cashPlan && !cashOpening && cashPositions.length === 0 ? (
@@ -759,8 +759,12 @@ export default function ExecutiveDashboardPage() {
                     </div>
                   </div>
                 )}
+
+                <SectionTitle title="Department Performance" />
+                <PerformanceTable rows={departmentRows} />
               </div>
 
+              {/* RIGHT COLUMN */}
               <div>
                 <SectionTitle title="Receivables — Bills in Progress" />
                 {receivableRows.length === 0 ? (
@@ -798,16 +802,7 @@ export default function ExecutiveDashboardPage() {
                     )}
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Two-column row: Department + People performance */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px" }}>
-              <div>
-                <SectionTitle title="Department Performance" />
-                <PerformanceTable rows={departmentRows} />
-              </div>
-              <div>
                 <SectionTitle title="People Performance" />
                 <PerformanceTable rows={peopleRows} />
               </div>
@@ -845,7 +840,7 @@ function panelCard(red: boolean): React.CSSProperties {
     borderRadius: "8px",
     padding: "12px",
     backgroundColor: "white",
-    marginBottom: "12px",
+    marginBottom: "4px",
   };
 }
 
