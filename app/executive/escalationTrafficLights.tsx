@@ -28,7 +28,6 @@ export default function EscalationTrafficLights({
 }: {
   escalations: Escalation[];
 }) {
-  // which metric is expanded; null = collapsed, just tiles
   const [open, setOpen] = useState<"Production" | "Dispatch" | "Breakage" | null>(null);
 
   const byMetric = {
@@ -48,33 +47,33 @@ export default function EscalationTrafficLights({
         onClick={() => (hasIssues ? setOpen(isOpen ? null : metric) : null)}
         style={{
           flex: 1,
-          minWidth: "130px",
+          minWidth: "100px",
           cursor: hasIssues ? "pointer" : "default",
           backgroundColor: c.bg,
           border: `1px solid ${isOpen ? c.dot : c.border}`,
-          borderRadius: "10px",
-          padding: "12px 14px",
+          borderRadius: "8px",
+          padding: "8px 10px",
           display: "flex",
           alignItems: "center",
-          gap: "12px",
+          gap: "9px",
           textAlign: "left",
           outline: isOpen ? `2px solid ${c.dot}` : "none",
         }}
       >
         <span
           style={{
-            width: "14px",
-            height: "14px",
+            width: "11px",
+            height: "11px",
             borderRadius: "50%",
             backgroundColor: c.dot,
             flexShrink: 0,
           }}
         />
         <span style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ fontSize: "24px", fontWeight: 800, color: c.text, lineHeight: 1 }}>
+          <span style={{ fontSize: "19px", fontWeight: 800, color: c.text, lineHeight: 1 }}>
             {list.length}
           </span>
-          <span style={{ fontSize: "12px", fontWeight: 600, color: c.text }}>
+          <span style={{ fontSize: "11px", fontWeight: 600, color: c.text }}>
             {metric}
           </span>
         </span>

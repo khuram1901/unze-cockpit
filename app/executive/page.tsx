@@ -650,10 +650,6 @@ export default function ExecutiveDashboardPage() {
         (!t.updated_at && t.created_at && t.created_at.slice(0, 10) >= currentMonthStart))
   );
 
-  const productionEscalations = escalations.filter((e) => e.metric === "Production");
-  const dispatchEscalations = escalations.filter((e) => e.metric === "Dispatch");
-  const breakageEscalations = escalations.filter((e) => e.metric === "Breakage");
-
   const departmentRows = buildPerformanceRows(tasks, "department");
   const peopleRows = buildPerformanceRows(tasks, "person");
 
@@ -682,25 +678,25 @@ export default function ExecutiveDashboardPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: "24px 28px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
+      <main style={{ padding: "20px 24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
-            <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
-            <p style={{ color: SLATE, fontSize: "13px", marginTop: "6px", maxWidth: "640px" }}>
+            <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
+            <p style={{ color: SLATE, fontSize: "12px", marginTop: "5px", maxWidth: "640px" }}>
               Executive escalations surface lagging indicators (Q3+ for production and dispatch, breakage over 1.5%). Earlier issues stay with operations.
             </p>
           </div>
-          <div style={{ backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "10px", padding: "10px 14px" }}>
-            <label style={{ fontWeight: 700, display: "block", marginBottom: "4px", fontSize: "12px", color: SLATE }}>View date</label>
+          <div style={{ backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "8px 12px" }}>
+            <label style={{ fontWeight: 700, display: "block", marginBottom: "3px", fontSize: "11px", color: SLATE }}>View date</label>
             <input
               type="date"
               value={selectedDate}
               min={minDate}
               max={today}
               onChange={(e) => setSelectedDate(e.target.value)}
-              style={{ padding: "7px 10px", border: `1px solid ${BORDER}`, borderRadius: "6px", fontSize: "13px" }}
+              style={{ padding: "6px 9px", border: `1px solid ${BORDER}`, borderRadius: "6px", fontSize: "12px" }}
             />
-            <div style={{ marginTop: "6px", color: SLATE, fontSize: "12px" }}>
+            <div style={{ marginTop: "5px", color: SLATE, fontSize: "11px" }}>
               {selectedMonth} · Q{currentQuarter}
             </div>
           </div>
@@ -713,7 +709,8 @@ export default function ExecutiveDashboardPage() {
             {cashPlanMissing && (
               <SlimAlert color="#dc2626" text="This month's cash plan has not been entered. The finance manager needs to set expected receivables and payouts on the Finance page." />
             )}
-                       <SectionTitle title="Executive Escalations" />
+
+            <SectionTitle title="Executive Escalations" />
             <EscalationTrafficLights escalations={escalations} />
 
             <SectionTitle title="Executive Attention" />
@@ -738,7 +735,7 @@ export default function ExecutiveDashboardPage() {
             </div>
 
             {/* Two-column row: Finance + Receivables side by side on wide screens */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))", gap: "20px", marginTop: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px" }}>
               <div>
                 <SectionTitle title="Finance — Cash Position" />
                 {!cashPlan && !cashOpening && cashPositions.length === 0 ? (
@@ -799,7 +796,7 @@ export default function ExecutiveDashboardPage() {
             </div>
 
             {/* Two-column row: Department + People performance */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))", gap: "20px", marginTop: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px" }}>
               <div>
                 <SectionTitle title="Department Performance" />
                 <PerformanceTable rows={departmentRows} />
@@ -818,31 +815,31 @@ export default function ExecutiveDashboardPage() {
 
 const cardGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-  gap: "10px",
-  marginBottom: "24px",
+  gridTemplateColumns: "repeat(auto-fill, minmax(118px, 1fr))",
+  gap: "8px",
+  marginBottom: "18px",
 };
 
 const miniGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-  gap: "12px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(105px, 1fr))",
+  gap: "9px",
 };
 
 function panelCard(red: boolean): React.CSSProperties {
   return {
     border: `1px solid ${BORDER}`,
     borderTop: `3px solid ${red ? "#dc2626" : "#16a34a"}`,
-    borderRadius: "10px",
-    padding: "16px",
+    borderRadius: "8px",
+    padding: "12px",
     backgroundColor: "white",
-    marginBottom: "16px",
+    marginBottom: "12px",
   };
 }
 
 function SectionTitle({ title }: { title: string }) {
   return (
-    <h2 style={{ fontSize: "15px", fontWeight: 700, color: NAVY, margin: "20px 0 10px", paddingLeft: "10px", borderLeft: `3px solid ${NAVY}` }}>
+    <h2 style={{ fontSize: "13px", fontWeight: 700, color: NAVY, margin: "14px 0 8px", paddingLeft: "9px", borderLeft: `3px solid ${NAVY}` }}>
       {title}
     </h2>
   );
@@ -850,9 +847,9 @@ function SectionTitle({ title }: { title: string }) {
 
 function Card({ title, value, color }: { title: string; value: number; color: string }) {
   return (
-    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "8px", padding: "12px 14px", backgroundColor: "white" }}>
-      <div style={{ color: SLATE, fontSize: "12px", marginBottom: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
-      <div style={{ fontSize: "24px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
+    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
+      <div style={{ color: SLATE, fontSize: "11px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+      <div style={{ fontSize: "19px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
     </div>
   );
 }
@@ -860,29 +857,17 @@ function Card({ title, value, color }: { title: string; value: number; color: st
 function Mini({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div>
-      <div style={{ color: SLATE, fontSize: "11px", marginBottom: "2px" }}>{label}</div>
-      <div style={{ fontSize: "16px", fontWeight: 700, color }}>{value}</div>
+      <div style={{ color: SLATE, fontSize: "10px", marginBottom: "1px" }}>{label}</div>
+      <div style={{ fontSize: "14px", fontWeight: 700, color }}>{value}</div>
     </div>
   );
 }
 
 function SlimAlert({ color, text }: { color: string; text: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "10px", borderLeft: `4px solid ${color}`, backgroundColor: "white", border: `1px solid ${BORDER}`, borderLeftWidth: "4px", borderRadius: "6px", padding: "10px 14px", marginBottom: "16px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "10px", backgroundColor: "white", border: `1px solid ${BORDER}`, borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
       <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
       <span style={{ fontSize: "13px", color: NAVY }}>{text}</span>
-    </div>
-  );
-}
-
-function EscalationRow({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", borderLeft: "4px solid #dc2626", backgroundColor: "white", border: `1px solid ${BORDER}`, borderLeftWidth: "4px", borderRadius: "6px", padding: "10px 14px" }}>
-      <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: "#dc2626", flexShrink: 0, marginTop: "4px" }} />
-      <div>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{title}</div>
-        <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>{detail} A task has been raised with the owner.</div>
-      </div>
     </div>
   );
 }
@@ -890,7 +875,7 @@ function EscalationRow({ title, detail }: { title: string; detail: string }) {
 function PerformanceTable({ rows }: { rows: PerformanceRow[] }) {
   if (rows.length === 0) return <p style={{ color: SLATE, fontSize: "13px" }}>No task data yet.</p>;
   return (
-    <div style={{ overflowX: "auto", marginBottom: "16px", backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "10px" }}>
+    <div style={{ overflowX: "auto", marginBottom: "12px", backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "8px" }}>
       <table style={{ borderCollapse: "collapse", width: "100%" }}>
         <thead>
           <tr style={{ backgroundColor: "#f8fafc" }}>
@@ -916,16 +901,16 @@ function PerformanceTable({ rows }: { rows: PerformanceRow[] }) {
 const th: React.CSSProperties = {
   textAlign: "left",
   borderBottom: `1px solid ${BORDER}`,
-  padding: "8px 10px",
-  fontSize: "12px",
+  padding: "6px 8px",
+  fontSize: "11px",
   color: SLATE,
   fontWeight: 700,
 };
 
 const td: React.CSSProperties = {
   borderBottom: `1px solid #f1f5f9`,
-  padding: "8px 10px",
-  fontSize: "13px",
+  padding: "6px 8px",
+  fontSize: "12px",
 };
 
 const tdBold: React.CSSProperties = {
