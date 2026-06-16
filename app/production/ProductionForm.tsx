@@ -234,18 +234,18 @@ export default function ProductionForm() {
   }
 
   const inputStyle = {
-    display: "block", width: "100%", maxWidth: "300px", padding: "10px",
-    marginTop: "4px", marginBottom: "14px", border: "1px solid #ccc",
-    borderRadius: "6px", fontSize: "15px",
+    display: "block", width: "100%", padding: "7px 9px",
+    marginTop: "3px", marginBottom: "10px", border: "1px solid #e2e8f0",
+    borderRadius: "6px", fontSize: "13px",
   };
 
   const sectionStyle = {
-    border: "1px solid #e0e0e0", borderRadius: "8px",
-    padding: "20px", marginBottom: "20px",
+    border: "1px solid #e2e8f0", borderRadius: "8px",
+    padding: "14px", marginBottom: "14px", backgroundColor: "white",
   };
 
-  const hint = { fontSize: "13px", color: "#888", marginBottom: "14px" };
-  const h3 = { fontSize: "16px", fontWeight: "bold" as const, marginBottom: "4px" };
+  const hint = { fontSize: "12px", color: "#64748b", marginBottom: "10px" };
+  const h3 = { fontSize: "13px", fontWeight: 700 as const, color: "#1e293b", marginBottom: "4px" };
 
   function ReasonSelect({
     value, onChange, size,
@@ -262,7 +262,7 @@ export default function ProductionForm() {
     );
   }
 
-  if (loadingPlants) return <p>Loading your plant…</p>;
+  if (loadingPlants) return <p style={{ color: "#64748b" }}>Loading your plant…</p>;
 
   if (noAccess) {
     return (
@@ -279,13 +279,13 @@ export default function ProductionForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: "360px" }}>
-      {/* Plant & date */}
+    <form onSubmit={handleSubmit}>
+      {/* Plant & date — full width bar on top */}
       <div style={sectionStyle}>
         {plants.length === 1 ? (
-          <div style={{ marginBottom: "14px" }}>
-            <div style={{ fontSize: "13px", color: "#888" }}>Plant</div>
-            <div style={{ fontSize: "18px", fontWeight: "bold" }}>{plants[0].name}</div>
+          <div style={{ marginBottom: "10px" }}>
+            <div style={{ fontSize: "12px", color: "#64748b" }}>Plant</div>
+            <div style={{ fontSize: "16px", fontWeight: "bold", color: "#1e293b" }}>{plants[0].name}</div>
           </div>
         ) : (
           <label>Plant
@@ -305,101 +305,106 @@ export default function ProductionForm() {
         </label>
       </div>
 
-      {/* Production */}
-      {plantId && (
-        <div style={sectionStyle}>
-          <h3 style={h3}>Production today</h3>
-          <p style={hint}>Count ALL poles produced, including any that broke. Leave blank if none.</p>
-          {!isMeter ? (
-            <>
-              <label>31 ft produced<input type="number" min="0" style={inputStyle} value={prod31} onChange={(e) => setProd31(e.target.value)} placeholder="0" /></label>
-              <label>36 ft produced<input type="number" min="0" style={inputStyle} value={prod36} onChange={(e) => setProd36(e.target.value)} placeholder="0" /></label>
-              <label>45 ft produced<input type="number" min="0" style={inputStyle} value={prod45} onChange={(e) => setProd45(e.target.value)} placeholder="0" /></label>
-            </>
-          ) : (
-            <label>Single-phase meters produced<input type="number" min="0" style={inputStyle} value={prodMeter} onChange={(e) => setProdMeter(e.target.value)} placeholder="0" /></label>
-          )}
-        </div>
-      )}
+      {/* Data sections flow into columns across the page */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "14px", alignItems: "start" }}>
+        {/* Production */}
+        {plantId && (
+          <div style={sectionStyle}>
+            <h3 style={h3}>Production today</h3>
+            <p style={hint}>Count ALL poles produced, including any that broke. Leave blank if none.</p>
+            {!isMeter ? (
+              <>
+                <label>31 ft produced<input type="number" min="0" style={inputStyle} value={prod31} onChange={(e) => setProd31(e.target.value)} placeholder="0" /></label>
+                <label>36 ft produced<input type="number" min="0" style={inputStyle} value={prod36} onChange={(e) => setProd36(e.target.value)} placeholder="0" /></label>
+                <label>45 ft produced<input type="number" min="0" style={inputStyle} value={prod45} onChange={(e) => setProd45(e.target.value)} placeholder="0" /></label>
+              </>
+            ) : (
+              <label>Single-phase meters produced<input type="number" min="0" style={inputStyle} value={prodMeter} onChange={(e) => setProdMeter(e.target.value)} placeholder="0" /></label>
+            )}
+          </div>
+        )}
 
-      {/* Breakage */}
-      {plantId && !isMeter && (
-        <div style={sectionStyle}>
-          <h3 style={h3}>Breakage today</h3>
-          <p style={hint}>Of the production above, how many broke? Pick a reason for each size that broke.</p>
+        {/* Breakage */}
+        {plantId && !isMeter && (
+          <div style={sectionStyle}>
+            <h3 style={h3}>Breakage today</h3>
+            <p style={hint}>Of the production above, how many broke? Pick a reason for each size that broke.</p>
 
-          <label>31 ft broken<input type="number" min="0" style={inputStyle} value={brk31} onChange={(e) => setBrk31(e.target.value)} placeholder="0" /></label>
-          {Number(brk31) > 0 && <ReasonSelect value={reason31} onChange={setReason31} size="31 ft" />}
+            <label>31 ft broken<input type="number" min="0" style={inputStyle} value={brk31} onChange={(e) => setBrk31(e.target.value)} placeholder="0" /></label>
+            {Number(brk31) > 0 && <ReasonSelect value={reason31} onChange={setReason31} size="31 ft" />}
 
-          <label>36 ft broken<input type="number" min="0" style={inputStyle} value={brk36} onChange={(e) => setBrk36(e.target.value)} placeholder="0" /></label>
-          {Number(brk36) > 0 && <ReasonSelect value={reason36} onChange={setReason36} size="36 ft" />}
+            <label>36 ft broken<input type="number" min="0" style={inputStyle} value={brk36} onChange={(e) => setBrk36(e.target.value)} placeholder="0" /></label>
+            {Number(brk36) > 0 && <ReasonSelect value={reason36} onChange={setReason36} size="36 ft" />}
 
-          <label>45 ft broken<input type="number" min="0" style={inputStyle} value={brk45} onChange={(e) => setBrk45(e.target.value)} placeholder="0" /></label>
-          {Number(brk45) > 0 && <ReasonSelect value={reason45} onChange={setReason45} size="45 ft" />}
+            <label>45 ft broken<input type="number" min="0" style={inputStyle} value={brk45} onChange={(e) => setBrk45(e.target.value)} placeholder="0" /></label>
+            {Number(brk45) > 0 && <ReasonSelect value={reason45} onChange={setReason45} size="45 ft" />}
 
-          {(reason31 === "Other" || reason36 === "Other" || reason45 === "Other") && (
-            <label>Other — please specify<input type="text" style={inputStyle} value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} placeholder="Describe the other reason" /></label>
-          )}
-        </div>
-      )}
+            {(reason31 === "Other" || reason36 === "Other" || reason45 === "Other") && (
+              <label>Other — please specify<input type="text" style={inputStyle} value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} placeholder="Describe the other reason" /></label>
+            )}
+          </div>
+        )}
 
-      {/* Dispatch */}
-      {plantId && (
-        <div style={sectionStyle}>
-          <h3 style={h3}>Dispatch today</h3>
-          <p style={hint}>Good poles sent out. Leave blank if nothing dispatched.</p>
-          {!isMeter ? (
-            <>
-              <label>31 ft dispatched<input type="number" min="0" style={inputStyle} value={disp31} onChange={(e) => setDisp31(e.target.value)} placeholder="0" /></label>
-              <label>36 ft dispatched<input type="number" min="0" style={inputStyle} value={disp36} onChange={(e) => setDisp36(e.target.value)} placeholder="0" /></label>
-              <label>45 ft dispatched<input type="number" min="0" style={inputStyle} value={disp45} onChange={(e) => setDisp45(e.target.value)} placeholder="0" /></label>
-            </>
-          ) : (
-            <label>Single-phase meters dispatched<input type="number" min="0" style={inputStyle} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
-          )}
-        </div>
-      )}
+        {/* Dispatch */}
+        {plantId && (
+          <div style={sectionStyle}>
+            <h3 style={h3}>Dispatch today</h3>
+            <p style={hint}>Good poles sent out. Leave blank if nothing dispatched.</p>
+            {!isMeter ? (
+              <>
+                <label>31 ft dispatched<input type="number" min="0" style={inputStyle} value={disp31} onChange={(e) => setDisp31(e.target.value)} placeholder="0" /></label>
+                <label>36 ft dispatched<input type="number" min="0" style={inputStyle} value={disp36} onChange={(e) => setDisp36(e.target.value)} placeholder="0" /></label>
+                <label>45 ft dispatched<input type="number" min="0" style={inputStyle} value={disp45} onChange={(e) => setDisp45(e.target.value)} placeholder="0" /></label>
+              </>
+            ) : (
+              <label>Single-phase meters dispatched<input type="number" min="0" style={inputStyle} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
+            )}
+          </div>
+        )}
 
-      {/* Scrap processed */}
-      {plantId && !isMeter && (
-        <div style={sectionStyle}>
-          <h3 style={h3}>Broken poles processed for scrap today</h3>
-          <p style={hint}>Broken poles removed/processed. (Reduces broken-pole stock.)</p>
-          <label>31 ft processed<input type="number" min="0" style={inputStyle} value={scr31} onChange={(e) => setScr31(e.target.value)} placeholder="0" /></label>
-          <label>36 ft processed<input type="number" min="0" style={inputStyle} value={scr36} onChange={(e) => setScr36(e.target.value)} placeholder="0" /></label>
-          <label>45 ft processed<input type="number" min="0" style={inputStyle} value={scr45} onChange={(e) => setScr45(e.target.value)} placeholder="0" /></label>
-        </div>
-      )}
+        {/* Scrap processed */}
+        {plantId && !isMeter && (
+          <div style={sectionStyle}>
+            <h3 style={h3}>Broken poles processed for scrap today</h3>
+            <p style={hint}>Broken poles removed/processed. (Reduces broken-pole stock.)</p>
+            <label>31 ft processed<input type="number" min="0" style={inputStyle} value={scr31} onChange={(e) => setScr31(e.target.value)} placeholder="0" /></label>
+            <label>36 ft processed<input type="number" min="0" style={inputStyle} value={scr36} onChange={(e) => setScr36(e.target.value)} placeholder="0" /></label>
+            <label>45 ft processed<input type="number" min="0" style={inputStyle} value={scr45} onChange={(e) => setScr45(e.target.value)} placeholder="0" /></label>
+          </div>
+        )}
 
-      {/* Machine breakdown */}
-      {plantId && (
-        <div style={sectionStyle}>
-          <h3 style={h3}>Machine breakdown (optional)</h3>
-          <p style={hint}>Report a machine that is down, partially working, or resolved. Leave blank if none.</p>
+        {/* Machine breakdown */}
+        {plantId && (
+          <div style={sectionStyle}>
+            <h3 style={h3}>Machine breakdown (optional)</h3>
+            <p style={hint}>Report a machine that is down, partially working, or resolved. Leave blank if none.</p>
 
-          <label>Machine name<input type="text" style={inputStyle} value={machineName} onChange={(e) => setMachineName(e.target.value)} placeholder="e.g. Spinning Machine #2" /></label>
+            <label>Machine name<input type="text" style={inputStyle} value={machineName} onChange={(e) => setMachineName(e.target.value)} placeholder="e.g. Spinning Machine #2" /></label>
 
-          <label>Status
-            <select style={inputStyle} value={machineStatus} onChange={(e) => setMachineStatus(e.target.value)}>
-              {MACHINE_STATUSES.map((s) => (<option key={s}>{s}</option>))}
-            </select>
-          </label>
+            <label>Status
+              <select style={inputStyle} value={machineStatus} onChange={(e) => setMachineStatus(e.target.value)}>
+                {MACHINE_STATUSES.map((s) => (<option key={s}>{s}</option>))}
+              </select>
+            </label>
 
-          <label>Expected resolution<input type="text" style={inputStyle} value={machineExpectedResolution} onChange={(e) => setMachineExpectedResolution(e.target.value)} placeholder="e.g. Today 5pm / Tomorrow / Waiting for part" /></label>
+            <label>Expected resolution<input type="text" style={inputStyle} value={machineExpectedResolution} onChange={(e) => setMachineExpectedResolution(e.target.value)} placeholder="e.g. Today 5pm / Tomorrow / Waiting for part" /></label>
 
-          <label>Issue description<textarea style={{ ...inputStyle, height: "80px" }} value={machineDescription} onChange={(e) => setMachineDescription(e.target.value)} placeholder="What happened?" /></label>
+            <label>Issue description<textarea style={{ ...inputStyle, height: "80px" }} value={machineDescription} onChange={(e) => setMachineDescription(e.target.value)} placeholder="What happened?" /></label>
 
-          <label>Action taken<textarea style={{ ...inputStyle, height: "70px" }} value={machineActionTaken} onChange={(e) => setMachineActionTaken(e.target.value)} placeholder="What has been done so far?" /></label>
+            <label>Action taken<textarea style={{ ...inputStyle, height: "70px" }} value={machineActionTaken} onChange={(e) => setMachineActionTaken(e.target.value)} placeholder="What has been done so far?" /></label>
 
-          <p style={{ fontSize: "12px", color: "#999" }}>
-            To submit a machine issue, fill in at least the machine name and issue description.
-          </p>
-        </div>
-      )}
-      {/* Receivables for this plant */}
+            <p style={{ fontSize: "12px", color: "#999" }}>
+              To submit a machine issue, fill in at least the machine name and issue description.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Receivables for this plant — full width below the columns */}
       {plantId && selectedPlant && (
         <ReceivablesSection plantId={plantId} plantName={selectedPlant.name} />
       )}
+
       {/* General notes */}
       {plantId && (
         <div style={sectionStyle}>
@@ -408,12 +413,12 @@ export default function ProductionForm() {
       )}
 
       <button type="submit" disabled={saving || !plantId}
-        style={{ backgroundColor: "#0070f3", color: "white", border: "none", borderRadius: "6px", padding: "12px 24px", fontSize: "15px", cursor: "pointer", fontWeight: "bold" }}>
+        style={{ backgroundColor: "#1e293b", color: "white", border: "none", borderRadius: "6px", padding: "9px 20px", fontSize: "13px", cursor: "pointer", fontWeight: 700, marginTop: "6px" }}>
         {saving ? "Submitting…" : "Submit Daily Entry"}
       </button>
 
       {message && (
-        <p style={{ marginTop: "16px", fontSize: "14px", color: message.startsWith("Error") ? "red" : "green" }}>{message}</p>
+        <p style={{ marginTop: "14px", fontSize: "13px", color: message.startsWith("Error") ? "red" : "green" }}>{message}</p>
       )}
     </form>
   );
