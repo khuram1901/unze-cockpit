@@ -45,9 +45,8 @@ export default function EscalationTrafficLights({
     return (
       <button
         onClick={() => (hasIssues ? setOpen(isOpen ? null : metric) : null)}
-        style={{
-          flex: 1,
-          minWidth: "100px",
+                style={{
+          minWidth: "118px",
           cursor: hasIssues ? "pointer" : "default",
           backgroundColor: c.bg,
           border: `1px solid ${isOpen ? c.dot : c.border}`,
@@ -84,7 +83,13 @@ export default function EscalationTrafficLights({
   return (
     <section style={{ marginBottom: "24px" }}>
       {/* Traffic-light tiles — always visible, just numbers + colour */}
-      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(118px, 1fr))",
+          gap: "8px",
+        }}
+      >
         {METRICS.map((m) => (
           <Tile key={m} metric={m} />
         ))}
