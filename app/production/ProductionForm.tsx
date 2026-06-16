@@ -280,29 +280,40 @@ export default function ProductionForm() {
 
   return (
     <form onSubmit={handleSubmit}>
-      {/* Plant & date — full width bar on top */}
-      <div style={sectionStyle}>
+          {/* Plant & date — compact horizontal strip */}
+      <div style={{ ...sectionStyle, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "16px" }}>
         {plants.length === 1 ? (
-          <div style={{ marginBottom: "10px" }}>
-            <div style={{ fontSize: "12px", color: "#64748b" }}>Plant</div>
-            <div style={{ fontSize: "16px", fontWeight: "bold", color: "#1e293b" }}>{plants[0].name}</div>
+          <div>
+            <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "2px" }}>Plant</div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b" }}>{plants[0].name}</div>
           </div>
         ) : (
-          <label>Plant
-            <select style={inputStyle} value={plantId}
-              onChange={(e) => setPlantId(e.target.value)} required>
+          <div style={{ minWidth: "200px" }}>
+            <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "2px" }}>Plant</div>
+            <select
+              style={{ ...inputStyle, marginBottom: 0, width: "auto", minWidth: "200px" }}
+              value={plantId}
+              onChange={(e) => setPlantId(e.target.value)}
+              required
+            >
               <option value="">-- Select your plant --</option>
               {plants.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-          </label>
+          </div>
         )}
 
-        <label>Date
-          <input type="date" style={inputStyle} value={entryDate}
-            onChange={(e) => setEntryDate(e.target.value)} required />
-        </label>
+        <div>
+          <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "2px" }}>Date</div>
+          <input
+            type="date"
+            style={{ ...inputStyle, marginBottom: 0, width: "auto" }}
+            value={entryDate}
+            onChange={(e) => setEntryDate(e.target.value)}
+            required
+          />
+        </div>
       </div>
 
       {/* Data sections flow into columns across the page */}
