@@ -108,11 +108,6 @@ export default function AuthWrapper({
   allowedRoles: ["Admin", "Executive"],
 },
     {
-      label: "Machine Issues",
-      href: "/machine-issues",
-      allowedRoles: ["Admin", "Executive", "Manager", "Member"],
-    },
-    {
       label: "Tasks",
       href: "/tasks",
       allowedRoles: ["Admin", "Executive", "Manager", "Member"],

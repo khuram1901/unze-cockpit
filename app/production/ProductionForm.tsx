@@ -21,12 +21,15 @@ const REASONS = [
   "Other",
 ];
 
+const MACHINE_STATUSES = ["Down", "Partially Working", "Resolved"];
+
 export default function ProductionForm() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [plantId, setPlantId] = useState("");
-  const [entryDate, setEntryDate] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
+  const [loadingPlants, setLoadingPlants] = useState(true);
+  const [noAccess, setNoAccess] = useState(false);
+
+  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
 
   // Production
   const [prod31, setProd31] = useState("");
@@ -55,18 +58,73 @@ export default function ProductionForm() {
   const [scr45, setScr45] = useState("");
 
   const [notes, setNotes] = useState("");
+
+  // Machine breakdown
+  const [machineName, setMachineName] = useState("");
+  const [machineStatus, setMachineStatus] = useState("Down");
+  const [machineExpectedResolution, setMachineExpectedResolution] = useState("");
+  const [machineDescription, setMachineDescription] = useState("");
+  const [machineActionTaken, setMachineActionTaken] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
+      setLoadingPlants(true);
+
+      const { data: userData } = await supabase.auth.getUser();
+      const email = userData.user?.email;
+
+      if (!email) {
+        setLoadingPlants(false);
+        setNoAccess(true);
+        return;
+      }
+
+      // Find the member record for the current user
+      const { data: me } = await supabase
+        .from("members")
+        .select("id, role")
+        .eq("email", email)
+        .single();
+
+      const role = me?.role || "Member";
+      const isAdminOrExec = role === "Admin" || role === "Executive";
+
+      // Load all active plants
+      const { data: allPlants } = await supabase
         .from("plants")
         .select("*")
         .eq("active", true)
         .order("name");
-      if (data) setPlants(data);
+
+      const active = allPlants || [];
+
+      if (isAdminOrExec) {
+        // Admin / Executive can enter for any plant
+        setPlants(active);
+      } else if (me) {
+        // Members / Managers only see plants assigned to them
+        const { data: mp } = await supabase
+          .from("member_plants")
+          .select("plant_id")
+          .eq("member_id", me.id);
+
+        const assignedIds = new Set((mp || []).map((r) => r.plant_id));
+        const mine = active.filter((p) => assignedIds.has(p.id));
+        setPlants(mine);
+
+        // If exactly one plant, auto-select it
+        if (mine.length === 1) setPlantId(mine[0].id);
+        if (mine.length === 0) setNoAccess(true);
+      } else {
+        setNoAccess(true);
+      }
+
+      setLoadingPlants(false);
     }
+
     load();
   }, []);
 
@@ -80,6 +138,8 @@ export default function ProductionForm() {
     setReason31(""); setReason36(""); setReason45(""); setReasonOther("");
     setScr31(""); setScr36(""); setScr45("");
     setNotes("");
+    setMachineName(""); setMachineStatus("Down");
+    setMachineExpectedResolution(""); setMachineDescription(""); setMachineActionTaken("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -94,6 +154,7 @@ export default function ProductionForm() {
     const hasDispatch = disp31 || disp36 || disp45 || dispMeter;
     const hasBreakage = brk31 || brk36 || brk45;
     const hasScrap = scr31 || scr36 || scr45;
+    const hasMachine = machineName && machineDescription;
 
     let err = "";
 
@@ -145,16 +206,29 @@ export default function ProductionForm() {
       if (error) err = error.message;
     }
 
+    if (hasMachine && !err) {
+      const { error } = await supabase.from("machine_issues").insert({
+        plant_id: plantId, plant_name: selectedPlant?.name || "",
+        machine_name: machineName,
+        issue_status: machineStatus,
+        expected_resolution: machineExpectedResolution || null,
+        issue_description: machineDescription,
+        action_taken: machineActionTaken || null,
+        entered_by: enteredBy,
+      });
+      if (error) err = error.message;
+    }
+
     setSaving(false);
 
     if (err) { setMessage("Error: " + err); return; }
 
-    if (!hasProduction && !hasDispatch && !hasBreakage && !hasScrap) {
-      setMessage("Please enter at least one number before submitting.");
+    if (!hasProduction && !hasDispatch && !hasBreakage && !hasScrap && !hasMachine) {
+      setMessage("Please enter at least one number or a machine issue before submitting.");
       return;
     }
 
-    setMessage("✅ Daily entry submitted. Thank you!");
+    setMessage("Daily entry submitted. Thank you!");
     resetAll();
   }
 
@@ -173,13 +247,9 @@ export default function ProductionForm() {
   const h3 = { fontSize: "16px", fontWeight: "bold" as const, marginBottom: "4px" };
 
   function ReasonSelect({
-    value,
-    onChange,
-    size,
+    value, onChange, size,
   }: {
-    value: string;
-    onChange: (v: string) => void;
-    size: string;
+    value: string; onChange: (v: string) => void; size: string;
   }) {
     return (
       <select style={inputStyle} value={value} onChange={(e) => onChange(e.target.value)}>
@@ -191,19 +261,43 @@ export default function ProductionForm() {
     );
   }
 
+  if (loadingPlants) return <p>Loading your plant…</p>;
+
+  if (noAccess) {
+    return (
+      <div style={{ ...sectionStyle, maxWidth: "520px" }}>
+        <p style={{ color: "#991b1b", fontWeight: "bold" }}>
+          You are not assigned to any plant yet.
+        </p>
+        <p style={{ color: "#666", fontSize: "14px" }}>
+          Please ask an administrator to assign you to a plant on the Members page before entering
+          data.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} style={{ maxWidth: "360px" }}>
       {/* Plant & date */}
       <div style={sectionStyle}>
-        <label>Plant
-          <select style={inputStyle} value={plantId}
-            onChange={(e) => setPlantId(e.target.value)} required>
-            <option value="">-- Select your plant --</option>
-            {plants.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </label>
+        {plants.length === 1 ? (
+          <div style={{ marginBottom: "14px" }}>
+            <div style={{ fontSize: "13px", color: "#888" }}>Plant</div>
+            <div style={{ fontSize: "18px", fontWeight: "bold" }}>{plants[0].name}</div>
+          </div>
+        ) : (
+          <label>Plant
+            <select style={inputStyle} value={plantId}
+              onChange={(e) => setPlantId(e.target.value)} required>
+              <option value="">-- Select your plant --</option>
+              {plants.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <label>Date
           <input type="date" style={inputStyle} value={entryDate}
             onChange={(e) => setEntryDate(e.target.value)} required />
@@ -276,9 +370,36 @@ export default function ProductionForm() {
         </div>
       )}
 
+      {/* Machine breakdown */}
       {plantId && (
         <div style={sectionStyle}>
-          <label>General notes (optional)<textarea style={{ ...inputStyle, height: "60px" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any issues, e.g. half day, machine down…" /></label>
+          <h3 style={h3}>Machine breakdown (optional)</h3>
+          <p style={hint}>Report a machine that is down, partially working, or resolved. Leave blank if none.</p>
+
+          <label>Machine name<input type="text" style={inputStyle} value={machineName} onChange={(e) => setMachineName(e.target.value)} placeholder="e.g. Spinning Machine #2" /></label>
+
+          <label>Status
+            <select style={inputStyle} value={machineStatus} onChange={(e) => setMachineStatus(e.target.value)}>
+              {MACHINE_STATUSES.map((s) => (<option key={s}>{s}</option>))}
+            </select>
+          </label>
+
+          <label>Expected resolution<input type="text" style={inputStyle} value={machineExpectedResolution} onChange={(e) => setMachineExpectedResolution(e.target.value)} placeholder="e.g. Today 5pm / Tomorrow / Waiting for part" /></label>
+
+          <label>Issue description<textarea style={{ ...inputStyle, height: "80px" }} value={machineDescription} onChange={(e) => setMachineDescription(e.target.value)} placeholder="What happened?" /></label>
+
+          <label>Action taken<textarea style={{ ...inputStyle, height: "70px" }} value={machineActionTaken} onChange={(e) => setMachineActionTaken(e.target.value)} placeholder="What has been done so far?" /></label>
+
+          <p style={{ fontSize: "12px", color: "#999" }}>
+            To submit a machine issue, fill in at least the machine name and issue description.
+          </p>
+        </div>
+      )}
+
+      {/* General notes */}
+      {plantId && (
+        <div style={sectionStyle}>
+          <label>General notes (optional)<textarea style={{ ...inputStyle, height: "60px" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any issues, e.g. half day, machine down" /></label>
         </div>
       )}
 

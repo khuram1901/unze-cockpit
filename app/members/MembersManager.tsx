@@ -19,20 +19,18 @@ type Plant = { id: string; name: string };
 const ROLES = ["Admin", "Executive", "Manager", "Member"];
 
 const DEPARTMENTS = [
-  "Unze Pole Production",
-  "Unze Meters",
+  "Unze Trading Ops",
   "Finance",
   "HR",
   "Admin",
   "Legal",
   "Sales",
   "Audit",
-  "Accounts",
   "S&M Investment",
   "BINC",
 ];
 
-const BUSINESS_UNITS = [
+const ALL_BUSINESS_UNITS = [
   "Head Office",
   "PESCO Plant",
   "MEPCO Plant",
@@ -43,6 +41,24 @@ const BUSINESS_UNITS = [
   "Property",
   "Nursing College",
 ];
+
+// Which business units are valid for each department
+const DEPT_BUSINESS_UNITS: Record<string, string[]> = {
+  "Unze Trading Ops": ["Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
+  Finance: ALL_BUSINESS_UNITS,
+  HR: ALL_BUSINESS_UNITS,
+  Admin: ALL_BUSINESS_UNITS,
+  Legal: ALL_BUSINESS_UNITS,
+  Audit: ALL_BUSINESS_UNITS,
+  Sales: ["PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
+  "S&M Investment": ["Property"],
+  BINC: ["Nursing College"],
+};
+
+function businessUnitsFor(department: string | null): string[] {
+  if (!department) return [];
+  return DEPT_BUSINESS_UNITS[department] || ALL_BUSINESS_UNITS;
+}
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -204,6 +220,15 @@ export default function MembersManager() {
 
     const member = members.find((m) => m.id === id);
 
+    // If department changes and current business unit is no longer valid, clear it
+    if (updates.department !== undefined) {
+      const validBUs = businessUnitsFor(updates.department);
+      const currentBU = member?.business_unit;
+      if (currentBU && !validBUs.includes(currentBU)) {
+        updates = { ...updates, business_unit: null };
+      }
+    }
+
     const updatedFirstName =
       updates.first_name !== undefined ? updates.first_name : member?.first_name || "";
 
@@ -262,6 +287,8 @@ export default function MembersManager() {
 
   if (loading) return <p>Loading members</p>;
 
+  const addFormBUs = businessUnitsFor(department);
+
   return (
     <div>
       {isAdmin && (
@@ -310,7 +337,10 @@ export default function MembersManager() {
             <select
               style={inputStyle}
               value={department}
-              onChange={(e) => setDepartment(e.target.value)}
+              onChange={(e) => {
+                setDepartment(e.target.value);
+                setBusinessUnit(""); // reset BU when department changes
+              }}
             >
               <option value="">Department</option>
               {DEPARTMENTS.map((d) => (
@@ -321,9 +351,10 @@ export default function MembersManager() {
               style={inputStyle}
               value={businessUnit}
               onChange={(e) => setBusinessUnit(e.target.value)}
+              disabled={!department}
             >
-              <option value="">Business Unit</option>
-              {BUSINESS_UNITS.map((b) => (
+              <option value="">{department ? "Business Unit" : "Select dept first"}</option>
+              {addFormBUs.map((b) => (
                 <option key={b}>{b}</option>
               ))}
             </select>
@@ -349,6 +380,7 @@ export default function MembersManager() {
       <div style={{ display: "grid", gap: "10px", maxWidth: "1100px" }}>
         {members.map((m) => {
           const displayName = fullName(m.first_name, m.last_name, m.name);
+          const rowBUs = businessUnitsFor(m.department);
 
           return (
             <div
@@ -416,9 +448,10 @@ export default function MembersManager() {
                     value={m.business_unit || ""}
                     onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })}
                     style={smallInputStyle}
+                    disabled={!m.department}
                   >
-                    <option value="">Business Unit</option>
-                    {BUSINESS_UNITS.map((b) => (
+                    <option value="">{m.department ? "Business Unit" : "Select dept first"}</option>
+                    {rowBUs.map((b) => (
                       <option key={b}>{b}</option>
                     ))}
                   </select>
