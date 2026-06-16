@@ -64,6 +64,36 @@ function fmtMoney(n: number) {
   return n.toLocaleString();
 }
 
+const inputStyle = {
+  display: "block",
+  width: "100%",
+  padding: "7px 9px",
+  marginTop: "3px",
+  marginBottom: "10px",
+  border: `1px solid ${BORDER}`,
+  borderRadius: "6px",
+  fontSize: "13px",
+};
+
+const sectionStyle = {
+  border: `1px solid ${BORDER}`,
+  borderRadius: "8px",
+  padding: "14px",
+  marginBottom: "14px",
+  backgroundColor: "white",
+};
+
+const hint = { fontSize: "12px", color: SLATE, marginBottom: "10px" };
+
+const h3 = {
+  fontSize: "13px",
+  fontWeight: 700 as const,
+  color: NAVY,
+  marginBottom: "4px",
+  paddingLeft: "9px",
+  borderLeft: `3px solid ${NAVY}`,
+};
+
 export default function ReceivablesSection({
   plantId,
   plantName,
@@ -199,42 +229,30 @@ export default function ReceivablesSection({
     loadData();
   }
 
-  const inputStyle = {
-    display: "block",
-    width: "100%",
-    padding: "7px 9px",
-    marginTop: "3px",
-    marginBottom: "10px",
-    border: `1px solid ${BORDER}`,
-    borderRadius: "6px",
-    fontSize: "13px",
-  };
-  const sectionStyle = {
-    border: `1px solid ${BORDER}`,
-    borderRadius: "8px",
-    padding: "14px",
-    marginBottom: "14px",
-    backgroundColor: "white",
-  };
-  const hint = { fontSize: "12px", color: SLATE, marginBottom: "10px" };
-  const h3 = {
-    fontSize: "13px",
-    fontWeight: 700 as const,
-    color: NAVY,
-    marginBottom: "4px",
-    paddingLeft: "9px",
-    borderLeft: `3px solid ${NAVY}`,
+  const th: React.CSSProperties = {
+    textAlign: "left",
+    borderBottom: `1px solid ${BORDER}`,
+    padding: "6px 8px",
+    fontSize: "11px",
+    color: SLATE,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
   };
 
-  if (loading) return <div style={sectionStyle}>Loading receivables…</div>;
+  const td: React.CSSProperties = {
+    borderBottom: `1px solid #f1f5f9`,
+    padding: "6px 8px",
+    fontSize: "12px",
+    verticalAlign: "middle",
+  };
 
   return (
     <div style={sectionStyle}>
       <h3 style={h3}>Receivables (bills) for this plant</h3>
       <p style={hint}>
-        Add a bill (Invoice + IC + GRN) and move it through the stages. A bill turns amber on its
-        final budgeted day and red once it is over its stage time. Red bills escalate to the
-        executive dashboard and create a task for the Trading Ops owner.
+        Add a bill (Invoice + IC + GRN) on the left, then track every open bill in the table below.
+        A bill turns amber on its final budgeted day and red once it is over its stage time. Red
+        bills escalate to the executive dashboard and create a task for the Trading Ops owner.
       </p>
 
       {msg && (
@@ -249,177 +267,198 @@ export default function ReceivablesSection({
         </p>
       )}
 
-      {/* Existing bills */}
-      {bills.length === 0 ? (
-        <p style={{ color: SLATE, fontSize: "13px", marginBottom: "14px" }}>
-          No open bills for this plant yet.
-        </p>
-      ) : (
-        <div style={{ marginBottom: "14px", display: "grid", gap: "8px" }}>
-          {bills.map((bill) => {
-            const st = billStatus(bill);
-            const elapsed = workingDaysSince(bill.current_stage_entered_date);
-            const budget = stageBudget(bill.current_stage_order);
-            return (
-              <div
-                key={bill.id}
-                style={{
-                  border: `1px solid ${BORDER}`,
-                  borderLeft: `5px solid ${statusColor[st]}`,
-                  borderRadius: "8px",
-                  padding: "12px",
-                  backgroundColor: "white",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
-                  <div style={{ fontWeight: 700, fontSize: "13px", color: NAVY }}>
-                    {bill.utility} — {fmtMoney(bill.amount)} {bill.currency}
-                  </div>
-                  <div style={{ color: statusColor[st], fontWeight: 700, fontSize: "12px" }}>
-                    {st.toUpperCase()}
-                  </div>
-                </div>
-                <div style={{ fontSize: "12px", color: SLATE, marginTop: "4px" }}>
-                  Invoice: {bill.invoice_ref || "—"} | IC: {bill.ic_ref || "—"} | GRN:{" "}
-                  {bill.grn_ref || "—"}
-                </div>
-                <div style={{ fontSize: "12px", color: SLATE, marginTop: "4px" }}>
-                  Stage {bill.current_stage_order}: <strong>{stageName(bill.current_stage_order)}</strong>{" "}
-                  — {elapsed} of {budget} working day(s) used
-                </div>
-                <div style={{ marginTop: "10px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  <select
-                    value={bill.current_stage_order}
-                    onChange={(e) => moveStage(bill, Number(e.target.value))}
-                    style={{
-                      padding: "6px 8px",
-                      border: `1px solid ${BORDER}`,
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      flex: 1,
-                      minWidth: "180px",
-                    }}
-                  >
-                    {stages.map((s) => (
-                      <option key={s.id} value={s.stage_order}>
-                        {s.stage_order}. {s.stage_name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => markCollected(bill)}
-                    style={{
-                      backgroundColor: "#16a34a",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      padding: "6px 12px",
-                      fontSize: "12px",
-                      cursor: "pointer",
-                      fontWeight: 600,
-                    }}
-                  >
-                    Mark Collected
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Add new bill */}
-      <h3 style={{ ...h3, marginTop: "10px" }}>Add a new bill</h3>
-      <div>
-        {customers.length > 1 ? (
-          <label>
-            Customer
-            <select
-              value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
-              style={inputStyle}
-            >
-              {customers.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <div style={{ marginBottom: "10px" }}>
-            <div style={{ fontSize: "11px", color: SLATE }}>Customer</div>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>{customers[0]}</div>
-          </div>
-        )}
-        <label>
-          Invoice reference
-          <input
-            type="text"
-            style={inputStyle}
-            value={invoiceRef}
-            onChange={(e) => setInvoiceRef(e.target.value)}
-            placeholder="Invoice no."
-          />
-        </label>
-        <label>
-          IC reference (optional)
-          <input
-            type="text"
-            style={inputStyle}
-            value={icRef}
-            onChange={(e) => setIcRef(e.target.value)}
-            placeholder="Inspection Certificate no."
-          />
-        </label>
-        <label>
-          GRN reference (optional)
-          <input
-            type="text"
-            style={inputStyle}
-            value={grnRef}
-            onChange={(e) => setGrnRef(e.target.value)}
-            placeholder="Goods Receive Note no."
-          />
-        </label>
-        <label>
-          Amount (PKR)
-          <input
-            type="number"
-            min="0"
-            style={inputStyle}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0"
-          />
-        </label>
-        <label>
-          Date submitted
-          <input
-            type="date"
-            style={inputStyle}
-            value={dateSubmitted}
-            onChange={(e) => setDateSubmitted(e.target.value)}
-          />
-        </label>
-      </div>
-
-      <button
-        type="button"
-        onClick={addBill}
-        disabled={saving}
+      {/* Two areas side by side: compact add-form (left) + tracking table (right) */}
+      <div
         style={{
-          backgroundColor: NAVY,
-          color: "white",
-          border: "none",
-          borderRadius: "6px",
-          padding: "8px 18px",
-          fontSize: "13px",
-          cursor: "pointer",
-          fontWeight: 700,
-          marginTop: "4px",
+          display: "grid",
+          gridTemplateColumns: "minmax(240px, 300px) 1fr",
+          gap: "16px",
+          alignItems: "start",
         }}
       >
-        {saving ? "Adding…" : "Add Bill"}
-      </button>
+        {/* LEFT: add a new bill */}
+        <div style={{ borderRight: `1px solid ${BORDER}`, paddingRight: "16px" }}>
+          <div style={{ fontSize: "12px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
+            Add a new bill
+          </div>
+          {customers.length > 1 ? (
+            <label>
+              Customer
+              <select
+                value={customer}
+                onChange={(e) => setCustomer(e.target.value)}
+                style={inputStyle}
+              >
+                {customers.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <div style={{ marginBottom: "10px" }}>
+              <div style={{ fontSize: "11px", color: SLATE }}>Customer</div>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>{customers[0]}</div>
+            </div>
+          )}
+          <label>
+            Invoice reference
+            <input
+              type="text"
+              style={inputStyle}
+              value={invoiceRef}
+              onChange={(e) => setInvoiceRef(e.target.value)}
+              placeholder="Invoice no."
+            />
+          </label>
+          <label>
+            IC reference (optional)
+            <input
+              type="text"
+              style={inputStyle}
+              value={icRef}
+              onChange={(e) => setIcRef(e.target.value)}
+              placeholder="Inspection Certificate no."
+            />
+          </label>
+          <label>
+            GRN reference (optional)
+            <input
+              type="text"
+              style={inputStyle}
+              value={grnRef}
+              onChange={(e) => setGrnRef(e.target.value)}
+              placeholder="Goods Receive Note no."
+            />
+          </label>
+          <label>
+            Amount (PKR)
+            <input
+              type="number"
+              min="0"
+              style={inputStyle}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0"
+            />
+          </label>
+          <label>
+            Date submitted
+            <input
+              type="date"
+              style={inputStyle}
+              value={dateSubmitted}
+              onChange={(e) => setDateSubmitted(e.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={addBill}
+            disabled={saving}
+            style={{
+              backgroundColor: NAVY,
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              padding: "8px 18px",
+              fontSize: "13px",
+              cursor: "pointer",
+              fontWeight: 700,
+              marginTop: "4px",
+            }}
+          >
+            {saving ? "Adding…" : "Add Bill"}
+          </button>
+        </div>
+
+        {/* RIGHT: tracking table */}
+        <div>
+          <div style={{ fontSize: "12px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
+            Open bills ({bills.length})
+          </div>
+          {loading ? (
+            <p style={{ color: SLATE, fontSize: "13px" }}>Loading receivables…</p>
+          ) : bills.length === 0 ? (
+            <p style={{ color: SLATE, fontSize: "13px" }}>No open bills for this plant yet.</p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={th}>Customer</th>
+                    <th style={th}>Amount</th>
+                    <th style={th}>Invoice / IC / GRN</th>
+                    <th style={th}>Stage</th>
+                    <th style={th}>Days</th>
+                    <th style={th}>Status</th>
+                    <th style={th}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bills.map((bill) => {
+                    const st = billStatus(bill);
+                    const elapsed = workingDaysSince(bill.current_stage_entered_date);
+                    const budget = stageBudget(bill.current_stage_order);
+                    return (
+                      <tr key={bill.id}>
+                        <td style={{ ...td, fontWeight: 700, color: NAVY }}>{bill.utility}</td>
+                        <td style={td}>
+                          {fmtMoney(bill.amount)} {bill.currency}
+                        </td>
+                        <td style={{ ...td, color: SLATE }}>
+                          {bill.invoice_ref || "—"} / {bill.ic_ref || "—"} / {bill.grn_ref || "—"}
+                        </td>
+                        <td style={td}>
+                          <select
+                            value={bill.current_stage_order}
+                            onChange={(e) => moveStage(bill, Number(e.target.value))}
+                            style={{
+                              padding: "4px 6px",
+                              border: `1px solid ${BORDER}`,
+                              borderRadius: "6px",
+                              fontSize: "12px",
+                              minWidth: "150px",
+                            }}
+                          >
+                            {stages.map((s) => (
+                              <option key={s.id} value={s.stage_order}>
+                                {s.stage_order}. {s.stage_name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                          {elapsed} / {budget}
+                        </td>
+                        <td style={{ ...td, color: statusColor[st], fontWeight: 700 }}>
+                          {st.toUpperCase()}
+                        </td>
+                        <td style={td}>
+                          <button
+                            onClick={() => markCollected(bill)}
+                            style={{
+                              backgroundColor: "#16a34a",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "6px",
+                              padding: "5px 10px",
+                              fontSize: "12px",
+                              cursor: "pointer",
+                              fontWeight: 600,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Collected
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
