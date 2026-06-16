@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import ReceivablesSection from "./ReceivablesSection";
 
 type Plant = {
   id: string;
@@ -395,7 +396,10 @@ export default function ProductionForm() {
           </p>
         </div>
       )}
-
+      {/* Receivables for this plant */}
+      {plantId && selectedPlant && (
+        <ReceivablesSection plantId={plantId} plantName={selectedPlant.name} />
+      )}
       {/* General notes */}
       {plantId && (
         <div style={sectionStyle}>

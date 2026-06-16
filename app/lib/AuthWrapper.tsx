@@ -38,6 +38,7 @@ export default function AuthWrapper({
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
   const [member, setMember] = useState<Member | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     async function checkAuth() {
@@ -76,7 +77,7 @@ export default function AuthWrapper({
     return (
       <main
         style={{
-          padding: "40px",
+          padding: "24px",
           fontFamily: "sans-serif",
         }}
       >
@@ -150,6 +151,7 @@ export default function AuthWrapper({
         (currentRole === "Manager" && currentDepartment === "Finance")
       );
     }
+
     return item.allowedRoles.includes(currentRole);
   });
 
@@ -163,34 +165,112 @@ export default function AuthWrapper({
       : "#888";
 
   return (
-    <div style={{ fontFamily: "sans-serif" }}>
+    <div style={{ fontFamily: "sans-serif", minHeight: "100vh" }}>
       <header
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "12px 24px",
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
           borderBottom: "1px solid #e0e0e0",
           backgroundColor: "#fafafa",
-          flexWrap: "wrap",
-          gap: "12px",
         }}
       >
         <div
           style={{
+            maxWidth: "1400px",
+            margin: "0 auto",
+            padding: "12px 16px",
             display: "flex",
+            justifyContent: "space-between",
             alignItems: "center",
-            gap: "24px",
-            flexWrap: "wrap",
+            gap: "12px",
           }}
         >
-          <strong style={{ fontSize: "16px" }}>Unze Group Cockpit</strong>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button
+              onClick={() => setMenuOpen((prev) => !prev)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "38px",
+                height: "38px",
+                border: "1px solid #ddd",
+                borderRadius: "8px",
+                backgroundColor: "white",
+                cursor: "pointer",
+                fontSize: "20px",
+              }}
+              aria-label="Toggle navigation"
+            >
+              ☰
+            </button>
 
-          <nav
+            <strong style={{ fontSize: "16px", whiteSpace: "nowrap" }}>
+              Unze Group Cockpit
+            </strong>
+          </div>
+
+          <div
             style={{
               display: "flex",
-              gap: "16px",
-              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "10px",
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                fontSize: "13px",
+                color: "#555",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "220px",
+              }}
+            >
+              {displayName(member, email)}
+
+              <span
+                style={{
+                  marginLeft: "6px",
+                  fontSize: "11px",
+                  backgroundColor: roleColor,
+                  color: "white",
+                  padding: "2px 8px",
+                  borderRadius: "10px",
+                }}
+              >
+                {currentRole}
+              </span>
+            </span>
+
+            <button
+              onClick={handleSignOut}
+              style={{
+                backgroundColor: "white",
+                border: "1px solid #ccc",
+                borderRadius: "6px",
+                padding: "7px 12px",
+                fontSize: "13px",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+
+        {menuOpen && (
+          <nav
+            style={{
+              borderTop: "1px solid #e0e0e0",
+              backgroundColor: "white",
+              padding: "10px 16px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: "8px",
             }}
           >
             {visibleNavItems.map((item) => {
@@ -200,15 +280,16 @@ export default function AuthWrapper({
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={() => setMenuOpen(false)}
                   style={{
                     textDecoration: "none",
                     fontSize: "14px",
                     fontWeight: active ? "bold" : "normal",
-                    color: active ? "#0070f3" : "#444",
-                    borderBottom: active
-                      ? "2px solid #0070f3"
-                      : "2px solid transparent",
-                    paddingBottom: "4px",
+                    color: active ? "#0070f3" : "#333",
+                    backgroundColor: active ? "#eff6ff" : "#fafafa",
+                    border: active ? "1px solid #bfdbfe" : "1px solid #eee",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
                   }}
                 >
                   {item.label}
@@ -216,43 +297,18 @@ export default function AuthWrapper({
               );
             })}
           </nav>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <span style={{ fontSize: "14px", color: "#555" }}>
-            {displayName(member, email)}
-
-            <span
-              style={{
-                marginLeft: "6px",
-                fontSize: "12px",
-                backgroundColor: roleColor,
-                color: "white",
-                padding: "2px 8px",
-                borderRadius: "10px",
-              }}
-            >
-              {currentRole}
-            </span>
-          </span>
-
-          <button
-            onClick={handleSignOut}
-            style={{
-              backgroundColor: "white",
-              border: "1px solid #ccc",
-              borderRadius: "6px",
-              padding: "6px 14px",
-              fontSize: "14px",
-              cursor: "pointer",
-            }}
-          >
-            Sign out
-          </button>
-        </div>
+        )}
       </header>
 
-      {children}
+      <div
+        style={{
+          maxWidth: "1400px",
+          margin: "0 auto",
+          width: "100%",
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
