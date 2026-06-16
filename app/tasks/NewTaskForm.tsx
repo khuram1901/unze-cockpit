@@ -22,18 +22,15 @@ type DepartmentOwner = {
 };
 
 const PROJECT_AREAS = [
-  "Unze Pole Production",
-  "Unze Meters",
+  "Unze Trading Ops",
   "Finance",
   "HR",
   "Admin",
   "Legal",
   "Sales",
   "Audit",
-  "Accounts",
   "S&M Investment",
   "BINC",
-  "Other",
 ];
 
 // Unified status list used across the whole task module
