@@ -113,6 +113,37 @@ type DailyPosition = {
   closing_after_post_dated: number;
 };
 
+// ---- Receivables types ----
+type ReceivableStage = {
+  id: string;
+  stage_order: number;
+  stage_name: string;
+  working_day_budget: number;
+};
+
+type Receivable = {
+  id: string;
+  utility: string;
+  plant_id: string;
+  invoice_ref: string | null;
+  amount: number;
+  currency: string;
+  date_submitted: string;
+  current_stage_order: number;
+  current_stage_entered_date: string;
+  status: string;
+};
+
+// Accumulative receivables breakdown per customer
+type ReceivableCustomerRow = {
+  customer: string;
+  greenAmount: number;
+  amberAmount: number;
+  redAmount: number;
+  totalAmount: number;
+  redCount: number;
+};
+
 function formatDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -159,6 +190,22 @@ function quarterEndDate(monthStart: string, quarter: 1 | 2 | 3 | 4) {
 
 function fmtMoney(n: number) {
   return n.toLocaleString();
+}
+
+// Count working days (Mon–Fri) elapsed in the current stage.
+function workingDaysSince(dateStr: string): number {
+  const start = new Date(dateStr + "T00:00:00");
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  if (start > now) return 0;
+  let count = 0;
+  const cur = new Date(start);
+  while (cur <= now) {
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return Math.max(0, count - 1);
 }
 
 const today = formatDate(new Date());
@@ -292,6 +339,9 @@ export default function ExecutiveDashboardPage() {
   const [cashPlan, setCashPlan] = useState<MonthlyPlan | null>(null);
   const [cashPositions, setCashPositions] = useState<DailyPosition[]>([]);
 
+  // ---- Receivables state ----
+  const [receivableRows, setReceivableRows] = useState<ReceivableCustomerRow[]>([]);
+
   async function autoCreateEscalationTask(
     esc: Escalation,
     allTasks: Task[],
@@ -326,6 +376,46 @@ export default function ExecutiveDashboardPage() {
       source_type: "kpi_escalation",
       source_record_id: null,
       source_label: esc.sourceLabel,
+    });
+  }
+
+  // Create one task for a stuck (red) receivable bill, guarded against duplicates.
+  async function autoCreateReceivableTask(
+    bill: Receivable,
+    stageName: string,
+    allTasks: Task[],
+    owner: DepartmentOwner | null
+  ) {
+    if (!owner?.primary_owner_name || !owner?.primary_owner_email) return;
+
+    const sourceLabel = `receivable_stuck:${bill.id}:${bill.current_stage_order}`;
+    const alreadyExists = allTasks.some(
+      (task) =>
+        task.source_type === "receivable_escalation" &&
+        task.source_label === sourceLabel
+    );
+    if (alreadyExists) return;
+
+    await supabase.from("tasks").insert({
+      task_type: "Explanation Required",
+      exception_type: "receivable",
+      explanation_required: true,
+      description: `Receivable stuck: ${bill.utility} bill of ${fmtMoney(bill.amount)} ${bill.currency} is over time at stage "${stageName}".`,
+      project: "Unze Trading Ops",
+      priority: "High",
+      status: "Waiting Reply",
+      due_date: dueIn48Hours(),
+      assigned_date: today,
+      assigned_to: owner.primary_owner_name,
+      assigned_to_email: owner.primary_owner_email,
+      assigned_by: "System",
+      notes: `Auto-created by the receivables escalation engine. Bill for ${bill.utility} has exceeded its budgeted working days at stage "${stageName}".`,
+      reply_required: true,
+      assigned_to_department: "Unze Trading Ops",
+      assigned_to_business_unit: null,
+      source_type: "receivable_escalation",
+      source_record_id: bill.id,
+      source_label: sourceLabel,
     });
   }
 
@@ -401,6 +491,66 @@ export default function ExecutiveDashboardPage() {
     setCashPlan(cashPlanRes.data || null);
     setCashPositions(cashPosRes.data || []);
     setCashPlanMissing(!cashPlanRes.data);
+
+    // ---- Receivables data (active bills + stage budgets) ----
+    const [stagesRes, billsRes] = await Promise.all([
+      supabase.from("receivable_stages").select("*").order("stage_order"),
+      supabase.from("receivables").select("*").neq("status", "Collected"),
+    ]);
+    const recStages: ReceivableStage[] = stagesRes.data || [];
+    const bills: Receivable[] = billsRes.data || [];
+
+    function stageBudget(order: number) {
+      return recStages.find((s) => s.stage_order === order)?.working_day_budget || 0;
+    }
+    function stageNameFor(order: number) {
+      return recStages.find((s) => s.stage_order === order)?.stage_name || `Stage ${order}`;
+    }
+    function billRagStatus(bill: Receivable): "green" | "amber" | "red" {
+      const budget = stageBudget(bill.current_stage_order);
+      const elapsed = workingDaysSince(bill.current_stage_entered_date);
+      if (budget <= 0) return "green";
+      if (elapsed >= budget) return "red";
+      if (elapsed >= budget - 1) return "amber";
+      return "green";
+    }
+
+    // Accumulate by customer (the utility field stores the customer)
+    const custMap = new Map<string, ReceivableCustomerRow>();
+    for (const bill of bills) {
+      const key = bill.utility || "Unknown";
+      if (!custMap.has(key)) {
+        custMap.set(key, {
+          customer: key,
+          greenAmount: 0,
+          amberAmount: 0,
+          redAmount: 0,
+          totalAmount: 0,
+          redCount: 0,
+        });
+      }
+      const row = custMap.get(key)!;
+      const rag = billRagStatus(bill);
+      const amt = Number(bill.amount) || 0;
+      row.totalAmount += amt;
+      if (rag === "green") row.greenAmount += amt;
+      else if (rag === "amber") row.amberAmount += amt;
+      else {
+        row.redAmount += amt;
+        row.redCount += 1;
+      }
+    }
+    const recRows = Array.from(custMap.values()).sort(
+      (a, b) => b.redAmount - a.redAmount || b.totalAmount - a.totalAmount
+    );
+    setReceivableRows(recRows);
+
+    // Auto-create a task for each red (stuck) bill, guarded against duplicates
+    for (const bill of bills) {
+      if (billRagStatus(bill) === "red") {
+        await autoCreateReceivableTask(bill, stageNameFor(bill.current_stage_order), taskData, owner);
+      }
+    }
 
     // Sum a metric for a plant between two dates (inclusive)
     function sumBetween(rows: any[], plantId: string, fromDate: string, toDate: string): number {
@@ -488,7 +638,6 @@ export default function ExecutiveDashboardPage() {
 
     const foundEscalations: Escalation[] = [];
 
-    // Helper: is a plant "behind" (under 85%) at a given quarter checkpoint, for a metric?
     function behindAtQuarter(
       entries: any[],
       targetTotalForMonth: number,
@@ -496,7 +645,7 @@ export default function ExecutiveDashboardPage() {
       quarter: 1 | 2 | 3 | 4,
       checkpointEnd: string
     ): boolean {
-      if (targetTotalForMonth <= 0) return false; // no target = can't be behind
+      if (targetTotalForMonth <= 0) return false;
       const cumulativeTarget = (targetTotalForMonth / 4) * quarter;
       const cumulativeActual = sumBetween(entries, plantId, selectedMonthStart, checkpointEnd);
       const achievement = cumulativeTarget > 0 ? (cumulativeActual / cumulativeTarget) * 100 : 0;
@@ -504,7 +653,6 @@ export default function ExecutiveDashboardPage() {
     }
 
     for (const plant of plants) {
-      // Production escalation
       const prodTarget = targetTotal(monthlyProductionTargets.find((t) => t.plant_id === plant.id));
       if (prodTarget > 0 && currentQuarter >= 3) {
         const behindQ1 = behindAtQuarter(monthlyProduction, prodTarget, plant.id, 1, q1End);
@@ -523,7 +671,6 @@ export default function ExecutiveDashboardPage() {
         }
       }
 
-      // Dispatch escalation
       const dispTarget = targetTotal(monthlyDispatchTargets.find((t) => t.plant_id === plant.id));
       if (dispTarget > 0 && currentQuarter >= 3) {
         const behindQ1 = behindAtQuarter(monthlyDispatch, dispTarget, plant.id, 1, q1End);
@@ -542,7 +689,6 @@ export default function ExecutiveDashboardPage() {
         }
       }
 
-      // Breakage escalation (rate-band, month-to-date, >1.5% = red + task)
       const producedMTD = sumBetween(monthlyProduction, plant.id, selectedMonthStart, dateToView);
       const brokenMTD = sumBetween(monthlyBreakage, plant.id, selectedMonthStart, dateToView);
       if (producedMTD > 0) {
@@ -559,7 +705,6 @@ export default function ExecutiveDashboardPage() {
       }
     }
 
-    // Auto-create tasks for each escalation (guarded against duplicates)
     for (const esc of foundEscalations) {
       await autoCreateEscalationTask(esc, taskData, owner);
     }
@@ -583,6 +728,7 @@ export default function ExecutiveDashboardPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "monthly_dispatch_targets" }, () => loadExecutiveData(selectedDate))
       .on("postgres_changes", { event: "*", schema: "public", table: "monthly_cash_plan" }, () => loadExecutiveData(selectedDate))
       .on("postgres_changes", { event: "*", schema: "public", table: "daily_cash_position" }, () => loadExecutiveData(selectedDate))
+      .on("postgres_changes", { event: "*", schema: "public", table: "receivables" }, () => loadExecutiveData(selectedDate))
       .subscribe();
 
     return () => {
@@ -639,6 +785,13 @@ export default function ExecutiveDashboardPage() {
   const projectedClosing = cashOpeningAmount + plannedRecv - plannedPay;
   const latestClosing = latestCashPosition?.closing_balance ?? cashOpeningAmount;
   const cashHeadlineRed = recvBehind || payOver;
+
+  // ---- Receivables grand totals ----
+  const recGreen = receivableRows.reduce((s, r) => s + r.greenAmount, 0);
+  const recAmber = receivableRows.reduce((s, r) => s + r.amberAmount, 0);
+  const recRed = receivableRows.reduce((s, r) => s + r.redAmount, 0);
+  const recTotal = receivableRows.reduce((s, r) => s + r.totalAmount, 0);
+  const recRedCount = receivableRows.reduce((s, r) => s + r.redCount, 0);
 
   return (
     <AuthWrapper>
@@ -802,6 +955,83 @@ export default function ExecutiveDashboardPage() {
                   <Card title="Money In (MTD)" value={actualReceiptsMTD} color="#16a34a" />
                   <Card title="Money Out (MTD)" value={actualPaymentsMTD} color="#dc2626" />
                   <Card title="Latest Closing" value={latestClosing} color="#7c3aed" />
+                </div>
+              </>
+            )}
+
+            <SectionTitle title="Receivables — Bills in Progress" />
+            {receivableRows.length === 0 ? (
+              <p style={{ color: "#666", marginBottom: "32px" }}>
+                No receivable bills in progress. Bills are added by operations on the Daily Entry page.
+              </p>
+            ) : (
+              <>
+                <div
+                  style={{
+                    border: "1px solid #e0e0e0",
+                    borderTop: `4px solid ${recRed > 0 ? "#dc2626" : "#16a34a"}`,
+                    borderRadius: "10px",
+                    padding: "20px",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <div style={{ fontSize: "15px", fontWeight: "bold", marginBottom: "12px" }}>
+                    Receivables Health:{" "}
+                    <span style={{ color: recRed > 0 ? "#dc2626" : "#16a34a" }}>
+                      {recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: "30px", flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ color: "#666", fontSize: "13px" }}>Total Tracked</div>
+                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#0070f3" }}>
+                        {fmtMoney(recTotal)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: "#666", fontSize: "13px" }}>On Time (green)</div>
+                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#16a34a" }}>
+                        {fmtMoney(recGreen)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: "#666", fontSize: "13px" }}>Due Soon (amber)</div>
+                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#d97706" }}>
+                        {fmtMoney(recAmber)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ color: "#666", fontSize: "13px" }}>Stuck (red)</div>
+                      <div style={{ fontSize: "20px", fontWeight: "bold", color: "#dc2626" }}>
+                        {fmtMoney(recRed)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: "auto", marginBottom: "32px" }}>
+                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "640px" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: "#fafafa" }}>
+                        <th style={tableHeaderStyle}>Customer</th>
+                        <th style={tableHeaderStyle}>On Time</th>
+                        <th style={tableHeaderStyle}>Due Soon</th>
+                        <th style={tableHeaderStyle}>Stuck</th>
+                        <th style={tableHeaderStyle}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {receivableRows.map((r) => (
+                        <tr key={r.customer}>
+                          <td style={tableCellStyle}><strong>{r.customer}</strong></td>
+                          <td style={{ ...tableCellStyle, color: "#16a34a", fontWeight: "bold" }}>{fmtMoney(r.greenAmount)}</td>
+                          <td style={{ ...tableCellStyle, color: "#d97706", fontWeight: "bold" }}>{fmtMoney(r.amberAmount)}</td>
+                          <td style={{ ...tableCellStyle, color: "#dc2626", fontWeight: "bold" }}>{fmtMoney(r.redAmount)}</td>
+                          <td style={tableCellStyle}>{fmtMoney(r.totalAmount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </>
             )}
