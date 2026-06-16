@@ -409,12 +409,12 @@ export default function ProductionForm() {
             </p>
           </div>
         )}
-      </div>
 
-      {/* Receivables for this plant — full width below the columns */}
-      {plantId && selectedPlant && (
-        <ReceivablesSection plantId={plantId} plantName={selectedPlant.name} />
-      )}
+        {/* Receivables — sits as a card in the same grid */}
+        {plantId && selectedPlant && (
+          <ReceivablesSection plantId={plantId} plantName={selectedPlant.name} />
+        )}
+      </div>
 
       {/* General notes */}
       {plantId && (

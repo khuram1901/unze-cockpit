@@ -27,6 +27,10 @@ type Receivable = {
   notes: string | null;
 };
 
+const NAVY = "#1e293b";
+const SLATE = "#64748b";
+const BORDER = "#e2e8f0";
+
 // Per-plant customer list. First entry is the default.
 // Plants not listed here fall back to using the plant name itself.
 const PLANT_CUSTOMERS: Record<string, string[]> = {
@@ -198,27 +202,27 @@ export default function ReceivablesSection({
   const inputStyle = {
     display: "block",
     width: "100%",
-    maxWidth: "300px",
-    padding: "10px",
-    marginTop: "4px",
-    marginBottom: "14px",
-    border: "1px solid #ccc",
+    padding: "7px 9px",
+    marginTop: "3px",
+    marginBottom: "10px",
+    border: `1px solid ${BORDER}`,
     borderRadius: "6px",
-    fontSize: "15px",
+    fontSize: "13px",
   };
   const sectionStyle = {
-    border: "1px solid #e0e0e0",
+    border: `1px solid ${BORDER}`,
     borderRadius: "8px",
-    padding: "20px",
-    marginBottom: "20px",
+    padding: "14px",
+    marginBottom: "14px",
+    backgroundColor: "white",
   };
-  const hint = { fontSize: "13px", color: "#888", marginBottom: "14px" };
-  const h3 = { fontSize: "16px", fontWeight: "bold" as const, marginBottom: "4px" };
+  const hint = { fontSize: "12px", color: SLATE, marginBottom: "10px" };
+  const h3 = { fontSize: "13px", fontWeight: 700 as const, color: NAVY, marginBottom: "4px", paddingLeft: "9px", borderLeft: `3px solid ${NAVY}` };
 
   if (loading) return <div style={sectionStyle}>Loading receivables…</div>;
 
   return (
-    <div style={{ ...sectionStyle, maxWidth: "640px" }}>
+    <div style={sectionStyle}>
       <h3 style={h3}>Receivables (bills) for this plant</h3>
       <p style={hint}>
         Add a bill (Invoice + IC + GRN) and move it through the stages. A bill turns amber on its
@@ -230,19 +234,23 @@ export default function ReceivablesSection({
         <p
           style={{
             color: msg.startsWith("Error") ? "#c0392b" : "#16a34a",
-            fontWeight: "bold",
-            fontSize: "14px",
+            fontWeight: 700,
+            fontSize: "13px",
           }}
         >
           {msg}
         </p>
       )}
 
-      {/* Existing bills */}
+      {/* Existing bills — flow into columns across the page */}
       {bills.length === 0 ? (
-        <p style={{ color: "#999", fontSize: "14px" }}>No open bills for this plant yet.</p>
+        <p style={{ color: SLATE, fontSize: "13px", marginBottom: "14px" }}>
+          No open bills for this plant yet.
+        </p>
       ) : (
-        <div style={{ marginBottom: "20px" }}>
+        <div
+                  <div style={{ marginBottom: "14px" }}>
+
           {bills.map((bill) => {
             const st = billStatus(bill);
             const elapsed = workingDaysSince(bill.current_stage_entered_date);
@@ -251,26 +259,26 @@ export default function ReceivablesSection({
               <div
                 key={bill.id}
                 style={{
-                  border: "1px solid #e0e0e0",
+                  border: `1px solid ${BORDER}`,
                   borderLeft: `5px solid ${statusColor[st]}`,
                   borderRadius: "8px",
-                  padding: "14px",
-                  marginBottom: "12px",
+                  padding: "12px",
+                  backgroundColor: "white",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
-                  <div style={{ fontWeight: "bold" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+                  <div style={{ fontWeight: 700, fontSize: "13px", color: NAVY }}>
                     {bill.utility} — {fmtMoney(bill.amount)} {bill.currency}
                   </div>
-                  <div style={{ color: statusColor[st], fontWeight: "bold" }}>
+                  <div style={{ color: statusColor[st], fontWeight: 700, fontSize: "12px" }}>
                     {st.toUpperCase()}
                   </div>
                 </div>
-                <div style={{ fontSize: "13px", color: "#666", marginTop: "4px" }}>
+                <div style={{ fontSize: "12px", color: SLATE, marginTop: "4px" }}>
                   Invoice: {bill.invoice_ref || "—"} | IC: {bill.ic_ref || "—"} | GRN:{" "}
                   {bill.grn_ref || "—"}
                 </div>
-                <div style={{ fontSize: "13px", color: "#666", marginTop: "4px" }}>
+                <div style={{ fontSize: "12px", color: SLATE, marginTop: "4px" }}>
                   Stage {bill.current_stage_order}: <strong>{stageName(bill.current_stage_order)}</strong>{" "}
                   — {elapsed} of {budget} working day(s) used
                 </div>
@@ -279,11 +287,12 @@ export default function ReceivablesSection({
                     value={bill.current_stage_order}
                     onChange={(e) => moveStage(bill, Number(e.target.value))}
                     style={{
-                      padding: "8px",
-                      border: "1px solid #ccc",
+                      padding: "6px 8px",
+                      border: `1px solid ${BORDER}`,
                       borderRadius: "6px",
-                      fontSize: "14px",
-                      maxWidth: "320px",
+                      fontSize: "12px",
+                      flex: 1,
+                      minWidth: "180px",
                     }}
                   >
                     {stages.map((s) => (
@@ -299,9 +308,10 @@ export default function ReceivablesSection({
                       color: "white",
                       border: "none",
                       borderRadius: "6px",
-                      padding: "8px 14px",
-                      fontSize: "14px",
+                      padding: "6px 12px",
+                      fontSize: "12px",
                       cursor: "pointer",
+                      fontWeight: 600,
                     }}
                   >
                     Mark Collected
@@ -313,9 +323,9 @@ export default function ReceivablesSection({
         </div>
       )}
 
-      {/* Add new bill */}
+      {/* Add new bill — compact two-column block */}
       <h3 style={{ ...h3, marginTop: "10px" }}>Add a new bill</h3>
-      <div>
+            <div>
         {customers.length > 1 ? (
           <label>
             Customer
@@ -330,9 +340,9 @@ export default function ReceivablesSection({
             </select>
           </label>
         ) : (
-          <div style={{ marginBottom: "14px" }}>
-            <div style={{ fontSize: "13px", color: "#888" }}>Customer</div>
-            <div style={{ fontSize: "16px", fontWeight: "bold" }}>{customers[0]}</div>
+          <div style={{ marginBottom: "10px" }}>
+            <div style={{ fontSize: "11px", color: SLATE }}>Customer</div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>{customers[0]}</div>
           </div>
         )}
         <label>
@@ -385,24 +395,26 @@ export default function ReceivablesSection({
             onChange={(e) => setDateSubmitted(e.target.value)}
           />
         </label>
-        <button
-          type="button"
-          onClick={addBill}
-          disabled={saving}
-          style={{
-            backgroundColor: "#0070f3",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            padding: "10px 20px",
-            fontSize: "15px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
-          {saving ? "Adding…" : "Add Bill"}
-        </button>
       </div>
+
+      <button
+        type="button"
+        onClick={addBill}
+        disabled={saving}
+        style={{
+          backgroundColor: NAVY,
+          color: "white",
+          border: "none",
+          borderRadius: "6px",
+          padding: "8px 18px",
+          fontSize: "13px",
+          cursor: "pointer",
+          fontWeight: 700,
+          marginTop: "4px",
+        }}
+      >
+        {saving ? "Adding…" : "Add Bill"}
+      </button>
     </div>
   );
 }
