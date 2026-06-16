@@ -280,7 +280,7 @@ export default function ProductionForm() {
 
   return (
     <form onSubmit={handleSubmit}>
-          {/* Plant & date — compact horizontal strip */}
+      {/* Plant & date — compact horizontal strip */}
       <div style={{ ...sectionStyle, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "16px" }}>
         {plants.length === 1 ? (
           <div>
@@ -410,7 +410,7 @@ export default function ProductionForm() {
           </div>
         )}
 
-        {/* Receivables — sits as a card in the same grid */}
+        {/* Receivables — compact card in the same grid */}
         {plantId && selectedPlant && (
           <ReceivablesSection plantId={plantId} plantName={selectedPlant.name} />
         )}

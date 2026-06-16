@@ -217,7 +217,14 @@ export default function ReceivablesSection({
     backgroundColor: "white",
   };
   const hint = { fontSize: "12px", color: SLATE, marginBottom: "10px" };
-  const h3 = { fontSize: "13px", fontWeight: 700 as const, color: NAVY, marginBottom: "4px", paddingLeft: "9px", borderLeft: `3px solid ${NAVY}` };
+  const h3 = {
+    fontSize: "13px",
+    fontWeight: 700 as const,
+    color: NAVY,
+    marginBottom: "4px",
+    paddingLeft: "9px",
+    borderLeft: `3px solid ${NAVY}`,
+  };
 
   if (loading) return <div style={sectionStyle}>Loading receivables…</div>;
 
@@ -242,15 +249,13 @@ export default function ReceivablesSection({
         </p>
       )}
 
-      {/* Existing bills — flow into columns across the page */}
+      {/* Existing bills */}
       {bills.length === 0 ? (
         <p style={{ color: SLATE, fontSize: "13px", marginBottom: "14px" }}>
           No open bills for this plant yet.
         </p>
       ) : (
-        <div
-                  <div style={{ marginBottom: "14px" }}>
-
+        <div style={{ marginBottom: "14px", display: "grid", gap: "8px" }}>
           {bills.map((bill) => {
             const st = billStatus(bill);
             const elapsed = workingDaysSince(bill.current_stage_entered_date);
@@ -323,9 +328,9 @@ export default function ReceivablesSection({
         </div>
       )}
 
-      {/* Add new bill — compact two-column block */}
+      {/* Add new bill */}
       <h3 style={{ ...h3, marginTop: "10px" }}>Add a new bill</h3>
-            <div>
+      <div>
         {customers.length > 1 ? (
           <label>
             Customer
