@@ -137,12 +137,11 @@ export default function ProductionForm() {
     setSectionMsg({ section, text, ok });
   }
 
-  // ---- Section submit handlers ----
-
-  async function submitProduction() {
+  // ---- Production ----
+  async function submitProduction(nothing = false) {
     if (!plantId) return;
-    if (!prod31 && !prod36 && !prod45 && !prodMeter) {
-      showMsg("production", "Enter at least one production number first.", false);
+    if (!nothing && !prod31 && !prod36 && !prod45 && !prodMeter) {
+      showMsg("production", "Enter a number, or use 'Nothing to report'.", false);
       return;
     }
     setSavingSection("production");
@@ -150,20 +149,24 @@ export default function ProductionForm() {
     const { error } = await supabase.from("production_entries").insert({
       plant_id: plantId, plant_name: selectedPlant?.name || "",
       entry_date: entryDate,
-      qty_31: Number(prod31) || 0, qty_36: Number(prod36) || 0,
-      qty_45: Number(prod45) || 0, qty_meter: Number(prodMeter) || 0,
+      qty_31: nothing ? 0 : Number(prod31) || 0,
+      qty_36: nothing ? 0 : Number(prod36) || 0,
+      qty_45: nothing ? 0 : Number(prod45) || 0,
+      qty_meter: nothing ? 0 : Number(prodMeter) || 0,
+      nothing_to_report: nothing,
       entered_by: enteredBy, notes,
     });
     setSavingSection("");
     if (error) { showMsg("production", "Error: " + error.message, false); return; }
-    showMsg("production", "Production saved ✓", true);
+    showMsg("production", nothing ? "Logged: nothing to report ✓" : "Production saved ✓", true);
     setProd31(""); setProd36(""); setProd45(""); setProdMeter("");
   }
 
-  async function submitDispatch() {
+  // ---- Dispatch ----
+  async function submitDispatch(nothing = false) {
     if (!plantId) return;
-    if (!disp31 && !disp36 && !disp45 && !dispMeter) {
-      showMsg("dispatch", "Enter at least one dispatch number first.", false);
+    if (!nothing && !disp31 && !disp36 && !disp45 && !dispMeter) {
+      showMsg("dispatch", "Enter a number, or use 'Nothing to report'.", false);
       return;
     }
     setSavingSection("dispatch");
@@ -171,20 +174,24 @@ export default function ProductionForm() {
     const { error } = await supabase.from("dispatch_entries").insert({
       plant_id: plantId, plant_name: selectedPlant?.name || "",
       entry_date: entryDate,
-      qty_31: Number(disp31) || 0, qty_36: Number(disp36) || 0,
-      qty_45: Number(disp45) || 0, qty_meter: Number(dispMeter) || 0,
+      qty_31: nothing ? 0 : Number(disp31) || 0,
+      qty_36: nothing ? 0 : Number(disp36) || 0,
+      qty_45: nothing ? 0 : Number(disp45) || 0,
+      qty_meter: nothing ? 0 : Number(dispMeter) || 0,
+      nothing_to_report: nothing,
       entered_by: enteredBy, notes,
     });
     setSavingSection("");
     if (error) { showMsg("dispatch", "Error: " + error.message, false); return; }
-    showMsg("dispatch", "Dispatch saved ✓", true);
+    showMsg("dispatch", nothing ? "Logged: nothing to report ✓" : "Dispatch saved ✓", true);
     setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter("");
   }
 
-  async function submitBreakage() {
+  // ---- Breakage ----
+  async function submitBreakage(nothing = false) {
     if (!plantId) return;
-    if (!brk31 && !brk36 && !brk45) {
-      showMsg("breakage", "Enter at least one breakage number first.", false);
+    if (!nothing && !brk31 && !brk36 && !brk45) {
+      showMsg("breakage", "Enter a number, or use 'Nothing to report'.", false);
       return;
     }
     setSavingSection("breakage");
@@ -192,25 +199,28 @@ export default function ProductionForm() {
     const { error } = await supabase.from("breakage_entries").insert({
       plant_id: plantId, plant_name: selectedPlant?.name || "",
       entry_date: entryDate,
-      qty_31: Number(brk31) || 0, qty_36: Number(brk36) || 0,
-      qty_45: Number(brk45) || 0,
-      reason_31: reason31 || null,
-      reason_36: reason36 || null,
-      reason_45: reason45 || null,
-      reason_other: reasonOther || null,
+      qty_31: nothing ? 0 : Number(brk31) || 0,
+      qty_36: nothing ? 0 : Number(brk36) || 0,
+      qty_45: nothing ? 0 : Number(brk45) || 0,
+      reason_31: nothing ? null : reason31 || null,
+      reason_36: nothing ? null : reason36 || null,
+      reason_45: nothing ? null : reason45 || null,
+      reason_other: nothing ? null : reasonOther || null,
+      nothing_to_report: nothing,
       entered_by: enteredBy,
     });
     setSavingSection("");
     if (error) { showMsg("breakage", "Error: " + error.message, false); return; }
-    showMsg("breakage", "Breakage saved ✓", true);
+    showMsg("breakage", nothing ? "Logged: nothing to report ✓" : "Breakage saved ✓", true);
     setBrk31(""); setBrk36(""); setBrk45("");
     setReason31(""); setReason36(""); setReason45(""); setReasonOther("");
   }
 
-  async function submitScrap() {
+  // ---- Scrap ----
+  async function submitScrap(nothing = false) {
     if (!plantId) return;
-    if (!scr31 && !scr36 && !scr45) {
-      showMsg("scrap", "Enter at least one scrap number first.", false);
+    if (!nothing && !scr31 && !scr36 && !scr45) {
+      showMsg("scrap", "Enter a number, or use 'Nothing to report'.", false);
       return;
     }
     setSavingSection("scrap");
@@ -218,68 +228,67 @@ export default function ProductionForm() {
     const { error } = await supabase.from("scrap_processed_entries").insert({
       plant_id: plantId, plant_name: selectedPlant?.name || "",
       entry_date: entryDate,
-      qty_31: Number(scr31) || 0, qty_36: Number(scr36) || 0,
-      qty_45: Number(scr45) || 0,
+      qty_31: nothing ? 0 : Number(scr31) || 0,
+      qty_36: nothing ? 0 : Number(scr36) || 0,
+      qty_45: nothing ? 0 : Number(scr45) || 0,
+      nothing_to_report: nothing,
       notes, entered_by: enteredBy,
     });
     setSavingSection("");
     if (error) { showMsg("scrap", "Error: " + error.message, false); return; }
-    showMsg("scrap", "Scrap saved ✓", true);
+    showMsg("scrap", nothing ? "Logged: nothing to report ✓" : "Scrap saved ✓", true);
     setScr31(""); setScr36(""); setScr45("");
   }
 
-  async function submitMachine() {
+  // ---- Machine ----
+  async function submitMachine(nothing = false) {
     if (!plantId) return;
-    if (!machineName || !machineDescription) {
-      showMsg("machine", "Enter at least the machine name and issue description first.", false);
+    if (!nothing && (!machineName || !machineDescription)) {
+      showMsg("machine", "Enter machine name + description, or use 'Nothing to report'.", false);
       return;
     }
     setSavingSection("machine");
     const enteredBy = await currentEmail();
     const { error } = await supabase.from("machine_issues").insert({
       plant_id: plantId, plant_name: selectedPlant?.name || "",
-      machine_name: machineName,
-      issue_status: machineStatus,
-      expected_resolution: machineExpectedResolution || null,
-      issue_description: machineDescription,
-      action_taken: machineActionTaken || null,
+      machine_name: nothing ? "None" : machineName,
+      issue_status: nothing ? "Resolved" : machineStatus,
+      expected_resolution: nothing ? null : machineExpectedResolution || null,
+      issue_description: nothing ? "No machine issues today" : machineDescription,
+      action_taken: nothing ? null : machineActionTaken || null,
+      nothing_to_report: nothing,
       entered_by: enteredBy,
     });
     setSavingSection("");
     if (error) { showMsg("machine", "Error: " + error.message, false); return; }
-    showMsg("machine", "Machine issue saved ✓", true);
+    showMsg("machine", nothing ? "Logged: nothing to report ✓" : "Machine issue saved ✓", true);
     setMachineName(""); setMachineStatus("Down");
     setMachineExpectedResolution(""); setMachineDescription(""); setMachineActionTaken("");
   }
 
   // ---- Styles ----
-
   const inputStyle = {
     display: "block", width: "100%", padding: "7px 9px",
     marginTop: "3px", marginBottom: "10px", border: "1px solid #e2e8f0",
     borderRadius: "6px", fontSize: "13px",
   };
-
   const sectionStyle = {
     border: "1px solid #e2e8f0", borderRadius: "8px",
     padding: "14px", marginBottom: "14px", backgroundColor: "white",
   };
-
   const hint = { fontSize: "12px", color: "#64748b", marginBottom: "10px" };
   const h3 = { fontSize: "13px", fontWeight: 700 as const, color: "#1e293b", marginBottom: "4px" };
 
-  const sectionBtn = (section: string): React.CSSProperties => ({
-    backgroundColor: "#1e293b",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    padding: "7px 16px",
-    fontSize: "12px",
-    cursor: savingSection === section ? "wait" : "pointer",
-    fontWeight: 700,
-    marginTop: "4px",
+  const submitBtn = (section: string): React.CSSProperties => ({
+    backgroundColor: "#1e293b", color: "white", border: "none", borderRadius: "6px",
+    padding: "7px 14px", fontSize: "12px", cursor: "pointer", fontWeight: 700,
     opacity: savingSection === section ? 0.7 : 1,
   });
+  const nothingBtn: React.CSSProperties = {
+    backgroundColor: "white", color: "#64748b", border: "1px solid #e2e8f0", borderRadius: "6px",
+    padding: "7px 12px", fontSize: "12px", cursor: "pointer", fontWeight: 600,
+  };
+  const btnRow: React.CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" };
 
   function SectionMessage({ section }: { section: string }) {
     if (!sectionMsg || sectionMsg.section !== section) return null;
@@ -298,9 +307,7 @@ export default function ProductionForm() {
     return (
       <select style={inputStyle} value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">-- Reason for {size} --</option>
-        {REASONS.map((r) => (
-          <option key={r}>{r}</option>
-        ))}
+        {REASONS.map((r) => (<option key={r}>{r}</option>))}
       </select>
     );
   }
@@ -310,12 +317,9 @@ export default function ProductionForm() {
   if (noAccess) {
     return (
       <div style={{ ...sectionStyle, maxWidth: "520px" }}>
-        <p style={{ color: "#991b1b", fontWeight: "bold" }}>
-          You are not assigned to any plant yet.
-        </p>
+        <p style={{ color: "#991b1b", fontWeight: "bold" }}>You are not assigned to any plant yet.</p>
         <p style={{ color: "#666", fontSize: "14px" }}>
-          Please ask an administrator to assign you to a plant on the Members page before entering
-          data.
+          Please ask an administrator to assign you to a plant on the Members page before entering data.
         </p>
       </div>
     );
@@ -323,7 +327,7 @@ export default function ProductionForm() {
 
   return (
     <div>
-      {/* Plant & date — compact horizontal strip */}
+      {/* Plant & date */}
       <div style={{ ...sectionStyle, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "16px" }}>
         {plants.length === 1 ? (
           <div>
@@ -340,13 +344,10 @@ export default function ProductionForm() {
               required
             >
               <option value="">-- Select your plant --</option>
-              {plants.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
+              {plants.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
             </select>
           </div>
         )}
-
         <div>
           <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "2px" }}>Date</div>
           <input
@@ -359,13 +360,12 @@ export default function ProductionForm() {
         </div>
       </div>
 
-      {/* Data sections — each with its own submit button */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "14px", alignItems: "start" }}>
         {/* Production */}
         {plantId && (
           <div style={sectionStyle}>
             <h3 style={h3}>Production today</h3>
-            <p style={hint}>Count ALL poles produced, including any that broke. Leave blank if none.</p>
+            <p style={hint}>Count ALL poles produced, including any that broke. Required daily.</p>
             {!isMeter ? (
               <>
                 <label>31 ft produced<input type="number" min="0" style={inputStyle} value={prod31} onChange={(e) => setProd31(e.target.value)} placeholder="0" /></label>
@@ -375,9 +375,14 @@ export default function ProductionForm() {
             ) : (
               <label>Single-phase meters produced<input type="number" min="0" style={inputStyle} value={prodMeter} onChange={(e) => setProdMeter(e.target.value)} placeholder="0" /></label>
             )}
-            <button type="button" onClick={submitProduction} disabled={savingSection === "production"} style={sectionBtn("production")}>
-              {savingSection === "production" ? "Saving…" : "Submit Production"}
-            </button>
+            <div style={btnRow}>
+              <button type="button" onClick={() => submitProduction(false)} disabled={savingSection === "production"} style={submitBtn("production")}>
+                {savingSection === "production" ? "Saving…" : "Submit Production"}
+              </button>
+              <button type="button" onClick={() => submitProduction(true)} disabled={savingSection === "production"} style={nothingBtn}>
+                Nothing to report
+              </button>
+            </div>
             <SectionMessage section="production" />
           </div>
         )}
@@ -387,22 +392,23 @@ export default function ProductionForm() {
           <div style={sectionStyle}>
             <h3 style={h3}>Breakage today</h3>
             <p style={hint}>Of the production above, how many broke? Pick a reason for each size that broke.</p>
-
             <label>31 ft broken<input type="number" min="0" style={inputStyle} value={brk31} onChange={(e) => setBrk31(e.target.value)} placeholder="0" /></label>
             {Number(brk31) > 0 && <ReasonSelect value={reason31} onChange={setReason31} size="31 ft" />}
-
             <label>36 ft broken<input type="number" min="0" style={inputStyle} value={brk36} onChange={(e) => setBrk36(e.target.value)} placeholder="0" /></label>
             {Number(brk36) > 0 && <ReasonSelect value={reason36} onChange={setReason36} size="36 ft" />}
-
             <label>45 ft broken<input type="number" min="0" style={inputStyle} value={brk45} onChange={(e) => setBrk45(e.target.value)} placeholder="0" /></label>
             {Number(brk45) > 0 && <ReasonSelect value={reason45} onChange={setReason45} size="45 ft" />}
-
             {(reason31 === "Other" || reason36 === "Other" || reason45 === "Other") && (
               <label>Other — please specify<input type="text" style={inputStyle} value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} placeholder="Describe the other reason" /></label>
             )}
-            <button type="button" onClick={submitBreakage} disabled={savingSection === "breakage"} style={sectionBtn("breakage")}>
-              {savingSection === "breakage" ? "Saving…" : "Submit Breakage"}
-            </button>
+            <div style={btnRow}>
+              <button type="button" onClick={() => submitBreakage(false)} disabled={savingSection === "breakage"} style={submitBtn("breakage")}>
+                {savingSection === "breakage" ? "Saving…" : "Submit Breakage"}
+              </button>
+              <button type="button" onClick={() => submitBreakage(true)} disabled={savingSection === "breakage"} style={nothingBtn}>
+                Nothing to report
+              </button>
+            </div>
             <SectionMessage section="breakage" />
           </div>
         )}
@@ -411,7 +417,7 @@ export default function ProductionForm() {
         {plantId && (
           <div style={sectionStyle}>
             <h3 style={h3}>Dispatch today</h3>
-            <p style={hint}>Good poles sent out. Leave blank if nothing dispatched.</p>
+            <p style={hint}>Good poles sent out. Required daily.</p>
             {!isMeter ? (
               <>
                 <label>31 ft dispatched<input type="number" min="0" style={inputStyle} value={disp31} onChange={(e) => setDisp31(e.target.value)} placeholder="0" /></label>
@@ -421,14 +427,19 @@ export default function ProductionForm() {
             ) : (
               <label>Single-phase meters dispatched<input type="number" min="0" style={inputStyle} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
             )}
-            <button type="button" onClick={submitDispatch} disabled={savingSection === "dispatch"} style={sectionBtn("dispatch")}>
-              {savingSection === "dispatch" ? "Saving…" : "Submit Dispatch"}
-            </button>
+            <div style={btnRow}>
+              <button type="button" onClick={() => submitDispatch(false)} disabled={savingSection === "dispatch"} style={submitBtn("dispatch")}>
+                {savingSection === "dispatch" ? "Saving…" : "Submit Dispatch"}
+              </button>
+              <button type="button" onClick={() => submitDispatch(true)} disabled={savingSection === "dispatch"} style={nothingBtn}>
+                Nothing to report
+              </button>
+            </div>
             <SectionMessage section="dispatch" />
           </div>
         )}
 
-        {/* Scrap processed */}
+        {/* Scrap */}
         {plantId && !isMeter && (
           <div style={sectionStyle}>
             <h3 style={h3}>Broken poles processed for scrap today</h3>
@@ -436,47 +447,51 @@ export default function ProductionForm() {
             <label>31 ft processed<input type="number" min="0" style={inputStyle} value={scr31} onChange={(e) => setScr31(e.target.value)} placeholder="0" /></label>
             <label>36 ft processed<input type="number" min="0" style={inputStyle} value={scr36} onChange={(e) => setScr36(e.target.value)} placeholder="0" /></label>
             <label>45 ft processed<input type="number" min="0" style={inputStyle} value={scr45} onChange={(e) => setScr45(e.target.value)} placeholder="0" /></label>
-            <button type="button" onClick={submitScrap} disabled={savingSection === "scrap"} style={sectionBtn("scrap")}>
-              {savingSection === "scrap" ? "Saving…" : "Submit Scrap"}
-            </button>
+            <div style={btnRow}>
+              <button type="button" onClick={() => submitScrap(false)} disabled={savingSection === "scrap"} style={submitBtn("scrap")}>
+                {savingSection === "scrap" ? "Saving…" : "Submit Scrap"}
+              </button>
+              <button type="button" onClick={() => submitScrap(true)} disabled={savingSection === "scrap"} style={nothingBtn}>
+                Nothing to report
+              </button>
+            </div>
             <SectionMessage section="scrap" />
           </div>
         )}
 
-        {/* Machine breakdown */}
+        {/* Machine */}
         {plantId && (
           <div style={sectionStyle}>
             <h3 style={h3}>Machine breakdown (optional)</h3>
-            <p style={hint}>Report a machine that is down, partially working, or resolved. Leave blank if none.</p>
-
+            <p style={hint}>Report a machine that is down, partially working, or resolved.</p>
             <label>Machine name<input type="text" style={inputStyle} value={machineName} onChange={(e) => setMachineName(e.target.value)} placeholder="e.g. Spinning Machine #2" /></label>
-
             <label>Status
               <select style={inputStyle} value={machineStatus} onChange={(e) => setMachineStatus(e.target.value)}>
                 {MACHINE_STATUSES.map((s) => (<option key={s}>{s}</option>))}
               </select>
             </label>
-
             <label>Expected resolution<input type="text" style={inputStyle} value={machineExpectedResolution} onChange={(e) => setMachineExpectedResolution(e.target.value)} placeholder="e.g. Today 5pm / Tomorrow / Waiting for part" /></label>
-
             <label>Issue description<textarea style={{ ...inputStyle, height: "80px" }} value={machineDescription} onChange={(e) => setMachineDescription(e.target.value)} placeholder="What happened?" /></label>
-
             <label>Action taken<textarea style={{ ...inputStyle, height: "70px" }} value={machineActionTaken} onChange={(e) => setMachineActionTaken(e.target.value)} placeholder="What has been done so far?" /></label>
-
-            <button type="button" onClick={submitMachine} disabled={savingSection === "machine"} style={sectionBtn("machine")}>
-              {savingSection === "machine" ? "Saving…" : "Submit Machine Issue"}
-            </button>
+            <div style={btnRow}>
+              <button type="button" onClick={() => submitMachine(false)} disabled={savingSection === "machine"} style={submitBtn("machine")}>
+                {savingSection === "machine" ? "Saving…" : "Submit Machine Issue"}
+              </button>
+              <button type="button" onClick={() => submitMachine(true)} disabled={savingSection === "machine"} style={nothingBtn}>
+                Nothing to report
+              </button>
+            </div>
             <SectionMessage section="machine" />
           </div>
         )}
       </div>
 
-      {/* Receivables — full width below the columns (add-form + tracking table) */}
+      {/* Receivables — full width below */}
       {plantId && selectedPlant && (
         <ReceivablesSection plantId={plantId} plantName={selectedPlant.name} />
       )}
 
-      {/* General notes — applies to the daily entries above */}
+      {/* General notes */}
       {plantId && (
         <div style={sectionStyle}>
           <label>General notes (optional)<textarea style={{ ...inputStyle, height: "60px" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any issues, e.g. half day, machine down" /></label>
