@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Manrope } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
 });
 
@@ -18,11 +18,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
+    <html lang="en" className={`${manrope.variable} h-full antialiased`}>
       <body
         className="min-h-full flex flex-col"
         style={{
-          fontFamily: "var(--font-inter), system-ui, sans-serif",
+          fontFamily: "var(--font-manrope), system-ui, sans-serif",
           backgroundColor: "#f8fafc",
           color: "#0f172a",
           margin: 0,
