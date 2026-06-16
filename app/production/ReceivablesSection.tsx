@@ -27,9 +27,20 @@ type Receivable = {
   notes: string | null;
 };
 
-const UTILITIES = ["PESCO", "MEPCO", "FESCO", "Meters"];
+// Per-plant customer list. First entry is the default.
+// Plants not listed here fall back to using the plant name itself.
+const PLANT_CUSTOMERS: Record<string, string[]> = {
+  FIEDMC: ["FESCO", "GEPCO", "LESCO"],
+  MEPCO: ["MEPCO"],
+  PESCO: ["PESCO"],
+  "Smart Meter Plant": ["Meters"],
+};
 
-// Count working days (Mon–Fri) elapsed from a date up to today, inclusive of start.
+function customersForPlant(plantName: string): string[] {
+  return PLANT_CUSTOMERS[plantName] || [plantName];
+}
+
+// Count working days (Mon–Fri) elapsed in the current stage.
 function workingDaysSince(dateStr: string): number {
   const start = new Date(dateStr + "T00:00:00");
   const today = new Date();
@@ -42,17 +53,7 @@ function workingDaysSince(dateStr: string): number {
     if (day !== 0 && day !== 6) count++;
     cur.setDate(cur.getDate() + 1);
   }
-  // days "in" the stage = working days from entry to today minus the entry day itself
   return Math.max(0, count - 1);
-}
-
-function bestUtilityForPlant(plantName: string): string {
-  const n = (plantName || "").toUpperCase();
-  if (n.includes("PESCO")) return "PESCO";
-  if (n.includes("MEPCO")) return "MEPCO";
-  if (n.includes("FESCO")) return "FESCO";
-  if (n.includes("METER")) return "Meters";
-  return "PESCO";
 }
 
 function fmtMoney(n: number) {
@@ -72,8 +73,10 @@ export default function ReceivablesSection({
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const customers = customersForPlant(plantName);
+
   // new bill form
-  const [utility, setUtility] = useState("PESCO");
+  const [customer, setCustomer] = useState(customers[0]);
   const [invoiceRef, setInvoiceRef] = useState("");
   const [icRef, setIcRef] = useState("");
   const [grnRef, setGrnRef] = useState("");
@@ -99,7 +102,7 @@ export default function ReceivablesSection({
   }, [plantId]);
 
   useEffect(() => {
-    setUtility(bestUtilityForPlant(plantName));
+    setCustomer(customersForPlant(plantName)[0]);
     loadData();
   }, [plantId, plantName, loadData]);
 
@@ -111,7 +114,6 @@ export default function ReceivablesSection({
     return stages.find((s) => s.stage_order === order)?.working_day_budget || 0;
   }
 
-  // green / amber / red for a bill based on working days in current stage
   function billStatus(bill: Receivable): "green" | "amber" | "red" {
     const budget = stageBudget(bill.current_stage_order);
     const elapsed = workingDaysSince(bill.current_stage_entered_date);
@@ -123,16 +125,15 @@ export default function ReceivablesSection({
 
   const statusColor = { green: "#16a34a", amber: "#d97706", red: "#dc2626" };
 
-    async function addBill() {
+  async function addBill() {
     setMsg("");
     if (!amount) {
       setMsg("Enter the bill amount.");
       return;
     }
     setSaving(true);
-    const today = new Date().toISOString().slice(0, 10);
     const { error } = await supabase.from("receivables").insert({
-      utility,
+      utility: customer,
       plant_id: plantId,
       invoice_ref: invoiceRef || null,
       ic_ref: icRef || null,
@@ -314,19 +315,26 @@ export default function ReceivablesSection({
 
       {/* Add new bill */}
       <h3 style={{ ...h3, marginTop: "10px" }}>Add a new bill</h3>
-            <div>
-        <label>
-          Utility
-          <select
-            value={utility}
-            onChange={(e) => setUtility(e.target.value)}
-            style={inputStyle}
-          >
-            {UTILITIES.map((u) => (
-              <option key={u}>{u}</option>
-            ))}
-          </select>
-        </label>
+      <div>
+        {customers.length > 1 ? (
+          <label>
+            Customer
+            <select
+              value={customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              style={inputStyle}
+            >
+              {customers.map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <div style={{ marginBottom: "14px" }}>
+            <div style={{ fontSize: "13px", color: "#888" }}>Customer</div>
+            <div style={{ fontSize: "16px", fontWeight: "bold" }}>{customers[0]}</div>
+          </div>
+        )}
         <label>
           Invoice reference
           <input
@@ -377,7 +385,7 @@ export default function ReceivablesSection({
             onChange={(e) => setDateSubmitted(e.target.value)}
           />
         </label>
-                <button
+        <button
           type="button"
           onClick={addBill}
           disabled={saving}
@@ -393,7 +401,7 @@ export default function ReceivablesSection({
           }}
         >
           {saving ? "Adding…" : "Add Bill"}
-                </button>
+        </button>
       </div>
     </div>
   );
