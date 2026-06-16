@@ -58,8 +58,6 @@ export default function ProductionForm() {
   const [scr36, setScr36] = useState("");
   const [scr45, setScr45] = useState("");
 
-  const [notes, setNotes] = useState("");
-
   // Machine breakdown
   const [machineName, setMachineName] = useState("");
   const [machineStatus, setMachineStatus] = useState("Down");
@@ -67,8 +65,11 @@ export default function ProductionForm() {
   const [machineDescription, setMachineDescription] = useState("");
   const [machineActionTaken, setMachineActionTaken] = useState("");
 
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
+  const [notes, setNotes] = useState("");
+
+  // Per-section saving + message state
+  const [savingSection, setSavingSection] = useState("");
+  const [sectionMsg, setSectionMsg] = useState<{ section: string; text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -83,7 +84,6 @@ export default function ProductionForm() {
         return;
       }
 
-      // Find the member record for the current user
       const { data: me } = await supabase
         .from("members")
         .select("id, role")
@@ -93,7 +93,6 @@ export default function ProductionForm() {
       const role = me?.role || "Member";
       const isAdminOrExec = role === "Admin" || role === "Executive";
 
-      // Load all active plants
       const { data: allPlants } = await supabase
         .from("plants")
         .select("*")
@@ -103,10 +102,8 @@ export default function ProductionForm() {
       const active = allPlants || [];
 
       if (isAdminOrExec) {
-        // Admin / Executive can enter for any plant
         setPlants(active);
       } else if (me) {
-        // Members / Managers only see plants assigned to them
         const { data: mp } = await supabase
           .from("member_plants")
           .select("plant_id")
@@ -116,7 +113,6 @@ export default function ProductionForm() {
         const mine = active.filter((p) => assignedIds.has(p.id));
         setPlants(mine);
 
-        // If exactly one plant, auto-select it
         if (mine.length === 1) setPlantId(mine[0].id);
         if (mine.length === 0) setNoAccess(true);
       } else {
@@ -132,106 +128,131 @@ export default function ProductionForm() {
   const selectedPlant = plants.find((p) => p.id === plantId);
   const isMeter = selectedPlant?.type === "meter";
 
-  function resetAll() {
+  async function currentEmail() {
+    const { data: userData } = await supabase.auth.getUser();
+    return userData.user?.email || "unknown";
+  }
+
+  function showMsg(section: string, text: string, ok: boolean) {
+    setSectionMsg({ section, text, ok });
+  }
+
+  // ---- Section submit handlers ----
+
+  async function submitProduction() {
+    if (!plantId) return;
+    if (!prod31 && !prod36 && !prod45 && !prodMeter) {
+      showMsg("production", "Enter at least one production number first.", false);
+      return;
+    }
+    setSavingSection("production");
+    const enteredBy = await currentEmail();
+    const { error } = await supabase.from("production_entries").insert({
+      plant_id: plantId, plant_name: selectedPlant?.name || "",
+      entry_date: entryDate,
+      qty_31: Number(prod31) || 0, qty_36: Number(prod36) || 0,
+      qty_45: Number(prod45) || 0, qty_meter: Number(prodMeter) || 0,
+      entered_by: enteredBy, notes,
+    });
+    setSavingSection("");
+    if (error) { showMsg("production", "Error: " + error.message, false); return; }
+    showMsg("production", "Production saved ✓", true);
     setProd31(""); setProd36(""); setProd45(""); setProdMeter("");
+  }
+
+  async function submitDispatch() {
+    if (!plantId) return;
+    if (!disp31 && !disp36 && !disp45 && !dispMeter) {
+      showMsg("dispatch", "Enter at least one dispatch number first.", false);
+      return;
+    }
+    setSavingSection("dispatch");
+    const enteredBy = await currentEmail();
+    const { error } = await supabase.from("dispatch_entries").insert({
+      plant_id: plantId, plant_name: selectedPlant?.name || "",
+      entry_date: entryDate,
+      qty_31: Number(disp31) || 0, qty_36: Number(disp36) || 0,
+      qty_45: Number(disp45) || 0, qty_meter: Number(dispMeter) || 0,
+      entered_by: enteredBy, notes,
+    });
+    setSavingSection("");
+    if (error) { showMsg("dispatch", "Error: " + error.message, false); return; }
+    showMsg("dispatch", "Dispatch saved ✓", true);
     setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter("");
+  }
+
+  async function submitBreakage() {
+    if (!plantId) return;
+    if (!brk31 && !brk36 && !brk45) {
+      showMsg("breakage", "Enter at least one breakage number first.", false);
+      return;
+    }
+    setSavingSection("breakage");
+    const enteredBy = await currentEmail();
+    const { error } = await supabase.from("breakage_entries").insert({
+      plant_id: plantId, plant_name: selectedPlant?.name || "",
+      entry_date: entryDate,
+      qty_31: Number(brk31) || 0, qty_36: Number(brk36) || 0,
+      qty_45: Number(brk45) || 0,
+      reason_31: reason31 || null,
+      reason_36: reason36 || null,
+      reason_45: reason45 || null,
+      reason_other: reasonOther || null,
+      entered_by: enteredBy,
+    });
+    setSavingSection("");
+    if (error) { showMsg("breakage", "Error: " + error.message, false); return; }
+    showMsg("breakage", "Breakage saved ✓", true);
     setBrk31(""); setBrk36(""); setBrk45("");
     setReason31(""); setReason36(""); setReason45(""); setReasonOther("");
+  }
+
+  async function submitScrap() {
+    if (!plantId) return;
+    if (!scr31 && !scr36 && !scr45) {
+      showMsg("scrap", "Enter at least one scrap number first.", false);
+      return;
+    }
+    setSavingSection("scrap");
+    const enteredBy = await currentEmail();
+    const { error } = await supabase.from("scrap_processed_entries").insert({
+      plant_id: plantId, plant_name: selectedPlant?.name || "",
+      entry_date: entryDate,
+      qty_31: Number(scr31) || 0, qty_36: Number(scr36) || 0,
+      qty_45: Number(scr45) || 0,
+      notes, entered_by: enteredBy,
+    });
+    setSavingSection("");
+    if (error) { showMsg("scrap", "Error: " + error.message, false); return; }
+    showMsg("scrap", "Scrap saved ✓", true);
     setScr31(""); setScr36(""); setScr45("");
-    setNotes("");
+  }
+
+  async function submitMachine() {
+    if (!plantId) return;
+    if (!machineName || !machineDescription) {
+      showMsg("machine", "Enter at least the machine name and issue description first.", false);
+      return;
+    }
+    setSavingSection("machine");
+    const enteredBy = await currentEmail();
+    const { error } = await supabase.from("machine_issues").insert({
+      plant_id: plantId, plant_name: selectedPlant?.name || "",
+      machine_name: machineName,
+      issue_status: machineStatus,
+      expected_resolution: machineExpectedResolution || null,
+      issue_description: machineDescription,
+      action_taken: machineActionTaken || null,
+      entered_by: enteredBy,
+    });
+    setSavingSection("");
+    if (error) { showMsg("machine", "Error: " + error.message, false); return; }
+    showMsg("machine", "Machine issue saved ✓", true);
     setMachineName(""); setMachineStatus("Down");
     setMachineExpectedResolution(""); setMachineDescription(""); setMachineActionTaken("");
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setMessage("");
-
-    const { data: userData } = await supabase.auth.getUser();
-    const enteredBy = userData.user?.email || "unknown";
-
-    const hasProduction = prod31 || prod36 || prod45 || prodMeter;
-    const hasDispatch = disp31 || disp36 || disp45 || dispMeter;
-    const hasBreakage = brk31 || brk36 || brk45;
-    const hasScrap = scr31 || scr36 || scr45;
-    const hasMachine = machineName && machineDescription;
-
-    let err = "";
-
-    if (hasProduction) {
-      const { error } = await supabase.from("production_entries").insert({
-        plant_id: plantId, plant_name: selectedPlant?.name || "",
-        entry_date: entryDate,
-        qty_31: Number(prod31) || 0, qty_36: Number(prod36) || 0,
-        qty_45: Number(prod45) || 0, qty_meter: Number(prodMeter) || 0,
-        entered_by: enteredBy, notes,
-      });
-      if (error) err = error.message;
-    }
-
-    if (hasDispatch && !err) {
-      const { error } = await supabase.from("dispatch_entries").insert({
-        plant_id: plantId, plant_name: selectedPlant?.name || "",
-        entry_date: entryDate,
-        qty_31: Number(disp31) || 0, qty_36: Number(disp36) || 0,
-        qty_45: Number(disp45) || 0, qty_meter: Number(dispMeter) || 0,
-        entered_by: enteredBy, notes,
-      });
-      if (error) err = error.message;
-    }
-
-    if (hasBreakage && !err) {
-      const { error } = await supabase.from("breakage_entries").insert({
-        plant_id: plantId, plant_name: selectedPlant?.name || "",
-        entry_date: entryDate,
-        qty_31: Number(brk31) || 0, qty_36: Number(brk36) || 0,
-        qty_45: Number(brk45) || 0,
-        reason_31: reason31 || null,
-        reason_36: reason36 || null,
-        reason_45: reason45 || null,
-        reason_other: reasonOther || null,
-        entered_by: enteredBy,
-      });
-      if (error) err = error.message;
-    }
-
-    if (hasScrap && !err) {
-      const { error } = await supabase.from("scrap_processed_entries").insert({
-        plant_id: plantId, plant_name: selectedPlant?.name || "",
-        entry_date: entryDate,
-        qty_31: Number(scr31) || 0, qty_36: Number(scr36) || 0,
-        qty_45: Number(scr45) || 0,
-        notes, entered_by: enteredBy,
-      });
-      if (error) err = error.message;
-    }
-
-    if (hasMachine && !err) {
-      const { error } = await supabase.from("machine_issues").insert({
-        plant_id: plantId, plant_name: selectedPlant?.name || "",
-        machine_name: machineName,
-        issue_status: machineStatus,
-        expected_resolution: machineExpectedResolution || null,
-        issue_description: machineDescription,
-        action_taken: machineActionTaken || null,
-        entered_by: enteredBy,
-      });
-      if (error) err = error.message;
-    }
-
-    setSaving(false);
-
-    if (err) { setMessage("Error: " + err); return; }
-
-    if (!hasProduction && !hasDispatch && !hasBreakage && !hasScrap && !hasMachine) {
-      setMessage("Please enter at least one number or a machine issue before submitting.");
-      return;
-    }
-
-    setMessage("Daily entry submitted. Thank you!");
-    resetAll();
-  }
+  // ---- Styles ----
 
   const inputStyle = {
     display: "block", width: "100%", padding: "7px 9px",
@@ -246,6 +267,28 @@ export default function ProductionForm() {
 
   const hint = { fontSize: "12px", color: "#64748b", marginBottom: "10px" };
   const h3 = { fontSize: "13px", fontWeight: 700 as const, color: "#1e293b", marginBottom: "4px" };
+
+  const sectionBtn = (section: string): React.CSSProperties => ({
+    backgroundColor: "#1e293b",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    padding: "7px 16px",
+    fontSize: "12px",
+    cursor: savingSection === section ? "wait" : "pointer",
+    fontWeight: 700,
+    marginTop: "4px",
+    opacity: savingSection === section ? 0.7 : 1,
+  });
+
+  function SectionMessage({ section }: { section: string }) {
+    if (!sectionMsg || sectionMsg.section !== section) return null;
+    return (
+      <p style={{ marginTop: "8px", fontSize: "12px", fontWeight: 700, color: sectionMsg.ok ? "#16a34a" : "#c0392b" }}>
+        {sectionMsg.text}
+      </p>
+    );
+  }
 
   function ReasonSelect({
     value, onChange, size,
@@ -279,7 +322,7 @@ export default function ProductionForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <div>
       {/* Plant & date — compact horizontal strip */}
       <div style={{ ...sectionStyle, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "16px" }}>
         {plants.length === 1 ? (
@@ -316,7 +359,7 @@ export default function ProductionForm() {
         </div>
       </div>
 
-      {/* Data sections flow into columns across the page */}
+      {/* Data sections — each with its own submit button */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "14px", alignItems: "start" }}>
         {/* Production */}
         {plantId && (
@@ -332,6 +375,10 @@ export default function ProductionForm() {
             ) : (
               <label>Single-phase meters produced<input type="number" min="0" style={inputStyle} value={prodMeter} onChange={(e) => setProdMeter(e.target.value)} placeholder="0" /></label>
             )}
+            <button type="button" onClick={submitProduction} disabled={savingSection === "production"} style={sectionBtn("production")}>
+              {savingSection === "production" ? "Saving…" : "Submit Production"}
+            </button>
+            <SectionMessage section="production" />
           </div>
         )}
 
@@ -353,6 +400,10 @@ export default function ProductionForm() {
             {(reason31 === "Other" || reason36 === "Other" || reason45 === "Other") && (
               <label>Other — please specify<input type="text" style={inputStyle} value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} placeholder="Describe the other reason" /></label>
             )}
+            <button type="button" onClick={submitBreakage} disabled={savingSection === "breakage"} style={sectionBtn("breakage")}>
+              {savingSection === "breakage" ? "Saving…" : "Submit Breakage"}
+            </button>
+            <SectionMessage section="breakage" />
           </div>
         )}
 
@@ -370,6 +421,10 @@ export default function ProductionForm() {
             ) : (
               <label>Single-phase meters dispatched<input type="number" min="0" style={inputStyle} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
             )}
+            <button type="button" onClick={submitDispatch} disabled={savingSection === "dispatch"} style={sectionBtn("dispatch")}>
+              {savingSection === "dispatch" ? "Saving…" : "Submit Dispatch"}
+            </button>
+            <SectionMessage section="dispatch" />
           </div>
         )}
 
@@ -381,6 +436,10 @@ export default function ProductionForm() {
             <label>31 ft processed<input type="number" min="0" style={inputStyle} value={scr31} onChange={(e) => setScr31(e.target.value)} placeholder="0" /></label>
             <label>36 ft processed<input type="number" min="0" style={inputStyle} value={scr36} onChange={(e) => setScr36(e.target.value)} placeholder="0" /></label>
             <label>45 ft processed<input type="number" min="0" style={inputStyle} value={scr45} onChange={(e) => setScr45(e.target.value)} placeholder="0" /></label>
+            <button type="button" onClick={submitScrap} disabled={savingSection === "scrap"} style={sectionBtn("scrap")}>
+              {savingSection === "scrap" ? "Saving…" : "Submit Scrap"}
+            </button>
+            <SectionMessage section="scrap" />
           </div>
         )}
 
@@ -404,34 +463,25 @@ export default function ProductionForm() {
 
             <label>Action taken<textarea style={{ ...inputStyle, height: "70px" }} value={machineActionTaken} onChange={(e) => setMachineActionTaken(e.target.value)} placeholder="What has been done so far?" /></label>
 
-            <p style={{ fontSize: "12px", color: "#999" }}>
-              To submit a machine issue, fill in at least the machine name and issue description.
-            </p>
+            <button type="button" onClick={submitMachine} disabled={savingSection === "machine"} style={sectionBtn("machine")}>
+              {savingSection === "machine" ? "Saving…" : "Submit Machine Issue"}
+            </button>
+            <SectionMessage section="machine" />
           </div>
         )}
-
-              </div>
+      </div>
 
       {/* Receivables — full width below the columns (add-form + tracking table) */}
       {plantId && selectedPlant && (
         <ReceivablesSection plantId={plantId} plantName={selectedPlant.name} />
       )}
 
-      {/* General notes */}
+      {/* General notes — applies to the daily entries above */}
       {plantId && (
         <div style={sectionStyle}>
           <label>General notes (optional)<textarea style={{ ...inputStyle, height: "60px" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any issues, e.g. half day, machine down" /></label>
         </div>
       )}
-
-      <button type="submit" disabled={saving || !plantId}
-        style={{ backgroundColor: "#1e293b", color: "white", border: "none", borderRadius: "6px", padding: "9px 20px", fontSize: "13px", cursor: "pointer", fontWeight: 700, marginTop: "6px" }}>
-        {saving ? "Submitting…" : "Submit Daily Entry"}
-      </button>
-
-      {message && (
-        <p style={{ marginTop: "14px", fontSize: "13px", color: message.startsWith("Error") ? "red" : "green" }}>{message}</p>
-      )}
-    </form>
+    </div>
   );
 }
