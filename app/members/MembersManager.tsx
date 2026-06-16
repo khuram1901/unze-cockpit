@@ -55,6 +55,13 @@ const DEPT_BUSINESS_UNITS: Record<string, string[]> = {
   BINC: ["Nursing College"],
 };
 
+// Admin and Executive are organisation-wide: they are not pinned to a
+// department or business unit. Department/BU fields apply only to Manager
+// and Member.
+function roleHasDeptAndBU(role: string): boolean {
+  return role === "Manager" || role === "Member";
+}
+
 function businessUnitsFor(department: string | null): string[] {
   if (!department) return [];
   return DEPT_BUSINESS_UNITS[department] || ALL_BUSINESS_UNITS;
@@ -184,14 +191,17 @@ export default function MembersManager() {
 
     const displayName = `${firstName} ${lastName}`.trim();
 
+    // Admin/Executive are organisation-wide — never store a department or BU.
+    const keepsDeptBU = roleHasDeptAndBU(role);
+
     const { error } = await supabase.from("members").insert({
       first_name: firstName,
       last_name: lastName,
       name: displayName,
       email: email.trim(),
       role,
-      department: department || null,
-      business_unit: businessUnit || null,
+      department: keepsDeptBU ? department || null : null,
+      business_unit: keepsDeptBU ? businessUnit || null : null,
     });
 
     setSaving(false);
@@ -220,7 +230,12 @@ export default function MembersManager() {
 
     const member = members.find((m) => m.id === id);
 
-    // If department changes and current business unit is no longer valid, clear it
+    // If the role is being changed UP to Admin/Executive, wipe department/BU.
+    if (updates.role !== undefined && !roleHasDeptAndBU(updates.role)) {
+      updates = { ...updates, department: null, business_unit: null };
+    }
+
+    // If department changes and current business unit is no longer valid, clear it.
     if (updates.department !== undefined) {
       const validBUs = businessUnitsFor(updates.department);
       const currentBU = member?.business_unit;
@@ -288,6 +303,7 @@ export default function MembersManager() {
   if (loading) return <p>Loading members</p>;
 
   const addFormBUs = businessUnitsFor(department);
+  const addFormShowsDeptBU = roleHasDeptAndBU(role);
 
   return (
     <div>
@@ -329,35 +345,56 @@ export default function MembersManager() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-            <select style={inputStyle} value={role} onChange={(e) => setRole(e.target.value)}>
+            <select
+              style={inputStyle}
+              value={role}
+              onChange={(e) => {
+                setRole(e.target.value);
+                // Switching to Admin/Executive clears any selected dept/BU.
+                if (!roleHasDeptAndBU(e.target.value)) {
+                  setDepartment("");
+                  setBusinessUnit("");
+                }
+              }}
+            >
               {ROLES.map((r) => (
                 <option key={r}>{r}</option>
               ))}
             </select>
-            <select
-              style={inputStyle}
-              value={department}
-              onChange={(e) => {
-                setDepartment(e.target.value);
-                setBusinessUnit(""); // reset BU when department changes
-              }}
-            >
-              <option value="">Department</option>
-              {DEPARTMENTS.map((d) => (
-                <option key={d}>{d}</option>
-              ))}
-            </select>
-            <select
-              style={inputStyle}
-              value={businessUnit}
-              onChange={(e) => setBusinessUnit(e.target.value)}
-              disabled={!department}
-            >
-              <option value="">{department ? "Business Unit" : "Select dept first"}</option>
-              {addFormBUs.map((b) => (
-                <option key={b}>{b}</option>
-              ))}
-            </select>
+
+            {addFormShowsDeptBU ? (
+              <>
+                <select
+                  style={inputStyle}
+                  value={department}
+                  onChange={(e) => {
+                    setDepartment(e.target.value);
+                    setBusinessUnit(""); // reset BU when department changes
+                  }}
+                >
+                  <option value="">Department</option>
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+                <select
+                  style={inputStyle}
+                  value={businessUnit}
+                  onChange={(e) => setBusinessUnit(e.target.value)}
+                  disabled={!department}
+                >
+                  <option value="">{department ? "Business Unit" : "Select dept first"}</option>
+                  {addFormBUs.map((b) => (
+                    <option key={b}>{b}</option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <span style={{ fontSize: "13px", color: "#888", alignSelf: "center" }}>
+                {role} sees all departments &amp; business units
+              </span>
+            )}
+
             <button
               type="submit"
               disabled={saving}
@@ -381,6 +418,7 @@ export default function MembersManager() {
         {members.map((m) => {
           const displayName = fullName(m.first_name, m.last_name, m.name);
           const rowBUs = businessUnitsFor(m.department);
+          const rowShowsDeptBU = roleHasDeptAndBU(m.role);
 
           return (
             <div
@@ -433,28 +471,41 @@ export default function MembersManager() {
                     ))}
                   </select>
 
-                  <select
-                    value={m.department || ""}
-                    onChange={(e) => updateMember(m.id, { department: e.target.value || null })}
-                    style={smallInputStyle}
-                  >
-                    <option value="">Department</option>
-                    {DEPARTMENTS.map((d) => (
-                      <option key={d}>{d}</option>
-                    ))}
-                  </select>
+                  {rowShowsDeptBU ? (
+                    <>
+                      <select
+                        value={m.department || ""}
+                        onChange={(e) => updateMember(m.id, { department: e.target.value || null })}
+                        style={smallInputStyle}
+                      >
+                        <option value="">Department</option>
+                        {DEPARTMENTS.map((d) => (
+                          <option key={d}>{d}</option>
+                        ))}
+                      </select>
 
-                  <select
-                    value={m.business_unit || ""}
-                    onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })}
-                    style={smallInputStyle}
-                    disabled={!m.department}
-                  >
-                    <option value="">{m.department ? "Business Unit" : "Select dept first"}</option>
-                    {rowBUs.map((b) => (
-                      <option key={b}>{b}</option>
-                    ))}
-                  </select>
+                      <select
+                        value={m.business_unit || ""}
+                        onChange={(e) =>
+                          updateMember(m.id, { business_unit: e.target.value || null })
+                        }
+                        style={smallInputStyle}
+                        disabled={!m.department}
+                      >
+                        <option value="">
+                          {m.department ? "Business Unit" : "Select dept first"}
+                        </option>
+                        {rowBUs.map((b) => (
+                          <option key={b}>{b}</option>
+                        ))}
+                      </select>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: "12px", color: "#999" }}>All departments</div>
+                      <div style={{ fontSize: "12px", color: "#999" }}>All business units</div>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -464,11 +515,11 @@ export default function MembersManager() {
                   </div>
 
                   <div style={{ fontSize: "13px", color: "#555" }}>
-                    {m.department || "No department"}
+                    {rowShowsDeptBU ? m.department || "No department" : "All departments"}
                   </div>
 
                   <div style={{ fontSize: "13px", color: "#555" }}>
-                    {m.business_unit || "No business unit"}
+                    {rowShowsDeptBU ? m.business_unit || "No business unit" : "All business units"}
                   </div>
 
                   <span
