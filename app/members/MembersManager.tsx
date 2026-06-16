@@ -14,6 +14,8 @@ type Member = {
   business_unit: string | null;
 };
 
+type Plant = { id: string; name: string };
+
 const ROLES = ["Admin", "Executive", "Manager", "Member"];
 
 const DEPARTMENTS = [
@@ -42,7 +44,6 @@ const BUSINESS_UNITS = [
   "Nursing College",
 ];
 
-// Basic but solid email format check
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
@@ -56,6 +57,10 @@ export default function MembersManager() {
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState<string>("Member");
   const [loading, setLoading] = useState(true);
+
+  const [plants, setPlants] = useState<Plant[]>([]);
+  const [assignments, setAssignments] = useState<Record<string, Set<string>>>({});
+  const [savingAssignment, setSavingAssignment] = useState<string>("");
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -85,6 +90,25 @@ export default function MembersManager() {
 
     if (data) setMembers(data);
 
+    const { data: plantData } = await supabase
+      .from("plants")
+      .select("id, name")
+      .eq("active", true)
+      .order("name");
+
+    if (plantData) setPlants(plantData);
+
+    const { data: mpData } = await supabase
+      .from("member_plants")
+      .select("member_id, plant_id");
+
+    const grouped: Record<string, Set<string>> = {};
+    (mpData || []).forEach((row) => {
+      if (!grouped[row.member_id]) grouped[row.member_id] = new Set();
+      grouped[row.member_id].add(row.plant_id);
+    });
+    setAssignments(grouped);
+
     setLoading(false);
   }
 
@@ -92,10 +116,49 @@ export default function MembersManager() {
     loadData();
   }, []);
 
+  async function togglePlant(memberId: string, plantId: string, currentlyAssigned: boolean) {
+    const key = `${memberId}-${plantId}`;
+    setSavingAssignment(key);
+
+    if (currentlyAssigned) {
+      const { error } = await supabase
+        .from("member_plants")
+        .delete()
+        .eq("member_id", memberId)
+        .eq("plant_id", plantId);
+
+      if (error) {
+        alert("Error removing plant: " + error.message);
+        setSavingAssignment("");
+        return;
+      }
+    } else {
+      const { error } = await supabase
+        .from("member_plants")
+        .insert({ member_id: memberId, plant_id: plantId });
+
+      if (error) {
+        alert("Error assigning plant: " + error.message);
+        setSavingAssignment("");
+        return;
+      }
+    }
+
+    setAssignments((prev) => {
+      const next = { ...prev };
+      const set = new Set(next[memberId] || []);
+      if (currentlyAssigned) set.delete(plantId);
+      else set.add(plantId);
+      next[memberId] = set;
+      return next;
+    });
+
+    setSavingAssignment("");
+  }
+
   async function addMember(e: React.FormEvent) {
     e.preventDefault();
 
-    // Email is mandatory and must be valid — no user without a valid email
     if (!isValidEmail(email)) {
       alert("A valid email address is required to add a member.");
       return;
@@ -133,10 +196,9 @@ export default function MembersManager() {
   }
 
   async function updateMember(id: string, updates: Partial<Member>) {
-    // If this update is changing the email, block invalid/blank values
     if (updates.email !== undefined && !isValidEmail(updates.email || "")) {
       alert("A valid email address is required. The email cannot be left blank.");
-      loadData(); // reload to discard the invalid edit in the input
+      loadData();
       return;
     }
 
@@ -213,24 +275,11 @@ export default function MembersManager() {
             maxWidth: "1000px",
           }}
         >
-          <h2
-            style={{
-              fontSize: "16px",
-              fontWeight: "bold",
-              marginBottom: "12px",
-            }}
-          >
+          <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "12px" }}>
             Add a member
           </h2>
 
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "8px",
-              alignItems: "center",
-            }}
-          >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
             <input
               style={inputStyle}
               placeholder="First Name"
@@ -238,7 +287,6 @@ export default function MembersManager() {
               onChange={(e) => setFirstName(e.target.value)}
               required
             />
-
             <input
               style={inputStyle}
               placeholder="Last Name"
@@ -246,7 +294,6 @@ export default function MembersManager() {
               onChange={(e) => setLastName(e.target.value)}
               required
             />
-
             <input
               style={inputStyle}
               placeholder="Email"
@@ -255,17 +302,11 @@ export default function MembersManager() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-
-            <select
-              style={inputStyle}
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-            >
+            <select style={inputStyle} value={role} onChange={(e) => setRole(e.target.value)}>
               {ROLES.map((r) => (
                 <option key={r}>{r}</option>
               ))}
             </select>
-
             <select
               style={inputStyle}
               value={department}
@@ -276,7 +317,6 @@ export default function MembersManager() {
                 <option key={d}>{d}</option>
               ))}
             </select>
-
             <select
               style={inputStyle}
               value={businessUnit}
@@ -287,7 +327,6 @@ export default function MembersManager() {
                 <option key={b}>{b}</option>
               ))}
             </select>
-
             <button
               type="submit"
               disabled={saving}
@@ -331,22 +370,13 @@ export default function MembersManager() {
                       style={{ ...smallInputStyle, marginBottom: "6px", width: "90%" }}
                       value={m.first_name || ""}
                       placeholder="First Name"
-                      onChange={(e) =>
-                        updateMember(m.id, {
-                          first_name: e.target.value,
-                        })
-                      }
+                      onChange={(e) => updateMember(m.id, { first_name: e.target.value })}
                     />
-
                     <input
                       style={{ ...smallInputStyle, width: "90%" }}
                       value={m.last_name || ""}
                       placeholder="Last Name"
-                      onChange={(e) =>
-                        updateMember(m.id, {
-                          last_name: e.target.value,
-                        })
-                      }
+                      onChange={(e) => updateMember(m.id, { last_name: e.target.value })}
                     />
                   </div>
 
@@ -363,11 +393,7 @@ export default function MembersManager() {
 
                   <select
                     value={m.role}
-                    onChange={(e) =>
-                      updateMember(m.id, {
-                        role: e.target.value,
-                      })
-                    }
+                    onChange={(e) => updateMember(m.id, { role: e.target.value })}
                     style={smallInputStyle}
                   >
                     {ROLES.map((r) => (
@@ -377,11 +403,7 @@ export default function MembersManager() {
 
                   <select
                     value={m.department || ""}
-                    onChange={(e) =>
-                      updateMember(m.id, {
-                        department: e.target.value || null,
-                      })
-                    }
+                    onChange={(e) => updateMember(m.id, { department: e.target.value || null })}
                     style={smallInputStyle}
                   >
                     <option value="">Department</option>
@@ -392,11 +414,7 @@ export default function MembersManager() {
 
                   <select
                     value={m.business_unit || ""}
-                    onChange={(e) =>
-                      updateMember(m.id, {
-                        business_unit: e.target.value || null,
-                      })
-                    }
+                    onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })}
                     style={smallInputStyle}
                   >
                     <option value="">Business Unit</option>
@@ -408,12 +426,8 @@ export default function MembersManager() {
               ) : (
                 <>
                   <div>
-                    <div style={{ fontWeight: "bold", fontSize: "15px" }}>
-                      {displayName}
-                    </div>
-                    <div style={{ color: "#777", fontSize: "13px" }}>
-                      {m.email || "no email"}
-                    </div>
+                    <div style={{ fontWeight: "bold", fontSize: "15px" }}>{displayName}</div>
+                    <div style={{ color: "#777", fontSize: "13px" }}>{m.email || "no email"}</div>
                   </div>
 
                   <div style={{ fontSize: "13px", color: "#555" }}>
@@ -466,6 +480,90 @@ export default function MembersManager() {
           );
         })}
       </div>
+
+      {isAdmin && (
+        <div style={{ marginTop: "40px", maxWidth: "1100px" }}>
+          <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "6px" }}>
+            Plant Assignments
+          </h2>
+          <p style={{ fontSize: "13px", color: "#666", marginBottom: "16px" }}>
+            Tick the plants each person can enter data for. A person can be assigned one, several, or
+            no plants. Only Members and Managers are listed — Admin and Executive can see all plants
+            automatically.
+          </p>
+
+          {plants.length === 0 ? (
+            <p style={{ color: "#999" }}>No active plants found.</p>
+          ) : (
+            (() => {
+              const entryUsers = members.filter(
+                (m) => m.role === "Member" || m.role === "Manager"
+              );
+
+              if (entryUsers.length === 0) {
+                return <p style={{ color: "#999" }}>No Members or Managers to assign yet.</p>;
+              }
+
+              return (
+                <div style={{ display: "grid", gap: "10px" }}>
+                  {entryUsers.map((m) => {
+                    const displayName = fullName(m.first_name, m.last_name, m.name);
+                    const memberPlants = assignments[m.id] || new Set<string>();
+
+                    return (
+                      <div
+                        key={m.id}
+                        style={{
+                          border: "1px solid #e0e0e0",
+                          borderRadius: "8px",
+                          padding: "12px 16px",
+                        }}
+                      >
+                        <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "8px" }}>
+                          {displayName}{" "}
+                          <span style={{ color: "#999", fontWeight: "normal", fontSize: "12px" }}>
+                            ({m.role})
+                          </span>
+                        </div>
+
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "14px" }}>
+                          {plants.map((p) => {
+                            const assigned = memberPlants.has(p.id);
+                            const key = `${m.id}-${p.id}`;
+                            const isSaving = savingAssignment === key;
+
+                            return (
+                              <label
+                                key={p.id}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  fontSize: "14px",
+                                  cursor: isSaving ? "wait" : "pointer",
+                                  opacity: isSaving ? 0.5 : 1,
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={assigned}
+                                  disabled={isSaving}
+                                  onChange={() => togglePlant(m.id, p.id, assigned)}
+                                />
+                                {p.name}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()
+          )}
+        </div>
+      )}
     </div>
   );
 }
