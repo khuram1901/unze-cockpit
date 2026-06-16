@@ -255,6 +255,7 @@ export default function ExecutiveDashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cashPlanMissing, setCashPlanMissing] = useState(false);
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -352,6 +353,15 @@ export default function ExecutiveDashboardPage() {
 
     setMachineIssues(activeMachineIssues);
     setTasks(taskData);
+
+    // Check whether the finance manager has entered this month's cash plan
+    const currentMonthForCash = formatDate(new Date()).slice(0, 7);
+    const { data: cashPlanRow } = await supabase
+      .from("monthly_cash_plan")
+      .select("id")
+      .eq("plan_month", currentMonthForCash)
+      .maybeSingle();
+    setCashPlanMissing(!cashPlanRow);
 
     // Sum a metric for a plant between two dates (inclusive)
     function sumBetween(rows: any[], plantId: string, fromDate: string, toDate: string): number {
@@ -603,6 +613,23 @@ export default function ExecutiveDashboardPage() {
           <p>Loading executive dashboard…</p>
         ) : (
           <>
+            {cashPlanMissing && (
+              <div
+                style={{
+                  border: "1px solid #fecaca",
+                  backgroundColor: "#fef2f2",
+                  color: "#991b1b",
+                  borderRadius: "10px",
+                  padding: "16px",
+                  fontWeight: "bold",
+                  marginBottom: "24px",
+                }}
+              >
+                ⚠️ This month&apos;s cash plan has not been entered yet. The finance manager needs to
+                set the expected receivables and payouts on the Finance page.
+              </div>
+            )}
+
             <SectionTitle title="Executive Escalations (Lagging Indicators)" />
 
             {escalations.length === 0 ? (
