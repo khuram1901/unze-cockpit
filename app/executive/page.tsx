@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
-import EscalationTrafficLights from "./EscalationTrafficLights2";
+import EscalationTrafficLights from "./EscalationTrafficLights";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number; meter: number };
