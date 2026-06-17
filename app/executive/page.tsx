@@ -889,7 +889,7 @@ export default function ExecutiveDashboardPage() {
             <SectionTitle title="Executive Escalations" />
             <EscalationTrafficLights escalations={escalations} />
             {/* Two-column row: Attention (left) + Daily Snapshot (right) */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: "16px", marginTop: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(420px, 1fr))", gap: "16px", marginTop: "8px" }}>
               <div>
                 <SectionTitle title="Executive Attention" />
                 <div style={squareGrid}>
@@ -916,7 +916,7 @@ export default function ExecutiveDashboardPage() {
               </div>
             </div>
             {/* Two continuous columns: left = Finance + Department, right = Receivables + People */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
               {/* LEFT COLUMN */}
               <div>
                 {userRole === "Admin" && (

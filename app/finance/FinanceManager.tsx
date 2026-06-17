@@ -716,7 +716,7 @@ export default function FinanceManager() {
                 style={{
                   borderCollapse: "collapse",
                   width: "100%",
-                  minWidth: "560px",
+                  minWidth: "0",
                 }}
               >
                 <thead>

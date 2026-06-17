@@ -223,7 +223,7 @@ export default function AuthWrapper({
             gap: "12px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "14px", minWidth: 0 }}>
             {isMobile && (
               <button
                 onClick={() => setMenuOpen((prev) => !prev)}
@@ -231,14 +231,15 @@ export default function AuthWrapper({
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: "42px",
-                  height: "42px",
+                  width: "38px",
+                  height: "38px",
                   border: `1px solid ${BORDER}`,
                   borderRadius: "8px",
                   backgroundColor: LIGHT,
                   cursor: "pointer",
-                  fontSize: "20px",
+                  fontSize: "18px",
                   color: NAVY,
+                  flexShrink: 0,
                 }}
                 aria-label="Toggle navigation"
               >
@@ -251,50 +252,55 @@ export default function AuthWrapper({
               alt="Unze Group"
               width={160}
               height={64}
-              style={{ height: "54px", width: "auto", objectFit: "contain" }}
+              style={{ height: isMobile ? "32px" : "54px", width: "auto", objectFit: "contain", flexShrink: 0 }}
               priority
             />
 
-            <span
-              style={{
-                fontSize: "15px",
-                fontWeight: 700,
-                color: NAVY,
-                whiteSpace: "nowrap",
-                borderLeft: `1px solid ${BORDER}`,
-                paddingLeft: "14px",
-              }}
-            >
-              Cockpit
-            </span>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
-            <span
-              style={{
-                fontSize: "13px",
-                color: NAVY,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                maxWidth: "220px",
-              }}
-            >
-              {displayName(member, email)}
+            {!isMobile && (
               <span
                 style={{
-                  marginLeft: "8px",
-                  fontSize: "11px",
+                  fontSize: "15px",
                   fontWeight: 700,
-                  backgroundColor: roleColor,
-                  color: "white",
-                  padding: "2px 9px",
-                  borderRadius: "10px",
+                  color: NAVY,
+                  whiteSpace: "nowrap",
+                  borderLeft: `1px solid ${BORDER}`,
+                  paddingLeft: "14px",
                 }}
               >
-                {currentRole}
+                Cockpit
               </span>
+            )}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px", minWidth: 0 }}>
+            {!isMobile && (
+              <span
+                style={{
+                  fontSize: "13px",
+                  color: NAVY,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: "220px",
+                }}
+              >
+                {displayName(member, email)}
+              </span>
+            )}
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                backgroundColor: roleColor,
+                color: "white",
+                padding: "2px 9px",
+                borderRadius: "10px",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+              }}
+            >
+              {currentRole}
             </span>
 
             {/* Settings dropdown — only Admin / Executive */}
@@ -318,7 +324,7 @@ export default function AuthWrapper({
                   }}
                   aria-label="Settings menu"
                 >
-                  <span style={{ fontSize: "14px" }}>⚙</span> Settings
+                  <span style={{ fontSize: "14px" }}>⚙</span>{!isMobile && " Settings"}
                   <span style={{ fontSize: "10px", color: SLATE }}>▾</span>
                 </button>
 
@@ -383,15 +389,16 @@ export default function AuthWrapper({
                 backgroundColor: NAVY,
                 border: "none",
                 borderRadius: "7px",
-                padding: "8px 14px",
-                fontSize: "13px",
+                padding: isMobile ? "7px 10px" : "8px 14px",
+                fontSize: isMobile ? "11px" : "13px",
                 fontWeight: 600,
                 color: "white",
                 cursor: "pointer",
                 whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
-              Sign out
+              {isMobile ? "Out" : "Sign out"}
             </button>
           </div>
         </div>

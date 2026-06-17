@@ -271,7 +271,7 @@ export default function ReceivablesSection({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(240px, 300px) 1fr",
+          gridTemplateColumns: "1fr",
           gap: "16px",
           alignItems: "start",
         }}

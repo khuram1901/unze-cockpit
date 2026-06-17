@@ -14,6 +14,7 @@ import {
   tableCellStyle,
   tableCellBoldStyle,
 } from "../lib/SharedUI";
+import { useMobile } from "../lib/useMobile";
 
 type MeetingRequest = {
   id: string;
@@ -99,6 +100,7 @@ export default function CalendarPage() {
   const [busySlots, setBusySlots] = useState<BusySlot[]>([]);
   const [busyLoading, setBusyLoading] = useState(false);
 
+  const isMobile = useMobile();
   const canManageRequests = member?.role === "Admin" || member?.role === "Executive";
 
   async function loadData() {
@@ -254,7 +256,7 @@ export default function CalendarPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: "20px 24px" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
         <PageHeader
           title="Calendar & Meeting Requests"
           subtitle="View availability, request meetings, and manage approvals"
@@ -263,7 +265,7 @@ export default function CalendarPage() {
         {/* ── REQUEST FORM ── */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "minmax(280px, 500px) minmax(200px, 1fr)",
+          gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 500px) minmax(200px, 1fr)",
           gap: "16px",
           alignItems: "start",
         }}>
@@ -486,7 +488,7 @@ export default function CalendarPage() {
           </div>
         ) : (
           <div style={{ overflowX: "auto", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "900px" }}>
+            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
               <thead>
                 <tr style={{ backgroundColor: "#f8fafc" }}>
                   <th style={tableHeaderStyle}>Title</th>

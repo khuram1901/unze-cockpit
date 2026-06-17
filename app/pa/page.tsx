@@ -203,7 +203,7 @@ export default function PADashboardPage() {
                 <p style={{ color: COLOURS.SLATE, fontSize: "13px", marginBottom: "12px" }}>No pending requests.</p>
               ) : (
                 <div style={{ overflowX: "auto", marginBottom: "12px", backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px" }}>
-                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "600px" }}>
+                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
                     <thead>
                       <tr style={{ backgroundColor: "#f8fafc" }}>
                         <th style={tableHeaderStyle}>Title</th>
@@ -250,7 +250,7 @@ export default function PADashboardPage() {
                 <p style={{ color: COLOURS.SLATE, fontSize: "13px", marginBottom: "12px" }}>No active escalations.</p>
               ) : (
                 <div style={{ overflowX: "auto", marginBottom: "12px", backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px" }}>
-                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "600px" }}>
+                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
                     <thead>
                       <tr style={{ backgroundColor: "#f8fafc" }}>
                         <th style={tableHeaderStyle}>Type</th>
@@ -291,7 +291,7 @@ export default function PADashboardPage() {
                 <>
                   <SectionTitle title={`My Tasks (${myTasks.length})`} />
                   <div style={{ overflowX: "auto", marginBottom: "12px", backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px" }}>
-                    <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "500px" }}>
+                    <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
                       <thead>
                         <tr style={{ backgroundColor: "#f8fafc" }}>
                           <th style={tableHeaderStyle}>Description</th>
@@ -345,7 +345,7 @@ export default function PADashboardPage() {
                     </span>
                   </div>
                   <div style={{ overflowX: "auto", backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 6px 6px" }}>
-                    <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "500px" }}>
+                    <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
                       <thead>
                         <tr>
                           <th style={tableHeaderStyle}>Description</th>
