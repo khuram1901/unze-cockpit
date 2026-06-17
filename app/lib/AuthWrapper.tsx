@@ -38,12 +38,13 @@ function displayName(member: Member | null, email: string | null) {
 // ─────────────────────────────────────────────────────────────────
 const MAIN_NAV: NavItem[] = [
   { label: "Executive", href: "/executive", allowedRoles: ["Admin", "Executive"] },
+  { label: "PA Dashboard", href: "/pa", allowedRoles: ["Admin", "Executive"] },
   { label: "Operations", href: "/dashboard", allowedRoles: ["Admin", "Executive", "Manager"] },
   { label: "Daily Entry", href: "/production", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Monthly Targets", href: "/monthly-operations-targets", allowedRoles: ["Admin", "Executive", "Manager"] },
   { label: "Tasks", href: "/tasks", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Calendar", href: "/calendar", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
-  { label: "Finance", href: "/finance", allowedRoles: ["Admin", "Executive"], financeManagerException: true },
+  { label: "Finance", href: "/finance", allowedRoles: ["Admin"], financeManagerException: true },
 ];
 
 // ─────────────────────────────────────────────────────────────────

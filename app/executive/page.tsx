@@ -346,6 +346,7 @@ export default function ExecutiveDashboardPage() {
   const [bankExpanded, setBankExpanded] = useState(false);
   const [lastYearReceipts, setLastYearReceipts] = useState<number | null>(null);
   const [lastYearPayments, setLastYearPayments] = useState<number | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -453,6 +454,18 @@ export default function ExecutiveDashboardPage() {
 
   async function loadExecutiveData(dateToView: string) {
     setLoading(true);
+
+    // Fetch current user role for PA view filtering
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      const { data: memberData } = await supabase
+        .from("members")
+        .select("role")
+        .eq("email", user.email)
+        .maybeSingle();
+      if (memberData) setUserRole(memberData.role);
+    }
+
     const selectedMonth = getMonthFromDate(dateToView);
     const selectedMonthStart = getMonthStartFromDate(dateToView);
     const selectedMonthEnd = getMonthEndFromDate(dateToView);
@@ -867,7 +880,7 @@ export default function ExecutiveDashboardPage() {
           <p style={{ color: SLATE }}>Loading executive dashboard…</p>
         ) : (
           <>
-            {cashPlanMissing && (
+            {userRole === "Admin" && cashPlanMissing && (
               <SlimAlert color="#dc2626" text="This month's cash plan has not been entered. The finance manager needs to set expected receivables and payouts on the Finance page." />
             )}
 
@@ -904,6 +917,8 @@ export default function ExecutiveDashboardPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
               {/* LEFT COLUMN */}
               <div>
+                {userRole === "Admin" && (
+                <>
                 <SectionTitle title="Finance — Cash Position" />
                 {!cashPlan && !cashOpening && cashPositions.length === 0 ? (
                   <p style={{ color: SLATE, fontSize: "13px" }}>No finance data yet.</p>
@@ -1041,6 +1056,8 @@ export default function ExecutiveDashboardPage() {
                       </div>
                     </div>
                   </div>
+                )}
+                </>
                 )}
 
                 <SectionTitle title="Department Performance" />
