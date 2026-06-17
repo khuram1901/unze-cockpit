@@ -329,45 +329,52 @@ export default function DashboardView() {
   return (
     <div>
       <p style={{ color: SLATE, fontSize: "13px", marginBottom: "16px" }}>
-        {`Operations command centre for ${today} (month-week ${weekNum} of 4). Your tasks, missing entries, machine issues and KPIs in one place.`}
+        {`Operations command centre for ${today} (month-week ${weekNum} of 4). Today's snapshot, open issues, your tasks and KPIs in one place.`}
       </p>
 
-      {/* ===== MY TASKS — accountability items assigned to me ===== */}
-      <SectionTitle title={`My Tasks · ${openTasks.length} outstanding`} />
+      {/* ===== TODAY'S SNAPSHOT ===== */}
+      <SectionTitle title="Today's Snapshot" />
+      <div style={squareGrid}>
+        <Card label="Produced Today" value={totalProducedToday} color="#16a34a" />
+        <Card label="Broken Today" value={totalBrokenToday} color="#dc2626" />
+        <Card label="Dispatched Today" value={totalDispatchedToday} color="#7c3aed" />
+        <Card label="Plants Missing" value={missingPlants.length} color="#ef4444" />
+        <Card label="Closing Good Stock" value={totalClosingGoodStock} color="#0070f3" />
+        <Card label="Closing Broken Stock" value={totalClosingBrokenStock} color="#d97706" />
+      </div>
+
+      {/* ===== MACHINE ISSUES ===== */}
+      <SectionTitle title={`Machine Issues · ${machineIssues.length} open`} />
       <div style={{ marginBottom: "24px" }}>
-        {myTasks.length === 0 ? (
-          <div style={okBoxStyle}>No tasks assigned to you. Nothing outstanding.</div>
+        {machineIssues.length === 0 ? (
+          <div style={okBoxStyle}>No open machine issues across any plant.</div>
         ) : (
-          <>
-            {completedCount > 0 && (
-              <div style={{ textAlign: "right", marginBottom: "8px" }}>
-                <button
-                  onClick={() => setShowCompleted((v) => !v)}
-                  style={{ fontSize: "12px", fontWeight: 600, color: NAVY, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 11px", cursor: "pointer" }}
-                >
-                  {showCompleted ? "Hide completed" : `Show completed (${completedCount})`}
-                </button>
-              </div>
-            )}
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                <tbody>
-                  {visibleTasks.map((task) => {
-                    const open = expandedTaskId === task.id;
-                    return (
-                      <FragmentRow
-                        key={task.id}
-                        task={task}
-                        open={open}
-                        onToggle={() => setExpandedTaskId(open ? null : task.id)}
-                        onChanged={loadAll}
-                      />
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
+            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <thead>
+                <tr style={{ backgroundColor: "#f8fafc" }}>
+                  <th style={th}>Plant</th>
+                  <th style={th}>Machine</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Expected fix</th>
+                  <th style={th}>Issue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {machineIssues.map((m) => (
+                  <tr key={m.id}>
+                    <td style={tdBold}>{m.plant_name}</td>
+                    <td style={td}>{m.machine_name}</td>
+                    <td style={{ ...td, color: m.issue_status === "Down" ? "#dc2626" : "#d97706", fontWeight: 700 }}>
+                      {m.issue_status}
+                    </td>
+                    <td style={td}>{m.expected_resolution || "—"}</td>
+                    <td style={{ ...td, color: SLATE }}>{m.issue_description || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -417,50 +424,43 @@ export default function DashboardView() {
         )}
       </div>
 
-      {/* ===== MACHINE ISSUES ===== */}
-      <SectionTitle title={`Machine Issues · ${machineIssues.length} open`} />
+      {/* ===== MY TASKS — accountability items assigned to me ===== */}
+      <SectionTitle title={`My Tasks · ${openTasks.length} outstanding`} />
       <div style={{ marginBottom: "24px" }}>
-        {machineIssues.length === 0 ? (
-          <div style={okBoxStyle}>No open machine issues across any plant.</div>
+        {myTasks.length === 0 ? (
+          <div style={okBoxStyle}>No tasks assigned to you. Nothing outstanding.</div>
         ) : (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%" }}>
-              <thead>
-                <tr style={{ backgroundColor: "#f8fafc" }}>
-                  <th style={th}>Plant</th>
-                  <th style={th}>Machine</th>
-                  <th style={th}>Status</th>
-                  <th style={th}>Expected fix</th>
-                  <th style={th}>Issue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {machineIssues.map((m) => (
-                  <tr key={m.id}>
-                    <td style={tdBold}>{m.plant_name}</td>
-                    <td style={td}>{m.machine_name}</td>
-                    <td style={{ ...td, color: m.issue_status === "Down" ? "#dc2626" : "#d97706", fontWeight: 700 }}>
-                      {m.issue_status}
-                    </td>
-                    <td style={td}>{m.expected_resolution || "—"}</td>
-                    <td style={{ ...td, color: SLATE }}>{m.issue_description || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {completedCount > 0 && (
+              <div style={{ textAlign: "right", marginBottom: "8px" }}>
+                <button
+                  onClick={() => setShowCompleted((v) => !v)}
+                  style={{ fontSize: "12px", fontWeight: 600, color: NAVY, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 11px", cursor: "pointer" }}
+                >
+                  {showCompleted ? "Hide completed" : `Show completed (${completedCount})`}
+                </button>
+              </div>
+            )}
+            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
+              <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                <tbody>
+                  {visibleTasks.map((task) => {
+                    const open = expandedTaskId === task.id;
+                    return (
+                      <FragmentRow
+                        key={task.id}
+                        task={task}
+                        open={open}
+                        onToggle={() => setExpandedTaskId(open ? null : task.id)}
+                        onChanged={loadAll}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
-      </div>
-
-      {/* ===== TODAY'S SNAPSHOT ===== */}
-      <SectionTitle title="Today's Snapshot" />
-      <div style={squareGrid}>
-        <Card label="Produced Today" value={totalProducedToday} color="#16a34a" />
-        <Card label="Broken Today" value={totalBrokenToday} color="#dc2626" />
-        <Card label="Dispatched Today" value={totalDispatchedToday} color="#7c3aed" />
-        <Card label="Plants Missing" value={missingPlants.length} color="#ef4444" />
-        <Card label="Closing Good Stock" value={totalClosingGoodStock} color="#0070f3" />
-        <Card label="Closing Broken Stock" value={totalClosingBrokenStock} color="#d97706" />
       </div>
 
       {/* ===== KPI TABLES (reference) ===== */}
