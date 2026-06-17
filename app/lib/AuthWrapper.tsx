@@ -45,8 +45,6 @@ const MAIN_NAV: NavItem[] = [
   { label: "Calendar", href: "/calendar", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Finance", href: "/finance", allowedRoles: ["Admin", "Executive"], financeManagerException: true },
   { label: "Machine Issues", href: "/machine-issues", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
-  { label: "Weekly Targets", href: "/weekly-production-targets", allowedRoles: ["Admin"] },
-  { label: "Opening Balances", href: "/opening-balances", allowedRoles: ["Admin"] },
 ];
 
 // ─────────────────────────────────────────────────────────────────
@@ -55,6 +53,7 @@ const MAIN_NAV: NavItem[] = [
 const SETTINGS_NAV: NavItem[] = [
   { label: "Members", href: "/members", allowedRoles: ["Admin", "Executive"] },
   { label: "Department Owners", href: "/department-owners", allowedRoles: ["Admin", "Executive"] },
+  { label: "Opening Balances", href: "/opening-balances", allowedRoles: ["Admin", "Executive"] },
   { label: "Exceptions", href: "/exceptions", allowedRoles: ["Admin", "Executive"] },
 ];
 
