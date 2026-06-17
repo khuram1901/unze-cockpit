@@ -38,7 +38,7 @@ export default function EscalationTrafficLights({
           borderRadius: "6px",
           padding: "10px 14px",
           backgroundColor: "white",
-          fontSize: "13px",
+          fontSize: "15px",
           color: NAVY,
           marginBottom: "14px",
         }}
@@ -81,7 +81,7 @@ export default function EscalationTrafficLights({
               <div
                 style={{
                   color: SLATE,
-                  fontSize: "11px",
+                  fontSize: "13px",
                   marginBottom: "2px",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
@@ -119,7 +119,7 @@ export default function EscalationTrafficLights({
               padding: "8px 12px",
               backgroundColor: "#f8fafc",
               borderBottom: `1px solid ${BORDER}`,
-              fontSize: "12px",
+              fontSize: "14px",
               fontWeight: 700,
               color: NAVY,
             }}
@@ -134,10 +134,10 @@ export default function EscalationTrafficLights({
                 borderTop: i === 0 ? "none" : `1px solid ${BORDER}`,
               }}
             >
-              <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>
                 {e.plantName}
               </div>
-              <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>
+              <div style={{ fontSize: "14px", color: SLATE, marginTop: "2px" }}>
                 {e.detail}
               </div>
             </div>

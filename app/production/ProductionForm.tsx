@@ -270,30 +270,30 @@ export default function ProductionForm() {
   const inputStyle = {
     display: "block", width: "100%", padding: "7px 9px",
     marginTop: "3px", marginBottom: "10px", border: "1px solid #e2e8f0",
-    borderRadius: "6px", fontSize: "13px",
+    borderRadius: "6px", fontSize: "15px",
   };
   const sectionStyle = {
     border: "1px solid #e2e8f0", borderRadius: "8px",
     padding: "14px", marginBottom: "14px", backgroundColor: "white",
   };
-  const hint = { fontSize: "12px", color: "#64748b", marginBottom: "10px" };
-  const h3 = { fontSize: "13px", fontWeight: 700 as const, color: "#1e293b", marginBottom: "4px" };
+  const hint = { fontSize: "14px", color: "#64748b", marginBottom: "10px" };
+  const h3 = { fontSize: "15px", fontWeight: 700 as const, color: "#1e293b", marginBottom: "4px" };
 
   const submitBtn = (section: string): React.CSSProperties => ({
     backgroundColor: "#1e293b", color: "white", border: "none", borderRadius: "6px",
-    padding: "7px 14px", fontSize: "12px", cursor: "pointer", fontWeight: 700,
+    padding: "7px 14px", fontSize: "14px", cursor: "pointer", fontWeight: 700,
     opacity: savingSection === section ? 0.7 : 1,
   });
   const nothingBtn: React.CSSProperties = {
     backgroundColor: "white", color: "#64748b", border: "1px solid #e2e8f0", borderRadius: "6px",
-    padding: "7px 12px", fontSize: "12px", cursor: "pointer", fontWeight: 600,
+    padding: "7px 12px", fontSize: "14px", cursor: "pointer", fontWeight: 600,
   };
   const btnRow: React.CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" };
 
   function SectionMessage({ section }: { section: string }) {
     if (!sectionMsg || sectionMsg.section !== section) return null;
     return (
-      <p style={{ marginTop: "8px", fontSize: "12px", fontWeight: 700, color: sectionMsg.ok ? "#16a34a" : "#c0392b" }}>
+      <p style={{ marginTop: "8px", fontSize: "14px", fontWeight: 700, color: sectionMsg.ok ? "#16a34a" : "#c0392b" }}>
         {sectionMsg.text}
       </p>
     );
@@ -331,12 +331,12 @@ export default function ProductionForm() {
       <div style={{ ...sectionStyle, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "16px" }}>
         {plants.length === 1 ? (
           <div>
-            <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "2px" }}>Plant</div>
+            <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "2px" }}>Plant</div>
             <div style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b" }}>{plants[0].name}</div>
           </div>
         ) : (
           <div style={{ minWidth: "200px" }}>
-            <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "2px" }}>Plant</div>
+            <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "2px" }}>Plant</div>
             <select
               style={{ ...inputStyle, marginBottom: 0, width: "auto", minWidth: "200px" }}
               value={plantId}
@@ -349,7 +349,7 @@ export default function ProductionForm() {
           </div>
         )}
         <div>
-          <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "2px" }}>Date</div>
+          <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "2px" }}>Date</div>
           <input
             type="date"
             style={{ ...inputStyle, marginBottom: 0, width: "auto" }}

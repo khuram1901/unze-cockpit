@@ -405,5 +405,5 @@ const dotsStyle = {
 const footerStyle = {
   marginTop: "28px",
   color: "#64748b",
-  fontSize: "13px",
+  fontSize: "15px",
 };

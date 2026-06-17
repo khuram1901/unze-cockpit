@@ -858,21 +858,21 @@ export default function ExecutiveDashboardPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
             <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
-            <p style={{ color: SLATE, fontSize: "12px", marginTop: "5px", maxWidth: "640px" }}>
+            <p style={{ color: SLATE, fontSize: "14px", marginTop: "5px", maxWidth: "640px" }}>
               Executive escalations surface lagging indicators (Q3+ for production and dispatch, breakage over 1.5%). Earlier issues stay with operations.
             </p>
           </div>
           <div style={{ backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "8px 12px" }}>
-            <label style={{ fontWeight: 700, display: "block", marginBottom: "3px", fontSize: "11px", color: SLATE }}>View date</label>
+            <label style={{ fontWeight: 700, display: "block", marginBottom: "3px", fontSize: "13px", color: SLATE }}>View date</label>
             <input
               type="date"
               value={selectedDate}
               min={minDate}
               max={today}
               onChange={(e) => setSelectedDate(e.target.value)}
-              style={{ padding: "6px 9px", border: `1px solid ${BORDER}`, borderRadius: "6px", fontSize: "12px" }}
+              style={{ padding: "6px 9px", border: `1px solid ${BORDER}`, borderRadius: "6px", fontSize: "14px" }}
             />
-            <div style={{ marginTop: "5px", color: SLATE, fontSize: "11px" }}>
+            <div style={{ marginTop: "5px", color: SLATE, fontSize: "13px" }}>
               {selectedMonth} · Q{currentQuarter}
             </div>
           </div>
@@ -923,19 +923,19 @@ export default function ExecutiveDashboardPage() {
                 <>
                 <SectionTitle title="Finance — Cash Position" />
                 {!cashPlan && !cashOpening && cashPositions.length === 0 ? (
-                  <p style={{ color: SLATE, fontSize: "13px" }}>No finance data yet.</p>
+                  <p style={{ color: SLATE, fontSize: "15px" }}>No finance data yet.</p>
                 ) : (
                   <>
                     <div style={panelCardRAG(cashHeadlineStatus)}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                        <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>
+                        <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>
                           Cash Health: <span style={{ color: ragColour(cashHeadlineStatus) }}>
                             {cashHeadlineStatus === "GREEN" ? "ON TRACK" : cashHeadlineStatus === "AMBER" ? "MONITOR" : "ATTENTION"}
                           </span>
                         </div>
                         {latestCashPosition && (
                           <div style={{
-                            fontSize: "10px",
+                            fontSize: "12px",
                             fontWeight: 600,
                             color: (() => {
                               const lastDate = new Date(latestCashPosition.position_date + "T00:00:00");
@@ -978,7 +978,7 @@ export default function ExecutiveDashboardPage() {
                             border: `1px solid ${BORDER}`,
                             borderRadius: "6px",
                             padding: "5px 12px",
-                            fontSize: "11px",
+                            fontSize: "13px",
                             fontWeight: 600,
                             color: SLATE,
                             cursor: "pointer",
@@ -1006,16 +1006,16 @@ export default function ExecutiveDashboardPage() {
                                   const amount = typeof val === "number" ? val : 0;
                                   return (
                                     <tr key={key}>
-                                      <td style={{ padding: "3px 6px", fontSize: "11px", color: NAVY }}>{label}</td>
-                                      <td style={{ padding: "3px 6px", fontSize: "11px", fontWeight: 600, textAlign: "right", color: amount > 0 ? NAVY : SLATE }}>
+                                      <td style={{ padding: "3px 6px", fontSize: "13px", color: NAVY }}>{label}</td>
+                                      <td style={{ padding: "3px 6px", fontSize: "13px", fontWeight: 600, textAlign: "right", color: amount > 0 ? NAVY : SLATE }}>
                                         {fmtMoney(amount)}
                                       </td>
                                     </tr>
                                   );
                                 })}
                                 <tr style={{ borderTop: `1px solid ${BORDER}` }}>
-                                  <td style={{ padding: "5px 6px", fontSize: "12px", fontWeight: 700, color: NAVY }}>Total Available</td>
-                                  <td style={{ padding: "5px 6px", fontSize: "12px", fontWeight: 700, textAlign: "right", color: "#0070f3" }}>
+                                  <td style={{ padding: "5px 6px", fontSize: "14px", fontWeight: 700, color: NAVY }}>Total Available</td>
+                                  <td style={{ padding: "5px 6px", fontSize: "14px", fontWeight: 700, textAlign: "right", color: "#0070f3" }}>
                                     {fmtMoney(bankSnapshot.total_available_balance)}
                                   </td>
                                 </tr>
@@ -1036,7 +1036,7 @@ export default function ExecutiveDashboardPage() {
                     padding: "8px 12px",
                     backgroundColor: "white",
                     marginTop: "8px",
-                    fontSize: "11px",
+                    fontSize: "13px",
                   }}>
                     <div style={{ fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
                       vs Same Month Last Year
@@ -1070,10 +1070,10 @@ export default function ExecutiveDashboardPage() {
               <div>
                 <SectionTitle title="Receivables — Bills in Progress" />
                 {receivableRows.length === 0 ? (
-                  <p style={{ color: SLATE, fontSize: "13px" }}>No receivable bills in progress.</p>
+                  <p style={{ color: SLATE, fontSize: "15px" }}>No receivable bills in progress.</p>
                 ) : (
                   <div style={panelCard(recRed > 0)}>
-                    <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "10px", color: NAVY }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "10px", color: NAVY }}>
                       Receivables: <span style={{ color: recRed > 0 ? "#dc2626" : "#16a34a" }}>{recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}</span>
                     </div>
                     <div style={miniGrid}>
@@ -1159,7 +1159,7 @@ function panelCardRAG(status: RAGStatus): React.CSSProperties {
 
 function SectionTitle({ title }: { title: string }) {
   return (
-    <h2 style={{ fontSize: "13px", fontWeight: 700, color: NAVY, margin: "14px 0 8px", paddingLeft: "9px", borderLeft: `3px solid ${NAVY}` }}>
+    <h2 style={{ fontSize: "15px", fontWeight: 700, color: NAVY, margin: "14px 0 8px", paddingLeft: "9px", borderLeft: `3px solid ${NAVY}` }}>
       {title}
     </h2>
   );
@@ -1168,7 +1168,7 @@ function SectionTitle({ title }: { title: string }) {
 function Card({ title, value, color }: { title: string; value: number; color: string }) {
   return (
     <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
-      <div style={{ color: SLATE, fontSize: "11px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+      <div style={{ color: SLATE, fontSize: "13px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
       <div style={{ fontSize: "19px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
     </div>
   );
@@ -1177,7 +1177,7 @@ function Card({ title, value, color }: { title: string; value: number; color: st
 function Mini({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div>
-      <div style={{ color: SLATE, fontSize: "10px", marginBottom: "1px" }}>{label}</div>
+      <div style={{ color: SLATE, fontSize: "12px", marginBottom: "1px" }}>{label}</div>
       <div style={{ fontSize: "14px", fontWeight: 700, color }}>{value}</div>
     </div>
   );
@@ -1187,13 +1187,13 @@ function SlimAlert({ color, text }: { color: string; text: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px", backgroundColor: "white", border: `1px solid ${BORDER}`, borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
       <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
-      <span style={{ fontSize: "13px", color: NAVY }}>{text}</span>
+      <span style={{ fontSize: "15px", color: NAVY }}>{text}</span>
     </div>
   );
 }
 
 function PerformanceTable({ rows }: { rows: PerformanceRow[] }) {
-  if (rows.length === 0) return <p style={{ color: SLATE, fontSize: "13px" }}>No task data yet.</p>;
+  if (rows.length === 0) return <p style={{ color: SLATE, fontSize: "15px" }}>No task data yet.</p>;
   return (
     <div style={{ overflowX: "auto", marginBottom: "12px", backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "8px" }}>
       <table style={{ borderCollapse: "collapse", width: "100%" }}>
@@ -1222,7 +1222,7 @@ const th: React.CSSProperties = {
   textAlign: "left",
   borderBottom: `1px solid ${BORDER}`,
   padding: "6px 8px",
-  fontSize: "11px",
+  fontSize: "13px",
   color: SLATE,
   fontWeight: 700,
 };
@@ -1230,7 +1230,7 @@ const th: React.CSSProperties = {
 const td: React.CSSProperties = {
   borderBottom: `1px solid #f1f5f9`,
   padding: "6px 8px",
-  fontSize: "12px",
+  fontSize: "14px",
 };
 
 const tdBold: React.CSSProperties = {

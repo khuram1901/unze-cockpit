@@ -14,7 +14,7 @@ export default function MembersPage() {
             <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
               Members
             </h1>
-            <p style={{ color: SLATE, fontSize: "12px", marginTop: "5px" }}>
+            <p style={{ color: SLATE, fontSize: "14px", marginTop: "5px" }}>
               Manage team members, roles, departments, and plant assignments.
             </p>
           </div>

@@ -46,7 +46,7 @@ function SectionTitle({ title }: { title: string }) {
   return (
     <h2
       style={{
-        fontSize: "13px",
+        fontSize: "15px",
         fontWeight: 700,
         color: NAVY,
         margin: "20px 0 10px",
@@ -190,7 +190,7 @@ export default function MonthlyOperationsTargetsPage() {
     return (
       <AuthWrapper>
         <main style={{ padding: mainPadding }}>
-          <p style={{ color: SLATE, fontSize: "13px" }}>Loading monthly targets…</p>
+          <p style={{ color: SLATE, fontSize: "15px" }}>Loading monthly targets…</p>
         </main>
       </AuthWrapper>
     );
@@ -204,7 +204,7 @@ export default function MonthlyOperationsTargetsPage() {
             <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
               Monthly Operations Targets
             </h1>
-            <p style={{ color: SLATE, fontSize: "12px", marginTop: "5px" }}>
+            <p style={{ color: SLATE, fontSize: "14px", marginTop: "5px" }}>
               Set monthly production and dispatch targets per plant. These feed the KPI scorecard.
             </p>
           </div>
@@ -237,7 +237,7 @@ export default function MonthlyOperationsTargetsPage() {
                     borderRadius: "6px",
                     padding: "10px 12px",
                     marginBottom: "12px",
-                    fontSize: "12px",
+                    fontSize: "14px",
                   }}
                 >
                   You can view targets but cannot create or update them.
@@ -254,7 +254,7 @@ export default function MonthlyOperationsTargetsPage() {
                     onChange={(e) => setTargetMonth(e.target.value)}
                     required
                   />
-                  <span style={{ fontSize: "11px", color: SLATE }}>
+                  <span style={{ fontSize: "13px", color: SLATE }}>
                     {formatMonthUK(targetMonth)}
                   </span>
                 </label>
@@ -295,7 +295,7 @@ export default function MonthlyOperationsTargetsPage() {
                       borderRadius: "6px",
                       padding: "8px 10px",
                       marginBottom: "10px",
-                      fontSize: "12px",
+                      fontSize: "14px",
                     }}
                   >
                     Existing {targetType} target found — saving will update it.
@@ -330,7 +330,7 @@ export default function MonthlyOperationsTargetsPage() {
                   <p
                     style={{
                       marginTop: "10px",
-                      fontSize: "13px",
+                      fontSize: "15px",
                       fontWeight: 600,
                       color: message.startsWith("Error") ? "#dc2626" : message.startsWith("You") ? "#d97706" : "#16a34a",
                     }}
@@ -359,7 +359,7 @@ export default function MonthlyOperationsTargetsPage() {
 function TargetsTable({ targets, mobile }: { targets: MonthlyTarget[]; mobile: boolean }) {
   if (targets.length === 0) {
     return (
-      <p style={{ color: SLATE, fontSize: "13px", marginBottom: "8px" }}>
+      <p style={{ color: SLATE, fontSize: "15px", marginBottom: "8px" }}>
         No targets set for this month yet.
       </p>
     );
@@ -376,14 +376,14 @@ function TargetsTable({ targets, mobile }: { targets: MonthlyTarget[]; mobile: b
             backgroundColor: "white",
             marginBottom: "6px",
           }}>
-            <div style={{ fontWeight: 700, fontSize: "13px", color: NAVY }}>{t.plant_name}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", marginTop: "6px", fontSize: "11px" }}>
+            <div style={{ fontWeight: 700, fontSize: "15px", color: NAVY }}>{t.plant_name}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", marginTop: "6px", fontSize: "13px" }}>
               {(t.target_31 || 0) > 0 && <span>31ft: <strong>{t.target_31}</strong></span>}
               {(t.target_36 || 0) > 0 && <span>36ft: <strong>{t.target_36}</strong></span>}
               {(t.target_45 || 0) > 0 && <span>45ft: <strong>{t.target_45}</strong></span>}
               {(t.target_meter || 0) > 0 && <span>Meters: <strong>{t.target_meter}</strong></span>}
             </div>
-            <div style={{ fontSize: "12px", fontWeight: 700, color: NAVY, marginTop: "4px" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginTop: "4px" }}>
               Total: {targetTotal(t).toLocaleString()}
             </div>
           </div>
@@ -429,7 +429,7 @@ function TargetsTable({ targets, mobile }: { targets: MonthlyTarget[]; mobile: b
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "12px",
+  fontSize: "14px",
   fontWeight: 600,
   color: NAVY,
   marginBottom: "10px",
@@ -441,7 +441,7 @@ const inputStyle: React.CSSProperties = {
   marginTop: "3px",
   border: `1px solid ${BORDER}`,
   borderRadius: "6px",
-  fontSize: "13px",
+  fontSize: "15px",
   boxSizing: "border-box",
 };
 const btnStyle: React.CSSProperties = {
@@ -450,7 +450,7 @@ const btnStyle: React.CSSProperties = {
   border: "none",
   borderRadius: "6px",
   padding: "9px 18px",
-  fontSize: "13px",
+  fontSize: "15px",
   fontWeight: 700,
   cursor: "pointer",
   marginTop: "4px",
@@ -459,13 +459,13 @@ const th: React.CSSProperties = {
   textAlign: "left",
   borderBottom: `1px solid ${BORDER}`,
   padding: "6px 10px",
-  fontSize: "11px",
+  fontSize: "13px",
   color: SLATE,
   fontWeight: 700,
 };
 const td: React.CSSProperties = {
   borderBottom: `1px solid #f1f5f9`,
   padding: "7px 10px",
-  fontSize: "12px",
+  fontSize: "14px",
 };
 const tdBold: React.CSSProperties = { ...td, fontWeight: 700, color: NAVY };

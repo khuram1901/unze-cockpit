@@ -178,7 +178,7 @@ export default function NewTaskForm() {
     marginBottom: "10px",
     border: "1px solid #e2e8f0",
     borderRadius: "6px",
-    fontSize: "13px",
+    fontSize: "15px",
   };
 
   const selectedMember = members.find((m) => m.name === assignedTo);
@@ -236,7 +236,7 @@ export default function NewTaskForm() {
             padding: "10px",
             marginBottom: "12px",
             backgroundColor: "#fafafa",
-            fontSize: "13px",
+            fontSize: "15px",
             color: "#555",
           }}
         >
@@ -289,7 +289,7 @@ export default function NewTaskForm() {
             padding: "10px",
             marginBottom: "12px",
             backgroundColor: "#fafafa",
-            fontSize: "13px",
+            fontSize: "15px",
             color: "#555",
           }}
         >
@@ -363,7 +363,7 @@ export default function NewTaskForm() {
           border: "none",
           borderRadius: "6px",
           padding: "8px 18px",
-          fontSize: "13px",
+          fontSize: "15px",
           cursor: "pointer",
           fontWeight: 700,
           marginTop: "4px",

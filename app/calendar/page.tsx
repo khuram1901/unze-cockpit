@@ -297,7 +297,7 @@ export default function CalendarPage() {
               </div>
 
               {requestedDate && (
-                <p style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "-6px", marginBottom: "10px" }}>
+                <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "-6px", marginBottom: "10px" }}>
                   Selected: <strong>{formatDateUK(requestedDate)}</strong>
                 </p>
               )}
@@ -346,7 +346,7 @@ export default function CalendarPage() {
                   overflowY: "auto",
                 }}>
                   {allMembers.filter((m) => m.email && m.email !== email).map((m) => (
-                    <label key={m.email} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "2px 4px", fontSize: "12px", cursor: "pointer" }}>
+                    <label key={m.email} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "2px 4px", fontSize: "14px", cursor: "pointer" }}>
                       <input
                         type="checkbox"
                         checked={selectedAttendees.includes(m.email || "")}
@@ -354,7 +354,7 @@ export default function CalendarPage() {
                         style={{ width: "14px", height: "14px" }}
                       />
                       {displayMemberName(m, m.email)}
-                      {m.department && <span style={{ color: COLOURS.SLATE, fontSize: "10px" }}>({m.department})</span>}
+                      {m.department && <span style={{ color: COLOURS.SLATE, fontSize: "12px" }}>({m.department})</span>}
                     </label>
                   ))}
                 </div>
@@ -365,7 +365,7 @@ export default function CalendarPage() {
               </button>
 
               {message && (
-                <p style={{ marginTop: "10px", fontSize: "13px", color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, fontWeight: 600 }}>
+                <p style={{ marginTop: "10px", fontSize: "15px", color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, fontWeight: 600 }}>
                   {message}
                 </p>
               )}
@@ -381,7 +381,7 @@ export default function CalendarPage() {
               { step: "3. Approval", detail: "Heads of Department are auto-approved. Others need Admin/PA approval." },
               { step: "4. Calendar", detail: "Approved meetings are synced to Google Calendar with invites to all attendees." },
             ].map((row) => (
-              <div key={row.step} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "10px 0", fontSize: "12px", color: COLOURS.SLATE }}>
+              <div key={row.step} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "10px 0", fontSize: "14px", color: COLOURS.SLATE }}>
                 <div style={{ fontWeight: 700, color: COLOURS.NAVY, marginBottom: "3px" }}>{row.step}</div>
                 {row.detail}
               </div>
@@ -400,7 +400,7 @@ export default function CalendarPage() {
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
             <button onClick={prevWeek} style={navBtn}>← Prev</button>
-            <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>
               {dayLabel(weekDates[0])} — {dayLabel(weekDates[6])}
               {busyLoading && <span style={{ color: COLOURS.SLATE, fontWeight: 400 }}> (loading…)</span>}
             </span>
@@ -428,7 +428,7 @@ export default function CalendarPage() {
                 <>
                   <div key={`h-${hour}`} style={{
                     padding: "2px 4px",
-                    fontSize: "10px",
+                    fontSize: "12px",
                     color: COLOURS.SLATE,
                     textAlign: "right",
                     borderTop: `1px solid ${COLOURS.BORDER}`,
@@ -449,7 +449,7 @@ export default function CalendarPage() {
                           backgroundColor: busy ? "#fee2e2" : req ? (req.status === "Approved" ? "#dcfce7" : "#fef3c7") : "white",
                           cursor: busy ? "not-allowed" : "pointer",
                           position: "relative",
-                          fontSize: "9px",
+                          fontSize: "11px",
                           padding: "2px 3px",
                           overflow: "hidden",
                         }}
@@ -469,7 +469,7 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          <div style={{ marginTop: "8px", display: "flex", gap: "12px", fontSize: "10px", color: COLOURS.SLATE, flexWrap: "wrap" }}>
+          <div style={{ marginTop: "8px", display: "flex", gap: "12px", fontSize: "12px", color: COLOURS.SLATE, flexWrap: "wrap" }}>
             <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "2px", marginRight: "4px" }} />Busy</span>
             <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#dcfce7", border: "1px solid #86efac", borderRadius: "2px", marginRight: "4px" }} />Approved</span>
             <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#fef3c7", border: "1px solid #fde68a", borderRadius: "2px", marginRight: "4px" }} />Pending</span>
@@ -481,9 +481,9 @@ export default function CalendarPage() {
         <SectionTitle title="All Meeting Requests" />
 
         {loading ? (
-          <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Loading requests…</p>
+          <p style={{ color: COLOURS.SLATE, fontSize: "15px" }}>Loading requests…</p>
         ) : requests.length === 0 ? (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", color: COLOURS.SLATE, fontSize: "13px" }}>
+          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", color: COLOURS.SLATE, fontSize: "15px" }}>
             No meeting requests yet.
           </div>
         ) : (
@@ -506,33 +506,33 @@ export default function CalendarPage() {
                 {requests.map((r) => (
                   <tr key={r.id}>
                     <td style={tableCellStyle}>
-                      <div style={{ fontWeight: 700, color: COLOURS.NAVY, fontSize: "12px" }}>
+                      <div style={{ fontWeight: 700, color: COLOURS.NAVY, fontSize: "14px" }}>
                         {r.meeting_title}
-                        {r.decision_required && <span style={{ color: COLOURS.RED, fontSize: "10px", marginLeft: "6px" }}>DECISION</span>}
+                        {r.decision_required && <span style={{ color: COLOURS.RED, fontSize: "12px", marginLeft: "6px" }}>DECISION</span>}
                       </div>
-                      {r.meeting_purpose && <div style={{ color: COLOURS.SLATE, fontSize: "11px", marginTop: "2px" }}>{r.meeting_purpose}</div>}
+                      {r.meeting_purpose && <div style={{ color: COLOURS.SLATE, fontSize: "13px", marginTop: "2px" }}>{r.meeting_purpose}</div>}
                       {r.attendees && r.attendees.length > 0 && (
-                        <div style={{ color: COLOURS.SLATE, fontSize: "10px", marginTop: "2px" }}>
+                        <div style={{ color: COLOURS.SLATE, fontSize: "12px", marginTop: "2px" }}>
                           {r.attendees.length} attendee{r.attendees.length > 1 ? "s" : ""}
                         </div>
                       )}
                     </td>
-                    <td style={tableCellStyle}><span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{r.meeting_type || "Ad-hoc"}</span></td>
+                    <td style={tableCellStyle}><span style={{ fontSize: "13px", color: COLOURS.SLATE }}>{r.meeting_type || "Ad-hoc"}</span></td>
                     <td style={tableCellStyle}>
-                      <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "12px" }}>{r.requested_by_name || "—"}</div>
-                      {r.requested_by_department && <div style={{ color: COLOURS.SLATE, fontSize: "11px" }}>{r.requested_by_department}</div>}
+                      <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "14px" }}>{r.requested_by_name || "—"}</div>
+                      {r.requested_by_department && <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>{r.requested_by_department}</div>}
                     </td>
                     <td style={tableCellStyle}>{r.requested_date ? formatDateUK(r.requested_date) : "—"}</td>
                     <td style={tableCellStyle}>{r.preferred_time || "—"}</td>
                     <td style={tableCellStyle}><PriorityBadge priority={r.priority} /></td>
                     <td style={tableCellStyle}><StatusBadge status={r.status} /></td>
-                    <td style={tableCellStyle}><span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{r.approved_by || "—"}</span></td>
+                    <td style={tableCellStyle}><span style={{ fontSize: "13px", color: COLOURS.SLATE }}>{r.approved_by || "—"}</span></td>
                     {canManageRequests && (
                       <td style={tableCellStyle}>
                         <select
                           value={r.status || "Pending"}
                           onChange={(e) => updateStatus(r.id, e.target.value)}
-                          style={{ padding: "5px 7px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "12px", backgroundColor: "white" }}
+                          style={{ padding: "5px 7px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "14px", backgroundColor: "white" }}
                         >
                           <option>Pending</option>
                           <option>Approved</option>
@@ -554,7 +554,7 @@ export default function CalendarPage() {
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "12px",
+  fontSize: "14px",
   fontWeight: 600,
   color: COLOURS.NAVY,
   marginBottom: "10px",
@@ -567,7 +567,7 @@ const inputStyle: React.CSSProperties = {
   marginTop: "3px",
   border: `1px solid ${COLOURS.BORDER}`,
   borderRadius: "6px",
-  fontSize: "13px",
+  fontSize: "15px",
   boxSizing: "border-box",
 };
 
@@ -577,7 +577,7 @@ const btnStyle: React.CSSProperties = {
   border: "none",
   borderRadius: "6px",
   padding: "9px 18px",
-  fontSize: "13px",
+  fontSize: "15px",
   fontWeight: 700,
   cursor: "pointer",
   marginTop: "4px",
@@ -589,7 +589,7 @@ const navBtn: React.CSSProperties = {
   border: `1px solid ${COLOURS.BORDER}`,
   borderRadius: "6px",
   padding: "5px 12px",
-  fontSize: "12px",
+  fontSize: "14px",
   fontWeight: 600,
   color: COLOURS.NAVY,
   cursor: "pointer",
@@ -597,7 +597,7 @@ const navBtn: React.CSSProperties = {
 
 const headerCell: React.CSSProperties = {
   padding: "4px 6px",
-  fontSize: "11px",
+  fontSize: "13px",
   textAlign: "center",
   color: COLOURS.SLATE,
 };

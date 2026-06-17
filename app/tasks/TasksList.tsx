@@ -113,7 +113,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
     : tasks.filter((t) => t.assigned_to_email && t.assigned_to_email === myEmail);
 
   if (scopedTasks.length === 0) {
-    return <p style={{ color: SLATE, fontSize: "13px" }}>No assignments yet.</p>;
+    return <p style={{ color: SLATE, fontSize: "15px" }}>No assignments yet.</p>;
   }
 
   const completedCount = scopedTasks.filter((t) => t.status === "Completed").length;
@@ -148,7 +148,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
         {completedCount > 0 && (
           <button
             onClick={() => setShowCompleted((v) => !v)}
-            style={{ fontSize: "12px", fontWeight: 600, color: NAVY, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 11px", cursor: "pointer" }}
+            style={{ fontSize: "14px", fontWeight: 600, color: NAVY, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 11px", cursor: "pointer" }}
           >
             {showCompleted ? "Hide completed" : `Show completed (${completedCount})`}
           </button>
@@ -171,13 +171,13 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
                 onClick={() => toggleProject(projectName)}
                 style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", cursor: "pointer", backgroundColor: "#f8fafc" }}
               >
-                <span style={{ width: "18px", height: "18px", display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1px solid ${BORDER}`, borderRadius: "4px", fontSize: "13px", fontWeight: 700, color: NAVY, backgroundColor: "white" }}>
+                <span style={{ width: "18px", height: "18px", display: "inline-flex", alignItems: "center", justifyContent: "center", border: `1px solid ${BORDER}`, borderRadius: "4px", fontSize: "15px", fontWeight: 700, color: NAVY, backgroundColor: "white" }}>
                   {isOpen ? "−" : "+"}
                 </span>
-                <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{projectName}</span>
-                <span style={{ fontSize: "12px", color: SLATE }}>· {activeCount} active</span>
+                <span style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>{projectName}</span>
+                <span style={{ fontSize: "14px", color: SLATE }}>· {activeCount} active</span>
                 {redCount > 0 && (
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: "white", backgroundColor: "#dc2626", borderRadius: "10px", padding: "2px 8px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "white", backgroundColor: "#dc2626", borderRadius: "10px", padding: "2px 8px" }}>
                     {redCount} need attention
                   </span>
                 )}
@@ -202,7 +202,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
                             <td style={td}>{task.assigned_to || "—"}</td>
                             <td style={td}>{formatDateUK(task.due_date)}</td>
                             <td style={td}>
-                              <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 9px", borderRadius: "10px", color: "white", backgroundColor: statusColor(task.status), whiteSpace: "nowrap" }}>
+                              <span style={{ fontSize: "13px", fontWeight: 700, padding: "3px 9px", borderRadius: "10px", color: "white", backgroundColor: statusColor(task.status), whiteSpace: "nowrap" }}>
                                 {task.status}
                               </span>
                             </td>
@@ -211,20 +211,20 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
                           {taskOpen && (
                             <tr>
                               <td colSpan={5} style={{ ...td, backgroundColor: "#f8fafc", padding: "14px 16px 14px 42px" }}>
-                                <div style={{ fontSize: "13px", color: SLATE, marginBottom: "6px" }}>
+                                <div style={{ fontSize: "15px", color: SLATE, marginBottom: "6px" }}>
                                   Type: <strong>{task.task_type || "Task"}</strong> &nbsp;|&nbsp;
                                   Assigned date: {formatDateUK(task.assigned_date)} &nbsp;|&nbsp;
                                   Assigned by: <strong>{task.assigned_by || "—"}</strong>
                                 </div>
 
                                 {task.notes && (
-                                  <div style={{ fontSize: "13px", color: SLATE, marginBottom: "8px" }}>
+                                  <div style={{ fontSize: "15px", color: SLATE, marginBottom: "8px" }}>
                                     Notes: {task.notes}
                                   </div>
                                 )}
 
                                 {task.reply_text && (
-                                  <div style={{ padding: "10px 12px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", borderRadius: "8px", color: "#166534", fontSize: "13px", marginBottom: "8px" }}>
+                                  <div style={{ padding: "10px 12px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", borderRadius: "8px", color: "#166534", fontSize: "15px", marginBottom: "8px" }}>
                                     <strong>Explanation:</strong> {task.reply_text}
                                     {task.corrective_action && (
                                       <div style={{ marginTop: "5px" }}><strong>Corrective action:</strong> {task.corrective_action}</div>
@@ -232,7 +232,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
                                     {task.recovery_date && (
                                       <div style={{ marginTop: "5px" }}><strong>Expected recovery:</strong> {formatDateUK(task.recovery_date)}</div>
                                     )}
-                                    <div style={{ marginTop: "5px", fontSize: "11px" }}>
+                                    <div style={{ marginTop: "5px", fontSize: "13px" }}>
                                       By {task.reply_by || "unknown"} {task.reply_at ? `on ${formatDateUK(task.reply_at)}` : ""}
                                     </div>
                                   </div>
@@ -259,6 +259,6 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
 const td: React.CSSProperties = {
   borderBottom: `1px solid #f1f5f9`,
   padding: "8px 10px",
-  fontSize: "13px",
+  fontSize: "15px",
   verticalAlign: "top",
 };
