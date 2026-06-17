@@ -220,14 +220,11 @@ export default function FinanceManager() {
   useEffect(() => {
     loadData();
 
-    // Check Google connection status
-    supabase
-      .from("google_oauth_tokens")
-      .select("id")
-      .limit(1)
-      .then(({ data }) => {
-        if (data && data.length > 0) setGmailConnected(true);
-      });
+    // Check Google connection status via server-side route (avoids RLS)
+    fetch("/api/google/status")
+      .then((r) => r.json())
+      .then((data) => { if (data.connected) setGmailConnected(true); })
+      .catch(() => {});
 
     // Check URL params for Google OAuth result
     const params = new URLSearchParams(window.location.search);

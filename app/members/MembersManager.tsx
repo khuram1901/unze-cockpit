@@ -12,6 +12,7 @@ type Member = {
   role: string;
   department: string | null;
   business_unit: string | null;
+  is_hod: boolean;
 };
 
 type Plant = { id: string; name: string };
@@ -108,7 +109,7 @@ export default function MembersManager() {
 
     const { data } = await supabase
       .from("members")
-      .select("id, first_name, last_name, name, email, role, department, business_unit")
+      .select("id, first_name, last_name, name, email, role, department, business_unit, is_hod")
       .order("first_name", { ascending: true });
 
     if (data) setMembers(data);
@@ -542,6 +543,18 @@ export default function MembersManager() {
                     {m.role}
                   </span>
                 </>
+              )}
+
+              {isAdmin && (m.role === "Manager" || m.role === "Member") && (
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#1e293b", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={m.is_hod || false}
+                    onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })}
+                    style={{ width: "16px", height: "16px" }}
+                  />
+                  Head of Dept
+                </label>
               )}
 
               {isAdmin && (
