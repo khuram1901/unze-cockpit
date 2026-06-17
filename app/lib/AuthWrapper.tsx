@@ -44,6 +44,7 @@ const MAIN_NAV: NavItem[] = [
   { label: "Monthly Targets", href: "/monthly-operations-targets", allowedRoles: ["Admin", "Executive", "Manager"] },
   { label: "Tasks", href: "/tasks", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Calendar", href: "/calendar", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
+  { label: "Meetings", href: "/meetings", allowedRoles: ["Admin", "Executive"] },
   { label: "Finance", href: "/finance", allowedRoles: ["Admin"], financeManagerException: true },
   { label: "Audit", href: "/department/audit", allowedRoles: ["Admin", "Executive", "Manager"] },
   { label: "HR", href: "/department/hr", allowedRoles: ["Admin", "Executive", "Manager"] },
