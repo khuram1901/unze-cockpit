@@ -44,7 +44,6 @@ const MAIN_NAV: NavItem[] = [
   { label: "Tasks", href: "/tasks", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Calendar", href: "/calendar", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Finance", href: "/finance", allowedRoles: ["Admin", "Executive"], financeManagerException: true },
-  { label: "Machine Issues", href: "/machine-issues", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
 ];
 
 // ─────────────────────────────────────────────────────────────────
