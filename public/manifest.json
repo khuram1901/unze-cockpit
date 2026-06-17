@@ -1,0 +1,24 @@
+{
+  "name": "Unze Group Cockpit",
+  "short_name": "Cockpit",
+  "description": "Unze Group operations and finance dashboard",
+  "start_url": "/executive",
+  "display": "standalone",
+  "background_color": "#eef2f7",
+  "theme_color": "#1e293b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

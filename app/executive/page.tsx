@@ -7,6 +7,7 @@ import EscalationTrafficLights from "./EscalationTrafficLights";
 import { formatDateUK, workingDaysFromNow } from "../lib/dateUtils";
 import { RAGStatus, ragColour } from "../lib/SharedUI";
 import { UTPL_COMPANY_ID } from "../lib/constants";
+import { useMobile } from "../lib/useMobile";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number; meter: number };
@@ -330,6 +331,7 @@ function buildPerformanceRows(tasks: Task[], groupBy: "department" | "person"): 
 }
 
 export default function ExecutiveDashboardPage() {
+  const isMobile = useMobile();
   const [selectedDate, setSelectedDate] = useState(today);
   const [summaries, setSummaries] = useState<PlantExecutiveSummary[]>([]);
   const [machineIssues, setMachineIssues] = useState<MachineIssue[]>([]);
@@ -852,7 +854,7 @@ export default function ExecutiveDashboardPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: "20px 24px" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
             <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
@@ -1122,7 +1124,7 @@ const cardGrid = {
 };
 const squareGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, 1fr)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))",
   gap: "8px",
   marginBottom: "18px",
 };

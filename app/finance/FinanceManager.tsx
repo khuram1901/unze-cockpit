@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 import { UTPL_COMPANY_ID } from "../lib/constants";
+import { useMobile } from "../lib/useMobile";
 
 type OpeningBalance = {
   id: string;
@@ -59,6 +60,7 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 export default function FinanceManager() {
+  const isMobile = useMobile();
   const [loading, setLoading] = useState(true);
 
   const [opening, setOpening] = useState<OpeningBalance | null>(null);
@@ -602,7 +604,7 @@ export default function FinanceManager() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(280px, 1fr) minmax(0, 2fr)",
+          gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 1fr) minmax(0, 2fr)",
           gap: "16px",
           alignItems: "stretch",
           marginTop: "16px",
