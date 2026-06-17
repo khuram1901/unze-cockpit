@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
+import { formatDateUK, formatDateTimeUK } from "../lib/dateUtils";
 
 type MeetingRequest = {
   id: string;
@@ -32,23 +33,7 @@ const NAVY = "#1e293b";
 const SLATE = "#64748b";
 const BORDER = "#e2e8f0";
 
-function formatDateUK(dateString: string | null) {
-  if (!dateString) return "—";
-  const [year, month, day] = dateString.slice(0, 10).split("-");
-  if (!year || !month || !day) return "—";
-  return `${day}/${month}/${year}`;
-}
 
-function formatDateTimeUK(dateString: string | null) {
-  if (!dateString) return "—";
-  return new Date(dateString).toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function displayMemberName(member: Member | null, email: string | null) {
   if (!member) return email || "User";
