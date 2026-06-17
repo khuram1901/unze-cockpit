@@ -28,6 +28,10 @@ type Member = {
   role: string | null;
 };
 
+const NAVY = "#1e293b";
+const SLATE = "#64748b";
+const BORDER = "#e2e8f0";
+
 function formatDateUK(dateString: string | null) {
   if (!dateString) return "—";
   const [year, month, day] = dateString.slice(0, 10).split("-");
@@ -37,7 +41,6 @@ function formatDateUK(dateString: string | null) {
 
 function formatDateTimeUK(dateString: string | null) {
   if (!dateString) return "—";
-
   return new Date(dateString).toLocaleString("en-GB", {
     day: "2-digit",
     month: "2-digit",
@@ -49,17 +52,83 @@ function formatDateTimeUK(dateString: string | null) {
 
 function displayMemberName(member: Member | null, email: string | null) {
   if (!member) return email || "User";
-
   const fullName = `${member.first_name || ""} ${member.last_name || ""}`.trim();
-
   return fullName || member.name || email || "User";
+}
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <h2
+      style={{
+        fontSize: "13px",
+        fontWeight: 700,
+        color: NAVY,
+        margin: "20px 0 10px",
+        paddingLeft: "9px",
+        borderLeft: `3px solid ${NAVY}`,
+      }}
+    >
+      {title}
+    </h2>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const color =
+    status === "Approved"
+      ? "#16a34a"
+      : status === "Rejected"
+      ? "#dc2626"
+      : status === "Completed"
+      ? "#64748b"
+      : "#d97706";
+  return (
+    <span
+      style={{
+        fontSize: "11px",
+        fontWeight: 700,
+        padding: "3px 9px",
+        borderRadius: "10px",
+        color: "white",
+        backgroundColor: color,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {status}
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: string }) {
+  const color =
+    priority === "Urgent"
+      ? "#dc2626"
+      : priority === "High"
+      ? "#d97706"
+      : priority === "Low"
+      ? "#64748b"
+      : "#0070f3";
+  return (
+    <span
+      style={{
+        fontSize: "11px",
+        fontWeight: 700,
+        padding: "3px 9px",
+        borderRadius: "10px",
+        color: "white",
+        backgroundColor: color,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {priority}
+    </span>
+  );
 }
 
 export default function CalendarPage() {
   const [requests, setRequests] = useState<MeetingRequest[]>([]);
   const [member, setMember] = useState<Member | null>(null);
   const [email, setEmail] = useState<string | null>(null);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -76,10 +145,8 @@ export default function CalendarPage() {
 
   async function loadData() {
     setLoading(true);
-
     const { data: userData } = await supabase.auth.getUser();
     const userEmail = userData.user?.email || null;
-
     setEmail(userEmail);
 
     if (userEmail) {
@@ -88,7 +155,6 @@ export default function CalendarPage() {
         .select("first_name, last_name, name, department, role")
         .eq("email", userEmail)
         .single();
-
       if (memberData) setMember(memberData);
     }
 
@@ -107,7 +173,6 @@ export default function CalendarPage() {
 
   async function submitRequest(e: React.FormEvent) {
     e.preventDefault();
-
     setSaving(true);
     setMessage("");
 
@@ -138,40 +203,53 @@ export default function CalendarPage() {
     setDuration("30");
     setPriority("Normal");
     setMessage("✅ Meeting request submitted.");
-
     loadData();
   }
 
   async function updateStatus(id: string, status: string) {
     const { error } = await supabase
       .from("meeting_requests")
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ status, updated_at: new Date().toISOString() })
       .eq("id", id);
 
     if (error) {
-      alert("Error updating meeting request: " + error.message);
+      alert("Error updating request: " + error.message);
       return;
     }
-
     loadData();
   }
 
   return (
     <AuthWrapper>
-      <main style={pageStyle}>
-        <div style={pageHeaderStyle}>
-          <h1 style={pageTitleStyle}>Calendar & Meeting Requests</h1>
-          <p style={pageSubtitleStyle}>
-            Request meetings with Khuram. Approved meetings can later be connected to Google Calendar.
+      <main style={{ padding: "20px 24px" }}>
+        <div style={{ marginBottom: "16px" }}>
+          <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
+            Calendar & Meeting Requests
+          </h1>
+          <p style={{ color: SLATE, fontSize: "12px", marginTop: "5px" }}>
+            Request a meeting with Khuram. Admin and Executive can approve or reject requests.
           </p>
         </div>
 
-        <div style={layoutStyle}>
-          <section style={cardStyle}>
-            <h2 style={sectionTitleStyle}>Request a Meeting</h2>
+        {/* Two-column: form + how it works */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(280px, 460px) minmax(200px, 1fr)",
+            gap: "16px",
+            alignItems: "start",
+          }}
+        >
+          {/* Request form */}
+          <div
+            style={{
+              border: `1px solid ${BORDER}`,
+              borderRadius: "8px",
+              padding: "16px",
+              backgroundColor: "white",
+            }}
+          >
+            <SectionTitle title="Request a Meeting" />
 
             <form onSubmit={submitRequest}>
               <label style={labelStyle}>
@@ -180,7 +258,7 @@ export default function CalendarPage() {
                   style={inputStyle}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Example: Dispatch recovery discussion"
+                  placeholder="e.g. Dispatch recovery discussion"
                   required
                 />
               </label>
@@ -188,7 +266,7 @@ export default function CalendarPage() {
               <label style={labelStyle}>
                 Purpose
                 <textarea
-                  style={{ ...inputStyle, height: "92px", resize: "vertical" }}
+                  style={{ ...inputStyle, height: "80px", resize: "vertical" }}
                   value={purpose}
                   onChange={(e) => setPurpose(e.target.value)}
                   placeholder="Why do you need this meeting?"
@@ -206,9 +284,9 @@ export default function CalendarPage() {
               </label>
 
               {requestedDate && (
-                <div style={helperTextStyle}>
-                  Selected date: <strong>{formatDateUK(requestedDate)}</strong>
-                </div>
+                <p style={{ fontSize: "11px", color: SLATE, marginTop: "-6px", marginBottom: "10px" }}>
+                  Selected: <strong>{formatDateUK(requestedDate)}</strong>
+                </p>
               )}
 
               <label style={labelStyle}>
@@ -217,11 +295,11 @@ export default function CalendarPage() {
                   style={inputStyle}
                   value={preferredTime}
                   onChange={(e) => setPreferredTime(e.target.value)}
-                  placeholder="Example: Morning / 3:00 PM / After lunch"
+                  placeholder="e.g. Morning / 3:00 PM / After lunch"
                 />
               </label>
 
-              <div style={twoColumnStyle}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                 <label style={labelStyle}>
                   Duration
                   <select
@@ -229,10 +307,10 @@ export default function CalendarPage() {
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
                   >
-                    <option value="15">15 minutes</option>
-                    <option value="30">30 minutes</option>
-                    <option value="45">45 minutes</option>
-                    <option value="60">60 minutes</option>
+                    <option value="15">15 min</option>
+                    <option value="30">30 min</option>
+                    <option value="45">45 min</option>
+                    <option value="60">60 min</option>
                   </select>
                 </label>
 
@@ -251,323 +329,213 @@ export default function CalendarPage() {
                 </label>
               </div>
 
-              <button type="submit" disabled={saving} style={primaryButtonStyle}>
-                {saving ? "Submitting..." : "Submit Meeting Request"}
+              <button type="submit" disabled={saving} style={btnStyle}>
+                {saving ? "Submitting…" : "Submit Meeting Request"}
               </button>
 
               {message && (
                 <p
                   style={{
-                    marginTop: "14px",
-                    fontSize: "14px",
+                    marginTop: "10px",
+                    fontSize: "13px",
                     color: message.startsWith("Error") ? "#dc2626" : "#16a34a",
+                    fontWeight: 600,
                   }}
                 >
                   {message}
                 </p>
               )}
             </form>
-          </section>
+          </div>
 
-          <section style={infoCardStyle}>
-            <h2 style={sectionTitleStyle}>How this works</h2>
-
-            <div style={smallInfoRowStyle}>
-              <strong>1. Request</strong>
-              <span>Submit a meeting request with purpose, date and priority.</span>
-            </div>
-
-            <div style={smallInfoRowStyle}>
-              <strong>2. Review</strong>
-              <span>Admin or Executive reviews and approves or rejects.</span>
-            </div>
-
-            <div style={smallInfoRowStyle}>
-              <strong>3. Schedule</strong>
-              <span>Google Calendar integration will be added after this workflow is stable.</span>
-            </div>
-          </section>
+          {/* How it works */}
+          <div
+            style={{
+              border: `1px solid ${BORDER}`,
+              borderRadius: "8px",
+              padding: "16px",
+              backgroundColor: "#f8fafc",
+            }}
+          >
+            <SectionTitle title="How this works" />
+            {[
+              { step: "1. Request", detail: "Submit with purpose, date, and priority." },
+              { step: "2. Review", detail: "Admin or Executive approves or rejects." },
+              {
+                step: "3. Schedule",
+                detail:
+                  "Google Calendar integration is coming — approved requests will create calendar events automatically.",
+              },
+            ].map((row) => (
+              <div
+                key={row.step}
+                style={{
+                  borderBottom: `1px solid ${BORDER}`,
+                  padding: "10px 0",
+                  fontSize: "12px",
+                  color: SLATE,
+                }}
+              >
+                <div style={{ fontWeight: 700, color: NAVY, marginBottom: "3px" }}>
+                  {row.step}
+                </div>
+                {row.detail}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <section style={{ marginTop: "30px" }}>
-          <h2 style={sectionTitleStyle}>Meeting Requests</h2>
+        {/* Requests table */}
+        <SectionTitle title="All Meeting Requests" />
 
-          {loading ? (
-            <p style={mutedTextStyle}>Loading meeting requests...</p>
-          ) : requests.length === 0 ? (
-            <div style={emptyStateStyle}>No meeting requests yet.</div>
-          ) : (
-            <div style={tableWrapperStyle}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr style={{ backgroundColor: "#fafafa" }}>
-                    <th style={th}>Title</th>
-                    <th style={th}>Requested By</th>
-                    <th style={th}>Requested Date</th>
-                    <th style={th}>Preferred Time</th>
-                    <th style={th}>Duration</th>
-                    <th style={th}>Priority</th>
-                    <th style={th}>Status</th>
-                    <th style={th}>Created</th>
-                    {canManageRequests && <th style={th}>Action</th>}
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {requests.map((r) => (
-                    <tr key={r.id}>
-                      <td style={td}>
-                        <strong style={{ color: "#111827" }}>{r.meeting_title}</strong>
-                        <div style={purposeTextStyle}>
-                          {r.meeting_purpose || "No purpose provided"}
+        {loading ? (
+          <p style={{ color: SLATE, fontSize: "13px" }}>Loading requests…</p>
+        ) : requests.length === 0 ? (
+          <div
+            style={{
+              border: `1px solid ${BORDER}`,
+              borderRadius: "8px",
+              padding: "14px",
+              backgroundColor: "white",
+              color: SLATE,
+              fontSize: "13px",
+            }}
+          >
+            No meeting requests yet.
+          </div>
+        ) : (
+          <div
+            style={{
+              overflowX: "auto",
+              border: `1px solid ${BORDER}`,
+              borderRadius: "8px",
+              backgroundColor: "white",
+            }}
+          >
+            <table
+              style={{ borderCollapse: "collapse", width: "100%", minWidth: "860px" }}
+            >
+              <thead>
+                <tr style={{ backgroundColor: "#f8fafc" }}>
+                  <th style={th}>Title & Purpose</th>
+                  <th style={th}>Requested By</th>
+                  <th style={th}>Date</th>
+                  <th style={th}>Time</th>
+                  <th style={th}>Duration</th>
+                  <th style={th}>Priority</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Submitted</th>
+                  {canManageRequests && <th style={th}>Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((r) => (
+                  <tr key={r.id}>
+                    <td style={td}>
+                      <div style={{ fontWeight: 700, color: NAVY, fontSize: "12px" }}>
+                        {r.meeting_title}
+                      </div>
+                      {r.meeting_purpose && (
+                        <div style={{ color: SLATE, fontSize: "11px", marginTop: "2px" }}>
+                          {r.meeting_purpose}
                         </div>
-                      </td>
-
-                      <td style={td}>
-                        <strong>{r.requested_by_name || r.requested_by_email || "—"}</strong>
-                        <div style={purposeTextStyle}>
-                          {r.requested_by_department || "—"}
-                        </div>
-                      </td>
-
-                      <td style={td}>{formatDateUK(r.requested_date)}</td>
-                      <td style={td}>{r.preferred_time || "—"}</td>
-                      <td style={td}>{r.duration_minutes || 30} min</td>
-
-                      <td style={td}>
-                        <PriorityBadge priority={r.priority || "Normal"} />
-                      </td>
-
-                      <td style={td}>
-                        <StatusBadge status={r.status || "Pending"} />
-                      </td>
-
-                      <td style={td}>{formatDateTimeUK(r.created_at)}</td>
-
-                      {canManageRequests && (
-                        <td style={td}>
-                          <select
-                            value={r.status || "Pending"}
-                            onChange={(e) => updateStatus(r.id, e.target.value)}
-                            style={smallSelectStyle}
-                          >
-                            <option>Pending</option>
-                            <option>Approved</option>
-                            <option>Rejected</option>
-                            <option>Completed</option>
-                          </select>
-                        </td>
                       )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                    </td>
+                    <td style={td}>
+                      <div style={{ fontWeight: 600, color: NAVY, fontSize: "12px" }}>
+                        {r.requested_by_name || r.requested_by_email || "—"}
+                      </div>
+                      {r.requested_by_department && (
+                        <div style={{ color: SLATE, fontSize: "11px" }}>
+                          {r.requested_by_department}
+                        </div>
+                      )}
+                    </td>
+                    <td style={td}>{formatDateUK(r.requested_date)}</td>
+                    <td style={td}>{r.preferred_time || "—"}</td>
+                    <td style={td}>{r.duration_minutes || 30} min</td>
+                    <td style={td}>
+                      <PriorityBadge priority={r.priority || "Normal"} />
+                    </td>
+                    <td style={td}>
+                      <StatusBadge status={r.status || "Pending"} />
+                    </td>
+                    <td style={td}>{formatDateTimeUK(r.created_at)}</td>
+                    {canManageRequests && (
+                      <td style={td}>
+                        <select
+                          value={r.status || "Pending"}
+                          onChange={(e) => updateStatus(r.id, e.target.value)}
+                          style={{
+                            padding: "5px 7px",
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            backgroundColor: "white",
+                          }}
+                        >
+                          <option>Pending</option>
+                          <option>Approved</option>
+                          <option>Rejected</option>
+                          <option>Completed</option>
+                        </select>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </main>
     </AuthWrapper>
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const color =
-    status === "Approved"
-      ? "#16a34a"
-      : status === "Rejected"
-      ? "#dc2626"
-      : status === "Completed"
-      ? "#555"
-      : "#d97706";
-
-  return (
-    <span style={{ ...badgeStyle, backgroundColor: color }}>
-      {status}
-    </span>
-  );
-}
-
-function PriorityBadge({ priority }: { priority: string }) {
-  const color =
-    priority === "Urgent"
-      ? "#dc2626"
-      : priority === "High"
-      ? "#d97706"
-      : priority === "Low"
-      ? "#64748b"
-      : "#0070f3";
-
-  return (
-    <span style={{ ...badgeStyle, backgroundColor: color }}>
-      {priority}
-    </span>
-  );
-}
-
-const pageStyle = {
-  padding: "40px",
-  fontFamily: "sans-serif",
-};
-
-const pageHeaderStyle = {
-  marginBottom: "24px",
-};
-
-const pageTitleStyle = {
-  fontSize: "32px",
-  fontWeight: "bold",
-  marginBottom: "8px",
-  color: "#111827",
-};
-
-const pageSubtitleStyle = {
-  color: "#666",
-  marginBottom: "0",
-  fontSize: "15px",
-};
-
-const layoutStyle = {
-  display: "grid",
-  gridTemplateColumns: "minmax(280px, 640px) minmax(240px, 1fr)",
-  gap: "20px",
-  alignItems: "start",
-};
-
-const cardStyle = {
-  border: "1px solid #e0e0e0",
-  borderRadius: "10px",
-  padding: "20px",
-  backgroundColor: "white",
-};
-
-const infoCardStyle = {
-  border: "1px solid #e0e0e0",
-  borderRadius: "10px",
-  padding: "20px",
-  backgroundColor: "#fafafa",
-};
-
-const sectionTitleStyle = {
-  fontSize: "20px",
-  fontWeight: "bold",
-  marginTop: "0",
-  marginBottom: "14px",
-  color: "#111827",
-};
-
-const labelStyle = {
+const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "14px",
-  fontWeight: "bold",
-  color: "#333",
-  marginBottom: "6px",
+  fontSize: "12px",
+  fontWeight: 600,
+  color: NAVY,
+  marginBottom: "10px",
 };
 
-const inputStyle = {
+const inputStyle: React.CSSProperties = {
   display: "block",
   width: "100%",
-  padding: "10px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
-  fontSize: "14px",
-  marginTop: "6px",
-  marginBottom: "14px",
-  boxSizing: "border-box" as const,
-};
-
-const smallSelectStyle = {
-  padding: "8px",
-  border: "1px solid #ccc",
+  padding: "7px 9px",
+  marginTop: "3px",
+  border: `1px solid ${BORDER}`,
   borderRadius: "6px",
   fontSize: "13px",
-  backgroundColor: "white",
+  boxSizing: "border-box",
 };
 
-const twoColumnStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: "12px",
-};
-
-const primaryButtonStyle = {
-  backgroundColor: "#0070f3",
+const btnStyle: React.CSSProperties = {
+  backgroundColor: NAVY,
   color: "white",
   border: "none",
   borderRadius: "6px",
-  padding: "12px 20px",
-  fontSize: "14px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const helperTextStyle = {
-  marginTop: "-8px",
-  marginBottom: "14px",
-  color: "#666",
+  padding: "9px 18px",
   fontSize: "13px",
-};
-
-const smallInfoRowStyle = {
-  display: "grid",
-  gap: "4px",
-  padding: "12px 0",
-  borderBottom: "1px solid #e5e7eb",
-  color: "#555",
-  fontSize: "14px",
-};
-
-const mutedTextStyle = {
-  color: "#666",
-  fontSize: "14px",
-};
-
-const emptyStateStyle = {
-  border: "1px solid #e0e0e0",
-  borderRadius: "10px",
-  padding: "18px",
-  backgroundColor: "#fafafa",
-  color: "#666",
-  fontSize: "14px",
-};
-
-const tableWrapperStyle = {
-  overflowX: "auto" as const,
-  marginBottom: "32px",
-};
-
-const tableStyle = {
-  borderCollapse: "collapse" as const,
-  width: "100%",
-  minWidth: "980px",
-};
-
-const th = {
-  textAlign: "left" as const,
-  border: "1px solid #e0e0e0",
-  padding: "10px",
-  fontSize: "14px",
-  color: "#333",
-};
-
-const td = {
-  border: "1px solid #e0e0e0",
-  padding: "10px",
-  fontSize: "14px",
-  verticalAlign: "top" as const,
-  color: "#333",
-};
-
-const purposeTextStyle = {
-  color: "#666",
-  fontSize: "12px",
+  fontWeight: 700,
+  cursor: "pointer",
   marginTop: "4px",
+  width: "100%",
 };
 
-const badgeStyle = {
-  color: "white",
-  padding: "4px 10px",
-  borderRadius: "999px",
+const th: React.CSSProperties = {
+  textAlign: "left",
+  borderBottom: `1px solid ${BORDER}`,
+  padding: "6px 10px",
+  fontSize: "11px",
+  color: SLATE,
+  fontWeight: 700,
+};
+
+const td: React.CSSProperties = {
+  borderBottom: `1px solid #f1f5f9`,
+  padding: "7px 10px",
   fontSize: "12px",
-  fontWeight: "bold",
-  display: "inline-block",
+  verticalAlign: "top",
 };

@@ -4,13 +4,7 @@ import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 
-type Plant = {
-  id: string;
-  name: string;
-  type: string;
-  active: boolean;
-};
-
+type Plant = { id: string; name: string; type: string; active: boolean };
 type WeeklyTarget = {
   id: string;
   plant_id: string;
@@ -23,13 +17,12 @@ type WeeklyTarget = {
   target_meter: number | null;
   notes: string | null;
   submitted_by: string | null;
-  created_at: string;
 };
+type Member = { name: string; role: string };
 
-type Member = {
-  name: string;
-  role: string;
-};
+const NAVY = "#1e293b";
+const SLATE = "#64748b";
+const BORDER = "#e2e8f0";
 
 function getMonday(date = new Date()) {
   const d = new Date(date);
@@ -38,16 +31,31 @@ function getMonday(date = new Date()) {
   d.setDate(diff);
   return d.toISOString().slice(0, 10);
 }
-
 function addDays(dateString: string, days: number) {
   const d = new Date(dateString);
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
-
 function formatDateUK(dateString: string) {
   const [year, month, day] = dateString.split("-");
   return `${day}/${month}/${year}`;
+}
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <h2
+      style={{
+        fontSize: "13px",
+        fontWeight: 700,
+        color: NAVY,
+        margin: "20px 0 10px",
+        paddingLeft: "9px",
+        borderLeft: `3px solid ${NAVY}`,
+      }}
+    >
+      {title}
+    </h2>
+  );
 }
 
 export default function WeeklyProductionTargetsPage() {
@@ -72,152 +80,91 @@ export default function WeeklyProductionTargetsPage() {
 
   async function loadInitialData() {
     setLoading(true);
-
     const { data: userData } = await supabase.auth.getUser();
     const email = userData.user?.email;
-
     if (email) {
       const { data: memberData } = await supabase
         .from("members")
         .select("name, role")
         .eq("email", email)
         .single();
-
       if (memberData) setMember(memberData);
     }
-
     const { data: plantsData } = await supabase
       .from("plants")
       .select("*")
       .eq("active", true)
       .order("name");
-
     if (plantsData) setPlants(plantsData);
-
     await loadExistingTargets(weekStart);
-
     setLoading(false);
   }
 
-  async function loadExistingTargets(currentWeekStart = weekStart) {
-    const currentWeekEnd = addDays(currentWeekStart, 6);
-
+  async function loadExistingTargets(ws = weekStart) {
+    const we = addDays(ws, 6);
     const { data } = await supabase
       .from("weekly_production_targets")
       .select("*")
-      .eq("week_start", currentWeekStart)
-      .eq("week_end", currentWeekEnd)
-      .order("plant_name", { ascending: true });
-
-    if (data) setExistingTargets(data);
+      .eq("week_start", ws)
+      .eq("week_end", we)
+      .order("plant_name");
+    setExistingTargets(data || []);
   }
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
+  useEffect(() => { loadInitialData(); }, []);
+  useEffect(() => { loadExistingTargets(weekStart); }, [weekStart]);
 
   useEffect(() => {
-    loadExistingTargets(weekStart);
-  }, [weekStart]);
-
-  useEffect(() => {
-    if (!plantId) {
-      setTarget31("");
-      setTarget36("");
-      setTarget45("");
-      setTargetMeter("");
-      setNotes("");
-      return;
-    }
-
+    if (!plantId) { setTarget31(""); setTarget36(""); setTarget45(""); setTargetMeter(""); setNotes(""); return; }
     const existing = existingTargets.find((t) => t.plant_id === plantId);
-
     if (existing) {
       setTarget31(String(existing.target_31 || ""));
       setTarget36(String(existing.target_36 || ""));
       setTarget45(String(existing.target_45 || ""));
       setTargetMeter(String(existing.target_meter || ""));
       setNotes(existing.notes || "");
-      setMessage("Existing target loaded. Saving will update this target.");
+      setMessage("Existing target loaded — saving will update it.");
     } else {
-      setTarget31("");
-      setTarget36("");
-      setTarget45("");
-      setTargetMeter("");
-      setNotes("");
-      setMessage("");
+      setTarget31(""); setTarget36(""); setTarget45(""); setTargetMeter(""); setNotes(""); setMessage("");
     }
   }, [plantId, existingTargets]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    if (!canEditTargets) {
-      setMessage("Error: You do not have permission to add or update weekly targets.");
-      return;
-    }
-
+    if (!canEditTargets) { setMessage("Only Admin users can update weekly targets."); return; }
     setSaving(true);
     setMessage("");
-
-    if (!plantId || !selectedPlant) {
-      setSaving(false);
-      setMessage("Please select a plant.");
-      return;
-    }
-
+    if (!plantId || !selectedPlant) { setSaving(false); setMessage("Please select a plant."); return; }
     const { data: userData } = await supabase.auth.getUser();
     const submittedBy = userData.user?.email || "unknown";
-
-    const payload = {
-      plant_id: plantId,
-      plant_name: selectedPlant.name,
-      week_start: weekStart,
-      week_end: weekEnd,
-      target_31: Number(target31) || 0,
-      target_36: Number(target36) || 0,
-      target_45: Number(target45) || 0,
-      target_meter: Number(targetMeter) || 0,
-      submitted_by: submittedBy,
-      notes: notes || null,
-    };
-
-    const { error } = await supabase
-      .from("weekly_production_targets")
-      .upsert(payload, {
-        onConflict: "plant_id,week_start",
-      });
-
+    const { error } = await supabase.from("weekly_production_targets").upsert(
+      {
+        plant_id: plantId,
+        plant_name: selectedPlant.name,
+        week_start: weekStart,
+        week_end: weekEnd,
+        target_31: Number(target31) || 0,
+        target_36: Number(target36) || 0,
+        target_45: Number(target45) || 0,
+        target_meter: Number(targetMeter) || 0,
+        submitted_by: submittedBy,
+        notes: notes || null,
+      },
+      { onConflict: "plant_id,week_start" }
+    );
     setSaving(false);
-
-    if (error) {
-      setMessage("Error: " + error.message);
-      return;
-    }
-
-    setMessage("✅ Weekly production target saved.");
+    if (error) { setMessage("Error: " + error.message); return; }
+    setMessage("✅ Weekly target saved.");
     await loadExistingTargets(weekStart);
   }
 
-  const inputStyle = {
-    display: "block",
-    width: "100%",
-    maxWidth: "420px",
-    padding: "10px",
-    marginTop: "4px",
-    marginBottom: "14px",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
-    fontSize: "15px",
-  };
-
-  const selectedExistingTarget = existingTargets.find((t) => t.plant_id === plantId);
+  const selectedExisting = existingTargets.find((t) => t.plant_id === plantId);
 
   if (loading) {
     return (
       <AuthWrapper>
-        <main style={{ padding: "40px", fontFamily: "sans-serif" }}>
-          Loading weekly targets...
+        <main style={{ padding: "20px 24px" }}>
+          <p style={{ color: SLATE, fontSize: "13px" }}>Loading weekly targets…</p>
         </main>
       </AuthWrapper>
     );
@@ -225,255 +172,142 @@ export default function WeeklyProductionTargetsPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: "40px", fontFamily: "sans-serif" }}>
-        <h1 style={{ fontSize: "32px", fontWeight: "bold", marginBottom: "8px" }}>
-          Weekly Production Targets
-        </h1>
+      <main style={{ padding: "20px 24px" }}>
+        <div style={{ marginBottom: "16px" }}>
+          <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
+            Weekly Production Targets
+          </h1>
+          <p style={{ color: SLATE, fontSize: "12px", marginTop: "5px" }}>
+            Set weekly production commitments per plant. Admin only.
+          </p>
+        </div>
 
-        <p style={{ color: "#666", marginBottom: "24px" }}>
-          Set weekly production commitments. Only Admin users can create or update targets.
-        </p>
-
-        {!canEditTargets && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(280px, 420px) 1fr",
+            gap: "20px",
+            alignItems: "start",
+          }}
+        >
+          {/* Form */}
           <div
             style={{
-              border: "1px solid #fecaca",
-              backgroundColor: "#fef2f2",
-              color: "#991b1b",
+              border: `1px solid ${BORDER}`,
               borderRadius: "8px",
-              padding: "14px",
-              marginBottom: "24px",
-              maxWidth: "720px",
+              padding: "16px",
+              backgroundColor: "white",
             }}
           >
-            You can view weekly targets, but you cannot create or update them.
-          </div>
-        )}
+            <SectionTitle title="Add / Update Weekly Target" />
 
-        {canEditTargets && (
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              border: "1px solid #e0e0e0",
-              borderRadius: "10px",
-              padding: "20px",
-              maxWidth: "520px",
-              marginBottom: "32px",
-            }}
-          >
-            <label>
-              Plant
-              <select
-                style={inputStyle}
-                value={plantId}
-                onChange={(e) => setPlantId(e.target.value)}
-                required
-              >
-                <option value="">-- Select plant --</option>
-                {plants.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Week start
-              <input
-                type="date"
-                style={inputStyle}
-                value={weekStart}
-                onChange={(e) => setWeekStart(e.target.value)}
-                required
-              />
-            </label>
-
-            <div style={{ marginBottom: "16px", color: "#555", fontSize: "14px" }}>
-              Week period:{" "}
-              <strong>{formatDateUK(weekStart)}</strong> to{" "}
-              <strong>{formatDateUK(weekEnd)}</strong>
-            </div>
-
-            {selectedExistingTarget && (
+            {!canEditTargets && (
               <div
                 style={{
-                  border: "1px solid #fed7aa",
-                  backgroundColor: "#fff7ed",
-                  color: "#9a3412",
-                  borderRadius: "8px",
-                  padding: "10px",
-                  fontSize: "14px",
-                  marginBottom: "16px",
+                  border: `1px solid #fecaca`,
+                  backgroundColor: "#fef2f2",
+                  color: "#991b1b",
+                  borderRadius: "6px",
+                  padding: "10px 12px",
+                  marginBottom: "12px",
+                  fontSize: "12px",
                 }}
               >
-                Existing target found for this plant/week. Saving will update it.
+                You can view weekly targets but cannot create or update them.
               </div>
             )}
 
-            {!isMeter ? (
-              <>
-                <label>
-                  31 ft weekly target
-                  <input
-                    type="number"
-                    min="0"
-                    style={inputStyle}
-                    value={target31}
-                    onChange={(e) => setTarget31(e.target.value)}
-                    placeholder="0"
-                  />
-                </label>
-
-                <label>
-                  36 ft weekly target
-                  <input
-                    type="number"
-                    min="0"
-                    style={inputStyle}
-                    value={target36}
-                    onChange={(e) => setTarget36(e.target.value)}
-                    placeholder="0"
-                  />
-                </label>
-
-                <label>
-                  45 ft weekly target
-                  <input
-                    type="number"
-                    min="0"
-                    style={inputStyle}
-                    value={target45}
-                    onChange={(e) => setTarget45(e.target.value)}
-                    placeholder="0"
-                  />
-                </label>
-              </>
-            ) : (
-              <label>
-                Meters weekly target
-                <input
-                  type="number"
-                  min="0"
-                  style={inputStyle}
-                  value={targetMeter}
-                  onChange={(e) => setTargetMeter(e.target.value)}
-                  placeholder="0"
-                />
+            <form onSubmit={handleSubmit}>
+              <label style={labelStyle}>
+                Plant
+                <select style={inputStyle} value={plantId} onChange={(e) => setPlantId(e.target.value)} required>
+                  <option value="">— Select plant —</option>
+                  {plants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
               </label>
-            )}
 
-            <label>
-              Notes
-              <textarea
-                style={{ ...inputStyle, height: "80px" }}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Any assumptions, shutdowns, holidays, special orders..."
-              />
-            </label>
+              <label style={labelStyle}>
+                Week starting
+                <input type="date" style={inputStyle} value={weekStart} onChange={(e) => setWeekStart(e.target.value)} required />
+                <span style={{ fontSize: "11px", color: SLATE }}>
+                  {formatDateUK(weekStart)} to {formatDateUK(weekEnd)}
+                </span>
+              </label>
 
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                backgroundColor: "#0070f3",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                padding: "12px 24px",
-                fontSize: "15px",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
-              {saving ? "Saving..." : selectedExistingTarget ? "Update Weekly Target" : "Submit Weekly Target"}
-            </button>
+              {selectedExisting && (
+                <div style={{ border: `1px solid #fed7aa`, backgroundColor: "#fff7ed", color: "#9a3412", borderRadius: "6px", padding: "8px 10px", marginBottom: "10px", fontSize: "12px" }}>
+                  Existing target found — saving will update it.
+                </div>
+              )}
 
-            {message && (
-              <p
-                style={{
-                  marginTop: "16px",
-                  fontSize: "14px",
-                  color: message.startsWith("Error") ? "red" : "green",
-                }}
-              >
-                {message}
-              </p>
-            )}
-          </form>
-        )}
+              {!isMeter ? (
+                <>
+                  <label style={labelStyle}>31 ft target<input type="number" min="0" style={inputStyle} value={target31} onChange={(e) => setTarget31(e.target.value)} placeholder="0" /></label>
+                  <label style={labelStyle}>36 ft target<input type="number" min="0" style={inputStyle} value={target36} onChange={(e) => setTarget36(e.target.value)} placeholder="0" /></label>
+                  <label style={labelStyle}>45 ft target<input type="number" min="0" style={inputStyle} value={target45} onChange={(e) => setTarget45(e.target.value)} placeholder="0" /></label>
+                </>
+              ) : (
+                <label style={labelStyle}>Meters target<input type="number" min="0" style={inputStyle} value={targetMeter} onChange={(e) => setTargetMeter(e.target.value)} placeholder="0" /></label>
+              )}
 
-        <h2 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "14px" }}>
-          Existing Targets for Selected Week
-        </h2>
+              <label style={labelStyle}>
+                Notes
+                <textarea style={{ ...inputStyle, height: "60px" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Assumptions, shutdowns, holidays…" />
+              </label>
 
-        <div style={{ marginBottom: "16px", color: "#555", fontSize: "14px" }}>
-          Showing week: <strong>{formatDateUK(weekStart)}</strong> to{" "}
-          <strong>{formatDateUK(weekEnd)}</strong>
-        </div>
+              <button type="submit" disabled={saving || !canEditTargets} style={btnStyle}>
+                {saving ? "Saving…" : selectedExisting ? "Update Target" : "Save Target"}
+              </button>
 
-        {existingTargets.length === 0 ? (
-          <p style={{ color: "#666" }}>No targets set for this week yet.</p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "700px" }}>
-              <thead>
-                <tr style={{ backgroundColor: "#fafafa" }}>
-                  <th style={tableHeaderStyle}>Plant</th>
-                  <th style={tableHeaderStyle}>Week</th>
-                  <th style={tableHeaderStyle}>31 ft</th>
-                  <th style={tableHeaderStyle}>36 ft</th>
-                  <th style={tableHeaderStyle}>45 ft</th>
-                  <th style={tableHeaderStyle}>Meters</th>
-                  <th style={tableHeaderStyle}>Total</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {existingTargets.map((t) => {
-                  const total =
-                    (t.target_31 || 0) +
-                    (t.target_36 || 0) +
-                    (t.target_45 || 0) +
-                    (t.target_meter || 0);
-
-                  return (
-                    <tr key={t.id}>
-                      <td style={tableCellStyle}>
-                        <strong>{t.plant_name}</strong>
-                      </td>
-                      <td style={tableCellStyle}>
-                        {formatDateUK(t.week_start)} to {formatDateUK(t.week_end)}
-                      </td>
-                      <td style={tableCellStyle}>{t.target_31 || 0}</td>
-                      <td style={tableCellStyle}>{t.target_36 || 0}</td>
-                      <td style={tableCellStyle}>{t.target_45 || 0}</td>
-                      <td style={tableCellStyle}>{t.target_meter || 0}</td>
-                      <td style={tableCellStyle}>
-                        <strong>{total}</strong>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              {message && (
+                <p style={{ marginTop: "10px", fontSize: "13px", fontWeight: 600, color: message.startsWith("Error") || message.startsWith("Only") ? "#dc2626" : "#16a34a" }}>
+                  {message}
+                </p>
+              )}
+            </form>
           </div>
-        )}
+
+          {/* Existing targets table */}
+          <div>
+            <SectionTitle title={`Targets — ${formatDateUK(weekStart)} to ${formatDateUK(weekEnd)}`} />
+            {existingTargets.length === 0 ? (
+              <p style={{ color: SLATE, fontSize: "13px" }}>No targets set for this week yet.</p>
+            ) : (
+              <div style={{ overflowX: "auto", border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white" }}>
+                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "520px" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#f8fafc" }}>
+                      {["Plant", "31 ft", "36 ft", "45 ft", "Meters", "Total"].map((h) => <th key={h} style={th}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {existingTargets.map((t) => {
+                      const total = (t.target_31 || 0) + (t.target_36 || 0) + (t.target_45 || 0) + (t.target_meter || 0);
+                      return (
+                        <tr key={t.id}>
+                          <td style={tdBold}>{t.plant_name}</td>
+                          <td style={td}>{t.target_31 || 0}</td>
+                          <td style={td}>{t.target_36 || 0}</td>
+                          <td style={td}>{t.target_45 || 0}</td>
+                          <td style={td}>{t.target_meter || 0}</td>
+                          <td style={{ ...td, fontWeight: 700, color: NAVY }}>{total}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       </main>
     </AuthWrapper>
   );
 }
 
-const tableHeaderStyle = {
-  textAlign: "left" as const,
-  border: "1px solid #e0e0e0",
-  padding: "10px",
-  fontSize: "14px",
-};
-
-const tableCellStyle = {
-  border: "1px solid #e0e0e0",
-  padding: "10px",
-  fontSize: "14px",
-};
+const labelStyle: React.CSSProperties = { display: "block", fontSize: "12px", fontWeight: 600, color: NAVY, marginBottom: "10px" };
+const inputStyle: React.CSSProperties = { display: "block", width: "100%", padding: "7px 9px", marginTop: "3px", border: `1px solid ${BORDER}`, borderRadius: "6px", fontSize: "13px", boxSizing: "border-box" };
+const btnStyle: React.CSSProperties = { backgroundColor: NAVY, color: "white", border: "none", borderRadius: "6px", padding: "9px 18px", fontSize: "13px", fontWeight: 700, cursor: "pointer", marginTop: "4px" };
+const th: React.CSSProperties = { textAlign: "left", borderBottom: `1px solid ${BORDER}`, padding: "6px 10px", fontSize: "11px", color: SLATE, fontWeight: 700 };
+const td: React.CSSProperties = { borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "12px" };
+const tdBold: React.CSSProperties = { ...td, fontWeight: 700, color: NAVY };

@@ -20,7 +20,33 @@ type ExceptionRow = {
   created_at: string;
 };
 
+const NAVY = "#1e293b";
+const SLATE = "#64748b";
+const BORDER = "#e2e8f0";
 const STATUSES = ["Open", "Submitted", "Closed"];
+
+function formatDateUK(dateString: string | null) {
+  if (!dateString) return "—";
+  const [year, month, day] = dateString.slice(0, 10).split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <h2
+      style={{
+        fontSize: "13px",
+        fontWeight: 700,
+        color: NAVY,
+        margin: "20px 0 10px",
+        paddingLeft: "9px",
+        borderLeft: `3px solid ${NAVY}`,
+      }}
+    >
+      {title}
+    </h2>
+  );
+}
 
 export default function ExceptionsPage() {
   const [exceptions, setExceptions] = useState<ExceptionRow[]>([]);
@@ -37,7 +63,6 @@ export default function ExceptionsPage() {
     } else {
       setExceptions(data || []);
     }
-
     setLoading(false);
   }
 
@@ -59,46 +84,130 @@ export default function ExceptionsPage() {
       alert("Error updating exception: " + error.message);
       return;
     }
-
     loadExceptions();
   }
 
-  if (loading) {
-    return (
-      <AuthWrapper>
-        <main style={{ padding: "40px", fontFamily: "sans-serif" }}>
-          Loading exceptions...
-        </main>
-      </AuthWrapper>
-    );
-  }
+  const open = exceptions.filter((e) => e.status === "Open");
+  const submitted = exceptions.filter((e) => e.status === "Submitted");
+  const closed = exceptions.filter((e) => e.status === "Closed");
 
   return (
     <AuthWrapper>
-      <main style={{ padding: "40px", fontFamily: "sans-serif" }}>
-        <h1 style={{ fontSize: "32px", fontWeight: "bold", marginBottom: "8px" }}>
-          Exceptions
-        </h1>
-
-        <p style={{ color: "#666", marginBottom: "24px" }}>
-          KPI exceptions, explanations, corrective actions, and closure tracking.
-        </p>
-
-        <div style={{ display: "grid", gap: "14px" }}>
-          {exceptions.length === 0 ? (
-            <p style={{ color: "#666" }}>No exceptions yet.</p>
-          ) : (
-            exceptions.map((ex) => (
-              <ExceptionCard
-                key={ex.id}
-                ex={ex}
-                onUpdate={updateException}
-              />
-            ))
-          )}
+      <main style={{ padding: "20px 24px" }}>
+        <div style={{ marginBottom: "16px" }}>
+          <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
+            Exceptions
+          </h1>
+          <p style={{ color: SLATE, fontSize: "12px", marginTop: "5px" }}>
+            KPI exceptions, explanations, corrective actions, and closure tracking.
+          </p>
         </div>
+
+        {/* Summary counts */}
+        {!loading && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+              gap: "8px",
+              marginBottom: "20px",
+            }}
+          >
+            <CountCard label="Open" count={open.length} color="#dc2626" />
+            <CountCard label="Awaiting Review" count={submitted.length} color="#d97706" />
+            <CountCard label="Closed" count={closed.length} color="#16a34a" />
+            <CountCard label="Total" count={exceptions.length} color={NAVY} />
+          </div>
+        )}
+
+        {loading ? (
+          <p style={{ color: SLATE, fontSize: "13px" }}>Loading exceptions…</p>
+        ) : exceptions.length === 0 ? (
+          <div
+            style={{
+              border: "1px solid #bbf7d0",
+              backgroundColor: "#f0fdf4",
+              color: "#166534",
+              borderRadius: "8px",
+              padding: "12px 14px",
+              fontWeight: 700,
+              fontSize: "13px",
+            }}
+          >
+            No exceptions recorded yet.
+          </div>
+        ) : (
+          <>
+            {open.length > 0 && (
+              <>
+                <SectionTitle title={`Open — ${open.length}`} />
+                <div style={{ display: "grid", gap: "10px", marginBottom: "8px" }}>
+                  {open.map((ex) => (
+                    <ExceptionCard key={ex.id} ex={ex} onUpdate={updateException} />
+                  ))}
+                </div>
+              </>
+            )}
+            {submitted.length > 0 && (
+              <>
+                <SectionTitle title={`Awaiting Review — ${submitted.length}`} />
+                <div style={{ display: "grid", gap: "10px", marginBottom: "8px" }}>
+                  {submitted.map((ex) => (
+                    <ExceptionCard key={ex.id} ex={ex} onUpdate={updateException} />
+                  ))}
+                </div>
+              </>
+            )}
+            {closed.length > 0 && (
+              <>
+                <SectionTitle title={`Closed — ${closed.length}`} />
+                <div style={{ display: "grid", gap: "10px", marginBottom: "8px" }}>
+                  {closed.map((ex) => (
+                    <ExceptionCard key={ex.id} ex={ex} onUpdate={updateException} />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </main>
     </AuthWrapper>
+  );
+}
+
+function CountCard({
+  label,
+  count,
+  color,
+}: {
+  label: string;
+  count: number;
+  color: string;
+}) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${BORDER}`,
+        borderTop: `3px solid ${color}`,
+        borderRadius: "7px",
+        padding: "8px 10px",
+        backgroundColor: "white",
+      }}
+    >
+      <div
+        style={{
+          color: SLATE,
+          fontSize: "11px",
+          marginBottom: "2px",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ fontSize: "19px", fontWeight: 800, color }}>{count}</div>
+    </div>
   );
 }
 
@@ -125,92 +234,136 @@ function ExceptionCard({
   return (
     <div
       style={{
-        border: "1px solid #e0e0e0",
-        borderTop: `4px solid ${statusColor}`,
-        borderRadius: "10px",
-        padding: "18px",
+        border: `1px solid ${BORDER}`,
+        borderTop: `3px solid ${statusColor}`,
+        borderRadius: "8px",
+        padding: "14px 16px",
+        backgroundColor: "white",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-        <div>
-          <strong style={{ fontSize: "17px" }}>{ex.title}</strong>
-
-          <div style={{ marginTop: "6px", color: "#555", fontSize: "14px" }}>
-            Department: <strong>{ex.department || "—"}</strong> | Type:{" "}
-            <strong>{ex.exception_type || "—"}</strong> | Owner:{" "}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: "12px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>
+            {ex.title}
+          </div>
+          <div style={{ fontSize: "12px", color: SLATE }}>
+            Department: <strong>{ex.department || "—"}</strong> &nbsp;|&nbsp; Type:{" "}
+            <strong>{ex.exception_type || "—"}</strong> &nbsp;|&nbsp; Owner:{" "}
             <strong>{ex.assigned_to || "—"}</strong>
           </div>
-
           {ex.description && (
-            <div style={{ marginTop: "8px", color: "#555", fontSize: "14px" }}>
+            <div style={{ fontSize: "12px", color: SLATE, marginTop: "6px" }}>
               {ex.description}
             </div>
           )}
         </div>
 
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            onUpdate(ex.id, { status: e.target.value });
-          }}
-          style={{
-            height: "fit-content",
-            padding: "6px",
-            border: "1px solid #ccc",
-            borderRadius: "6px",
-            fontWeight: "bold",
-            color: statusColor,
-          }}
-        >
-          {STATUSES.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span
+            style={{
+              fontSize: "11px",
+              fontWeight: 700,
+              padding: "3px 9px",
+              borderRadius: "10px",
+              color: "white",
+              backgroundColor: statusColor,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {status}
+          </span>
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              onUpdate(ex.id, { status: e.target.value });
+            }}
+            style={{
+              padding: "5px 7px",
+              border: `1px solid ${BORDER}`,
+              borderRadius: "6px",
+              fontSize: "12px",
+              backgroundColor: "white",
+              color: NAVY,
+            }}
+          >
+            {STATUSES.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {status === "Open" && (
-        <div style={{ marginTop: "16px" }}>
-          <FieldLabel label="Explanation">
-            <textarea
-              value={explanation}
-              onChange={(e) => setExplanation(e.target.value)}
-              placeholder="Explain what happened..."
-              style={{ ...fieldStyle, height: "80px" }}
-            />
-          </FieldLabel>
-
-          <FieldLabel label="Corrective Action">
-            <textarea
-              value={correctiveAction}
-              onChange={(e) => setCorrectiveAction(e.target.value)}
-              placeholder="What action has been taken or will be taken?"
-              style={{ ...fieldStyle, height: "80px" }}
-            />
-          </FieldLabel>
-
-          <FieldLabel label="Expected Recovery Date">
-            <input
-              type="date"
-              value={recoveryDate}
-              onChange={(e) => setRecoveryDate(e.target.value)}
-              style={fieldStyle}
-            />
-          </FieldLabel>
-
-          <FieldLabel label="Impact Assessment">
-            <select
-              value={impactAssessment}
-              onChange={(e) => setImpactAssessment(e.target.value)}
-              style={fieldStyle}
-            >
-              <option value="">-- Select impact --</option>
-              <option value="No expected impact">No expected impact</option>
-              <option value="At risk but recoverable">At risk but recoverable</option>
-              <option value="Likely to miss target">Likely to miss target</option>
-              <option value="Already recovered">Already recovered</option>
-            </select>
-          </FieldLabel>
+        <div
+          style={{
+            marginTop: "14px",
+            borderTop: `1px solid ${BORDER}`,
+            paddingTop: "14px",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gap: "12px",
+            }}
+          >
+            <label style={labelStyle}>
+              Explanation
+              <textarea
+                value={explanation}
+                onChange={(e) => setExplanation(e.target.value)}
+                placeholder="Explain what happened…"
+                style={{ ...inputStyle, height: "72px" }}
+              />
+            </label>
+            <label style={labelStyle}>
+              Corrective Action
+              <textarea
+                value={correctiveAction}
+                onChange={(e) => setCorrectiveAction(e.target.value)}
+                placeholder="What action has been or will be taken?"
+                style={{ ...inputStyle, height: "72px" }}
+              />
+            </label>
+            <label style={labelStyle}>
+              Expected Recovery Date
+              <input
+                type="date"
+                value={recoveryDate}
+                onChange={(e) => setRecoveryDate(e.target.value)}
+                style={inputStyle}
+              />
+              {recoveryDate && (
+                <span style={{ fontSize: "11px", color: SLATE }}>
+                  {recoveryDate.split("-").reverse().join("/")}
+                </span>
+              )}
+            </label>
+            <label style={labelStyle}>
+              Impact Assessment
+              <select
+                value={impactAssessment}
+                onChange={(e) => setImpactAssessment(e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">— Select impact —</option>
+                <option>No expected impact</option>
+                <option>At risk but recoverable</option>
+                <option>Likely to miss target</option>
+                <option>Already recovered</option>
+              </select>
+            </label>
+          </div>
 
           <button
             onClick={() =>
@@ -223,14 +376,15 @@ function ExceptionCard({
               })
             }
             style={{
-              marginTop: "8px",
+              marginTop: "10px",
               backgroundColor: "#16a34a",
               color: "white",
               border: "none",
               borderRadius: "6px",
-              padding: "8px 16px",
+              padding: "8px 18px",
+              fontSize: "13px",
+              fontWeight: 700,
               cursor: "pointer",
-              fontWeight: "bold",
             }}
           >
             Submit Explanation
@@ -241,25 +395,30 @@ function ExceptionCard({
       {(status === "Submitted" || status === "Closed") && (
         <div
           style={{
-            marginTop: "16px",
-            border: "1px solid #e0e0e0",
-            borderRadius: "8px",
-            padding: "12px",
-            backgroundColor: "#fafafa",
-            fontSize: "14px",
+            marginTop: "12px",
+            borderTop: `1px solid ${BORDER}`,
+            paddingTop: "12px",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "10px",
+            fontSize: "12px",
           }}
         >
           <div>
-            <strong>Explanation:</strong> {ex.explanation || "—"}
+            <div style={{ color: SLATE, fontSize: "11px", marginBottom: "2px" }}>Explanation</div>
+            <div style={{ color: NAVY }}>{ex.explanation || "—"}</div>
           </div>
-          <div style={{ marginTop: "6px" }}>
-            <strong>Corrective Action:</strong> {ex.corrective_action || "—"}
+          <div>
+            <div style={{ color: SLATE, fontSize: "11px", marginBottom: "2px" }}>Corrective Action</div>
+            <div style={{ color: NAVY }}>{ex.corrective_action || "—"}</div>
           </div>
-          <div style={{ marginTop: "6px" }}>
-            <strong>Recovery Date:</strong> {ex.recovery_date || "—"}
+          <div>
+            <div style={{ color: SLATE, fontSize: "11px", marginBottom: "2px" }}>Recovery Date</div>
+            <div style={{ color: NAVY }}>{ex.recovery_date ? ex.recovery_date.split("-").reverse().join("/") : "—"}</div>
           </div>
-          <div style={{ marginTop: "6px" }}>
-            <strong>Impact:</strong> {ex.impact_assessment || "—"}
+          <div>
+            <div style={{ color: SLATE, fontSize: "11px", marginBottom: "2px" }}>Impact</div>
+            <div style={{ color: NAVY }}>{ex.impact_assessment || "—"}</div>
           </div>
         </div>
       )}
@@ -267,29 +426,21 @@ function ExceptionCard({
   );
 }
 
-function FieldLabel({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label style={{ fontSize: "14px", fontWeight: "bold", display: "block" }}>
-      {label}
-      {children}
-    </label>
-  );
-}
-
-const fieldStyle = {
-  width: "100%",
-  maxWidth: "560px",
-  padding: "8px",
-  border: "1px solid #ccc",
-  borderRadius: "6px",
-  fontSize: "14px",
+const labelStyle: React.CSSProperties = {
   display: "block",
-  marginTop: "4px",
-  marginBottom: "10px",
+  fontSize: "12px",
+  fontWeight: 600,
+  color: NAVY,
+  marginBottom: "0",
+};
+
+const inputStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  padding: "7px 9px",
+  marginTop: "3px",
+  border: `1px solid ${BORDER}`,
+  borderRadius: "6px",
+  fontSize: "13px",
+  boxSizing: "border-box",
 };

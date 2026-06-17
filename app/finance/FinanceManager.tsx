@@ -28,6 +28,13 @@ type DailyPosition = {
   closing_after_post_dated: number;
 };
 
+const NAVY = "#1e293b";
+const SLATE = "#64748b";
+const BORDER = "#e2e8f0";
+const GREEN = "#16a34a";
+const RED = "#dc2626";
+const BLUE = "#0070f3";
+
 function fmt(n: number) {
   return n.toLocaleString();
 }
@@ -40,6 +47,51 @@ function currentMonth() {
   return new Date().toISOString().slice(0, 7);
 }
 
+function formatDateUK(dateString: string | null) {
+  if (!dateString) return "—";
+  const [year, month, day] = dateString.slice(0, 10).split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function formatMonthUK(monthString: string) {
+  const [year, month] = monthString.split("-");
+  return `${month}/${year}`;
+}
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <h2
+      style={{
+        fontSize: "13px",
+        fontWeight: 700,
+        color: NAVY,
+        margin: "20px 0 10px",
+        paddingLeft: "9px",
+        borderLeft: `3px solid ${NAVY}`,
+      }}
+    >
+      {title}
+    </h2>
+  );
+}
+
+function FormCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${BORDER}`,
+        borderRadius: "8px",
+        padding: "16px",
+        backgroundColor: "white",
+        marginBottom: "16px",
+        maxWidth: "480px",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function FinanceManager() {
   const [loading, setLoading] = useState(true);
 
@@ -47,16 +99,13 @@ export default function FinanceManager() {
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
   const [positions, setPositions] = useState<DailyPosition[]>([]);
 
-  // one-off opening balance form
   const [obDate, setObDate] = useState(todayStr());
   const [obAmount, setObAmount] = useState("");
 
-  // monthly plan form
   const [planMonth, setPlanMonth] = useState(currentMonth());
   const [planRecv, setPlanRecv] = useState("");
   const [planPay, setPlanPay] = useState("");
 
-  // daily position form
   const [dpDate, setDpDate] = useState(todayStr());
   const [dpOpening, setDpOpening] = useState("");
   const [dpReceipts, setDpReceipts] = useState("");
@@ -69,17 +118,28 @@ export default function FinanceManager() {
 
   async function loadData() {
     setLoading(true);
-
     const [obRes, planRes, posRes] = await Promise.all([
-      supabase.from("cash_opening_balance").select("*").order("as_of_date", { ascending: true }).limit(1),
-      supabase.from("monthly_cash_plan").select("*").eq("plan_month", currentMonth()).maybeSingle(),
-      supabase.from("daily_cash_position").select("*").order("position_date", { ascending: false }).limit(30),
+      supabase
+        .from("cash_opening_balance")
+        .select("*")
+        .order("as_of_date", { ascending: true })
+        .limit(1),
+      supabase
+        .from("monthly_cash_plan")
+        .select("*")
+        .eq("plan_month", currentMonth())
+        .maybeSingle(),
+      supabase
+        .from("daily_cash_position")
+        .select("*")
+        .order("position_date", { ascending: false })
+        .limit(30),
     ]);
-
-    setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
+    setOpening(
+      obRes.data && obRes.data.length > 0 ? obRes.data[0] : null
+    );
     setPlan(planRes.data || null);
     setPositions(posRes.data || []);
-
     setLoading(false);
   }
 
@@ -87,80 +147,65 @@ export default function FinanceManager() {
     loadData();
   }, []);
 
+  function showMsg(text: string) {
+    setMsg(text);
+    setTimeout(() => setMsg(""), 4000);
+  }
+
   async function saveOpeningBalance(e: React.FormEvent) {
     e.preventDefault();
-    setMsg("");
-    if (!obAmount) {
-      setMsg("Enter an opening amount.");
-      return;
-    }
     setSaving(true);
     const { error } = await supabase.from("cash_opening_balance").insert({
       as_of_date: obDate,
-      opening_amount: Number(obAmount),
+      opening_amount: Number(obAmount) || 0,
       currency: "PKR",
     });
     setSaving(false);
-    if (error) {
-      setMsg("Error: " + error.message);
-      return;
-    }
-    setMsg("Opening balance saved ✓");
+    if (error) { showMsg("Error: " + error.message); return; }
+    showMsg("✅ Opening balance saved.");
+    setObAmount("");
     loadData();
   }
 
   async function saveMonthlyPlan(e: React.FormEvent) {
     e.preventDefault();
-    setMsg("");
     setSaving(true);
-    // upsert by plan_month (unique)
     const { error } = await supabase.from("monthly_cash_plan").upsert(
       {
         plan_month: planMonth,
-        tentative_receivables: Number(planRecv || 0),
-        tentative_payouts: Number(planPay || 0),
-        currency: "PKR",
-        updated_at: new Date().toISOString(),
+        tentative_receivables: Number(planRecv) || 0,
+        tentative_payouts: Number(planPay) || 0,
       },
       { onConflict: "plan_month" }
     );
     setSaving(false);
-    if (error) {
-      setMsg("Error: " + error.message);
-      return;
-    }
-    setMsg("Monthly plan saved ✓");
-    setPlanRecv("");
-    setPlanPay("");
+    if (error) { showMsg("Error: " + error.message); return; }
+    showMsg("✅ Monthly plan saved.");
     loadData();
   }
 
   async function saveDailyPosition(e: React.FormEvent) {
     e.preventDefault();
-    setMsg("");
     setSaving(true);
-    const closing = Number(dpClosing || 0);
-    const postDated = Number(dpPostDated || 0);
-    const { error } = await supabase.from("daily_cash_position").upsert(
-      {
-        position_date: dpDate,
-        opening_balance: Number(dpOpening || 0),
-        total_receipts: Number(dpReceipts || 0),
-        total_payments: Number(dpPayments || 0),
-        closing_balance: closing,
-        post_dated_total: postDated,
-        closing_after_post_dated: closing - postDated,
-        currency: "PKR",
-        source: "manual",
-      },
-      { onConflict: "position_date" }
-    );
+    const closingAfterPD =
+      Number(dpClosing) - Number(dpPostDated);
+    const { error } = await supabase
+      .from("daily_cash_position")
+      .upsert(
+        {
+          position_date: dpDate,
+          opening_balance: Number(dpOpening) || 0,
+          total_receipts: Number(dpReceipts) || 0,
+          total_payments: Number(dpPayments) || 0,
+          closing_balance: Number(dpClosing) || 0,
+          post_dated_total: Number(dpPostDated) || 0,
+          closing_after_post_dated: closingAfterPD,
+        },
+        { onConflict: "position_date" }
+      );
     setSaving(false);
-    if (error) {
-      setMsg("Error: " + error.message);
-      return;
-    }
-    setMsg("Daily cash position saved ✓");
+    if (error) { showMsg("Error: " + error.message); return; }
+    showMsg("✅ Daily position saved.");
     setDpOpening("");
     setDpReceipts("");
     setDpPayments("");
@@ -169,239 +214,404 @@ export default function FinanceManager() {
     loadData();
   }
 
-  // ---- Month-to-date tracking vs plan ----
-  const monthPositions = positions.filter((p) => p.position_date.slice(0, 7) === currentMonth());
-  const actualReceiptsMTD = monthPositions.reduce((s, p) => s + p.total_receipts, 0);
-  const actualPaymentsMTD = monthPositions.reduce((s, p) => s + p.total_payments, 0);
+  if (loading) {
+    return <p style={{ color: SLATE, fontSize: "13px" }}>Loading finance data…</p>;
+  }
+
   const latestPosition = positions[0] || null;
-
-  const plannedRecv = plan?.tentative_receivables || 0;
-  const plannedPay = plan?.tentative_payouts || 0;
-
-  const recvBehind = plannedRecv > 0 && actualReceiptsMTD < plannedRecv;
-  const payOver = plannedPay > 0 && actualPaymentsMTD > plannedPay;
-
-  // Headline: are we trending below where two-numbers say we should be?
-  const openingForMonth = opening?.opening_amount || 0;
-  const projectedClosing = openingForMonth + plannedRecv - plannedPay;
-  const actualSoFar = (latestPosition?.closing_balance ?? openingForMonth);
-  const headlineRed = recvBehind || payOver;
-
-  const cardStyle = {
-    border: "1px solid #e0e0e0",
-    borderRadius: "10px",
-    padding: "20px",
-    marginBottom: "24px",
-    maxWidth: "900px",
-  };
-  const inputStyle = {
-    padding: "8px",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
-    fontSize: "14px",
-    marginRight: "8px",
-    marginBottom: "8px",
-  };
-  const btnStyle = {
-    backgroundColor: "#0070f3",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    padding: "9px 18px",
-    fontSize: "14px",
-    cursor: "pointer",
-  };
-
-  if (loading) return <p>Loading finance…</p>;
 
   return (
     <div>
       {msg && (
-        <p style={{ color: msg.startsWith("Error") ? "#c0392b" : "#16a34a", fontWeight: "bold" }}>
+        <div
+          style={{
+            border: `1px solid ${BORDER}`,
+            borderLeft: `4px solid ${msg.startsWith("Error") ? RED : GREEN}`,
+            borderRadius: "6px",
+            padding: "10px 14px",
+            marginBottom: "14px",
+            backgroundColor: "white",
+            fontSize: "13px",
+            color: NAVY,
+          }}
+        >
           {msg}
-        </p>
+        </div>
       )}
 
-      {/* ---- CASH HEALTH SUMMARY ---- */}
+      {/* ── SUMMARY ROW ── */}
+      {(opening || latestPosition || plan) && (
+        <>
+          <SectionTitle title="Current Position" />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+              gap: "8px",
+              marginBottom: "20px",
+            }}
+          >
+            {opening && (
+              <MiniCard
+                label="Opening Balance"
+                value={`PKR ${fmt(opening.opening_amount)}`}
+                sub={`as of ${formatDateUK(opening.as_of_date)}`}
+                color={BLUE}
+              />
+            )}
+            {plan && (
+              <>
+                <MiniCard
+                  label="Planned Receivables"
+                  value={`PKR ${fmt(plan.tentative_receivables)}`}
+                  sub={formatMonthUK(plan.plan_month)}
+                  color={GREEN}
+                />
+                <MiniCard
+                  label="Planned Payouts"
+                  value={`PKR ${fmt(plan.tentative_payouts)}`}
+                  sub={formatMonthUK(plan.plan_month)}
+                  color={RED}
+                />
+              </>
+            )}
+            {latestPosition && (
+              <MiniCard
+                label="Latest Closing Balance"
+                value={`PKR ${fmt(latestPosition.closing_balance)}`}
+                sub={formatDateUK(latestPosition.position_date)}
+                color={NAVY}
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── TWO-COLUMN LAYOUT: forms left, table right ── */}
       <div
         style={{
-          ...cardStyle,
-          borderTop: `4px solid ${headlineRed ? "#dc2626" : "#16a34a"}`,
+          display: "grid",
+          gridTemplateColumns: "minmax(300px, 480px) 1fr",
+          gap: "24px",
+          alignItems: "start",
         }}
       >
-        <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "12px" }}>
-          This Month ({currentMonth()}) — Cash Health:{" "}
-          <span style={{ color: headlineRed ? "#dc2626" : "#16a34a" }}>
-            {headlineRed ? "ATTENTION" : "ON TRACK"}
-          </span>
-        </h2>
-        <div style={{ display: "flex", gap: "30px", flexWrap: "wrap" }}>
-          <div>
-            <div style={{ color: "#666", fontSize: "13px" }}>Money In (actual / plan)</div>
-            <div style={{ fontSize: "20px", fontWeight: "bold", color: recvBehind ? "#dc2626" : "#16a34a" }}>
-              {fmt(actualReceiptsMTD)} / {fmt(plannedRecv)}
+        {/* LEFT: forms */}
+        <div>
+          <SectionTitle title="Opening Balance" />
+          <p style={{ fontSize: "12px", color: SLATE, marginBottom: "10px" }}>
+            Set once. This is the starting cash balance the system counts forward from.
+          </p>
+          {opening && (
+            <div
+              style={{
+                border: `1px solid ${BORDER}`,
+                borderRadius: "6px",
+                padding: "10px 12px",
+                marginBottom: "12px",
+                backgroundColor: "#f8fafc",
+                fontSize: "12px",
+                color: NAVY,
+              }}
+            >
+              Current: <strong>PKR {fmt(opening.opening_amount)}</strong> as of{" "}
+              {formatDateUK(opening.as_of_date)}. Submitting again will add a new record.
             </div>
-          </div>
-          <div>
-            <div style={{ color: "#666", fontSize: "13px" }}>Money Out (actual / plan)</div>
-            <div style={{ fontSize: "20px", fontWeight: "bold", color: payOver ? "#dc2626" : "#16a34a" }}>
-              {fmt(actualPaymentsMTD)} / {fmt(plannedPay)}
-            </div>
-          </div>
-          <div>
-            <div style={{ color: "#666", fontSize: "13px" }}>Latest Closing Balance</div>
-            <div style={{ fontSize: "20px", fontWeight: "bold", color: "#0070f3" }}>
-              {fmt(actualSoFar)}
-            </div>
-          </div>
-          <div>
-            <div style={{ color: "#666", fontSize: "13px" }}>Projected Month-End</div>
-            <div style={{ fontSize: "20px", fontWeight: "bold", color: "#555" }}>
-              {fmt(projectedClosing)}
-            </div>
-          </div>
+          )}
+          <FormCard>
+            <form onSubmit={saveOpeningBalance}>
+              <label style={labelStyle}>
+                As of date
+                <input
+                  type="date"
+                  value={obDate}
+                  onChange={(e) => setObDate(e.target.value)}
+                  style={inputStyle}
+                  required
+                />
+              </label>
+              <label style={labelStyle}>
+                Opening amount (PKR)
+                <input
+                  type="number"
+                  min="0"
+                  value={obAmount}
+                  onChange={(e) => setObAmount(e.target.value)}
+                  placeholder="0"
+                  style={inputStyle}
+                  required
+                />
+              </label>
+              <button type="submit" disabled={saving} style={btnStyle}>
+                {saving ? "Saving…" : "Save Opening Balance"}
+              </button>
+            </form>
+          </FormCard>
+
+          <SectionTitle title="Monthly Cash Plan" />
+          <p style={{ fontSize: "12px", color: SLATE, marginBottom: "10px" }}>
+            Set expected receivables and payouts for the month. Used to calculate cash health on the Executive dashboard.
+          </p>
+          <FormCard>
+            <form onSubmit={saveMonthlyPlan}>
+              <label style={labelStyle}>
+                Plan month
+                <input
+                  type="month"
+                  value={planMonth}
+                  onChange={(e) => setPlanMonth(e.target.value)}
+                  style={inputStyle}
+                  required
+                />
+              </label>
+              <label style={labelStyle}>
+                Expected receivables (PKR)
+                <input
+                  type="number"
+                  min="0"
+                  value={planRecv}
+                  onChange={(e) => setPlanRecv(e.target.value)}
+                  placeholder="0"
+                  style={inputStyle}
+                />
+              </label>
+              <label style={labelStyle}>
+                Expected payouts (PKR)
+                <input
+                  type="number"
+                  min="0"
+                  value={planPay}
+                  onChange={(e) => setPlanPay(e.target.value)}
+                  placeholder="0"
+                  style={inputStyle}
+                />
+              </label>
+              <button type="submit" disabled={saving} style={btnStyle}>
+                {saving ? "Saving…" : plan ? "Update Monthly Plan" : "Save Monthly Plan"}
+              </button>
+            </form>
+          </FormCard>
+
+          <SectionTitle title="Daily Cash Position" />
+          <p style={{ fontSize: "12px", color: SLATE, marginBottom: "10px" }}>
+            Enter the daily figures from the accountant's statement. Existing entries for the same date will be updated.
+          </p>
+          <FormCard>
+            <form onSubmit={saveDailyPosition}>
+              <label style={labelStyle}>
+                Date
+                <input
+                  type="date"
+                  value={dpDate}
+                  onChange={(e) => setDpDate(e.target.value)}
+                  style={inputStyle}
+                  required
+                />
+              </label>
+              <label style={labelStyle}>
+                Opening balance (PKR)
+                <input
+                  type="number"
+                  min="0"
+                  value={dpOpening}
+                  onChange={(e) => setDpOpening(e.target.value)}
+                  placeholder="0"
+                  style={inputStyle}
+                />
+              </label>
+              <label style={labelStyle}>
+                Total receipts (PKR)
+                <input
+                  type="number"
+                  min="0"
+                  value={dpReceipts}
+                  onChange={(e) => setDpReceipts(e.target.value)}
+                  placeholder="0"
+                  style={inputStyle}
+                />
+              </label>
+              <label style={labelStyle}>
+                Total payments (PKR)
+                <input
+                  type="number"
+                  min="0"
+                  value={dpPayments}
+                  onChange={(e) => setDpPayments(e.target.value)}
+                  placeholder="0"
+                  style={inputStyle}
+                />
+              </label>
+              <label style={labelStyle}>
+                Closing balance (PKR)
+                <input
+                  type="number"
+                  value={dpClosing}
+                  onChange={(e) => setDpClosing(e.target.value)}
+                  placeholder="0"
+                  style={inputStyle}
+                />
+              </label>
+              <label style={labelStyle}>
+                Post-dated total (PKR)
+                <input
+                  type="number"
+                  min="0"
+                  value={dpPostDated}
+                  onChange={(e) => setDpPostDated(e.target.value)}
+                  placeholder="0"
+                  style={inputStyle}
+                />
+              </label>
+              <button type="submit" disabled={saving} style={btnStyle}>
+                {saving ? "Saving…" : "Save Daily Position"}
+              </button>
+            </form>
+          </FormCard>
         </div>
-      </div>
 
-      {/* ---- ONE-OFF OPENING BALANCE ---- */}
-      <div style={cardStyle}>
-        <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "12px" }}>
-          Opening Balance (one-off)
-        </h2>
-        {opening ? (
-          <p style={{ color: "#555" }}>
-            Set to <strong>{fmt(opening.opening_amount)}</strong> as of{" "}
-            <strong>{opening.as_of_date}</strong>. This is locked — the balance now carries forward
-            automatically.
-          </p>
-        ) : (
-          <form onSubmit={saveOpeningBalance}>
-            <input
-              type="date"
-              value={obDate}
-              onChange={(e) => setObDate(e.target.value)}
-              style={inputStyle}
-            />
-            <input
-              type="number"
-              placeholder="Opening amount"
-              value={obAmount}
-              onChange={(e) => setObAmount(e.target.value)}
-              style={inputStyle}
-            />
-            <button type="submit" disabled={saving} style={btnStyle}>
-              {saving ? "Saving…" : "Set Opening Balance"}
-            </button>
-          </form>
-        )}
-      </div>
-
-      {/* ---- MONTHLY PLAN ---- */}
-      <div style={cardStyle}>
-        <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "12px" }}>
-          Monthly Plan — Expected Receivables &amp; Payouts
-        </h2>
-        {plan && (
-          <p style={{ color: "#555", marginBottom: "10px" }}>
-            Current ({plan.plan_month}): expected in <strong>{fmt(plan.tentative_receivables)}</strong>,
-            expected out <strong>{fmt(plan.tentative_payouts)}</strong>. Re-submit to update.
-          </p>
-        )}
-        <form onSubmit={saveMonthlyPlan}>
-          <input
-            type="month"
-            value={planMonth}
-            onChange={(e) => setPlanMonth(e.target.value)}
-            style={inputStyle}
-          />
-          <input
-            type="number"
-            placeholder="Tentative receivables (in)"
-            value={planRecv}
-            onChange={(e) => setPlanRecv(e.target.value)}
-            style={inputStyle}
-          />
-          <input
-            type="number"
-            placeholder="Tentative payouts (out)"
-            value={planPay}
-            onChange={(e) => setPlanPay(e.target.value)}
-            style={inputStyle}
-          />
-          <button type="submit" disabled={saving} style={btnStyle}>
-            {saving ? "Saving…" : "Save Monthly Plan"}
-          </button>
-        </form>
-      </div>
-
-      {/* ---- DAILY CASH POSITION ENTRY ---- */}
-      <div style={cardStyle}>
-        <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "12px" }}>
-          Daily Cash Position (from accountant&apos;s statement)
-        </h2>
-        <form onSubmit={saveDailyPosition}>
-          <input type="date" value={dpDate} onChange={(e) => setDpDate(e.target.value)} style={inputStyle} />
-          <input type="number" placeholder="Opening" value={dpOpening} onChange={(e) => setDpOpening(e.target.value)} style={inputStyle} />
-          <input type="number" placeholder="Receipts" value={dpReceipts} onChange={(e) => setDpReceipts(e.target.value)} style={inputStyle} />
-          <input type="number" placeholder="Payments" value={dpPayments} onChange={(e) => setDpPayments(e.target.value)} style={inputStyle} />
-          <input type="number" placeholder="Closing" value={dpClosing} onChange={(e) => setDpClosing(e.target.value)} style={inputStyle} />
-          <input type="number" placeholder="Post-dated total" value={dpPostDated} onChange={(e) => setDpPostDated(e.target.value)} style={inputStyle} />
-          <button type="submit" disabled={saving} style={btnStyle}>
-            {saving ? "Saving…" : "Save Today's Cash"}
-          </button>
-        </form>
-      </div>
-
-      {/* ---- RECENT POSITIONS TABLE ---- */}
-      <div style={{ ...cardStyle, maxWidth: "1100px" }}>
-        <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "12px" }}>
-          Recent Daily Positions
-        </h2>
-        {positions.length === 0 ? (
-          <p style={{ color: "#999" }}>No daily cash figures entered yet.</p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "700px" }}>
-              <thead>
-                <tr style={{ backgroundColor: "#fafafa" }}>
-                  <th style={th}>Date</th>
-                  <th style={th}>Opening</th>
-                  <th style={th}>Receipts</th>
-                  <th style={th}>Payments</th>
-                  <th style={th}>Closing</th>
-                  <th style={th}>Post-Dated</th>
-                  <th style={th}>After Post-Dated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {positions.map((p) => (
-                  <tr key={p.id}>
-                    <td style={td}>{p.position_date}</td>
-                    <td style={td}>{fmt(p.opening_balance)}</td>
-                    <td style={{ ...td, color: "#16a34a" }}>{fmt(p.total_receipts)}</td>
-                    <td style={{ ...td, color: "#dc2626" }}>{fmt(p.total_payments)}</td>
-                    <td style={{ ...td, fontWeight: "bold" }}>{fmt(p.closing_balance)}</td>
-                    <td style={td}>{fmt(p.post_dated_total)}</td>
-                    <td style={td}>{fmt(p.closing_after_post_dated)}</td>
+        {/* RIGHT: daily position history table */}
+        <div>
+          <SectionTitle title="Daily Position — Last 30 Days" />
+          {positions.length === 0 ? (
+            <p style={{ fontSize: "13px", color: SLATE }}>No daily positions recorded yet.</p>
+          ) : (
+            <div
+              style={{
+                overflowX: "auto",
+                border: `1px solid ${BORDER}`,
+                borderRadius: "8px",
+                backgroundColor: "white",
+              }}
+            >
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "640px" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f8fafc" }}>
+                    <th style={th}>Date</th>
+                    <th style={th}>Opening</th>
+                    <th style={th}>Receipts</th>
+                    <th style={th}>Payments</th>
+                    <th style={th}>Closing</th>
+                    <th style={th}>Post-dated</th>
+                    <th style={th}>Net closing</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  {positions.map((p) => (
+                    <tr key={p.id}>
+                      <td style={tdBold}>{formatDateUK(p.position_date)}</td>
+                      <td style={td}>{fmt(p.opening_balance)}</td>
+                      <td style={{ ...td, color: GREEN, fontWeight: 600 }}>
+                        {fmt(p.total_receipts)}
+                      </td>
+                      <td style={{ ...td, color: RED, fontWeight: 600 }}>
+                        {fmt(p.total_payments)}
+                      </td>
+                      <td style={{ ...td, fontWeight: 700, color: NAVY }}>
+                        {fmt(p.closing_balance)}
+                      </td>
+                      <td style={{ ...td, color: SLATE }}>{fmt(p.post_dated_total)}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>
+                        {fmt(p.closing_after_post_dated)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-const th = {
-  textAlign: "left" as const,
-  border: "1px solid #e0e0e0",
-  padding: "10px",
-  fontSize: "13px",
+function MiniCard({
+  label,
+  value,
+  sub,
+  color,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  color: string;
+}) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${BORDER}`,
+        borderTop: `3px solid ${color}`,
+        borderRadius: "7px",
+        padding: "8px 10px",
+        backgroundColor: "white",
+      }}
+    >
+      <div
+        style={{
+          color: SLATE,
+          fontSize: "11px",
+          marginBottom: "2px",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ fontSize: "14px", fontWeight: 800, color }}>{value}</div>
+      {sub && <div style={{ fontSize: "10px", color: SLATE, marginTop: "2px" }}>{sub}</div>}
+    </div>
+  );
+}
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: "12px",
+  fontWeight: 600,
+  color: NAVY,
+  marginBottom: "10px",
 };
-const td = {
-  border: "1px solid #e0e0e0",
-  padding: "10px",
+
+const inputStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  padding: "7px 9px",
+  marginTop: "3px",
+  border: `1px solid ${BORDER}`,
+  borderRadius: "6px",
   fontSize: "13px",
+  boxSizing: "border-box",
+};
+
+const btnStyle: React.CSSProperties = {
+  backgroundColor: NAVY,
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  padding: "9px 18px",
+  fontSize: "13px",
+  fontWeight: 700,
+  cursor: "pointer",
+  marginTop: "4px",
+};
+
+const th: React.CSSProperties = {
+  textAlign: "left",
+  borderBottom: `1px solid ${BORDER}`,
+  padding: "6px 10px",
+  fontSize: "11px",
+  color: SLATE,
+  fontWeight: 700,
+};
+
+const td: React.CSSProperties = {
+  borderBottom: `1px solid #f1f5f9`,
+  padding: "7px 10px",
+  fontSize: "12px",
+};
+
+const tdBold: React.CSSProperties = {
+  ...td,
+  fontWeight: 700,
+  color: NAVY,
 };
