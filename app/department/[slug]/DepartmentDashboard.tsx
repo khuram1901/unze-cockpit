@@ -25,11 +25,18 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
 
   async function loadData() {
     setLoading(true);
-    const { data } = await supabase
+    let query = supabase
       .from(config.table)
       .select("*")
-      .eq("company_id", UTPL_COMPANY_ID)
       .order("created_at", { ascending: false });
+
+    if (config.table === "tasks") {
+      query = query.eq("assigned_to_department", config.departmentName);
+    } else {
+      query = query.eq("company_id", UTPL_COMPANY_ID);
+    }
+
+    const { data } = await query;
     setRows(data || []);
     setLoading(false);
   }
@@ -47,7 +54,15 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
     e.preventDefault();
     setSaving(true);
 
-    const record: Record<string, unknown> = { company_id: UTPL_COMPANY_ID };
+    const record: Record<string, unknown> = {};
+    if (config.table === "tasks") {
+      record.assigned_to_department = config.departmentName;
+      record.assigned_by = "Department Dashboard";
+      record.assigned_date = new Date().toISOString().slice(0, 10);
+    } else {
+      record.company_id = UTPL_COMPANY_ID;
+    }
+
     for (const field of config.formFields) {
       const val = formData[field.key] || "";
       if (field.type === "number") {
