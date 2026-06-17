@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import TaskStatus from "./TaskStatus";
+import { formatDateUK } from "../lib/dateUtils";
 
 type Task = {
   id: string;
@@ -48,11 +49,6 @@ function statusColor(status: string) {
   }
 }
 
-function formatDateUK(dateString: string | null) {
-  if (!dateString) return "—";
-  const [year, month, day] = dateString.slice(0, 10).split("-");
-  return `${day}-${month}-${year}`;
-}
 
 function normaliseProject(raw: string | null): string {
   if (!raw) return "Unassigned";

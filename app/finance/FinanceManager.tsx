@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 
 type OpeningBalance = {
   id: string;
@@ -38,21 +39,6 @@ const BLUE = "#0070f3";
 function fmt(n: number) {
   return n.toLocaleString();
 }
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-function currentMonth() {
-  return new Date().toISOString().slice(0, 7);
-}
-function formatDateUK(dateString: string | null) {
-  if (!dateString) return "—";
-  const [year, month, day] = dateString.slice(0, 10).split("-");
-  return `${day}/${month}/${year}`;
-}
-function formatMonthUK(monthString: string) {
-  const [year, month] = monthString.split("-");
-  return `${month}/${year}`;
-}
 
 function SectionTitle({ title }: { title: string }) {
   return (
@@ -82,16 +68,16 @@ export default function FinanceManager() {
   const [openModal, setOpenModal] = useState<null | "opening" | "plan">(null);
 
   // Opening balance form
-  const [obDate, setObDate] = useState(todayStr());
+  const [obDate, setObDate] = useState(todayISO());
   const [obAmount, setObAmount] = useState("");
 
   // Monthly plan form
-  const [planMonth, setPlanMonth] = useState(currentMonth());
+  const [planMonth, setPlanMonth] = useState(currentMonthISO());
   const [planRecv, setPlanRecv] = useState("");
   const [planPay, setPlanPay] = useState("");
 
   // Daily position form (always visible)
-  const [dpDate, setDpDate] = useState(todayStr());
+  const [dpDate, setDpDate] = useState(todayISO());
   const [dpOpening, setDpOpening] = useState("");
   const [dpReceipts, setDpReceipts] = useState("");
   const [dpPayments, setDpPayments] = useState("");
@@ -112,7 +98,7 @@ export default function FinanceManager() {
       supabase
         .from("monthly_cash_plan")
         .select("*")
-        .eq("plan_month", currentMonth())
+        .eq("plan_month", currentMonthISO())
         .maybeSingle(),
       supabase
         .from("daily_cash_position")
@@ -140,7 +126,7 @@ export default function FinanceManager() {
       setObDate(opening.as_of_date);
       setObAmount(String(opening.opening_amount));
     } else {
-      setObDate(todayStr());
+      setObDate(todayISO());
       setObAmount("");
     }
     setOpenModal("opening");
@@ -152,7 +138,7 @@ export default function FinanceManager() {
       setPlanRecv(String(plan.tentative_receivables));
       setPlanPay(String(plan.tentative_payouts));
     } else {
-      setPlanMonth(currentMonth());
+      setPlanMonth(currentMonthISO());
       setPlanRecv("");
       setPlanPay("");
     }

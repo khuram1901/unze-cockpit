@@ -462,8 +462,8 @@ export default function ProductionForm() {
         {/* Machine */}
         {plantId && (
           <div style={sectionStyle}>
-            <h3 style={h3}>Machine breakdown (optional)</h3>
-            <p style={hint}>Report a machine that is down, partially working, or resolved.</p>
+            <h3 style={h3}>Machine status today</h3>
+            <p style={hint}>Report any machine that is down or partially working today. If everything is running normally, click "Nothing to report".</p>
             <label>Machine name<input type="text" style={inputStyle} value={machineName} onChange={(e) => setMachineName(e.target.value)} placeholder="e.g. Spinning Machine #2" /></label>
             <label>Status
               <select style={inputStyle} value={machineStatus} onChange={(e) => setMachineStatus(e.target.value)}>
