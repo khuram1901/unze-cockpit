@@ -188,6 +188,49 @@ export function CountCard({
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Traffic light — three-state status indicator
+// ─────────────────────────────────────────────────────────────────
+export type RAGStatus = "GREEN" | "AMBER" | "RED";
+
+export function ragColour(status: RAGStatus): string {
+  if (status === "GREEN") return COLOURS.GREEN;
+  if (status === "AMBER") return COLOURS.AMBER;
+  return COLOURS.RED;
+}
+
+export function TrafficLight({
+  status,
+  label,
+  detail,
+}: {
+  status: RAGStatus;
+  label: string;
+  detail?: string;
+}) {
+  const colour = ragColour(status);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <span
+        style={{
+          width: "12px",
+          height: "12px",
+          borderRadius: "50%",
+          backgroundColor: colour,
+          flexShrink: 0,
+          boxShadow: `0 0 4px ${colour}40`,
+        }}
+      />
+      <div>
+        <div style={{ fontSize: "12px", fontWeight: 700, color: colour }}>{label}</div>
+        {detail && (
+          <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{detail}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Shared table styles
 // ─────────────────────────────────────────────────────────────────
 export const tableHeaderStyle: React.CSSProperties = {

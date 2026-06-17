@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import EscalationTrafficLights from "./EscalationTrafficLights";
-import { formatDateUK } from "../lib/dateUtils";
+import { formatDateUK, workingDaysFromNow } from "../lib/dateUtils";
+import { RAGStatus, ragColour } from "../lib/SharedUI";
+import { UTPL_COMPANY_ID } from "../lib/constants";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number; meter: number };
@@ -140,6 +142,44 @@ type ReceivableCustomerRow = {
   redAmount: number;
   totalAmount: number;
   redCount: number;
+};
+
+type BankSnapshot = {
+  position_date: string;
+  cash_at_office: number;
+  js_bank_unze_trading: number;
+  askari_bank_saving: number;
+  allied_bank_unze_trading: number;
+  dib_bank: number;
+  silk_bank_saving: number;
+  mcb_unze_trading: number;
+  askari_saving_1489: number;
+  askari_saving_unze_trading: number;
+  hbl_pf_unze_trading: number;
+  meezan_bank_unze_trading: number;
+  hbl_unze_trading: number;
+  hbl_h_unze_trading: number;
+  faysal_bank_unze_trading: number;
+  total_available_balance: number;
+  post_dated_cheques_total: number;
+  reconciled: boolean;
+};
+
+const BANK_DISPLAY_NAMES: Record<string, string> = {
+  cash_at_office: "Cash at Office",
+  js_bank_unze_trading: "JS Bank",
+  askari_bank_saving: "Askari Bank Saving",
+  allied_bank_unze_trading: "Allied Bank",
+  dib_bank: "DIB Bank",
+  silk_bank_saving: "Silk Bank Saving",
+  mcb_unze_trading: "MCB Bank",
+  askari_saving_1489: "Askari Saving 1489",
+  askari_saving_unze_trading: "Askari Saving",
+  hbl_pf_unze_trading: "HBL PF",
+  meezan_bank_unze_trading: "Meezan Bank",
+  hbl_unze_trading: "HBL",
+  hbl_h_unze_trading: "HBL - H",
+  faysal_bank_unze_trading: "Faysal Bank",
 };
 
 const NAVY = "#1e293b";
@@ -302,6 +342,10 @@ export default function ExecutiveDashboardPage() {
   const [cashPlan, setCashPlan] = useState<MonthlyPlan | null>(null);
   const [cashPositions, setCashPositions] = useState<DailyPosition[]>([]);
   const [receivableRows, setReceivableRows] = useState<ReceivableCustomerRow[]>([]);
+  const [bankSnapshot, setBankSnapshot] = useState<BankSnapshot | null>(null);
+  const [bankExpanded, setBankExpanded] = useState(false);
+  const [lastYearReceipts, setLastYearReceipts] = useState<number | null>(null);
+  const [lastYearPayments, setLastYearPayments] = useState<number | null>(null);
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -371,6 +415,42 @@ export default function ExecutiveDashboardPage() {
     });
   }
 
+  async function autoCreateCashEscalationTask(
+    exceptionType: "cash_receivables" | "cash_payouts",
+    detail: string,
+    allTasks: Task[],
+    financeOwner: DepartmentOwner | null
+  ) {
+    if (!financeOwner?.primary_owner_name || !financeOwner?.primary_owner_email) return;
+    const month = formatDate(new Date()).slice(0, 7);
+    const sourceLabel = `kpi_escalation:${exceptionType}:${month}`;
+    const alreadyExists = allTasks.some(
+      (task) => task.source_type === "kpi_escalation" && task.source_label === sourceLabel
+    );
+    if (alreadyExists) return;
+    await supabase.from("tasks").insert({
+      task_type: "Explanation Required",
+      exception_type: exceptionType,
+      explanation_required: true,
+      description: detail,
+      project: "Unze Trading Ops",
+      priority: "High",
+      status: "Waiting Reply",
+      due_date: workingDaysFromNow(3),
+      assigned_date: today,
+      assigned_to: financeOwner.primary_owner_name,
+      assigned_to_email: financeOwner.primary_owner_email,
+      assigned_by: "System",
+      notes: `Auto-created by the executive cash escalation engine. ${detail}`,
+      reply_required: true,
+      assigned_to_department: "Finance",
+      assigned_to_business_unit: null,
+      source_type: "kpi_escalation",
+      source_record_id: null,
+      source_label: sourceLabel,
+    });
+  }
+
   async function loadExecutiveData(dateToView: string) {
     setLoading(true);
     const selectedMonth = getMonthFromDate(dateToView);
@@ -420,14 +500,40 @@ export default function ExecutiveDashboardPage() {
 
     const currentMonthForCash = formatDate(new Date()).slice(0, 7);
     const [cashOpenRes, cashPlanRes, cashPosRes] = await Promise.all([
-      supabase.from("cash_opening_balance").select("*").order("as_of_date", { ascending: true }).limit(1),
-      supabase.from("monthly_cash_plan").select("*").eq("plan_month", currentMonthForCash).maybeSingle(),
-      supabase.from("daily_cash_position").select("*").order("position_date", { ascending: false }).limit(30),
+      supabase.from("cash_opening_balance").select("*").eq("company_id", UTPL_COMPANY_ID).order("as_of_date", { ascending: true }).limit(1),
+      supabase.from("monthly_cash_plan").select("*").eq("company_id", UTPL_COMPANY_ID).eq("plan_month", currentMonthForCash).maybeSingle(),
+      supabase.from("daily_cash_position").select("*").eq("company_id", UTPL_COMPANY_ID).order("position_date", { ascending: false }).limit(30),
     ]);
     setCashOpening(cashOpenRes.data && cashOpenRes.data.length > 0 ? cashOpenRes.data[0] : null);
     setCashPlan(cashPlanRes.data || null);
     setCashPositions(cashPosRes.data || []);
     setCashPlanMissing(!cashPlanRes.data);
+
+    const bankSnapRes = await supabase
+      .from("bank_position_snapshots")
+      .select("*")
+      .eq("company_id", UTPL_COMPANY_ID)
+      .order("position_date", { ascending: false })
+      .limit(1);
+    setBankSnapshot(bankSnapRes.data && bankSnapRes.data.length > 0 ? bankSnapRes.data[0] : null);
+
+    // Historical comparison: same month last year
+    const nowForHist = new Date();
+    const lastYearMonth = `${nowForHist.getFullYear() - 1}-${String(nowForHist.getMonth() + 1).padStart(2, "0")}`;
+    const lyRes = await supabase
+      .from("daily_cash_position")
+      .select("total_receipts, total_payments")
+      .eq("company_id", UTPL_COMPANY_ID)
+      .gte("position_date", lastYearMonth + "-01")
+      .lte("position_date", lastYearMonth + "-31");
+    if (lyRes.data && lyRes.data.length > 0) {
+      const lyData = lyRes.data as { total_receipts: number; total_payments: number }[];
+      setLastYearReceipts(lyData.reduce((s, r) => s + (r.total_receipts || 0), 0));
+      setLastYearPayments(lyData.reduce((s, r) => s + (r.total_payments || 0), 0));
+    } else {
+      setLastYearReceipts(null);
+      setLastYearPayments(null);
+    }
 
     const [stagesRes, billsRes] = await Promise.all([
       supabase.from("receivable_stages").select("*").order("stage_order"),
@@ -604,6 +710,45 @@ export default function ExecutiveDashboardPage() {
       await autoCreateEscalationTask(esc, taskData, owner);
     }
 
+    // Cash pacing escalation
+    const cashMonth = formatDate(new Date()).slice(0, 7);
+    const monthCashPos = (cashPosRes.data || []).filter((p: DailyPosition) => p.position_date.slice(0, 7) === cashMonth);
+    const recMTD = monthCashPos.reduce((s: number, p: DailyPosition) => s + p.total_receipts, 0);
+    const payMTD = monthCashPos.reduce((s: number, p: DailyPosition) => s + p.total_payments, 0);
+    const pRecv = cashPlanRes.data?.tentative_receivables || 0;
+    const pPay = cashPlanRes.data?.tentative_payouts || 0;
+    const nowDate = new Date();
+    const dim = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
+    const de = nowDate.getDate();
+    const expRecv = pRecv > 0 ? (pRecv / dim) * de : 0;
+    const recvPct = expRecv > 0 ? (recMTD / expRecv) * 100 : 100;
+    const expPay = pPay > 0 ? (pPay / dim) * de : 0;
+    const payPct = expPay > 0 ? (payMTD / expPay) * 100 : 100;
+
+    const financeOwnerRes = await supabase
+      .from("department_owners")
+      .select("department_name, primary_owner_name, primary_owner_email")
+      .eq("department_name", "Finance")
+      .maybeSingle();
+    const financeOwner: DepartmentOwner | null = financeOwnerRes.data || null;
+
+    if (recvPct < 85) {
+      await autoCreateCashEscalationTask(
+        "cash_receivables",
+        `Receivables pacing at ${Math.round(recvPct)}% — actual ${fmtMoney(recMTD)} vs expected ${fmtMoney(Math.round(expRecv))} by day ${de} of ${dim}.`,
+        taskData,
+        financeOwner
+      );
+    }
+    if (payPct > 115) {
+      await autoCreateCashEscalationTask(
+        "cash_payouts",
+        `Payouts pacing at ${Math.round(payPct)}% — actual ${fmtMoney(payMTD)} vs expected ${fmtMoney(Math.round(expPay))} by day ${de} of ${dim}.`,
+        taskData,
+        financeOwner
+      );
+    }
+
     setSummaries(result);
     setEscalations(foundEscalations);
     setLoading(false);
@@ -659,12 +804,32 @@ export default function ExecutiveDashboardPage() {
   const latestCashPosition = cashPositions[0] || null;
   const plannedRecv = cashPlan?.tentative_receivables || 0;
   const plannedPay = cashPlan?.tentative_payouts || 0;
-  const recvBehind = plannedRecv > 0 && actualReceiptsMTD < plannedRecv;
-  const payOver = plannedPay > 0 && actualPaymentsMTD > plannedPay;
   const cashOpeningAmount = cashOpening?.opening_amount || 0;
   const projectedClosing = cashOpeningAmount + plannedRecv - plannedPay;
   const latestClosing = latestCashPosition?.closing_balance ?? cashOpeningAmount;
-  const cashHeadlineRed = recvBehind || payOver;
+
+  // Pacing-based three-state traffic lights
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysElapsed = now.getDate();
+
+  const expectedRecvByToday = plannedRecv > 0 ? (plannedRecv / daysInMonth) * daysElapsed : 0;
+  const recvAchievementPct = expectedRecvByToday > 0
+    ? (actualReceiptsMTD / expectedRecvByToday) * 100 : 100;
+  const recvStatus: RAGStatus =
+    recvAchievementPct >= 95 ? "GREEN" : recvAchievementPct >= 85 ? "AMBER" : "RED";
+
+  const expectedPayByToday = plannedPay > 0 ? (plannedPay / daysInMonth) * daysElapsed : 0;
+  const payAchievementPct = expectedPayByToday > 0
+    ? (actualPaymentsMTD / expectedPayByToday) * 100 : 100;
+  const payStatus: RAGStatus =
+    payAchievementPct <= 105 ? "GREEN" : payAchievementPct <= 115 ? "AMBER" : "RED";
+
+  const cashHeadlineStatus: RAGStatus =
+    recvStatus === "RED" || payStatus === "RED" ? "RED"
+    : recvStatus === "AMBER" || payStatus === "AMBER" ? "AMBER"
+    : "GREEN";
+  const cashHeadlineRed = cashHeadlineStatus !== "GREEN";
 
   const recGreen = receivableRows.reduce((s, r) => s + r.greenAmount, 0);
   const recAmber = receivableRows.reduce((s, r) => s + r.amberAmount, 0);
@@ -743,15 +908,137 @@ export default function ExecutiveDashboardPage() {
                 {!cashPlan && !cashOpening && cashPositions.length === 0 ? (
                   <p style={{ color: SLATE, fontSize: "13px" }}>No finance data yet.</p>
                 ) : (
-                  <div style={panelCard(cashHeadlineRed)}>
-                    <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "10px", color: NAVY }}>
-                      Cash Health: <span style={{ color: cashHeadlineRed ? "#dc2626" : "#16a34a" }}>{cashHeadlineRed ? "ATTENTION" : "ON TRACK"}</span>
+                  <>
+                    <div style={panelCardRAG(cashHeadlineStatus)}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>
+                          Cash Health: <span style={{ color: ragColour(cashHeadlineStatus) }}>
+                            {cashHeadlineStatus === "GREEN" ? "ON TRACK" : cashHeadlineStatus === "AMBER" ? "MONITOR" : "ATTENTION"}
+                          </span>
+                        </div>
+                        {latestCashPosition && (
+                          <div style={{
+                            fontSize: "10px",
+                            fontWeight: 600,
+                            color: (() => {
+                              const lastDate = new Date(latestCashPosition.position_date + "T00:00:00");
+                              const diffDays = Math.floor((Date.now() - lastDate.getTime()) / 86400000);
+                              return diffDays > 1 ? "#dc2626" : SLATE;
+                            })(),
+                          }}>
+                            Updated: {formatDateUK(latestCashPosition.position_date)}
+                            {(() => {
+                              const lastDate = new Date(latestCashPosition.position_date + "T00:00:00");
+                              const diffDays = Math.floor((Date.now() - lastDate.getTime()) / 86400000);
+                              return diffDays > 1 ? " (STALE)" : "";
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Today's Position */}
+                      <div style={{ ...miniGrid, marginBottom: "10px" }}>
+                        <Mini label="Today's Closing" value={fmtMoney(latestClosing)} color="#0070f3" />
+                        <Mini label="Post-dated" value={fmtMoney(latestCashPosition?.post_dated_total ?? 0)} color={SLATE} />
+                        <Mini label="Net after Post-dated" value={fmtMoney(latestCashPosition?.closing_after_post_dated ?? latestClosing)} color={NAVY} />
+                      </div>
+
+                      {/* Pacing cards */}
+                      <div style={{ ...miniGrid, marginBottom: "6px" }}>
+                        <Mini label={`Receivables Pace (${Math.round(recvAchievementPct)}%)`} value={`${fmtMoney(actualReceiptsMTD)} / ${fmtMoney(Math.round(expectedRecvByToday))}`} color={ragColour(recvStatus)} />
+                        <Mini label={`Payouts Pace (${Math.round(payAchievementPct)}%)`} value={`${fmtMoney(actualPaymentsMTD)} / ${fmtMoney(Math.round(expectedPayByToday))}`} color={ragColour(payStatus)} />
+                        <Mini label="Projected Month-End" value={fmtMoney(projectedClosing)} color={NAVY} />
+                      </div>
                     </div>
-                    <div style={miniGrid}>
-                      <Mini label="Money In (act/plan)" value={`${fmtMoney(actualReceiptsMTD)} / ${fmtMoney(plannedRecv)}`} color={recvBehind ? "#dc2626" : "#16a34a"} />
-                      <Mini label="Money Out (act/plan)" value={`${fmtMoney(actualPaymentsMTD)} / ${fmtMoney(plannedPay)}`} color={payOver ? "#dc2626" : "#16a34a"} />
-                      <Mini label="Latest Closing" value={fmtMoney(latestClosing)} color="#0070f3" />
-                      <Mini label="Projected Month-End" value={fmtMoney(projectedClosing)} color={NAVY} />
+
+                    {/* Bank Breakdown drill-down */}
+                    {bankSnapshot && (
+                      <div style={{ marginTop: "4px" }}>
+                        <button
+                          onClick={() => setBankExpanded(!bankExpanded)}
+                          style={{
+                            background: "transparent",
+                            border: `1px solid ${BORDER}`,
+                            borderRadius: "6px",
+                            padding: "5px 12px",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            color: SLATE,
+                            cursor: "pointer",
+                            width: "100%",
+                            textAlign: "left",
+                          }}
+                        >
+                          {bankExpanded ? "▼" : "▶"} Bank Breakdown ({formatDateUK(bankSnapshot.position_date)})
+                          {!bankSnapshot.reconciled && (
+                            <span style={{ color: "#dc2626", marginLeft: "8px" }}>NOT RECONCILED</span>
+                          )}
+                        </button>
+                        {bankExpanded && (
+                          <div style={{
+                            border: `1px solid ${BORDER}`,
+                            borderTop: "none",
+                            borderRadius: "0 0 6px 6px",
+                            padding: "8px 12px",
+                            backgroundColor: "white",
+                          }}>
+                            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                              <tbody>
+                                {Object.entries(BANK_DISPLAY_NAMES).map(([key, label]) => {
+                                  const val = (bankSnapshot as Record<string, unknown>)[key];
+                                  const amount = typeof val === "number" ? val : 0;
+                                  return (
+                                    <tr key={key}>
+                                      <td style={{ padding: "3px 6px", fontSize: "11px", color: NAVY }}>{label}</td>
+                                      <td style={{ padding: "3px 6px", fontSize: "11px", fontWeight: 600, textAlign: "right", color: amount > 0 ? NAVY : SLATE }}>
+                                        {fmtMoney(amount)}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                <tr style={{ borderTop: `1px solid ${BORDER}` }}>
+                                  <td style={{ padding: "5px 6px", fontSize: "12px", fontWeight: 700, color: NAVY }}>Total Available</td>
+                                  <td style={{ padding: "5px 6px", fontSize: "12px", fontWeight: 700, textAlign: "right", color: "#0070f3" }}>
+                                    {fmtMoney(bankSnapshot.total_available_balance)}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Historical: vs same month last year */}
+                {lastYearReceipts !== null && (
+                  <div style={{
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: "6px",
+                    padding: "8px 12px",
+                    backgroundColor: "white",
+                    marginTop: "8px",
+                    fontSize: "11px",
+                  }}>
+                    <div style={{ fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
+                      vs Same Month Last Year
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                      <div>
+                        <div style={{ color: SLATE }}>Receipts (last yr)</div>
+                        <div style={{ fontWeight: 700, color: NAVY }}>{fmtMoney(lastYearReceipts)}</div>
+                        <div style={{ color: actualReceiptsMTD >= lastYearReceipts ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                          {actualReceiptsMTD >= lastYearReceipts ? "▲" : "▼"} {fmtMoney(Math.abs(actualReceiptsMTD - lastYearReceipts))}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ color: SLATE }}>Payments (last yr)</div>
+                        <div style={{ fontWeight: 700, color: NAVY }}>{fmtMoney(lastYearPayments ?? 0)}</div>
+                        <div style={{ color: actualPaymentsMTD <= (lastYearPayments ?? 0) ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                          {actualPaymentsMTD <= (lastYearPayments ?? 0) ? "▼" : "▲"} {fmtMoney(Math.abs(actualPaymentsMTD - (lastYearPayments ?? 0)))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -833,6 +1120,17 @@ function panelCard(red: boolean): React.CSSProperties {
   return {
     border: `1px solid ${BORDER}`,
     borderTop: `3px solid ${red ? "#dc2626" : "#16a34a"}`,
+    borderRadius: "8px",
+    padding: "12px",
+    backgroundColor: "white",
+    marginBottom: "4px",
+  };
+}
+
+function panelCardRAG(status: RAGStatus): React.CSSProperties {
+  return {
+    border: `1px solid ${BORDER}`,
+    borderTop: `3px solid ${ragColour(status)}`,
     borderRadius: "8px",
     padding: "12px",
     backgroundColor: "white",

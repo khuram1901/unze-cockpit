@@ -27,6 +27,17 @@ export function formatMonthUK(monthString: string | null): string {
   return `${month}/${year}`;
 }
 
+export function workingDaysFromNow(n: number): string {
+  const d = new Date();
+  let added = 0;
+  while (added < n) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) added++;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 // ISO date for inputs and database (YYYY-MM-DD)
 export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
+import { UTPL_COMPANY_ID } from "../lib/constants";
 
 type OpeningBalance = {
   id: string;
@@ -86,6 +87,63 @@ export default function FinanceManager() {
 
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState(false);
+
+  // PDF upload state
+  const [cashFlowFile, setCashFlowFile] = useState<File | null>(null);
+  const [bankPositionFile, setBankPositionFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{
+    success: boolean;
+    date?: string;
+    reconciliation?: { matches: boolean; cashFlowClosing: number; bankPositionTotal: number; diff: number };
+    cashFlow?: Record<string, number>;
+    error?: string;
+  } | null>(null);
+
+  async function handlePDFUpload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!cashFlowFile || !bankPositionFile) {
+      showMsg("Error: Please select both PDF files.");
+      return;
+    }
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("cashFlow", cashFlowFile);
+      formData.append("bankPosition", bankPositionFile);
+      formData.append("uploadedBy", "manual");
+
+      const res = await fetch("/api/finance/parse-cash-flow", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setUploadResult({ success: false, error: data.error || "Upload failed" });
+        showMsg("Error: " + (data.error || "Upload failed"));
+      } else {
+        setUploadResult({
+          success: true,
+          date: data.date,
+          reconciliation: data.reconciliation,
+          cashFlow: data.cashFlow,
+        });
+        showMsg(data.reconciliation?.matches
+          ? "Statements parsed and balanced. Saved."
+          : "Statements parsed but NOT balanced — please review."
+        );
+        setCashFlowFile(null);
+        setBankPositionFile(null);
+        loadData();
+      }
+    } catch {
+      setUploadResult({ success: false, error: "Network error" });
+      showMsg("Error: Network error during upload.");
+    }
+    setUploading(false);
+  }
 
   async function loadData() {
     setLoading(true);
@@ -93,16 +151,19 @@ export default function FinanceManager() {
       supabase
         .from("cash_opening_balance")
         .select("*")
+        .eq("company_id", UTPL_COMPANY_ID)
         .order("as_of_date", { ascending: true })
         .limit(1),
       supabase
         .from("monthly_cash_plan")
         .select("*")
+        .eq("company_id", UTPL_COMPANY_ID)
         .eq("plan_month", currentMonthISO())
         .maybeSingle(),
       supabase
         .from("daily_cash_position")
         .select("*")
+        .eq("company_id", UTPL_COMPANY_ID)
         .order("position_date", { ascending: false })
         .limit(30),
     ]);
@@ -114,6 +175,30 @@ export default function FinanceManager() {
 
   useEffect(() => {
     loadData();
+
+    // Check Google connection status
+    supabase
+      .from("google_oauth_tokens")
+      .select("id")
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data.length > 0) setGmailConnected(true);
+      });
+
+    // Check URL params for Google OAuth result
+    const params = new URLSearchParams(window.location.search);
+    const googleStatus = params.get("google");
+    if (googleStatus === "connected") {
+      setGmailConnected(true);
+      showMsg("Gmail connected successfully. Daily statements will be ingested automatically.");
+      window.history.replaceState({}, "", "/finance");
+    } else if (googleStatus === "error") {
+      showMsg("Error: Failed to connect Gmail. Please try again.");
+      window.history.replaceState({}, "", "/finance");
+    } else if (googleStatus === "denied") {
+      showMsg("Error: Gmail access was denied. Please try again and grant permissions.");
+      window.history.replaceState({}, "", "/finance");
+    }
   }, []);
 
   function showMsg(text: string) {
@@ -149,6 +234,7 @@ export default function FinanceManager() {
     e.preventDefault();
     setSaving(true);
     const { error } = await supabase.from("cash_opening_balance").insert({
+      company_id: UTPL_COMPANY_ID,
       as_of_date: obDate,
       opening_amount: Number(obAmount) || 0,
       currency: "PKR",
@@ -168,6 +254,7 @@ export default function FinanceManager() {
     setSaving(true);
     const { error } = await supabase.from("monthly_cash_plan").upsert(
       {
+        company_id: UTPL_COMPANY_ID,
         plan_month: planMonth,
         tentative_receivables: Number(planRecv) || 0,
         tentative_payouts: Number(planPay) || 0,
@@ -190,6 +277,7 @@ export default function FinanceManager() {
     const closingAfterPD = Number(dpClosing) - Number(dpPostDated);
     const { error } = await supabase.from("daily_cash_position").upsert(
       {
+        company_id: UTPL_COMPANY_ID,
         position_date: dpDate,
         opening_balance: Number(dpOpening) || 0,
         total_receipts: Number(dpReceipts) || 0,
@@ -276,6 +364,138 @@ export default function FinanceManager() {
           sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
           color={NAVY}
         />
+      </div>
+
+      {/* ── GMAIL CONNECTION ── */}
+      <SectionTitle title="Automatic Ingestion" />
+      <div
+        style={{
+          border: `1px solid ${BORDER}`,
+          borderRadius: "8px",
+          padding: "12px 16px",
+          backgroundColor: "white",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "10px",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>
+            Gmail: {gmailConnected ? (
+              <span style={{ color: GREEN }}>Connected</span>
+            ) : (
+              <span style={{ color: SLATE }}>Not connected</span>
+            )}
+          </div>
+          <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px" }}>
+            {gmailConnected
+              ? "Daily cash flow and bank position PDFs are ingested automatically from your cockpit-cash Gmail label every 2 minutes."
+              : "Connect your Gmail to automatically ingest daily cash statements. You'll need a Gmail label called 'cockpit-cash'."
+            }
+          </div>
+        </div>
+        {!gmailConnected && (
+          <a
+            href="/api/google/auth"
+            style={{
+              ...btnStyle,
+              textDecoration: "none",
+              display: "inline-block",
+              textAlign: "center",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Connect Gmail
+          </a>
+        )}
+      </div>
+
+      {/* ── PDF UPLOAD ── */}
+      <SectionTitle title="Upload Daily Statement PDFs" />
+      <div
+        style={{
+          border: `1px solid ${BORDER}`,
+          borderRadius: "8px",
+          padding: "16px",
+          backgroundColor: "white",
+          marginBottom: "16px",
+        }}
+      >
+        <p style={{ fontSize: "12px", color: SLATE, marginBottom: "12px" }}>
+          Upload the daily Cash Flow and Bank Position PDFs from the accountant. The system will extract the figures, check they balance, and save automatically.
+        </p>
+        <form onSubmit={handlePDFUpload}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <label style={labelStyle}>
+              Cash Flow PDF
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={(e) => setCashFlowFile(e.target.files?.[0] || null)}
+                style={{ ...inputStyle, padding: "6px 8px" }}
+              />
+            </label>
+            <label style={labelStyle}>
+              Bank Position PDF
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={(e) => setBankPositionFile(e.target.files?.[0] || null)}
+                style={{ ...inputStyle, padding: "6px 8px" }}
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={uploading || !cashFlowFile || !bankPositionFile}
+            style={{
+              ...btnStyle,
+              opacity: uploading || !cashFlowFile || !bankPositionFile ? 0.5 : 1,
+            }}
+          >
+            {uploading ? "Parsing…" : "Upload & Parse"}
+          </button>
+        </form>
+
+        {uploadResult && (
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "10px 14px",
+              borderRadius: "6px",
+              border: `1px solid ${BORDER}`,
+              borderLeft: `4px solid ${uploadResult.reconciliation?.matches ? GREEN : RED}`,
+              backgroundColor: "#fafbfc",
+              fontSize: "12px",
+            }}
+          >
+            {uploadResult.success ? (
+              <>
+                <div style={{ fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
+                  {uploadResult.reconciliation?.matches
+                    ? "Balanced — statements match"
+                    : "Mismatch — statements do NOT balance"
+                  }
+                </div>
+                <div style={{ color: SLATE }}>
+                  Date: {uploadResult.date} &nbsp;|&nbsp;
+                  Cash Flow Closing: {uploadResult.reconciliation?.cashFlowClosing?.toLocaleString()} &nbsp;|&nbsp;
+                  Bank Total: {uploadResult.reconciliation?.bankPositionTotal?.toLocaleString()}
+                  {!uploadResult.reconciliation?.matches && (
+                    <span style={{ color: RED, fontWeight: 700 }}>
+                      &nbsp;|&nbsp; Difference: {uploadResult.reconciliation?.diff?.toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div style={{ color: RED, fontWeight: 600 }}>{uploadResult.error}</div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── DAILY POSITION: FORM + TABLE ── */}

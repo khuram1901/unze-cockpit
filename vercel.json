@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/finance/check-inbox",
+      "schedule": "*/2 * * * *"
+    }
+  ]
+}
