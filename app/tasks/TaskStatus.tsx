@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { logAction } from "../lib/audit-log";
 
 type Task = {
   id: string;
@@ -68,6 +69,7 @@ export default function TaskStatus({
       return;
     }
 
+    logAction("Updated", "tasks", `Status → ${newStatus}: ${task.id}`, task.id);
     setStatus(newStatus);
     setSavedMessage("Saved ✓");
     onChanged();
@@ -93,6 +95,7 @@ export default function TaskStatus({
       return;
     }
 
+    logAction("Updated", "tasks", `Due date → ${dueDate}: ${task.id}`, task.id);
     setDateMessage("Date saved ✓");
     onChanged();
     setTimeout(() => setDateMessage(""), 2000);
@@ -133,9 +136,7 @@ export default function TaskStatus({
       return;
     }
 
-    // EMAIL HOOK: notify the reviewer (Admin/Executive) that an
-    // explanation has been submitted and awaits review.
-
+    logAction("Updated", "tasks", `Explanation submitted: ${task.id}`, task.id);
     setStatus("Submitted");
     setSavedMessage("Response submitted ✓");
     onChanged();

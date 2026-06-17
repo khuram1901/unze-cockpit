@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
+import { logAction } from "../lib/audit-log";
 
 type Stage = {
   id: string;
@@ -184,6 +185,7 @@ export default function ReceivablesSection({
       setMsg("Error: " + error.message);
       return;
     }
+    logAction("Created", "receivables", `Bill: ${customer} ${amount} PKR`);
     setMsg("Bill added ✓");
     setInvoiceRef("");
     setIcRef("");
@@ -225,6 +227,7 @@ export default function ReceivablesSection({
       setMsg("Error: " + error.message);
       return;
     }
+    logAction("Updated", "receivables", "Bill marked as collected", bill.id);
     setMsg("Bill marked as collected ✓");
     loadData();
   }

@@ -5,6 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import RoleGuard from "../lib/RoleGuard";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
+import { logAction } from "../lib/audit-log";
 
 type Plant = { id: string; name: string; type: string; active: boolean };
 type MonthlyTarget = {
@@ -178,6 +179,7 @@ export default function MonthlyOperationsTargetsPage() {
     );
     setSaving(false);
     if (error) { setMessage("Error: " + error.message); return; }
+    logAction("Created", `monthly_${targetType}_targets`, `${targetType} target for ${targetMonth}: ${selectedPlant?.name || plantId}`);
     setMessage("✅ Monthly target saved.");
     await loadTargets(targetMonth);
   }

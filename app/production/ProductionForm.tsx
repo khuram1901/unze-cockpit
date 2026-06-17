@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import ReceivablesSection from "./ReceivablesSection";
+import { logAction } from "../lib/audit-log";
 
 type Plant = {
   id: string;
@@ -158,7 +159,7 @@ export default function ProductionForm() {
     });
     setSavingSection("");
     if (error) { showMsg("production", "Error: " + error.message, false); return; }
-    showMsg("production", nothing ? "Logged: nothing to report ✓" : "Production saved ✓", true);
+    logAction("Created", "production_entries", `Production entry for ${entryDate}`); showMsg("production", nothing ? "Logged: nothing to report ✓" : "Production saved ✓", true);
     setProd31(""); setProd36(""); setProd45(""); setProdMeter("");
   }
 
@@ -183,7 +184,7 @@ export default function ProductionForm() {
     });
     setSavingSection("");
     if (error) { showMsg("dispatch", "Error: " + error.message, false); return; }
-    showMsg("dispatch", nothing ? "Logged: nothing to report ✓" : "Dispatch saved ✓", true);
+    logAction("Created", "dispatch_entries", `Dispatch entry for ${entryDate}`); showMsg("dispatch", nothing ? "Logged: nothing to report ✓" : "Dispatch saved ✓", true);
     setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter("");
   }
 
@@ -211,7 +212,7 @@ export default function ProductionForm() {
     });
     setSavingSection("");
     if (error) { showMsg("breakage", "Error: " + error.message, false); return; }
-    showMsg("breakage", nothing ? "Logged: nothing to report ✓" : "Breakage saved ✓", true);
+    logAction("Created", "breakage_entries", `Breakage entry for ${entryDate}`); showMsg("breakage", nothing ? "Logged: nothing to report ✓" : "Breakage saved ✓", true);
     setBrk31(""); setBrk36(""); setBrk45("");
     setReason31(""); setReason36(""); setReason45(""); setReasonOther("");
   }
@@ -236,7 +237,7 @@ export default function ProductionForm() {
     });
     setSavingSection("");
     if (error) { showMsg("scrap", "Error: " + error.message, false); return; }
-    showMsg("scrap", nothing ? "Logged: nothing to report ✓" : "Scrap saved ✓", true);
+    logAction("Created", "scrap_processed_entries", `Scrap entry for ${entryDate}`); showMsg("scrap", nothing ? "Logged: nothing to report ✓" : "Scrap saved ✓", true);
     setScr31(""); setScr36(""); setScr45("");
   }
 
@@ -261,7 +262,7 @@ export default function ProductionForm() {
     });
     setSavingSection("");
     if (error) { showMsg("machine", "Error: " + error.message, false); return; }
-    showMsg("machine", nothing ? "Logged: nothing to report ✓" : "Machine issue saved ✓", true);
+    logAction("Created", "machine_issues", `Machine issue: ${machineName}`); showMsg("machine", nothing ? "Logged: nothing to report ✓" : "Machine issue saved ✓", true);
     setMachineName(""); setMachineStatus("Down");
     setMachineExpectedResolution(""); setMachineDescription(""); setMachineActionTaken("");
   }

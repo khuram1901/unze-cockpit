@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
+import { logAction } from "../lib/audit-log";
 
 type Member = {
   id: string;
@@ -104,6 +105,7 @@ export default function DepartmentOwnersPage() {
       })
       .eq("id", row.id);
     if (error) { alert(error.message); return; }
+    logAction("Updated", "department_owners", `Updated owners for ${row.department_name}`, row.id);
     loadData();
   }
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
+import { logAction } from "../lib/audit-log";
 
 type Member = {
   id: string;
@@ -214,6 +215,7 @@ export default function MembersManager() {
       return;
     }
 
+    logAction("Created", "members", `Added ${firstName} ${lastName} (${email}) as ${role}`);
     setFirstName("");
     setLastName("");
     setEmail("");
@@ -269,6 +271,8 @@ export default function MembersManager() {
       return;
     }
 
+    const changedFields = Object.keys(updates).join(", ");
+    logAction("Updated", "members", `Updated ${changedFields}`, id);
     loadData();
   }
 
@@ -282,6 +286,7 @@ export default function MembersManager() {
       return;
     }
 
+    logAction("Deleted", "members", `Removed ${memberName}`, id);
     loadData();
   }
 

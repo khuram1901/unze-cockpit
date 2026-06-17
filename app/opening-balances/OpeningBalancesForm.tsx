@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { logAction } from "../lib/audit-log";
 
 type Plant = { id: string; name: string; type: string };
 
@@ -100,6 +101,7 @@ export default function OpeningBalancesForm() {
       return;
     }
 
+    logAction("Created", "opening_balances", `Opening balances for ${selectedPlant?.name}`);
     setMessage("✅ Opening balances saved for " + selectedPlant?.name);
     setG31(""); setG36(""); setG45("");
     setB31(""); setB36(""); setB45("");

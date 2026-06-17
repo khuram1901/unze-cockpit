@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "next/navigation";
+import { logAction } from "../lib/audit-log";
 
 type Member = {
   id: string;
@@ -155,8 +156,7 @@ export default function NewTaskForm() {
       return;
     }
 
-    // EMAIL HOOK: when email notifications are built, trigger
-    // "you have a new task" email to assignedToEmail here.
+    logAction("Created", "tasks", `Task: ${description} → ${assignedTo}`);
 
     setDescription("");
     setProject("");

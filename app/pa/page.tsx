@@ -18,6 +18,7 @@ import {
   tableCellBoldStyle,
 } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
+import { logAction } from "../lib/audit-log";
 
 type Task = {
   id: string;
@@ -110,6 +111,7 @@ export default function PADashboardPage() {
       status: "Approved",
       approved_by: currentUserName || currentUserEmail || "PA",
     }).eq("id", id);
+    logAction("Updated", "meeting_requests", "Approved on CEO's behalf", id);
     loadData();
   }
 
