@@ -5,6 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
+import { logAction } from "../lib/audit-log";
 import {
   COLOURS,
   SectionTitle,
@@ -172,6 +173,7 @@ export default function MeetingsPage() {
       }
     }
 
+    logAction("Created", "meetings", `${extracted.meeting_title} — ${tasksCreated} tasks created`, meeting.id);
     setMessage(`Meeting saved and ${tasksCreated} task${tasksCreated !== 1 ? "s" : ""} created.`);
     setExtracted(null);
     setTranscript("");

@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 import { UTPL_COMPANY_ID } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
+import { logAction } from "../lib/audit-log";
 
 type OpeningBalance = {
   id: string;
@@ -287,6 +288,7 @@ export default function FinanceManager() {
       showMsg("Error: " + error.message);
       return;
     }
+    logAction("Updated", "cash_opening_balance", `Opening balance: ${obAmount} as of ${obDate}`);
     showMsg("✅ Opening balance saved.");
     setOpenModal(null);
     loadData();
@@ -309,6 +311,7 @@ export default function FinanceManager() {
       showMsg("Error: " + error.message);
       return;
     }
+    logAction("Updated", "monthly_cash_plan", `Plan for ${planMonth}: recv ${planRecv}, pay ${planPay}`);
     showMsg("✅ Monthly plan saved.");
     setOpenModal(null);
     loadData();
@@ -336,6 +339,7 @@ export default function FinanceManager() {
       showMsg("Error: " + error.message);
       return;
     }
+    logAction("Created", "daily_cash_position", `Position for ${dpDate}: closing ${dpClosing}`);
     showMsg("✅ Daily position saved.");
     setDpOpening("");
     setDpReceipts("");

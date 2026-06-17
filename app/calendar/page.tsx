@@ -15,6 +15,7 @@ import {
   tableCellBoldStyle,
 } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
+import { logAction } from "../lib/audit-log";
 
 type MeetingRequest = {
   id: string;
@@ -191,6 +192,7 @@ export default function CalendarPage() {
     setPriority("Normal");
     setDecisionRequired(false);
     setSelectedAttendees([]);
+    logAction("Created", "meeting_requests", `${title} — ${autoApproved ? "auto-approved" : "pending approval"}`);
     setMessage(autoApproved
       ? "Meeting auto-approved (you are a Head of Department)."
       : "Meeting request submitted for approval."

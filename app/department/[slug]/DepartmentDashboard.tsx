@@ -13,6 +13,7 @@ import {
   StatusBadge,
 } from "../../lib/SharedUI";
 import { DepartmentConfig } from "../../lib/department-config";
+import { logAction } from "../../lib/audit-log";
 
 export default function DepartmentDashboard({ config }: { config: DepartmentConfig }) {
   const isMobile = useMobile();
@@ -84,6 +85,8 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
       return;
     }
 
+    const firstField = config.formFields[0];
+    logAction("Created", config.table, formData[firstField.key] || "New record");
     showMsg("Record added successfully.");
     setFormData({});
     setShowForm(false);
@@ -95,6 +98,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
       .from(config.table)
       .update({ [config.statusField]: newStatus })
       .eq("id", id);
+    logAction("Updated status", config.table, `Changed to: ${newStatus}`, id);
     loadData();
   }
 
