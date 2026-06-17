@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import TaskStatus from "../tasks/TaskStatus";
+import { formatDateUK } from "../lib/dateUtils";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number };
@@ -131,11 +132,6 @@ function statusColor(s: Status) {
 function statusLabel(s: Status) {
   if (s === "none") return "No Target";
   return s.toUpperCase();
-}
-function formatDateUK(dateString: string | null) {
-  if (!dateString) return "—";
-  const [y, m, d] = dateString.slice(0, 10).split("-");
-  return `${d}-${m}-${y}`;
 }
 
 // Working days (Mon-Fri) between two dates, exclusive of start, inclusive of end.

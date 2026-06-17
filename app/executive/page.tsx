@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import EscalationTrafficLights from "./EscalationTrafficLights";
+import { formatDateUK } from "../lib/dateUtils";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number; meter: number };
@@ -150,11 +151,6 @@ function formatDate(d: Date) {
 }
 
 // UK display format DD-MM-YYYY
-function formatDateUK(dateString: string | null) {
-  if (!dateString) return "—";
-  const [year, month, day] = dateString.slice(0, 10).split("-");
-  return `${day}-${month}-${year}`;
-}
 
 function getMonthFromDate(dateString: string) {
   return dateString.slice(0, 7);
