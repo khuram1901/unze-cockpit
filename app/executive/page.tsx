@@ -857,7 +857,7 @@ export default function ExecutiveDashboardPage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
-            <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
+            <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
             <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px", maxWidth: "640px" }}>
               Executive escalations surface lagging indicators (Q3+ for production and dispatch, breakage over 1.5%). Earlier issues stay with operations.
             </p>

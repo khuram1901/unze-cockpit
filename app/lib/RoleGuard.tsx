@@ -56,7 +56,7 @@ export default function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
           maxWidth: "700px",
         }}
       >
-        <h2 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "8px" }}>
+        <h2 style={{ fontSize: "26px", fontWeight: "bold", marginBottom: "8px" }}>
           Access Denied
         </h2>
 

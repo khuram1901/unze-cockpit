@@ -179,7 +179,7 @@ export default function AuthWrapper({
               onClick={() => setMenuOpen(false)}
               style={{
                 textDecoration: "none",
-                fontSize: "13.5px",
+                fontSize: "15px",
                 fontWeight: active ? 700 : 500,
                 color: active ? "white" : stacked ? "white" : NAVY,
                 backgroundColor: active ? "#2563eb" : "transparent",
@@ -468,7 +468,7 @@ export default function AuthWrapper({
                       onClick={() => setMenuOpen(false)}
                       style={{
                         textDecoration: "none",
-                        fontSize: "13.5px",
+                        fontSize: "15px",
                         fontWeight: active ? 700 : 500,
                         color: "white",
                         backgroundColor: active ? "#2563eb" : "transparent",

@@ -11,7 +11,7 @@ export default function MembersPage() {
       <main style={{ padding: "20px 24px" }}>
         <RoleGuard allowedRoles={["Admin"]}>
           <div style={{ marginBottom: "16px" }}>
-            <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
+            <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>
               Members
             </h1>
             <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px" }}>

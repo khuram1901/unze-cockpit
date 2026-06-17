@@ -201,7 +201,7 @@ export default function MonthlyOperationsTargetsPage() {
       <main style={{ padding: mainPadding, maxWidth: "100vw", overflowX: "hidden" }}>
         <RoleGuard allowedRoles={["Admin", "Executive"]}>
           <div style={{ marginBottom: "16px" }}>
-            <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
+            <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>
               Monthly Operations Targets
             </h1>
             <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px" }}>

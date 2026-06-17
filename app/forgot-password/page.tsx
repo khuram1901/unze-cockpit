@@ -61,7 +61,7 @@ export default function ForgotPasswordPage() {
           boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
         }}
       >
-        <h1 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "4px" }}>
+        <h1 style={{ fontSize: "26px", fontWeight: "bold", marginBottom: "4px" }}>
           Reset your password
         </h1>
         <p style={{ color: "#777", fontSize: "16px", marginBottom: "24px" }}>
