@@ -17,6 +17,7 @@ import {
   tableCellStyle,
   tableCellBoldStyle,
 } from "../lib/SharedUI";
+import { useMobile } from "../lib/useMobile";
 
 type Task = {
   id: string;
@@ -64,6 +65,7 @@ function daysOverdue(task: Task): number {
 }
 
 export default function PADashboardPage() {
+  const isMobile = useMobile();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [meetingRequests, setMeetingRequests] = useState<MeetingRequest[]>([]);
@@ -151,7 +153,7 @@ export default function PADashboardPage() {
   return (
     <AuthWrapper>
       <RoleGuard allowedRoles={["Admin", "Executive"]}>
-        <main style={{ padding: "20px 24px" }}>
+        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
           <PageHeader
             title="PA Command Centre"
             subtitle="Tasks, escalations, approvals, and follow-ups across the company"
@@ -202,45 +204,42 @@ export default function PADashboardPage() {
               {meetingRequests.length === 0 ? (
                 <p style={{ color: COLOURS.SLATE, fontSize: "13px", marginBottom: "12px" }}>No pending requests.</p>
               ) : (
-                <div style={{ overflowX: "auto", marginBottom: "12px", backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px" }}>
-                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "#f8fafc" }}>
-                        <th style={tableHeaderStyle}>Title</th>
-                        <th style={tableHeaderStyle}>Requested By</th>
-                        <th style={tableHeaderStyle}>Date</th>
-                        <th style={tableHeaderStyle}>Priority</th>
-                        <th style={tableHeaderStyle}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {meetingRequests.map((r) => (
-                        <tr key={r.id}>
-                          <td style={tableCellBoldStyle}>{r.meeting_title}</td>
-                          <td style={tableCellStyle}>{r.requested_by_name || r.requested_by_email || "—"}</td>
-                          <td style={tableCellStyle}>{r.requested_date ? formatDateUK(r.requested_date) : "—"}</td>
-                          <td style={tableCellStyle}><PriorityBadge priority={r.priority} /></td>
-                          <td style={tableCellStyle}>
-                            <button
-                              onClick={() => approveMeeting(r.id)}
-                              style={{
-                                backgroundColor: COLOURS.GREEN,
-                                color: "white",
-                                border: "none",
-                                borderRadius: "5px",
-                                padding: "5px 12px",
-                                fontSize: "11px",
-                                fontWeight: 700,
-                                cursor: "pointer",
-                              }}
-                            >
-                              Approve on CEO's behalf
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ marginBottom: "12px" }}>
+                  {meetingRequests.map((r) => (
+                    <div key={r.id} style={{
+                      border: `1px solid ${COLOURS.BORDER}`,
+                      borderRadius: "8px",
+                      padding: "10px 12px",
+                      backgroundColor: "white",
+                      marginBottom: "8px",
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", flexWrap: "wrap" }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: "13px", color: COLOURS.NAVY }}>{r.meeting_title}</div>
+                          <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                            {r.requested_by_name || "—"} · {r.requested_date ? formatDateUK(r.requested_date) : "No date"} · <PriorityBadge priority={r.priority} />
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => approveMeeting(r.id)}
+                          style={{
+                            backgroundColor: COLOURS.GREEN,
+                            color: "white",
+                            border: "none",
+                            borderRadius: "5px",
+                            padding: "7px 12px",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                            flexShrink: 0,
+                          }}
+                        >
+                          Approve
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -249,40 +248,30 @@ export default function PADashboardPage() {
               {escalations.length === 0 ? (
                 <p style={{ color: COLOURS.SLATE, fontSize: "13px", marginBottom: "12px" }}>No active escalations.</p>
               ) : (
-                <div style={{ overflowX: "auto", marginBottom: "12px", backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px" }}>
-                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "#f8fafc" }}>
-                        <th style={tableHeaderStyle}>Type</th>
-                        <th style={tableHeaderStyle}>Description</th>
-                        <th style={tableHeaderStyle}>Assigned To</th>
-                        <th style={tableHeaderStyle}>Due</th>
-                        <th style={tableHeaderStyle}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {escalations.map((t) => (
-                        <tr key={t.id}>
-                          <td style={tableCellStyle}>
-                            <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.RED }}>
-                              {t.exception_type || t.source_type || "—"}
-                            </span>
-                          </td>
-                          <td style={tableCellBoldStyle}>{t.description}</td>
-                          <td style={tableCellStyle}>{t.assigned_to || "—"}</td>
-                          <td style={{
-                            ...tableCellStyle,
-                            color: isOverdue(t) ? COLOURS.RED : COLOURS.NAVY,
-                            fontWeight: isOverdue(t) ? 700 : 400,
-                          }}>
-                            {t.due_date ? formatDateUK(t.due_date) : "—"}
-                            {isOverdue(t) && ` (${daysOverdue(t)}d late)`}
-                          </td>
-                          <td style={tableCellStyle}><StatusBadge status={t.status} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ marginBottom: "12px" }}>
+                  {escalations.map((t) => (
+                    <div key={t.id} style={{
+                      border: `1px solid ${COLOURS.BORDER}`,
+                      borderLeft: `3px solid ${isOverdue(t) ? COLOURS.RED : COLOURS.AMBER}`,
+                      borderRadius: "6px",
+                      padding: "10px 12px",
+                      backgroundColor: "white",
+                      marginBottom: "8px",
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</div>
+                        <StatusBadge status={t.status} />
+                      </div>
+                      <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "4px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <span style={{ color: COLOURS.RED, fontWeight: 600 }}>{t.exception_type || t.source_type}</span>
+                        <span>→ {t.assigned_to || "Unassigned"}</span>
+                        <span style={{ color: isOverdue(t) ? COLOURS.RED : COLOURS.NAVY, fontWeight: isOverdue(t) ? 700 : 400 }}>
+                          Due: {t.due_date ? formatDateUK(t.due_date) : "—"}
+                          {isOverdue(t) && ` (${daysOverdue(t)}d late)`}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -290,33 +279,29 @@ export default function PADashboardPage() {
               {myTasks.length > 0 && (
                 <>
                   <SectionTitle title={`My Tasks (${myTasks.length})`} />
-                  <div style={{ overflowX: "auto", marginBottom: "12px", backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px" }}>
-                    <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
-                      <thead>
-                        <tr style={{ backgroundColor: "#f8fafc" }}>
-                          <th style={tableHeaderStyle}>Description</th>
-                          <th style={tableHeaderStyle}>Due</th>
-                          <th style={tableHeaderStyle}>Priority</th>
-                          <th style={tableHeaderStyle}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {myTasks.map((t) => (
-                          <tr key={t.id}>
-                            <td style={tableCellBoldStyle}>{t.description}</td>
-                            <td style={{
-                              ...tableCellStyle,
-                              color: isOverdue(t) ? COLOURS.RED : COLOURS.NAVY,
-                              fontWeight: isOverdue(t) ? 700 : 400,
-                            }}>
-                              {t.due_date ? formatDateUK(t.due_date) : "—"}
-                            </td>
-                            <td style={tableCellStyle}><PriorityBadge priority={t.priority} /></td>
-                            <td style={tableCellStyle}><StatusBadge status={t.status} /></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div style={{ marginBottom: "12px", backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "6px" }}>
+                    {myTasks.map((t) => (
+                      <div key={t.id} style={{
+                        padding: "8px 8px",
+                        borderBottom: `1px solid ${COLOURS.LIGHT}`,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                      }}>
+                        <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, minWidth: 0, flex: 1 }}>
+                          {t.description}
+                          <div style={{ fontSize: "10px", color: isOverdue(t) ? COLOURS.RED : COLOURS.SLATE, marginTop: "2px" }}>
+                            {t.due_date ? formatDateUK(t.due_date) : "No due date"}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                          <PriorityBadge priority={t.priority} />
+                          <StatusBadge status={t.status} />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </>
               )}
@@ -344,36 +329,32 @@ export default function PADashboardPage() {
                       {group.tasks.length} open
                     </span>
                   </div>
-                  <div style={{ overflowX: "auto", backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 6px 6px" }}>
-                    <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
-                      <thead>
-                        <tr>
-                          <th style={tableHeaderStyle}>Description</th>
-                          <th style={tableHeaderStyle}>Due</th>
-                          <th style={tableHeaderStyle}>Priority</th>
-                          <th style={tableHeaderStyle}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {group.tasks
-                          .sort((a, b) => daysOverdue(b) - daysOverdue(a))
-                          .map((t) => (
-                            <tr key={t.id}>
-                              <td style={tableCellBoldStyle}>{t.description}</td>
-                              <td style={{
-                                ...tableCellStyle,
-                                color: isOverdue(t) ? COLOURS.RED : COLOURS.NAVY,
-                                fontWeight: isOverdue(t) ? 700 : 400,
-                              }}>
-                                {t.due_date ? formatDateUK(t.due_date) : "—"}
-                                {isOverdue(t) && ` (${daysOverdue(t)}d)`}
-                              </td>
-                              <td style={tableCellStyle}><PriorityBadge priority={t.priority} /></td>
-                              <td style={tableCellStyle}><StatusBadge status={t.status} /></td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
+                  <div style={{ backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 6px 6px", padding: "6px" }}>
+                    {group.tasks
+                      .sort((a, b) => daysOverdue(b) - daysOverdue(a))
+                      .map((t) => (
+                        <div key={t.id} style={{
+                          padding: "8px 8px",
+                          borderBottom: `1px solid ${COLOURS.LIGHT}`,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          gap: "8px",
+                          flexWrap: "wrap",
+                        }}>
+                          <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, minWidth: 0, flex: 1 }}>
+                            {t.description}
+                            <div style={{ fontSize: "10px", color: isOverdue(t) ? COLOURS.RED : COLOURS.SLATE, marginTop: "2px", fontWeight: isOverdue(t) ? 700 : 400 }}>
+                              {t.due_date ? formatDateUK(t.due_date) : "No due date"}
+                              {isOverdue(t) && ` · ${daysOverdue(t)}d overdue`}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                            <PriorityBadge priority={t.priority} />
+                            <StatusBadge status={t.status} />
+                          </div>
+                        </div>
+                      ))}
                   </div>
                 </div>
               ))}

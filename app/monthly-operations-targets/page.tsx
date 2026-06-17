@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import RoleGuard from "../lib/RoleGuard";
 import { supabase } from "../lib/supabase";
+import { useMobile } from "../lib/useMobile";
 
 type Plant = { id: string; name: string; type: string; active: boolean };
 type MonthlyTarget = {
@@ -59,6 +60,7 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 export default function MonthlyOperationsTargetsPage() {
+  const isMobile = useMobile();
   const [member, setMember] = useState<Member | null>(null);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [productionTargets, setProductionTargets] = useState<MonthlyTarget[]>([]);
@@ -182,10 +184,12 @@ export default function MonthlyOperationsTargetsPage() {
 
   const existingTarget = getExistingTarget();
 
+  const mainPadding = isMobile ? "12px 14px" : "20px 24px";
+
   if (loading) {
     return (
       <AuthWrapper>
-        <main style={{ padding: "20px 24px" }}>
+        <main style={{ padding: mainPadding }}>
           <p style={{ color: SLATE, fontSize: "13px" }}>Loading monthly targets…</p>
         </main>
       </AuthWrapper>
@@ -194,7 +198,7 @@ export default function MonthlyOperationsTargetsPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: "20px 24px" }}>
+      <main style={{ padding: mainPadding, maxWidth: "100vw", overflowX: "hidden" }}>
         <RoleGuard allowedRoles={["Admin", "Executive"]}>
           <div style={{ marginBottom: "16px" }}>
             <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
@@ -208,7 +212,7 @@ export default function MonthlyOperationsTargetsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(280px, 440px) 1fr",
+              gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 440px) 1fr",
               gap: "20px",
               alignItems: "start",
             }}
@@ -370,7 +374,7 @@ function TargetsTable({ targets }: { targets: MonthlyTarget[] }) {
         backgroundColor: "white",
       }}
     >
-      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "560px" }}>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
         <thead>
           <tr style={{ backgroundColor: "#f8fafc" }}>
             {["Plant", "31 ft", "36 ft", "45 ft", "Meters", "Total", "Submitted By"].map((h) => (
