@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { useMobile } from "../lib/useMobile";
 
 type Member = {
   id: string;
@@ -78,6 +79,7 @@ function fullName(firstName: string | null, lastName: string | null, oldName?: s
 }
 
 export default function MembersManager() {
+  const isMobile = useMobile();
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState<string>("Member");
   const [loading, setLoading] = useState(true);
@@ -323,7 +325,7 @@ export default function MembersManager() {
             Add a member
           </h2>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(150px, 1fr))", gap: "8px", alignItems: "center" }}>
             <input
               style={inputStyle}
               placeholder="First Name"
@@ -427,10 +429,10 @@ export default function MembersManager() {
               style={{
                 border: "1px solid #e0e0e0",
                 borderRadius: "8px",
-                padding: "14px 16px",
+                padding: isMobile ? "12px" : "14px 16px",
                 display: "grid",
-                gridTemplateColumns: "1.5fr 1.5fr 1fr 1.5fr 1.5fr auto",
-                gap: "10px",
+                gridTemplateColumns: isMobile ? "1fr" : "1.5fr 1.5fr 1fr 1.5fr 1.5fr auto",
+                gap: isMobile ? "8px" : "10px",
                 alignItems: "center",
               }}
             >

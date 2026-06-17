@@ -14,6 +14,7 @@ import {
   tableCellBoldStyle as tdBold,
 } from "../lib/SharedUI";
 import { formatDateUK } from "../lib/dateUtils";
+import { useMobile } from "../lib/useMobile";
 
 // This page reads from the `tasks` table — filtered to escalation tasks only.
 // The exception engine in the Executive dashboard auto-creates a task whenever
@@ -55,6 +56,7 @@ function sourceLabel(s: string | null): string {
 }
 
 export default function ExceptionsPage() {
+  const isMobile = useMobile();
   const [escalations, setEscalations] = useState<EscalationTask[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -130,19 +132,19 @@ export default function ExceptionsPage() {
             {waitingReply.length > 0 && (
               <>
                 <SectionTitle title={`Waiting Reply — ${waitingReply.length}`} />
-                <EscalationTable rows={waitingReply} />
+                <EscalationTable rows={waitingReply} mobile={isMobile} />
               </>
             )}
             {submitted.length > 0 && (
               <>
                 <SectionTitle title={`Awaiting Review — ${submitted.length}`} />
-                <EscalationTable rows={submitted} />
+                <EscalationTable rows={submitted} mobile={isMobile} />
               </>
             )}
             {closed.length > 0 && (
               <>
                 <SectionTitle title={`Closed — ${closed.length}`} />
-                <EscalationTable rows={closed} />
+                <EscalationTable rows={closed} mobile={isMobile} />
               </>
             )}
           </>
@@ -152,7 +154,45 @@ export default function ExceptionsPage() {
   );
 }
 
-function EscalationTable({ rows }: { rows: EscalationTask[] }) {
+function EscalationTable({ rows, mobile }: { rows: EscalationTask[]; mobile: boolean }) {
+  if (mobile) {
+    return (
+      <div style={{ marginBottom: "8px" }}>
+        {rows.map((row) => (
+          <div key={row.id} style={{
+            border: `1px solid ${COLOURS.BORDER}`,
+            borderLeft: `3px solid ${row.status === "Waiting Reply" ? COLOURS.RED : COLOURS.AMBER}`,
+            borderRadius: "6px",
+            padding: "10px 12px",
+            backgroundColor: "white",
+            marginBottom: "6px",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "6px" }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, minWidth: 0, flex: 1 }}>
+                {row.description}
+              </div>
+              <StatusBadge status={row.status} />
+            </div>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px", fontSize: "10px", color: COLOURS.SLATE }}>
+              <span style={{
+                fontWeight: 700,
+                padding: "1px 6px",
+                borderRadius: "8px",
+                backgroundColor: row.source_type === "kpi_escalation" ? "#dbeafe" : "#fef3c7",
+                color: row.source_type === "kpi_escalation" ? "#1e40af" : "#92400e",
+              }}>
+                {sourceLabel(row.source_type)}
+              </span>
+              <span>{exceptionTypeLabel(row.exception_type)}</span>
+              <span>→ {row.assigned_to || "—"}</span>
+              <span>Due: {formatDateUK(row.due_date)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -170,8 +210,6 @@ function EscalationTable({ rows }: { rows: EscalationTask[] }) {
             <th style={th}>Type</th>
             <th style={th}>Description</th>
             <th style={th}>Owner</th>
-            <th style={th}>Department</th>
-            <th style={th}>Raised</th>
             <th style={th}>Due</th>
             <th style={th}>Status</th>
           </tr>
@@ -200,10 +238,6 @@ function EscalationTable({ rows }: { rows: EscalationTask[] }) {
                 {row.description}
               </td>
               <td style={td}>{row.assigned_to || "—"}</td>
-              <td style={{ ...td, color: COLOURS.SLATE }}>
-                {row.assigned_to_department || "—"}
-              </td>
-              <td style={td}>{formatDateUK(row.created_at)}</td>
               <td style={td}>{formatDateUK(row.due_date)}</td>
               <td style={td}>
                 <StatusBadge status={row.status} />
