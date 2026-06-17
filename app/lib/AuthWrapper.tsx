@@ -274,34 +274,36 @@ export default function AuthWrapper({
 
           <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px", minWidth: 0 }}>
             {!isMobile && (
-              <span
-                style={{
-                  fontSize: "13px",
-                  color: NAVY,
-                  fontWeight: 600,
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  maxWidth: "220px",
-                }}
-              >
-                {displayName(member, email)}
-              </span>
+              <>
+                <span
+                  style={{
+                    fontSize: "13px",
+                    color: NAVY,
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: "220px",
+                  }}
+                >
+                  {displayName(member, email)}
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    backgroundColor: roleColor,
+                    color: "white",
+                    padding: "2px 9px",
+                    borderRadius: "10px",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                >
+                  {currentRole}
+                </span>
+              </>
             )}
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                backgroundColor: roleColor,
-                color: "white",
-                padding: "2px 9px",
-                borderRadius: "10px",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              {currentRole}
-            </span>
 
             {/* Settings dropdown — only Admin / Executive */}
             {canSeeSettings && (
@@ -389,8 +391,8 @@ export default function AuthWrapper({
                 backgroundColor: NAVY,
                 border: "none",
                 borderRadius: "7px",
-                padding: isMobile ? "7px 10px" : "8px 14px",
-                fontSize: isMobile ? "11px" : "13px",
+                padding: "8px 12px",
+                fontSize: "13px",
                 fontWeight: 600,
                 color: "white",
                 cursor: "pointer",
@@ -398,7 +400,7 @@ export default function AuthWrapper({
                 flexShrink: 0,
               }}
             >
-              {isMobile ? "Out" : "Sign out"}
+              Sign out
             </button>
           </div>
         </div>

@@ -468,7 +468,7 @@ export default function DashboardView() {
 
       <SectionTitle title="Breakage KPI" />
       <div style={{ overflowX: "auto", marginBottom: "24px" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "500px" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
           <thead>
             <tr style={{ backgroundColor: "#f8fafc" }}>
               <th style={th}>Plant</th>
@@ -556,7 +556,7 @@ function taskBadgeColor(status: string) {
 function KPITable({ summaries, metric }: { summaries: PlantSummary[]; metric: "production" | "dispatch" }) {
   return (
     <div style={{ overflowX: "auto", marginBottom: "24px" }}>
-      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "820px" }}>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
         <thead>
           <tr style={{ backgroundColor: "#f8fafc" }}>
             <th style={th}>Plant</th>

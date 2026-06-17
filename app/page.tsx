@@ -111,11 +111,18 @@ function HeroCarousel({
         />
       )}
 
-      <div style={captionStyle}>
-        <div style={captionTitleStyle}>{slide.title}</div>
-        <div style={captionSubtitleStyle}>{slide.subtitle}</div>
+      <div style={{
+        ...captionStyle,
+        left: isMobile ? "8px" : "24px",
+        right: isMobile ? "8px" : "24px",
+        bottom: isMobile ? "8px" : "24px",
+        padding: isMobile ? "10px 12px" : "18px",
+        borderRadius: isMobile ? "10px" : "16px",
+      }}>
+        <div style={{ fontSize: isMobile ? "15px" : "24px", fontWeight: 800, marginBottom: isMobile ? "2px" : "6px" }}>{slide.title}</div>
+        <div style={{ color: "#dbeafe", fontSize: isMobile ? "11px" : "15px" }}>{slide.subtitle}</div>
 
-        <div style={dotsStyle}>
+        <div style={{ ...dotsStyle, marginTop: isMobile ? "6px" : "14px" }}>
           {slides.map((_, index) => (
             <button
               key={index}

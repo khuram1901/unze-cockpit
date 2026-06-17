@@ -163,7 +163,7 @@ function EscalationTable({ rows }: { rows: EscalationTask[] }) {
         marginBottom: "8px",
       }}
     >
-      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "820px" }}>
+      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
         <thead>
           <tr style={{ backgroundColor: "#f8fafc" }}>
             <th style={th}>Source</th>
