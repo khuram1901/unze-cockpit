@@ -349,6 +349,11 @@ export default function ExecutiveDashboardPage() {
   const [lastYearReceipts, setLastYearReceipts] = useState<number | null>(null);
   const [lastYearPayments, setLastYearPayments] = useState<number | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+
+  function toggleCard(card: string) {
+    setExpandedCard((prev) => prev === card ? null : card);
+  }
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -911,14 +916,59 @@ export default function ExecutiveDashboardPage() {
               <>
                 <SectionTitle title="Needs Your Attention" />
                 <div style={squareGrid}>
-                  {overdueTasks.length > 0 && <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" />}
-                  {waitingReplies.length > 0 && <Card title="Waiting Replies" value={waitingReplies.length} color="#dc2626" />}
-                  {escalations.length > 0 && <Card title="Escalations" value={escalations.length} color="#dc2626" />}
-                  {downMachines.length > 0 && <Card title="Machines Down" value={downMachines.length} color="#b91c1c" />}
-                  {missingPlants.length > 0 && <Card title="Plants Not Reported" value={missingPlants.length} color="#ef4444" />}
-                  {dueThisWeekTasks.length > 0 && <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" />}
+                  {overdueTasks.length > 0 && <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" onClick={() => toggleCard("overdue")} />}
+                  {waitingReplies.length > 0 && <Card title="Waiting Replies" value={waitingReplies.length} color="#dc2626" onClick={() => toggleCard("waiting")} />}
+                  {escalations.length > 0 && <Card title="Escalations" value={escalations.length} color="#dc2626" onClick={() => toggleCard("escalations")} />}
+                  {downMachines.length > 0 && <Card title="Machines Down" value={downMachines.length} color="#b91c1c" onClick={() => toggleCard("machines")} />}
+                  {missingPlants.length > 0 && <Card title="Plants Not Reported" value={missingPlants.length} color="#ef4444" onClick={() => toggleCard("missing")} />}
+                  {dueThisWeekTasks.length > 0 && <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" onClick={() => toggleCard("dueweek")} />}
                 </div>
-                {escalations.length > 0 && <EscalationTrafficLights escalations={escalations} />}
+
+                {/* Inline detail panels */}
+                {expandedCard === "overdue" && (
+                  <DetailPanel title="Overdue Tasks" onClose={() => setExpandedCard(null)} linkHref="/tasks" linkLabel="Open Tasks page">
+                    {overdueTasks.map((t) => (
+                      <DetailRow key={t.id} primary={t.description} secondary={`${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`} badge={t.priority} />
+                    ))}
+                  </DetailPanel>
+                )}
+                {expandedCard === "waiting" && (
+                  <DetailPanel title="Waiting Replies" onClose={() => setExpandedCard(null)} linkHref="/tasks" linkLabel="Open Tasks page">
+                    {waitingReplies.map((t) => (
+                      <DetailRow key={t.id} primary={t.description} secondary={`${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`} badge={t.priority} />
+                    ))}
+                  </DetailPanel>
+                )}
+                {expandedCard === "escalations" && (
+                  <DetailPanel title="Escalations" onClose={() => setExpandedCard(null)} linkHref="/exceptions" linkLabel="Open Exceptions page">
+                    {escalations.map((e) => (
+                      <DetailRow key={e.sourceLabel} primary={`${e.plantName} — ${e.metric}`} secondary={e.detail} />
+                    ))}
+                  </DetailPanel>
+                )}
+                {expandedCard === "machines" && (
+                  <DetailPanel title="Machines Down" onClose={() => setExpandedCard(null)}>
+                    {downMachines.map((m) => (
+                      <DetailRow key={m.id} primary={`${m.plant_name} — ${m.machine_name}`} secondary={m.issue_description || "No description"} />
+                    ))}
+                  </DetailPanel>
+                )}
+                {expandedCard === "missing" && (
+                  <DetailPanel title="Plants Not Reported Today" onClose={() => setExpandedCard(null)} linkHref="/production" linkLabel="Open Daily Entry">
+                    {missingPlants.map((s) => (
+                      <DetailRow key={s.plant.id} primary={s.plant.name} secondary={`Type: ${s.plant.type}`} />
+                    ))}
+                  </DetailPanel>
+                )}
+                {expandedCard === "dueweek" && (
+                  <DetailPanel title="Due This Week" onClose={() => setExpandedCard(null)} linkHref="/tasks" linkLabel="Open Tasks page">
+                    {dueThisWeekTasks.map((t) => (
+                      <DetailRow key={t.id} primary={t.description} secondary={`${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`} badge={t.priority} />
+                    ))}
+                  </DetailPanel>
+                )}
+
+                {expandedCard === null && escalations.length > 0 && <EscalationTrafficLights escalations={escalations} />}
               </>
             )}
             {overdueTasks.length === 0 && waitingReplies.length === 0 && escalations.length === 0 && missingPlants.length === 0 && downMachines.length === 0 && (
@@ -945,13 +995,13 @@ export default function ExecutiveDashboardPage() {
               gap: "8px",
               marginBottom: "14px",
             }}>
-              <Card title="Produced" value={produced} color="#16a34a" />
-              <Card title="Dispatched" value={dispatched} color="#7c3aed" />
-              <Card title="Broken" value={broken} color="#dc2626" />
-              <Card title="Machine Issues" value={machineIssues.length} color={machineIssues.length > 0 ? "#b91c1c" : "#16a34a"} />
-              <Card title="Good Stock" value={closingGoodStock} color="#0070f3" />
-              <Card title="Broken Stock" value={closingBrokenStock} color="#d97706" />
-              <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" />
+              <Card title="Produced" value={produced} color="#16a34a" href="/dashboard" />
+              <Card title="Dispatched" value={dispatched} color="#7c3aed" href="/dashboard" />
+              <Card title="Broken" value={broken} color="#dc2626" href="/dashboard" />
+              <Card title="Machine Issues" value={machineIssues.length} color={machineIssues.length > 0 ? "#b91c1c" : "#16a34a"} href="/dashboard" />
+              <Card title="Good Stock" value={closingGoodStock} color="#0070f3" href="/dashboard" />
+              <Card title="Broken Stock" value={closingBrokenStock} color="#d97706" href="/dashboard" />
+              <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" href="/tasks" />
             </div>
             {/* Two continuous columns: left = Finance + Department, right = Receivables + People */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
@@ -1201,11 +1251,93 @@ function SectionTitle({ title }: { title: string }) {
   );
 }
 
-function Card({ title, value, color }: { title: string; value: number; color: string }) {
-  return (
-    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
-      <div style={{ color: SLATE, fontSize: "15px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
+function Card({ title, value, color, onClick, href }: { title: string; value: number; color: string; onClick?: () => void; href?: string }) {
+  const isClickable = !!(onClick || href);
+  const content = (
+    <div style={{
+      border: `1px solid ${BORDER}`,
+      borderTop: `3px solid ${color}`,
+      borderRadius: "7px",
+      padding: "8px 10px",
+      backgroundColor: "white",
+      cursor: isClickable ? "pointer" : "default",
+      transition: "box-shadow 0.15s",
+    }}
+    onClick={onClick}
+    onMouseEnter={isClickable ? (e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; } : undefined}
+    onMouseLeave={isClickable ? (e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; } : undefined}
+    >
+      <div style={{ color: SLATE, fontSize: "15px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {title} {isClickable && <span style={{ fontSize: "12px" }}>→</span>}
+      </div>
       <div style={{ fontSize: "19px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
+    </div>
+  );
+
+  if (href) {
+    return <a href={href} style={{ textDecoration: "none" }}>{content}</a>;
+  }
+  return content;
+}
+
+function DetailPanel({ title, children, onClose, linkHref, linkLabel }: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
+  linkHref?: string;
+  linkLabel?: string;
+}) {
+  return (
+    <div style={{
+      border: `1px solid ${BORDER}`,
+      borderRadius: "8px",
+      backgroundColor: "white",
+      marginBottom: "14px",
+      overflow: "hidden",
+    }}>
+      <div style={{
+        padding: "10px 14px",
+        backgroundColor: "#f8fafc",
+        borderBottom: `1px solid ${BORDER}`,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}>
+        <span style={{ fontSize: "16px", fontWeight: 700, color: NAVY }}>{title}</span>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          {linkHref && (
+            <a href={linkHref} style={{ fontSize: "14px", color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>
+              {linkLabel || "View all"} →
+            </a>
+          )}
+          <button onClick={onClose} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "4px 10px", fontSize: "14px", color: SLATE, cursor: "pointer" }}>
+            Close
+          </button>
+        </div>
+      </div>
+      <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ primary, secondary, badge }: { primary: string; secondary?: string; badge?: string | null }) {
+  return (
+    <div style={{ padding: "9px 14px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>{primary}</div>
+        {secondary && <div style={{ fontSize: "14px", color: SLATE, marginTop: "2px" }}>{secondary}</div>}
+      </div>
+      {badge && (
+        <span style={{
+          fontSize: "12px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", whiteSpace: "nowrap", flexShrink: 0,
+          backgroundColor: badge === "High" || badge === "Urgent" ? "#dc2626" : badge === "Medium" ? "#0070f3" : "#64748b",
+          color: "white",
+        }}>
+          {badge}
+        </span>
+      )}
     </div>
   );
 }
