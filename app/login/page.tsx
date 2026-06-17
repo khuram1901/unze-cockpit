@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useMobile } from "../lib/useMobile";
 
 type MemberProfile = {
   role: string | null;
@@ -63,6 +64,7 @@ function getLandingRoute(profile: MemberProfile | null, email: string) {
 
 export default function LoginPage() {
   const router = useRouter();
+  const isMobile = useMobile();
 
   const [active, setActive] = useState(0);
   const [email, setEmail] = useState("");
@@ -109,18 +111,17 @@ export default function LoginPage() {
   const slide = slides[active];
 
   return (
-    <main style={pageStyle}>
-      <section style={shellStyle}>
-        <div style={loginCardStyle}>
+    <main style={{ ...pageStyle, padding: isMobile ? "16px" : "32px" }}>
+      <section style={{ ...shellStyle, gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(320px, 1fr))", gap: isMobile ? "20px" : "36px" }}>
+        <div style={{ ...loginCardStyle, padding: isMobile ? "20px" : "34px" }}>
           <Link href="/" style={backLinkStyle}>
             ← Back to Home
           </Link>
 
-          <h1 style={titleStyle}>Unze Group Cockpit</h1>
+          <h1 style={{ ...titleStyle, fontSize: isMobile ? "24px" : "42px", margin: isMobile ? "16px 0 10px" : "28px 0 14px" }}>Unze Group Cockpit</h1>
 
-          <p style={subtitleStyle}>
-            Sign in to access your role-based dashboard, tasks, exceptions,
-            meeting requests, and management cockpit.
+          <p style={{ ...subtitleStyle, fontSize: isMobile ? "13px" : "17px", marginBottom: isMobile ? "16px" : "26px" }}>
+            Sign in to access your dashboard, tasks, and management cockpit.
           </p>
 
           <form onSubmit={handleSubmit}>
@@ -177,7 +178,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <HeroCarousel slide={slide} active={active} setActive={setActive} />
+        {!isMobile && <HeroCarousel slide={slide} active={active} setActive={setActive} />}
       </section>
 
       <div style={footerStyle}>© Unze Group 1989–2026 · Cockpit v1.0</div>

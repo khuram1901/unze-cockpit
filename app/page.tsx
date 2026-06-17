@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useMobile } from "./lib/useMobile";
 
 const slides = [
   {
@@ -33,6 +34,7 @@ const slides = [
 ];
 
 export default function HomePage() {
+  const isMobile = useMobile();
   const [active, setActive] = useState(0);
 
   useEffect(() => {
@@ -46,23 +48,23 @@ export default function HomePage() {
   const slide = slides[active];
 
   return (
-    <main style={pageStyle}>
-      <section style={shellStyle}>
+    <main style={{ ...pageStyle, padding: isMobile ? "16px" : "32px" }}>
+      <section style={{ ...shellStyle, gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(320px, 1fr))", gap: isMobile ? "20px" : "36px" }}>
         <div>
-          <div style={pillStyle}>● CEO Operating System</div>
+          <div style={{ ...pillStyle, fontSize: isMobile ? "12px" : "14px", padding: isMobile ? "6px 12px" : "8px 14px", marginBottom: isMobile ? "14px" : "24px" }}>● CEO Operating System</div>
 
-          <h1 style={titleStyle}>Unze Group Command Centre</h1>
+          <h1 style={{ ...titleStyle, fontSize: isMobile ? "28px" : "56px", marginBottom: isMobile ? "10px" : "18px" }}>Unze Group Command Centre</h1>
 
-          <p style={subtitleStyle}>
+          <p style={{ ...subtitleStyle, fontSize: isMobile ? "14px" : "18px", marginBottom: isMobile ? "10px" : "18px" }}>
             Operations • Finance • Manufacturing • Retail • Hospitality
           </p>
 
-          <p style={bodyTextStyle}>
+          <p style={{ ...bodyTextStyle, fontSize: isMobile ? "14px" : "18px", marginBottom: isMobile ? "18px" : "28px" }}>
             One command centre for performance visibility, exception management,
             tasks, meetings, finance, and executive decisions.
           </p>
 
-          <Link href="/login" style={primaryButtonStyle}>
+          <Link href="/login" style={{ ...primaryButtonStyle, padding: isMobile ? "12px 20px" : "14px 24px" }}>
             Enter Cockpit
           </Link>
         </div>
@@ -71,6 +73,7 @@ export default function HomePage() {
           slide={slide}
           active={active}
           setActive={setActive}
+          isMobile={isMobile}
         />
       </section>
 
@@ -83,21 +86,24 @@ function HeroCarousel({
   slide,
   active,
   setActive,
+  isMobile,
 }: {
   slide: (typeof slides)[number];
   active: number;
   setActive: (index: number) => void;
+  isMobile: boolean;
 }) {
+  const heroHeight = isMobile ? "240px" : "430px";
   return (
-    <div style={heroBoxStyle}>
+    <div style={{ ...heroBoxStyle, minHeight: heroHeight }}>
       {slide.type === "logo" ? (
-        <div style={logoSlideStyle}>
-          <img src={slide.image} alt={slide.title} style={logoImageStyle} />
+        <div style={{ ...logoSlideStyle, height: heroHeight, padding: isMobile ? "24px" : "42px" }}>
+          <img src={slide.image} alt={slide.title} style={{ ...logoImageStyle, maxHeight: isMobile ? "120px" : "240px" }} />
         </div>
       ) : (
         <div
           style={{
-            height: "430px",
+            height: heroHeight,
             backgroundImage: `linear-gradient(rgba(31,42,68,0.20), rgba(31,42,68,0.65)), url('${slide.image}')`,
             backgroundSize: "cover",
             backgroundPosition: "center",
