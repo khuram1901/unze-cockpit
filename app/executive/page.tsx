@@ -809,6 +809,26 @@ export default function ExecutiveDashboardPage() {
   const departmentRows = buildPerformanceRows(tasks, "department");
   const peopleRows = buildPerformanceRows(tasks, "person");
 
+  // Build department → people mapping for drill-down
+  const deptPeopleMap = new Map<string, PerformanceRow[]>();
+  for (const task of tasks) {
+    const dept = task.assigned_to_department || "Unassigned Department";
+    const person = task.assigned_to || "Unassigned Person";
+    if (!deptPeopleMap.has(dept)) deptPeopleMap.set(dept, []);
+    const rows = deptPeopleMap.get(dept)!;
+    let row = rows.find((r) => r.name === person);
+    if (!row) {
+      row = { name: person, red: 0, amber: 0, green: 0, total: 0 };
+      rows.push(row);
+    }
+    const color = taskColor(task);
+    row[color] += 1;
+    row.total += 1;
+  }
+  for (const rows of deptPeopleMap.values()) {
+    rows.sort((a, b) => b.red - a.red || b.amber - a.amber || a.name.localeCompare(b.name));
+  }
+
   const selectedMonth = getMonthFromDate(selectedDate);
   const currentQuarter = getMonthQuarter(selectedDate);
 
@@ -895,9 +915,7 @@ export default function ExecutiveDashboardPage() {
                 <div style={squareGrid}>
                   <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" />
                   <Card title="Waiting Replies" value={waitingReplies.length} color="#dc2626" />
-                  <Card title="Machines Down" value={downMachines.length} color="#dc2626" />
                   <Card title="Plants Missing" value={missingPlants.length} color="#ef4444" />
-                  <Card title="Escalations" value={escalations.length} color="#dc2626" />
                   <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" />
                   <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" />
                 </div>
@@ -1062,8 +1080,8 @@ export default function ExecutiveDashboardPage() {
                 </>
                 )}
 
-                <SectionTitle title="Department Performance" />
-                <PerformanceTable rows={departmentRows} />
+                <SectionTitle title="Performance by Department" />
+                <DrillDownPerformance departmentRows={departmentRows} deptPeopleMap={deptPeopleMap} />
               </div>
 
               {/* RIGHT COLUMN */}
@@ -1105,8 +1123,6 @@ export default function ExecutiveDashboardPage() {
                   </div>
                 )}
 
-                <SectionTitle title="People Performance" />
-                <PerformanceTable rows={peopleRows} />
               </div>
             </div>
           </>
@@ -1188,6 +1204,79 @@ function SlimAlert({ color, text }: { color: string; text: string }) {
     <div style={{ display: "flex", alignItems: "center", gap: "10px", backgroundColor: "white", border: `1px solid ${BORDER}`, borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
       <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
       <span style={{ fontSize: "17px", color: NAVY }}>{text}</span>
+    </div>
+  );
+}
+
+function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRows: PerformanceRow[]; deptPeopleMap: Map<string, PerformanceRow[]> }) {
+  const [expandedDept, setExpandedDept] = useState<string | null>(null);
+
+  if (departmentRows.length === 0) return <p style={{ color: SLATE, fontSize: "17px" }}>No task data yet.</p>;
+
+  return (
+    <div style={{ marginBottom: "12px" }}>
+      {departmentRows.map((dept) => {
+        const isExpanded = expandedDept === dept.name;
+        const deptPeople = deptPeopleMap.get(dept.name) || [];
+        return (
+          <div key={dept.name} style={{ marginBottom: "4px" }}>
+            <button
+              onClick={() => setExpandedDept(isExpanded ? null : dept.name)}
+              style={{
+                width: "100%",
+                textAlign: "left",
+                border: `1px solid ${BORDER}`,
+                borderRadius: isExpanded ? "8px 8px 0 0" : "8px",
+                padding: "10px 12px",
+                backgroundColor: "white",
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "14px", color: SLATE }}>{isExpanded ? "▼" : "▶"}</span>
+                <span style={{ fontWeight: 700, fontSize: "16px", color: NAVY }}>{dept.name}</span>
+              </div>
+              <div style={{ display: "flex", gap: "12px", fontSize: "15px" }}>
+                {dept.red > 0 && <span style={{ color: "#dc2626", fontWeight: 700 }}>{dept.red} red</span>}
+                {dept.amber > 0 && <span style={{ color: "#d97706", fontWeight: 700 }}>{dept.amber} amber</span>}
+                {dept.green > 0 && <span style={{ color: "#16a34a", fontWeight: 700 }}>{dept.green} green</span>}
+                <span style={{ color: SLATE }}>{dept.total} total</span>
+              </div>
+            </button>
+            {isExpanded && (
+              <div style={{
+                border: `1px solid ${BORDER}`,
+                borderTop: "none",
+                borderRadius: "0 0 8px 8px",
+                backgroundColor: "#f8fafc",
+                padding: "6px",
+              }}>
+                {deptPeople
+                  .filter((p) => p.total > 0)
+                  .map((person) => (
+                    <div key={person.name} style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      padding: "6px 10px",
+                      borderBottom: `1px solid ${BORDER}`,
+                      fontSize: "15px",
+                    }}>
+                      <span style={{ color: NAVY, fontWeight: 600 }}>{person.name}</span>
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        {person.red > 0 && <span style={{ color: "#dc2626", fontWeight: 700 }}>{person.red}</span>}
+                        {person.amber > 0 && <span style={{ color: "#d97706", fontWeight: 700 }}>{person.amber}</span>}
+                        {person.green > 0 && <span style={{ color: "#16a34a", fontWeight: 700 }}>{person.green}</span>}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
