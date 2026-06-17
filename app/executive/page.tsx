@@ -8,6 +8,7 @@ import { formatDateUK, workingDaysFromNow } from "../lib/dateUtils";
 import { RAGStatus, ragColour } from "../lib/SharedUI";
 import { UTPL_COMPANY_ID } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
+import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number; meter: number };
@@ -350,6 +351,7 @@ export default function ExecutiveDashboardPage() {
   const [lastYearPayments, setLastYearPayments] = useState<number | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[]>([]);
 
   function toggleCard(card: string) {
     setExpandedCard((prev) => prev === card ? null : card);
@@ -771,6 +773,23 @@ export default function ExecutiveDashboardPage() {
 
     setSummaries(result);
     setEscalations(foundEscalations);
+
+    // Department Health roll-up
+    const healthResults: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[] = [];
+    for (const deptConfig of DEPARTMENT_CONFIGS) {
+      const { data: deptData } = await supabase
+        .from(deptConfig.table)
+        .select("*")
+        .eq("company_id", UTPL_COMPANY_ID);
+      const deptRows = (deptData || []) as Record<string, unknown>[];
+      healthResults.push({
+        slug: deptConfig.slug,
+        title: deptConfig.title,
+        status: getDepartmentHealthStatus(deptRows, deptConfig),
+      });
+    }
+    setDeptHealth(healthResults);
+
     setLoading(false);
   }
 
@@ -1149,6 +1168,40 @@ export default function ExecutiveDashboardPage() {
                 )}
                 </>
                 )}
+
+                <SectionTitle title="Department Health" />
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: "8px",
+                  marginBottom: "14px",
+                }}>
+                  {deptHealth.map((d) => (
+                    <a key={d.slug} href={`/department/${d.slug}`} style={{ textDecoration: "none" }}>
+                      <div style={{
+                        border: `1px solid ${BORDER}`,
+                        borderTop: `3px solid ${d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626"}`,
+                        borderRadius: "7px",
+                        padding: "8px 10px",
+                        backgroundColor: "white",
+                        cursor: "pointer",
+                        transition: "box-shadow 0.15s",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
+                      >
+                        <div style={{ fontSize: "15px", color: SLATE, marginBottom: "2px" }}>{d.title} →</div>
+                        <div style={{
+                          fontSize: "17px",
+                          fontWeight: 800,
+                          color: d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626",
+                        }}>
+                          {d.status}
+                        </div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
 
                 <SectionTitle title="Performance by Department" />
                 <DrillDownPerformance departmentRows={departmentRows} deptPeopleMap={deptPeopleMap} />
