@@ -89,6 +89,50 @@ export default function FinanceManager() {
   const [saving, setSaving] = useState(false);
   const [gmailConnected, setGmailConnected] = useState(false);
 
+  // Forecast upload state
+  const [forecastFile, setForecastFile] = useState<File | null>(null);
+  const [forecastUploading, setForecastUploading] = useState(false);
+  const [forecastResult, setForecastResult] = useState<{
+    success: boolean;
+    months?: string[];
+    categories?: number;
+    totalRows?: number;
+    error?: string;
+  } | null>(null);
+
+  async function handleForecastUpload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!forecastFile) return;
+    setForecastUploading(true);
+    setForecastResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", forecastFile);
+      formData.append("uploadedBy", "manual");
+      const res = await fetch("/api/finance/upload-forecast", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setForecastResult({ success: false, error: data.error });
+        showMsg("Error: " + (data.error || "Upload failed"));
+      } else {
+        setForecastResult({
+          success: true,
+          months: data.months,
+          categories: data.categories,
+          totalRows: data.totalRows,
+        });
+        showMsg("Cash flow forecast uploaded — " + data.categories + " categories across " + data.months.length + " months.");
+        setForecastFile(null);
+      }
+    } catch {
+      setForecastResult({ success: false, error: "Network error" });
+    }
+    setForecastUploading(false);
+  }
+
   // PDF upload state
   const [cashFlowFile, setCashFlowFile] = useState<File | null>(null);
   const [bankPositionFile, setBankPositionFile] = useState<File | null>(null);
@@ -493,6 +537,65 @@ export default function FinanceManager() {
               </>
             ) : (
               <div style={{ color: RED, fontWeight: 600 }}>{uploadResult.error}</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── FORECAST UPLOAD ── */}
+      <SectionTitle title="Upload Cash Flow Forecast (Excel)" />
+      <div
+        style={{
+          border: `1px solid ${BORDER}`,
+          borderRadius: "8px",
+          padding: "16px",
+          backgroundColor: "white",
+          marginBottom: "16px",
+        }}
+      >
+        <p style={{ fontSize: "12px", color: SLATE, marginBottom: "12px" }}>
+          Upload the projected cash flow Excel. The system reads the &quot;Monthly-CF&quot; sheet and saves monthly budgets by category (inflows and outflows).
+        </p>
+        <form onSubmit={handleForecastUpload}>
+          <label style={labelStyle}>
+            Cash Flow Forecast Excel (.xlsx)
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => setForecastFile(e.target.files?.[0] || null)}
+              style={{ ...inputStyle, padding: "6px 8px" }}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={forecastUploading || !forecastFile}
+            style={{
+              ...btnStyle,
+              opacity: forecastUploading || !forecastFile ? 0.5 : 1,
+            }}
+          >
+            {forecastUploading ? "Parsing…" : "Upload & Parse Forecast"}
+          </button>
+        </form>
+
+        {forecastResult && (
+          <div
+            style={{
+              marginTop: "12px",
+              padding: "10px 14px",
+              borderRadius: "6px",
+              border: `1px solid ${BORDER}`,
+              borderLeft: `4px solid ${forecastResult.success ? GREEN : RED}`,
+              backgroundColor: "#fafbfc",
+              fontSize: "12px",
+            }}
+          >
+            {forecastResult.success ? (
+              <div style={{ color: NAVY }}>
+                <span style={{ fontWeight: 700 }}>Saved</span> — {forecastResult.categories} categories across {forecastResult.months?.join(", ")} ({forecastResult.totalRows} rows)
+              </div>
+            ) : (
+              <div style={{ color: RED, fontWeight: 600 }}>{forecastResult.error}</div>
             )}
           </div>
         )}
