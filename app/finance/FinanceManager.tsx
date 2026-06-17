@@ -38,21 +38,17 @@ const BLUE = "#0070f3";
 function fmt(n: number) {
   return n.toLocaleString();
 }
-
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
-
 function currentMonth() {
   return new Date().toISOString().slice(0, 7);
 }
-
 function formatDateUK(dateString: string | null) {
   if (!dateString) return "—";
   const [year, month, day] = dateString.slice(0, 10).split("-");
   return `${day}/${month}/${year}`;
 }
-
 function formatMonthUK(monthString: string) {
   const [year, month] = monthString.split("-");
   return `${month}/${year}`;
@@ -75,23 +71,6 @@ function SectionTitle({ title }: { title: string }) {
   );
 }
 
-function FormCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        border: `1px solid ${BORDER}`,
-        borderRadius: "8px",
-        padding: "16px",
-        backgroundColor: "white",
-        marginBottom: "16px",
-        maxWidth: "480px",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 export default function FinanceManager() {
   const [loading, setLoading] = useState(true);
 
@@ -99,13 +78,19 @@ export default function FinanceManager() {
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
   const [positions, setPositions] = useState<DailyPosition[]>([]);
 
+  // Which edit modal is open: null, 'opening', or 'plan'
+  const [openModal, setOpenModal] = useState<null | "opening" | "plan">(null);
+
+  // Opening balance form
   const [obDate, setObDate] = useState(todayStr());
   const [obAmount, setObAmount] = useState("");
 
+  // Monthly plan form
   const [planMonth, setPlanMonth] = useState(currentMonth());
   const [planRecv, setPlanRecv] = useState("");
   const [planPay, setPlanPay] = useState("");
 
+  // Daily position form (always visible)
   const [dpDate, setDpDate] = useState(todayStr());
   const [dpOpening, setDpOpening] = useState("");
   const [dpReceipts, setDpReceipts] = useState("");
@@ -135,9 +120,7 @@ export default function FinanceManager() {
         .order("position_date", { ascending: false })
         .limit(30),
     ]);
-    setOpening(
-      obRes.data && obRes.data.length > 0 ? obRes.data[0] : null
-    );
+    setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
     setPlan(planRes.data || null);
     setPositions(posRes.data || []);
     setLoading(false);
@@ -152,6 +135,30 @@ export default function FinanceManager() {
     setTimeout(() => setMsg(""), 4000);
   }
 
+  function openOpeningModal() {
+    if (opening) {
+      setObDate(opening.as_of_date);
+      setObAmount(String(opening.opening_amount));
+    } else {
+      setObDate(todayStr());
+      setObAmount("");
+    }
+    setOpenModal("opening");
+  }
+
+  function openPlanModal() {
+    if (plan) {
+      setPlanMonth(plan.plan_month);
+      setPlanRecv(String(plan.tentative_receivables));
+      setPlanPay(String(plan.tentative_payouts));
+    } else {
+      setPlanMonth(currentMonth());
+      setPlanRecv("");
+      setPlanPay("");
+    }
+    setOpenModal("plan");
+  }
+
   async function saveOpeningBalance(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
@@ -161,9 +168,12 @@ export default function FinanceManager() {
       currency: "PKR",
     });
     setSaving(false);
-    if (error) { showMsg("Error: " + error.message); return; }
+    if (error) {
+      showMsg("Error: " + error.message);
+      return;
+    }
     showMsg("✅ Opening balance saved.");
-    setObAmount("");
+    setOpenModal(null);
     loadData();
   }
 
@@ -179,32 +189,36 @@ export default function FinanceManager() {
       { onConflict: "plan_month" }
     );
     setSaving(false);
-    if (error) { showMsg("Error: " + error.message); return; }
+    if (error) {
+      showMsg("Error: " + error.message);
+      return;
+    }
     showMsg("✅ Monthly plan saved.");
+    setOpenModal(null);
     loadData();
   }
 
   async function saveDailyPosition(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const closingAfterPD =
-      Number(dpClosing) - Number(dpPostDated);
-    const { error } = await supabase
-      .from("daily_cash_position")
-      .upsert(
-        {
-          position_date: dpDate,
-          opening_balance: Number(dpOpening) || 0,
-          total_receipts: Number(dpReceipts) || 0,
-          total_payments: Number(dpPayments) || 0,
-          closing_balance: Number(dpClosing) || 0,
-          post_dated_total: Number(dpPostDated) || 0,
-          closing_after_post_dated: closingAfterPD,
-        },
-        { onConflict: "position_date" }
-      );
+    const closingAfterPD = Number(dpClosing) - Number(dpPostDated);
+    const { error } = await supabase.from("daily_cash_position").upsert(
+      {
+        position_date: dpDate,
+        opening_balance: Number(dpOpening) || 0,
+        total_receipts: Number(dpReceipts) || 0,
+        total_payments: Number(dpPayments) || 0,
+        closing_balance: Number(dpClosing) || 0,
+        post_dated_total: Number(dpPostDated) || 0,
+        closing_after_post_dated: closingAfterPD,
+      },
+      { onConflict: "position_date" }
+    );
     setSaving(false);
-    if (error) { showMsg("Error: " + error.message); return; }
+    if (error) {
+      showMsg("Error: " + error.message);
+      return;
+    }
     showMsg("✅ Daily position saved.");
     setDpOpening("");
     setDpReceipts("");
@@ -239,180 +253,84 @@ export default function FinanceManager() {
         </div>
       )}
 
-      {/* ── SUMMARY ROW ── */}
-      {(opening || latestPosition || plan) && (
-        <>
-          <SectionTitle title="Current Position" />
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-              gap: "8px",
-              marginBottom: "20px",
-            }}
-          >
-            {opening && (
-              <MiniCard
-                label="Opening Balance"
-                value={`PKR ${fmt(opening.opening_amount)}`}
-                sub={`as of ${formatDateUK(opening.as_of_date)}`}
-                color={BLUE}
-              />
-            )}
-            {plan && (
-              <>
-                <MiniCard
-                  label="Planned Receivables"
-                  value={`PKR ${fmt(plan.tentative_receivables)}`}
-                  sub={formatMonthUK(plan.plan_month)}
-                  color={GREEN}
-                />
-                <MiniCard
-                  label="Planned Payouts"
-                  value={`PKR ${fmt(plan.tentative_payouts)}`}
-                  sub={formatMonthUK(plan.plan_month)}
-                  color={RED}
-                />
-              </>
-            )}
-            {latestPosition && (
-              <MiniCard
-                label="Latest Closing Balance"
-                value={`PKR ${fmt(latestPosition.closing_balance)}`}
-                sub={formatDateUK(latestPosition.position_date)}
-                color={NAVY}
-              />
-            )}
-          </div>
-        </>
-      )}
-
-      {/* ── TWO-COLUMN LAYOUT: forms left, table right ── */}
+      {/* ── SUMMARY CARDS ROW ── */}
+      <SectionTitle title="Cash Position Overview" />
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(300px, 480px) 1fr",
-          gap: "24px",
-          alignItems: "start",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+          gap: "10px",
+          marginBottom: "8px",
         }}
       >
-        {/* LEFT: forms */}
-        <div>
-          <SectionTitle title="Opening Balance" />
-          <p style={{ fontSize: "12px", color: SLATE, marginBottom: "10px" }}>
-            Set once. This is the starting cash balance the system counts forward from.
-          </p>
-          {opening && (
-            <div
-              style={{
-                border: `1px solid ${BORDER}`,
-                borderRadius: "6px",
-                padding: "10px 12px",
-                marginBottom: "12px",
-                backgroundColor: "#f8fafc",
-                fontSize: "12px",
-                color: NAVY,
-              }}
-            >
-              Current: <strong>PKR {fmt(opening.opening_amount)}</strong> as of{" "}
-              {formatDateUK(opening.as_of_date)}. Submitting again will add a new record.
-            </div>
-          )}
-          <FormCard>
-            <form onSubmit={saveOpeningBalance}>
-              <label style={labelStyle}>
-                As of date
-                <input
-                  type="date"
-                  value={obDate}
-                  onChange={(e) => setObDate(e.target.value)}
-                  style={inputStyle}
-                  required
-                />
-              </label>
-              <label style={labelStyle}>
-                Opening amount (PKR)
-                <input
-                  type="number"
-                  min="0"
-                  value={obAmount}
-                  onChange={(e) => setObAmount(e.target.value)}
-                  placeholder="0"
-                  style={inputStyle}
-                  required
-                />
-              </label>
-              <button type="submit" disabled={saving} style={btnStyle}>
-                {saving ? "Saving…" : "Save Opening Balance"}
-              </button>
-            </form>
-          </FormCard>
+        <SummaryCard
+          label="Opening Balance"
+          value={opening ? `PKR ${fmt(opening.opening_amount)}` : "Not set"}
+          sub={opening ? `as of ${formatDateUK(opening.as_of_date)}` : "Click edit to set"}
+          color={BLUE}
+          onEdit={openOpeningModal}
+        />
+        <SummaryCard
+          label="Planned Receivables"
+          value={plan ? `PKR ${fmt(plan.tentative_receivables)}` : "Not set"}
+          sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
+          color={GREEN}
+          onEdit={openPlanModal}
+        />
+        <SummaryCard
+          label="Planned Payouts"
+          value={plan ? `PKR ${fmt(plan.tentative_payouts)}` : "Not set"}
+          sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
+          color={RED}
+          onEdit={openPlanModal}
+        />
+        <SummaryCard
+          label="Latest Closing"
+          value={latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}
+          sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
+          color={NAVY}
+        />
+      </div>
 
-          <SectionTitle title="Monthly Cash Plan" />
-          <p style={{ fontSize: "12px", color: SLATE, marginBottom: "10px" }}>
-            Set expected receivables and payouts for the month. Used to calculate cash health on the Executive dashboard.
+      {/* ── DAILY POSITION: FORM + TABLE ── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(280px, 1fr) minmax(0, 2fr)",
+          gap: "16px",
+          alignItems: "stretch",
+          marginTop: "16px",
+        }}
+      >
+        {/* LEFT — Daily entry form */}
+        <div
+          style={{
+            border: `1px solid ${BORDER}`,
+            borderRadius: "8px",
+            padding: "16px",
+            backgroundColor: "white",
+          }}
+        >
+          <SectionTitle title="Record Daily Position" />
+          <p style={{ fontSize: "12px", color: SLATE, marginTop: "-4px", marginBottom: "12px" }}>
+            Enter today's figures from the accountant's statement.
           </p>
-          <FormCard>
-            <form onSubmit={saveMonthlyPlan}>
+          <form onSubmit={saveDailyPosition}>
+            <label style={labelStyle}>
+              Date
+              <input
+                type="date"
+                value={dpDate}
+                onChange={(e) => setDpDate(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               <label style={labelStyle}>
-                Plan month
-                <input
-                  type="month"
-                  value={planMonth}
-                  onChange={(e) => setPlanMonth(e.target.value)}
-                  style={inputStyle}
-                  required
-                />
-              </label>
-              <label style={labelStyle}>
-                Expected receivables (PKR)
-                <input
-                  type="number"
-                  min="0"
-                  value={planRecv}
-                  onChange={(e) => setPlanRecv(e.target.value)}
-                  placeholder="0"
-                  style={inputStyle}
-                />
-              </label>
-              <label style={labelStyle}>
-                Expected payouts (PKR)
+                Opening (PKR)
                 <input
                   type="number"
-                  min="0"
-                  value={planPay}
-                  onChange={(e) => setPlanPay(e.target.value)}
-                  placeholder="0"
-                  style={inputStyle}
-                />
-              </label>
-              <button type="submit" disabled={saving} style={btnStyle}>
-                {saving ? "Saving…" : plan ? "Update Monthly Plan" : "Save Monthly Plan"}
-              </button>
-            </form>
-          </FormCard>
-
-          <SectionTitle title="Daily Cash Position" />
-          <p style={{ fontSize: "12px", color: SLATE, marginBottom: "10px" }}>
-            Enter the daily figures from the accountant's statement. Existing entries for the same date will be updated.
-          </p>
-          <FormCard>
-            <form onSubmit={saveDailyPosition}>
-              <label style={labelStyle}>
-                Date
-                <input
-                  type="date"
-                  value={dpDate}
-                  onChange={(e) => setDpDate(e.target.value)}
-                  style={inputStyle}
-                  required
-                />
-              </label>
-              <label style={labelStyle}>
-                Opening balance (PKR)
-                <input
-                  type="number"
-                  min="0"
                   value={dpOpening}
                   onChange={(e) => setDpOpening(e.target.value)}
                   placeholder="0"
@@ -420,7 +338,17 @@ export default function FinanceManager() {
                 />
               </label>
               <label style={labelStyle}>
-                Total receipts (PKR)
+                Closing (PKR)
+                <input
+                  type="number"
+                  value={dpClosing}
+                  onChange={(e) => setDpClosing(e.target.value)}
+                  placeholder="0"
+                  style={inputStyle}
+                />
+              </label>
+              <label style={labelStyle}>
+                Receipts (PKR)
                 <input
                   type="number"
                   min="0"
@@ -431,7 +359,7 @@ export default function FinanceManager() {
                 />
               </label>
               <label style={labelStyle}>
-                Total payments (PKR)
+                Payments (PKR)
                 <input
                   type="number"
                   min="0"
@@ -441,17 +369,7 @@ export default function FinanceManager() {
                   style={inputStyle}
                 />
               </label>
-              <label style={labelStyle}>
-                Closing balance (PKR)
-                <input
-                  type="number"
-                  value={dpClosing}
-                  onChange={(e) => setDpClosing(e.target.value)}
-                  placeholder="0"
-                  style={inputStyle}
-                />
-              </label>
-              <label style={labelStyle}>
+              <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
                 Post-dated total (PKR)
                 <input
                   type="number"
@@ -462,28 +380,39 @@ export default function FinanceManager() {
                   style={inputStyle}
                 />
               </label>
-              <button type="submit" disabled={saving} style={btnStyle}>
-                {saving ? "Saving…" : "Save Daily Position"}
-              </button>
-            </form>
-          </FormCard>
+            </div>
+            <button type="submit" disabled={saving} style={btnStyle}>
+              {saving ? "Saving…" : "Save Daily Position"}
+            </button>
+          </form>
         </div>
 
-        {/* RIGHT: daily position history table */}
-        <div>
+        {/* RIGHT — History table */}
+        <div
+          style={{
+            border: `1px solid ${BORDER}`,
+            borderRadius: "8px",
+            padding: "16px",
+            backgroundColor: "white",
+            display: "flex",
+            flexDirection: "column",
+            minWidth: 0,
+          }}
+        >
           <SectionTitle title="Daily Position — Last 30 Days" />
           {positions.length === 0 ? (
-            <p style={{ fontSize: "13px", color: SLATE }}>No daily positions recorded yet.</p>
+            <p style={{ fontSize: "13px", color: SLATE }}>
+              No daily positions recorded yet.
+            </p>
           ) : (
-            <div
-              style={{
-                overflowX: "auto",
-                border: `1px solid ${BORDER}`,
-                borderRadius: "8px",
-                backgroundColor: "white",
-              }}
-            >
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "640px" }}>
+            <div style={{ overflowX: "auto", flex: 1 }}>
+              <table
+                style={{
+                  borderCollapse: "collapse",
+                  width: "100%",
+                  minWidth: "560px",
+                }}
+              >
                 <thead>
                   <tr style={{ backgroundColor: "#f8fafc" }}>
                     <th style={th}>Date</th>
@@ -492,7 +421,7 @@ export default function FinanceManager() {
                     <th style={th}>Payments</th>
                     <th style={th}>Closing</th>
                     <th style={th}>Post-dated</th>
-                    <th style={th}>Net closing</th>
+                    <th style={th}>Net</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -509,7 +438,9 @@ export default function FinanceManager() {
                       <td style={{ ...td, fontWeight: 700, color: NAVY }}>
                         {fmt(p.closing_balance)}
                       </td>
-                      <td style={{ ...td, color: SLATE }}>{fmt(p.post_dated_total)}</td>
+                      <td style={{ ...td, color: SLATE }}>
+                        {fmt(p.post_dated_total)}
+                      </td>
                       <td style={{ ...td, fontWeight: 700 }}>
                         {fmt(p.closing_after_post_dated)}
                       </td>
@@ -521,20 +452,121 @@ export default function FinanceManager() {
           )}
         </div>
       </div>
+
+      {/* ── MODALS ── */}
+      {openModal === "opening" && (
+        <Modal title="Opening Balance" onClose={() => setOpenModal(null)}>
+          <p style={{ fontSize: "12px", color: SLATE, marginBottom: "12px" }}>
+            Set the starting cash balance. The system counts forward from here.
+          </p>
+          <form onSubmit={saveOpeningBalance}>
+            <label style={labelStyle}>
+              As of date
+              <input
+                type="date"
+                value={obDate}
+                onChange={(e) => setObDate(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </label>
+            <label style={labelStyle}>
+              Opening amount (PKR)
+              <input
+                type="number"
+                min="0"
+                value={obAmount}
+                onChange={(e) => setObAmount(e.target.value)}
+                placeholder="0"
+                style={inputStyle}
+                required
+              />
+            </label>
+            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setOpenModal(null)}
+                style={cancelBtnStyle}
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={saving} style={{ ...btnStyle, flex: 1 }}>
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {openModal === "plan" && (
+        <Modal title="Monthly Cash Plan" onClose={() => setOpenModal(null)}>
+          <p style={{ fontSize: "12px", color: SLATE, marginBottom: "12px" }}>
+            Set expected receivables and payouts for the month. Used to calculate cash health on the Executive dashboard.
+          </p>
+          <form onSubmit={saveMonthlyPlan}>
+            <label style={labelStyle}>
+              Plan month
+              <input
+                type="month"
+                value={planMonth}
+                onChange={(e) => setPlanMonth(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </label>
+            <label style={labelStyle}>
+              Expected receivables (PKR)
+              <input
+                type="number"
+                min="0"
+                value={planRecv}
+                onChange={(e) => setPlanRecv(e.target.value)}
+                placeholder="0"
+                style={inputStyle}
+              />
+            </label>
+            <label style={labelStyle}>
+              Expected payouts (PKR)
+              <input
+                type="number"
+                min="0"
+                value={planPay}
+                onChange={(e) => setPlanPay(e.target.value)}
+                placeholder="0"
+                style={inputStyle}
+              />
+            </label>
+            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+              <button
+                type="button"
+                onClick={() => setOpenModal(null)}
+                style={cancelBtnStyle}
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={saving} style={{ ...btnStyle, flex: 1 }}>
+                {saving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
 
-function MiniCard({
+function SummaryCard({
   label,
   value,
   sub,
   color,
+  onEdit,
 }: {
   label: string;
   value: string;
   sub?: string;
   color: string;
+  onEdit?: () => void;
 }) {
   return (
     <div
@@ -542,24 +574,118 @@ function MiniCard({
         border: `1px solid ${BORDER}`,
         borderTop: `3px solid ${color}`,
         borderRadius: "7px",
-        padding: "8px 10px",
+        padding: "10px 12px",
         backgroundColor: "white",
+        position: "relative",
       }}
     >
       <div
         style={{
           color: SLATE,
           fontSize: "11px",
-          marginBottom: "2px",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
+          marginBottom: "4px",
+          fontWeight: 600,
         }}
       >
         {label}
       </div>
-      <div style={{ fontSize: "14px", fontWeight: 800, color }}>{value}</div>
-      {sub && <div style={{ fontSize: "10px", color: SLATE, marginTop: "2px" }}>{sub}</div>}
+      <div style={{ fontSize: "15px", fontWeight: 800, color }}>{value}</div>
+      {sub && (
+        <div style={{ fontSize: "10px", color: SLATE, marginTop: "3px" }}>
+          {sub}
+        </div>
+      )}
+      {onEdit && (
+        <button
+          onClick={onEdit}
+          style={{
+            position: "absolute",
+            top: "8px",
+            right: "8px",
+            background: "transparent",
+            border: `1px solid ${BORDER}`,
+            borderRadius: "5px",
+            padding: "2px 8px",
+            fontSize: "10px",
+            fontWeight: 600,
+            color: SLATE,
+            cursor: "pointer",
+          }}
+        >
+          Edit
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(15,23,42,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 50,
+        padding: "16px",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          backgroundColor: "white",
+          borderRadius: "10px",
+          padding: "20px",
+          maxWidth: "420px",
+          width: "100%",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          boxShadow: "0 10px 30px rgba(15,23,42,0.20)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "14px",
+            paddingBottom: "10px",
+            borderBottom: `1px solid ${BORDER}`,
+          }}
+        >
+          <h2 style={{ fontSize: "15px", fontWeight: 700, color: NAVY, margin: 0 }}>
+            {title}
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: "none",
+              fontSize: "20px",
+              color: SLATE,
+              cursor: "pointer",
+              padding: "0 4px",
+              lineHeight: 1,
+            }}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        {children}
+      </div>
     </div>
   );
 }
@@ -591,6 +717,18 @@ const btnStyle: React.CSSProperties = {
   padding: "9px 18px",
   fontSize: "13px",
   fontWeight: 700,
+  cursor: "pointer",
+  marginTop: "4px",
+};
+
+const cancelBtnStyle: React.CSSProperties = {
+  backgroundColor: "white",
+  color: NAVY,
+  border: `1px solid ${BORDER}`,
+  borderRadius: "6px",
+  padding: "9px 18px",
+  fontSize: "13px",
+  fontWeight: 600,
   cursor: "pointer",
   marginTop: "4px",
 };
