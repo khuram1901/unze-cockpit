@@ -440,20 +440,18 @@ export default function FinanceManager() {
             }
           </div>
         </div>
-        {!gmailConnected && (
-          <a
-            href="/api/google/auth"
-            style={{
-              ...btnStyle,
-              textDecoration: "none",
-              display: "inline-block",
-              textAlign: "center",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Connect Gmail
-          </a>
-        )}
+        <a
+          href="/api/google/auth"
+          style={{
+            ...btnStyle,
+            textDecoration: "none",
+            display: "inline-block",
+            textAlign: "center",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {gmailConnected ? "Add Another Account" : "Connect Gmail"}
+        </a>
       </div>
 
       {/* ── PDF UPLOAD ── */}

@@ -260,96 +260,6 @@ export default function CalendarPage() {
           subtitle="View availability, request meetings, and manage approvals"
         />
 
-        {/* ── WEEK VIEW ── */}
-        <SectionTitle title="Weekly Availability" />
-        <div style={{
-          border: `1px solid ${COLOURS.BORDER}`,
-          borderRadius: "8px",
-          backgroundColor: "white",
-          padding: "12px",
-          marginBottom: "16px",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <button onClick={prevWeek} style={navBtn}>← Prev</button>
-            <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>
-              {dayLabel(weekDates[0])} — {dayLabel(weekDates[6])}
-              {busyLoading && <span style={{ color: COLOURS.SLATE, fontWeight: 400 }}> (loading…)</span>}
-            </span>
-            <button onClick={nextWeek} style={navBtn}>Next →</button>
-          </div>
-
-          <div style={{ overflowX: "auto" }}>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: `50px repeat(7, 1fr)`,
-              minWidth: "700px",
-            }}>
-              {/* Header row */}
-              <div style={headerCell} />
-              {weekDates.map((d) => (
-                <div key={d} style={{
-                  ...headerCell,
-                  fontWeight: 700,
-                  color: d === new Date().toISOString().slice(0, 10) ? COLOURS.BLUE : COLOURS.NAVY,
-                }}>
-                  {dayLabel(d)}
-                </div>
-              ))}
-
-              {/* Hour rows */}
-              {HOURS.map((hour) => (
-                <>
-                  <div key={`h-${hour}`} style={{
-                    padding: "2px 4px",
-                    fontSize: "10px",
-                    color: COLOURS.SLATE,
-                    textAlign: "right",
-                    borderTop: `1px solid ${COLOURS.BORDER}`,
-                  }}>
-                    {String(hour).padStart(2, "0")}:00
-                  </div>
-                  {weekDates.map((d) => {
-                    const busy = isBusy(d, hour);
-                    const req = hasRequest(d, hour);
-                    return (
-                      <div
-                        key={`${d}-${hour}`}
-                        onClick={() => !busy && clickSlot(d, hour)}
-                        style={{
-                          borderTop: `1px solid ${COLOURS.BORDER}`,
-                          borderLeft: `1px solid ${COLOURS.BORDER}`,
-                          height: "28px",
-                          backgroundColor: busy ? "#fee2e2" : req ? (req.status === "Approved" ? "#dcfce7" : "#fef3c7") : "white",
-                          cursor: busy ? "not-allowed" : "pointer",
-                          position: "relative",
-                          fontSize: "9px",
-                          padding: "2px 3px",
-                          overflow: "hidden",
-                        }}
-                        title={busy ? "Busy" : req ? `${req.meeting_title} (${req.status})` : "Click to request"}
-                      >
-                        {busy && <span style={{ color: "#dc2626", fontWeight: 600 }}>Busy</span>}
-                        {!busy && req && (
-                          <span style={{ color: req.status === "Approved" ? "#16a34a" : "#d97706", fontWeight: 600 }}>
-                            {req.meeting_title.slice(0, 12)}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ marginTop: "8px", display: "flex", gap: "12px", fontSize: "10px", color: COLOURS.SLATE }}>
-            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "2px", marginRight: "4px" }} />Busy</span>
-            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#dcfce7", border: "1px solid #86efac", borderRadius: "2px", marginRight: "4px" }} />Approved</span>
-            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#fef3c7", border: "1px solid #fde68a", borderRadius: "2px", marginRight: "4px" }} />Pending</span>
-            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: "2px", marginRight: "4px" }} />Free — click to request</span>
-          </div>
-        </div>
-
         {/* ── REQUEST FORM ── */}
         <div style={{
           display: "grid",
@@ -474,6 +384,94 @@ export default function CalendarPage() {
                 {row.detail}
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* ── WEEK VIEW ── */}
+        <SectionTitle title="Weekly Availability" />
+        <div style={{
+          border: `1px solid ${COLOURS.BORDER}`,
+          borderRadius: "8px",
+          backgroundColor: "white",
+          padding: "12px",
+          marginBottom: "16px",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <button onClick={prevWeek} style={navBtn}>← Prev</button>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>
+              {dayLabel(weekDates[0])} — {dayLabel(weekDates[6])}
+              {busyLoading && <span style={{ color: COLOURS.SLATE, fontWeight: 400 }}> (loading…)</span>}
+            </span>
+            <button onClick={nextWeek} style={navBtn}>Next →</button>
+          </div>
+
+          <div style={{ overflowX: "auto" }}>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: `50px repeat(7, 1fr)`,
+              minWidth: "700px",
+            }}>
+              <div style={headerCell} />
+              {weekDates.map((d) => (
+                <div key={d} style={{
+                  ...headerCell,
+                  fontWeight: 700,
+                  color: d === new Date().toISOString().slice(0, 10) ? COLOURS.BLUE : COLOURS.NAVY,
+                }}>
+                  {dayLabel(d)}
+                </div>
+              ))}
+
+              {HOURS.map((hour) => (
+                <>
+                  <div key={`h-${hour}`} style={{
+                    padding: "2px 4px",
+                    fontSize: "10px",
+                    color: COLOURS.SLATE,
+                    textAlign: "right",
+                    borderTop: `1px solid ${COLOURS.BORDER}`,
+                  }}>
+                    {String(hour).padStart(2, "0")}:00
+                  </div>
+                  {weekDates.map((d) => {
+                    const busy = isBusy(d, hour);
+                    const req = hasRequest(d, hour);
+                    return (
+                      <div
+                        key={`${d}-${hour}`}
+                        onClick={() => !busy && clickSlot(d, hour)}
+                        style={{
+                          borderTop: `1px solid ${COLOURS.BORDER}`,
+                          borderLeft: `1px solid ${COLOURS.BORDER}`,
+                          height: "28px",
+                          backgroundColor: busy ? "#fee2e2" : req ? (req.status === "Approved" ? "#dcfce7" : "#fef3c7") : "white",
+                          cursor: busy ? "not-allowed" : "pointer",
+                          position: "relative",
+                          fontSize: "9px",
+                          padding: "2px 3px",
+                          overflow: "hidden",
+                        }}
+                        title={busy ? "Busy" : req ? `${req.meeting_title} (${req.status})` : "Click to request"}
+                      >
+                        {busy && <span style={{ color: "#dc2626", fontWeight: 600 }}>Busy</span>}
+                        {!busy && req && (
+                          <span style={{ color: req.status === "Approved" ? "#16a34a" : "#d97706", fontWeight: 600 }}>
+                            {req.meeting_title.slice(0, 12)}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginTop: "8px", display: "flex", gap: "12px", fontSize: "10px", color: COLOURS.SLATE, flexWrap: "wrap" }}>
+            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "2px", marginRight: "4px" }} />Busy</span>
+            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#dcfce7", border: "1px solid #86efac", borderRadius: "2px", marginRight: "4px" }} />Approved</span>
+            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#fef3c7", border: "1px solid #fde68a", borderRadius: "2px", marginRight: "4px" }} />Pending</span>
+            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: "2px", marginRight: "4px" }} />Free — click to request</span>
           </div>
         </div>
 
