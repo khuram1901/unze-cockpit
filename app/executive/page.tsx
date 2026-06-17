@@ -879,7 +879,7 @@ export default function ExecutiveDashboardPage() {
           <div>
             <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
             <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px", maxWidth: "640px" }}>
-              Executive escalations surface lagging indicators (Q3+ for production and dispatch, breakage over 1.5%). Earlier issues stay with operations.
+              Exceptions surface automatically. If nothing needs your attention, everything is on track.
             </p>
           </div>
           <div style={{ backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "8px 12px" }}>
@@ -906,32 +906,52 @@ export default function ExecutiveDashboardPage() {
               <SlimAlert color="#dc2626" text="This month's cash plan has not been entered. The finance manager needs to set expected receivables and payouts on the Finance page." />
             )}
 
-            <SectionTitle title="Executive Escalations" />
-            <EscalationTrafficLights escalations={escalations} />
-            {/* Two-column row: Attention (left) + Daily Snapshot (right) */}
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(420px, 1fr))", gap: "16px", marginTop: "8px" }}>
-              <div>
-                <SectionTitle title="Executive Attention" />
+            {/* ── SECTION 1: NEEDS YOUR ATTENTION ── */}
+            {(overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || machineIssues.filter(i => i.issue_status === "Down").length > 0) && (
+              <>
+                <SectionTitle title="Needs Your Attention" />
                 <div style={squareGrid}>
-                  <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" />
-                  <Card title="Waiting Replies" value={waitingReplies.length} color="#dc2626" />
-                  <Card title="Plants Missing" value={missingPlants.length} color="#ef4444" />
-                  <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" />
-                  <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" />
+                  {overdueTasks.length > 0 && <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" />}
+                  {waitingReplies.length > 0 && <Card title="Waiting Replies" value={waitingReplies.length} color="#dc2626" />}
+                  {escalations.length > 0 && <Card title="Escalations" value={escalations.length} color="#dc2626" />}
+                  {downMachines.length > 0 && <Card title="Machines Down" value={downMachines.length} color="#b91c1c" />}
+                  {missingPlants.length > 0 && <Card title="Plants Not Reported" value={missingPlants.length} color="#ef4444" />}
+                  {dueThisWeekTasks.length > 0 && <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" />}
                 </div>
+                {escalations.length > 0 && <EscalationTrafficLights escalations={escalations} />}
+              </>
+            )}
+            {overdueTasks.length === 0 && waitingReplies.length === 0 && escalations.length === 0 && missingPlants.length === 0 && downMachines.length === 0 && (
+              <div style={{
+                border: `1px solid ${BORDER}`,
+                borderLeft: "4px solid #16a34a",
+                borderRadius: "6px",
+                padding: "12px 16px",
+                backgroundColor: "white",
+                fontSize: "16px",
+                color: NAVY,
+                fontWeight: 600,
+                marginBottom: "14px",
+              }}>
+                All clear — no items require your attention right now.
               </div>
+            )}
 
-              <div>
-                <SectionTitle title="Operations Daily Snapshot" />
-                <div style={squareGrid}>
-                  <Card title="Produced Today" value={produced} color="#16a34a" />
-                  <Card title="Broken Today" value={broken} color="#dc2626" />
-                  <Card title="Dispatched Today" value={dispatched} color="#7c3aed" />
-                  <Card title="Machine Issues" value={machineIssues.length} color="#b91c1c" />
-                  <Card title="Closing Good Stock" value={closingGoodStock} color="#0070f3" />
-                  <Card title="Closing Broken Stock" value={closingBrokenStock} color="#d97706" />
-                </div>
-              </div>
+            {/* ── SECTION 2: OPERATIONS STATUS ── */}
+            <SectionTitle title="Operations Status — Today" />
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(130px, 1fr))",
+              gap: "8px",
+              marginBottom: "14px",
+            }}>
+              <Card title="Produced" value={produced} color="#16a34a" />
+              <Card title="Dispatched" value={dispatched} color="#7c3aed" />
+              <Card title="Broken" value={broken} color="#dc2626" />
+              <Card title="Machine Issues" value={machineIssues.length} color={machineIssues.length > 0 ? "#b91c1c" : "#16a34a"} />
+              <Card title="Good Stock" value={closingGoodStock} color="#0070f3" />
+              <Card title="Broken Stock" value={closingBrokenStock} color="#d97706" />
+              <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" />
             </div>
             {/* Two continuous columns: left = Finance + Department, right = Receivables + People */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
