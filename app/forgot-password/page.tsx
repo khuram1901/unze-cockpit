@@ -36,7 +36,7 @@ export default function ForgotPasswordPage() {
     marginBottom: "16px",
     border: "1px solid #ccc",
     borderRadius: "6px",
-    fontSize: "14px",
+    fontSize: "16px",
     boxSizing: "border-box" as const,
   };
 
@@ -64,12 +64,12 @@ export default function ForgotPasswordPage() {
         <h1 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "4px" }}>
           Reset your password
         </h1>
-        <p style={{ color: "#777", fontSize: "14px", marginBottom: "24px" }}>
+        <p style={{ color: "#777", fontSize: "16px", marginBottom: "24px" }}>
           Enter your email and we&apos;ll send you a reset link.
         </p>
 
         <form onSubmit={handleSubmit}>
-          <label style={{ fontSize: "14px" }}>
+          <label style={{ fontSize: "16px" }}>
             Email
             <input
               type="email"
@@ -90,7 +90,7 @@ export default function ForgotPasswordPage() {
               border: "none",
               borderRadius: "6px",
               padding: "12px",
-              fontSize: "15px",
+              fontSize: "17px",
               cursor: "pointer",
               fontWeight: "bold",
             }}
@@ -103,7 +103,7 @@ export default function ForgotPasswordPage() {
           <p
             style={{
               marginTop: "16px",
-              fontSize: "14px",
+              fontSize: "16px",
               color: message.startsWith("Error") ? "red" : "green",
             }}
           >
@@ -111,7 +111,7 @@ export default function ForgotPasswordPage() {
           </p>
         )}
 
-        <p style={{ marginTop: "20px", fontSize: "14px", textAlign: "center" }}>
+        <p style={{ marginTop: "20px", fontSize: "16px", textAlign: "center" }}>
           <a href="/login" style={{ color: "#0070f3" }}>
             Back to sign in
           </a>

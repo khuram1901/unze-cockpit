@@ -178,7 +178,7 @@ export default function NewTaskForm() {
     marginBottom: "10px",
     border: "1px solid #e2e8f0",
     borderRadius: "6px",
-    fontSize: "15px",
+    fontSize: "17px",
   };
 
   const selectedMember = members.find((m) => m.name === assignedTo);
@@ -195,7 +195,7 @@ export default function NewTaskForm() {
         backgroundColor: "white",
       }}
     >
-      <h2 style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b", marginBottom: "12px", paddingLeft: "9px", borderLeft: "3px solid #1e293b" }}>
+      <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", marginBottom: "12px", paddingLeft: "9px", borderLeft: "3px solid #1e293b" }}>
         Create task
       </h2>
 
@@ -236,7 +236,7 @@ export default function NewTaskForm() {
             padding: "10px",
             marginBottom: "12px",
             backgroundColor: "#fafafa",
-            fontSize: "15px",
+            fontSize: "17px",
             color: "#555",
           }}
         >
@@ -289,7 +289,7 @@ export default function NewTaskForm() {
             padding: "10px",
             marginBottom: "12px",
             backgroundColor: "#fafafa",
-            fontSize: "15px",
+            fontSize: "17px",
             color: "#555",
           }}
         >
@@ -303,7 +303,7 @@ export default function NewTaskForm() {
       )}
 
       <div style={{ marginBottom: "12px" }}>
-        <div style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "4px" }}>
+        <div style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "4px" }}>
           Assigned by
         </div>
         <div
@@ -314,7 +314,7 @@ export default function NewTaskForm() {
             borderRadius: "6px",
             backgroundColor: "#fafafa",
             color: "#555",
-            fontSize: "14px",
+            fontSize: "16px",
           }}
         >
           {assignedBy || assignedByEmail || "Current user"}
@@ -363,7 +363,7 @@ export default function NewTaskForm() {
           border: "none",
           borderRadius: "6px",
           padding: "8px 18px",
-          fontSize: "15px",
+          fontSize: "17px",
           cursor: "pointer",
           fontWeight: 700,
           marginTop: "4px",

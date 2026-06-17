@@ -64,7 +64,7 @@ export default function RoleGuard({ allowedRoles, children }: RoleGuardProps) {
           You do not have permission to view this page.
         </p>
 
-        <p style={{ fontSize: "14px" }}>
+        <p style={{ fontSize: "16px" }}>
           Current role: <strong>{role || "Unknown"}</strong>
         </p>
       </div>

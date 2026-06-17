@@ -112,7 +112,7 @@ export default function ExceptionsPage() {
         )}
 
         {loading ? (
-          <p style={{ color: COLOURS.SLATE, fontSize: "15px" }}>Loading exceptions…</p>
+          <p style={{ color: COLOURS.SLATE, fontSize: "17px" }}>Loading exceptions…</p>
         ) : escalations.length === 0 ? (
           <div
             style={{
@@ -122,7 +122,7 @@ export default function ExceptionsPage() {
               borderRadius: "8px",
               padding: "12px 14px",
               fontWeight: 700,
-              fontSize: "15px",
+              fontSize: "17px",
             }}
           >
             No exceptions raised. All tracked KPIs and receivables are within tolerance.
@@ -168,12 +168,12 @@ function EscalationTable({ rows, mobile }: { rows: EscalationTask[]; mobile: boo
             marginBottom: "6px",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "6px" }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, minWidth: 0, flex: 1 }}>
                 {row.description}
               </div>
               <StatusBadge status={row.status} />
             </div>
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px", fontSize: "12px", color: COLOURS.SLATE }}>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px", fontSize: "14px", color: COLOURS.SLATE }}>
               <span style={{
                 fontWeight: 700,
                 padding: "1px 6px",
@@ -220,7 +220,7 @@ function EscalationTable({ rows, mobile }: { rows: EscalationTask[]; mobile: boo
               <td style={td}>
                 <span
                   style={{
-                    fontSize: "12px",
+                    fontSize: "14px",
                     fontWeight: 700,
                     padding: "2px 7px",
                     borderRadius: "10px",

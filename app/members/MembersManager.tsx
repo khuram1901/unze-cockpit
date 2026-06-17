@@ -291,7 +291,7 @@ export default function MembersManager() {
     padding: "8px",
     border: "1px solid #ccc",
     borderRadius: "6px",
-    fontSize: "14px",
+    fontSize: "16px",
     marginRight: "8px",
   };
 
@@ -299,7 +299,7 @@ export default function MembersManager() {
     padding: "6px",
     border: "1px solid #ccc",
     borderRadius: "6px",
-    fontSize: "15px",
+    fontSize: "17px",
     minWidth: "120px",
   };
 
@@ -393,7 +393,7 @@ export default function MembersManager() {
                 </select>
               </>
             ) : (
-              <span style={{ fontSize: "15px", color: "#888", alignSelf: "center" }}>
+              <span style={{ fontSize: "17px", color: "#888", alignSelf: "center" }}>
                 {role} sees all departments &amp; business units
               </span>
             )}
@@ -407,7 +407,7 @@ export default function MembersManager() {
                 border: "none",
                 borderRadius: "6px",
                 padding: "9px 18px",
-                fontSize: "14px",
+                fontSize: "16px",
                 cursor: "pointer",
               }}
             >
@@ -505,29 +505,29 @@ export default function MembersManager() {
                     </>
                   ) : (
                     <>
-                      <div style={{ fontSize: "14px", color: "#999" }}>All departments</div>
-                      <div style={{ fontSize: "14px", color: "#999" }}>All business units</div>
+                      <div style={{ fontSize: "16px", color: "#999" }}>All departments</div>
+                      <div style={{ fontSize: "16px", color: "#999" }}>All business units</div>
                     </>
                   )}
                 </>
               ) : (
                 <>
                   <div>
-                    <div style={{ fontWeight: "bold", fontSize: "15px" }}>{displayName}</div>
-                    <div style={{ color: "#777", fontSize: "15px" }}>{m.email || "no email"}</div>
+                    <div style={{ fontWeight: "bold", fontSize: "17px" }}>{displayName}</div>
+                    <div style={{ color: "#777", fontSize: "17px" }}>{m.email || "no email"}</div>
                   </div>
 
-                  <div style={{ fontSize: "15px", color: "#555" }}>
+                  <div style={{ fontSize: "17px", color: "#555" }}>
                     {rowShowsDeptBU ? m.department || "No department" : "All departments"}
                   </div>
 
-                  <div style={{ fontSize: "15px", color: "#555" }}>
+                  <div style={{ fontSize: "17px", color: "#555" }}>
                     {rowShowsDeptBU ? m.business_unit || "No business unit" : "All business units"}
                   </div>
 
                   <span
                     style={{
-                      fontSize: "14px",
+                      fontSize: "16px",
                       backgroundColor:
                         m.role === "Admin"
                           ? "#0070f3"
@@ -548,7 +548,7 @@ export default function MembersManager() {
               )}
 
               {isAdmin && (m.role === "Manager" || m.role === "Member") && (
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", color: "#1e293b", cursor: "pointer" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "16px", color: "#1e293b", cursor: "pointer" }}>
                   <input
                     type="checkbox"
                     checked={m.is_hod || false}
@@ -568,7 +568,7 @@ export default function MembersManager() {
                     color: "#c0392b",
                     borderRadius: "6px",
                     padding: "6px 12px",
-                    fontSize: "15px",
+                    fontSize: "17px",
                     cursor: "pointer",
                   }}
                 >
@@ -585,7 +585,7 @@ export default function MembersManager() {
           <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "6px" }}>
             Plant Assignments
           </h2>
-          <p style={{ fontSize: "15px", color: "#666", marginBottom: "16px" }}>
+          <p style={{ fontSize: "17px", color: "#666", marginBottom: "16px" }}>
             Tick the plants each person can enter data for. A person can be assigned one, several, or
             no plants. Only Members and Managers are listed — Admin and Executive can see all plants
             automatically.
@@ -618,9 +618,9 @@ export default function MembersManager() {
                           padding: "12px 16px",
                         }}
                       >
-                        <div style={{ fontWeight: "bold", fontSize: "14px", marginBottom: "8px" }}>
+                        <div style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "8px" }}>
                           {displayName}{" "}
-                          <span style={{ color: "#999", fontWeight: "normal", fontSize: "14px" }}>
+                          <span style={{ color: "#999", fontWeight: "normal", fontSize: "16px" }}>
                             ({m.role})
                           </span>
                         </div>
@@ -638,7 +638,7 @@ export default function MembersManager() {
                                   display: "flex",
                                   alignItems: "center",
                                   gap: "6px",
-                                  fontSize: "14px",
+                                  fontSize: "16px",
                                   cursor: isSaving ? "wait" : "pointer",
                                   opacity: isSaving ? 0.5 : 1,
                                 }}

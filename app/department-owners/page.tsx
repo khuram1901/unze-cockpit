@@ -37,7 +37,7 @@ function SectionTitle({ title }: { title: string }) {
   return (
     <h2
       style={{
-        fontSize: "15px",
+        fontSize: "17px",
         fontWeight: 700,
         color: NAVY,
         margin: "20px 0 10px",
@@ -150,7 +150,7 @@ export default function DepartmentOwnersPage() {
     return (
       <AuthWrapper>
         <main style={{ padding: "20px 24px" }}>
-          <p style={{ color: SLATE, fontSize: "15px" }}>Loading…</p>
+          <p style={{ color: SLATE, fontSize: "17px" }}>Loading…</p>
         </main>
       </AuthWrapper>
     );
@@ -166,7 +166,7 @@ export default function DepartmentOwnersPage() {
           <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
             Department Owners
           </h1>
-          <p style={{ color: SLATE, fontSize: "14px", marginTop: "5px" }}>
+          <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px" }}>
             Set primary, backup, and escalation owners per department. Use task reassignment when someone leaves or changes role.
           </p>
         </div>
@@ -183,7 +183,7 @@ export default function DepartmentOwnersPage() {
           }}
         >
           <SectionTitle title="Reassign Open Tasks" />
-          <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
+          <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
             Moves Not Started, In Progress, and Waiting Reply tasks only. Completed tasks stay with the original owner.
           </p>
 
@@ -211,7 +211,7 @@ export default function DepartmentOwnersPage() {
           </div>
 
           {fromMemberId && (
-            <p style={{ fontSize: "14px", color: SLATE, marginBottom: "10px" }}>
+            <p style={{ fontSize: "16px", color: SLATE, marginBottom: "10px" }}>
               {fromMember?.name} has <strong>{fromOpenCount}</strong> open task(s).
             </p>
           )}
@@ -225,7 +225,7 @@ export default function DepartmentOwnersPage() {
               border: "none",
               borderRadius: "6px",
               padding: "8px 18px",
-              fontSize: "15px",
+              fontSize: "17px",
               fontWeight: 700,
               cursor: "pointer",
             }}
@@ -237,7 +237,7 @@ export default function DepartmentOwnersPage() {
             <p
               style={{
                 marginTop: "10px",
-                fontSize: "15px",
+                fontSize: "17px",
                 fontWeight: 600,
                 color: message.startsWith("✅") ? "#16a34a" : "#dc2626",
               }}
@@ -262,7 +262,7 @@ export default function DepartmentOwnersPage() {
             >
               <div
                 style={{
-                  fontSize: "15px",
+                  fontSize: "17px",
                   fontWeight: 700,
                   color: NAVY,
                   marginBottom: "12px",
@@ -344,7 +344,7 @@ export default function DepartmentOwnersPage() {
                   border: "none",
                   borderRadius: "6px",
                   padding: "7px 16px",
-                  fontSize: "14px",
+                  fontSize: "16px",
                   fontWeight: 700,
                   cursor: "pointer",
                 }}
@@ -361,7 +361,7 @@ export default function DepartmentOwnersPage() {
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: 600,
   color: NAVY,
   marginBottom: "0",
@@ -373,6 +373,6 @@ const inputStyle: React.CSSProperties = {
   marginTop: "3px",
   border: `1px solid ${BORDER}`,
   borderRadius: "6px",
-  fontSize: "15px",
+  fontSize: "17px",
   boxSizing: "border-box",
 };

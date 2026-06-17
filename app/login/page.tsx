@@ -271,7 +271,7 @@ const loginCardStyle = {
 const backLinkStyle = {
   color: "#2563eb",
   textDecoration: "none",
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: 700,
 };
 
@@ -292,7 +292,7 @@ const subtitleStyle = {
 
 const labelStyle = {
   display: "block",
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: "bold",
   color: "#334155",
   marginBottom: "6px",
@@ -306,7 +306,7 @@ const inputStyle = {
   marginBottom: "16px",
   border: "1px solid #cbd5e1",
   borderRadius: "8px",
-  fontSize: "15px",
+  fontSize: "17px",
   boxSizing: "border-box" as const,
 };
 
@@ -328,7 +328,7 @@ const primaryButtonStyle = {
   border: "none",
   borderRadius: "8px",
   padding: "13px 18px",
-  fontSize: "15px",
+  fontSize: "17px",
   fontWeight: "bold",
   cursor: "pointer",
 };
@@ -336,13 +336,13 @@ const primaryButtonStyle = {
 const errorStyle = {
   marginTop: "16px",
   color: "#dc2626",
-  fontSize: "14px",
+  fontSize: "16px",
 };
 
 const forgotLinkStyle = {
   color: "#2563eb",
   textDecoration: "none",
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: 700,
 };
 
@@ -393,7 +393,7 @@ const captionTitleStyle = {
 
 const captionSubtitleStyle = {
   color: "#dbeafe",
-  fontSize: "15px",
+  fontSize: "17px",
 };
 
 const dotsStyle = {
@@ -405,5 +405,5 @@ const dotsStyle = {
 const footerStyle = {
   marginTop: "28px",
   color: "#64748b",
-  fontSize: "15px",
+  fontSize: "17px",
 };

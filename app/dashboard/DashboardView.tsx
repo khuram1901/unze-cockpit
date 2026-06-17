@@ -324,7 +324,7 @@ export default function DashboardView() {
 
   return (
     <div>
-      <p style={{ color: SLATE, fontSize: "15px", marginBottom: "16px" }}>
+      <p style={{ color: SLATE, fontSize: "17px", marginBottom: "16px" }}>
         {`Operations command centre for ${today} (month-week ${weekNum} of 4). Today's snapshot, open issues, your tasks and KPIs in one place.`}
       </p>
 
@@ -404,11 +404,11 @@ export default function DashboardView() {
                       </td>
                       <td style={td}>
                         {escalated ? (
-                          <span style={{ fontSize: "13px", fontWeight: 700, color: "white", backgroundColor: "#dc2626", borderRadius: "10px", padding: "2px 8px" }}>
+                          <span style={{ fontSize: "15px", fontWeight: 700, color: "white", backgroundColor: "#dc2626", borderRadius: "10px", padding: "2px 8px" }}>
                             3+ days — escalated to Executive
                           </span>
                         ) : (
-                          <span style={{ fontSize: "13px", fontWeight: 700, color: "#d97706" }}>Chase today</span>
+                          <span style={{ fontSize: "15px", fontWeight: 700, color: "#d97706" }}>Chase today</span>
                         )}
                       </td>
                     </tr>
@@ -431,7 +431,7 @@ export default function DashboardView() {
               <div style={{ textAlign: "right", marginBottom: "8px" }}>
                 <button
                   onClick={() => setShowCompleted((v) => !v)}
-                  style={{ fontSize: "14px", fontWeight: 600, color: NAVY, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 11px", cursor: "pointer" }}
+                  style={{ fontSize: "16px", fontWeight: 600, color: NAVY, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 11px", cursor: "pointer" }}
                 >
                   {showCompleted ? "Hide completed" : `Show completed (${completedCount})`}
                 </button>
@@ -513,7 +513,7 @@ function FragmentRow({
         <td style={td}>{task.priority || "—"}</td>
         <td style={td}>{formatDateUK(task.due_date)}</td>
         <td style={td}>
-          <span style={{ fontSize: "13px", fontWeight: 700, padding: "3px 9px", borderRadius: "10px", color: "white", backgroundColor: taskBadgeColor(task.status), whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: "15px", fontWeight: 700, padding: "3px 9px", borderRadius: "10px", color: "white", backgroundColor: taskBadgeColor(task.status), whiteSpace: "nowrap" }}>
             {task.status}
           </span>
         </td>
@@ -521,14 +521,14 @@ function FragmentRow({
       {open && (
         <tr>
           <td colSpan={4} style={{ ...td, backgroundColor: "#f8fafc", padding: "14px 16px" }}>
-            <div style={{ fontSize: "15px", color: SLATE, marginBottom: "6px" }}>
+            <div style={{ fontSize: "17px", color: SLATE, marginBottom: "6px" }}>
               Type: <strong>{task.task_type || "Task"}</strong> &nbsp;|&nbsp;
               Assigned by: <strong>{task.assigned_by || "—"}</strong> &nbsp;|&nbsp;
               Assigned: {formatDateUK(task.assigned_date)}
             </div>
-            {task.notes && <div style={{ fontSize: "15px", color: SLATE, marginBottom: "8px" }}>Notes: {task.notes}</div>}
+            {task.notes && <div style={{ fontSize: "17px", color: SLATE, marginBottom: "8px" }}>Notes: {task.notes}</div>}
             {task.reply_text && (
-              <div style={{ padding: "10px 12px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", borderRadius: "8px", color: "#166534", fontSize: "15px", marginBottom: "8px" }}>
+              <div style={{ padding: "10px 12px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", borderRadius: "8px", color: "#166534", fontSize: "17px", marginBottom: "8px" }}>
                 <strong>Your explanation:</strong> {task.reply_text}
                 {task.corrective_action && <div style={{ marginTop: "5px" }}><strong>Corrective action:</strong> {task.corrective_action}</div>}
                 {task.recovery_date && <div style={{ marginTop: "5px" }}><strong>Expected recovery:</strong> {formatDateUK(task.recovery_date)}</div>}
@@ -595,7 +595,7 @@ function KPITable({ summaries, metric }: { summaries: PlantSummary[]; metric: "p
 
 function SectionTitle({ title }: { title: string }) {
   return (
-    <h2 style={{ fontSize: "15px", fontWeight: 700, color: NAVY, margin: "14px 0 8px", paddingLeft: "9px", borderLeft: `3px solid ${NAVY}` }}>
+    <h2 style={{ fontSize: "17px", fontWeight: 700, color: NAVY, margin: "14px 0 8px", paddingLeft: "9px", borderLeft: `3px solid ${NAVY}` }}>
       {title}
     </h2>
   );
@@ -604,7 +604,7 @@ function SectionTitle({ title }: { title: string }) {
 function Card({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
-      <div style={{ color: SLATE, fontSize: "13px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+      <div style={{ color: SLATE, fontSize: "15px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
       <div style={{ fontSize: "19px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
     </div>
   );
@@ -621,7 +621,7 @@ const th: React.CSSProperties = {
   textAlign: "left",
   borderBottom: `1px solid ${BORDER}`,
   padding: "6px 8px",
-  fontSize: "13px",
+  fontSize: "15px",
   color: SLATE,
   fontWeight: 700,
 };
@@ -629,7 +629,7 @@ const th: React.CSSProperties = {
 const td: React.CSSProperties = {
   borderBottom: `1px solid #f1f5f9`,
   padding: "8px 10px",
-  fontSize: "14px",
+  fontSize: "16px",
   verticalAlign: "top",
 };
 
@@ -646,5 +646,5 @@ const okBoxStyle = {
   borderRadius: "8px",
   padding: "12px 14px",
   fontWeight: "bold" as const,
-  fontSize: "15px",
+  fontSize: "17px",
 };

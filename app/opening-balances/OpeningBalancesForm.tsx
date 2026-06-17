@@ -13,7 +13,7 @@ function SectionTitle({ title }: { title: string }) {
   return (
     <h2
       style={{
-        fontSize: "15px",
+        fontSize: "17px",
         fontWeight: 700,
         color: NAVY,
         margin: "16px 0 10px",
@@ -107,7 +107,7 @@ export default function OpeningBalancesForm() {
 
   if (!isAdmin) {
     return (
-      <p style={{ color: "#dc2626", fontSize: "15px" }}>
+      <p style={{ color: "#dc2626", fontSize: "17px" }}>
         Only Admins can set opening balances.
       </p>
     );
@@ -155,7 +155,7 @@ export default function OpeningBalancesForm() {
               required
             />
             {asOfDate && (
-              <span style={{ fontSize: "13px", color: SLATE }}>{asOfDateUK}</span>
+              <span style={{ fontSize: "15px", color: SLATE }}>{asOfDateUK}</span>
             )}
           </label>
         </div>
@@ -229,7 +229,7 @@ export default function OpeningBalancesForm() {
             border: "none",
             borderRadius: "6px",
             padding: "9px 20px",
-            fontSize: "15px",
+            fontSize: "17px",
             fontWeight: 700,
             cursor: saving || !plantId ? "not-allowed" : "pointer",
             opacity: !plantId ? 0.5 : 1,
@@ -242,7 +242,7 @@ export default function OpeningBalancesForm() {
           <p
             style={{
               marginTop: "12px",
-              fontSize: "15px",
+              fontSize: "17px",
               fontWeight: 600,
               color: message.startsWith("Error") ? "#dc2626" : "#16a34a",
             }}
@@ -257,7 +257,7 @@ export default function OpeningBalancesForm() {
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: 600,
   color: NAVY,
   marginBottom: "0",
@@ -270,6 +270,6 @@ const inputStyle: React.CSSProperties = {
   marginTop: "3px",
   border: `1px solid ${BORDER}`,
   borderRadius: "6px",
-  fontSize: "15px",
+  fontSize: "17px",
   boxSizing: "border-box",
 };

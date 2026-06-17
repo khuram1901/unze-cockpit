@@ -186,11 +186,11 @@ export default function PADashboardPage() {
                           backgroundColor: "white",
                         }}
                       >
-                        <div style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.NAVY }}>{u.name}</div>
-                        <div style={{ fontSize: "13px", color: COLOURS.RED, fontWeight: 600, marginTop: "2px" }}>
+                        <div style={{ fontWeight: 700, fontSize: "17px", color: COLOURS.NAVY }}>{u.name}</div>
+                        <div style={{ fontSize: "15px", color: COLOURS.RED, fontWeight: 600, marginTop: "2px" }}>
                           {u.overdueCount} overdue task{u.overdueCount > 1 ? "s" : ""}
                         </div>
-                        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                        <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "2px" }}>
                           {u.tasks.length} total open
                         </div>
                       </div>
@@ -202,7 +202,7 @@ export default function PADashboardPage() {
               {/* ── MEETING REQUESTS AWAITING APPROVAL ── */}
               <SectionTitle title={`Meeting Requests Awaiting Approval (${meetingRequests.length})`} />
               {meetingRequests.length === 0 ? (
-                <p style={{ color: COLOURS.SLATE, fontSize: "15px", marginBottom: "12px" }}>No pending requests.</p>
+                <p style={{ color: COLOURS.SLATE, fontSize: "17px", marginBottom: "12px" }}>No pending requests.</p>
               ) : (
                 <div style={{ marginBottom: "12px" }}>
                   {meetingRequests.map((r) => (
@@ -215,8 +215,8 @@ export default function PADashboardPage() {
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", flexWrap: "wrap" }}>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.NAVY }}>{r.meeting_title}</div>
-                          <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                          <div style={{ fontWeight: 700, fontSize: "17px", color: COLOURS.NAVY }}>{r.meeting_title}</div>
+                          <div style={{ fontSize: "15px", color: COLOURS.SLATE, marginTop: "2px" }}>
                             {r.requested_by_name || "—"} · {r.requested_date ? formatDateUK(r.requested_date) : "No date"} · <PriorityBadge priority={r.priority} />
                           </div>
                         </div>
@@ -228,7 +228,7 @@ export default function PADashboardPage() {
                             border: "none",
                             borderRadius: "5px",
                             padding: "7px 12px",
-                            fontSize: "13px",
+                            fontSize: "15px",
                             fontWeight: 700,
                             cursor: "pointer",
                             whiteSpace: "nowrap",
@@ -246,7 +246,7 @@ export default function PADashboardPage() {
               {/* ── ESCALATIONS ── */}
               <SectionTitle title={`Active Escalations (${escalations.length})`} />
               {escalations.length === 0 ? (
-                <p style={{ color: COLOURS.SLATE, fontSize: "15px", marginBottom: "12px" }}>No active escalations.</p>
+                <p style={{ color: COLOURS.SLATE, fontSize: "17px", marginBottom: "12px" }}>No active escalations.</p>
               ) : (
                 <div style={{ marginBottom: "12px" }}>
                   {escalations.map((t) => (
@@ -259,10 +259,10 @@ export default function PADashboardPage() {
                       marginBottom: "8px",
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-                        <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</div>
+                        <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</div>
                         <StatusBadge status={t.status} />
                       </div>
-                      <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "4px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <div style={{ fontSize: "15px", color: COLOURS.SLATE, marginTop: "4px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
                         <span style={{ color: COLOURS.RED, fontWeight: 600 }}>{t.exception_type || t.source_type}</span>
                         <span>→ {t.assigned_to || "Unassigned"}</span>
                         <span style={{ color: isOverdue(t) ? COLOURS.RED : COLOURS.NAVY, fontWeight: isOverdue(t) ? 700 : 400 }}>
@@ -290,9 +290,9 @@ export default function PADashboardPage() {
                         gap: "8px",
                         flexWrap: "wrap",
                       }}>
-                        <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: "16px", fontWeight: 600, color: COLOURS.NAVY, minWidth: 0, flex: 1 }}>
                           {t.description}
-                          <div style={{ fontSize: "12px", color: isOverdue(t) ? COLOURS.RED : COLOURS.SLATE, marginTop: "2px" }}>
+                          <div style={{ fontSize: "14px", color: isOverdue(t) ? COLOURS.RED : COLOURS.SLATE, marginTop: "2px" }}>
                             {t.due_date ? formatDateUK(t.due_date) : "No due date"}
                           </div>
                         </div>
@@ -311,7 +311,7 @@ export default function PADashboardPage() {
               {assigneeGroups.map((group) => (
                 <div key={group.name} style={{ marginBottom: "12px" }}>
                   <div style={{
-                    fontSize: "14px",
+                    fontSize: "16px",
                     fontWeight: 700,
                     color: COLOURS.NAVY,
                     padding: "6px 10px",
@@ -342,9 +342,9 @@ export default function PADashboardPage() {
                           gap: "8px",
                           flexWrap: "wrap",
                         }}>
-                          <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: "16px", fontWeight: 600, color: COLOURS.NAVY, minWidth: 0, flex: 1 }}>
                             {t.description}
-                            <div style={{ fontSize: "12px", color: isOverdue(t) ? COLOURS.RED : COLOURS.SLATE, marginTop: "2px", fontWeight: isOverdue(t) ? 700 : 400 }}>
+                            <div style={{ fontSize: "14px", color: isOverdue(t) ? COLOURS.RED : COLOURS.SLATE, marginTop: "2px", fontWeight: isOverdue(t) ? 700 : 400 }}>
                               {t.due_date ? formatDateUK(t.due_date) : "No due date"}
                               {isOverdue(t) && ` · ${daysOverdue(t)}d overdue`}
                             </div>

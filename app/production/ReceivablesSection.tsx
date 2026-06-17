@@ -72,7 +72,7 @@ const inputStyle = {
   marginBottom: "10px",
   border: `1px solid ${BORDER}`,
   borderRadius: "6px",
-  fontSize: "15px",
+  fontSize: "17px",
 };
 
 const sectionStyle = {
@@ -83,10 +83,10 @@ const sectionStyle = {
   backgroundColor: "white",
 };
 
-const hint = { fontSize: "14px", color: SLATE, marginBottom: "10px" };
+const hint = { fontSize: "16px", color: SLATE, marginBottom: "10px" };
 
 const h3 = {
-  fontSize: "15px",
+  fontSize: "17px",
   fontWeight: 700 as const,
   color: NAVY,
   marginBottom: "4px",
@@ -233,7 +233,7 @@ export default function ReceivablesSection({
     textAlign: "left",
     borderBottom: `1px solid ${BORDER}`,
     padding: "6px 8px",
-    fontSize: "13px",
+    fontSize: "15px",
     color: SLATE,
     fontWeight: 700,
     whiteSpace: "nowrap",
@@ -242,7 +242,7 @@ export default function ReceivablesSection({
   const td: React.CSSProperties = {
     borderBottom: `1px solid #f1f5f9`,
     padding: "6px 8px",
-    fontSize: "14px",
+    fontSize: "16px",
     verticalAlign: "middle",
   };
 
@@ -260,7 +260,7 @@ export default function ReceivablesSection({
           style={{
             color: msg.startsWith("Error") ? "#c0392b" : "#16a34a",
             fontWeight: 700,
-            fontSize: "15px",
+            fontSize: "17px",
           }}
         >
           {msg}
@@ -278,7 +278,7 @@ export default function ReceivablesSection({
       >
         {/* LEFT: add a new bill */}
         <div style={{ borderRight: `1px solid ${BORDER}`, paddingRight: "16px" }}>
-          <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
             Add a new bill
           </div>
           {customers.length > 1 ? (
@@ -296,8 +296,8 @@ export default function ReceivablesSection({
             </label>
           ) : (
             <div style={{ marginBottom: "10px" }}>
-              <div style={{ fontSize: "13px", color: SLATE }}>Customer</div>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>{customers[0]}</div>
+              <div style={{ fontSize: "15px", color: SLATE }}>Customer</div>
+              <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>{customers[0]}</div>
             </div>
           )}
           <label>
@@ -360,7 +360,7 @@ export default function ReceivablesSection({
               border: "none",
               borderRadius: "6px",
               padding: "8px 18px",
-              fontSize: "15px",
+              fontSize: "17px",
               cursor: "pointer",
               fontWeight: 700,
               marginTop: "4px",
@@ -372,13 +372,13 @@ export default function ReceivablesSection({
 
         {/* RIGHT: tracking table */}
         <div>
-          <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
             Open bills ({bills.length})
           </div>
           {loading ? (
-            <p style={{ color: SLATE, fontSize: "15px" }}>Loading receivables…</p>
+            <p style={{ color: SLATE, fontSize: "17px" }}>Loading receivables…</p>
           ) : bills.length === 0 ? (
-            <p style={{ color: SLATE, fontSize: "15px" }}>No open bills for this plant yet.</p>
+            <p style={{ color: SLATE, fontSize: "17px" }}>No open bills for this plant yet.</p>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -415,7 +415,7 @@ export default function ReceivablesSection({
                               padding: "4px 6px",
                               border: `1px solid ${BORDER}`,
                               borderRadius: "6px",
-                              fontSize: "14px",
+                              fontSize: "16px",
                               minWidth: "150px",
                             }}
                           >
@@ -441,7 +441,7 @@ export default function ReceivablesSection({
                               border: "none",
                               borderRadius: "6px",
                               padding: "5px 10px",
-                              fontSize: "14px",
+                              fontSize: "16px",
                               cursor: "pointer",
                               fontWeight: 600,
                               whiteSpace: "nowrap",

@@ -14,7 +14,7 @@ export default function FinancePage() {
           <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
             Finance — Cash Position
           </h1>
-          <p style={{ color: SLATE, fontSize: "14px", marginTop: "5px" }}>
+          <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px" }}>
             Set the opening balance, enter each month's expected receivables and payouts, and record daily cash figures.
           </p>
         </div>

@@ -16,7 +16,7 @@ export default function OpeningBalancesPage() {
           <h1 style={{ fontSize: "22px", fontWeight: 800, color: NAVY, margin: 0 }}>
             Opening Balances
           </h1>
-          <p style={{ color: SLATE, fontSize: "14px", marginTop: "5px" }}>
+          <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px" }}>
             Admin only. Set the starting stock for each plant. The dashboard counts forward from here using daily entries.
           </p>
         </div>

@@ -46,7 +46,7 @@ function SectionTitle({ title }: { title: string }) {
   return (
     <h2
       style={{
-        fontSize: "15px",
+        fontSize: "17px",
         fontWeight: 700,
         color: NAVY,
         margin: "20px 0 10px",
@@ -346,7 +346,7 @@ export default function FinanceManager() {
   }
 
   if (loading) {
-    return <p style={{ color: SLATE, fontSize: "15px" }}>Loading finance data…</p>;
+    return <p style={{ color: SLATE, fontSize: "17px" }}>Loading finance data…</p>;
   }
 
   const latestPosition = positions[0] || null;
@@ -362,7 +362,7 @@ export default function FinanceManager() {
             padding: "10px 14px",
             marginBottom: "14px",
             backgroundColor: "white",
-            fontSize: "15px",
+            fontSize: "17px",
             color: NAVY,
           }}
         >
@@ -426,14 +426,14 @@ export default function FinanceManager() {
         }}
       >
         <div>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>
+          <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>
             Gmail: {gmailConnected ? (
               <span style={{ color: GREEN }}>Connected</span>
             ) : (
               <span style={{ color: SLATE }}>Not connected</span>
             )}
           </div>
-          <div style={{ fontSize: "13px", color: SLATE, marginTop: "2px" }}>
+          <div style={{ fontSize: "15px", color: SLATE, marginTop: "2px" }}>
             {gmailConnected
               ? "Daily cash flow and bank position PDFs are ingested automatically from your cockpit-cash Gmail label every 2 minutes."
               : "Connect your Gmail to automatically ingest daily cash statements. You'll need a Gmail label called 'cockpit-cash'."
@@ -465,7 +465,7 @@ export default function FinanceManager() {
           marginBottom: "16px",
         }}
       >
-        <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
+        <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
           Upload the daily Cash Flow and Bank Position PDFs from the accountant. The system will extract the figures, check they balance, and save automatically.
         </p>
         <form onSubmit={handlePDFUpload}>
@@ -510,7 +510,7 @@ export default function FinanceManager() {
               border: `1px solid ${BORDER}`,
               borderLeft: `4px solid ${uploadResult.reconciliation?.matches ? GREEN : RED}`,
               backgroundColor: "#fafbfc",
-              fontSize: "14px",
+              fontSize: "16px",
             }}
           >
             {uploadResult.success ? (
@@ -550,7 +550,7 @@ export default function FinanceManager() {
           marginBottom: "16px",
         }}
       >
-        <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
+        <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
           Upload the projected cash flow Excel. The system reads the &quot;Monthly-CF&quot; sheet and saves monthly budgets by category (inflows and outflows).
         </p>
         <form onSubmit={handleForecastUpload}>
@@ -584,7 +584,7 @@ export default function FinanceManager() {
               border: `1px solid ${BORDER}`,
               borderLeft: `4px solid ${forecastResult.success ? GREEN : RED}`,
               backgroundColor: "#fafbfc",
-              fontSize: "14px",
+              fontSize: "16px",
             }}
           >
             {forecastResult.success ? (
@@ -618,7 +618,7 @@ export default function FinanceManager() {
           }}
         >
           <SectionTitle title="Record Daily Position" />
-          <p style={{ fontSize: "14px", color: SLATE, marginTop: "-4px", marginBottom: "12px" }}>
+          <p style={{ fontSize: "16px", color: SLATE, marginTop: "-4px", marginBottom: "12px" }}>
             Enter today's figures from the accountant's statement.
           </p>
           <form onSubmit={saveDailyPosition}>
@@ -707,7 +707,7 @@ export default function FinanceManager() {
         >
           <SectionTitle title="Daily Position — Last 30 Days" />
           {positions.length === 0 ? (
-            <p style={{ fontSize: "15px", color: SLATE }}>
+            <p style={{ fontSize: "17px", color: SLATE }}>
               No daily positions recorded yet.
             </p>
           ) : (
@@ -762,7 +762,7 @@ export default function FinanceManager() {
       {/* ── MODALS ── */}
       {openModal === "opening" && (
         <Modal title="Opening Balance" onClose={() => setOpenModal(null)}>
-          <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
+          <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
             Set the starting cash balance. The system counts forward from here.
           </p>
           <form onSubmit={saveOpeningBalance}>
@@ -806,7 +806,7 @@ export default function FinanceManager() {
 
       {openModal === "plan" && (
         <Modal title="Monthly Cash Plan" onClose={() => setOpenModal(null)}>
-          <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
+          <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
             Set expected receivables and payouts for the month. Used to calculate cash health on the Executive dashboard.
           </p>
           <form onSubmit={saveMonthlyPlan}>
@@ -888,16 +888,16 @@ function SummaryCard({
       <div
         style={{
           color: SLATE,
-          fontSize: "13px",
+          fontSize: "15px",
           marginBottom: "4px",
           fontWeight: 600,
         }}
       >
         {label}
       </div>
-      <div style={{ fontSize: "15px", fontWeight: 800, color }}>{value}</div>
+      <div style={{ fontSize: "17px", fontWeight: 800, color }}>{value}</div>
       {sub && (
-        <div style={{ fontSize: "12px", color: SLATE, marginTop: "3px" }}>
+        <div style={{ fontSize: "14px", color: SLATE, marginTop: "3px" }}>
           {sub}
         </div>
       )}
@@ -912,7 +912,7 @@ function SummaryCard({
             border: `1px solid ${BORDER}`,
             borderRadius: "5px",
             padding: "2px 8px",
-            fontSize: "12px",
+            fontSize: "14px",
             fontWeight: 600,
             color: SLATE,
             cursor: "pointer",
@@ -971,7 +971,7 @@ function Modal({
             borderBottom: `1px solid ${BORDER}`,
           }}
         >
-          <h2 style={{ fontSize: "15px", fontWeight: 700, color: NAVY, margin: 0 }}>
+          <h2 style={{ fontSize: "17px", fontWeight: 700, color: NAVY, margin: 0 }}>
             {title}
           </h2>
           <button
@@ -998,7 +998,7 @@ function Modal({
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: 600,
   color: NAVY,
   marginBottom: "10px",
@@ -1011,7 +1011,7 @@ const inputStyle: React.CSSProperties = {
   marginTop: "3px",
   border: `1px solid ${BORDER}`,
   borderRadius: "6px",
-  fontSize: "15px",
+  fontSize: "17px",
   boxSizing: "border-box",
 };
 
@@ -1021,7 +1021,7 @@ const btnStyle: React.CSSProperties = {
   border: "none",
   borderRadius: "6px",
   padding: "9px 18px",
-  fontSize: "15px",
+  fontSize: "17px",
   fontWeight: 700,
   cursor: "pointer",
   marginTop: "4px",
@@ -1033,7 +1033,7 @@ const cancelBtnStyle: React.CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: "6px",
   padding: "9px 18px",
-  fontSize: "15px",
+  fontSize: "17px",
   fontWeight: 600,
   cursor: "pointer",
   marginTop: "4px",
@@ -1043,7 +1043,7 @@ const th: React.CSSProperties = {
   textAlign: "left",
   borderBottom: `1px solid ${BORDER}`,
   padding: "6px 10px",
-  fontSize: "13px",
+  fontSize: "15px",
   color: SLATE,
   fontWeight: 700,
 };
@@ -1051,7 +1051,7 @@ const th: React.CSSProperties = {
 const td: React.CSSProperties = {
   borderBottom: `1px solid #f1f5f9`,
   padding: "7px 10px",
-  fontSize: "14px",
+  fontSize: "16px",
 };
 
 const tdBold: React.CSSProperties = {

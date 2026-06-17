@@ -35,7 +35,7 @@ export default function ResetPasswordPage() {
     marginBottom: "16px",
     border: "1px solid #ccc",
     borderRadius: "6px",
-    fontSize: "14px",
+    fontSize: "16px",
     boxSizing: "border-box" as const,
   };
 
@@ -63,12 +63,12 @@ export default function ResetPasswordPage() {
         <h1 style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "4px" }}>
           Set a new password
         </h1>
-        <p style={{ color: "#777", fontSize: "14px", marginBottom: "24px" }}>
+        <p style={{ color: "#777", fontSize: "16px", marginBottom: "24px" }}>
           Enter your new password below.
         </p>
 
         <form onSubmit={handleSubmit}>
-          <label style={{ fontSize: "14px" }}>
+          <label style={{ fontSize: "16px" }}>
             New password
             <input
               type="password"
@@ -90,7 +90,7 @@ export default function ResetPasswordPage() {
               border: "none",
               borderRadius: "6px",
               padding: "12px",
-              fontSize: "15px",
+              fontSize: "17px",
               cursor: "pointer",
               fontWeight: "bold",
             }}
@@ -103,7 +103,7 @@ export default function ResetPasswordPage() {
           <p
             style={{
               marginTop: "16px",
-              fontSize: "14px",
+              fontSize: "16px",
               color: message.startsWith("Error") ? "red" : "green",
             }}
           >

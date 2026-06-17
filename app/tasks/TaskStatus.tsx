@@ -146,7 +146,7 @@ export default function TaskStatus({
     padding: "6px",
     border: "1px solid #ccc",
     borderRadius: "6px",
-    fontSize: "14px",
+    fontSize: "16px",
   };
 
   const fieldStyle = {
@@ -155,7 +155,7 @@ export default function TaskStatus({
     padding: "8px",
     border: "1px solid #ccc",
     borderRadius: "6px",
-    fontSize: "14px",
+    fontSize: "16px",
     display: "block",
     marginTop: "4px",
     marginBottom: "10px",
@@ -164,7 +164,7 @@ export default function TaskStatus({
   return (
     <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #eee" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-        <span style={{ fontSize: "14px", fontWeight: "bold" }}>Update status:</span>
+        <span style={{ fontSize: "16px", fontWeight: "bold" }}>Update status:</span>
 
         <select
           style={controlStyle}
@@ -177,8 +177,8 @@ export default function TaskStatus({
           ))}
         </select>
 
-        {savedMessage && <span style={{ color: "green", fontSize: "14px" }}>{savedMessage}</span>}
-        {saving && <span style={{ color: "#888", fontSize: "14px" }}>Saving…</span>}
+        {savedMessage && <span style={{ color: "green", fontSize: "16px" }}>{savedMessage}</span>}
+        {saving && <span style={{ color: "#888", fontSize: "16px" }}>Saving…</span>}
       </div>
 
       {/* Due-date editor: Admin / Executive only */}
@@ -192,7 +192,7 @@ export default function TaskStatus({
             flexWrap: "wrap",
           }}
         >
-          <span style={{ fontSize: "14px", fontWeight: "bold" }}>Due date:</span>
+          <span style={{ fontSize: "16px", fontWeight: "bold" }}>Due date:</span>
           <input
             type="date"
             value={dueDate}
@@ -209,22 +209,22 @@ export default function TaskStatus({
               border: "none",
               borderRadius: "6px",
               padding: "6px 14px",
-              fontSize: "14px",
+              fontSize: "16px",
               cursor: "pointer",
               fontWeight: "bold",
             }}
           >
             Save date
           </button>
-          {dateMessage && <span style={{ color: "green", fontSize: "14px" }}>{dateMessage}</span>}
-          {savingDate && <span style={{ color: "#888", fontSize: "14px" }}>Saving…</span>}
+          {dateMessage && <span style={{ color: "green", fontSize: "16px" }}>{dateMessage}</span>}
+          {savingDate && <span style={{ color: "#888", fontSize: "16px" }}>Saving…</span>}
         </div>
       )}
 
       {/* The assignee fills in their explanation while status is Waiting Reply */}
       {task.reply_required && status === "Waiting Reply" && (
         <div style={{ marginTop: "12px" }}>
-          <label style={{ fontSize: "14px", fontWeight: "bold" }}>
+          <label style={{ fontSize: "16px", fontWeight: "bold" }}>
             Explanation
             <textarea
               placeholder="Explain what happened..."
@@ -234,7 +234,7 @@ export default function TaskStatus({
             />
           </label>
 
-          <label style={{ fontSize: "14px", fontWeight: "bold" }}>
+          <label style={{ fontSize: "16px", fontWeight: "bold" }}>
             Corrective Action
             <textarea
               placeholder="What action has been taken or will be taken?"
@@ -244,7 +244,7 @@ export default function TaskStatus({
             />
           </label>
 
-          <label style={{ fontSize: "14px", fontWeight: "bold" }}>
+          <label style={{ fontSize: "16px", fontWeight: "bold" }}>
             Expected Recovery Date
             <input
               type="date"
@@ -264,7 +264,7 @@ export default function TaskStatus({
               border: "none",
               borderRadius: "6px",
               padding: "8px 16px",
-              fontSize: "14px",
+              fontSize: "16px",
               cursor: "pointer",
               fontWeight: "bold",
             }}
@@ -286,7 +286,7 @@ export default function TaskStatus({
               border: "none",
               borderRadius: "6px",
               padding: "8px 16px",
-              fontSize: "14px",
+              fontSize: "16px",
               cursor: "pointer",
               fontWeight: "bold",
             }}
@@ -303,7 +303,7 @@ export default function TaskStatus({
               border: "1px solid #dc2626",
               borderRadius: "6px",
               padding: "8px 16px",
-              fontSize: "14px",
+              fontSize: "16px",
               cursor: "pointer",
               fontWeight: "bold",
             }}

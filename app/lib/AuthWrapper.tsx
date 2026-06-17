@@ -259,7 +259,7 @@ export default function AuthWrapper({
             {!isMobile && (
               <span
                 style={{
-                  fontSize: "15px",
+                  fontSize: "17px",
                   fontWeight: 700,
                   color: NAVY,
                   whiteSpace: "nowrap",
@@ -277,7 +277,7 @@ export default function AuthWrapper({
               <>
                 <span
                   style={{
-                    fontSize: "15px",
+                    fontSize: "17px",
                     color: NAVY,
                     fontWeight: 600,
                     whiteSpace: "nowrap",
@@ -290,7 +290,7 @@ export default function AuthWrapper({
                 </span>
                 <span
                   style={{
-                    fontSize: "13px",
+                    fontSize: "15px",
                     fontWeight: 700,
                     backgroundColor: roleColor,
                     color: "white",
@@ -315,7 +315,7 @@ export default function AuthWrapper({
                     border: `1px solid ${BORDER}`,
                     borderRadius: "7px",
                     padding: "7px 12px",
-                    fontSize: "15px",
+                    fontSize: "17px",
                     fontWeight: 600,
                     color: NAVY,
                     cursor: "pointer",
@@ -326,8 +326,8 @@ export default function AuthWrapper({
                   }}
                   aria-label="Settings menu"
                 >
-                  <span style={{ fontSize: "14px" }}>⚙</span>{!isMobile && " Settings"}
-                  <span style={{ fontSize: "12px", color: SLATE }}>▾</span>
+                  <span style={{ fontSize: "16px" }}>⚙</span>{!isMobile && " Settings"}
+                  <span style={{ fontSize: "14px", color: SLATE }}>▾</span>
                 </button>
 
                 {settingsOpen && (
@@ -347,7 +347,7 @@ export default function AuthWrapper({
                   >
                     <div
                       style={{
-                        fontSize: "12px",
+                        fontSize: "14px",
                         fontWeight: 700,
                         color: SLATE,
                         padding: "6px 10px 4px",
@@ -367,7 +367,7 @@ export default function AuthWrapper({
                           style={{
                             display: "block",
                             textDecoration: "none",
-                            fontSize: "15px",
+                            fontSize: "17px",
                             fontWeight: active ? 700 : 500,
                             color: active ? "white" : NAVY,
                             backgroundColor: active ? "#2563eb" : "transparent",
@@ -392,7 +392,7 @@ export default function AuthWrapper({
                 border: "none",
                 borderRadius: "7px",
                 padding: "8px 12px",
-                fontSize: "15px",
+                fontSize: "17px",
                 fontWeight: 600,
                 color: "white",
                 cursor: "pointer",
@@ -447,7 +447,7 @@ export default function AuthWrapper({
                 <div
                   style={{
                     gridColumn: "1 / -1",
-                    fontSize: "12px",
+                    fontSize: "14px",
                     fontWeight: 700,
                     color: "rgba(255,255,255,0.6)",
                     padding: "8px 4px 4px",

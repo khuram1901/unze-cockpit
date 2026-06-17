@@ -70,7 +70,7 @@ export function SectionTitle({ title }: { title: string }) {
   return (
     <h2
       style={{
-        fontSize: "15px",
+        fontSize: "17px",
         fontWeight: 700,
         color: COLOURS.NAVY,
         margin: "20px 0 10px",
@@ -96,7 +96,7 @@ export function PageHeader({
         {title}
       </h1>
       {subtitle && (
-        <p style={{ color: COLOURS.SLATE, fontSize: "14px", marginTop: "5px" }}>
+        <p style={{ color: COLOURS.SLATE, fontSize: "16px", marginTop: "5px" }}>
           {subtitle}
         </p>
       )}
@@ -109,7 +109,7 @@ export function StatusBadge({ status }: { status: string | null }) {
   return (
     <span
       style={{
-        fontSize: "12px",
+        fontSize: "14px",
         fontWeight: 700,
         padding: "3px 9px",
         borderRadius: "10px",
@@ -128,7 +128,7 @@ export function PriorityBadge({ priority }: { priority: string | null }) {
   return (
     <span
       style={{
-        fontSize: "12px",
+        fontSize: "14px",
         fontWeight: 700,
         padding: "3px 9px",
         borderRadius: "10px",
@@ -166,7 +166,7 @@ export function CountCard({
       <div
         style={{
           color: COLOURS.SLATE,
-          fontSize: "13px",
+          fontSize: "15px",
           marginBottom: "2px",
           whiteSpace: "nowrap",
           overflow: "hidden",
@@ -179,7 +179,7 @@ export function CountCard({
         {typeof value === "number" ? value.toLocaleString() : value}
       </div>
       {sub && (
-        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+        <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "2px" }}>
           {sub}
         </div>
       )}
@@ -221,9 +221,9 @@ export function TrafficLight({
         }}
       />
       <div>
-        <div style={{ fontSize: "14px", fontWeight: 700, color: colour }}>{label}</div>
+        <div style={{ fontSize: "16px", fontWeight: 700, color: colour }}>{label}</div>
         {detail && (
-          <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{detail}</div>
+          <div style={{ fontSize: "14px", color: COLOURS.SLATE }}>{detail}</div>
         )}
       </div>
     </div>
@@ -237,7 +237,7 @@ export const tableHeaderStyle: React.CSSProperties = {
   textAlign: "left",
   borderBottom: `1px solid ${COLOURS.BORDER}`,
   padding: "6px 10px",
-  fontSize: "13px",
+  fontSize: "15px",
   color: COLOURS.SLATE,
   fontWeight: 700,
 };
@@ -245,7 +245,7 @@ export const tableHeaderStyle: React.CSSProperties = {
 export const tableCellStyle: React.CSSProperties = {
   borderBottom: `1px solid #f1f5f9`,
   padding: "7px 10px",
-  fontSize: "14px",
+  fontSize: "16px",
 };
 
 export const tableCellBoldStyle: React.CSSProperties = {
@@ -259,7 +259,7 @@ export const tableCellBoldStyle: React.CSSProperties = {
 // ─────────────────────────────────────────────────────────────────
 export const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: 600,
   color: COLOURS.NAVY,
   marginBottom: "10px",
@@ -272,7 +272,7 @@ export const inputStyle: React.CSSProperties = {
   marginTop: "3px",
   border: `1px solid ${COLOURS.BORDER}`,
   borderRadius: "6px",
-  fontSize: "15px",
+  fontSize: "17px",
   boxSizing: "border-box",
 };
 
@@ -282,7 +282,7 @@ export const primaryButtonStyle: React.CSSProperties = {
   border: "none",
   borderRadius: "6px",
   padding: "10px 20px",
-  fontSize: "15px",
+  fontSize: "17px",
   fontWeight: 700,
   cursor: "pointer",
 };

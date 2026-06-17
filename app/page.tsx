@@ -175,7 +175,7 @@ const pillStyle = {
   borderRadius: "999px",
   padding: "8px 14px",
   marginBottom: "24px",
-  fontSize: "14px",
+  fontSize: "16px",
   color: "#2563eb",
   fontWeight: 700,
 };
@@ -210,7 +210,7 @@ const primaryButtonStyle = {
   padding: "14px 24px",
   borderRadius: "8px",
   fontWeight: 800,
-  fontSize: "15px",
+  fontSize: "17px",
   display: "inline-block",
   boxShadow: "0 10px 28px rgba(37,99,235,0.28)",
 };
@@ -262,7 +262,7 @@ const captionTitleStyle = {
 
 const captionSubtitleStyle = {
   color: "#dbeafe",
-  fontSize: "15px",
+  fontSize: "17px",
 };
 
 const dotsStyle = {
@@ -274,5 +274,5 @@ const dotsStyle = {
 const footerStyle = {
   marginTop: "28px",
   color: "#64748b",
-  fontSize: "15px",
+  fontSize: "17px",
 };

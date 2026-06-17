@@ -12,7 +12,7 @@ export default function ProductionPage() {
         <h1 style={{ fontSize: isMobile ? "22px" : "28px", fontWeight: "bold", marginBottom: "8px" }}>
           Daily Entry
         </h1>
-        <p style={{ color: "#666", fontSize: "14px", marginBottom: isMobile ? "16px" : "24px" }}>
+        <p style={{ color: "#666", fontSize: "16px", marginBottom: isMobile ? "16px" : "24px" }}>
           Enter today&apos;s production and dispatch for your plant.
         </p>
         <ProductionForm />
