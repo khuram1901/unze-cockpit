@@ -98,17 +98,20 @@ export default function AuthWrapper({
   const currentRole = member?.role || "Member";
 
   const navItems: NavItem[] = [
-    { label: "Executive", href: "/executive", allowedRoles: ["Admin", "Executive"] },
-    { label: "Operations", href: "/dashboard", allowedRoles: ["Admin", "Executive", "Manager"] },
-    { label: "Daily Entry", href: "/production", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
-    { label: "Monthly Targets", href: "/monthly-operations-targets", allowedRoles: ["Admin", "Executive"] },
-    { label: "Tasks", href: "/tasks", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
-    { label: "Exceptions", href: "/exceptions", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
-    { label: "Opening Balances", href: "/opening-balances", allowedRoles: ["Admin"] },
-    { label: "Members", href: "/members", allowedRoles: ["Admin"] },
-    { label: "Department Owners", href: "/department-owners", allowedRoles: ["Admin", "Executive"] },
-    { label: "Finance", href: "/finance", allowedRoles: ["Admin", "Executive"] },
-  ];
+  { label: "Executive", href: "/executive", allowedRoles: ["Admin", "Executive"] },
+  { label: "Operations", href: "/dashboard", allowedRoles: ["Admin", "Executive", "Manager"] },
+  { label: "Daily Entry", href: "/production", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
+  { label: "Monthly Targets", href: "/monthly-operations-targets", allowedRoles: ["Admin", "Executive"] },
+  { label: "Tasks", href: "/tasks", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
+  { label: "Exceptions", href: "/exceptions", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
+
+  { label: "Calendar", href: "/calendar", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
+
+  { label: "Opening Balances", href: "/opening-balances", allowedRoles: ["Admin"] },
+  { label: "Members", href: "/members", allowedRoles: ["Admin"] },
+  { label: "Department Owners", href: "/department-owners", allowedRoles: ["Admin", "Executive"] },
+  { label: "Finance", href: "/finance", allowedRoles: ["Admin", "Executive"] },
+];
 
   const currentDepartment = member?.department || null;
 
