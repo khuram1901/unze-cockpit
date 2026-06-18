@@ -15,6 +15,9 @@ type Member = {
   department: string | null;
   business_unit: string | null;
   is_hod: boolean;
+  notify_email: boolean;
+  notify_whatsapp: boolean;
+  phone_e164: string | null;
 };
 
 type Plant = { id: string; name: string };
@@ -112,7 +115,7 @@ export default function MembersManager() {
 
     const { data } = await supabase
       .from("members")
-      .select("id, first_name, last_name, name, email, role, department, business_unit, is_hod")
+      .select("id, first_name, last_name, name, email, role, department, business_unit, is_hod, notify_email, notify_whatsapp, phone_e164")
       .order("first_name", { ascending: true });
 
     if (data) setMembers(data);
@@ -562,6 +565,29 @@ export default function MembersManager() {
                   />
                   Head of Dept
                 </label>
+              )}
+
+              {isAdmin && (
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", fontSize: "14px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", color: "#1e293b" }}>
+                    <input type="checkbox" checked={m.notify_email} onChange={(e) => updateMember(m.id, { notify_email: e.target.checked })} style={{ width: "14px", height: "14px" }} />
+                    Email
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", color: "#1e293b" }}>
+                    <input type="checkbox" checked={m.notify_whatsapp || false} onChange={(e) => updateMember(m.id, { notify_whatsapp: e.target.checked })} style={{ width: "14px", height: "14px" }} />
+                    WhatsApp
+                  </label>
+                  {m.notify_whatsapp && (
+                    <input
+                      placeholder="+92..."
+                      value={m.phone_e164 || ""}
+                      onBlur={(e) => { if (e.target.value !== (m.phone_e164 || "")) updateMember(m.id, { phone_e164: e.target.value || null }); }}
+                      onChange={() => {}}
+                      defaultValue={m.phone_e164 || ""}
+                      style={{ padding: "4px 8px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "14px", width: "130px" }}
+                    />
+                  )}
+                </div>
               )}
 
               {isAdmin && (

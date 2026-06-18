@@ -132,7 +132,7 @@ export default function NewTaskForm() {
 
     const needsReply = status === "Waiting Reply";
 
-    const { error } = await supabase.from("tasks").insert({
+    const { data: newTask, error } = await supabase.from("tasks").insert({
       task_type: "Task",
       description,
       project,
@@ -147,7 +147,7 @@ export default function NewTaskForm() {
       reply_required: needsReply,
       assigned_to_department: assignedMember?.department || project || null,
       assigned_to_business_unit: assignedMember?.business_unit || null,
-    });
+    }).select("id").single();
 
     setSaving(false);
 
@@ -157,6 +157,15 @@ export default function NewTaskForm() {
     }
 
     logAction("Created", "tasks", `Task: ${description} → ${assignedTo}`);
+
+    // Send notification to assignee
+    if (assignedToEmail && newTask?.id) {
+      fetch("/api/notifications/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "task_assigned", taskId: newTask.id, recipientEmail: assignedToEmail }),
+      }).catch(() => {});
+    }
 
     setDescription("");
     setProject("");
