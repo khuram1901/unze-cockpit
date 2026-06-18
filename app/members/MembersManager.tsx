@@ -219,6 +219,14 @@ export default function MembersManager() {
     }
 
     logAction("Created", "members", `Added ${firstName} ${lastName} (${email}) as ${role}`);
+
+    // Send welcome email with password setup link
+    fetch("/api/members/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email.trim(), firstName, lastName, role }),
+    }).catch(() => {});
+
     setFirstName("");
     setLastName("");
     setEmail("");
