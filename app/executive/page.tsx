@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import EscalationTrafficLights from "./EscalationTrafficLights";
@@ -1418,70 +1418,72 @@ function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRow
 
   if (departmentRows.length === 0) return <p style={{ color: SLATE, fontSize: "17px" }}>No task data yet.</p>;
 
+  function trafficDot(count: number, color: string) {
+    if (count === 0) return null;
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+        <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, display: "inline-block", boxShadow: `0 0 4px ${color}40` }} />
+        <span style={{ fontWeight: 700, fontSize: "15px", color }}>{count}</span>
+      </span>
+    );
+  }
+
   return (
-    <div style={{ marginBottom: "12px" }}>
-      {departmentRows.map((dept) => {
-        const isExpanded = expandedDept === dept.name;
-        const deptPeople = deptPeopleMap.get(dept.name) || [];
-        return (
-          <div key={dept.name} style={{ marginBottom: "4px" }}>
-            <button
-              onClick={() => setExpandedDept(isExpanded ? null : dept.name)}
-              style={{
-                width: "100%",
-                textAlign: "left",
-                border: `1px solid ${BORDER}`,
-                borderRadius: isExpanded ? "8px 8px 0 0" : "8px",
-                padding: "10px 12px",
-                backgroundColor: "white",
-                cursor: "pointer",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ fontSize: "14px", color: SLATE }}>{isExpanded ? "▼" : "▶"}</span>
-                <span style={{ fontWeight: 700, fontSize: "16px", color: NAVY }}>{dept.name}</span>
-              </div>
-              <div style={{ display: "flex", gap: "12px", fontSize: "15px" }}>
-                {dept.red > 0 && <span style={{ color: "#dc2626", fontWeight: 700 }}>{dept.red} red</span>}
-                {dept.amber > 0 && <span style={{ color: "#d97706", fontWeight: 700 }}>{dept.amber} amber</span>}
-                {dept.green > 0 && <span style={{ color: "#16a34a", fontWeight: 700 }}>{dept.green} green</span>}
-                <span style={{ color: SLATE }}>{dept.total} total</span>
-              </div>
-            </button>
-            {isExpanded && (
-              <div style={{
-                border: `1px solid ${BORDER}`,
-                borderTop: "none",
-                borderRadius: "0 0 8px 8px",
-                backgroundColor: "#f8fafc",
-                padding: "6px",
-              }}>
-                {deptPeople
-                  .filter((p) => p.total > 0)
-                  .map((person) => (
-                    <div key={person.name} style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "6px 10px",
-                      borderBottom: `1px solid ${BORDER}`,
-                      fontSize: "15px",
-                    }}>
-                      <span style={{ color: NAVY, fontWeight: 600 }}>{person.name}</span>
-                      <div style={{ display: "flex", gap: "10px" }}>
-                        {person.red > 0 && <span style={{ color: "#dc2626", fontWeight: 700 }}>{person.red}</span>}
-                        {person.amber > 0 && <span style={{ color: "#d97706", fontWeight: 700 }}>{person.amber}</span>}
-                        {person.green > 0 && <span style={{ color: "#16a34a", fontWeight: 700 }}>{person.green}</span>}
-                      </div>
+    <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "12px" }}>
+      <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <thead>
+          <tr style={{ backgroundColor: "#f8fafc" }}>
+            <th style={th}>Department</th>
+            <th style={{ ...th, textAlign: "center" }}>Status</th>
+            <th style={{ ...th, textAlign: "center", width: "60px" }}>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {departmentRows.map((dept) => {
+            const isExpanded = expandedDept === dept.name;
+            const deptPeople = deptPeopleMap.get(dept.name) || [];
+            const status = dept.red > 0 ? "RED" : dept.amber > 0 ? "AMBER" : "GREEN";
+            const statusColor = status === "RED" ? "#dc2626" : status === "AMBER" ? "#d97706" : "#16a34a";
+
+            return (
+              <React.Fragment key={dept.name}>
+                <tr
+                  onClick={() => setExpandedDept(isExpanded ? null : dept.name)}
+                  style={{ cursor: "pointer", borderBottom: isExpanded ? "none" : `1px solid ${BORDER}` }}
+                >
+                  <td style={{ ...tdBold, borderBottom: isExpanded ? "none" : undefined }}>
+                    <span style={{ fontSize: "14px", color: SLATE, marginRight: "6px" }}>{isExpanded ? "▼" : "▶"}</span>
+                    {dept.name}
+                  </td>
+                  <td style={{ ...td, textAlign: "center", borderBottom: isExpanded ? "none" : undefined }}>
+                    <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
+                      {trafficDot(dept.red, "#dc2626")}
+                      {trafficDot(dept.amber, "#d97706")}
+                      {trafficDot(dept.green, "#16a34a")}
                     </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+                  </td>
+                  <td style={{ ...td, textAlign: "center", fontWeight: 700, color: statusColor, borderBottom: isExpanded ? "none" : undefined }}>
+                    {dept.total}
+                  </td>
+                </tr>
+                {isExpanded && deptPeople.filter((p) => p.total > 0).map((person) => (
+                  <tr key={person.name} style={{ backgroundColor: "#f8fafc" }}>
+                    <td style={{ ...td, paddingLeft: "32px", fontSize: "15px", color: NAVY }}>{person.name}</td>
+                    <td style={{ ...td, textAlign: "center" }}>
+                      <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
+                        {trafficDot(person.red, "#dc2626")}
+                        {trafficDot(person.amber, "#d97706")}
+                        {trafficDot(person.green, "#16a34a")}
+                      </div>
+                    </td>
+                    <td style={{ ...td, textAlign: "center", color: SLATE }}>{person.total}</td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
