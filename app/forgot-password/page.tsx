@@ -13,19 +13,19 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setMessage("");
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      await res.json();
+      setMessage("If that email exists, a password reset link has been sent. Check your inbox (including spam folder).");
+    } catch {
+      setMessage("Error sending reset email. Please try again.");
+    }
 
     setLoading(false);
-
-    if (error) {
-      setMessage("Error: " + error.message);
-    } else {
-      setMessage(
-        "If that email exists, a password reset link has been sent. Check your inbox."
-      );
-    }
   }
 
   const inputStyle = {
