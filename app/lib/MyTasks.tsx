@@ -56,7 +56,9 @@ export default function MyTasks() {
     load();
   }, []);
 
+  // Admin/Executive have Tasks page and PA dashboard — don't show here
   if (!loaded || tasks.length === 0) return null;
+  if (role === "Admin" || role === "Executive") return null;
 
   const today = new Date().toISOString().slice(0, 10);
   const isAdminOrExec = role === "Admin" || role === "Executive";
