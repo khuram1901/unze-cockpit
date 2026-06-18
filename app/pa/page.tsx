@@ -419,7 +419,7 @@ export default function PADashboardPage() {
 
               {/* People breakdown */}
               <SectionTitle title="By Person" />
-              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "12px" }}>
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "12px", maxWidth: isMobile ? "100%" : "400px" }}>
                 {people.map((p) => (
                   <div key={p.name} onClick={() => { setViewPerson(p.name); setExpandedSection(null); }}
                     style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "7px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
