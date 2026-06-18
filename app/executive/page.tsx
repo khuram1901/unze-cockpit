@@ -929,12 +929,16 @@ export default function ExecutiveDashboardPage() {
           <>
             <MyTasks />
 
-            {userRole === "Admin" && cashPlanMissing && (
-              <SlimAlert color="#dc2626" text="This month's cash plan has not been entered. The finance manager needs to set expected receivables and payouts on the Finance page." />
-            )}
 
             {/* ── SECTION 1: NEEDS YOUR ATTENTION ── */}
-            {(overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || machineIssues.filter(i => i.issue_status === "Down").length > 0) && (
+            {(() => {
+              const latestDate = latestCashPosition?.position_date;
+              const cashStaleDays = latestDate ? Math.floor((Date.now() - new Date(latestDate + "T00:00:00").getTime()) / 86400000) : 999;
+              const cashStale = userRole === "Admin" && cashStaleDays > 1;
+              const cashMissing = userRole === "Admin" && cashPositions.length === 0;
+              const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashStale || cashMissing || cashPlanMissing;
+
+              return hasAttention ? (
               <>
                 <SectionTitle title="Needs Your Attention" />
                 <div style={squareGrid}>
@@ -943,6 +947,9 @@ export default function ExecutiveDashboardPage() {
                   {escalations.length > 0 && <Card title="Escalations" value={escalations.length} color="#dc2626" onClick={() => toggleCard("escalations")} />}
                   {downMachines.length > 0 && <Card title="Machines Down" value={downMachines.length} color="#b91c1c" onClick={() => toggleCard("machines")} />}
                   {missingPlants.length > 0 && <Card title="Plants Not Reported" value={missingPlants.length} color="#ef4444" onClick={() => toggleCard("missing")} />}
+                  {cashStale && <Card title="Finance Stale" value={cashStaleDays} color="#dc2626" href="/finance" />}
+                  {cashMissing && <Card title="No Finance Data" value={0} color="#dc2626" href="/finance" />}
+                  {cashPlanMissing && <Card title="Cash Plan Missing" value={0} color="#d97706" href="/finance" />}
                   {dueThisWeekTasks.length > 0 && <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" onClick={() => toggleCard("dueweek")} />}
                 </div>
 
@@ -992,8 +999,7 @@ export default function ExecutiveDashboardPage() {
 
                 {expandedCard === null && escalations.length > 0 && <EscalationTrafficLights escalations={escalations} />}
               </>
-            )}
-            {overdueTasks.length === 0 && waitingReplies.length === 0 && escalations.length === 0 && missingPlants.length === 0 && downMachines.length === 0 && (
+            ) : (
               <div style={{
                 border: `1px solid ${BORDER}`,
                 borderLeft: "4px solid #16a34a",
@@ -1007,7 +1013,8 @@ export default function ExecutiveDashboardPage() {
               }}>
                 All clear — no items require your attention right now.
               </div>
-            )}
+            );
+            })()}
 
             {/* ── SECTION 2: OPERATIONS STATUS ── */}
             <SectionTitle title="Operations Status — Today" />
