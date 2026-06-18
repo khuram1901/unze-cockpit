@@ -9,45 +9,16 @@ export type BankPositionParsed = {
   rawText: string;
 };
 
-const BANK_LABELS: { key: string; labels: string[] }[] = [
-  { key: "cash_at_office", labels: ["Cash at Office", "Cash At Office"] },
-  { key: "js_bank_unze_trading", labels: ["JS Bank Unze Trading", "JS Bank"] },
-  { key: "askari_bank_saving", labels: ["Askari Bank Saving A/C", "Askari Bank Saving"] },
-  { key: "allied_bank_unze_trading", labels: ["Allied Bank Unze Trading", "Allied Bank"] },
-  { key: "dib_bank", labels: ["DIB Bank"] },
-  { key: "silk_bank_saving", labels: ["Silk Bank Saving A/c", "Silk Bank Saving", "Silk Bank"] },
-  { key: "mcb_unze_trading", labels: ["MCB Unze Trading", "MCB Bank"] },
-  { key: "askari_saving_1489", labels: ["Askari Bank Saving A/C 1489", "Askari Saving 1489"] },
-  { key: "askari_saving_unze_trading", labels: ["Askari Saving Unze Trading"] },
-  { key: "hbl_pf_unze_trading", labels: ["HBL PF Unze Trading", "HBL PF"] },
-  { key: "meezan_bank_unze_trading", labels: ["Meezan Bank Unze Trading", "Meezan Bank"] },
-  { key: "hbl_unze_trading", labels: ["HBL Unze Trading"] },
-  { key: "hbl_h_unze_trading", labels: ["HBL - H Unze Trading", "HBL-H Unze Trading", "HBL H Unze"] },
-  { key: "faysal_bank_unze_trading", labels: ["Faysal Bank Unze Trading", "Faysal Bank"] },
-];
-
-function extractNumber(text: string, label: string): number {
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const patterns = [
-    new RegExp(escaped + `[:\\s]+([\\d,]+\\.?\\d*)`, "i"),
-    new RegExp(escaped + `\\s+(-?[\\d,]+\\.?\\d*)`, "i"),
-  ];
-  for (const re of patterns) {
-    const m = text.match(re);
-    if (m) {
-      return parseFloat(m[1].replace(/,/g, "")) || 0;
-    }
-  }
-  return 0;
+function parseAmount(text: string): number {
+  const cleaned = text.replace(/,/g, "").replace(/\s/g, "");
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? 0 : num;
 }
 
 function extractDate(text: string): string | null {
-  const m = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  const m = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
   if (!m) return null;
-  const [, a, b, year] = m;
-  const day = a.length <= 2 && Number(a) <= 31 ? a.padStart(2, "0") : b.padStart(2, "0");
-  const month = a === day ? b.padStart(2, "0") : a.padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${m[3]}-${m[2]}-${m[1]}`;
 }
 
 function detectCurrency(text: string): string {
@@ -60,39 +31,62 @@ function detectCurrency(text: string): string {
 export async function parseBankPositionPDF(buffer: Buffer): Promise<BankPositionParsed> {
   const text = await extractTextFromPDF(buffer);
 
-  const banks: Record<string, number> = {};
-  for (const bank of BANK_LABELS) {
-    for (const label of bank.labels) {
-      const val = extractNumber(text, label);
-      if (val > 0) {
-        banks[bank.key] = val;
-        break;
-      }
-    }
-    if (!(bank.key in banks)) {
-      banks[bank.key] = 0;
-    }
+  // The bank position PDF lists bank names followed by their balance values
+  // The "Available Balance" section has the final balances in order
+  // Extract from the Available Balance section
+  const availableIdx = text.indexOf("Available Balance");
+  const totalIdx = text.indexOf("Total Available Balance");
+
+  let balanceBlock = "";
+  if (availableIdx >= 0 && totalIdx >= 0) {
+    balanceBlock = text.slice(availableIdx + 17, totalIdx);
   }
 
-  const totalAvailableBalance =
-    extractNumber(text, "Total Available Balance") ||
-    extractNumber(text, "Total Balance");
+  // Extract numbers from the balance block
+  const numbers = balanceBlock.match(/[\d,]+(?:\.\d+)?/g) || [];
+  const balances = numbers.map((n) => parseAmount(n));
 
-  const postDatedCHQsTotal =
-    extractNumber(text, "Post Dated CHQs") ||
-    extractNumber(text, "Post-Dated CHQs") ||
-    extractNumber(text, "Post Dated Cheques");
+  // Map to bank columns in order
+  const bankKeys = [
+    "cash_at_office",
+    "js_bank_unze_trading",
+    "askari_bank_saving",
+    "allied_bank_unze_trading",
+    "dib_bank",
+    "silk_bank_saving",
+    "mcb_unze_trading",
+    "askari_saving_1489",
+    "askari_saving_unze_trading",
+    "hbl_pf_unze_trading",
+    "meezan_bank_unze_trading",
+    "hbl_unze_trading",
+    "hbl_h_unze_trading",
+    "faysal_bank_unze_trading",
+  ];
 
+  const banks: Record<string, number> = {};
+  for (let i = 0; i < bankKeys.length; i++) {
+    banks[bankKeys[i]] = i < balances.length ? balances[i] : 0;
+  }
+
+  // Total Available Balance
+  const totalMatch = text.match(/Total Available Balance\s*([\d,]+(?:\.\d+)?)/i);
+  const totalAvailableBalance = totalMatch ? parseAmount(totalMatch[1]) : 0;
+
+  // Post Dated CHQs
+  const pdMatch = text.match(/Post Dated CHQ['']?s?\s*[£$€]?\s*([\d,]+(?:\.\d+)?)/i);
+  const postDatedCHQsTotal = pdMatch ? parseAmount(pdMatch[1]) : 0;
+
+  // Detect currency near post-dated
   const pdIdx = text.toLowerCase().indexOf("post dated");
-  const pdSection = pdIdx >= 0 ? text.slice(pdIdx) : "";
-  const postDatedCurrency = pdSection ? detectCurrency(pdSection) : "PKR";
+  const pdSection = pdIdx >= 0 ? text.slice(pdIdx, pdIdx + 50) : "";
 
   return {
     date: extractDate(text),
     banks,
     totalAvailableBalance,
     postDatedCHQsTotal,
-    postDatedCurrency,
+    postDatedCurrency: detectCurrency(pdSection),
     rawText: text,
   };
 }
