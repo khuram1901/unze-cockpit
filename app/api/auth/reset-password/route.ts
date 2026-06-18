@@ -25,8 +25,21 @@ export async function POST(request: NextRequest) {
 
     const memberName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || email;
 
+    // Ensure auth user exists — create if not
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
+    const authUserExists = existingUsers?.users?.some((u) => u.email === email.trim());
+
+    if (!authUserExists) {
+      const tempPassword = `Cockpit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      await supabase.auth.admin.createUser({
+        email: email.trim(),
+        password: tempPassword,
+        email_confirm: true,
+      });
+    }
+
     // Generate a magic link via Supabase Admin
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+    const { data: linkData } = await supabase.auth.admin.generateLink({
       type: "magiclink",
       email: email.trim(),
       options: {
