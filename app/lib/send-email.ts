@@ -54,7 +54,7 @@ function buildEmailHtml({
 function buildRawEmail(to: string, from: string, subject: string, htmlBody: string): string {
   const boundary = "boundary_" + Date.now();
   const raw = [
-    `From: Unze Cockpit <${from}>`,
+    `From: Unze Cockpit (No Reply) <${from}>`,
     `To: ${to}`,
     `Subject: ${subject}`,
     `MIME-Version: 1.0`,
@@ -97,11 +97,39 @@ export async function sendNotificationEmail({
   whatsAppMessage?: string;
 }) {
   try {
-    const oauth2Client = await getAuthenticatedClient();
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    // Use the notification-specific Gmail account (unzegrouppk@gmail.com)
+    const supabaseForTokens = createServiceClient();
+    const { data: notifToken } = await supabaseForTokens
+      .from("google_oauth_tokens")
+      .select("*")
+      .eq("user_email", "unzegrouppk@gmail.com")
+      .single();
 
-    const profile = await gmail.users.getProfile({ userId: "me" });
-    const fromEmail = profile.data.emailAddress || "";
+    if (!notifToken) {
+      console.error("Notification Gmail not connected. Connect via /api/google/auth-notifications");
+      return { success: false, error: "Notification Gmail not connected" };
+    }
+
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      (process.env.GOOGLE_REDIRECT_URI || "").replace("/callback", "/callback-notifications")
+    );
+    oauth2Client.setCredentials({
+      access_token: notifToken.access_token,
+      refresh_token: notifToken.refresh_token,
+      expiry_date: notifToken.token_expiry ? new Date(notifToken.token_expiry).getTime() : undefined,
+    });
+
+    oauth2Client.on("tokens", async (newTokens) => {
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (newTokens.access_token) updates.access_token = newTokens.access_token;
+      if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
+      await supabaseForTokens.from("google_oauth_tokens").update(updates).eq("id", notifToken.id);
+    });
+
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    const fromEmail = "unzegrouppk@gmail.com";
 
     const html = buildEmailHtml({ heading, body, linkUrl, linkLabel, whatsAppPhone, whatsAppMessage });
     const raw = buildRawEmail(to, fromEmail, subject, html);
