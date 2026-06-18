@@ -61,6 +61,7 @@ const SETTINGS_NAV: NavItem[] = [
   { label: "Opening Balances", href: "/opening-balances", allowedRoles: ["Admin", "Executive"] },
   { label: "Exceptions", href: "/exceptions", allowedRoles: ["Admin", "Executive"] },
   { label: "Audit Log", href: "/audit-log", allowedRoles: ["Admin"] },
+  { label: "My Profile", href: "/profile", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
 ];
 
 export default function AuthWrapper({
