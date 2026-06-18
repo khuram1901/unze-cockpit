@@ -81,27 +81,37 @@ export async function GET(request: NextRequest) {
         id: msg.id,
       });
 
-      const parts = fullMsg.data.payload?.parts || [];
+      // Recursively find all PDF attachments (Gmail nests parts)
+      type GmailPart = { filename?: string | null; mimeType?: string | null; body?: { attachmentId?: string | null; data?: string | null } | null; parts?: GmailPart[] | null };
+      function findPdfParts(parts: GmailPart[]): GmailPart[] {
+        const found: GmailPart[] = [];
+        for (const part of parts) {
+          if (part.filename && part.filename.toLowerCase().endsWith(".pdf") && part.body?.attachmentId) {
+            found.push(part);
+          }
+          if (part.parts) {
+            found.push(...findPdfParts(part.parts));
+          }
+        }
+        return found;
+      }
+
+      const allParts = fullMsg.data.payload?.parts || [];
+      const pdfParts = findPdfParts(allParts);
       const pdfAttachments: { filename: string; data: Buffer }[] = [];
 
-      for (const part of parts) {
-        if (
-          part.filename &&
-          part.filename.toLowerCase().endsWith(".pdf") &&
-          part.body?.attachmentId
-        ) {
-          const attachment = await gmail.users.messages.attachments.get({
-            userId: "me",
-            messageId: msg.id,
-            id: part.body.attachmentId,
-          });
+      for (const part of pdfParts) {
+        const attachment = await gmail.users.messages.attachments.get({
+          userId: "me",
+          messageId: msg.id!,
+          id: part.body!.attachmentId!,
+        });
 
-          if (attachment.data.data) {
-            pdfAttachments.push({
-              filename: part.filename,
-              data: Buffer.from(attachment.data.data, "base64"),
-            });
-          }
+        if (attachment.data.data) {
+          pdfAttachments.push({
+            filename: part.filename!,
+            data: Buffer.from(attachment.data.data, "base64"),
+          });
         }
       }
 
