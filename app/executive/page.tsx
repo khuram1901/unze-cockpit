@@ -927,9 +927,6 @@ export default function ExecutiveDashboardPage() {
           <p style={{ color: SLATE }}>Loading executive dashboard…</p>
         ) : (
           <>
-            <MyTasks />
-
-
             {/* ── SECTION 1: NEEDS YOUR ATTENTION ── */}
             {(() => {
               const latestDate = latestCashPosition?.position_date;

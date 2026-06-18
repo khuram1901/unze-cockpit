@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { formatDateUK } from "./dateUtils";
-import { COLOURS, SectionTitle, StatusBadge } from "./SharedUI";
+import { COLOURS, SectionTitle, StatusBadge, PriorityBadge } from "./SharedUI";
 
 type UserTask = {
   id: string;
@@ -11,11 +11,15 @@ type UserTask = {
   due_date: string | null;
   priority: string | null;
   status: string;
+  assigned_to: string | null;
+  assigned_to_department: string | null;
 };
 
 export default function MyTasks() {
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [role, setRole] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -23,21 +27,29 @@ export default function MyTasks() {
       if (!user?.email) { setLoaded(true); return; }
 
       const { data: member } = await supabase
-        .from("members").select("first_name, last_name, name")
+        .from("members").select("first_name, last_name, name, role")
         .eq("email", user.email).maybeSingle();
 
       if (!member) { setLoaded(true); return; }
 
-      const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || user.email;
+      const name = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || user.email;
+      setUserName(name);
+      setRole(member.role);
 
-      const { data } = await supabase
+      const isAdminOrExec = member.role === "Admin" || member.role === "Executive";
+
+      let query = supabase
         .from("tasks")
-        .select("id, description, due_date, priority, status")
-        .eq("assigned_to", userName)
+        .select("id, description, due_date, priority, status, assigned_to, assigned_to_department")
         .not("status", "in", '("Completed","Cancelled")')
-        .order("due_date", { ascending: true })
-        .limit(10);
+        .order("due_date", { ascending: true });
 
+      if (!isAdminOrExec) {
+        // Managers and Members only see their own tasks
+        query = query.eq("assigned_to", name);
+      }
+
+      const { data } = await query.limit(isAdminOrExec ? 30 : 15);
       setTasks(data || []);
       setLoaded(true);
     }
@@ -47,10 +59,12 @@ export default function MyTasks() {
   if (!loaded || tasks.length === 0) return null;
 
   const today = new Date().toISOString().slice(0, 10);
+  const isAdminOrExec = role === "Admin" || role === "Executive";
+  const title = isAdminOrExec ? `All Open Tasks (${tasks.length})` : `Your Tasks (${tasks.length})`;
 
   return (
     <>
-      <SectionTitle title={`Your Tasks (${tasks.length})`} />
+      <SectionTitle title={title} />
       <div style={{
         border: `1px solid ${COLOURS.BORDER}`,
         borderRadius: "8px",
@@ -63,8 +77,15 @@ export default function MyTasks() {
           return (
             <a key={t.id} href="/tasks" style={{ textDecoration: "none", display: "block", borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "7px 12px", backgroundColor: overdue ? "#fef2f2" : undefined }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {t.description}
+                <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+                  <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {t.description}
+                  </div>
+                  {isAdminOrExec && (
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "1px" }}>
+                      {t.assigned_to || "Unassigned"} {t.assigned_to_department ? `· ${t.assigned_to_department}` : ""}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
                   {t.due_date && (
@@ -72,6 +93,7 @@ export default function MyTasks() {
                       {formatDateUK(t.due_date)}
                     </span>
                   )}
+                  <PriorityBadge priority={t.priority} />
                   <StatusBadge status={t.status} />
                 </div>
               </div>
