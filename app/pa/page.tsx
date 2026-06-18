@@ -422,26 +422,22 @@ export default function PADashboardPage() {
               <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "12px" }}>
                 {people.map((p) => (
                   <div key={p.name} onClick={() => { setViewPerson(p.name); setExpandedSection(null); }}
-                    style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
+                    style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "7px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
                   >
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: "16px", color: COLOURS.NAVY }}>{p.name}</div>
-                      <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>{p.tasks.length} open tasks</div>
-                    </div>
-                    <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                    <span style={{ fontWeight: 600, fontSize: "15px", color: COLOURS.NAVY }}>
+                      {p.name} <span style={{ color: COLOURS.SLATE, fontWeight: 400 }}>({p.tasks.length})</span>
+                    </span>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       {p.overdue > 0 && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                          <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: COLOURS.RED }} />
-                          <span style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.RED }}>{p.overdue}</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                          <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.RED }} />
+                          <span style={{ fontWeight: 700, fontSize: "14px", color: COLOURS.RED }}>{p.overdue}</span>
                         </span>
                       )}
                       {p.overdue === 0 && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                          <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: COLOURS.GREEN }} />
-                          <span style={{ fontWeight: 600, fontSize: "14px", color: COLOURS.GREEN }}>OK</span>
-                        </span>
+                        <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.GREEN, display: "inline-block" }} />
                       )}
-                      <span style={{ color: COLOURS.SLATE, fontSize: "14px" }}>▶</span>
+                      <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>▶</span>
                     </div>
                   </div>
                 ))}
