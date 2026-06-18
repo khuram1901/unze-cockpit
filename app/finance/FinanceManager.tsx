@@ -319,6 +319,16 @@ export default function FinanceManager() {
 
   async function saveDailyPosition(e: React.FormEvent) {
     e.preventDefault();
+
+    // Validate opening matches previous day's closing
+    const prevDay = positions.find((p) => p.position_date < dpDate);
+    if (prevDay && Math.abs(Number(dpOpening) - prevDay.closing_balance) > 0.01) {
+      const proceed = confirm(
+        `Warning: Opening balance (${fmt(Number(dpOpening))}) does not match previous day's closing balance (${fmt(prevDay.closing_balance)} on ${formatDateUK(prevDay.position_date)}).\n\nSave anyway?`
+      );
+      if (!proceed) return;
+    }
+
     setSaving(true);
     const closingAfterPD = Number(dpClosing) - Number(dpPostDated);
     const { error } = await supabase.from("daily_cash_position").upsert(
@@ -535,6 +545,19 @@ export default function FinanceManager() {
                     </span>
                   )}
                 </div>
+                {(() => {
+                  if (!uploadResult.cashFlow || !uploadResult.date) return null;
+                  const prevDay = positions.find((p) => p.position_date < uploadResult.date!);
+                  const opening = (uploadResult.cashFlow as Record<string, number>).openingBalance;
+                  if (prevDay && opening && Math.abs(opening - prevDay.closing_balance) > 0.01) {
+                    return (
+                      <div style={{ color: RED, fontWeight: 700, marginTop: "6px", fontSize: "15px" }}>
+                        ⚠ Opening balance ({opening.toLocaleString()}) does not match previous day closing ({prevDay.closing_balance.toLocaleString()} on {formatDateUK(prevDay.position_date)})
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </>
             ) : (
               <div style={{ color: RED, fontWeight: 600 }}>{uploadResult.error}</div>
@@ -735,27 +758,40 @@ export default function FinanceManager() {
                   </tr>
                 </thead>
                 <tbody>
-                  {positions.map((p) => (
-                    <tr key={p.id}>
-                      <td style={tdBold}>{formatDateUK(p.position_date)}</td>
-                      <td style={td}>{fmt(p.opening_balance)}</td>
-                      <td style={{ ...td, color: GREEN, fontWeight: 600 }}>
-                        {fmt(p.total_receipts)}
-                      </td>
-                      <td style={{ ...td, color: RED, fontWeight: 600 }}>
-                        {fmt(p.total_payments)}
-                      </td>
-                      <td style={{ ...td, fontWeight: 700, color: NAVY }}>
-                        {fmt(p.closing_balance)}
-                      </td>
-                      <td style={{ ...td, color: SLATE }}>
-                        {fmt(p.post_dated_total)}
-                      </td>
-                      <td style={{ ...td, fontWeight: 700 }}>
-                        {fmt(p.closing_after_post_dated)}
-                      </td>
-                    </tr>
-                  ))}
+                  {positions.map((p, idx) => {
+                    const prevDay = positions[idx + 1];
+                    const mismatch = prevDay && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01;
+                    return (
+                      <tr key={p.id} style={mismatch ? { backgroundColor: "#fef2f2" } : undefined}>
+                        <td style={tdBold}>
+                          {formatDateUK(p.position_date)}
+                          {mismatch && (
+                            <div style={{ fontSize: "12px", color: RED, fontWeight: 700, marginTop: "2px" }}>
+                              ⚠ Opening does not match previous closing ({fmt(prevDay.closing_balance)})
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ ...td, color: mismatch ? RED : undefined, fontWeight: mismatch ? 700 : undefined }}>
+                          {fmt(p.opening_balance)}
+                        </td>
+                        <td style={{ ...td, color: GREEN, fontWeight: 600 }}>
+                          {fmt(p.total_receipts)}
+                        </td>
+                        <td style={{ ...td, color: RED, fontWeight: 600 }}>
+                          {fmt(p.total_payments)}
+                        </td>
+                        <td style={{ ...td, fontWeight: 700, color: NAVY }}>
+                          {fmt(p.closing_balance)}
+                        </td>
+                        <td style={{ ...td, color: SLATE }}>
+                          {fmt(p.post_dated_total)}
+                        </td>
+                        <td style={{ ...td, fontWeight: 700 }}>
+                          {fmt(p.closing_after_post_dated)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
