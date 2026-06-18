@@ -2,6 +2,7 @@
 
 import AuthWrapper from "../lib/AuthWrapper";
 import DashboardView from "./DashboardView";
+import MyTasks from "../lib/MyTasks";
 import { useMobile } from "../lib/useMobile";
 
 export default function DashboardPage() {
@@ -12,6 +13,7 @@ export default function DashboardPage() {
         <h1 style={{ fontSize: isMobile ? "22px" : "28px", fontWeight: "bold", marginBottom: "8px" }}>
           Operations Dashboard
         </h1>
+        <MyTasks />
         <DashboardView />
       </main>
     </AuthWrapper>

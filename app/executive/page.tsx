@@ -8,6 +8,7 @@ import { formatDateUK, workingDaysFromNow } from "../lib/dateUtils";
 import { RAGStatus, ragColour } from "../lib/SharedUI";
 import { UTPL_COMPANY_ID } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
+import MyTasks from "../lib/MyTasks";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
 
 type Plant = { id: string; name: string; type: string };
@@ -926,6 +927,8 @@ export default function ExecutiveDashboardPage() {
           <p style={{ color: SLATE }}>Loading executive dashboard…</p>
         ) : (
           <>
+            <MyTasks />
+
             {userRole === "Admin" && cashPlanMissing && (
               <SlimAlert color="#dc2626" text="This month's cash plan has not been entered. The finance manager needs to set expected receivables and payouts on the Finance page." />
             )}
