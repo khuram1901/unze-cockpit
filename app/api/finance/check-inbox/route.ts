@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
 import { google } from "googleapis";
-import { getAuthenticatedClient } from "../../../lib/google-client";
 import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
 import { reconcile } from "../../../lib/pdf-parsers/reconcile";
@@ -8,14 +7,42 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { UTPL_COMPANY_ID } from "../../../lib/constants";
 
 export async function GET(request: NextRequest) {
-  // Verify cron secret for Vercel cron jobs
   const authHeader = request.headers.get("authorization");
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorised" }, { status: 401 });
   }
 
   try {
-    const oauth2Client = await getAuthenticatedClient();
+    // Use the notification Gmail account (unzegrouppk@gmail.com) for inbox checking
+    const supabase = createServiceClient();
+    const { data: notifToken } = await supabase
+      .from("google_oauth_tokens")
+      .select("*")
+      .eq("user_email", "unzegrouppk@gmail.com")
+      .single();
+
+    if (!notifToken) {
+      return Response.json({ error: "Notification Gmail not connected" }, { status: 500 });
+    }
+
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      (process.env.GOOGLE_REDIRECT_URI || "").replace("/callback", "/callback-notifications")
+    );
+    oauth2Client.setCredentials({
+      access_token: notifToken.access_token,
+      refresh_token: notifToken.refresh_token,
+      expiry_date: notifToken.token_expiry ? new Date(notifToken.token_expiry).getTime() : undefined,
+    });
+
+    oauth2Client.on("tokens", async (newTokens) => {
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (newTokens.access_token) updates.access_token = newTokens.access_token;
+      if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
+      await supabase.from("google_oauth_tokens").update(updates).eq("id", notifToken.id);
+    });
+
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
     // Find unread emails with the cockpit-cash label
