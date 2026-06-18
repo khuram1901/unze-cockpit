@@ -15,9 +15,18 @@ import {
 import { DepartmentConfig } from "../../lib/department-config";
 import { logAction } from "../../lib/audit-log";
 
+type UserTask = {
+  id: string;
+  description: string;
+  due_date: string | null;
+  priority: string | null;
+  status: string;
+};
+
 export default function DepartmentDashboard({ config }: { config: DepartmentConfig }) {
   const isMobile = useMobile();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [myTasks, setMyTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
@@ -39,6 +48,26 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
 
     const { data } = await query;
     setRows(data || []);
+
+    // Load current user's tasks
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      const { data: member } = await supabase
+        .from("members").select("first_name, last_name, name")
+        .eq("email", user.email).maybeSingle();
+      if (member) {
+        const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || user.email;
+        const { data: tasks } = await supabase
+          .from("tasks")
+          .select("id, description, due_date, priority, status")
+          .eq("assigned_to", userName)
+          .not("status", "in", '("Completed","Cancelled")')
+          .order("due_date", { ascending: true })
+          .limit(10);
+        setMyTasks(tasks || []);
+      }
+    }
+
     setLoading(false);
   }
 
@@ -147,6 +176,40 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
             />
           ))}
         </div>
+      )}
+
+      {/* Your Tasks */}
+      {!loading && myTasks.length > 0 && (
+        <>
+          <SectionTitle title={`Your Tasks (${myTasks.length})`} />
+          <div style={{
+            border: `1px solid ${COLOURS.BORDER}`,
+            borderRadius: "8px",
+            backgroundColor: "white",
+            overflow: "hidden",
+            marginBottom: "14px",
+            maxWidth: isMobile ? "100%" : "500px",
+          }}>
+            {myTasks.map((t) => {
+              const overdue = t.due_date && t.due_date < new Date().toISOString().slice(0, 10) && t.status !== "Completed";
+              return (
+                <div key={t.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "7px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", backgroundColor: overdue ? "#fef2f2" : undefined }}>
+                  <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {t.description}
+                  </div>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
+                    {t.due_date && (
+                      <span style={{ fontSize: "13px", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 400 }}>
+                        {formatDateUK(t.due_date)}
+                      </span>
+                    )}
+                    <StatusBadge status={t.status} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {/* Add Record Button + Form */}
