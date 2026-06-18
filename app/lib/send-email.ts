@@ -56,7 +56,7 @@ function buildRawEmail(to: string, from: string, subject: string, htmlBody: stri
   const raw = [
     `From: Unze Cockpit (No Reply) <${from}>`,
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     ``,

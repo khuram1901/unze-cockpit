@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
       items.push(`<li>${allTasks.length} total open tasks</li>`);
 
       const subject = overdue.length > 0 || escalations.length > 0
-        ? `[!] Daily Digest — ${overdue.length} overdue, ${escalations.length} escalations`
-        : `Daily Digest — ${allTasks.length} open tasks`;
+        ? `[!] Daily Digest -${overdue.length} overdue, ${escalations.length} escalations`
+        : `Daily Digest -${allTasks.length} open tasks`;
 
       await sendNotificationEmail({
         to: admin.email!,
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
           ${overdue.length > 0 ? `
           <p style="margin-top:12px"><strong>Top overdue:</strong></p>
           <ul style="padding-left:20px;font-size:13px">
-            ${overdue.slice(0, 5).map((t) => `<li>${t.description?.slice(0, 80)} — ${t.assigned_to || "Unassigned"} (due ${t.due_date})</li>`).join("")}
+            ${overdue.slice(0, 5).map((t) => `<li>${t.description?.slice(0, 80)} -${t.assigned_to || "Unassigned"} (due ${t.due_date})</li>`).join("")}
           </ul>` : ""}
         `,
         linkUrl: isAdmin ? `${APP_URL}/executive` : `${APP_URL}/pa`,
