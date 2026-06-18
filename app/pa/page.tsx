@@ -213,12 +213,12 @@ export default function PADashboardPage() {
     return (
       <div onClick={() => count > 0 && toggleSection(section)} style={{
         border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${color}`,
-        borderRadius: "7px", padding: "10px 12px",
+        borderRadius: "7px", padding: "8px 10px",
         backgroundColor: expandedSection === section ? "#f8fafc" : "white",
         cursor: count > 0 ? "pointer" : "default",
       }}>
-        <div style={{ color: COLOURS.SLATE, fontSize: "14px" }}>{label}</div>
-        <div style={{ fontSize: "22px", fontWeight: 800, color }}>{count}</div>
+        <div style={{ color: COLOURS.SLATE, fontSize: "13px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label} {count > 0 && "→"}</div>
+        <div style={{ fontSize: "19px", fontWeight: 800, color }}>{count}</div>
       </div>
     );
   }
