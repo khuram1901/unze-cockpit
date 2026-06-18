@@ -91,15 +91,15 @@ export default function AuthWrapper({
     return () => window.removeEventListener("resize", checkWidth);
   }, []);
 
-  // Auth check
+  // Auth check — use getSession() for faster local check + auto-refresh
   useEffect(() => {
     async function checkAuth() {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
-      if (!user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
         router.push("/login");
         return;
       }
+      const user = session.user;
       setEmail(user.email ?? null);
       const { data: memberData } = await supabase
         .from("members")
@@ -112,6 +112,15 @@ export default function AuthWrapper({
       setLoading(false);
     }
     checkAuth();
+
+    // Listen for auth changes (token refresh, sign out)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        router.push("/login");
+      }
+    });
+
+    return () => { subscription.unsubscribe(); };
   }, [router]);
 
   // Close settings dropdown when clicking outside
