@@ -9,6 +9,8 @@ const EXTRACTION_SCHEMA = {
   properties: {
     meeting_title: { type: "string" as const },
     meeting_date: { type: "string" as const, description: "DD/MM/YYYY format" },
+    company: { type: "string" as const, description: "Which company this meeting relates to, e.g. Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or General if cross-company" },
+    department: { type: "string" as const, description: "Which department this meeting relates to, or General if cross-department" },
     attendees: { type: "array" as const, items: { type: "string" as const } },
     executive_summary: { type: "string" as const, description: "3-5 sentences" },
     decisions: { type: "array" as const, items: { type: "string" as const } },
@@ -20,7 +22,7 @@ const EXTRACTION_SCHEMA = {
         type: "object" as const,
         properties: {
           description: { type: "string" as const },
-          owner_name: { type: "string" as const },
+          owner_name: { type: "string" as const, description: "Must be a Manager or Executive from the team — never the meeting chair" },
           due_date: { type: "string" as const, description: "YYYY-MM-DD or empty" },
           priority: { type: "string" as const, enum: ["Low", "Medium", "High", "Urgent"] },
           department: { type: "string" as const },
@@ -30,22 +32,25 @@ const EXTRACTION_SCHEMA = {
       },
     },
   },
-  required: ["meeting_title", "meeting_date", "attendees", "executive_summary", "decisions", "risks", "opportunities", "action_items"] as const,
+  required: ["meeting_title", "meeting_date", "company", "department", "attendees", "executive_summary", "decisions", "risks", "opportunities", "action_items"] as const,
   additionalProperties: false as const,
 };
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { transcript, memberNames } = body;
+    const { transcript, memberNames, memberDetails } = body;
 
     if (!transcript || typeof transcript !== "string") {
       return Response.json({ error: "transcript is required" }, { status: 400 });
     }
 
-    const memberContext = memberNames && memberNames.length > 0
-      ? `\n\nKnown team members (try to match action item owners to these names): ${memberNames.join(", ")}`
-      : "";
+    let memberContext = "";
+    if (memberDetails && memberDetails.length > 0) {
+      memberContext = `\n\nTeam members (assign tasks ONLY to these people):\n${memberDetails.map((m: { name: string; role: string; department: string | null }) => `- ${m.name} (${m.role}${m.department ? `, ${m.department}` : ""})`).join("\n")}`;
+    } else if (memberNames && memberNames.length > 0) {
+      memberContext = `\n\nKnown team members: ${memberNames.join(", ")}`;
+    }
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -59,7 +64,18 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Extract structured meeting minutes from the following transcript or raw minutes. Use DD/MM/YYYY for dates. For action items, try to identify the owner, a due date if mentioned, priority level, and department.${memberContext}\n\n--- TRANSCRIPT ---\n${transcript}`,
+          content: `Extract structured meeting minutes from the following transcript or raw minutes.
+
+RULES:
+- Use DD/MM/YYYY for dates.
+- Identify which company this meeting relates to: Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or "General" if cross-company.
+- Identify which department: Unze Trading Ops, Finance, HR, Audit, Taxation, Admin, or "General" if cross-department.
+- For action items: assign tasks ONLY to Managers or Executives from the team list — NEVER to the meeting chair/owner (the person who called/led the meeting). The chair delegates; they don't take tasks unless explicitly stated.
+- Match owner names exactly to the team member list when possible.
+- If a task mentions a department but no specific person, assign it to the Manager or Head of Department for that area from the team list.${memberContext}
+
+--- TRANSCRIPT ---
+${transcript}`,
         },
       ],
     });

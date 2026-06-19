@@ -19,6 +19,8 @@ import {
 type ExtractedMinutes = {
   meeting_title: string;
   meeting_date: string;
+  company: string;
+  department: string;
   attendees: string[];
   executive_summary: string;
   decisions: string[];
@@ -52,10 +54,17 @@ export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [memberNames, setMemberNames] = useState<string[]>([]);
   const [memberEmails, setMemberEmails] = useState<{ name: string; email: string }[]>([]);
+  const [memberDetails, setMemberDetails] = useState<{ name: string; role: string; department: string | null }[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   // Step tracking: extract → review → approve → send
   const [step, setStep] = useState<"input" | "review" | "approved">("input");
+
+  // Input method tab
+  const [inputMethod, setInputMethod] = useState<"paste" | "upload" | "email">("paste");
+  const [uploading, setUploading] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const [emailResults, setEmailResults] = useState<{ id: string; subject: string; from: string; date: string; text: string }[]>([]);
 
   // External attendee emails
   const [externalEmails, setExternalEmails] = useState("");
@@ -68,7 +77,7 @@ export default function MeetingsPage() {
 
     const { data: members } = await supabase
       .from("members")
-      .select("first_name, last_name, name, email");
+      .select("first_name, last_name, name, email, role, department");
     if (members) {
       setMemberNames(members.map((m) => {
         const full = `${m.first_name || ""} ${m.last_name || ""}`.trim();
@@ -78,6 +87,11 @@ export default function MeetingsPage() {
         name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || "",
         email: m.email || "",
       })).filter((m) => m.email));
+      setMemberDetails(members.map((m) => ({
+        name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || "",
+        role: m.role || "Member",
+        department: m.department || null,
+      })).filter((m) => m.name));
     }
 
     const { data: meetingsData } = await supabase
@@ -98,7 +112,7 @@ export default function MeetingsPage() {
       const res = await fetch("/api/meetings/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, memberNames }),
+        body: JSON.stringify({ transcript, memberNames, memberDetails }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -111,6 +125,60 @@ export default function MeetingsPage() {
       setMessage("Error: Network error during extraction");
     }
     setExtracting(false);
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setMessage("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/meetings/parse-file", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage("Error: " + (data.error || "File parsing failed"));
+      } else {
+        setTranscript(data.text);
+        setInputMethod("paste");
+        setMessage(`Extracted text from ${file.name} — review below and click Extract.`);
+      }
+    } catch {
+      setMessage("Error: Network error uploading file");
+    }
+    setUploading(false);
+    e.target.value = "";
+  }
+
+  async function handleCheckEmail() {
+    setCheckingEmail(true);
+    setMessage("");
+    setEmailResults([]);
+
+    try {
+      const res = await fetch("/api/meetings/check-inbox", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage("Error: " + (data.error || "Inbox check failed"));
+      } else if (data.emails && data.emails.length > 0) {
+        setEmailResults(data.emails);
+        setMessage(`Found ${data.emails.length} unread minutes email${data.emails.length !== 1 ? "s" : ""}.`);
+      } else {
+        setMessage(data.message || "No new minutes emails found.");
+      }
+    } catch {
+      setMessage("Error: Network error checking inbox");
+    }
+    setCheckingEmail(false);
+  }
+
+  function selectEmailMinutes(text: string) {
+    setTranscript(text);
+    setInputMethod("paste");
+    setEmailResults([]);
+    setMessage("Email content loaded — review below and click Extract.");
   }
 
   async function handleApprove() {
@@ -257,7 +325,7 @@ export default function MeetingsPage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
         <PageHeader
           title="Meeting Minutes"
-          subtitle="Paste transcript → AI extracts → Review → Approve → Send to attendees"
+          subtitle="Paste, upload, or email minutes → AI extracts → Review → Approve → Send"
         />
 
         {message && (
@@ -274,26 +342,148 @@ export default function MeetingsPage() {
         {/* Step 1: Input */}
         {step === "input" && (
           <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "white", marginBottom: "16px" }}>
-            <SectionTitle title="Step 1: Paste Transcript" />
-            <textarea
-              value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
-              placeholder="Paste the meeting transcript, raw notes, or pre-written minutes here..."
-              style={{ ...inputStyle, height: "200px", resize: "vertical", fontFamily: "inherit" }}
-            />
-            <button onClick={handleExtract} disabled={extracting || !transcript.trim()}
-              style={{ ...primaryButtonStyle, width: "100%", marginTop: "8px", opacity: extracting || !transcript.trim() ? 0.5 : 1 }}>
-              {extracting ? "Extracting with AI..." : "Extract Meeting Minutes"}
-            </button>
+            <SectionTitle title="Step 1: Add Minutes" />
+
+            {/* Input method tabs */}
+            <div style={{ display: "flex", gap: "0", marginBottom: "16px", borderBottom: `2px solid ${COLOURS.BORDER}` }}>
+              {([
+                { key: "paste" as const, label: "Paste Text" },
+                { key: "upload" as const, label: "Upload File" },
+                { key: "email" as const, label: "From Email" },
+              ]).map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setInputMethod(tab.key)}
+                  style={{
+                    padding: "10px 20px",
+                    fontSize: "15px",
+                    fontWeight: inputMethod === tab.key ? 700 : 500,
+                    color: inputMethod === tab.key ? COLOURS.NAVY : COLOURS.SLATE,
+                    backgroundColor: "transparent",
+                    border: "none",
+                    borderBottom: inputMethod === tab.key ? `3px solid ${COLOURS.NAVY}` : "3px solid transparent",
+                    cursor: "pointer",
+                    marginBottom: "-2px",
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Paste tab */}
+            {inputMethod === "paste" && (
+              <>
+                <textarea
+                  value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  placeholder="Paste the meeting transcript, raw notes, or pre-written minutes here..."
+                  style={{ ...inputStyle, height: "200px", resize: "vertical", fontFamily: "inherit" }}
+                />
+                <button onClick={handleExtract} disabled={extracting || !transcript.trim()}
+                  style={{ ...primaryButtonStyle, width: "100%", marginTop: "8px", opacity: extracting || !transcript.trim() ? 0.5 : 1 }}>
+                  {extracting ? "Extracting with AI..." : "Extract Meeting Minutes"}
+                </button>
+              </>
+            )}
+
+            {/* Upload tab */}
+            {inputMethod === "upload" && (
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <p style={{ fontSize: "16px", color: COLOURS.SLATE, marginBottom: "16px" }}>
+                  Upload a PDF, Word (.docx), or text (.txt) file containing meeting minutes or transcript.
+                </p>
+                <label style={{
+                  display: "inline-block",
+                  ...primaryButtonStyle,
+                  padding: "12px 28px",
+                  cursor: uploading ? "wait" : "pointer",
+                  opacity: uploading ? 0.5 : 1,
+                }}>
+                  {uploading ? "Reading file..." : "Choose File"}
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt,.md"
+                    onChange={handleFileUpload}
+                    disabled={uploading}
+                    style={{ display: "none" }}
+                  />
+                </label>
+                <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "12px" }}>
+                  Supported: PDF, Word (.docx), Plain text (.txt)
+                </p>
+              </div>
+            )}
+
+            {/* Email tab */}
+            {inputMethod === "email" && (
+              <div style={{ padding: "8px 0" }}>
+                <div style={{ backgroundColor: "#f8fafc", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", marginBottom: "16px" }}>
+                  <p style={{ fontSize: "15px", color: COLOURS.NAVY, fontWeight: 700, marginBottom: "6px" }}>
+                    How it works
+                  </p>
+                  <ol style={{ fontSize: "15px", color: COLOURS.SLATE, margin: 0, paddingLeft: "20px", lineHeight: 1.8 }}>
+                    <li>Forward your minutes email to <strong>unzegrouppk@gmail.com</strong></li>
+                    <li>In Gmail, create a label called <strong>minutes-of-meeting</strong> and set up a filter to auto-label these emails</li>
+                    <li>Click the button below to check for new minutes</li>
+                  </ol>
+                </div>
+
+                <button onClick={handleCheckEmail} disabled={checkingEmail}
+                  style={{ ...primaryButtonStyle, width: "100%", opacity: checkingEmail ? 0.5 : 1 }}>
+                  {checkingEmail ? "Checking inbox..." : "Check for Minutes Emails"}
+                </button>
+
+                {emailResults.length > 0 && (
+                  <div style={{ marginTop: "14px" }}>
+                    <p style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>
+                      Select an email to extract:
+                    </p>
+                    {emailResults.map((email) => (
+                      <div key={email.id} style={{
+                        border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px 12px",
+                        marginBottom: "6px", backgroundColor: "white", cursor: "pointer",
+                      }}
+                        onClick={() => selectEmailMinutes(email.text)}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = COLOURS.NAVY; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = COLOURS.BORDER; }}
+                      >
+                        <div style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.NAVY }}>{email.subject}</div>
+                        <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                          From: {email.from} · {email.date}
+                        </div>
+                        <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                          {email.text.slice(0, 150)}{email.text.length > 150 ? "..." : ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {/* Step 2: Review & Edit */}
-        {step === "review" && extracted && (
+        {step === "review" && extracted && (() => {
+          const updateActionItem = (index: number, updates: Partial<ExtractedMinutes["action_items"][0]>) => {
+            const items = [...extracted.action_items];
+            items[index] = { ...items[index], ...updates };
+            setExtracted({ ...extracted, action_items: items });
+          };
+          const removeActionItem = (index: number) => {
+            setExtracted({ ...extracted, action_items: extracted.action_items.filter((_, i) => i !== index) });
+          };
+          const addActionItem = () => {
+            setExtracted({ ...extracted, action_items: [...extracted.action_items, { description: "", owner_name: "", priority: "Medium", due_date: "", department: "" }] });
+          };
+          const smallField: React.CSSProperties = { ...inputStyle, fontSize: "14px", padding: "6px 8px" };
+
+          return (
           <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "white", marginBottom: "16px" }}>
             <SectionTitle title="Step 2: Review & Approve" />
             <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "12px" }}>
-              Review the extracted minutes below. Edit anything that needs changing, then approve to create tasks and save.
+              Review and edit everything below. Change task owners, descriptions, priorities — then approve.
             </p>
 
             <div style={{ marginBottom: "12px" }}>
@@ -301,10 +491,26 @@ export default function MeetingsPage() {
               <input value={extracted.meeting_title} onChange={(e) => setExtracted({ ...extracted, meeting_title: e.target.value })} style={inputStyle} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
               <div>
                 <label style={labelStyle}>Date</label>
                 <input value={extracted.meeting_date} onChange={(e) => setExtracted({ ...extracted, meeting_date: e.target.value })} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Company</label>
+                <select value={extracted.company} onChange={(e) => setExtracted({ ...extracted, company: e.target.value })} style={inputStyle}>
+                  {["General", "Unze Trading", "Imperial Footwear", "Haute Dolci", "Barahn", "K&K Jhang"].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Department</label>
+                <select value={extracted.department} onChange={(e) => setExtracted({ ...extracted, department: e.target.value })} style={inputStyle}>
+                  {["General", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label style={labelStyle}>Attendees (comma-separated)</label>
@@ -339,15 +545,55 @@ export default function MeetingsPage() {
               </div>
             </div>
 
-            <SectionTitle title={`Action Items (${extracted.action_items.length})`} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <SectionTitle title={`Action Items (${extracted.action_items.length})`} />
+              <button onClick={addActionItem} style={{ ...primaryButtonStyle, padding: "6px 14px", fontSize: "14px" }}>
+                + Add Task
+              </button>
+            </div>
+
             {extracted.action_items.map((item, i) => (
-              <div key={i} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px 12px", marginBottom: "8px", backgroundColor: "#f8fafc" }}>
-                <div style={{ fontWeight: 700, fontSize: "16px", color: COLOURS.NAVY, marginBottom: "4px" }}>{item.description}</div>
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "15px", color: COLOURS.SLATE }}>
-                  <span>Owner: <strong>{item.owner_name}</strong></span>
-                  {item.due_date && <span>Due: {item.due_date}</span>}
-                  <PriorityBadge priority={item.priority} />
-                  {item.department && <span>{item.department}</span>}
+              <div key={i} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "12px", marginBottom: "8px", backgroundColor: "#f8fafc" }}>
+                <div style={{ marginBottom: "8px" }}>
+                  <input value={item.description} onChange={(e) => updateActionItem(i, { description: e.target.value })}
+                    placeholder="Task description" style={{ ...inputStyle, fontWeight: 600 }} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: "12px" }}>Owner</label>
+                    <select value={item.owner_name} onChange={(e) => updateActionItem(i, { owner_name: e.target.value })} style={smallField}>
+                      <option value="">Select owner</option>
+                      {memberDetails.filter((m) => m.role === "Manager" || m.role === "Executive" || m.role === "Admin").map((m) => (
+                        <option key={m.name} value={m.name}>{m.name} ({m.role})</option>
+                      ))}
+                      {item.owner_name && !memberDetails.find((m) => m.name === item.owner_name) && (
+                        <option value={item.owner_name}>{item.owner_name} (not matched)</option>
+                      )}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: "12px" }}>Priority</label>
+                    <select value={item.priority} onChange={(e) => updateActionItem(i, { priority: e.target.value })} style={smallField}>
+                      {["Low", "Medium", "High", "Urgent"].map((p) => <option key={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: "12px" }}>Due Date</label>
+                    <input type="date" value={item.due_date || ""} onChange={(e) => updateActionItem(i, { due_date: e.target.value })} style={smallField} />
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: "12px" }}>Department</label>
+                    <select value={item.department || ""} onChange={(e) => updateActionItem(i, { department: e.target.value })} style={smallField}>
+                      <option value="">None</option>
+                      {["Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
+                        <option key={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button onClick={() => removeActionItem(i)}
+                    style={{ backgroundColor: "white", border: `1px solid #e0a0a0`, color: "#c0392b", borderRadius: "6px", padding: "6px 10px", fontSize: "14px", cursor: "pointer", height: "fit-content" }}>
+                    Remove
+                  </button>
                 </div>
               </div>
             ))}
@@ -372,7 +618,8 @@ export default function MeetingsPage() {
               </button>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Step 3: Approved — send to attendees */}
         {step === "approved" && extracted && (
