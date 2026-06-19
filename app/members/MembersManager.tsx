@@ -240,6 +240,8 @@ export default function MembersManager() {
     loadData();
   }
 
+  const OWNER_EMAIL = "khuram1901@gmail.com";
+
   async function updateMember(id: string, updates: Partial<Member>) {
     if (updates.email !== undefined && !isValidEmail(updates.email || "")) {
       alert("A valid email address is required. The email cannot be left blank.");
@@ -248,6 +250,18 @@ export default function MembersManager() {
     }
 
     const member = members.find((m) => m.id === id);
+
+    if (member?.email === OWNER_EMAIL && myRole !== "Admin") {
+      alert("The owner account cannot be modified.");
+      loadData();
+      return;
+    }
+
+    if (member?.role === "Admin" && myRole !== "Admin") {
+      alert("Only an Admin can edit another Admin's details.");
+      loadData();
+      return;
+    }
 
     // If the role is being changed UP to Admin/Executive, wipe department/BU.
     if (updates.role !== undefined && !roleHasDeptAndBU(updates.role)) {
@@ -291,6 +305,15 @@ export default function MembersManager() {
   }
 
   async function deleteMember(id: string, memberName: string) {
+    const member = members.find((m) => m.id === id);
+    if (member?.email === OWNER_EMAIL) {
+      alert("The owner account cannot be removed.");
+      return;
+    }
+    if (member?.role === "Admin" && myRole !== "Admin") {
+      alert("Only an Admin can remove another Admin.");
+      return;
+    }
     if (!confirm(`Remove ${memberName} from members?`)) return;
 
     const { error } = await supabase.from("members").delete().eq("id", id);
