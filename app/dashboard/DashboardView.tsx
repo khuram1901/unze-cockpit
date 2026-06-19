@@ -160,6 +160,7 @@ export default function DashboardView() {
   const [machineIssues, setMachineIssues] = useState<MachineIssue[]>([]);
   const [myTasks, setMyTasks] = useState<Task[]>([]);
   const [myEmail, setMyEmail] = useState<string | null>(null);
+  const [myRole, setMyRole] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -202,9 +203,19 @@ export default function DashboardView() {
 
     setMachineIssues(machineRes.data || []);
 
-    // Only the logged-in manager's own assigned tasks
+    // Only show tasks for managers/members, not admin/executive
     const allTasks: Task[] = tasksRes.data || [];
-    setMyTasks(email ? allTasks.filter((t) => t.assigned_to_email === email) : []);
+    if (email) {
+      const { data: memberData } = await supabase
+        .from("members").select("role").eq("email", email).maybeSingle();
+      const role = memberData?.role || "Member";
+      setMyRole(role);
+      if (role === "Manager" || role === "Member") {
+        setMyTasks(allTasks.filter((t) => t.assigned_to_email === email));
+      } else {
+        setMyTasks([]);
+      }
+    }
 
     const weekNumber = getMonthWeekNumber(today);
 

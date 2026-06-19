@@ -27,6 +27,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
   const isMobile = useMobile();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [myTasks, setMyTasks] = useState<UserTask[]>([]);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
@@ -49,22 +50,25 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
     const { data } = await query;
     setRows(data || []);
 
-    // Load current user's tasks
+    // Load current user's tasks (managers only — admin/exec use Tasks page)
     const { data: { user } } = await supabase.auth.getUser();
     if (user?.email) {
       const { data: member } = await supabase
-        .from("members").select("first_name, last_name, name")
+        .from("members").select("first_name, last_name, name, role")
         .eq("email", user.email).maybeSingle();
       if (member) {
-        const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || user.email;
-        const { data: tasks } = await supabase
-          .from("tasks")
-          .select("id, description, due_date, priority, status")
-          .eq("assigned_to", userName)
-          .not("status", "in", '("Completed","Cancelled")')
-          .order("due_date", { ascending: true })
-          .limit(10);
-        setMyTasks(tasks || []);
+        setUserRole(member.role);
+        if (member.role === "Manager" || member.role === "Member") {
+          const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || user.email;
+          const { data: tasks } = await supabase
+            .from("tasks")
+            .select("id, description, due_date, priority, status")
+            .eq("assigned_to", userName)
+            .not("status", "in", '("Completed","Cancelled")')
+            .order("due_date", { ascending: true })
+            .limit(10);
+          setMyTasks(tasks || []);
+        }
       }
     }
 
