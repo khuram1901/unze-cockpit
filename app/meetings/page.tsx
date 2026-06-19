@@ -127,9 +127,7 @@ export default function MeetingsPage() {
     setExtracting(false);
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function processFile(file: File) {
     setUploading(true);
     setMessage("");
 
@@ -149,7 +147,22 @@ export default function MeetingsPage() {
       setMessage("Error: Network error uploading file");
     }
     setUploading(false);
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processFile(file);
     e.target.value = "";
+  }
+
+  const [dragging, setDragging] = useState(false);
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
   }
 
   async function handleCheckEmail() {
@@ -389,18 +402,37 @@ export default function MeetingsPage() {
 
             {/* Upload tab */}
             {inputMethod === "upload" && (
-              <div style={{ textAlign: "center", padding: "20px 0" }}>
-                <p style={{ fontSize: "16px", color: COLOURS.SLATE, marginBottom: "16px" }}>
-                  Upload a PDF, Word (.docx), or text (.txt) file containing meeting minutes or transcript.
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={handleDrop}
+                style={{
+                  textAlign: "center",
+                  padding: "40px 20px",
+                  border: `2px dashed ${dragging ? COLOURS.NAVY : COLOURS.BORDER}`,
+                  borderRadius: "10px",
+                  backgroundColor: dragging ? "#f0f4ff" : "#fafbfc",
+                  transition: "all 0.2s ease",
+                  cursor: uploading ? "wait" : "pointer",
+                }}
+              >
+                <div style={{ fontSize: "36px", marginBottom: "10px", opacity: 0.5 }}>
+                  {uploading ? "..." : "⬆️"}
+                </div>
+                <p style={{ fontSize: "17px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "6px" }}>
+                  {uploading ? "Reading file..." : dragging ? "Drop your file here" : "Drag & drop your file here"}
+                </p>
+                <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "16px" }}>
+                  or
                 </p>
                 <label style={{
                   display: "inline-block",
                   ...primaryButtonStyle,
-                  padding: "12px 28px",
+                  padding: "10px 24px",
                   cursor: uploading ? "wait" : "pointer",
                   opacity: uploading ? 0.5 : 1,
                 }}>
-                  {uploading ? "Reading file..." : "Choose File"}
+                  Browse Files
                   <input
                     type="file"
                     accept=".pdf,.docx,.txt,.md"
@@ -409,7 +441,7 @@ export default function MeetingsPage() {
                     style={{ display: "none" }}
                   />
                 </label>
-                <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "12px" }}>
+                <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "14px" }}>
                   Supported: PDF, Word (.docx), Plain text (.txt)
                 </p>
               </div>
