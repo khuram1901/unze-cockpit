@@ -26,9 +26,12 @@ const ROLES = ["Admin", "Executive", "Manager", "Member"];
 
 const DEPARTMENTS = [
   "Unze Trading Ops",
+  "Unze Trading Accounts",
   "Finance",
   "HR",
   "Admin",
+  "IT",
+  "Tax",
   "Legal",
   "Sales",
   "Audit",
