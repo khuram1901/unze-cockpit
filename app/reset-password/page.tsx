@@ -50,6 +50,15 @@ export default function ResetPasswordPage() {
     if (error) {
       setMessage("Error: " + error.message);
     } else {
+      // Send password change confirmation email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        fetch("/api/notifications/password-changed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: user.email }),
+        }).catch(() => {});
+      }
       setMessage("Password updated successfully! Redirecting to sign in...");
       await supabase.auth.signOut();
       setTimeout(() => router.push("/login"), 2000);
