@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Generate a magic link via Supabase Admin
+    // Generate a proper magic link via Supabase Admin
     const { data: linkData } = await supabase.auth.admin.generateLink({
       type: "magiclink",
       email: email.trim(),
@@ -47,9 +47,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Build the verification URL through Supabase's auth endpoint
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     let resetLink = `${APP_URL}/forgot-password`;
-    if (linkData?.properties?.hashed_token) {
-      resetLink = `${APP_URL}/reset-password#access_token=${linkData.properties.hashed_token}&type=magiclink`;
+    if (linkData?.properties?.hashed_token && supabaseUrl) {
+      resetLink = `${supabaseUrl}/auth/v1/verify?token=${linkData.properties.hashed_token}&type=magiclink&redirect_to=${encodeURIComponent(`${APP_URL}/reset-password`)}`;
     }
 
     // Send via our own Gmail

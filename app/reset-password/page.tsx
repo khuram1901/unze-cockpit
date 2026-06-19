@@ -14,19 +14,39 @@ export default function ResetPasswordPage() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    async function checkSession() {
-      // Supabase auto-handles the hash fragment from magic links
+    // Listen for auth state changes — Supabase fires this when it processes the URL token
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        setSessionReady(true);
+        setChecking(false);
+      }
+    });
+
+    // Also check if there's already a session (e.g. user is already logged in)
+    async function checkExisting() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         setSessionReady(true);
-      } else {
-        setMessage("No valid reset link found. Please request a new password reset from the login page.");
+        setChecking(false);
       }
-      setChecking(false);
     }
+    checkExisting();
 
-    // Small delay to let Supabase process the URL hash
-    setTimeout(checkSession, 1000);
+    // Fallback timeout — if no session after 5 seconds, show error
+    const timeout = setTimeout(() => {
+      setChecking((prev) => {
+        if (prev) {
+          setMessage("No valid reset link found. Please request a new password reset from the login page.");
+          return false;
+        }
+        return prev;
+      });
+    }, 5000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
