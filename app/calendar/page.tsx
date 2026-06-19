@@ -16,7 +16,6 @@ import {
 } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import MyTasks from "../lib/MyTasks";
 
 type MeetingRequest = {
   id: string;
@@ -264,8 +263,6 @@ export default function CalendarPage() {
           title="Calendar & Meeting Requests"
           subtitle="View availability, request meetings, and manage approvals"
         />
-
-        <MyTasks />
 
         {/* ── REQUEST FORM ── */}
         <div style={{

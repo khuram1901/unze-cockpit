@@ -6,7 +6,6 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import MyTasks from "../lib/MyTasks";
 import {
   COLOURS,
   SectionTitle,
@@ -260,8 +259,6 @@ export default function MeetingsPage() {
           title="Meeting Minutes"
           subtitle="Paste transcript → AI extracts → Review → Approve → Send to attendees"
         />
-
-        <MyTasks />
 
         {message && (
           <div style={{

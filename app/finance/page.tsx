@@ -2,7 +2,6 @@
 
 import AuthWrapper from "../lib/AuthWrapper";
 import FinanceManager from "./FinanceManager";
-import MyTasks from "../lib/MyTasks";
 
 const NAVY = "#1e293b";
 const SLATE = "#64748b";
@@ -19,7 +18,6 @@ export default function FinancePage() {
             Set the opening balance, enter each month's expected receivables and payouts, and record daily cash figures.
           </p>
         </div>
-        <MyTasks />
         <FinanceManager />
       </main>
     </AuthWrapper>
