@@ -4,8 +4,9 @@
 
 -- Drop any existing restrictive policies on members
 DO $$
+DECLARE
+  r RECORD;
 BEGIN
-  -- Drop all existing policies on the members table
   FOR r IN (SELECT policyname FROM pg_policies WHERE tablename = 'members' AND schemaname = 'public')
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON members', r.policyname);
@@ -24,6 +25,8 @@ CREATE POLICY "Allow all for authenticated" ON members
 
 -- Also fix member_plants if it has restrictive policies
 DO $$
+DECLARE
+  r RECORD;
 BEGIN
   FOR r IN (SELECT policyname FROM pg_policies WHERE tablename = 'member_plants' AND schemaname = 'public')
   LOOP
