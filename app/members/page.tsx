@@ -9,7 +9,7 @@ export default function MembersPage() {
   return (
     <AuthWrapper>
       <main style={{ padding: "20px 24px" }}>
-        <RoleGuard allowedRoles={["Admin"]}>
+        <RoleGuard allowedRoles={["Admin", "Executive"]}>
           <div style={{ marginBottom: "16px" }}>
             <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>
               Members

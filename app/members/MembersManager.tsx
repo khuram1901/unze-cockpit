@@ -301,7 +301,7 @@ export default function MembersManager() {
     loadData();
   }
 
-  const isAdmin = myRole === "Admin";
+  const isAdmin = myRole === "Admin" || myRole === "Executive";
 
   const inputStyle = {
     padding: "8px",
