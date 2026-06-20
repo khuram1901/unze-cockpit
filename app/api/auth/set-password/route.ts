@@ -12,13 +12,23 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceClient();
+    const normalised = email.trim().toLowerCase();
 
-    // Find the auth user by listing and matching email
+    // Find the auth user by listing and matching email (case-insensitive)
     const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-    const authUser = users?.find((u) => u.email === email.trim());
+    let authUser = users?.find((u) => u.email?.toLowerCase() === normalised);
 
+    // If no auth account, create one
     if (!authUser) {
-      return Response.json({ error: "No auth account found for this email" }, { status: 404 });
+      const { data, error: createErr } = await supabase.auth.admin.createUser({
+        email: normalised,
+        password,
+        email_confirm: true,
+      });
+      if (createErr) {
+        return Response.json({ error: "Could not create auth account: " + createErr.message }, { status: 500 });
+      }
+      return Response.json({ success: true });
     }
 
     const { error } = await supabase.auth.admin.updateUserById(authUser.id, { password });

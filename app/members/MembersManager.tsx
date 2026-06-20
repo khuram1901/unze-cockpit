@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
+import { COLOURS, PageHeader, SectionTitle, CountCard } from "../lib/SharedUI";
 
 type Member = {
   id: string;
@@ -51,7 +52,6 @@ const ALL_BUSINESS_UNITS = [
   "Nursing College",
 ];
 
-// Which business units are valid for each department
 const DEPT_BUSINESS_UNITS: Record<string, string[]> = {
   "Unze Trading Ops": ["Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
   Finance: ALL_BUSINESS_UNITS,
@@ -64,9 +64,6 @@ const DEPT_BUSINESS_UNITS: Record<string, string[]> = {
   BINC: ["Nursing College"],
 };
 
-// Admin and Executive are organisation-wide: they are not pinned to a
-// department or business unit. Department/BU fields apply only to Manager
-// and Member.
 function roleHasDeptAndBU(role: string): boolean {
   return role === "Manager" || role === "Member";
 }
@@ -85,6 +82,59 @@ function fullName(firstName: string | null, lastName: string | null, oldName?: s
   return combined || oldName || "Unnamed";
 }
 
+function roleBadgeColour(role: string): string {
+  switch (role) {
+    case "Admin": return COLOURS.BLUE;
+    case "Executive": return COLOURS.PURPLE;
+    case "Manager": return COLOURS.GREEN;
+    default: return COLOURS.SLATE;
+  }
+}
+
+// ── Shared styles ──────────────────────────────────────────────
+
+const fieldInput: React.CSSProperties = {
+  width: "100%",
+  padding: "8px 10px",
+  border: `1px solid ${COLOURS.BORDER}`,
+  borderRadius: "6px",
+  fontSize: "15px",
+  boxSizing: "border-box",
+};
+
+const fieldSelect: React.CSSProperties = { ...fieldInput };
+
+const fieldLabel: React.CSSProperties = {
+  display: "block",
+  fontSize: "13px",
+  fontWeight: 600,
+  color: COLOURS.SLATE,
+  marginBottom: "4px",
+};
+
+const actionBtn = (colour: string): React.CSSProperties => ({
+  backgroundColor: "white",
+  border: `1px solid ${colour}`,
+  color: colour,
+  borderRadius: "6px",
+  padding: "6px 12px",
+  fontSize: "14px",
+  fontWeight: 600,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+});
+
+const solidBtn = (bg: string): React.CSSProperties => ({
+  backgroundColor: bg,
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  padding: "8px 18px",
+  fontSize: "15px",
+  fontWeight: 700,
+  cursor: "pointer",
+});
+
 export default function MembersManager() {
   const isMobile = useMobile();
   const [members, setMembers] = useState<Member[]>([]);
@@ -102,10 +152,15 @@ export default function MembersManager() {
   const [department, setDepartment] = useState("");
   const [businessUnit, setBusinessUnit] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  const [expandedMember, setExpandedMember] = useState<string | null>(null);
   const [resettingPassword, setResettingPassword] = useState<string>("");
   const [settingPasswordFor, setSettingPasswordFor] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [settingPassword, setSettingPassword] = useState(false);
+
+  const [filter, setFilter] = useState("");
 
   async function loadData() {
     const { data: userData } = await supabase.auth.getUser();
@@ -204,8 +259,6 @@ export default function MembersManager() {
     setSaving(true);
 
     const displayName = `${firstName} ${lastName}`.trim();
-
-    // Admin/Executive are organisation-wide — never store a department or BU.
     const keepsDeptBU = roleHasDeptAndBU(role);
 
     const { error } = await supabase.from("members").insert({
@@ -227,7 +280,6 @@ export default function MembersManager() {
 
     logAction("Created", "members", `Added ${firstName} ${lastName} (${email}) as ${role}`);
 
-    // Send welcome email with password setup link
     fetch("/api/members/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -240,6 +292,7 @@ export default function MembersManager() {
     setRole("Member");
     setDepartment("");
     setBusinessUnit("");
+    setShowAddForm(false);
 
     loadData();
   }
@@ -311,12 +364,10 @@ export default function MembersManager() {
       return;
     }
 
-    // If the role is being changed UP to Admin/Executive, wipe department/BU.
     if (updates.role !== undefined && !roleHasDeptAndBU(updates.role)) {
       updates = { ...updates, department: null, business_unit: null };
     }
 
-    // If department changes and current business unit is no longer valid, clear it.
     if (updates.department !== undefined) {
       const validBUs = businessUnitsFor(updates.department);
       const currentBU = member?.business_unit;
@@ -327,10 +378,8 @@ export default function MembersManager() {
 
     const updatedFirstName =
       updates.first_name !== undefined ? updates.first_name : member?.first_name || "";
-
     const updatedLastName =
       updates.last_name !== undefined ? updates.last_name : member?.last_name || "";
-
     const updatedName = `${updatedFirstName || ""} ${updatedLastName || ""}`.trim();
 
     const { error } = await supabase
@@ -377,394 +426,391 @@ export default function MembersManager() {
 
   const isAdmin = myRole === "Admin" || myRole === "Executive";
 
-  const inputStyle = {
-    padding: "8px",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
-    fontSize: "16px",
-    marginRight: "8px",
-  };
-
-  const smallInputStyle = {
-    padding: "6px",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
-    fontSize: "17px",
-    minWidth: "120px",
-  };
-
-  if (loading) return <p>Loading members</p>;
+  if (loading) {
+    return (
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}>
+        <p style={{ color: COLOURS.SLATE, fontSize: "16px" }}>Loading members...</p>
+      </main>
+    );
+  }
 
   const addFormBUs = businessUnitsFor(department);
   const addFormShowsDeptBU = roleHasDeptAndBU(role);
 
+  const filtered = filter
+    ? members.filter((m) => {
+        const q = filter.toLowerCase();
+        return (
+          fullName(m.first_name, m.last_name, m.name).toLowerCase().includes(q) ||
+          (m.email || "").toLowerCase().includes(q) ||
+          m.role.toLowerCase().includes(q) ||
+          (m.department || "").toLowerCase().includes(q) ||
+          (m.business_unit || "").toLowerCase().includes(q)
+        );
+      })
+    : members;
+
+  const totalMembers = members.length;
+  const admins = members.filter((m) => m.role === "Admin" || m.role === "Executive").length;
+  const managers = members.filter((m) => m.role === "Manager").length;
+  const staff = members.filter((m) => m.role === "Member").length;
+
   return (
-    <div>
-      {isAdmin && (
+    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+      <PageHeader title="Members" subtitle="Manage team members, roles, departments, and plant assignments" />
+
+      {/* ── Summary cards ──────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "10px", marginBottom: "20px", maxWidth: "600px" }}>
+        <CountCard label="Total" value={totalMembers} color={COLOURS.NAVY} />
+        <CountCard label="Admin / Exec" value={admins} color={COLOURS.PURPLE} />
+        <CountCard label="Managers" value={managers} color={COLOURS.GREEN} />
+        <CountCard label="Members" value={staff} color={COLOURS.SLATE} />
+      </div>
+
+      {/* ── Toolbar: search + add ─────────────────────── */}
+      <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" }}>
+        <input
+          type="text"
+          placeholder="Search by name, email, role, department..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          style={{
+            flex: "1 1 250px",
+            maxWidth: "400px",
+            padding: "9px 12px",
+            border: `1px solid ${COLOURS.BORDER}`,
+            borderRadius: "6px",
+            fontSize: "15px",
+            boxSizing: "border-box",
+          }}
+        />
+        {isAdmin && (
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            style={solidBtn(COLOURS.NAVY)}
+          >
+            {showAddForm ? "Cancel" : "+ Add Member"}
+          </button>
+        )}
+      </div>
+
+      {/* ── Add member form ───────────────────────────── */}
+      {isAdmin && showAddForm && (
         <form
           onSubmit={addMember}
           style={{
-            border: "1px solid #e0e0e0",
+            border: `1px solid ${COLOURS.BORDER}`,
+            borderTop: `3px solid ${COLOURS.NAVY}`,
             borderRadius: "8px",
             padding: "20px",
-            marginBottom: "28px",
-            maxWidth: "1000px",
+            marginBottom: "20px",
+            backgroundColor: "white",
           }}
         >
-          <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "12px" }}>
-            Add a member
-          </h2>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "14px" }}>
+            New Member
+          </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(150px, 1fr))", gap: "8px", alignItems: "center" }}>
-            <input
-              style={inputStyle}
-              placeholder="First Name"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              required
-            />
-            <input
-              style={inputStyle}
-              placeholder="Last Name"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              required
-            />
-            <input
-              style={inputStyle}
-              placeholder="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <select
-              style={inputStyle}
-              value={role}
-              onChange={(e) => {
-                setRole(e.target.value);
-                // Switching to Admin/Executive clears any selected dept/BU.
-                if (!roleHasDeptAndBU(e.target.value)) {
-                  setDepartment("");
-                  setBusinessUnit("");
-                }
-              }}
-            >
-              {ROLES.map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1.5fr 1fr", gap: "12px" }}>
+            <div>
+              <label style={fieldLabel}>First Name</label>
+              <input style={fieldInput} value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+            </div>
+            <div>
+              <label style={fieldLabel}>Last Name</label>
+              <input style={fieldInput} value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+            </div>
+            <div>
+              <label style={fieldLabel}>Email</label>
+              <input style={fieldInput} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </div>
+            <div>
+              <label style={fieldLabel}>Role</label>
+              <select
+                style={fieldSelect}
+                value={role}
+                onChange={(e) => {
+                  setRole(e.target.value);
+                  if (!roleHasDeptAndBU(e.target.value)) {
+                    setDepartment("");
+                    setBusinessUnit("");
+                  }
+                }}
+              >
+                {ROLES.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+          </div>
 
-            {addFormShowsDeptBU ? (
-              <>
-                <select
-                  style={inputStyle}
-                  value={department}
-                  onChange={(e) => {
-                    setDepartment(e.target.value);
-                    setBusinessUnit(""); // reset BU when department changes
-                  }}
-                >
-                  <option value="">Department</option>
-                  {DEPARTMENTS.map((d) => (
-                    <option key={d}>{d}</option>
-                  ))}
+          {addFormShowsDeptBU && (
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginTop: "12px" }}>
+              <div>
+                <label style={fieldLabel}>Department</label>
+                <select style={fieldSelect} value={department} onChange={(e) => { setDepartment(e.target.value); setBusinessUnit(""); }}>
+                  <option value="">Select department</option>
+                  {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
                 </select>
-                <select
-                  style={inputStyle}
-                  value={businessUnit}
-                  onChange={(e) => setBusinessUnit(e.target.value)}
-                  disabled={!department}
-                >
-                  <option value="">{department ? "Business Unit" : "Select dept first"}</option>
-                  {addFormBUs.map((b) => (
-                    <option key={b}>{b}</option>
-                  ))}
+              </div>
+              <div>
+                <label style={fieldLabel}>Business Unit</label>
+                <select style={fieldSelect} value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value)} disabled={!department}>
+                  <option value="">{department ? "Select business unit" : "Choose department first"}</option>
+                  {addFormBUs.map((b) => <option key={b}>{b}</option>)}
                 </select>
-              </>
-            ) : (
-              <span style={{ fontSize: "17px", color: "#888", alignSelf: "center" }}>
-                {role} sees all departments &amp; business units
-              </span>
-            )}
+              </div>
+            </div>
+          )}
 
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                backgroundColor: "#0070f3",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                padding: "9px 18px",
-                fontSize: "16px",
-                cursor: "pointer",
-              }}
-            >
-              {saving ? "Adding" : "Add"}
+          {!addFormShowsDeptBU && (
+            <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "10px" }}>
+              {role} role has access to all departments and business units.
+            </p>
+          )}
+
+          <div style={{ marginTop: "16px" }}>
+            <button type="submit" disabled={saving} style={solidBtn(COLOURS.NAVY)}>
+              {saving ? "Adding..." : "Add Member"}
             </button>
           </div>
         </form>
       )}
 
-      <div style={{ display: "grid", gap: "10px", maxWidth: "1100px" }}>
-        {members.map((m) => {
+      {/* ── Members list ──────────────────────────────── */}
+      <SectionTitle title={`Team (${filtered.length})`} />
+
+      <div style={{ display: "grid", gap: "8px" }}>
+        {filtered.map((m) => {
           const displayName = fullName(m.first_name, m.last_name, m.name);
           const rowBUs = businessUnitsFor(m.department);
           const rowShowsDeptBU = roleHasDeptAndBU(m.role);
+          const isExpanded = expandedMember === m.id;
 
           return (
             <div
               key={m.id}
               style={{
-                border: "1px solid #e0e0e0",
+                border: `1px solid ${COLOURS.BORDER}`,
                 borderRadius: "8px",
-                padding: isMobile ? "12px" : "14px 16px",
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "1.5fr 1.5fr 1fr 1.5fr 1.5fr auto",
-                gap: isMobile ? "8px" : "10px",
-                alignItems: "center",
+                backgroundColor: "white",
+                overflow: "hidden",
               }}
             >
-              {isAdmin ? (
-                <>
-                  <div>
-                    <input
-                      style={{ ...smallInputStyle, marginBottom: "6px", width: "90%" }}
-                      value={m.first_name || ""}
-                      placeholder="First Name"
-                      onChange={(e) => updateMember(m.id, { first_name: e.target.value })}
-                    />
-                    <input
-                      style={{ ...smallInputStyle, width: "90%" }}
-                      value={m.last_name || ""}
-                      placeholder="Last Name"
-                      onChange={(e) => updateMember(m.id, { last_name: e.target.value })}
-                    />
+              {/* ── Top row: summary ───────────────────── */}
+              <div
+                onClick={() => isAdmin ? setExpandedMember(isExpanded ? null : m.id) : undefined}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr auto" : "2fr 2fr 1fr 1.5fr auto",
+                  gap: "10px",
+                  alignItems: "center",
+                  padding: isMobile ? "12px" : "12px 16px",
+                  cursor: isAdmin ? "pointer" : "default",
+                  backgroundColor: isExpanded ? COLOURS.LIGHT : "white",
+                }}
+              >
+                {/* Name */}
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: "16px", color: COLOURS.NAVY }}>
+                    {displayName}
+                    {m.is_hod && <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.AMBER, marginLeft: "6px" }}>HOD</span>}
                   </div>
+                  <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "1px" }}>{m.email || "No email"}</div>
+                </div>
 
-                  <input
-                    style={smallInputStyle}
-                    defaultValue={m.email || ""}
-                    placeholder="Email"
-                    onBlur={(e) => {
-                      if (e.target.value.trim() !== (m.email || "")) {
-                        updateMember(m.id, { email: e.target.value });
-                      }
-                    }}
-                  />
-
-                  <select
-                    value={m.role}
-                    onChange={(e) => updateMember(m.id, { role: e.target.value })}
-                    style={smallInputStyle}
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r}>{r}</option>
-                    ))}
-                  </select>
-
-                  {rowShowsDeptBU ? (
-                    <>
-                      <select
-                        value={m.department || ""}
-                        onChange={(e) => updateMember(m.id, { department: e.target.value || null })}
-                        style={smallInputStyle}
-                      >
-                        <option value="">Department</option>
-                        {DEPARTMENTS.map((d) => (
-                          <option key={d}>{d}</option>
-                        ))}
-                      </select>
-
-                      <select
-                        value={m.business_unit || ""}
-                        onChange={(e) =>
-                          updateMember(m.id, { business_unit: e.target.value || null })
-                        }
-                        style={smallInputStyle}
-                        disabled={!m.department}
-                      >
-                        <option value="">
-                          {m.department ? "Business Unit" : "Select dept first"}
-                        </option>
-                        {rowBUs.map((b) => (
-                          <option key={b}>{b}</option>
-                        ))}
-                      </select>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ fontSize: "16px", color: "#999" }}>All departments</div>
-                      <div style={{ fontSize: "16px", color: "#999" }}>All business units</div>
-                    </>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div>
-                    <div style={{ fontWeight: "bold", fontSize: "17px" }}>{displayName}</div>
-                    <div style={{ color: "#777", fontSize: "17px" }}>{m.email || "no email"}</div>
+                {/* Department + BU (desktop only) */}
+                {!isMobile && (
+                  <div style={{ fontSize: "14px", color: COLOURS.SLATE }}>
+                    {rowShowsDeptBU
+                      ? `${m.department || "No department"} · ${m.business_unit || "No BU"}`
+                      : "All departments"}
                   </div>
+                )}
 
-                  <div style={{ fontSize: "17px", color: "#555" }}>
-                    {rowShowsDeptBU ? m.department || "No department" : "All departments"}
+                {/* Role badge */}
+                <span
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    padding: "3px 10px",
+                    borderRadius: "10px",
+                    color: "white",
+                    backgroundColor: roleBadgeColour(m.role),
+                    whiteSpace: "nowrap",
+                    width: "fit-content",
+                    justifySelf: isMobile ? "end" : "start",
+                  }}
+                >
+                  {m.role}
+                </span>
+
+                {/* Notifications (desktop only) */}
+                {!isMobile && (
+                  <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>
+                    {m.notify_email && "Email"}
+                    {m.notify_email && m.notify_whatsapp && " · "}
+                    {m.notify_whatsapp && "WhatsApp"}
+                    {!m.notify_email && !m.notify_whatsapp && "No notifications"}
                   </div>
+                )}
 
-                  <div style={{ fontSize: "17px", color: "#555" }}>
-                    {rowShowsDeptBU ? m.business_unit || "No business unit" : "All business units"}
+                {/* Expand indicator (desktop) */}
+                {!isMobile && isAdmin && (
+                  <div style={{ fontSize: "18px", color: COLOURS.SLATE, justifySelf: "end" }}>
+                    {isExpanded ? "▲" : "▼"}
                   </div>
+                )}
+              </div>
 
-                  <span
-                    style={{
-                      fontSize: "16px",
-                      backgroundColor:
-                        m.role === "Admin"
-                          ? "#0070f3"
-                          : m.role === "Executive"
-                          ? "#7c3aed"
-                          : m.role === "Manager"
-                          ? "#16a34a"
-                          : "#888",
-                      color: "white",
-                      padding: "2px 10px",
-                      borderRadius: "10px",
-                      width: "fit-content",
-                    }}
-                  >
-                    {m.role}
-                  </span>
-                </>
-              )}
-
-              {isAdmin && (m.role === "Manager" || m.role === "Member") && (
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "16px", color: "#1e293b", cursor: "pointer" }}>
-                  <input
-                    type="checkbox"
-                    checked={m.is_hod || false}
-                    onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })}
-                    style={{ width: "16px", height: "16px" }}
-                  />
-                  Head of Dept
-                </label>
-              )}
-
-              {isAdmin && (
-                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", fontSize: "14px" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", color: "#1e293b" }}>
-                    <input type="checkbox" checked={m.notify_email} onChange={(e) => updateMember(m.id, { notify_email: e.target.checked })} style={{ width: "14px", height: "14px" }} />
-                    Email
-                  </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", color: "#1e293b" }}>
-                    <input type="checkbox" checked={m.notify_whatsapp || false} onChange={(e) => updateMember(m.id, { notify_whatsapp: e.target.checked })} style={{ width: "14px", height: "14px" }} />
-                    WhatsApp
-                  </label>
-                  {m.notify_whatsapp && (
-                    <input
-                      placeholder="+92..."
-                      value={m.phone_e164 || ""}
-                      onBlur={(e) => { if (e.target.value !== (m.phone_e164 || "")) updateMember(m.id, { phone_e164: e.target.value || null }); }}
-                      onChange={() => {}}
-                      defaultValue={m.phone_e164 || ""}
-                      style={{ padding: "4px 8px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "14px", width: "130px" }}
-                    />
-                  )}
+              {/* ── Mobile: dept row ───────────────────── */}
+              {isMobile && !isExpanded && (
+                <div style={{ padding: "0 12px 10px", fontSize: "13px", color: COLOURS.SLATE }}>
+                  {rowShowsDeptBU
+                    ? `${m.department || "No department"} · ${m.business_unit || "No BU"}`
+                    : "All departments"}
                 </div>
               )}
 
-              {isAdmin && (
-                <div style={{ gridColumn: isMobile ? "1" : "1 / -1", borderTop: "1px solid #eee", paddingTop: "10px", marginTop: "4px" }}>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              {/* ── Expanded edit panel ────────────────── */}
+              {isAdmin && isExpanded && (
+                <div style={{ borderTop: `1px solid ${COLOURS.BORDER}`, padding: isMobile ? "14px 12px" : "16px 20px" }}>
+
+                  {/* Edit fields */}
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 2fr 1fr", gap: "12px", marginBottom: "14px" }}>
+                    <div>
+                      <label style={fieldLabel}>First Name</label>
+                      <input
+                        style={fieldInput}
+                        value={m.first_name || ""}
+                        onChange={(e) => updateMember(m.id, { first_name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label style={fieldLabel}>Last Name</label>
+                      <input
+                        style={fieldInput}
+                        value={m.last_name || ""}
+                        onChange={(e) => updateMember(m.id, { last_name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label style={fieldLabel}>Email</label>
+                      <input
+                        style={fieldInput}
+                        defaultValue={m.email || ""}
+                        onBlur={(e) => {
+                          if (e.target.value.trim() !== (m.email || "")) {
+                            updateMember(m.id, { email: e.target.value });
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={fieldLabel}>Role</label>
+                      <select value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })} style={fieldSelect}>
+                        {ROLES.map((r) => <option key={r}>{r}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {rowShowsDeptBU && (
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "12px", marginBottom: "14px" }}>
+                      <div>
+                        <label style={fieldLabel}>Department</label>
+                        <select value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })} style={fieldSelect}>
+                          <option value="">Select department</option>
+                          {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={fieldLabel}>Business Unit</label>
+                        <select
+                          value={m.business_unit || ""}
+                          onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })}
+                          style={fieldSelect}
+                          disabled={!m.department}
+                        >
+                          <option value="">{m.department ? "Select business unit" : "Choose department first"}</option>
+                          {rowBUs.map((b) => <option key={b}>{b}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "end", paddingBottom: "4px" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                          <input
+                            type="checkbox"
+                            checked={m.is_hod || false}
+                            onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })}
+                            style={{ width: "16px", height: "16px" }}
+                          />
+                          Head of Department
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Notifications */}
+                  <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap", marginBottom: "16px", paddingTop: "6px", borderTop: `1px solid ${COLOURS.BORDER}` }}>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE }}>Notifications:</span>
+                    <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                      <input type="checkbox" checked={m.notify_email} onChange={(e) => updateMember(m.id, { notify_email: e.target.checked })} style={{ width: "15px", height: "15px" }} />
+                      Email
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                      <input type="checkbox" checked={m.notify_whatsapp || false} onChange={(e) => updateMember(m.id, { notify_whatsapp: e.target.checked })} style={{ width: "15px", height: "15px" }} />
+                      WhatsApp
+                    </label>
+                    {m.notify_whatsapp && (
+                      <input
+                        placeholder="+92..."
+                        defaultValue={m.phone_e164 || ""}
+                        onBlur={(e) => { if (e.target.value !== (m.phone_e164 || "")) updateMember(m.id, { phone_e164: e.target.value || null }); }}
+                        style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "14px", width: "140px" }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", paddingTop: "10px", borderTop: `1px solid ${COLOURS.BORDER}` }}>
                     <button
                       onClick={() => sendPasswordReset(m.email || "", displayName)}
                       disabled={!m.email || resettingPassword === m.email}
-                      style={{
-                        backgroundColor: "white",
-                        border: "1px solid #2563eb",
-                        color: "#2563eb",
-                        borderRadius: "6px",
-                        padding: "7px 14px",
-                        fontSize: "15px",
-                        cursor: !m.email || resettingPassword === m.email ? "wait" : "pointer",
-                        opacity: resettingPassword === m.email ? 0.6 : 1,
-                      }}
+                      style={{ ...actionBtn(COLOURS.BLUE), opacity: resettingPassword === m.email ? 0.6 : 1 }}
                     >
-                      {resettingPassword === m.email ? "Sending…" : "Send Password Reset"}
+                      {resettingPassword === m.email ? "Sending..." : "Send Password Reset"}
                     </button>
                     <button
-                      onClick={() => {
-                        setSettingPasswordFor(settingPasswordFor === m.id ? null : m.id);
-                        setNewPassword("");
-                      }}
-                      style={{
-                        backgroundColor: "white",
-                        border: "1px solid #7c3aed",
-                        color: "#7c3aed",
-                        borderRadius: "6px",
-                        padding: "7px 14px",
-                        fontSize: "15px",
-                        cursor: "pointer",
-                      }}
+                      onClick={() => { setSettingPasswordFor(settingPasswordFor === m.id ? null : m.id); setNewPassword(""); }}
+                      style={actionBtn(COLOURS.PURPLE)}
                     >
                       Set Password
                     </button>
                     <button
                       onClick={() => deleteMember(m.id, displayName)}
-                      style={{
-                        backgroundColor: "white",
-                        border: "1px solid #e0a0a0",
-                        color: "#c0392b",
-                        borderRadius: "6px",
-                        padding: "7px 14px",
-                        fontSize: "15px",
-                        cursor: "pointer",
-                      }}
+                      style={actionBtn(COLOURS.RED)}
                     >
-                      Remove
+                      Remove Member
                     </button>
                   </div>
+
+                  {/* Set password inline form */}
                   {settingPasswordFor === m.id && (
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "10px" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "12px", padding: "12px", backgroundColor: COLOURS.LIGHT, borderRadius: "6px" }}>
                       <input
                         type="text"
                         placeholder="New password (min 6 characters)"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        style={{
-                          padding: "8px 10px",
-                          border: "1px solid #ccc",
-                          borderRadius: "6px",
-                          fontSize: "15px",
-                          width: "220px",
-                        }}
+                        style={{ ...fieldInput, flex: "1 1 200px", maxWidth: "260px" }}
                       />
                       <button
                         onClick={() => setPasswordDirectly(m.email || "", displayName)}
                         disabled={settingPassword || newPassword.length < 6}
-                        style={{
-                          backgroundColor: "#7c3aed",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          padding: "8px 16px",
-                          fontSize: "15px",
-                          cursor: settingPassword || newPassword.length < 6 ? "not-allowed" : "pointer",
-                          opacity: settingPassword || newPassword.length < 6 ? 0.6 : 1,
-                        }}
+                        style={{ ...solidBtn(COLOURS.PURPLE), opacity: settingPassword || newPassword.length < 6 ? 0.5 : 1 }}
                       >
-                        {settingPassword ? "Saving…" : "Save"}
+                        {settingPassword ? "Saving..." : "Save"}
                       </button>
                       <button
                         onClick={() => { setSettingPasswordFor(null); setNewPassword(""); }}
-                        style={{
-                          backgroundColor: "white",
-                          border: "1px solid #ccc",
-                          color: "#666",
-                          borderRadius: "6px",
-                          padding: "8px 14px",
-                          fontSize: "15px",
-                          cursor: "pointer",
-                        }}
+                        style={actionBtn(COLOURS.SLATE)}
                       >
                         Cancel
                       </button>
@@ -777,31 +823,26 @@ export default function MembersManager() {
         })}
       </div>
 
+      {/* ── Plant Assignments ─────────────────────────── */}
       {isAdmin && (
-        <div style={{ marginTop: "40px", maxWidth: "1100px" }}>
-          <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "6px" }}>
-            Plant Assignments
-          </h2>
-          <p style={{ fontSize: "17px", color: "#666", marginBottom: "16px" }}>
-            Tick the plants each person can enter data for. A person can be assigned one, several, or
-            no plants. Only Members and Managers are listed — Admin and Executive can see all plants
-            automatically.
+        <>
+          <SectionTitle title="Plant Assignments" />
+          <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+            Tick the plants each person can enter data for. Admin and Executive can see all plants automatically.
           </p>
 
           {plants.length === 0 ? (
-            <p style={{ color: "#999" }}>No active plants found.</p>
+            <p style={{ color: COLOURS.SLATE }}>No active plants found.</p>
           ) : (
             (() => {
-              const entryUsers = members.filter(
-                (m) => m.role === "Member" || m.role === "Manager"
-              );
+              const entryUsers = members.filter((m) => m.role === "Member" || m.role === "Manager");
 
               if (entryUsers.length === 0) {
-                return <p style={{ color: "#999" }}>No Members or Managers to assign yet.</p>;
+                return <p style={{ color: COLOURS.SLATE }}>No Members or Managers to assign yet.</p>;
               }
 
               return (
-                <div style={{ display: "grid", gap: "10px" }}>
+                <div style={{ display: "grid", gap: "8px" }}>
                   {entryUsers.map((m) => {
                     const displayName = fullName(m.first_name, m.last_name, m.name);
                     const memberPlants = assignments[m.id] || new Set<string>();
@@ -810,15 +851,16 @@ export default function MembersManager() {
                       <div
                         key={m.id}
                         style={{
-                          border: "1px solid #e0e0e0",
+                          border: `1px solid ${COLOURS.BORDER}`,
                           borderRadius: "8px",
                           padding: "12px 16px",
+                          backgroundColor: "white",
                         }}
                       >
-                        <div style={{ fontWeight: "bold", fontSize: "16px", marginBottom: "8px" }}>
-                          {displayName}{" "}
-                          <span style={{ color: "#999", fontWeight: "normal", fontSize: "16px" }}>
-                            ({m.role})
+                        <div style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.NAVY, marginBottom: "8px" }}>
+                          {displayName}
+                          <span style={{ color: COLOURS.SLATE, fontWeight: 400, fontSize: "14px", marginLeft: "8px" }}>
+                            {m.role}
                           </span>
                         </div>
 
@@ -835,9 +877,10 @@ export default function MembersManager() {
                                   display: "flex",
                                   alignItems: "center",
                                   gap: "6px",
-                                  fontSize: "16px",
+                                  fontSize: "14px",
                                   cursor: isSaving ? "wait" : "pointer",
                                   opacity: isSaving ? 0.5 : 1,
+                                  color: COLOURS.NAVY,
                                 }}
                               >
                                 <input
@@ -858,8 +901,8 @@ export default function MembersManager() {
               );
             })()
           )}
-        </div>
+        </>
       )}
-    </div>
+    </main>
   );
 }
