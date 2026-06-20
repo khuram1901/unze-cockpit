@@ -14,34 +14,50 @@ export default function ResetPasswordPage() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    let settled = false;
+    const markReady = () => {
+      if (settled) return;
+      settled = true;
+      setSessionReady(true);
+      setChecking(false);
+    };
+
+    // If URL has hash tokens (Supabase redirect), manually set the session
+    // This handles cases where the auto-detect misses the hash fragment
+    const hash = window.location.hash;
+    if (hash && hash.includes("access_token")) {
+      const params = new URLSearchParams(hash.substring(1));
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ error }) => {
+          if (!error) {
+            window.history.replaceState(null, "", window.location.pathname);
+            markReady();
+          }
+        });
+      }
+    }
+
     // Listen for auth state changes — Supabase fires this when it processes the URL token
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        setSessionReady(true);
-        setChecking(false);
-      }
+      if (session) markReady();
     });
 
     // Also check if there's already a session (e.g. user is already logged in)
     async function checkExisting() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setSessionReady(true);
-        setChecking(false);
-      }
+      if (session) markReady();
     }
     checkExisting();
 
-    // Fallback timeout — if no session after 5 seconds, show error
+    // Fallback timeout — if no session after 8 seconds, show error
     const timeout = setTimeout(() => {
-      setChecking((prev) => {
-        if (prev) {
-          setMessage("No valid reset link found. Please request a new password reset from the login page.");
-          return false;
-        }
-        return prev;
-      });
-    }, 5000);
+      if (!settled) {
+        setChecking(false);
+        setMessage("No valid reset link found. Please request a new password reset from the login page.");
+      }
+    }, 8000);
 
     return () => {
       subscription.unsubscribe();

@@ -25,22 +25,17 @@ export async function POST(request: NextRequest) {
 
     const memberName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || email;
 
-    // Ensure auth user exists — create if not
-    const { data: existingUsers } = await supabase.auth.admin.listUsers();
-    const authUserExists = existingUsers?.users?.some((u) => u.email === email.trim());
+    // Ensure auth user exists — try to create, ignore if already exists
+    const tempPassword = `Cockpit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await supabase.auth.admin.createUser({
+      email: email.trim(),
+      password: tempPassword,
+      email_confirm: true,
+    });
 
-    if (!authUserExists) {
-      const tempPassword = `Cockpit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      await supabase.auth.admin.createUser({
-        email: email.trim(),
-        password: tempPassword,
-        email_confirm: true,
-      });
-    }
-
-    // Generate a proper magic link via Supabase Admin
+    // Generate a recovery link (password reset type) via Supabase Admin
     const { data: linkData } = await supabase.auth.admin.generateLink({
-      type: "magiclink",
+      type: "recovery",
       email: email.trim(),
       options: {
         redirectTo: `${APP_URL}/reset-password`,
@@ -51,7 +46,7 @@ export async function POST(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     let resetLink = `${APP_URL}/forgot-password`;
     if (linkData?.properties?.hashed_token && supabaseUrl) {
-      resetLink = `${supabaseUrl}/auth/v1/verify?token=${linkData.properties.hashed_token}&type=magiclink&redirect_to=${encodeURIComponent(`${APP_URL}/reset-password`)}`;
+      resetLink = `${supabaseUrl}/auth/v1/verify?token=${linkData.properties.hashed_token}&type=recovery&redirect_to=${encodeURIComponent(`${APP_URL}/reset-password`)}`;
     }
 
     // Send via our own Gmail

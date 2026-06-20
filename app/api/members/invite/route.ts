@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate a password reset link so user can set their own password
+    // Generate a recovery link so user can set their own password
     const { data: resetData } = await supabase.auth.admin.generateLink({
-      type: "magiclink",
+      type: "recovery",
       email: email.trim(),
       options: {
         redirectTo: `${APP_URL}/reset-password`,
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     let setupLink = `${APP_URL}/forgot-password`;
     if (resetData?.properties?.hashed_token && supabaseUrl) {
-      setupLink = `${supabaseUrl}/auth/v1/verify?token=${resetData.properties.hashed_token}&type=magiclink&redirect_to=${encodeURIComponent(`${APP_URL}/reset-password`)}`;
+      setupLink = `${supabaseUrl}/auth/v1/verify?token=${resetData.properties.hashed_token}&type=recovery&redirect_to=${encodeURIComponent(`${APP_URL}/reset-password`)}`;
     }
 
     // Send welcome email
