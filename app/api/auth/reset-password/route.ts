@@ -10,48 +10,59 @@ export async function POST(request: NextRequest) {
     if (!email) return Response.json({ error: "Email required" }, { status: 400 });
 
     const supabase = createServiceClient();
+    const normalised = email.trim().toLowerCase();
 
-    // Check if user exists in members
+    // Check if user exists in members (case-insensitive)
     const { data: member } = await supabase
       .from("members")
       .select("first_name, last_name, name")
-      .eq("email", email.trim())
+      .ilike("email", normalised)
       .maybeSingle();
 
     if (!member) {
-      // Don't reveal whether the email exists
       return Response.json({ success: true });
     }
 
     const memberName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || email;
 
     // Ensure auth user exists — try to create, ignore if already exists
-    const tempPassword = `Cockpit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await supabase.auth.admin.createUser({
-      email: email.trim(),
-      password: tempPassword,
+      email: normalised,
+      password: `Cockpit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       email_confirm: true,
     });
 
-    // Generate a recovery link (password reset type) via Supabase Admin
-    const { data: linkData } = await supabase.auth.admin.generateLink({
+    // Generate a recovery link via Supabase Admin
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "recovery",
-      email: email.trim(),
+      email: normalised,
       options: {
         redirectTo: `${APP_URL}/reset-password`,
       },
     });
 
-    // Build the verification URL through Supabase's auth endpoint
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    let resetLink = `${APP_URL}/forgot-password`;
-    if (linkData?.properties?.hashed_token && supabaseUrl) {
-      resetLink = `${supabaseUrl}/auth/v1/verify?token=${linkData.properties.hashed_token}&type=recovery&redirect_to=${encodeURIComponent(`${APP_URL}/reset-password`)}`;
+    if (linkError) {
+      console.error("generateLink failed:", linkError.message);
     }
 
-    // Send via our own Gmail
+    // Build the verification URL
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const token = linkData?.properties?.hashed_token;
+
+    if (!token || !supabaseUrl) {
+      console.error("Reset link generation failed — no token.", {
+        hasToken: !!token,
+        hasSupabaseUrl: !!supabaseUrl,
+        linkError: linkError?.message,
+      });
+    }
+
+    const resetLink = token && supabaseUrl
+      ? `${supabaseUrl}/auth/v1/verify?token=${token}&type=recovery&redirect_to=${encodeURIComponent(`${APP_URL}/reset-password`)}`
+      : `${APP_URL}/forgot-password`;
+
     await sendNotificationEmail({
-      to: email.trim(),
+      to: normalised,
       subject: "Password Reset - Unze Group Cockpit",
       heading: "Reset Your Password",
       body: `
@@ -72,6 +83,6 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Password reset error:", message);
-    return Response.json({ success: true }); // Don't reveal errors
+    return Response.json({ success: true });
   }
 }
