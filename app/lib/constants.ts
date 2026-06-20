@@ -13,8 +13,8 @@ export type CompanyConfig = {
 };
 
 export const COMPANIES: CompanyConfig[] = [
-  { id: UTPL_COMPANY_ID, name: "Unze Trading", shortCode: "UTPL", slug: "unze-trading", currency: "PKR" },
-  { id: IFPL_COMPANY_ID, name: "Imperial Footwear", shortCode: "IFPL", slug: "imperial", currency: "PKR" },
+  { id: UTPL_COMPANY_ID, name: "Unze Trading PVT Limited", shortCode: "UTPL", slug: "unze-trading", currency: "PKR" },
+  { id: IFPL_COMPANY_ID, name: "Imperial Footwear PVT Limited", shortCode: "IFPL", slug: "imperial", currency: "PKR" },
 ];
 
 export function getCompanyBySlug(slug: string): CompanyConfig | undefined {
@@ -26,5 +26,5 @@ export function getCompanyById(id: string): CompanyConfig | undefined {
 }
 
 export function getCompanyByName(name: string): CompanyConfig | undefined {
-  return COMPANIES.find((c) => c.name === name);
+  return COMPANIES.find((c) => c.name === name || c.name.startsWith(name));
 }
