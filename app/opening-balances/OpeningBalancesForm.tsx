@@ -176,7 +176,7 @@ export default function OpeningBalancesForm() {
               }}
             >
               <SectionTitle title="Good pole opening stock" />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "10px" }}>
                 <label style={labelStyle}>
                   31 ft
                   <input type="number" min="0" style={inputStyle} value={g31} onChange={(e) => setG31(e.target.value)} placeholder="0" />
@@ -204,7 +204,7 @@ export default function OpeningBalancesForm() {
               }}
             >
               <SectionTitle title="Broken pole opening stock" />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "10px" }}>
                 <label style={labelStyle}>
                   31 ft
                   <input type="number" min="0" style={inputStyle} value={b31} onChange={(e) => setB31(e.target.value)} placeholder="0" />

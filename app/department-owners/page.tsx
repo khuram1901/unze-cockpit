@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
+import { useMobile } from "../lib/useMobile";
 
 type Member = {
   id: string;
@@ -52,6 +53,7 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 export default function DepartmentOwnersPage() {
+  const isMobile = useMobile();
   const [members, setMembers] = useState<Member[]>([]);
   const [departments, setDepartments] = useState<DepartmentOwner[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -151,7 +153,7 @@ export default function DepartmentOwnersPage() {
   if (loading) {
     return (
       <AuthWrapper>
-        <main style={{ padding: "20px 24px" }}>
+        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}>
           <p style={{ color: SLATE, fontSize: "17px" }}>Loading…</p>
         </main>
       </AuthWrapper>
@@ -163,7 +165,7 @@ export default function DepartmentOwnersPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: "20px 24px" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
         <div style={{ marginBottom: "16px" }}>
           <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>
             Department Owners
@@ -189,7 +191,7 @@ export default function DepartmentOwnersPage() {
             Moves Not Started, In Progress, and Waiting Reply tasks only. Completed tasks stay with the original owner.
           </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginBottom: "10px" }}>
             <label style={labelStyle}>
               Current owner
               <select style={inputStyle} value={fromMemberId} onChange={(e) => setFromMemberId(e.target.value)}>

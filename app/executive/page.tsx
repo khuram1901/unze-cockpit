@@ -899,7 +899,7 @@ export default function ExecutiveDashboardPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
             <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
@@ -1231,7 +1231,7 @@ export default function ExecutiveDashboardPage() {
                       <Mini label="Stuck" value={fmtMoney(recRed)} color="#dc2626" />
                     </div>
                     {receivableRows.length > 0 && (
-                      <table style={{ borderCollapse: "collapse", width: "100%", marginTop: "12px" }}>
+                      <div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse", width: "100%", marginTop: "12px", minWidth: "420px" }}>
                         <thead>
                           <tr style={{ backgroundColor: "#f8fafc" }}>
                             <th style={th}>Customer</th><th style={th}>On Time</th><th style={th}>Due Soon</th><th style={th}>Stuck</th><th style={th}>Total</th>
@@ -1248,7 +1248,7 @@ export default function ExecutiveDashboardPage() {
                             </tr>
                           ))}
                         </tbody>
-                      </table>
+                      </table></div>
                     )}
                   </div>
                 )}
@@ -1436,7 +1436,7 @@ function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRow
   }
 
   return (
-    <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "12px" }}>
+    <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "12px", overflowX: "auto" }}>
       <table style={{ borderCollapse: "collapse", width: "100%" }}>
         <thead>
           <tr style={{ backgroundColor: "#f8fafc" }}>

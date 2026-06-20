@@ -185,7 +185,8 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
 
               {/* Tasks within project */}
               {isOpen && (
-                <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "580px" }}>
                   <tbody>
                     {projectTasks.map((task) => {
                       const taskOpen = expandedTaskId === task.id;
@@ -247,6 +248,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
                     })}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
           );

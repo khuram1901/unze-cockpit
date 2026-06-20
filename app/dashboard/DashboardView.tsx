@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import TaskStatus from "../tasks/TaskStatus";
 import { formatDateUK } from "../lib/dateUtils";
+import { useMobile } from "../lib/useMobile";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number };
@@ -156,6 +157,7 @@ function lastEntryDate(rows: { plant_id: string; entry_date: string }[], plantId
 const THRESHOLD = 85;
 
 export default function DashboardView() {
+  const isMobile = useMobile();
   const [summaries, setSummaries] = useState<PlantSummary[]>([]);
   const [machineIssues, setMachineIssues] = useState<MachineIssue[]>([]);
   const [myTasks, setMyTasks] = useState<Task[]>([]);
@@ -334,7 +336,7 @@ export default function DashboardView() {
   const visibleTasks = showCompleted ? myTasks : openTasks;
 
   return (
-    <div>
+    <div style={{ maxWidth: "100vw", overflowX: "hidden" }}>
       <p style={{ color: SLATE, fontSize: "17px", marginBottom: "16px" }}>
         {`Operations command centre for ${today} (month-week ${weekNum} of 4). Today's snapshot, open issues, your tasks and KPIs in one place.`}
       </p>
@@ -356,8 +358,8 @@ export default function DashboardView() {
         {machineIssues.length === 0 ? (
           <div style={okBoxStyle}>No open machine issues across any plant.</div>
         ) : (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", overflowX: "auto" }}>
+            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: isMobile ? "500px" : undefined }}>
               <thead>
                 <tr style={{ backgroundColor: "#f8fafc" }}>
                   <th style={th}>Plant</th>
@@ -391,8 +393,8 @@ export default function DashboardView() {
         {missingPlants.length === 0 ? (
           <div style={okBoxStyle}>All active plants have submitted both production and dispatch today.</div>
         ) : (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", overflowX: "auto" }}>
+            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: isMobile ? "480px" : undefined }}>
               <thead>
                 <tr style={{ backgroundColor: "#f8fafc" }}>
                   <th style={th}>Plant</th>

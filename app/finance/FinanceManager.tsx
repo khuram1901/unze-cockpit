@@ -483,7 +483,7 @@ export default function FinanceManager() {
           Upload the daily Cash Flow and Bank Position PDFs from the accountant. The system will extract the figures, check they balance, and save automatically.
         </p>
         <form onSubmit={handlePDFUpload}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
             <label style={labelStyle}>
               Cash Flow PDF
               <input
@@ -659,7 +659,7 @@ export default function FinanceManager() {
                 required
               />
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
               <label style={labelStyle}>
                 Opening (PKR)
                 <input
