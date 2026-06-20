@@ -69,6 +69,9 @@ export default function MeetingsPage() {
   // External attendee emails
   const [externalEmails, setExternalEmails] = useState("");
 
+  // Selected recipients for sending minutes
+  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set());
+
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -269,6 +272,18 @@ export default function MeetingsPage() {
     logAction("Created", "meetings", `${extracted.meeting_title} - ${tasksCreated} tasks created`, meeting.id);
     setMessage(`Approved: meeting saved and ${tasksCreated} task${tasksCreated !== 1 ? "s" : ""} created.`);
     setSaving(false);
+
+    // Pre-select all matched attendee emails + external emails
+    const allRecipients = new Set<string>();
+    for (const attendee of extracted.attendees) {
+      const match = memberEmails.find((m) => m.name.toLowerCase().includes(attendee.toLowerCase()) || attendee.toLowerCase().includes(m.name.toLowerCase()));
+      if (match?.email) allRecipients.add(match.email);
+    }
+    if (externalEmails.trim()) {
+      externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).forEach((e) => allRecipients.add(e));
+    }
+    setSelectedRecipients(allRecipients);
+
     setStep("approved");
     loadData();
   }
@@ -277,25 +292,10 @@ export default function MeetingsPage() {
     if (!extracted) return;
     setSending(true);
 
-    // Collect all emails: internal attendees + external
-    const allEmails: string[] = [];
-
-    // Match attendee names to member emails
-    for (const attendee of extracted.attendees) {
-      const match = memberEmails.find((m) => m.name.toLowerCase().includes(attendee.toLowerCase()) || attendee.toLowerCase().includes(m.name.toLowerCase()));
-      if (match?.email) allEmails.push(match.email);
-    }
-
-    // Add external emails
-    if (externalEmails.trim()) {
-      const extras = externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@"));
-      allEmails.push(...extras);
-    }
-
-    const uniqueEmails = Array.from(new Set(allEmails));
+    const uniqueEmails = Array.from(selectedRecipients);
 
     if (uniqueEmails.length === 0) {
-      setMessage("No attendee emails found. Add external emails or check attendee names match members.");
+      setMessage("No recipients selected. Tick at least one person to send to.");
       setSending(false);
       return;
     }
@@ -558,21 +558,48 @@ export default function MeetingsPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
               <div>
-                <label style={labelStyle}>Decisions ({extracted.decisions.length})</label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label style={labelStyle}>Decisions ({extracted.decisions.length})</label>
+                  <button onClick={() => setExtracted({ ...extracted, decisions: [...extracted.decisions, ""] })}
+                    style={{ fontSize: "12px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>+ Add</button>
+                </div>
                 {extracted.decisions.map((d, i) => (
-                  <div key={i} style={{ fontSize: "15px", color: COLOURS.NAVY, padding: "4px 0", borderBottom: `1px solid ${COLOURS.BORDER}` }}>{d}</div>
+                  <div key={i} style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+                    <input value={d} onChange={(e) => { const arr = [...extracted.decisions]; arr[i] = e.target.value; setExtracted({ ...extracted, decisions: arr }); }}
+                      style={{ ...smallField, flex: 1 }} />
+                    <button onClick={() => setExtracted({ ...extracted, decisions: extracted.decisions.filter((_, j) => j !== i) })}
+                      style={{ fontSize: "12px", color: COLOURS.RED, background: "none", border: "none", cursor: "pointer" }}>×</button>
+                  </div>
                 ))}
               </div>
               <div>
-                <label style={labelStyle}>Risks ({extracted.risks.length})</label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label style={labelStyle}>Risks ({extracted.risks.length})</label>
+                  <button onClick={() => setExtracted({ ...extracted, risks: [...extracted.risks, ""] })}
+                    style={{ fontSize: "12px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>+ Add</button>
+                </div>
                 {extracted.risks.map((r, i) => (
-                  <div key={i} style={{ fontSize: "15px", color: COLOURS.RED, padding: "4px 0", borderBottom: `1px solid ${COLOURS.BORDER}` }}>{r}</div>
+                  <div key={i} style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+                    <input value={r} onChange={(e) => { const arr = [...extracted.risks]; arr[i] = e.target.value; setExtracted({ ...extracted, risks: arr }); }}
+                      style={{ ...smallField, flex: 1 }} />
+                    <button onClick={() => setExtracted({ ...extracted, risks: extracted.risks.filter((_, j) => j !== i) })}
+                      style={{ fontSize: "12px", color: COLOURS.RED, background: "none", border: "none", cursor: "pointer" }}>×</button>
+                  </div>
                 ))}
               </div>
               <div>
-                <label style={labelStyle}>Opportunities ({extracted.opportunities.length})</label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label style={labelStyle}>Opportunities ({extracted.opportunities.length})</label>
+                  <button onClick={() => setExtracted({ ...extracted, opportunities: [...extracted.opportunities, ""] })}
+                    style={{ fontSize: "12px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>+ Add</button>
+                </div>
                 {extracted.opportunities.map((o, i) => (
-                  <div key={i} style={{ fontSize: "15px", color: COLOURS.GREEN, padding: "4px 0", borderBottom: `1px solid ${COLOURS.BORDER}` }}>{o}</div>
+                  <div key={i} style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+                    <input value={o} onChange={(e) => { const arr = [...extracted.opportunities]; arr[i] = e.target.value; setExtracted({ ...extracted, opportunities: arr }); }}
+                      style={{ ...smallField, flex: 1 }} />
+                    <button onClick={() => setExtracted({ ...extracted, opportunities: extracted.opportunities.filter((_, j) => j !== i) })}
+                      style={{ fontSize: "12px", color: COLOURS.RED, background: "none", border: "none", cursor: "pointer" }}>×</button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -654,44 +681,93 @@ export default function MeetingsPage() {
         })()}
 
         {/* Step 3: Approved — send to attendees */}
-        {step === "approved" && extracted && (
+        {step === "approved" && extracted && (() => {
+          const toggleRecipient = (email: string) => {
+            setSelectedRecipients((prev) => {
+              const next = new Set(prev);
+              if (next.has(email)) next.delete(email);
+              else next.add(email);
+              return next;
+            });
+          };
+          const selectAll = () => {
+            const all = new Set<string>();
+            extracted.attendees.forEach((a) => {
+              const match = memberEmails.find((m) => m.name.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(m.name.toLowerCase()));
+              if (match?.email) all.add(match.email);
+            });
+            if (externalEmails.trim()) externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).forEach((e) => all.add(e));
+            setSelectedRecipients(all);
+          };
+          const deselectAll = () => setSelectedRecipients(new Set());
+
+          return (
           <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "white", marginBottom: "16px" }}>
-            <SectionTitle title="Step 3: Send Minutes to Attendees" />
+            <SectionTitle title="Step 3: Send Minutes" />
             <p style={{ fontSize: "15px", color: COLOURS.NAVY, marginBottom: "12px" }}>
-              Meeting saved and tasks created. Now send the minutes to all attendees.
+              Meeting saved and tasks created. Select who should receive the minutes email.
             </p>
 
             <div style={{ marginBottom: "12px" }}>
-              <label style={labelStyle}>Internal attendees (matched to members)</label>
-              <div style={{ fontSize: "15px", color: COLOURS.NAVY }}>
-                {extracted.attendees.map((a) => {
-                  const match = memberEmails.find((m) => m.name.toLowerCase().includes(a.toLowerCase()));
-                  return (
-                    <span key={a} style={{ display: "inline-block", padding: "3px 10px", margin: "2px 4px", borderRadius: "12px", fontSize: "14px", backgroundColor: match ? "#dcfce7" : "#fef3c7", color: match ? "#166534" : "#92400e" }}>
-                      {a} {match ? `(${match.email})` : "(no email match)"}
-                    </span>
-                  );
-                })}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <label style={labelStyle}>Recipients ({selectedRecipients.size} selected)</label>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button onClick={selectAll} style={{ fontSize: "13px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Select All</button>
+                  <button onClick={deselectAll} style={{ fontSize: "13px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Deselect All</button>
+                </div>
+              </div>
+
+              {/* Internal attendees */}
+              {extracted.attendees.map((a) => {
+                const match = memberEmails.find((m) => m.name.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(m.name.toLowerCase()));
+                if (!match?.email) return (
+                  <div key={a} style={{ padding: "4px 0", fontSize: "14px", color: COLOURS.SLATE }}>
+                    {a} <span style={{ fontSize: "12px", color: "#92400e" }}>(no email match)</span>
+                  </div>
+                );
+                return (
+                  <label key={a} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                    <input type="checkbox" checked={selectedRecipients.has(match.email)}
+                      onChange={() => toggleRecipient(match.email)} style={{ width: "16px", height: "16px" }} />
+                    <span style={{ fontWeight: 600 }}>{a}</span>
+                    <span style={{ color: COLOURS.SLATE }}>{match.email}</span>
+                  </label>
+                );
+              })}
+
+              {/* External emails */}
+              {externalEmails.trim() && externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).map((ext) => (
+                <label key={ext} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                  <input type="checkbox" checked={selectedRecipients.has(ext)}
+                    onChange={() => toggleRecipient(ext)} style={{ width: "16px", height: "16px" }} />
+                  <span style={{ fontWeight: 600 }}>{ext}</span>
+                  <span style={{ fontSize: "12px", color: COLOURS.BLUE }}>(external)</span>
+                </label>
+              ))}
+
+              {/* Add extra recipient */}
+              <div style={{ marginTop: "8px", display: "flex", gap: "6px", alignItems: "center" }}>
+                <input
+                  type="email" placeholder="Add another email..."
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (val.includes("@")) {
+                        setSelectedRecipients((prev) => new Set(prev).add(val));
+                        (e.target as HTMLInputElement).value = "";
+                      }
+                    }
+                  }}
+                  style={{ ...inputStyle, flex: "1 1 200px", maxWidth: "280px", fontSize: "14px", padding: "6px 8px" }}
+                />
+                <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Press Enter to add</span>
               </div>
             </div>
 
-            {externalEmails.trim() && (
-              <div style={{ marginBottom: "12px" }}>
-                <label style={labelStyle}>External attendees</label>
-                <div style={{ fontSize: "15px", color: COLOURS.NAVY }}>
-                  {externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).map((e) => (
-                    <span key={e} style={{ display: "inline-block", padding: "3px 10px", margin: "2px 4px", borderRadius: "12px", fontSize: "14px", backgroundColor: "#dbeafe", color: "#1e40af" }}>
-                      {e}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={handleSendMinutes} disabled={sending}
-                style={{ ...primaryButtonStyle, flex: 2, opacity: sending ? 0.5 : 1 }}>
-                {sending ? "Sending..." : "Send Minutes to All Attendees"}
+              <button onClick={handleSendMinutes} disabled={sending || selectedRecipients.size === 0}
+                style={{ ...primaryButtonStyle, flex: 2, opacity: sending || selectedRecipients.size === 0 ? 0.5 : 1 }}>
+                {sending ? "Sending..." : `Send to ${selectedRecipients.size} Recipient${selectedRecipients.size !== 1 ? "s" : ""}`}
               </button>
               <button onClick={resetAll}
                 style={{ ...primaryButtonStyle, backgroundColor: "white", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, flex: 1 }}>
@@ -699,7 +775,8 @@ export default function MeetingsPage() {
               </button>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Past meetings */}
         <SectionTitle title="Past Meetings" />
