@@ -40,7 +40,7 @@ export default function TasksPageClient() {
   if (loading) return <p>Loading tasks…</p>;
 
   const role = member?.role || "Member";
-  const canCreateAssignments = true;
+  const canCreateAssignments = role === "Admin" || role === "Executive";
 
   return (
     <>
