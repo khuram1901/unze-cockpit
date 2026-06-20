@@ -102,6 +102,10 @@ export default function MembersManager() {
   const [department, setDepartment] = useState("");
   const [businessUnit, setBusinessUnit] = useState("");
   const [saving, setSaving] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState<string>("");
+  const [settingPasswordFor, setSettingPasswordFor] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [settingPassword, setSettingPassword] = useState(false);
 
   async function loadData() {
     const { data: userData } = await supabase.auth.getUser();
@@ -238,6 +242,50 @@ export default function MembersManager() {
     setBusinessUnit("");
 
     loadData();
+  }
+
+  async function sendPasswordReset(memberEmail: string, memberName: string) {
+    setResettingPassword(memberEmail);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: memberEmail }),
+      });
+      await res.json();
+      alert(`Password reset email sent to ${memberName} (${memberEmail}).`);
+      logAction("Updated", "members", `Sent password reset email to ${memberName} (${memberEmail})`);
+    } catch {
+      alert("Failed to send password reset email. Please try again.");
+    }
+    setResettingPassword("");
+  }
+
+  async function setPasswordDirectly(memberEmail: string, memberName: string) {
+    if (newPassword.length < 6) {
+      alert("Password must be at least 6 characters.");
+      return;
+    }
+    setSettingPassword(true);
+    try {
+      const res = await fetch("/api/auth/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: memberEmail, password: newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert("Error: " + (data.error || "Failed to set password"));
+      } else {
+        alert(`Password updated for ${memberName}. They can now sign in with the new password.`);
+        logAction("Updated", "members", `Set password directly for ${memberName} (${memberEmail})`);
+        setSettingPasswordFor(null);
+        setNewPassword("");
+      }
+    } catch {
+      alert("Failed to set password. Please try again.");
+    }
+    setSettingPassword(false);
   }
 
   const OWNER_EMAIL = "khuram1901@gmail.com";
@@ -625,20 +673,108 @@ export default function MembersManager() {
               )}
 
               {isAdmin && (
-                <button
-                  onClick={() => deleteMember(m.id, displayName)}
-                  style={{
-                    backgroundColor: "white",
-                    border: "1px solid #e0a0a0",
-                    color: "#c0392b",
-                    borderRadius: "6px",
-                    padding: "6px 12px",
-                    fontSize: "17px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Remove
-                </button>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    <button
+                      onClick={() => sendPasswordReset(m.email || "", displayName)}
+                      disabled={!m.email || resettingPassword === m.email}
+                      style={{
+                        backgroundColor: "white",
+                        border: "1px solid #2563eb",
+                        color: "#2563eb",
+                        borderRadius: "6px",
+                        padding: "6px 10px",
+                        fontSize: "14px",
+                        cursor: !m.email || resettingPassword === m.email ? "wait" : "pointer",
+                        opacity: resettingPassword === m.email ? 0.6 : 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {resettingPassword === m.email ? "Sending…" : "Send Reset"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSettingPasswordFor(settingPasswordFor === m.id ? null : m.id);
+                        setNewPassword("");
+                      }}
+                      style={{
+                        backgroundColor: "white",
+                        border: "1px solid #7c3aed",
+                        color: "#7c3aed",
+                        borderRadius: "6px",
+                        padding: "6px 10px",
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Set Password
+                    </button>
+                    <button
+                      onClick={() => deleteMember(m.id, displayName)}
+                      style={{
+                        backgroundColor: "white",
+                        border: "1px solid #e0a0a0",
+                        color: "#c0392b",
+                        borderRadius: "6px",
+                        padding: "6px 10px",
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  {settingPasswordFor === m.id && (
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <input
+                        type="text"
+                        placeholder="New password (min 6 chars)"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        style={{
+                          padding: "6px 8px",
+                          border: "1px solid #ccc",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          width: "180px",
+                        }}
+                      />
+                      <button
+                        onClick={() => setPasswordDirectly(m.email || "", displayName)}
+                        disabled={settingPassword || newPassword.length < 6}
+                        style={{
+                          backgroundColor: "#7c3aed",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "6px 12px",
+                          fontSize: "14px",
+                          cursor: settingPassword || newPassword.length < 6 ? "not-allowed" : "pointer",
+                          opacity: settingPassword || newPassword.length < 6 ? 0.6 : 1,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {settingPassword ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        onClick={() => { setSettingPasswordFor(null); setNewPassword(""); }}
+                        style={{
+                          backgroundColor: "white",
+                          border: "1px solid #ccc",
+                          color: "#666",
+                          borderRadius: "6px",
+                          padding: "6px 10px",
+                          fontSize: "14px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           );
