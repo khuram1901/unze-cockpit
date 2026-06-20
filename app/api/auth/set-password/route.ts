@@ -14,32 +14,42 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient();
     const normalised = email.trim().toLowerCase();
 
-    // Find the auth user by listing and matching email (case-insensitive)
-    const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-    let authUser = users?.find((u) => u.email?.toLowerCase() === normalised);
+    // Find the auth user
+    const { data: listData, error: listErr } = await supabase.auth.admin.listUsers({ perPage: 1000 });
 
-    // If no auth account, create one
+    if (listErr) {
+      console.error("listUsers failed:", listErr.message);
+      return Response.json({ error: "Failed to look up user: " + listErr.message }, { status: 500 });
+    }
+
+    const authUser = listData?.users?.find((u) => u.email?.toLowerCase() === normalised);
+
     if (!authUser) {
-      const { data, error: createErr } = await supabase.auth.admin.createUser({
+      // Create the auth account with the desired password
+      const { error: createErr } = await supabase.auth.admin.createUser({
         email: normalised,
         password,
         email_confirm: true,
       });
       if (createErr) {
+        console.error("createUser failed:", createErr.message);
         return Response.json({ error: "Could not create auth account: " + createErr.message }, { status: 500 });
       }
       return Response.json({ success: true });
     }
 
+    // Update existing user's password
     const { error } = await supabase.auth.admin.updateUserById(authUser.id, { password });
 
     if (error) {
+      console.error("updateUserById failed:", error.message);
       return Response.json({ error: error.message }, { status: 500 });
     }
 
     return Response.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("set-password error:", message);
     return Response.json({ error: message }, { status: 500 });
   }
 }
