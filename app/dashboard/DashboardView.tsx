@@ -179,16 +179,16 @@ export default function DashboardView() {
       prodTargetsRes, dispTargetsRes, machineRes, tasksRes,
     ] = await Promise.all([
       supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
-      supabase.from("opening_balances").select("*"),
-      supabase.from("broken_opening_balances").select("*"),
-      supabase.from("production_entries").select("*"),
-      supabase.from("dispatch_entries").select("*"),
-      supabase.from("breakage_entries").select("*"),
-      supabase.from("scrap_processed_entries").select("*"),
-      supabase.from("monthly_production_targets").select("*").eq("target_month", currentMonth),
-      supabase.from("monthly_dispatch_targets").select("*").eq("target_month", currentMonth),
-      supabase.from("machine_issues").select("*").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
-      supabase.from("tasks").select("*").order("created_at", { ascending: false }),
+      supabase.from("opening_balances").select("id, plant_id, size_category, quantity"),
+      supabase.from("broken_opening_balances").select("id, plant_id, size_category, quantity"),
+      supabase.from("production_entries").select("id, plant_id, entry_date, size_category, quantity"),
+      supabase.from("dispatch_entries").select("id, plant_id, entry_date, size_category, quantity"),
+      supabase.from("breakage_entries").select("id, plant_id, entry_date, size_category, quantity"),
+      supabase.from("scrap_processed_entries").select("id, plant_id, entry_date, size_category, quantity"),
+      supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", currentMonth),
+      supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", currentMonth),
+      supabase.from("machine_issues").select("id, plant_name, machine_name, issue_status, expected_resolution, issue_description, action_taken, created_at").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
+      supabase.from("tasks").select("id, description, project, priority, due_date, assigned_to, assigned_to_email, assigned_by, assigned_date, status, task_type, reply_required, reply_text, reply_by, reply_at, stuck_reason, notes, corrective_action, recovery_date, impact_on_monthly_target").order("created_at", { ascending: false }).limit(500),
     ]);
 
     const plants = plantsRes.data || [];
