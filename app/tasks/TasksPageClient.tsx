@@ -40,8 +40,7 @@ export default function TasksPageClient() {
   if (loading) return <p>Loading tasks…</p>;
 
   const role = member?.role || "Member";
-  // Admin and Executive (the PA) can create and assign tasks
-  const canCreateAssignments = role === "Admin" || role === "Executive";
+  const canCreateAssignments = true;
 
   return (
     <>
