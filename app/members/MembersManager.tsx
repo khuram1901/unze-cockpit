@@ -673,8 +673,8 @@ export default function MembersManager() {
               )}
 
               {isAdmin && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                <div style={{ gridColumn: isMobile ? "1" : "1 / -1", borderTop: "1px solid #eee", paddingTop: "10px", marginTop: "4px" }}>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
                     <button
                       onClick={() => sendPasswordReset(m.email || "", displayName)}
                       disabled={!m.email || resettingPassword === m.email}
@@ -683,14 +683,13 @@ export default function MembersManager() {
                         border: "1px solid #2563eb",
                         color: "#2563eb",
                         borderRadius: "6px",
-                        padding: "6px 10px",
-                        fontSize: "14px",
+                        padding: "7px 14px",
+                        fontSize: "15px",
                         cursor: !m.email || resettingPassword === m.email ? "wait" : "pointer",
                         opacity: resettingPassword === m.email ? 0.6 : 1,
-                        whiteSpace: "nowrap",
                       }}
                     >
-                      {resettingPassword === m.email ? "Sending…" : "Send Reset"}
+                      {resettingPassword === m.email ? "Sending…" : "Send Password Reset"}
                     </button>
                     <button
                       onClick={() => {
@@ -702,10 +701,9 @@ export default function MembersManager() {
                         border: "1px solid #7c3aed",
                         color: "#7c3aed",
                         borderRadius: "6px",
-                        padding: "6px 10px",
-                        fontSize: "14px",
+                        padding: "7px 14px",
+                        fontSize: "15px",
                         cursor: "pointer",
-                        whiteSpace: "nowrap",
                       }}
                     >
                       Set Password
@@ -717,28 +715,27 @@ export default function MembersManager() {
                         border: "1px solid #e0a0a0",
                         color: "#c0392b",
                         borderRadius: "6px",
-                        padding: "6px 10px",
-                        fontSize: "14px",
+                        padding: "7px 14px",
+                        fontSize: "15px",
                         cursor: "pointer",
-                        whiteSpace: "nowrap",
                       }}
                     >
                       Remove
                     </button>
                   </div>
                   {settingPasswordFor === m.id && (
-                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "10px" }}>
                       <input
                         type="text"
-                        placeholder="New password (min 6 chars)"
+                        placeholder="New password (min 6 characters)"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         style={{
-                          padding: "6px 8px",
+                          padding: "8px 10px",
                           border: "1px solid #ccc",
                           borderRadius: "6px",
-                          fontSize: "14px",
-                          width: "180px",
+                          fontSize: "15px",
+                          width: "220px",
                         }}
                       />
                       <button
@@ -749,11 +746,10 @@ export default function MembersManager() {
                           color: "white",
                           border: "none",
                           borderRadius: "6px",
-                          padding: "6px 12px",
-                          fontSize: "14px",
+                          padding: "8px 16px",
+                          fontSize: "15px",
                           cursor: settingPassword || newPassword.length < 6 ? "not-allowed" : "pointer",
                           opacity: settingPassword || newPassword.length < 6 ? 0.6 : 1,
-                          whiteSpace: "nowrap",
                         }}
                       >
                         {settingPassword ? "Saving…" : "Save"}
@@ -765,8 +761,8 @@ export default function MembersManager() {
                           border: "1px solid #ccc",
                           color: "#666",
                           borderRadius: "6px",
-                          padding: "6px 10px",
-                          fontSize: "14px",
+                          padding: "8px 14px",
+                          fontSize: "15px",
                           cursor: "pointer",
                         }}
                       >
