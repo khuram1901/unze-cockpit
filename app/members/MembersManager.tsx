@@ -178,7 +178,10 @@ export default function MembersManager() {
   async function updateMember(id: string, updates: Partial<Member>) {
     if (updates.email !== undefined && !isValidEmail(updates.email || "")) { alert("Valid email required."); loadData(); return; }
     const member = members.find((m) => m.id === id);
-    if (member?.email === OWNER_EMAIL && myRole !== "Admin") { alert("Owner account cannot be modified."); loadData(); return; }
+    if (member?.email === OWNER_EMAIL) {
+      if (updates.role !== undefined && updates.role !== "Admin") { alert("The owner account must remain Admin."); loadData(); return; }
+      if (updates.email !== undefined) { alert("The owner email cannot be changed."); loadData(); return; }
+    }
     if (member?.role === "Admin" && myRole !== "Admin") { alert("Only Admin can edit another Admin."); loadData(); return; }
     if (updates.role !== undefined && !roleHasDeptAndBU(updates.role)) updates = { ...updates, department: null, business_unit: null };
     if (updates.department !== undefined) {
