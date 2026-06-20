@@ -7,6 +7,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
+    const companyId = (formData.get("companyId") as string) || UTPL_COMPANY_ID;
 
     if (!file) {
       return Response.json({ error: "Excel file is required." }, { status: 400 });
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     // Flatten into monthly_budgets rows
     const upsertRows = parsed.rows.flatMap((row) =>
       row.months.map((m) => ({
-        company_id: UTPL_COMPANY_ID,
+        company_id: companyId,
         budget_month: m.month,
         flow_type: row.flowType,
         category: row.category,

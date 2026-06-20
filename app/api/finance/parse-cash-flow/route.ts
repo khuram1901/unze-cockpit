@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const cashFlowFile = formData.get("cashFlow") as File | null;
     const bankPositionFile = formData.get("bankPosition") as File | null;
+    const companyId = (formData.get("companyId") as string) || UTPL_COMPANY_ID;
 
     if (!cashFlowFile || !bankPositionFile) {
       return Response.json(
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Save daily cash position
     const { error: cashError } = await supabase.from("daily_cash_position").upsert(
       {
-        company_id: UTPL_COMPANY_ID,
+        company_id: companyId,
         position_date: positionDate,
         opening_balance: cashFlow.openingBalanceTotal,
         total_receipts: cashFlow.receiptsTotal,
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
         uploaded_by: formData.get("uploadedBy") as string || "manual",
         reconciled: result.matches,
       },
-      { onConflict: "position_date" }
+      { onConflict: "company_id,position_date" }
     );
 
     if (cashError) {
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
     // Save bank position snapshot
     const { error: bankError } = await supabase.from("bank_position_snapshots").upsert(
       {
-        company_id: UTPL_COMPANY_ID,
+        company_id: companyId,
         position_date: positionDate,
         ...bankPosition.banks,
         total_available_balance: bankPosition.totalAvailableBalance,

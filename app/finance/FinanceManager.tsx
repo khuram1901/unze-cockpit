@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
-import { UTPL_COMPANY_ID } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 
@@ -60,7 +59,7 @@ function SectionTitle({ title }: { title: string }) {
   );
 }
 
-export default function FinanceManager() {
+export default function FinanceManager({ companyId, companyName }: { companyId: string; companyName: string }) {
   const isMobile = useMobile();
   const [loading, setLoading] = useState(true);
 
@@ -112,6 +111,7 @@ export default function FinanceManager() {
       const formData = new FormData();
       formData.append("file", forecastFile);
       formData.append("uploadedBy", "manual");
+      formData.append("companyId", companyId);
       const res = await fetch("/api/finance/upload-forecast", {
         method: "POST",
         body: formData,
@@ -161,6 +161,7 @@ export default function FinanceManager() {
       formData.append("cashFlow", cashFlowFile);
       formData.append("bankPosition", bankPositionFile);
       formData.append("uploadedBy", "manual");
+      formData.append("companyId", companyId);
 
       const res = await fetch("/api/finance/parse-cash-flow", {
         method: "POST",
@@ -198,19 +199,19 @@ export default function FinanceManager() {
       supabase
         .from("cash_opening_balance")
         .select("*")
-        .eq("company_id", UTPL_COMPANY_ID)
+        .eq("company_id", companyId)
         .order("as_of_date", { ascending: true })
         .limit(1),
       supabase
         .from("monthly_cash_plan")
         .select("*")
-        .eq("company_id", UTPL_COMPANY_ID)
+        .eq("company_id", companyId)
         .eq("plan_month", currentMonthISO())
         .maybeSingle(),
       supabase
         .from("daily_cash_position")
         .select("*")
-        .eq("company_id", UTPL_COMPANY_ID)
+        .eq("company_id", companyId)
         .order("position_date", { ascending: false })
         .limit(30),
     ]);
@@ -278,7 +279,7 @@ export default function FinanceManager() {
     e.preventDefault();
     setSaving(true);
     const { error } = await supabase.from("cash_opening_balance").insert({
-      company_id: UTPL_COMPANY_ID,
+      company_id: companyId,
       as_of_date: obDate,
       opening_amount: Number(obAmount) || 0,
       currency: "PKR",
@@ -299,12 +300,12 @@ export default function FinanceManager() {
     setSaving(true);
     const { error } = await supabase.from("monthly_cash_plan").upsert(
       {
-        company_id: UTPL_COMPANY_ID,
+        company_id: companyId,
         plan_month: planMonth,
         tentative_receivables: Number(planRecv) || 0,
         tentative_payouts: Number(planPay) || 0,
       },
-      { onConflict: "plan_month" }
+      { onConflict: "company_id,plan_month" }
     );
     setSaving(false);
     if (error) {
@@ -333,7 +334,7 @@ export default function FinanceManager() {
     const closingAfterPD = Number(dpClosing) - Number(dpPostDated);
     const { error } = await supabase.from("daily_cash_position").upsert(
       {
-        company_id: UTPL_COMPANY_ID,
+        company_id: companyId,
         position_date: dpDate,
         opening_balance: Number(dpOpening) || 0,
         total_receipts: Number(dpReceipts) || 0,
@@ -342,7 +343,7 @@ export default function FinanceManager() {
         post_dated_total: Number(dpPostDated) || 0,
         closing_after_post_dated: closingAfterPD,
       },
-      { onConflict: "position_date" }
+      { onConflict: "company_id,position_date" }
     );
     setSaving(false);
     if (error) {

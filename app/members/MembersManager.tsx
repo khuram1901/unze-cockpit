@@ -15,6 +15,7 @@ type Member = {
   role: string;
   department: string | null;
   business_unit: string | null;
+  company: string | null;
   is_hod: boolean;
   notify_email: boolean;
   notify_whatsapp: boolean;
@@ -34,6 +35,8 @@ const ALL_BUSINESS_UNITS = [
   "Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant",
   "Meters", "Retail", "Hospitality", "Property", "Nursing College",
 ];
+
+const MEMBER_COMPANIES = ["Unze Trading", "Imperial Footwear"];
 
 const DEPT_BUSINESS_UNITS: Record<string, string[]> = {
   "Unze Trading Ops": ["Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
@@ -82,6 +85,7 @@ export default function MembersManager() {
   const [role, setRole] = useState("Member");
   const [department, setDepartment] = useState("");
   const [businessUnit, setBusinessUnit] = useState("");
+  const [company, setCompany] = useState("");
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -99,7 +103,7 @@ export default function MembersManager() {
       if (me) setMyRole(me.role);
     }
     const { data } = await supabase.from("members")
-      .select("id, first_name, last_name, name, email, role, department, business_unit, is_hod, notify_email, notify_whatsapp, phone_e164")
+      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, notify_email, notify_whatsapp, phone_e164")
       .order("first_name", { ascending: true });
     if (data) setMembers(data);
 
@@ -140,6 +144,7 @@ export default function MembersManager() {
       email: email.trim(), role,
       department: keepsDept ? department || null : null,
       business_unit: keepsDept ? businessUnit || null : null,
+      company: keepsDept ? company || null : null,
     });
     setSaving(false);
     if (error) { alert("Error: " + error.message); return; }
@@ -147,7 +152,7 @@ export default function MembersManager() {
     fetch("/api/members/invite", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email.trim(), firstName, lastName, role }) }).catch(() => {});
     setFirstName(""); setLastName(""); setEmail(""); setRole("Member");
-    setDepartment(""); setBusinessUnit(""); setShowAddForm(false);
+    setDepartment(""); setBusinessUnit(""); setCompany(""); setShowAddForm(false);
     loadData();
   }
 
@@ -183,7 +188,7 @@ export default function MembersManager() {
       if (updates.email !== undefined) { alert("The owner email cannot be changed."); loadData(); return; }
     }
     if (member?.role === "Admin" && myRole !== "Admin") { alert("Only Admin can edit another Admin."); loadData(); return; }
-    if (updates.role !== undefined && !roleHasDeptAndBU(updates.role)) updates = { ...updates, department: null, business_unit: null };
+    if (updates.role !== undefined && !roleHasDeptAndBU(updates.role)) updates = { ...updates, department: null, business_unit: null, company: null };
     if (updates.department !== undefined) {
       const valid = businessUnitsFor(updates.department);
       if (member?.business_unit && !valid.includes(member.business_unit)) updates = { ...updates, business_unit: null };
@@ -277,7 +282,7 @@ export default function MembersManager() {
             </div>
           </div>
           {roleHasDeptAndBU(role) && (
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", marginTop: "8px" }}>
               <div><label style={lbl}>Department</label>
                 <select style={inp} value={department} onChange={(e) => { setDepartment(e.target.value); setBusinessUnit(""); }}>
                   <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
@@ -287,6 +292,11 @@ export default function MembersManager() {
                 <select style={inp} value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value)} disabled={!department}>
                   <option value="">{department ? "Select" : "Dept first"}</option>
                   {businessUnitsFor(department).map((b) => <option key={b}>{b}</option>)}
+                </select>
+              </div>
+              <div><label style={lbl}>Company</label>
+                <select style={inp} value={company} onChange={(e) => setCompany(e.target.value)}>
+                  <option value="">Select</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}
                 </select>
               </div>
             </div>
@@ -385,7 +395,7 @@ export default function MembersManager() {
                   </div>
 
                   {showsDept && (
-                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr auto", gap: "8px", marginBottom: "10px", alignItems: "end" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto", gap: "8px", marginBottom: "10px", alignItems: "end" }}>
                       <div><label style={lbl}>Department</label>
                         <select style={inp} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}>
                           <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
@@ -395,6 +405,11 @@ export default function MembersManager() {
                         <select style={inp} value={m.business_unit || ""} onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })} disabled={!m.department}>
                           <option value="">{m.department ? "Select" : "Dept first"}</option>
                           {businessUnitsFor(m.department).map((b) => <option key={b}>{b}</option>)}
+                        </select>
+                      </div>
+                      <div><label style={lbl}>Company</label>
+                        <select style={inp} value={m.company || ""} onChange={(e) => updateMember(m.id, { company: e.target.value || null })}>
+                          <option value="">Select</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}
                         </select>
                       </div>
                       <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "6px" }}>

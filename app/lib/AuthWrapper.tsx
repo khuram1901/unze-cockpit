@@ -12,6 +12,7 @@ type Member = {
   last_name: string | null;
   role: string;
   department: string | null;
+  company: string | null;
 };
 
 type NavItem = {
@@ -103,7 +104,7 @@ export default function AuthWrapper({
       setEmail(user.email ?? null);
       const { data: memberData } = await supabase
         .from("members")
-        .select("name, first_name, last_name, role, department")
+        .select("name, first_name, last_name, role, department, company")
         .eq("email", user.email)
         .single();
       if (memberData) {

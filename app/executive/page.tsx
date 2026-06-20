@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 import EscalationTrafficLights from "./EscalationTrafficLights";
 import { formatDateUK, workingDaysFromNow } from "../lib/dateUtils";
 import { RAGStatus, ragColour } from "../lib/SharedUI";
-import { UTPL_COMPANY_ID } from "../lib/constants";
+import { UTPL_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import MyTasks from "../lib/MyTasks";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
@@ -340,16 +340,20 @@ export default function ExecutiveDashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [cashPlanMissing, setCashPlanMissing] = useState(false);
 
-  const [cashOpening, setCashOpening] = useState<OpeningBalance | null>(null);
-  const [cashPlan, setCashPlan] = useState<MonthlyPlan | null>(null);
-  const [cashPositions, setCashPositions] = useState<DailyPosition[]>([]);
+  type CompanyFinanceData = {
+    companyId: string;
+    companyName: string;
+    cashOpening: OpeningBalance | null;
+    cashPlan: MonthlyPlan | null;
+    cashPositions: DailyPosition[];
+    bankSnapshot: BankSnapshot | null;
+    lastYearReceipts: number | null;
+    lastYearPayments: number | null;
+  };
+
+  const [companyFinance, setCompanyFinance] = useState<CompanyFinanceData[]>([]);
   const [receivableRows, setReceivableRows] = useState<ReceivableCustomerRow[]>([]);
-  const [bankSnapshot, setBankSnapshot] = useState<BankSnapshot | null>(null);
-  const [bankExpanded, setBankExpanded] = useState(false);
-  const [lastYearReceipts, setLastYearReceipts] = useState<number | null>(null);
-  const [lastYearPayments, setLastYearPayments] = useState<number | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[]>([]);
@@ -522,41 +526,39 @@ export default function ExecutiveDashboardPage() {
     setTasks(taskData);
 
     const currentMonthForCash = formatDate(new Date()).slice(0, 7);
-    const [cashOpenRes, cashPlanRes, cashPosRes] = await Promise.all([
-      supabase.from("cash_opening_balance").select("*").eq("company_id", UTPL_COMPANY_ID).order("as_of_date", { ascending: true }).limit(1),
-      supabase.from("monthly_cash_plan").select("*").eq("company_id", UTPL_COMPANY_ID).eq("plan_month", currentMonthForCash).maybeSingle(),
-      supabase.from("daily_cash_position").select("*").eq("company_id", UTPL_COMPANY_ID).order("position_date", { ascending: false }).limit(30),
-    ]);
-    setCashOpening(cashOpenRes.data && cashOpenRes.data.length > 0 ? cashOpenRes.data[0] : null);
-    setCashPlan(cashPlanRes.data || null);
-    setCashPositions(cashPosRes.data || []);
-    setCashPlanMissing(!cashPlanRes.data);
-
-    const bankSnapRes = await supabase
-      .from("bank_position_snapshots")
-      .select("*")
-      .eq("company_id", UTPL_COMPANY_ID)
-      .order("position_date", { ascending: false })
-      .limit(1);
-    setBankSnapshot(bankSnapRes.data && bankSnapRes.data.length > 0 ? bankSnapRes.data[0] : null);
-
-    // Historical comparison: same month last year
     const nowForHist = new Date();
     const lastYearMonth = `${nowForHist.getFullYear() - 1}-${String(nowForHist.getMonth() + 1).padStart(2, "0")}`;
-    const lyRes = await supabase
-      .from("daily_cash_position")
-      .select("total_receipts, total_payments")
-      .eq("company_id", UTPL_COMPANY_ID)
-      .gte("position_date", lastYearMonth + "-01")
-      .lte("position_date", lastYearMonth + "-31");
-    if (lyRes.data && lyRes.data.length > 0) {
-      const lyData = lyRes.data as { total_receipts: number; total_payments: number }[];
-      setLastYearReceipts(lyData.reduce((s, r) => s + (r.total_receipts || 0), 0));
-      setLastYearPayments(lyData.reduce((s, r) => s + (r.total_payments || 0), 0));
-    } else {
-      setLastYearReceipts(null);
-      setLastYearPayments(null);
+
+    const allCompanyFinance: CompanyFinanceData[] = [];
+    for (const company of COMPANIES) {
+      const [cashOpenRes, cashPlanRes, cashPosRes, bankSnapRes, lyRes] = await Promise.all([
+        supabase.from("cash_opening_balance").select("*").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
+        supabase.from("monthly_cash_plan").select("*").eq("company_id", company.id).eq("plan_month", currentMonthForCash).maybeSingle(),
+        supabase.from("daily_cash_position").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(30),
+        supabase.from("bank_position_snapshots").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(1),
+        supabase.from("daily_cash_position").select("total_receipts, total_payments").eq("company_id", company.id).gte("position_date", lastYearMonth + "-01").lte("position_date", lastYearMonth + "-31"),
+      ]);
+
+      let lyReceipts: number | null = null;
+      let lyPayments: number | null = null;
+      if (lyRes.data && lyRes.data.length > 0) {
+        const lyData = lyRes.data as { total_receipts: number; total_payments: number }[];
+        lyReceipts = lyData.reduce((s, r) => s + (r.total_receipts || 0), 0);
+        lyPayments = lyData.reduce((s, r) => s + (r.total_payments || 0), 0);
+      }
+
+      allCompanyFinance.push({
+        companyId: company.id,
+        companyName: company.name,
+        cashOpening: cashOpenRes.data && cashOpenRes.data.length > 0 ? cashOpenRes.data[0] : null,
+        cashPlan: cashPlanRes.data || null,
+        cashPositions: cashPosRes.data || [],
+        bankSnapshot: bankSnapRes.data && bankSnapRes.data.length > 0 ? bankSnapRes.data[0] : null,
+        lastYearReceipts: lyReceipts,
+        lastYearPayments: lyPayments,
+      });
     }
+    setCompanyFinance(allCompanyFinance);
 
     const [stagesRes, billsRes] = await Promise.all([
       supabase.from("receivable_stages").select("*").order("stage_order"),
@@ -733,21 +735,8 @@ export default function ExecutiveDashboardPage() {
       await autoCreateEscalationTask(esc, taskData, owner);
     }
 
-    // Cash pacing escalation
+    // Cash pacing escalation (per company)
     const cashMonth = formatDate(new Date()).slice(0, 7);
-    const monthCashPos = (cashPosRes.data || []).filter((p: DailyPosition) => p.position_date.slice(0, 7) === cashMonth);
-    const recMTD = monthCashPos.reduce((s: number, p: DailyPosition) => s + p.total_receipts, 0);
-    const payMTD = monthCashPos.reduce((s: number, p: DailyPosition) => s + p.total_payments, 0);
-    const pRecv = cashPlanRes.data?.tentative_receivables || 0;
-    const pPay = cashPlanRes.data?.tentative_payouts || 0;
-    const nowDate = new Date();
-    const dim = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
-    const de = nowDate.getDate();
-    const expRecv = pRecv > 0 ? (pRecv / dim) * de : 0;
-    const recvPct = expRecv > 0 ? (recMTD / expRecv) * 100 : 100;
-    const expPay = pPay > 0 ? (pPay / dim) * de : 0;
-    const payPct = expPay > 0 ? (payMTD / expPay) * 100 : 100;
-
     const financeOwnerRes = await supabase
       .from("department_owners")
       .select("department_name, primary_owner_name, primary_owner_email")
@@ -755,21 +744,36 @@ export default function ExecutiveDashboardPage() {
       .maybeSingle();
     const financeOwner: DepartmentOwner | null = financeOwnerRes.data || null;
 
-    if (recvPct < 85) {
-      await autoCreateCashEscalationTask(
-        "cash_receivables",
-        `Receivables pacing at ${Math.round(recvPct)}% — actual ${fmtMoney(recMTD)} vs expected ${fmtMoney(Math.round(expRecv))} by day ${de} of ${dim}.`,
-        taskData,
-        financeOwner
-      );
-    }
-    if (payPct > 115) {
-      await autoCreateCashEscalationTask(
-        "cash_payouts",
-        `Payouts pacing at ${Math.round(payPct)}% — actual ${fmtMoney(payMTD)} vs expected ${fmtMoney(Math.round(expPay))} by day ${de} of ${dim}.`,
-        taskData,
-        financeOwner
-      );
+    for (const cfd of allCompanyFinance) {
+      const monthCashPos = cfd.cashPositions.filter((p) => p.position_date.slice(0, 7) === cashMonth);
+      const recMTD = monthCashPos.reduce((s, p) => s + p.total_receipts, 0);
+      const payMTD = monthCashPos.reduce((s, p) => s + p.total_payments, 0);
+      const pRecv = cfd.cashPlan?.tentative_receivables || 0;
+      const pPay = cfd.cashPlan?.tentative_payouts || 0;
+      const nowDate = new Date();
+      const dim = new Date(nowDate.getFullYear(), nowDate.getMonth() + 1, 0).getDate();
+      const de = nowDate.getDate();
+      const expRecv = pRecv > 0 ? (pRecv / dim) * de : 0;
+      const recvPct = expRecv > 0 ? (recMTD / expRecv) * 100 : 100;
+      const expPay = pPay > 0 ? (pPay / dim) * de : 0;
+      const payPct = expPay > 0 ? (payMTD / expPay) * 100 : 100;
+
+      if (recvPct < 85) {
+        await autoCreateCashEscalationTask(
+          "cash_receivables",
+          `${cfd.companyName}: Receivables pacing at ${Math.round(recvPct)}% — actual ${fmtMoney(recMTD)} vs expected ${fmtMoney(Math.round(expRecv))} by day ${de} of ${dim}.`,
+          taskData,
+          financeOwner
+        );
+      }
+      if (payPct > 115) {
+        await autoCreateCashEscalationTask(
+          "cash_payouts",
+          `${cfd.companyName}: Payouts pacing at ${Math.round(payPct)}% — actual ${fmtMoney(payMTD)} vs expected ${fmtMoney(Math.round(expPay))} by day ${de} of ${dim}.`,
+          taskData,
+          financeOwner
+        );
+      }
     }
 
     setSummaries(result);
@@ -857,45 +861,13 @@ export default function ExecutiveDashboardPage() {
   const selectedMonth = getMonthFromDate(selectedDate);
   const currentQuarter = getMonthQuarter(selectedDate);
 
-  const financeMonth = formatDate(new Date()).slice(0, 7);
-  const monthCashPositions = cashPositions.filter((p) => p.position_date.slice(0, 7) === financeMonth);
-  const actualReceiptsMTD = monthCashPositions.reduce((s, p) => s + p.total_receipts, 0);
-  const actualPaymentsMTD = monthCashPositions.reduce((s, p) => s + p.total_payments, 0);
-  const latestCashPosition = cashPositions[0] || null;
-  const plannedRecv = cashPlan?.tentative_receivables || 0;
-  const plannedPay = cashPlan?.tentative_payouts || 0;
-  const cashOpeningAmount = cashOpening?.opening_amount || 0;
-  const projectedClosing = cashOpeningAmount + plannedRecv - plannedPay;
-  const latestClosing = latestCashPosition?.closing_balance ?? cashOpeningAmount;
-
-  // Pacing-based three-state traffic lights
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const daysElapsed = now.getDate();
-
-  const expectedRecvByToday = plannedRecv > 0 ? (plannedRecv / daysInMonth) * daysElapsed : 0;
-  const recvAchievementPct = expectedRecvByToday > 0
-    ? (actualReceiptsMTD / expectedRecvByToday) * 100 : 100;
-  const recvStatus: RAGStatus =
-    recvAchievementPct >= 95 ? "GREEN" : recvAchievementPct >= 85 ? "AMBER" : "RED";
-
-  const expectedPayByToday = plannedPay > 0 ? (plannedPay / daysInMonth) * daysElapsed : 0;
-  const payAchievementPct = expectedPayByToday > 0
-    ? (actualPaymentsMTD / expectedPayByToday) * 100 : 100;
-  const payStatus: RAGStatus =
-    payAchievementPct <= 105 ? "GREEN" : payAchievementPct <= 115 ? "AMBER" : "RED";
-
-  const cashHeadlineStatus: RAGStatus =
-    recvStatus === "RED" || payStatus === "RED" ? "RED"
-    : recvStatus === "AMBER" || payStatus === "AMBER" ? "AMBER"
-    : "GREEN";
-  const cashHeadlineRed = cashHeadlineStatus !== "GREEN";
-
   const recGreen = receivableRows.reduce((s, r) => s + r.greenAmount, 0);
   const recAmber = receivableRows.reduce((s, r) => s + r.amberAmount, 0);
   const recRed = receivableRows.reduce((s, r) => s + r.redAmount, 0);
   const recTotal = receivableRows.reduce((s, r) => s + r.totalAmount, 0);
   const recRedCount = receivableRows.reduce((s, r) => s + r.redCount, 0);
+
+  const anyCashPlanMissing = companyFinance.some((cfd) => !cfd.cashPlan);
 
   return (
     <AuthWrapper>
@@ -929,11 +901,17 @@ export default function ExecutiveDashboardPage() {
           <>
             {/* ── SECTION 1: NEEDS YOUR ATTENTION ── */}
             {(() => {
-              const latestDate = latestCashPosition?.position_date;
-              const cashStaleDays = latestDate ? Math.floor((Date.now() - new Date(latestDate + "T00:00:00").getTime()) / 86400000) : 999;
-              const cashStale = userRole === "Admin" && cashStaleDays > 1;
-              const cashMissing = userRole === "Admin" && cashPositions.length === 0;
-              const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashStale || cashMissing || cashPlanMissing;
+              const cashAlerts: { title: string; value: number; color: string }[] = [];
+              if (userRole === "Admin") {
+                for (const cfd of companyFinance) {
+                  const latestDate = cfd.cashPositions[0]?.position_date;
+                  const staleDays = latestDate ? Math.floor((Date.now() - new Date(latestDate + "T00:00:00").getTime()) / 86400000) : 999;
+                  if (cfd.cashPositions.length === 0) cashAlerts.push({ title: `${cfd.companyName}: No Data`, value: 0, color: "#dc2626" });
+                  else if (staleDays > 1) cashAlerts.push({ title: `${cfd.companyName}: Stale`, value: staleDays, color: "#dc2626" });
+                  if (!cfd.cashPlan) cashAlerts.push({ title: `${cfd.companyName}: No Plan`, value: 0, color: "#d97706" });
+                }
+              }
+              const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0;
 
               return hasAttention ? (
               <>
@@ -944,9 +922,7 @@ export default function ExecutiveDashboardPage() {
                   {escalations.length > 0 && <Card title="Escalations" value={escalations.length} color="#dc2626" onClick={() => toggleCard("escalations")} />}
                   {downMachines.length > 0 && <Card title="Machines Down" value={downMachines.length} color="#b91c1c" onClick={() => toggleCard("machines")} />}
                   {missingPlants.length > 0 && <Card title="Plants Not Reported" value={missingPlants.length} color="#ef4444" onClick={() => toggleCard("missing")} />}
-                  {cashStale && <Card title="Finance Stale" value={cashStaleDays} color="#dc2626" href="/finance" />}
-                  {cashMissing && <Card title="No Finance Data" value={0} color="#dc2626" href="/finance" />}
-                  {cashPlanMissing && <Card title="Cash Plan Missing" value={0} color="#d97706" href="/finance" />}
+                  {cashAlerts.map((a) => <Card key={a.title} title={a.title} value={a.value} color={a.color} href="/finance" />)}
                   {dueThisWeekTasks.length > 0 && <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" onClick={() => toggleCard("dueweek")} />}
                 </div>
 
@@ -1033,148 +1009,9 @@ export default function ExecutiveDashboardPage() {
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
               {/* LEFT COLUMN */}
               <div>
-                {userRole === "Admin" && (
-                <>
-                <SectionTitle title="Finance — Cash Position" />
-                {!cashPlan && !cashOpening && cashPositions.length === 0 ? (
-                  <p style={{ color: SLATE, fontSize: "17px" }}>No finance data yet.</p>
-                ) : (
-                  <>
-                    <div style={panelCardRAG(cashHeadlineStatus)}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                        <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>
-                          Cash Health: <span style={{ color: ragColour(cashHeadlineStatus) }}>
-                            {cashHeadlineStatus === "GREEN" ? "ON TRACK" : cashHeadlineStatus === "AMBER" ? "MONITOR" : "ATTENTION"}
-                          </span>
-                        </div>
-                        {latestCashPosition && (
-                          <div style={{
-                            fontSize: "14px",
-                            fontWeight: 600,
-                            color: (() => {
-                              const lastDate = new Date(latestCashPosition.position_date + "T00:00:00");
-                              const diffDays = Math.floor((Date.now() - lastDate.getTime()) / 86400000);
-                              return diffDays > 1 ? "#dc2626" : SLATE;
-                            })(),
-                          }}>
-                            Updated: {formatDateUK(latestCashPosition.position_date)}
-                            {(() => {
-                              const lastDate = new Date(latestCashPosition.position_date + "T00:00:00");
-                              const diffDays = Math.floor((Date.now() - lastDate.getTime()) / 86400000);
-                              return diffDays > 1 ? " (STALE)" : "";
-                            })()}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Today's Position */}
-                      <div style={{ ...miniGrid, marginBottom: "10px" }}>
-                        <Mini label="Today's Closing" value={fmtMoney(latestClosing)} color="#0070f3" />
-                        <Mini label="Post-dated" value={fmtMoney(latestCashPosition?.post_dated_total ?? 0)} color={SLATE} />
-                        <Mini label="Net after Post-dated" value={fmtMoney(latestCashPosition?.closing_after_post_dated ?? latestClosing)} color={NAVY} />
-                      </div>
-
-                      {/* Pacing cards */}
-                      <div style={{ ...miniGrid, marginBottom: "6px" }}>
-                        <Mini label={`Receivables Pace (${Math.round(recvAchievementPct)}%)`} value={`${fmtMoney(actualReceiptsMTD)} / ${fmtMoney(Math.round(expectedRecvByToday))}`} color={ragColour(recvStatus)} />
-                        <Mini label={`Payouts Pace (${Math.round(payAchievementPct)}%)`} value={`${fmtMoney(actualPaymentsMTD)} / ${fmtMoney(Math.round(expectedPayByToday))}`} color={ragColour(payStatus)} />
-                        <Mini label="Projected Month-End" value={fmtMoney(projectedClosing)} color={NAVY} />
-                      </div>
-                    </div>
-
-                    {/* Bank Breakdown drill-down */}
-                    {bankSnapshot && (
-                      <div style={{ marginTop: "4px" }}>
-                        <button
-                          onClick={() => setBankExpanded(!bankExpanded)}
-                          style={{
-                            background: "transparent",
-                            border: `1px solid ${BORDER}`,
-                            borderRadius: "6px",
-                            padding: "5px 12px",
-                            fontSize: "15px",
-                            fontWeight: 600,
-                            color: SLATE,
-                            cursor: "pointer",
-                            width: "100%",
-                            textAlign: "left",
-                          }}
-                        >
-                          {bankExpanded ? "▼" : "▶"} Bank Breakdown ({formatDateUK(bankSnapshot.position_date)})
-                          {!bankSnapshot.reconciled && (
-                            <span style={{ color: "#dc2626", marginLeft: "8px" }}>NOT RECONCILED</span>
-                          )}
-                        </button>
-                        {bankExpanded && (
-                          <div style={{
-                            border: `1px solid ${BORDER}`,
-                            borderTop: "none",
-                            borderRadius: "0 0 6px 6px",
-                            padding: "8px 12px",
-                            backgroundColor: "white",
-                          }}>
-                            <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                              <tbody>
-                                {Object.entries(BANK_DISPLAY_NAMES).map(([key, label]) => {
-                                  const val = (bankSnapshot as Record<string, unknown>)[key];
-                                  const amount = typeof val === "number" ? val : 0;
-                                  return (
-                                    <tr key={key}>
-                                      <td style={{ padding: "3px 6px", fontSize: "15px", color: NAVY }}>{label}</td>
-                                      <td style={{ padding: "3px 6px", fontSize: "15px", fontWeight: 600, textAlign: "right", color: amount > 0 ? NAVY : SLATE }}>
-                                        {fmtMoney(amount)}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                                <tr style={{ borderTop: `1px solid ${BORDER}` }}>
-                                  <td style={{ padding: "5px 6px", fontSize: "16px", fontWeight: 700, color: NAVY }}>Total Available</td>
-                                  <td style={{ padding: "5px 6px", fontSize: "16px", fontWeight: 700, textAlign: "right", color: "#0070f3" }}>
-                                    {fmtMoney(bankSnapshot.total_available_balance)}
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Historical: vs same month last year */}
-                {lastYearReceipts !== null && (
-                  <div style={{
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: "6px",
-                    padding: "8px 12px",
-                    backgroundColor: "white",
-                    marginTop: "8px",
-                    fontSize: "15px",
-                  }}>
-                    <div style={{ fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
-                      vs Same Month Last Year
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                      <div>
-                        <div style={{ color: SLATE }}>Receipts (last yr)</div>
-                        <div style={{ fontWeight: 700, color: NAVY }}>{fmtMoney(lastYearReceipts)}</div>
-                        <div style={{ color: actualReceiptsMTD >= lastYearReceipts ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-                          {actualReceiptsMTD >= lastYearReceipts ? "▲" : "▼"} {fmtMoney(Math.abs(actualReceiptsMTD - lastYearReceipts))}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ color: SLATE }}>Payments (last yr)</div>
-                        <div style={{ fontWeight: 700, color: NAVY }}>{fmtMoney(lastYearPayments ?? 0)}</div>
-                        <div style={{ color: actualPaymentsMTD <= (lastYearPayments ?? 0) ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-                          {actualPaymentsMTD <= (lastYearPayments ?? 0) ? "▼" : "▲"} {fmtMoney(Math.abs(actualPaymentsMTD - (lastYearPayments ?? 0)))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                </>
-                )}
+                {userRole === "Admin" && companyFinance.map((cfd) => (
+                  <CompanyFinancePanel key={cfd.companyId} data={cfd} />
+                ))}
 
                 <SectionTitle title="Department Health" />
                 <div style={{
@@ -1301,6 +1138,120 @@ function panelCardRAG(status: RAGStatus): React.CSSProperties {
     backgroundColor: "white",
     marginBottom: "4px",
   };
+}
+
+function CompanyFinancePanel({ data }: { data: { companyId: string; companyName: string; cashOpening: OpeningBalance | null; cashPlan: MonthlyPlan | null; cashPositions: DailyPosition[]; bankSnapshot: BankSnapshot | null; lastYearReceipts: number | null; lastYearPayments: number | null } }) {
+  const [bankExpanded, setBankExpanded] = useState(false);
+  const financeMonth = formatDate(new Date()).slice(0, 7);
+  const monthPositions = data.cashPositions.filter((p) => p.position_date.slice(0, 7) === financeMonth);
+  const actualReceiptsMTD = monthPositions.reduce((s, p) => s + p.total_receipts, 0);
+  const actualPaymentsMTD = monthPositions.reduce((s, p) => s + p.total_payments, 0);
+  const latest = data.cashPositions[0] || null;
+  const plannedRecv = data.cashPlan?.tentative_receivables || 0;
+  const plannedPay = data.cashPlan?.tentative_payouts || 0;
+  const openAmt = data.cashOpening?.opening_amount || 0;
+  const projected = openAmt + plannedRecv - plannedPay;
+  const latestClosing = latest?.closing_balance ?? openAmt;
+
+  const now = new Date();
+  const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const de = now.getDate();
+  const expRecv = plannedRecv > 0 ? (plannedRecv / dim) * de : 0;
+  const recvPct = expRecv > 0 ? (actualReceiptsMTD / expRecv) * 100 : 100;
+  const recvStatus: RAGStatus = recvPct >= 95 ? "GREEN" : recvPct >= 85 ? "AMBER" : "RED";
+  const expPay = plannedPay > 0 ? (plannedPay / dim) * de : 0;
+  const payPct = expPay > 0 ? (actualPaymentsMTD / expPay) * 100 : 100;
+  const payStatus: RAGStatus = payPct <= 105 ? "GREEN" : payPct <= 115 ? "AMBER" : "RED";
+  const headline: RAGStatus = recvStatus === "RED" || payStatus === "RED" ? "RED" : recvStatus === "AMBER" || payStatus === "AMBER" ? "AMBER" : "GREEN";
+  const isUTPC = data.companyId === UTPL_COMPANY_ID;
+
+  return (
+    <>
+      <SectionTitle title={`Finance — ${data.companyName}`} />
+      {!data.cashPlan && !data.cashOpening && data.cashPositions.length === 0 ? (
+        <p style={{ color: SLATE, fontSize: "17px" }}>No finance data yet.</p>
+      ) : (
+        <>
+          <div style={panelCardRAG(headline)}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+              <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>
+                Cash Health: <span style={{ color: ragColour(headline) }}>{headline === "GREEN" ? "ON TRACK" : headline === "AMBER" ? "MONITOR" : "ATTENTION"}</span>
+              </div>
+              {latest && (
+                <div style={{ fontSize: "14px", fontWeight: 600, color: (() => { const d = Math.floor((Date.now() - new Date(latest.position_date + "T00:00:00").getTime()) / 86400000); return d > 1 ? "#dc2626" : SLATE; })() }}>
+                  Updated: {formatDateUK(latest.position_date)}
+                  {(() => { const d = Math.floor((Date.now() - new Date(latest.position_date + "T00:00:00").getTime()) / 86400000); return d > 1 ? " (STALE)" : ""; })()}
+                </div>
+              )}
+            </div>
+            <div style={{ ...miniGrid, marginBottom: "10px" }}>
+              <Mini label="Today's Closing" value={fmtMoney(latestClosing)} color="#0070f3" />
+              <Mini label="Post-dated" value={fmtMoney(latest?.post_dated_total ?? 0)} color={SLATE} />
+              <Mini label="Net after Post-dated" value={fmtMoney(latest?.closing_after_post_dated ?? latestClosing)} color={NAVY} />
+            </div>
+            <div style={{ ...miniGrid, marginBottom: "6px" }}>
+              <Mini label={`Receivables Pace (${Math.round(recvPct)}%)`} value={`${fmtMoney(actualReceiptsMTD)} / ${fmtMoney(Math.round(expRecv))}`} color={ragColour(recvStatus)} />
+              <Mini label={`Payouts Pace (${Math.round(payPct)}%)`} value={`${fmtMoney(actualPaymentsMTD)} / ${fmtMoney(Math.round(expPay))}`} color={ragColour(payStatus)} />
+              <Mini label="Projected Month-End" value={fmtMoney(projected)} color={NAVY} />
+            </div>
+          </div>
+
+          {isUTPC && data.bankSnapshot && (
+            <div style={{ marginTop: "4px" }}>
+              <button onClick={() => setBankExpanded(!bankExpanded)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 12px", fontSize: "15px", fontWeight: 600, color: SLATE, cursor: "pointer", width: "100%", textAlign: "left" }}>
+                {bankExpanded ? "▼" : "▶"} Bank Breakdown ({formatDateUK(data.bankSnapshot.position_date)})
+                {!data.bankSnapshot.reconciled && <span style={{ color: "#dc2626", marginLeft: "8px" }}>NOT RECONCILED</span>}
+              </button>
+              {bankExpanded && (
+                <div style={{ border: `1px solid ${BORDER}`, borderTop: "none", borderRadius: "0 0 6px 6px", padding: "8px 12px", backgroundColor: "white" }}>
+                  <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                    <tbody>
+                      {Object.entries(BANK_DISPLAY_NAMES).map(([key, label]) => {
+                        const val = (data.bankSnapshot as unknown as Record<string, unknown>)[key];
+                        const amount = typeof val === "number" ? val : 0;
+                        return (
+                          <tr key={key}>
+                            <td style={{ padding: "3px 6px", fontSize: "15px", color: NAVY }}>{label}</td>
+                            <td style={{ padding: "3px 6px", fontSize: "15px", fontWeight: 600, textAlign: "right", color: amount > 0 ? NAVY : SLATE }}>{fmtMoney(amount)}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ borderTop: `1px solid ${BORDER}` }}>
+                        <td style={{ padding: "5px 6px", fontSize: "16px", fontWeight: 700, color: NAVY }}>Total Available</td>
+                        <td style={{ padding: "5px 6px", fontSize: "16px", fontWeight: 700, textAlign: "right", color: "#0070f3" }}>{fmtMoney(data.bankSnapshot.total_available_balance)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {data.lastYearReceipts !== null && (
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "8px 12px", backgroundColor: "white", marginTop: "8px", fontSize: "15px" }}>
+          <div style={{ fontWeight: 700, color: NAVY, marginBottom: "6px" }}>vs Same Month Last Year</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <div>
+              <div style={{ color: SLATE }}>Receipts (last yr)</div>
+              <div style={{ fontWeight: 700, color: NAVY }}>{fmtMoney(data.lastYearReceipts)}</div>
+              <div style={{ color: actualReceiptsMTD >= data.lastYearReceipts ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                {actualReceiptsMTD >= data.lastYearReceipts ? "▲" : "▼"} {fmtMoney(Math.abs(actualReceiptsMTD - data.lastYearReceipts))}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: SLATE }}>Payments (last yr)</div>
+              <div style={{ fontWeight: 700, color: NAVY }}>{fmtMoney(data.lastYearPayments ?? 0)}</div>
+              <div style={{ color: actualPaymentsMTD <= (data.lastYearPayments ?? 0) ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                {actualPaymentsMTD <= (data.lastYearPayments ?? 0) ? "▼" : "▲"} {fmtMoney(Math.abs(actualPaymentsMTD - (data.lastYearPayments ?? 0)))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 function SectionTitle({ title }: { title: string }) {

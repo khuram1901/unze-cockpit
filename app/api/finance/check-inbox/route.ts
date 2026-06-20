@@ -212,7 +212,7 @@ async function saveToDatabase(
       uploaded_by: "gmail-auto",
       reconciled: result.matches,
     },
-    { onConflict: "position_date" }
+    { onConflict: "company_id,position_date" }
   );
 
   await supabase.from("bank_position_snapshots").upsert(
