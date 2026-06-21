@@ -320,15 +320,15 @@ export default function MembersManager() {
         {/* Header */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 0.8fr 1fr",
+          gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
           gap: "8px", padding: "8px 12px",
           backgroundColor: COLOURS.LIGHT, borderBottom: `1px solid ${COLOURS.BORDER}`,
           fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.5px",
         }}>
           <div>Name</div>
           {!isMobile && <div>Dept / BU</div>}
+          {!isMobile && <div>Company</div>}
           <div>Role</div>
-          {!isMobile && <div>Plants</div>}
         </div>
 
         {/* Rows */}
@@ -346,7 +346,7 @@ export default function MembersManager() {
                 onClick={() => isAdmin ? setEditingId(isEditing ? null : m.id) : undefined}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 0.8fr 1fr",
+                  gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
                   gap: "8px", padding: "10px 12px", alignItems: "center",
                   cursor: isAdmin ? "pointer" : "default",
                   backgroundColor: isEditing ? "#f8fafc" : "white",
@@ -369,26 +369,25 @@ export default function MembersManager() {
                   </div>
                 )}
 
+                {/* Company */}
+                {!isMobile && (
+                  <div style={{ fontSize: "13px", color: COLOURS.NAVY, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {m.company || <span style={{ color: COLOURS.SLATE }}>—</span>}
+                  </div>
+                )}
+
                 {/* Role badge */}
                 <span style={{
                   fontSize: "12px", fontWeight: 700, padding: "2px 8px", borderRadius: "8px",
                   color: "white", backgroundColor: roleBg(m.role), width: "fit-content",
                   justifySelf: isMobile ? "end" : "start",
                 }}>{m.role}</span>
-
-                {/* Plants (desktop) */}
-                {!isMobile && (
-                  <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
-                    {!showsDept ? "All" : plantNames.length > 0 ? plantNames.join(", ") : "—"}
-                  </div>
-                )}
               </div>
 
               {/* ── Mobile sub-row ────────────────────── */}
               {isMobile && !isEditing && (
                 <div style={{ padding: "0 12px 8px", fontSize: "12px", color: COLOURS.SLATE }}>
-                  {showsDept ? `${m.department || "—"} · ${m.business_unit || "—"}` : "All depts"}
-                  {showsDept && plantNames.length > 0 && ` · ${plantNames.join(", ")}`}
+                  {m.company || "No company"} · {showsDept ? `${m.department || "—"}` : "All depts"}
                 </div>
               )}
 
