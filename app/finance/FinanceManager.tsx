@@ -663,22 +663,31 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               fontSize: "15px",
               color: NAVY,
             }}>
-              <div style={{ fontWeight: 700, marginBottom: "6px" }}>Excel Template Format:</div>
+              <div style={{ fontWeight: 700, marginBottom: "6px" }}>Template for {companyName}:</div>
               <div style={{ color: SLATE, lineHeight: 1.6 }}>
-                <div>Sheet name: <strong>Monthly-CF</strong> (or first sheet)</div>
-                <div>Row 1: Header row with month dates (Excel serial format, e.g. Jan 2026, Feb 2026...)</div>
-                <div>Column A: Category names (e.g. &quot;Sales Revenue&quot;, &quot;Rent&quot;, &quot;Salaries&quot;)</div>
-                <div>Section markers: Rows labelled &quot;CASH INFLOW&quot; and &quot;CASH OUTFLOW&quot; to separate inflows from outflows</div>
-                <div>Values: Monthly budgeted amounts in each cell</div>
-                <div style={{ marginTop: "6px", fontStyle: "italic" }}>Rows labelled TOTAL, CLOSING, or OPENING BALANCE are skipped automatically.</div>
+                {companyName.startsWith("Imperial") ? (
+                  <>
+                    <div><strong>Inflows:</strong> Gross Sales - Retail, Gross Sales - Online, Other Income</div>
+                    <div><strong>Outflows:</strong> Salaries, Marketing, Admin Expenses</div>
+                    <div><strong>Adjustment:</strong> Less: Depreciation (non-cash) — subtracted since we track actual cash movement</div>
+                  </>
+                ) : (
+                  <>
+                    <div><strong>Inflows:</strong> Revenue by plant (PESCO, MEPCO, FESCO, Meters), Other Income</div>
+                    <div><strong>Outflows:</strong> Salaries, Admin Expenses, Welfare</div>
+                    <div><strong>Adjustment:</strong> Less: Depreciation (non-cash) — subtracted since we track actual cash movement</div>
+                  </>
+                )}
+                <div style={{ marginTop: "4px" }}>Sheet name: <strong>Monthly-CF</strong> | Row 1 = month headers | Column A = category names</div>
+                <div style={{ fontStyle: "italic" }}>Rows labelled TOTAL, CLOSING, or OPENING BALANCE are skipped automatically.</div>
               </div>
               <div style={{ marginTop: "10px" }}>
                 <a
-                  href="/cash-flow-forecast-template.xlsx"
+                  href={companyName.startsWith("Imperial") ? "/cash-flow-forecast-imperial.xlsx" : "/cash-flow-forecast-unze-trading.xlsx"}
                   download
                   style={{ fontSize: "15px", fontWeight: 600, color: BLUE, textDecoration: "underline" }}
                 >
-                  Download Template (.xlsx)
+                  Download {companyName.startsWith("Imperial") ? "Imperial Footwear" : "Unze Trading"} Template (.xlsx)
                 </a>
               </div>
             </div>
