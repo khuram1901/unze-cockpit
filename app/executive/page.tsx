@@ -1174,127 +1174,130 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
   const headline: RAGStatus = recvStatus === "RED" || payStatus === "RED" ? "RED" : recvStatus === "AMBER" || payStatus === "AMBER" ? "AMBER" : "GREEN";
   const isUTPC = data.companyId === UTPL_COMPANY_ID;
 
+  const staleDays = latest ? Math.floor((Date.now() - new Date(latest.position_date + "T00:00:00").getTime()) / 86400000) : 999;
+
+  const inflows = data.forecast.filter((f) => f.flow_type === "inflow");
+  const outflows = data.forecast.filter((f) => f.flow_type === "outflow");
+  const forecastTotalIn = inflows.reduce((s, f) => s + f.budgeted_amount, 0);
+  const forecastTotalOut = outflows.reduce((s, f) => s + f.budgeted_amount, 0);
+  const forecastNet = forecastTotalIn - forecastTotalOut;
+
+  const fRow = (label: string, value: string, opts?: { bold?: boolean; color?: string; indent?: boolean; borderTop?: boolean }) => (
+    <div style={{
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      padding: opts?.indent ? "3px 0 3px 14px" : "4px 0",
+      borderTop: opts?.borderTop ? `1px solid ${BORDER}` : undefined,
+      marginTop: opts?.borderTop ? "4px" : undefined,
+      paddingTop: opts?.borderTop ? "6px" : undefined,
+    }}>
+      <span style={{ fontSize: opts?.bold ? "15px" : "14px", fontWeight: opts?.bold ? 700 : 400, color: opts?.color || (opts?.bold ? NAVY : SLATE) }}>{label}</span>
+      <span style={{ fontSize: opts?.bold ? "16px" : "14px", fontWeight: opts?.bold ? 700 : 600, color: opts?.color || NAVY }}>{value}</span>
+    </div>
+  );
+
   return (
     <>
       <SectionTitle title={`Finance — ${data.companyName}`} />
-      {!data.cashPlan && !data.cashOpening && data.cashPositions.length === 0 ? (
+      {!data.cashPlan && !data.cashOpening && data.cashPositions.length === 0 && data.forecast.length === 0 ? (
         <p style={{ color: SLATE, fontSize: "17px" }}>No finance data yet.</p>
       ) : (
-        <>
-          <div style={panelCardRAG(headline)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-              <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>
-                Cash Health: <span style={{ color: ragColour(headline) }}>{headline === "GREEN" ? "ON TRACK" : headline === "AMBER" ? "MONITOR" : "ATTENTION"}</span>
+        <div style={panelCardRAG(headline)}>
+
+          {/* ── Where we stand today ── */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY }}>
+              Today&apos;s Position
+            </div>
+            {latest && (
+              <div style={{ fontSize: "13px", fontWeight: 600, color: staleDays > 1 ? "#dc2626" : SLATE }}>
+                {formatDateUK(latest.position_date)}{staleDays > 1 ? " (STALE)" : ""}
               </div>
-              {latest && (
-                <div style={{ fontSize: "14px", fontWeight: 600, color: (() => { const d = Math.floor((Date.now() - new Date(latest.position_date + "T00:00:00").getTime()) / 86400000); return d > 1 ? "#dc2626" : SLATE; })() }}>
-                  Updated: {formatDateUK(latest.position_date)}
-                  {(() => { const d = Math.floor((Date.now() - new Date(latest.position_date + "T00:00:00").getTime()) / 86400000); return d > 1 ? " (STALE)" : ""; })()}
-                </div>
-              )}
-            </div>
-            <div style={{ ...miniGrid, marginBottom: "10px" }}>
-              <Mini label="Today's Closing" value={fmtMoney(latestClosing)} color="#0070f3" />
-              <Mini label="Post-dated" value={fmtMoney(latest?.post_dated_total ?? 0)} color={SLATE} />
-              <Mini label="Net after Post-dated" value={fmtMoney(latest?.closing_after_post_dated ?? latestClosing)} color={NAVY} />
-            </div>
-            <div style={{ ...miniGrid, marginBottom: "6px" }}>
-              <Mini label={`Receivables Pace (${Math.round(recvPct)}%)`} value={`${fmtMoney(actualReceiptsMTD)} / ${fmtMoney(Math.round(expRecv))}`} color={ragColour(recvStatus)} />
-              <Mini label={`Payouts Pace (${Math.round(payPct)}%)`} value={`${fmtMoney(actualPaymentsMTD)} / ${fmtMoney(Math.round(expPay))}`} color={ragColour(payStatus)} />
-              <Mini label="Projected Month-End" value={fmtMoney(projected)} color={NAVY} />
-            </div>
+            )}
           </div>
 
+          {latest ? (
+            <div style={{ marginBottom: "12px" }}>
+              {fRow("Cash in banks", `PKR ${fmtMoney(latestClosing)}`, { bold: true, color: "#0070f3" })}
+              {fRow("Post-dated cheques issued", `PKR ${fmtMoney(latest.post_dated_total)}`, { indent: true })}
+              {fRow("Available cash (after cheques)", `PKR ${fmtMoney(latest.closing_after_post_dated)}`, { bold: true, borderTop: true })}
+            </div>
+          ) : (
+            <p style={{ color: SLATE, fontSize: "14px", marginBottom: "12px" }}>No daily position entered yet.</p>
+          )}
+
+          {/* ── This month: money in vs money out ── */}
+          {(plannedRecv > 0 || plannedPay > 0) && (
+            <>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>This Month — Actual vs Plan</div>
+              <div style={{ marginBottom: "12px" }}>
+                {fRow("Money received so far", `PKR ${fmtMoney(actualReceiptsMTD)}`)}
+                {fRow("Expected by today (day " + de + " of " + dim + ")", `PKR ${fmtMoney(Math.round(expRecv))}`, { indent: true })}
+                {fRow("Receipts on track?", recvStatus === "GREEN" ? "Yes" : recvStatus === "AMBER" ? "Slightly behind" : "Behind — needs attention", { bold: true, color: ragColour(recvStatus) })}
+
+                <div style={{ height: "8px" }} />
+
+                {fRow("Money paid out so far", `PKR ${fmtMoney(actualPaymentsMTD)}`)}
+                {fRow("Expected by today", `PKR ${fmtMoney(Math.round(expPay))}`, { indent: true })}
+                {fRow("Payments on track?", payStatus === "GREEN" ? "Yes" : payStatus === "AMBER" ? "Slightly over" : "Over budget — needs attention", { bold: true, color: ragColour(payStatus) })}
+
+                {fRow("Projected month-end balance", `PKR ${fmtMoney(projected)}`, { bold: true, borderTop: true, color: projected >= 0 ? "#16a34a" : "#dc2626" })}
+              </div>
+            </>
+          )}
+
+          {/* ── Forecast breakdown ── */}
+          {data.forecast.length > 0 && (
+            <>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>Budgeted Cash Flow (This Month)</div>
+              <div style={{ marginBottom: "8px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Money In</div>
+                {inflows.map((f) => fRow(f.category, `PKR ${fmtMoney(f.budgeted_amount)}`, { indent: true, key: f.category } as any))}
+                {fRow("Total budgeted inflows", `PKR ${fmtMoney(forecastTotalIn)}`, { bold: true, color: "#16a34a" })}
+
+                <div style={{ height: "8px" }} />
+
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#dc2626", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Money Out</div>
+                {outflows.map((f) => fRow(f.category, `PKR ${fmtMoney(f.budgeted_amount)}`, { indent: true, key: f.category } as any))}
+                {fRow("Total budgeted outflows", `PKR ${fmtMoney(forecastTotalOut)}`, { bold: true, color: "#dc2626" })}
+
+                {fRow("Net cash flow (in minus out)", `PKR ${fmtMoney(forecastNet)}`, { bold: true, borderTop: true, color: forecastNet >= 0 ? "#16a34a" : "#dc2626" })}
+              </div>
+            </>
+          )}
+
+          {/* ── Bank breakdown ── */}
           {data.bankSnapshot && (
-            <div style={{ marginTop: "4px" }}>
-              <button onClick={() => setBankExpanded(!bankExpanded)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 12px", fontSize: "15px", fontWeight: 600, color: SLATE, cursor: "pointer", width: "100%", textAlign: "left" }}>
-                {bankExpanded ? "▼" : "▶"} Bank Breakdown ({formatDateUK(data.bankSnapshot.position_date)})
-                {!data.bankSnapshot.reconciled && <span style={{ color: "#dc2626", marginLeft: "8px" }}>NOT RECONCILED</span>}
-              </button>
-              {bankExpanded && (
-                <div style={{ border: `1px solid ${BORDER}`, borderTop: "none", borderRadius: "0 0 6px 6px", padding: "8px 12px", backgroundColor: "white" }}>
-                  <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                    <tbody>
-                      {Object.entries(BANK_DISPLAY_NAMES).map(([key, label]) => {
-                        const val = (data.bankSnapshot as unknown as Record<string, unknown>)[key];
-                        const amount = typeof val === "number" ? val : 0;
-                        return (
-                          <tr key={key}>
-                            <td style={{ padding: "3px 6px", fontSize: "15px", color: NAVY }}>{label}</td>
-                            <td style={{ padding: "3px 6px", fontSize: "15px", fontWeight: 600, textAlign: "right", color: amount > 0 ? NAVY : SLATE }}>{fmtMoney(amount)}</td>
-                          </tr>
-                        );
-                      })}
-                      <tr style={{ borderTop: `1px solid ${BORDER}` }}>
-                        <td style={{ padding: "5px 6px", fontSize: "16px", fontWeight: 700, color: NAVY }}>Total Available</td>
-                        <td style={{ padding: "5px 6px", fontSize: "16px", fontWeight: 700, textAlign: "right", color: "#0070f3" }}>{fmtMoney(data.bankSnapshot.total_available_balance)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
+            <>
+              <div style={{ marginTop: "4px" }}>
+                <button onClick={() => setBankExpanded(!bankExpanded)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 12px", fontSize: "15px", fontWeight: 600, color: NAVY, cursor: "pointer", width: "100%", textAlign: "left" }}>
+                  {bankExpanded ? "▼" : "▶"} Bank Account Breakdown
+                  {!data.bankSnapshot.reconciled && <span style={{ color: "#dc2626", marginLeft: "8px" }}>NOT RECONCILED</span>}
+                </button>
+                {bankExpanded && (
+                  <div style={{ padding: "6px 0" }}>
+                    {Object.entries(BANK_DISPLAY_NAMES).map(([key, label]) => {
+                      const val = (data.bankSnapshot as unknown as Record<string, unknown>)[key];
+                      const amount = typeof val === "number" ? val : 0;
+                      return fRow(label, `PKR ${fmtMoney(amount)}`, { indent: true });
+                    })}
+                    {fRow("Total across all banks", `PKR ${fmtMoney(data.bankSnapshot.total_available_balance)}`, { bold: true, borderTop: true, color: "#0070f3" })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ── vs Last Year ── */}
+          {data.lastYearReceipts !== null && (
+            <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${BORDER}` }}>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: SLATE, marginBottom: "4px" }}>Same Month Last Year</div>
+              {fRow("Received last year", `PKR ${fmtMoney(data.lastYearReceipts)}`, { indent: true })}
+              {fRow("Received this year", `PKR ${fmtMoney(actualReceiptsMTD)}`, { indent: true })}
+              {fRow("Difference", `${actualReceiptsMTD >= data.lastYearReceipts ? "+" : ""}PKR ${fmtMoney(actualReceiptsMTD - data.lastYearReceipts)}`, { bold: true, color: actualReceiptsMTD >= data.lastYearReceipts ? "#16a34a" : "#dc2626" })}
             </div>
           )}
-        </>
-      )}
-
-      {data.lastYearReceipts !== null && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "8px 12px", backgroundColor: "white", marginTop: "8px", fontSize: "15px" }}>
-          <div style={{ fontWeight: 700, color: NAVY, marginBottom: "6px" }}>vs Same Month Last Year</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-            <div>
-              <div style={{ color: SLATE }}>Receipts (last yr)</div>
-              <div style={{ fontWeight: 700, color: NAVY }}>{fmtMoney(data.lastYearReceipts)}</div>
-              <div style={{ color: actualReceiptsMTD >= data.lastYearReceipts ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-                {actualReceiptsMTD >= data.lastYearReceipts ? "▲" : "▼"} {fmtMoney(Math.abs(actualReceiptsMTD - data.lastYearReceipts))}
-              </div>
-            </div>
-            <div>
-              <div style={{ color: SLATE }}>Payments (last yr)</div>
-              <div style={{ fontWeight: 700, color: NAVY }}>{fmtMoney(data.lastYearPayments ?? 0)}</div>
-              <div style={{ color: actualPaymentsMTD <= (data.lastYearPayments ?? 0) ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-                {actualPaymentsMTD <= (data.lastYearPayments ?? 0) ? "▼" : "▲"} {fmtMoney(Math.abs(actualPaymentsMTD - (data.lastYearPayments ?? 0)))}
-              </div>
-            </div>
-          </div>
         </div>
       )}
-
-      {data.forecast.length > 0 && (() => {
-        const inflows = data.forecast.filter((f) => f.flow_type === "inflow");
-        const outflows = data.forecast.filter((f) => f.flow_type === "outflow");
-        const totalIn = inflows.reduce((s, f) => s + f.budgeted_amount, 0);
-        const totalOut = outflows.reduce((s, f) => s + f.budgeted_amount, 0);
-        const netCF = totalIn - totalOut;
-        return (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px 12px", backgroundColor: "white", marginTop: "8px", fontSize: "15px" }}>
-            <div style={{ fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Cash Flow Forecast (This Month)</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-              <div>
-                <div style={{ fontWeight: 600, color: "#16a34a", marginBottom: "4px" }}>Inflows: {fmtMoney(totalIn)}</div>
-                {inflows.map((f) => (
-                  <div key={f.category} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: SLATE }}>
-                    <span>{f.category}</span>
-                    <span style={{ fontWeight: 600, color: NAVY }}>{fmtMoney(f.budgeted_amount)}</span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div style={{ fontWeight: 600, color: "#dc2626", marginBottom: "4px" }}>Outflows: {fmtMoney(totalOut)}</div>
-                {outflows.map((f) => (
-                  <div key={f.category} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: SLATE }}>
-                    <span>{f.category}</span>
-                    <span style={{ fontWeight: 600, color: NAVY }}>{fmtMoney(f.budgeted_amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={{ marginTop: "8px", paddingTop: "6px", borderTop: `1px solid ${BORDER}`, fontWeight: 700, color: netCF >= 0 ? "#16a34a" : "#dc2626", fontSize: "16px" }}>
-              Net Cash Flow: {fmtMoney(netCF)}
-            </div>
-          </div>
-        );
-      })()}
     </>
   );
 }
