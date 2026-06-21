@@ -461,160 +461,171 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         />
       </div>
 
-      {/* ── GMAIL CONNECTION ── */}
-      <SectionTitle title="Automatic Ingestion" />
-      <div
-        style={{
-          border: `1px solid ${BORDER}`,
-          borderRadius: "8px",
-          padding: "12px 16px",
-          backgroundColor: "white",
-          marginBottom: "16px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "10px",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>
-            Gmail: {gmailConnected ? (
-              <span style={{ color: GREEN }}>Connected</span>
-            ) : (
-              <span style={{ color: SLATE }}>Not connected</span>
-            )}
-          </div>
-          <div style={{ fontSize: "15px", color: SLATE, marginTop: "2px" }}>
-            {gmailConnected
-              ? "Daily cash flow and bank position PDFs are ingested automatically from your cockpit-cash Gmail label every 2 minutes."
-              : "Connect your Gmail to automatically ingest daily cash statements. You'll need a Gmail label called 'cockpit-cash'."
-            }
-          </div>
-        </div>
-        <a
-          href="/api/google/auth"
+      {/* ── ROW: INGESTION + PDF UPLOAD side by side ── */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+        gap: "14px",
+        marginBottom: "14px",
+      }}>
+        {/* LEFT — Automatic Ingestion */}
+        <div
           style={{
-            ...btnStyle,
-            textDecoration: "none",
-            display: "inline-block",
-            textAlign: "center",
-            whiteSpace: "nowrap",
+            border: `1px solid ${BORDER}`,
+            borderRadius: "8px",
+            padding: "14px 16px",
+            backgroundColor: "white",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
           }}
         >
-          {gmailConnected ? "Add Another Account" : "Connect Gmail"}
-        </a>
-      </div>
-
-      {/* ── PDF UPLOAD ── */}
-      <SectionTitle title="Upload Daily Statement PDFs" />
-      <div
-        style={{
-          border: `1px solid ${BORDER}`,
-          borderRadius: "8px",
-          padding: "16px",
-          backgroundColor: "white",
-          marginBottom: "16px",
-        }}
-      >
-        <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
-          Upload the daily Cash Flow and Bank Position PDFs from the accountant. The system will extract the figures, check they balance, and save automatically.
-        </p>
-        <form onSubmit={handlePDFUpload}>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
-            <label style={labelStyle}>
-              Cash Flow PDF
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => setCashFlowFile(e.target.files?.[0] || null)}
-                style={{ ...inputStyle, padding: "6px 8px" }}
-              />
-            </label>
-            <label style={labelStyle}>
-              Bank Position PDF
-              <input
-                type="file"
-                accept=".pdf"
-                onChange={(e) => setBankPositionFile(e.target.files?.[0] || null)}
-                style={{ ...inputStyle, padding: "6px 8px" }}
-              />
-            </label>
+          <div>
+            <SectionTitle title="Automatic Ingestion" />
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>
+              Gmail: {gmailConnected ? (
+                <span style={{ color: GREEN }}>Connected</span>
+              ) : (
+                <span style={{ color: SLATE }}>Not connected</span>
+              )}
+            </div>
+            <div style={{ fontSize: "14px", color: SLATE, marginBottom: "10px" }}>
+              {gmailConnected
+                ? "Daily statements ingested automatically from your cockpit-cash Gmail label."
+                : "Connect Gmail to auto-ingest daily cash statements. Label: 'cockpit-cash'."
+              }
+            </div>
           </div>
-          <button
-            type="submit"
-            disabled={uploading || !cashFlowFile || !bankPositionFile}
+          <a
+            href="/api/google/auth"
             style={{
               ...btnStyle,
-              opacity: uploading || !cashFlowFile || !bankPositionFile ? 0.5 : 1,
+              textDecoration: "none",
+              display: "inline-block",
+              textAlign: "center",
+              whiteSpace: "nowrap",
+              alignSelf: "flex-start",
             }}
           >
-            {uploading ? "Parsing…" : "Upload & Parse"}
-          </button>
-        </form>
+            {gmailConnected ? "Add Another Account" : "Connect Gmail"}
+          </a>
+        </div>
 
-        {uploadResult && (
-          <div
-            style={{
-              marginTop: "12px",
-              padding: "10px 14px",
-              borderRadius: "6px",
-              border: `1px solid ${BORDER}`,
-              borderLeft: `4px solid ${uploadResult.reconciliation?.matches ? GREEN : RED}`,
-              backgroundColor: "#fafbfc",
-              fontSize: "16px",
-            }}
-          >
-            {uploadResult.success ? (
-              <>
-                <div style={{ fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
-                  {uploadResult.reconciliation?.matches
-                    ? "Balanced — statements match"
-                    : "Mismatch — statements do NOT balance"
-                  }
-                </div>
-                <div style={{ color: SLATE }}>
-                  Date: {uploadResult.date} &nbsp;|&nbsp;
-                  Cash Flow Closing: {uploadResult.reconciliation?.cashFlowClosing?.toLocaleString()} &nbsp;|&nbsp;
-                  Bank Total: {uploadResult.reconciliation?.bankPositionTotal?.toLocaleString()}
-                  {!uploadResult.reconciliation?.matches && (
-                    <span style={{ color: RED, fontWeight: 700 }}>
-                      &nbsp;|&nbsp; Difference: {uploadResult.reconciliation?.diff?.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-                {(() => {
-                  if (!uploadResult.cashFlow || !uploadResult.date) return null;
-                  const prevDay = positions.find((p) => p.position_date < uploadResult.date!);
-                  const opening = (uploadResult.cashFlow as Record<string, number>).openingBalance;
-                  if (prevDay && opening && Math.abs(opening - prevDay.closing_balance) > 0.01) {
-                    return (
-                      <div style={{ color: RED, fontWeight: 700, marginTop: "6px", fontSize: "15px" }}>
-                        ⚠ Opening balance ({opening.toLocaleString()}) does not match previous day closing ({prevDay.closing_balance.toLocaleString()} on {formatDateUK(prevDay.position_date)})
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-              </>
-            ) : (
-              <div style={{ color: RED, fontWeight: 600 }}>{uploadResult.error}</div>
-            )}
-          </div>
-        )}
+        {/* RIGHT — PDF Upload */}
+        <div
+          style={{
+            border: `1px solid ${BORDER}`,
+            borderRadius: "8px",
+            padding: "14px 16px",
+            backgroundColor: "white",
+          }}
+        >
+          <SectionTitle title="Upload Daily Statements" />
+          <p style={{ fontSize: "14px", color: SLATE, marginBottom: "10px" }}>
+            Upload Cash Flow + Bank Position PDFs. System extracts, reconciles, and saves.
+          </p>
+          <form onSubmit={handlePDFUpload}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+              <label style={{ ...labelStyle, fontSize: "14px" }}>
+                Cash Flow PDF
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setCashFlowFile(e.target.files?.[0] || null)}
+                  style={{ ...inputStyle, padding: "5px 6px", fontSize: "14px" }}
+                />
+              </label>
+              <label style={{ ...labelStyle, fontSize: "14px" }}>
+                Bank Position PDF
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setBankPositionFile(e.target.files?.[0] || null)}
+                  style={{ ...inputStyle, padding: "5px 6px", fontSize: "14px" }}
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={uploading || !cashFlowFile || !bankPositionFile}
+              style={{
+                ...btnStyle,
+                fontSize: "15px",
+                padding: "7px 14px",
+                opacity: uploading || !cashFlowFile || !bankPositionFile ? 0.5 : 1,
+              }}
+            >
+              {uploading ? "Parsing…" : "Upload & Parse"}
+            </button>
+          </form>
+
+          {uploadResult && (
+            <div
+              style={{
+                marginTop: "10px",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: `1px solid ${BORDER}`,
+                borderLeft: `4px solid ${uploadResult.reconciliation?.matches ? GREEN : RED}`,
+                backgroundColor: "#fafbfc",
+                fontSize: "14px",
+              }}
+            >
+              {uploadResult.success ? (
+                <>
+                  <div style={{ fontWeight: 700, color: NAVY, marginBottom: "4px" }}>
+                    {uploadResult.reconciliation?.matches
+                      ? "Balanced — statements match"
+                      : "Mismatch — NOT balanced"
+                    }
+                  </div>
+                  <div style={{ color: SLATE }}>
+                    Date: {uploadResult.date} | CF Closing: {uploadResult.reconciliation?.cashFlowClosing?.toLocaleString()} | Bank: {uploadResult.reconciliation?.bankPositionTotal?.toLocaleString()}
+                    {!uploadResult.reconciliation?.matches && (
+                      <span style={{ color: RED, fontWeight: 700 }}>
+                        {" "}| Diff: {uploadResult.reconciliation?.diff?.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  {(() => {
+                    if (!uploadResult.cashFlow || !uploadResult.date) return null;
+                    const prevDay = positions.find((p) => p.position_date < uploadResult.date!);
+                    const opening = (uploadResult.cashFlow as Record<string, number>).openingBalance;
+                    if (prevDay && opening && Math.abs(opening - prevDay.closing_balance) > 0.01) {
+                      return (
+                        <div style={{ color: RED, fontWeight: 700, marginTop: "4px", fontSize: "13px" }}>
+                          Opening ({opening.toLocaleString()}) does not match previous closing ({prevDay.closing_balance.toLocaleString()})
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </>
+              ) : (
+                <div style={{ color: RED, fontWeight: 600 }}>{uploadResult.error}</div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ── CASH FLOW FORECAST ── */}
-      <SectionTitle title="Cash Flow Forecast" />
+      {/* ── ROW: FORECAST + DAILY ENTRY side by side ── */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+        gap: "14px",
+        marginBottom: "14px",
+      }}>
+      {/* LEFT — Cash Flow Forecast */}
       <div
         style={{
           border: `1px solid ${BORDER}`,
           borderRadius: "8px",
-          padding: "16px",
+          padding: "14px 16px",
           backgroundColor: "white",
-          marginBottom: "16px",
         }}
       >
+        <SectionTitle title="Cash Flow Forecast" />
         {/* Tab buttons */}
         <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
           <button
@@ -799,178 +810,160 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         )}
       </div>
 
-      {/* ── DAILY POSITION: FORM + TABLE ── */}
+      {/* RIGHT — Daily entry form */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 1fr) minmax(0, 2fr)",
-          gap: "16px",
-          alignItems: "stretch",
-          marginTop: "16px",
+          border: `1px solid ${BORDER}`,
+          borderRadius: "8px",
+          padding: "14px 16px",
+          backgroundColor: "white",
         }}
       >
-        {/* LEFT — Daily entry form */}
-        <div
-          style={{
-            border: `1px solid ${BORDER}`,
-            borderRadius: "8px",
-            padding: "16px",
-            backgroundColor: "white",
-          }}
-        >
-          <SectionTitle title="Record Daily Position" />
-          <p style={{ fontSize: "16px", color: SLATE, marginTop: "-4px", marginBottom: "12px" }}>
-            Enter today's figures from the accountant's statement.
-          </p>
-          <form onSubmit={saveDailyPosition}>
-            <label style={labelStyle}>
-              Date
+        <SectionTitle title="Record Daily Position" />
+        <p style={{ fontSize: "14px", color: SLATE, marginTop: "-4px", marginBottom: "10px" }}>
+          Enter today&apos;s figures from the accountant&apos;s statement.
+        </p>
+        <form onSubmit={saveDailyPosition}>
+          <label style={{ ...labelStyle, fontSize: "14px" }}>
+            Date
+            <input
+              type="date"
+              value={dpDate}
+              onChange={(e) => setDpDate(e.target.value)}
+              style={inputStyle}
+              required
+            />
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <label style={{ ...labelStyle, fontSize: "14px" }}>
+              Opening (PKR)
               <input
-                type="date"
-                value={dpDate}
-                onChange={(e) => setDpDate(e.target.value)}
+                type="number"
+                value={dpOpening}
+                onChange={(e) => setDpOpening(e.target.value)}
+                placeholder="0"
                 style={inputStyle}
-                required
               />
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-              <label style={labelStyle}>
-                Opening (PKR)
-                <input
-                  type="number"
-                  value={dpOpening}
-                  onChange={(e) => setDpOpening(e.target.value)}
-                  placeholder="0"
-                  style={inputStyle}
-                />
-              </label>
-              <label style={labelStyle}>
-                Closing (PKR)
-                <input
-                  type="number"
-                  value={dpClosing}
-                  onChange={(e) => setDpClosing(e.target.value)}
-                  placeholder="0"
-                  style={inputStyle}
-                />
-              </label>
-              <label style={labelStyle}>
-                Receipts (PKR)
-                <input
-                  type="number"
-                  min="0"
-                  value={dpReceipts}
-                  onChange={(e) => setDpReceipts(e.target.value)}
-                  placeholder="0"
-                  style={inputStyle}
-                />
-              </label>
-              <label style={labelStyle}>
-                Payments (PKR)
-                <input
-                  type="number"
-                  min="0"
-                  value={dpPayments}
-                  onChange={(e) => setDpPayments(e.target.value)}
-                  placeholder="0"
-                  style={inputStyle}
-                />
-              </label>
-              <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
-                Post-dated total (PKR)
-                <input
-                  type="number"
-                  min="0"
-                  value={dpPostDated}
-                  onChange={(e) => setDpPostDated(e.target.value)}
-                  placeholder="0"
-                  style={inputStyle}
-                />
-              </label>
-            </div>
-            <button type="submit" disabled={saving} style={btnStyle}>
-              {saving ? "Saving…" : "Save Daily Position"}
-            </button>
-          </form>
-        </div>
+            <label style={{ ...labelStyle, fontSize: "14px" }}>
+              Closing (PKR)
+              <input
+                type="number"
+                value={dpClosing}
+                onChange={(e) => setDpClosing(e.target.value)}
+                placeholder="0"
+                style={inputStyle}
+              />
+            </label>
+            <label style={{ ...labelStyle, fontSize: "14px" }}>
+              Receipts (PKR)
+              <input
+                type="number"
+                min="0"
+                value={dpReceipts}
+                onChange={(e) => setDpReceipts(e.target.value)}
+                placeholder="0"
+                style={inputStyle}
+              />
+            </label>
+            <label style={{ ...labelStyle, fontSize: "14px" }}>
+              Payments (PKR)
+              <input
+                type="number"
+                min="0"
+                value={dpPayments}
+                onChange={(e) => setDpPayments(e.target.value)}
+                placeholder="0"
+                style={inputStyle}
+              />
+            </label>
+            <label style={{ ...labelStyle, fontSize: "14px", gridColumn: "1 / -1" }}>
+              Post-dated total (PKR)
+              <input
+                type="number"
+                min="0"
+                value={dpPostDated}
+                onChange={(e) => setDpPostDated(e.target.value)}
+                placeholder="0"
+                style={inputStyle}
+              />
+            </label>
+          </div>
+          <button type="submit" disabled={saving} style={btnStyle}>
+            {saving ? "Saving…" : "Save Daily Position"}
+          </button>
+        </form>
+      </div>
+      </div>
 
-        {/* RIGHT — History table */}
-        <div
-          style={{
-            border: `1px solid ${BORDER}`,
-            borderRadius: "8px",
-            padding: "16px",
-            backgroundColor: "white",
-            display: "flex",
-            flexDirection: "column",
-            minWidth: 0,
-          }}
-        >
-          <SectionTitle title="Daily Position — Last 30 Days" />
-          {positions.length === 0 ? (
-            <p style={{ fontSize: "17px", color: SLATE }}>
-              No daily positions recorded yet.
-            </p>
-          ) : (
-            <div style={{ overflowX: "auto", flex: 1 }}>
-              <table
-                style={{
-                  borderCollapse: "collapse",
-                  width: "100%",
-                  minWidth: "0",
-                }}
-              >
-                <thead>
-                  <tr style={{ backgroundColor: "#f8fafc" }}>
-                    <th style={th}>Date</th>
-                    <th style={th}>Opening</th>
-                    <th style={th}>Receipts</th>
-                    <th style={th}>Payments</th>
-                    <th style={th}>Closing</th>
-                    <th style={th}>Post-dated</th>
-                    <th style={th}>Net</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {positions.map((p, idx) => {
-                    const prevDay = positions[idx + 1];
-                    const mismatch = prevDay && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01;
-                    return (
-                      <tr key={p.id} style={mismatch ? { backgroundColor: "#fef2f2" } : undefined}>
-                        <td style={tdBold}>
-                          {formatDateUK(p.position_date)}
-                          {mismatch && (
-                            <div style={{ fontSize: "12px", color: RED, fontWeight: 700, marginTop: "2px" }}>
-                              ⚠ Opening does not match previous closing ({fmt(prevDay.closing_balance)})
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ ...td, color: mismatch ? RED : undefined, fontWeight: mismatch ? 700 : undefined }}>
-                          {fmt(p.opening_balance)}
-                        </td>
-                        <td style={{ ...td, color: GREEN, fontWeight: 600 }}>
-                          {fmt(p.total_receipts)}
-                        </td>
-                        <td style={{ ...td, color: RED, fontWeight: 600 }}>
-                          {fmt(p.total_payments)}
-                        </td>
-                        <td style={{ ...td, fontWeight: 700, color: NAVY }}>
-                          {fmt(p.closing_balance)}
-                        </td>
-                        <td style={{ ...td, color: SLATE }}>
-                          {fmt(p.post_dated_total)}
-                        </td>
-                        <td style={{ ...td, fontWeight: 700 }}>
-                          {fmt(p.closing_after_post_dated)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+      {/* ── DAILY POSITION HISTORY TABLE (full width) ── */}
+      <div
+        style={{
+          border: `1px solid ${BORDER}`,
+          borderRadius: "8px",
+          padding: "16px",
+          backgroundColor: "white",
+          marginBottom: "16px",
+        }}
+      >
+        <SectionTitle title="Daily Position — Last 30 Days" />
+        {positions.length === 0 ? (
+          <p style={{ fontSize: "16px", color: SLATE }}>
+            No daily positions recorded yet.
+          </p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <thead>
+                <tr style={{ backgroundColor: "#f8fafc" }}>
+                  <th style={th}>Date</th>
+                  <th style={th}>Opening</th>
+                  <th style={th}>Receipts</th>
+                  <th style={th}>Payments</th>
+                  <th style={th}>Closing</th>
+                  <th style={th}>Post-dated</th>
+                  <th style={th}>Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((p, idx) => {
+                  const prevDay = positions[idx + 1];
+                  const mismatch = prevDay && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01;
+                  return (
+                    <tr key={p.id} style={mismatch ? { backgroundColor: "#fef2f2" } : undefined}>
+                      <td style={tdBold}>
+                        {formatDateUK(p.position_date)}
+                        {mismatch && (
+                          <div style={{ fontSize: "12px", color: RED, fontWeight: 700, marginTop: "2px" }}>
+                            Opening != prev closing ({fmt(prevDay.closing_balance)})
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ ...td, color: mismatch ? RED : undefined, fontWeight: mismatch ? 700 : undefined }}>
+                        {fmt(p.opening_balance)}
+                      </td>
+                      <td style={{ ...td, color: GREEN, fontWeight: 600 }}>
+                        {fmt(p.total_receipts)}
+                      </td>
+                      <td style={{ ...td, color: RED, fontWeight: 600 }}>
+                        {fmt(p.total_payments)}
+                      </td>
+                      <td style={{ ...td, fontWeight: 700, color: NAVY }}>
+                        {fmt(p.closing_balance)}
+                      </td>
+                      <td style={{ ...td, color: SLATE }}>
+                        {fmt(p.post_dated_total)}
+                      </td>
+                      <td style={{ ...td, fontWeight: 700 }}>
+                        {fmt(p.closing_after_post_dated)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── MODALS ── */}
