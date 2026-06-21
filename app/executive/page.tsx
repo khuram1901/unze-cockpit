@@ -147,6 +147,12 @@ type ReceivableCustomerRow = {
   redCount: number;
 };
 
+type BudgetRow = {
+  category: string;
+  flow_type: string;
+  budgeted_amount: number;
+};
+
 type BankSnapshot = {
   position_date: string;
   cash_at_office: number;
@@ -350,6 +356,7 @@ export default function ExecutiveDashboardPage() {
     bankSnapshot: BankSnapshot | null;
     lastYearReceipts: number | null;
     lastYearPayments: number | null;
+    forecast: BudgetRow[];
   };
 
   const [companyFinance, setCompanyFinance] = useState<CompanyFinanceData[]>([]);
@@ -531,12 +538,13 @@ export default function ExecutiveDashboardPage() {
 
     const allCompanyFinance: CompanyFinanceData[] = [];
     for (const company of COMPANIES) {
-      const [cashOpenRes, cashPlanRes, cashPosRes, bankSnapRes, lyRes] = await Promise.all([
+      const [cashOpenRes, cashPlanRes, cashPosRes, bankSnapRes, lyRes, forecastRes] = await Promise.all([
         supabase.from("cash_opening_balance").select("*").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
         supabase.from("monthly_cash_plan").select("*").eq("company_id", company.id).eq("plan_month", currentMonthForCash).maybeSingle(),
         supabase.from("daily_cash_position").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(30),
         supabase.from("bank_position_snapshots").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(1),
         supabase.from("daily_cash_position").select("total_receipts, total_payments").eq("company_id", company.id).gte("position_date", lastYearMonth + "-01").lte("position_date", lastYearMonth + "-31"),
+        supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount").eq("company_id", company.id).eq("budget_month", currentMonthForCash),
       ]);
 
       let lyReceipts: number | null = null;
@@ -556,6 +564,7 @@ export default function ExecutiveDashboardPage() {
         bankSnapshot: bankSnapRes.data && bankSnapRes.data.length > 0 ? bankSnapRes.data[0] : null,
         lastYearReceipts: lyReceipts,
         lastYearPayments: lyPayments,
+        forecast: (forecastRes.data || []) as BudgetRow[],
       });
     }
     setCompanyFinance(allCompanyFinance);
@@ -1140,7 +1149,7 @@ function panelCardRAG(status: RAGStatus): React.CSSProperties {
   };
 }
 
-function CompanyFinancePanel({ data }: { data: { companyId: string; companyName: string; cashOpening: OpeningBalance | null; cashPlan: MonthlyPlan | null; cashPositions: DailyPosition[]; bankSnapshot: BankSnapshot | null; lastYearReceipts: number | null; lastYearPayments: number | null } }) {
+function CompanyFinancePanel({ data }: { data: { companyId: string; companyName: string; cashOpening: OpeningBalance | null; cashPlan: MonthlyPlan | null; cashPositions: DailyPosition[]; bankSnapshot: BankSnapshot | null; lastYearReceipts: number | null; lastYearPayments: number | null; forecast: BudgetRow[] } }) {
   const [bankExpanded, setBankExpanded] = useState(false);
   const financeMonth = formatDate(new Date()).slice(0, 7);
   const monthPositions = data.cashPositions.filter((p) => p.position_date.slice(0, 7) === financeMonth);
@@ -1250,6 +1259,42 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
           </div>
         </div>
       )}
+
+      {data.forecast.length > 0 && (() => {
+        const inflows = data.forecast.filter((f) => f.flow_type === "inflow");
+        const outflows = data.forecast.filter((f) => f.flow_type === "outflow");
+        const totalIn = inflows.reduce((s, f) => s + f.budgeted_amount, 0);
+        const totalOut = outflows.reduce((s, f) => s + f.budgeted_amount, 0);
+        const netCF = totalIn - totalOut;
+        return (
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px 12px", backgroundColor: "white", marginTop: "8px", fontSize: "15px" }}>
+            <div style={{ fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Cash Flow Forecast (This Month)</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div>
+                <div style={{ fontWeight: 600, color: "#16a34a", marginBottom: "4px" }}>Inflows: {fmtMoney(totalIn)}</div>
+                {inflows.map((f) => (
+                  <div key={f.category} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: SLATE }}>
+                    <span>{f.category}</span>
+                    <span style={{ fontWeight: 600, color: NAVY }}>{fmtMoney(f.budgeted_amount)}</span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: "#dc2626", marginBottom: "4px" }}>Outflows: {fmtMoney(totalOut)}</div>
+                {outflows.map((f) => (
+                  <div key={f.category} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: SLATE }}>
+                    <span>{f.category}</span>
+                    <span style={{ fontWeight: 600, color: NAVY }}>{fmtMoney(f.budgeted_amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ marginTop: "8px", paddingTop: "6px", borderTop: `1px solid ${BORDER}`, fontWeight: 700, color: netCF >= 0 ? "#16a34a" : "#dc2626", fontSize: "16px" }}>
+              Net Cash Flow: {fmtMoney(netCF)}
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }
