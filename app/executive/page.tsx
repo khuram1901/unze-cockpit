@@ -1150,7 +1150,7 @@ function panelCardRAG(status: RAGStatus): React.CSSProperties {
 }
 
 function CompanyFinancePanel({ data }: { data: { companyId: string; companyName: string; cashOpening: OpeningBalance | null; cashPlan: MonthlyPlan | null; cashPositions: DailyPosition[]; bankSnapshot: BankSnapshot | null; lastYearReceipts: number | null; lastYearPayments: number | null; forecast: BudgetRow[] } }) {
-  const [bankExpanded, setBankExpanded] = useState(false);
+  const [bankExpanded, setBankExpanded] = useState(true);
   const financeMonth = formatDate(new Date()).slice(0, 7);
   const monthPositions = data.cashPositions.filter((p) => p.position_date.slice(0, 7) === financeMonth);
   const actualReceiptsMTD = monthPositions.reduce((s, p) => s + p.total_receipts, 0);
@@ -1205,7 +1205,7 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
             </div>
           </div>
 
-          {isUTPC && data.bankSnapshot && (
+          {data.bankSnapshot && (
             <div style={{ marginTop: "4px" }}>
               <button onClick={() => setBankExpanded(!bankExpanded)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 12px", fontSize: "15px", fontWeight: 600, color: SLATE, cursor: "pointer", width: "100%", textAlign: "left" }}>
                 {bankExpanded ? "▼" : "▶"} Bank Breakdown ({formatDateUK(data.bankSnapshot.position_date)})
