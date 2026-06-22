@@ -104,9 +104,13 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
     if (taskIdFromUrl && tasks.length > 0) {
       const task = tasks.find((t) => t.id === taskIdFromUrl);
       if (task) {
+        if (task.status === "Completed") setShowCompleted(true);
         const projectName = normaliseProject(task.project);
         setOpenProjects((prev) => new Set(prev).add(projectName));
         setExpandedTaskId(taskIdFromUrl);
+        setTimeout(() => {
+          document.getElementById(`task-${taskIdFromUrl}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 100);
       }
     }
   }, [taskIdFromUrl, tasks]);
@@ -208,6 +212,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
                       return (
                         <React.Fragment key={task.id}>
                           <tr
+                            id={`task-${task.id}`}
                             onClick={() => setExpandedTaskId(taskOpen ? null : task.id)}
                             style={{ cursor: "pointer", backgroundColor: taskOpen ? "#f8fafc" : "white" }}
                           >
