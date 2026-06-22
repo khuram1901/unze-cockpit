@@ -1364,85 +1364,102 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
     </div>
   );
 
+  const [showDetail, setShowDetail] = useState<string | null>(null);
+  const toggleDetail = (key: string) => setShowDetail(showDetail === key ? null : key);
+
+  const summaryCard = (label: string, value: string, sub: string, color: string) => (
+    <div style={{ borderRadius: "8px", padding: "10px 12px", backgroundColor: "white", border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}` }}>
+      <div style={{ fontSize: "13px", color: SLATE, marginBottom: "2px" }}>{label}</div>
+      <div style={{ fontSize: "18px", fontWeight: 800, color }}>{value}</div>
+      <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>{sub}</div>
+    </div>
+  );
+
+  const expandSection = (key: string, title: string, children: React.ReactNode) => (
+    <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: "8px" }}>
+      <div onClick={() => toggleDetail(key)} style={{ padding: "8px 0", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>{title}</span>
+        <span style={{ fontSize: "13px", color: SLATE }}>{showDetail === key ? "▲ Hide" : "▼ Show"}</span>
+      </div>
+      {showDetail === key && <div style={{ paddingBottom: "6px" }}>{children}</div>}
+    </div>
+  );
+
   return (
     <>
       <SectionTitle title={`Finance — ${data.companyName}`} />
       {!data.cashPlan && !data.cashOpening && data.cashPositions.length === 0 && data.forecast.length === 0 ? (
         <p style={{ color: SLATE, fontSize: "17px" }}>No finance data yet.</p>
       ) : (
-        <div style={panelCardRAG(headline)}>
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px", backgroundColor: "white", marginBottom: "8px" }}>
 
-          {/* ── Where we stand today ── */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY }}>
-              Today&apos;s Position
-            </div>
-            {latest && (
-              <div style={{ fontSize: "13px", fontWeight: 600, color: staleDays > 1 ? "#dc2626" : SLATE }}>
-                {formatDateUK(latest.position_date)}{staleDays > 1 ? " (STALE)" : ""}
-              </div>
+          {/* ── Summary cards row ── */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+            {summaryCard(
+              "Cash Available",
+              latest ? `PKR ${fmtMoney(latest.closing_after_post_dated)}` : "—",
+              latest ? `Updated ${formatDateUK(latest.position_date)}${staleDays > 1 ? " (STALE)" : ""}` : "No data",
+              staleDays > 1 ? "#dc2626" : "#0070f3"
+            )}
+            {summaryCard(
+              "Money In (MTD)",
+              `PKR ${fmtMoney(actualReceiptsMTD)}`,
+              plannedRecv > 0 ? `${Math.round(recvPct)}% of expected` : "No plan set",
+              ragColour(recvStatus)
+            )}
+            {summaryCard(
+              "Money Out (MTD)",
+              `PKR ${fmtMoney(actualPaymentsMTD)}`,
+              plannedPay > 0 ? `${Math.round(payPct)}% of expected` : "No plan set",
+              ragColour(payStatus)
             )}
           </div>
 
-          {latest ? (
-            <div style={{ marginBottom: "12px" }}>
-              {fRow("Cash in banks", `PKR ${fmtMoney(latestClosing)}`, { bold: true, color: "#0070f3" })}
-              {fRow("Post-dated cheques issued", `PKR ${fmtMoney(latest.post_dated_total)}`, { indent: true })}
-              {fRow("Available cash (after cheques)", `PKR ${fmtMoney(latest.closing_after_post_dated)}`, { bold: true, borderTop: true })}
-            </div>
-          ) : (
-            <p style={{ color: SLATE, fontSize: "14px", marginBottom: "12px" }}>No daily position entered yet.</p>
-          )}
-
-          {/* ── This month: money in vs money out ── */}
-          {(plannedRecv > 0 || plannedPay > 0) && (
-            <>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>This Month — Actual vs Plan</div>
-              <div style={{ marginBottom: "12px" }}>
-                {fRow("Money received so far", `PKR ${fmtMoney(actualReceiptsMTD)}`)}
-                {fRow("Expected by today (day " + de + " of " + dim + ")", `PKR ${fmtMoney(Math.round(expRecv))}`, { indent: true })}
-                {fRow("Receipts on track?", recvStatus === "GREEN" ? "Yes" : recvStatus === "AMBER" ? "Slightly behind" : "Behind — needs attention", { bold: true, color: ragColour(recvStatus) })}
-
-                <div style={{ height: "8px" }} />
-
-                {fRow("Money paid out so far", `PKR ${fmtMoney(actualPaymentsMTD)}`)}
-                {fRow("Expected by today", `PKR ${fmtMoney(Math.round(expPay))}`, { indent: true })}
-                {fRow("Payments on track?", payStatus === "GREEN" ? "Yes" : payStatus === "AMBER" ? "Slightly over" : "Over budget — needs attention", { bold: true, color: ragColour(payStatus) })}
-
-                {fRow("Projected month-end balance", `PKR ${fmtMoney(projected)}`, { bold: true, borderTop: true, color: projected >= 0 ? "#16a34a" : "#dc2626" })}
-              </div>
-            </>
-          )}
-
-          {/* ── Forecast breakdown ── */}
+          {/* ── Projected + net ── */}
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 4px", fontSize: "14px" }}>
+            <span style={{ color: SLATE }}>Projected month-end</span>
+            <span style={{ fontWeight: 700, color: projected >= 0 ? "#16a34a" : "#dc2626" }}>PKR {fmtMoney(projected)}</span>
+          </div>
           {data.forecast.length > 0 && (
-            <>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>Budgeted Cash Flow — {data.forecast[0]?.budget_month === financeMonth ? "This Month" : formatMonthUK(data.forecast[0]?.budget_month || null)}</div>
-              <div style={{ marginBottom: "8px" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Money In</div>
-                {inflows.map((f) => fRow(f.category, `PKR ${fmtMoney(f.budgeted_amount)}`, { indent: true, key: f.category } as any))}
-                {fRow("Total budgeted inflows", `PKR ${fmtMoney(forecastTotalIn)}`, { bold: true, color: "#16a34a" })}
-
-                <div style={{ height: "8px" }} />
-
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#dc2626", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Money Out</div>
-                {outflows.map((f) => fRow(f.category, `PKR ${fmtMoney(f.budgeted_amount)}`, { indent: true, key: f.category } as any))}
-                {fRow("Total budgeted outflows", `PKR ${fmtMoney(forecastTotalOut)}`, { bold: true, color: "#dc2626" })}
-
-                {fRow("Net cash flow (in minus out)", `PKR ${fmtMoney(forecastNet)}`, { bold: true, borderTop: true, color: forecastNet >= 0 ? "#16a34a" : "#dc2626" })}
-              </div>
-            </>
-          )}
-
-          {/* ── vs Last Year ── */}
-          {data.lastYearReceipts !== null && (
-            <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${BORDER}` }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: SLATE, marginBottom: "4px" }}>Same Month Last Year</div>
-              {fRow("Received last year", `PKR ${fmtMoney(data.lastYearReceipts)}`, { indent: true })}
-              {fRow("Received this year", `PKR ${fmtMoney(actualReceiptsMTD)}`, { indent: true })}
-              {fRow("Difference", `${actualReceiptsMTD >= data.lastYearReceipts ? "+" : ""}PKR ${fmtMoney(actualReceiptsMTD - data.lastYearReceipts)}`, { bold: true, color: actualReceiptsMTD >= data.lastYearReceipts ? "#16a34a" : "#dc2626" })}
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px 6px", fontSize: "14px" }}>
+              <span style={{ color: SLATE }}>Forecast net cash flow</span>
+              <span style={{ fontWeight: 700, color: forecastNet >= 0 ? "#16a34a" : "#dc2626" }}>PKR {fmtMoney(forecastNet)}</span>
             </div>
           )}
+
+          {/* ── Expandable sections ── */}
+          {(plannedRecv > 0 || plannedPay > 0) && expandSection("plan", "Actual vs Plan Details", (
+            <div style={{ fontSize: "14px" }}>
+              {fRow("Received so far", `PKR ${fmtMoney(actualReceiptsMTD)}`)}
+              {fRow(`Expected by day ${de} of ${dim}`, `PKR ${fmtMoney(Math.round(expRecv))}`, { indent: true })}
+              {fRow("Receipts status", recvStatus === "GREEN" ? "On track" : recvStatus === "AMBER" ? "Slightly behind" : "Behind", { bold: true, color: ragColour(recvStatus) })}
+              <div style={{ height: "6px" }} />
+              {fRow("Paid out so far", `PKR ${fmtMoney(actualPaymentsMTD)}`)}
+              {fRow(`Expected by day ${de} of ${dim}`, `PKR ${fmtMoney(Math.round(expPay))}`, { indent: true })}
+              {fRow("Payments status", payStatus === "GREEN" ? "On track" : payStatus === "AMBER" ? "Slightly over" : "Over budget", { bold: true, color: ragColour(payStatus) })}
+            </div>
+          ))}
+
+          {data.forecast.length > 0 && expandSection("forecast", `Forecast Breakdown — ${data.forecast[0]?.budget_month === financeMonth ? "This Month" : formatMonthUK(data.forecast[0]?.budget_month || null)}`, (
+            <div style={{ fontSize: "14px" }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: "#16a34a", marginBottom: "2px", textTransform: "uppercase" }}>Money In</div>
+              {inflows.map((f) => fRow(f.category, `PKR ${fmtMoney(f.budgeted_amount)}`, { indent: true }))}
+              {fRow("Total inflows", `PKR ${fmtMoney(forecastTotalIn)}`, { bold: true, color: "#16a34a" })}
+              <div style={{ height: "6px" }} />
+              <div style={{ fontSize: "12px", fontWeight: 700, color: "#dc2626", marginBottom: "2px", textTransform: "uppercase" }}>Money Out</div>
+              {outflows.map((f) => fRow(f.category, `PKR ${fmtMoney(f.budgeted_amount)}`, { indent: true }))}
+              {fRow("Total outflows", `PKR ${fmtMoney(forecastTotalOut)}`, { bold: true, color: "#dc2626" })}
+              {fRow("Net", `PKR ${fmtMoney(forecastNet)}`, { bold: true, borderTop: true, color: forecastNet >= 0 ? "#16a34a" : "#dc2626" })}
+            </div>
+          ))}
+
+          {data.lastYearReceipts !== null && expandSection("lastyear", "vs Same Month Last Year", (
+            <div style={{ fontSize: "14px" }}>
+              {fRow("Received last year", `PKR ${fmtMoney(data.lastYearReceipts)}`)}
+              {fRow("Received this year", `PKR ${fmtMoney(actualReceiptsMTD)}`)}
+              {fRow("Difference", `${actualReceiptsMTD >= data.lastYearReceipts! ? "+" : ""}PKR ${fmtMoney(actualReceiptsMTD - data.lastYearReceipts!)}`, { bold: true, color: actualReceiptsMTD >= data.lastYearReceipts! ? "#16a34a" : "#dc2626" })}
+            </div>
+          ))}
         </div>
       )}
     </>
