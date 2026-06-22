@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import TaskStatus from "./TaskStatus";
 import { formatDateUK } from "../lib/dateUtils";
@@ -67,13 +68,16 @@ function isRed(task: Task) {
 }
 
 export default function TasksList({ currentRole }: { currentRole: string }) {
+  const searchParams = useSearchParams();
+  const taskIdFromUrl = searchParams.get("task");
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [openProjects, setOpenProjects] = useState<Set<string>>(new Set());
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(taskIdFromUrl);
 
   const isPrivileged = currentRole === "Admin" || currentRole === "Executive";
 
@@ -95,6 +99,17 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
   useEffect(() => {
     loadTasks();
   }, []);
+
+  useEffect(() => {
+    if (taskIdFromUrl && tasks.length > 0) {
+      const task = tasks.find((t) => t.id === taskIdFromUrl);
+      if (task) {
+        const projectName = normaliseProject(task.project);
+        setOpenProjects((prev) => new Set(prev).add(projectName));
+        setExpandedTaskId(taskIdFromUrl);
+      }
+    }
+  }, [taskIdFromUrl, tasks]);
 
   function toggleProject(name: string) {
     setOpenProjects((prev) => {

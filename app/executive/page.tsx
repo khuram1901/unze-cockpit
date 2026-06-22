@@ -1045,16 +1045,17 @@ export default function ExecutiveDashboardPage() {
                               )}
                             </div>
 
-                            {/* Expanded items with actions */}
+                            {/* Expanded items — click to open task detail */}
                             {isOpen && row.items.length > 0 && (
                               <div style={{ backgroundColor: "white" }}>
                                 {row.items.map((item) => {
-                                  const isActioning = actioningTask === (item.taskId || item.machineId);
-                                  return (
-                                    <div key={item.key} style={{
+                                  const href = item.taskId ? `/tasks?task=${item.taskId}` : undefined;
+                                  const inner = (
+                                    <div style={{
                                       padding: "8px 16px 8px 48px",
                                       borderBottom: `1px solid #f1f5f9`,
                                       display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+                                      cursor: href ? "pointer" : "default",
                                     }}>
                                       <div style={{ minWidth: 0, flex: 1 }}>
                                         <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY }}>{item.primary}</div>
@@ -1068,11 +1069,17 @@ export default function ExecutiveDashboardPage() {
                                             color: "white",
                                           }}>{item.badge}</span>
                                         )}
-                                        {item.actionType === "complete" && item.taskId && actionBtn("Complete", "#16a34a", () => quickTaskAction(item.taskId!, "Completed"), isActioning)}
-                                        {item.actionType === "reply" && item.taskId && actionBtn("View", "#2563eb", () => { window.location.href = "/tasks"; }, false)}
-                                        {item.actionType === "resolve" && item.machineId && actionBtn("Resolve", "#16a34a", () => quickMachineResolve(item.machineId!), isActioning)}
+                                        <span style={{ fontSize: "13px", color: "#2563eb", fontWeight: 600 }}>Open →</span>
                                       </div>
                                     </div>
+                                  );
+                                  return href ? (
+                                    <a key={item.key} href={href} style={{ textDecoration: "none", color: "inherit", display: "block" }}
+                                      onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "#f8fafc"; }}
+                                      onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "transparent"; }}
+                                    >{inner}</a>
+                                  ) : (
+                                    <div key={item.key}>{inner}</div>
                                   );
                                 })}
                               </div>
