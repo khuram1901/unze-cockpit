@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 
 type OpeningBalance = {
   id: string;
@@ -895,6 +896,50 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         </form>
       </div>
       </div>
+
+      {/* ── CHARTS ── */}
+      {positions.length > 1 && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          gap: "14px",
+          marginBottom: "14px",
+        }}>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+              Cash Balance — Last 30 Days
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={[...positions].reverse().map((p) => ({ date: p.position_date.slice(5), closing: p.closing_balance, net: p.closing_after_post_dated }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
+                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+                <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: "13px" }} />
+                <Line type="monotone" dataKey="closing" stroke="#0070f3" strokeWidth={2} dot={false} name="Closing Balance" />
+                <Line type="monotone" dataKey="net" stroke={NAVY} strokeWidth={2} dot={false} name="After Post-dated" strokeDasharray="5 3" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+              Daily Receipts vs Payments
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={[...positions].reverse().map((p) => ({ date: p.position_date.slice(5), receipts: p.total_receipts, payments: p.total_payments }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
+                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+                <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
+                <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
+                <Bar dataKey="receipts" fill="#16a34a" name="Money In" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="payments" fill="#dc2626" name="Money Out" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* ── DAILY POSITION HISTORY TABLE (full width) ── */}
       <div

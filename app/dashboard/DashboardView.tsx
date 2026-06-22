@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import TaskStatus from "../tasks/TaskStatus";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number };
@@ -351,6 +352,36 @@ export default function DashboardView() {
         <Card label="Closing Good Stock" value={totalClosingGoodStock} color="#0070f3" />
         <Card label="Closing Broken Stock" value={totalClosingBrokenStock} color="#d97706" />
       </div>
+
+      {/* ===== PLANT COMPARISON CHART ===== */}
+      {summaries.length > 1 && (
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "16px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+            Plant Comparison — This Month
+          </div>
+          <ResponsiveContainer width="100%" height={Math.max(180, summaries.length * 45)}>
+            <BarChart
+              data={summaries.map((s) => ({
+                name: s.plant.name.replace(" Plant", ""),
+                Produced: s.production.monthActual,
+                Dispatched: s.dispatch.monthActual,
+                Target: s.production.monthlyTarget,
+              }))}
+              layout="vertical"
+              margin={{ left: 10, right: 20, top: 0, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 12, fill: SLATE }} />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 13, fill: NAVY, fontWeight: 600 }} width={80} />
+              <Tooltip formatter={(value) => Number(value).toLocaleString()} />
+              <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
+              <Bar dataKey="Target" fill="#e2e8f0" name="Target" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="Produced" fill="#16a34a" name="Produced" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="Dispatched" fill="#7c3aed" name="Dispatched" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* ===== MACHINE ISSUES ===== */}
       <SectionTitle title={`Machine Issues · ${machineIssues.length} open`} />

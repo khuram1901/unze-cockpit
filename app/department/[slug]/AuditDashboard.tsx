@@ -7,6 +7,7 @@ import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
 
 const AUDIT_STAGES: { label: string; pct: number }[] = [
   { label: "Audit Planning", pct: 0 },
@@ -188,6 +189,34 @@ export default function AuditDashboard() {
           <CountCard label="Avg Completion" value={avgPct} color={COLOURS.PURPLE} />
         </div>
       )}
+
+      {/* Stage Pipeline Chart */}
+      {!loading && items.length > 0 && (() => {
+        const stageCounts = AUDIT_STAGES.map((s) => ({
+          stage: s.label.length > 18 ? s.label.slice(0, 16) + "…" : s.label,
+          count: items.filter((i) => i.audit_stage === s.label && i.status !== "Cancelled").length,
+          pct: s.pct,
+        }));
+        const stageColors = ["#64748b", "#0070f3", "#2563eb", "#d97706", "#7c3aed", "#16a34a", "#16a34a"];
+        return (
+          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>
+              Audit Pipeline — by Stage
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={stageCounts} margin={{ left: 0, right: 10, top: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="stage" tick={{ fontSize: 11, fill: COLOURS.SLATE }} interval={0} angle={-20} textAnchor="end" height={50} />
+                <YAxis tick={{ fontSize: 12, fill: COLOURS.SLATE }} allowDecimals={false} />
+                <Tooltip formatter={(value, _name, props) => [`${value} audit${Number(value) !== 1 ? "s" : ""} (${props.payload.pct}%)`, "Count"]} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {stageCounts.map((_, i) => <Cell key={i} fill={stageColors[i]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
 
       {/* Add button + form */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
