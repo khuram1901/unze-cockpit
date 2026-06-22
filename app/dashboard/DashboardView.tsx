@@ -346,11 +346,11 @@ export default function DashboardView() {
       <SectionTitle title="Today's Snapshot" />
       <div style={squareGrid}>
         <Card label="Produced Today" value={totalProducedToday} color="#16a34a" />
+        <Card label="Dispatched Today" value={totalDispatchedToday} color="#059669" />
         <Card label="Broken Today" value={totalBrokenToday} color="#dc2626" />
-        <Card label="Dispatched Today" value={totalDispatchedToday} color="#7c3aed" />
-        <Card label="Plants Missing" value={missingPlants.length} color="#ef4444" />
-        <Card label="Closing Good Stock" value={totalClosingGoodStock} color="#0070f3" />
-        <Card label="Closing Broken Stock" value={totalClosingBrokenStock} color="#d97706" />
+        <Card label="Plants Missing" value={missingPlants.length} color={missingPlants.length > 0 ? "#dc2626" : "#16a34a"} />
+        <Card label="Closing Good Stock" value={totalClosingGoodStock} color="#2563eb" />
+        <Card label="Closing Broken Stock" value={totalClosingBrokenStock} color="#dc2626" />
       </div>
 
       {/* ===== PLANT COMPARISON CHART ===== */}
@@ -375,9 +375,9 @@ export default function DashboardView() {
               <YAxis dataKey="name" type="category" tick={{ fontSize: 13, fill: NAVY, fontWeight: 600 }} width={80} />
               <Tooltip formatter={(value) => Number(value).toLocaleString()} />
               <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
-              <Bar dataKey="Target" fill="#e2e8f0" name="Target" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="Target" fill="#cbd5e1" name="Target" radius={[0, 4, 4, 0]} />
               <Bar dataKey="Produced" fill="#16a34a" name="Produced" radius={[0, 4, 4, 0]} />
-              <Bar dataKey="Dispatched" fill="#7c3aed" name="Dispatched" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="Dispatched" fill="#059669" name="Dispatched" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

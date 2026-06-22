@@ -1117,11 +1117,11 @@ export default function ExecutiveDashboardPage() {
               marginBottom: "14px",
             }}>
               <Card title="Produced" value={produced} color="#16a34a" href="/dashboard" />
-              <Card title="Dispatched" value={dispatched} color="#7c3aed" href="/dashboard" />
+              <Card title="Dispatched" value={dispatched} color="#059669" href="/dashboard" />
               <Card title="Broken" value={broken} color="#dc2626" href="/dashboard" />
-              <Card title="Machine Issues" value={machineIssues.length} color={machineIssues.length > 0 ? "#b91c1c" : "#16a34a"} href="/dashboard" />
-              <Card title="Good Stock" value={closingGoodStock} color="#0070f3" href="/dashboard" />
-              <Card title="Broken Stock" value={closingBrokenStock} color="#d97706" href="/dashboard" />
+              <Card title="Machine Issues" value={machineIssues.length} color={machineIssues.length > 0 ? "#dc2626" : "#16a34a"} href="/dashboard" />
+              <Card title="Good Stock" value={closingGoodStock} color="#2563eb" href="/dashboard" />
+              <Card title="Broken Stock" value={closingBrokenStock} color="#dc2626" href="/dashboard" />
               <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" href="/tasks" />
             </div>
             {/* ── CHARTS ROW ── */}
@@ -1145,7 +1145,7 @@ export default function ExecutiveDashboardPage() {
                       <Tooltip />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "13px" }} />
                       <Line type="monotone" dataKey="produced" stroke="#16a34a" strokeWidth={2} dot={false} name="Produced" />
-                      <Line type="monotone" dataKey="dispatched" stroke="#7c3aed" strokeWidth={2} dot={false} name="Dispatched" />
+                      <Line type="monotone" dataKey="dispatched" stroke="#059669" strokeWidth={2} dot={false} name="Dispatched" strokeDasharray="5 3" />
                       <Line type="monotone" dataKey="broken" stroke="#dc2626" strokeWidth={2} dot={false} name="Broken" />
                     </LineChart>
                   </ResponsiveContainer>
@@ -1399,19 +1399,19 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
               "Cash Available",
               latest ? `PKR ${fmtMoney(latest.closing_after_post_dated)}` : "—",
               latest ? `Updated ${formatDateUK(latest.position_date)}${staleDays > 1 ? " (STALE)" : ""}` : "No data",
-              staleDays > 1 ? "#dc2626" : "#0070f3"
+              staleDays > 1 ? "#dc2626" : (latest?.closing_after_post_dated ?? 0) >= 0 ? "#16a34a" : "#dc2626"
             )}
             {summaryCard(
               "Money In (MTD)",
               `PKR ${fmtMoney(actualReceiptsMTD)}`,
               plannedRecv > 0 ? `${Math.round(recvPct)}% of expected` : "No plan set",
-              ragColour(recvStatus)
+              recvStatus === "RED" ? "#dc2626" : "#16a34a"
             )}
             {summaryCard(
               "Money Out (MTD)",
               `PKR ${fmtMoney(actualPaymentsMTD)}`,
               plannedPay > 0 ? `${Math.round(payPct)}% of expected` : "No plan set",
-              ragColour(payStatus)
+              payStatus === "RED" ? "#dc2626" : payStatus === "AMBER" ? "#d97706" : "#dc2626"
             )}
           </div>
 
