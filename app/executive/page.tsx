@@ -10,6 +10,7 @@ import { UTPL_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import MyTasks from "../lib/MyTasks";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number; meter: number };
@@ -328,6 +329,9 @@ export default function ExecutiveDashboardPage() {
   const [userName, setUserName] = useState<string | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[]>([]);
+
+  type DailyOpsPoint = { date: string; produced: number; dispatched: number; broken: number };
+  const [dailyOpsData, setDailyOpsData] = useState<DailyOpsPoint[]>([]);
 
   function toggleCard(card: string) {
     setExpandedCard((prev) => prev === card ? null : card);
@@ -758,6 +762,25 @@ export default function ExecutiveDashboardPage() {
     setSummaries(result);
     setEscalations(foundEscalations);
 
+    // Aggregate daily production/dispatch/breakage for the line chart
+    const opsMap = new Map<string, DailyOpsPoint>();
+    for (const r of monthlyProduction) {
+      const d = r.entry_date;
+      if (!opsMap.has(d)) opsMap.set(d, { date: d, produced: 0, dispatched: 0, broken: 0 });
+      opsMap.get(d)!.produced += (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0) + (r.qty_meter || 0);
+    }
+    for (const r of monthlyDispatch) {
+      const d = r.entry_date;
+      if (!opsMap.has(d)) opsMap.set(d, { date: d, produced: 0, dispatched: 0, broken: 0 });
+      opsMap.get(d)!.dispatched += (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0) + (r.qty_meter || 0);
+    }
+    for (const r of monthlyBreakage) {
+      const d = r.entry_date;
+      if (!opsMap.has(d)) opsMap.set(d, { date: d, produced: 0, dispatched: 0, broken: 0 });
+      opsMap.get(d)!.broken += (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0) + (r.qty_meter || 0);
+    }
+    setDailyOpsData(Array.from(opsMap.values()).sort((a, b) => a.date.localeCompare(b.date)));
+
     // Department Health roll-up
     const healthResults: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[] = [];
     for (const deptConfig of DEPARTMENT_CONFIGS) {
@@ -984,6 +1007,68 @@ export default function ExecutiveDashboardPage() {
               <Card title="Broken Stock" value={closingBrokenStock} color="#d97706" href="/dashboard" />
               <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" href="/tasks" />
             </div>
+            {/* ── CHARTS ROW ── */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+              gap: "14px",
+              marginBottom: "14px",
+            }}>
+              {/* Production / Dispatch / Breakage daily trend */}
+              {dailyOpsData.length > 1 && (
+                <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+                    Daily Production Trend — This Month
+                  </div>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={dailyOpsData.map((d) => ({ ...d, date: d.date.slice(5) }))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="date" tick={{ fontSize: 12, fill: SLATE }} />
+                      <YAxis tick={{ fontSize: 12, fill: SLATE }} />
+                      <Tooltip />
+                      <Legend iconType="circle" wrapperStyle={{ fontSize: "13px" }} />
+                      <Line type="monotone" dataKey="produced" stroke="#16a34a" strokeWidth={2} dot={false} name="Produced" />
+                      <Line type="monotone" dataKey="dispatched" stroke="#7c3aed" strokeWidth={2} dot={false} name="Dispatched" />
+                      <Line type="monotone" dataKey="broken" stroke="#dc2626" strokeWidth={2} dot={false} name="Broken" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Receipts vs Payments monthly bar chart */}
+              {(() => {
+                const utplFinance = companyFinance.find((c) => c.companyId === UTPL_COMPANY_ID);
+                if (!utplFinance || utplFinance.cashPositions.length === 0) return null;
+                const monthMap = new Map<string, { month: string; receipts: number; payments: number }>();
+                for (const p of utplFinance.cashPositions) {
+                  const m = p.position_date.slice(0, 7);
+                  if (!monthMap.has(m)) monthMap.set(m, { month: m, receipts: 0, payments: 0 });
+                  monthMap.get(m)!.receipts += p.total_receipts;
+                  monthMap.get(m)!.payments += p.total_payments;
+                }
+                const cashData = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+                if (cashData.length === 0) return null;
+                return (
+                  <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+                      Receipts vs Payments
+                    </div>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={cashData.map((d) => ({ ...d, month: d.month.slice(5) }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: SLATE }} />
+                        <YAxis tick={{ fontSize: 12, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+                        <Tooltip formatter={(value) => Number(value).toLocaleString()} />
+                        <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
+                        <Bar dataKey="receipts" fill="#16a34a" name="Money In" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="payments" fill="#dc2626" name="Money Out" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Two continuous columns: left = Finance, right = Receivables + Dept Health + Performance */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
               {/* LEFT COLUMN */}
