@@ -20,7 +20,7 @@ type NavItem = {
   href: string;
   allowedRoles: string[];
   financeManagerException?: boolean;
-  managerDepartment?: string;
+  managerDepartments?: string[];
 };
 
 const NAVY = "#1e293b";
@@ -40,17 +40,17 @@ function displayName(member: Member | null, email: string | null) {
 const MAIN_NAV: NavItem[] = [
   { label: "Executive", href: "/executive", allowedRoles: ["Admin", "Executive"] },
   { label: "PA Dashboard", href: "/pa", allowedRoles: ["Admin", "Executive"] },
-  { label: "Operations", href: "/dashboard", allowedRoles: ["Admin", "Executive", "Manager"] },
-  { label: "Daily Entry", href: "/production", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
-  { label: "Monthly Targets", href: "/monthly-operations-targets", allowedRoles: ["Admin", "Executive", "Manager"] },
+  { label: "Operations", href: "/dashboard", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Unze Trading Ops"] },
+  { label: "Daily Entry", href: "/production", allowedRoles: ["Admin", "Executive", "Manager", "Member"], managerDepartments: ["Unze Trading Ops"] },
+  { label: "Monthly Targets", href: "/monthly-operations-targets", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Unze Trading Ops"] },
   { label: "Tasks", href: "/tasks", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Calendar", href: "/calendar", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Meetings", href: "/meetings", allowedRoles: ["Admin", "Executive"] },
   { label: "Finance", href: "/finance", allowedRoles: ["Admin"], financeManagerException: true },
-  { label: "Audit", href: "/department/audit", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartment: "Audit" },
-  { label: "HR", href: "/department/hr", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartment: "HR" },
-  { label: "Taxation", href: "/department/taxation", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartment: "Tax" },
-  { label: "Admin Dept", href: "/department/admin", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartment: "Admin" },
+  { label: "Audit", href: "/department/audit", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Audit"] },
+  { label: "HR", href: "/department/hr", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["HR"] },
+  { label: "Taxation", href: "/department/taxation", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Tax"] },
+  { label: "Admin Dept", href: "/department/admin", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Admin"] },
 ];
 
 // ─────────────────────────────────────────────────────────────────
@@ -167,9 +167,9 @@ export default function AuthWrapper({
         (currentRole === "Manager" && currentDepartment === "Finance")
       );
     }
-    // Department pages — Managers only see their own department
-    if (item.managerDepartment && currentRole === "Manager") {
-      return currentDepartment === item.managerDepartment;
+    // Department-scoped pages — Managers only see pages matching their department
+    if (item.managerDepartments && currentRole === "Manager") {
+      return currentDepartment !== null && item.managerDepartments.includes(currentDepartment);
     }
     return true;
   });
