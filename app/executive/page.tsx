@@ -923,8 +923,39 @@ export default function ExecutiveDashboardPage() {
               if (missingPlants.length > 0) criticalItems.push(`${missingPlants.length} plant${missingPlants.length > 1 ? "s" : ""} not reported`);
               const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0;
 
+              type AttentionRow = { id: string; label: string; count: number; color: string; linkHref?: string; items: { key: string; primary: string; secondary: string; badge?: string | null }[] };
+              const attentionRows: AttentionRow[] = [];
+              if (overdueTasks.length > 0) attentionRows.push({
+                id: "overdue", label: "Overdue Tasks", count: overdueTasks.length, color: "#dc2626", linkHref: "/tasks",
+                items: overdueTasks.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority })),
+              });
+              if (downMachines.length > 0) attentionRows.push({
+                id: "machines", label: "Machines Down", count: downMachines.length, color: "#b91c1c",
+                items: downMachines.map((m) => ({ key: m.id, primary: `${m.plant_name} — ${m.machine_name}`, secondary: m.issue_description || "No description" })),
+              });
+              if (escalations.length > 0) attentionRows.push({
+                id: "escalations", label: "Escalations", count: escalations.length, color: "#dc2626", linkHref: "/exceptions",
+                items: escalations.map((e) => ({ key: e.sourceLabel, primary: `${e.plantName} — ${e.metric}`, secondary: e.detail })),
+              });
+              if (waitingReplies.length > 0) attentionRows.push({
+                id: "waiting", label: "Waiting Replies", count: waitingReplies.length, color: "#dc2626", linkHref: "/tasks",
+                items: waitingReplies.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority })),
+              });
+              if (missingPlants.length > 0) attentionRows.push({
+                id: "missing", label: "Plants Not Reported", count: missingPlants.length, color: "#ef4444", linkHref: "/production",
+                items: missingPlants.map((s) => ({ key: s.plant.id, primary: s.plant.name, secondary: `Type: ${s.plant.type}` })),
+              });
+              if (dueThisWeekTasks.length > 0) attentionRows.push({
+                id: "dueweek", label: "Due This Week", count: dueThisWeekTasks.length, color: "#d97706", linkHref: "/tasks",
+                items: dueThisWeekTasks.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority })),
+              });
+              for (const a of cashAlerts) {
+                attentionRows.push({ id: `cash-${a.title}`, label: a.title, count: a.value, color: a.color, linkHref: "/finance", items: [] });
+              }
+
               return hasAttention ? (
               <>
+                {/* Critical banner */}
                 {hasCritical && (
                   <div style={{
                     backgroundColor: "#fef2f2",
@@ -939,70 +970,69 @@ export default function ExecutiveDashboardPage() {
                   }}>
                     <span style={{ fontSize: "20px", flexShrink: 0 }}>⚠</span>
                     <div>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
-                        Action needed today
-                      </div>
-                      <div style={{ fontSize: "15px", color: "#991b1b", marginTop: "2px" }}>
-                        {criticalItems.join(" · ")}
-                      </div>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>Action needed today</div>
+                      <div style={{ fontSize: "15px", color: "#991b1b", marginTop: "2px" }}>{criticalItems.join(" · ")}</div>
                     </div>
                   </div>
                 )}
 
-                <SectionTitle title="Needs Your Attention" />
-                <div style={squareGrid}>
-                  {overdueTasks.length > 0 && <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" onClick={() => toggleCard("overdue")} />}
-                  {waitingReplies.length > 0 && <Card title="Waiting Replies" value={waitingReplies.length} color="#dc2626" onClick={() => toggleCard("waiting")} />}
-                  {escalations.length > 0 && <Card title="Escalations" value={escalations.length} color="#dc2626" onClick={() => toggleCard("escalations")} />}
-                  {downMachines.length > 0 && <Card title="Machines Down" value={downMachines.length} color="#b91c1c" onClick={() => toggleCard("machines")} />}
-                  {missingPlants.length > 0 && <Card title="Plants Not Reported" value={missingPlants.length} color="#ef4444" onClick={() => toggleCard("missing")} />}
-                  {cashAlerts.map((a) => <Card key={a.title} title={a.title} value={a.value} color={a.color} href="/finance" />)}
-                  {dueThisWeekTasks.length > 0 && <Card title="Due This Week" value={dueThisWeekTasks.length} color="#d97706" onClick={() => toggleCard("dueweek")} />}
-                </div>
+                {/* Clickable attention rows */}
+                <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
+                  {attentionRows.map((row) => {
+                    const isOpen = expandedCard === row.id;
+                    return (
+                      <div key={row.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
+                        <div
+                          onClick={() => row.items.length > 0 ? setExpandedCard(isOpen ? null : row.id) : undefined}
+                          style={{
+                            display: "flex", justifyContent: "space-between", alignItems: "center",
+                            padding: "10px 14px", cursor: row.items.length > 0 ? "pointer" : "default",
+                            backgroundColor: isOpen ? "#f8fafc" : "white",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <span style={{
+                              width: "28px", height: "28px", borderRadius: "50%",
+                              backgroundColor: row.color, color: "white",
+                              display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              fontSize: "14px", fontWeight: 700, flexShrink: 0,
+                            }}>{row.count}</span>
+                            <span style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>{row.label}</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            {row.linkHref && (
+                              <a href={row.linkHref} onClick={(e) => e.stopPropagation()} style={{ fontSize: "13px", color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>View all →</a>
+                            )}
+                            {row.items.length > 0 && (
+                              <span style={{ fontSize: "14px", color: SLATE }}>{isOpen ? "▼" : "▶"}</span>
+                            )}
+                          </div>
+                        </div>
 
-                {/* Inline detail panels */}
-                {expandedCard === "overdue" && (
-                  <DetailPanel title="Overdue Tasks" onClose={() => setExpandedCard(null)} linkHref="/tasks" linkLabel="Open Tasks page">
-                    {overdueTasks.map((t) => (
-                      <DetailRow key={t.id} primary={t.description} secondary={`${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`} badge={t.priority} />
-                    ))}
-                  </DetailPanel>
-                )}
-                {expandedCard === "waiting" && (
-                  <DetailPanel title="Waiting Replies" onClose={() => setExpandedCard(null)} linkHref="/tasks" linkLabel="Open Tasks page">
-                    {waitingReplies.map((t) => (
-                      <DetailRow key={t.id} primary={t.description} secondary={`${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`} badge={t.priority} />
-                    ))}
-                  </DetailPanel>
-                )}
-                {expandedCard === "escalations" && (
-                  <DetailPanel title="Escalations" onClose={() => setExpandedCard(null)} linkHref="/exceptions" linkLabel="Open Exceptions page">
-                    {escalations.map((e) => (
-                      <DetailRow key={e.sourceLabel} primary={`${e.plantName} — ${e.metric}`} secondary={e.detail} />
-                    ))}
-                  </DetailPanel>
-                )}
-                {expandedCard === "machines" && (
-                  <DetailPanel title="Machines Down" onClose={() => setExpandedCard(null)}>
-                    {downMachines.map((m) => (
-                      <DetailRow key={m.id} primary={`${m.plant_name} — ${m.machine_name}`} secondary={m.issue_description || "No description"} />
-                    ))}
-                  </DetailPanel>
-                )}
-                {expandedCard === "missing" && (
-                  <DetailPanel title="Plants Not Reported Today" onClose={() => setExpandedCard(null)} linkHref="/production" linkLabel="Open Daily Entry">
-                    {missingPlants.map((s) => (
-                      <DetailRow key={s.plant.id} primary={s.plant.name} secondary={`Type: ${s.plant.type}`} />
-                    ))}
-                  </DetailPanel>
-                )}
-                {expandedCard === "dueweek" && (
-                  <DetailPanel title="Due This Week" onClose={() => setExpandedCard(null)} linkHref="/tasks" linkLabel="Open Tasks page">
-                    {dueThisWeekTasks.map((t) => (
-                      <DetailRow key={t.id} primary={t.description} secondary={`${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`} badge={t.priority} />
-                    ))}
-                  </DetailPanel>
-                )}
+                        {isOpen && row.items.length > 0 && (
+                          <div style={{ maxHeight: "250px", overflowY: "auto" }}>
+                            {row.items.map((item) => (
+                              <div key={item.key} style={{ padding: "8px 14px 8px 52px", borderTop: `1px solid #f1f5f9`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY }}>{item.primary}</div>
+                                  <div style={{ fontSize: "13px", color: SLATE, marginTop: "1px" }}>{item.secondary}</div>
+                                </div>
+                                {item.badge && (
+                                  <span style={{
+                                    fontSize: "12px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px",
+                                    whiteSpace: "nowrap", flexShrink: 0,
+                                    backgroundColor: item.badge === "High" || item.badge === "Urgent" ? "#dc2626" : item.badge === "Medium" ? "#0070f3" : "#64748b",
+                                    color: "white",
+                                  }}>{item.badge}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
 
                 {expandedCard === null && escalations.length > 0 && <EscalationTrafficLights escalations={escalations} />}
               </>
