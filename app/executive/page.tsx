@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import EscalationTrafficLights from "./EscalationTrafficLights";
-import { formatDateUK, workingDaysFromNow } from "../lib/dateUtils";
+import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtils";
 import { RAGStatus, ragColour } from "../lib/SharedUI";
 import { UTPL_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
@@ -151,6 +151,7 @@ type BudgetRow = {
   category: string;
   flow_type: string;
   budgeted_amount: number;
+  budget_month?: string;
 };
 
 type BankSnapshot = {
@@ -544,7 +545,7 @@ export default function ExecutiveDashboardPage() {
         supabase.from("daily_cash_position").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(30),
         supabase.from("bank_position_snapshots").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(1),
         supabase.from("daily_cash_position").select("total_receipts, total_payments").eq("company_id", company.id).gte("position_date", lastYearMonth + "-01").lte("position_date", lastYearMonth + "-31"),
-        supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount").eq("company_id", company.id).eq("budget_month", currentMonthForCash),
+        supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("company_id", company.id).gte("budget_month", currentMonthForCash).order("budget_month", { ascending: true }),
       ]);
 
       let lyReceipts: number | null = null;
@@ -564,7 +565,12 @@ export default function ExecutiveDashboardPage() {
         bankSnapshot: bankSnapRes.data && bankSnapRes.data.length > 0 ? bankSnapRes.data[0] : null,
         lastYearReceipts: lyReceipts,
         lastYearPayments: lyPayments,
-        forecast: (forecastRes.data || []) as BudgetRow[],
+        forecast: (() => {
+          const all = (forecastRes.data || []) as BudgetRow[];
+          if (all.length === 0) return [];
+          const firstMonth = all[0].budget_month;
+          return all.filter((r) => r.budget_month === firstMonth);
+        })(),
       });
     }
     setCompanyFinance(allCompanyFinance);
@@ -1248,7 +1254,7 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
           {/* ── Forecast breakdown ── */}
           {data.forecast.length > 0 && (
             <>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>Budgeted Cash Flow (This Month)</div>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>Budgeted Cash Flow — {data.forecast[0]?.budget_month === financeMonth ? "This Month" : formatMonthUK(data.forecast[0]?.budget_month || null)}</div>
               <div style={{ marginBottom: "8px" }}>
                 <div style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Money In</div>
                 {inflows.map((f) => fRow(f.category, `PKR ${fmtMoney(f.budgeted_amount)}`, { indent: true, key: f.category } as any))}

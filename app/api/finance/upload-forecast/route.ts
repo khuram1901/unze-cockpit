@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     }
 
     const quarterRows = Array.from(quarterMap.entries()).map(([key, val]) => ({
-      company_id: UTPL_COMPANY_ID,
+      company_id: companyId,
       forecast_quarter: key.split(":")[0],
       flow_type: val.flowType,
       category: val.category,
