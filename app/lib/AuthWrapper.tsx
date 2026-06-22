@@ -19,8 +19,8 @@ type NavItem = {
   label: string;
   href: string;
   allowedRoles: string[];
-  // For Finance: also allow Manager if they're in Finance department.
   financeManagerException?: boolean;
+  managerDepartment?: string;
 };
 
 const NAVY = "#1e293b";
@@ -47,10 +47,10 @@ const MAIN_NAV: NavItem[] = [
   { label: "Calendar", href: "/calendar", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Meetings", href: "/meetings", allowedRoles: ["Admin", "Executive"] },
   { label: "Finance", href: "/finance", allowedRoles: ["Admin"], financeManagerException: true },
-  { label: "Audit", href: "/department/audit", allowedRoles: ["Admin", "Executive", "Manager"] },
-  { label: "HR", href: "/department/hr", allowedRoles: ["Admin", "Executive", "Manager"] },
-  { label: "Taxation", href: "/department/taxation", allowedRoles: ["Admin", "Executive", "Manager"] },
-  { label: "Admin Dept", href: "/department/admin", allowedRoles: ["Admin", "Executive", "Manager"] },
+  { label: "Audit", href: "/department/audit", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartment: "Audit" },
+  { label: "HR", href: "/department/hr", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartment: "HR" },
+  { label: "Taxation", href: "/department/taxation", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartment: "Tax" },
+  { label: "Admin Dept", href: "/department/admin", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartment: "Admin" },
 ];
 
 // ─────────────────────────────────────────────────────────────────
@@ -158,6 +158,7 @@ export default function AuthWrapper({
 
   // Filter main nav items
   const visibleMainNav = MAIN_NAV.filter((item) => {
+    if (!item.allowedRoles.includes(currentRole)) return false;
     // Finance — Manager only sees it if they're in Finance department
     if (item.financeManagerException) {
       return (
@@ -166,7 +167,11 @@ export default function AuthWrapper({
         (currentRole === "Manager" && currentDepartment === "Finance")
       );
     }
-    return item.allowedRoles.includes(currentRole);
+    // Department pages — Managers only see their own department
+    if (item.managerDepartment && currentRole === "Manager") {
+      return currentDepartment === item.managerDepartment;
+    }
+    return true;
   });
 
   // Filter settings items
