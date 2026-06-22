@@ -984,50 +984,13 @@ export default function ExecutiveDashboardPage() {
               <Card title="Broken Stock" value={closingBrokenStock} color="#d97706" href="/dashboard" />
               <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" href="/tasks" />
             </div>
-            {/* Two continuous columns: left = Finance + Department, right = Receivables + People */}
+            {/* Two continuous columns: left = Finance, right = Receivables + Dept Health + Performance */}
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
               {/* LEFT COLUMN */}
               <div>
                 {userRole === "Admin" && companyFinance.map((cfd) => (
                   <CompanyFinancePanel key={cfd.companyId} data={cfd} />
                 ))}
-
-                <SectionTitle title="Department Health" />
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(140px, 1fr))",
-                  gap: "8px",
-                  marginBottom: "14px",
-                }}>
-                  {deptHealth.map((d) => (
-                    <a key={d.slug} href={`/department/${d.slug}`} style={{ textDecoration: "none" }}>
-                      <div style={{
-                        border: `1px solid ${BORDER}`,
-                        borderTop: `3px solid ${d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626"}`,
-                        borderRadius: "7px",
-                        padding: "8px 10px",
-                        backgroundColor: "white",
-                        cursor: "pointer",
-                        transition: "box-shadow 0.15s",
-                      }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
-                      >
-                        <div style={{ fontSize: "15px", color: SLATE, marginBottom: "2px" }}>{d.title} →</div>
-                        <div style={{
-                          fontSize: "17px",
-                          fontWeight: 800,
-                          color: d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626",
-                        }}>
-                          {d.status}
-                        </div>
-                      </div>
-                    </a>
-                  ))}
-                </div>
-
-                <SectionTitle title="Performance by Department" />
-                <DrillDownPerformance departmentRows={departmentRows} deptPeopleMap={deptPeopleMap} />
               </div>
 
               {/* RIGHT COLUMN */}
@@ -1069,6 +1032,42 @@ export default function ExecutiveDashboardPage() {
                   </div>
                 )}
 
+                <SectionTitle title="Department Health" />
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(140px, 1fr))",
+                  gap: "8px",
+                  marginBottom: "14px",
+                }}>
+                  {deptHealth.map((d) => (
+                    <a key={d.slug} href={`/department/${d.slug}`} style={{ textDecoration: "none" }}>
+                      <div style={{
+                        border: `1px solid ${BORDER}`,
+                        borderTop: `3px solid ${d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626"}`,
+                        borderRadius: "7px",
+                        padding: "8px 10px",
+                        backgroundColor: "white",
+                        cursor: "pointer",
+                        transition: "box-shadow 0.15s",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
+                      >
+                        <div style={{ fontSize: "15px", color: SLATE, marginBottom: "2px" }}>{d.title} →</div>
+                        <div style={{
+                          fontSize: "17px",
+                          fontWeight: 800,
+                          color: d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626",
+                        }}>
+                          {d.status}
+                        </div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+
+                <SectionTitle title="Performance by Department" />
+                <DrillDownPerformance departmentRows={departmentRows} deptPeopleMap={deptPeopleMap} />
               </div>
             </div>
           </>
