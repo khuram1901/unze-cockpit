@@ -915,9 +915,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
                 <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
                 <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: "13px" }} />
-                <Line type="monotone" dataKey="closing" stroke="#2563eb" strokeWidth={2} dot={false} name="Closing Balance" />
-                <Line type="monotone" dataKey="net" stroke={NAVY} strokeWidth={2} dot={false} name="After Post-dated" strokeDasharray="5 3" />
+                <Legend iconType="plainline" wrapperStyle={{ fontSize: "13px" }} />
+                <Line type="monotone" dataKey="closing" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} name="Closing Balance (solid blue)" />
+                <Line type="monotone" dataKey="net" stroke={NAVY} strokeWidth={2} dot={{ r: 3, strokeDasharray: "" }} name="After Post-dated (dashed)" strokeDasharray="5 3" />
               </LineChart>
             </ResponsiveContainer>
           </div>

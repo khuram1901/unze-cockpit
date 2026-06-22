@@ -375,9 +375,9 @@ export default function DashboardView() {
               <YAxis dataKey="name" type="category" tick={{ fontSize: 13, fill: NAVY, fontWeight: 600 }} width={80} />
               <Tooltip formatter={(value) => Number(value).toLocaleString()} />
               <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
-              <Bar dataKey="Target" fill="#cbd5e1" name="Target" radius={[0, 4, 4, 0]} />
-              <Bar dataKey="Produced" fill="#16a34a" name="Produced" radius={[0, 4, 4, 0]} />
-              <Bar dataKey="Dispatched" fill="#059669" name="Dispatched" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="Target" fill="#cbd5e1" name="Monthly Target (grey)" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="Produced" fill="#16a34a" name="Produced MTD (green)" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="Dispatched" fill="#059669" name="Dispatched MTD (teal)" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

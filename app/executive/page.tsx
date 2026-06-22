@@ -1143,10 +1143,10 @@ export default function ExecutiveDashboardPage() {
                       <XAxis dataKey="date" tick={{ fontSize: 12, fill: SLATE }} />
                       <YAxis tick={{ fontSize: 12, fill: SLATE }} />
                       <Tooltip />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: "13px" }} />
-                      <Line type="monotone" dataKey="produced" stroke="#16a34a" strokeWidth={2} dot={false} name="Produced" />
-                      <Line type="monotone" dataKey="dispatched" stroke="#059669" strokeWidth={2} dot={false} name="Dispatched" strokeDasharray="5 3" />
-                      <Line type="monotone" dataKey="broken" stroke="#dc2626" strokeWidth={2} dot={false} name="Broken" />
+                      <Legend iconType="plainline" wrapperStyle={{ fontSize: "13px" }} />
+                      <Line type="monotone" dataKey="produced" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} name="Produced (solid green)" />
+                      <Line type="monotone" dataKey="dispatched" stroke="#059669" strokeWidth={2} dot={{ r: 3, strokeDasharray: "" }} name="Dispatched (dashed teal)" strokeDasharray="5 3" />
+                      <Line type="monotone" dataKey="broken" stroke="#dc2626" strokeWidth={2} dot={{ r: 3 }} name="Broken (red)" />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -1176,9 +1176,9 @@ export default function ExecutiveDashboardPage() {
                         <XAxis dataKey="month" tick={{ fontSize: 12, fill: SLATE }} />
                         <YAxis tick={{ fontSize: 12, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
                         <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
-                        <Legend iconType="circle" wrapperStyle={{ fontSize: "13px" }} />
-                        <Line type="monotone" dataKey="receipts" stroke="#16a34a" strokeWidth={2} dot={{ r: 4 }} name="Money In" />
-                        <Line type="monotone" dataKey="payments" stroke="#dc2626" strokeWidth={2} dot={{ r: 4 }} name="Money Out" />
+                        <Legend iconType="plainline" wrapperStyle={{ fontSize: "13px" }} />
+                        <Line type="monotone" dataKey="receipts" stroke="#16a34a" strokeWidth={2} dot={{ r: 4 }} name="Receipts (green)" />
+                        <Line type="monotone" dataKey="payments" stroke="#dc2626" strokeWidth={2} dot={{ r: 4 }} name="Payments (red)" />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
@@ -1608,9 +1608,9 @@ function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRow
             <YAxis dataKey="name" type="category" tick={{ fontSize: 13, fill: NAVY, fontWeight: 600 }} width={130} />
             <Tooltip />
             <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
-            <Bar dataKey="Overdue" stackId="a" fill="#dc2626" radius={[0, 0, 0, 0]} cursor="pointer" />
-            <Bar dataKey="In Progress" stackId="a" fill="#d97706" cursor="pointer" />
-            <Bar dataKey="Completed" stackId="a" fill="#16a34a" radius={[0, 4, 4, 0]} cursor="pointer" />
+            <Bar dataKey="Overdue" stackId="a" fill="#dc2626" radius={[0, 0, 0, 0]} cursor="pointer" name="Overdue (red)" />
+            <Bar dataKey="In Progress" stackId="a" fill="#d97706" cursor="pointer" name="In Progress (amber)" />
+            <Bar dataKey="Completed" stackId="a" fill="#16a34a" radius={[0, 4, 4, 0]} cursor="pointer" name="Completed (green)" />
           </BarChart>
         </ResponsiveContainer>
       </div>
