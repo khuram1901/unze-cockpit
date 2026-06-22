@@ -325,6 +325,7 @@ export default function ExecutiveDashboardPage() {
   const [companyFinance, setCompanyFinance] = useState<CompanyFinanceData[]>([]);
   const [receivableRows, setReceivableRows] = useState<ReceivableCustomerRow[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[]>([]);
 
@@ -444,10 +445,13 @@ export default function ExecutiveDashboardPage() {
     if (user?.email) {
       const { data: memberData } = await supabase
         .from("members")
-        .select("role")
+        .select("role, first_name, name")
         .eq("email", user.email)
         .maybeSingle();
-      if (memberData) setUserRole(memberData.role);
+      if (memberData) {
+        setUserRole(memberData.role);
+        setUserName(memberData.first_name || memberData.name || null);
+      }
     }
 
     const selectedMonth = getMonthFromDate(dateToView);
@@ -849,7 +853,7 @@ export default function ExecutiveDashboardPage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
-            <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>Good Morning Khuram</h1>
+            <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>{new Date().getHours() < 12 ? "Good Morning" : new Date().getHours() < 17 ? "Good Afternoon" : "Good Evening"}{userName ? ` ${userName}` : ""}</h1>
             <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px", maxWidth: "640px" }}>
               Exceptions surface automatically. If nothing needs your attention, everything is on track.
             </p>
