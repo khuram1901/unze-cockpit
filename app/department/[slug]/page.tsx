@@ -6,6 +6,16 @@ import RoleGuard from "../../lib/RoleGuard";
 import { getDepartmentConfig } from "../../lib/department-config";
 import DepartmentDashboard from "./DepartmentDashboard";
 import AuditDashboard from "./AuditDashboard";
+import HRDashboard from "./HRDashboard";
+import TaxationDashboard from "./TaxationDashboard";
+import AdminDashboard from "./AdminDashboard";
+
+const CUSTOM_DASHBOARDS: Record<string, React.ComponentType> = {
+  audit: AuditDashboard,
+  hr: HRDashboard,
+  taxation: TaxationDashboard,
+  admin: AdminDashboard,
+};
 
 export default function DepartmentPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -22,10 +32,12 @@ export default function DepartmentPage({ params }: { params: Promise<{ slug: str
     );
   }
 
+  const CustomDashboard = CUSTOM_DASHBOARDS[slug];
+
   return (
     <AuthWrapper>
       <RoleGuard allowedRoles={config.allowedRoles}>
-        {slug === "audit" ? <AuditDashboard /> : <DepartmentDashboard config={config} />}
+        {CustomDashboard ? <CustomDashboard /> : <DepartmentDashboard config={config} />}
       </RoleGuard>
     </AuthWrapper>
   );

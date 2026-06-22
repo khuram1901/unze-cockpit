@@ -58,7 +58,7 @@ const inp: React.CSSProperties = {
   border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "16px", boxSizing: "border-box",
 };
 const lbl: React.CSSProperties = {
-  display: "block", fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px",
+  display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px",
 };
 const th: React.CSSProperties = {
   textAlign: "left", borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "6px 10px",
@@ -85,6 +85,7 @@ export default function AuditDashboard() {
   const [notes, setNotes] = useState("");
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [bannerOpen, setBannerOpen] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -173,6 +174,46 @@ export default function AuditDashboard() {
           borderRadius: "6px", padding: "10px 14px", marginBottom: "14px",
           backgroundColor: "white", fontSize: "16px", color: COLOURS.NAVY,
         }}>{message}</div>
+      )}
+
+      {/* Alert Banner */}
+      {!loading && overdue > 0 && (
+        <div style={{
+          border: "1px solid #fecaca", borderLeft: "4px solid #dc2626", borderRadius: "8px",
+          backgroundColor: "#fef2f2", overflow: "hidden", marginBottom: "14px",
+        }}>
+          <div onClick={() => setBannerOpen(!bannerOpen)} style={{
+            padding: "12px 16px", cursor: "pointer",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "20px" }}>⚠</span>
+              <div>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: "#991b1b" }}>{overdue} audit{overdue > 1 ? "s" : ""} past target date</div>
+                <div style={{ fontSize: "13px", color: "#991b1b", marginTop: "1px" }}>
+                  {items.filter((i) => i.status !== "Completed" && i.status !== "Cancelled" && overdueDays(i.target_date) > 0).slice(0, 3).map((i) => `${i.audit_area} (${overdueDays(i.target_date)}d)`).join(" · ")}
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b" }}>{bannerOpen ? "▲" : "▼"}</span>
+          </div>
+          {bannerOpen && (
+            <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "white" }}>
+              {items.filter((i) => i.status !== "Completed" && i.status !== "Cancelled" && overdueDays(i.target_date) > 0).map((i) => (
+                <div key={i.id} onClick={() => { setExpandedId(i.id); setBannerOpen(false); }} style={{
+                  padding: "8px 16px 8px 48px", borderBottom: "1px solid #f1f5f9", cursor: "pointer",
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                }}>
+                  <div>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{i.audit_area}</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{i.assigned_to || "Unassigned"} · Stage: {i.audit_stage || "Not started"}</div>
+                  </div>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#dc2626" }}>{overdueDays(i.target_date)}d overdue</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* KPI Cards */}
