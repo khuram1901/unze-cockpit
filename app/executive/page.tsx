@@ -328,6 +328,22 @@ export default function ExecutiveDashboardPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const [bannerOpen, setBannerOpen] = useState(false);
+  const [actioningTask, setActioningTask] = useState<string | null>(null);
+
+  async function quickTaskAction(taskId: string, newStatus: string) {
+    setActioningTask(taskId);
+    await supabase.from("tasks").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", taskId);
+    await loadExecutiveData(selectedDate);
+    setActioningTask(null);
+  }
+
+  async function quickMachineResolve(issueId: string) {
+    setActioningTask(issueId);
+    await supabase.from("machine_issues").update({ issue_status: "Resolved" }).eq("id", issueId);
+    await loadExecutiveData(selectedDate);
+    setActioningTask(null);
+  }
   const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[]>([]);
 
   type DailyOpsPoint = { date: string; produced: number; dispatched: number; broken: number };
@@ -923,118 +939,150 @@ export default function ExecutiveDashboardPage() {
               if (missingPlants.length > 0) criticalItems.push(`${missingPlants.length} plant${missingPlants.length > 1 ? "s" : ""} not reported`);
               const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0;
 
-              type AttentionRow = { id: string; label: string; count: number; color: string; linkHref?: string; items: { key: string; primary: string; secondary: string; badge?: string | null }[] };
+              type AttentionItem = { key: string; primary: string; secondary: string; badge?: string | null; taskId?: string; machineId?: string; actionType?: "complete" | "reply" | "resolve" };
+              type AttentionRow = { id: string; label: string; count: number; color: string; items: AttentionItem[] };
               const attentionRows: AttentionRow[] = [];
               if (overdueTasks.length > 0) attentionRows.push({
-                id: "overdue", label: "Overdue Tasks", count: overdueTasks.length, color: "#dc2626", linkHref: "/tasks",
-                items: overdueTasks.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority })),
+                id: "overdue", label: "Overdue Tasks", count: overdueTasks.length, color: "#dc2626",
+                items: overdueTasks.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority, taskId: t.id, actionType: "complete" as const })),
               });
               if (downMachines.length > 0) attentionRows.push({
                 id: "machines", label: "Machines Down", count: downMachines.length, color: "#b91c1c",
-                items: downMachines.map((m) => ({ key: m.id, primary: `${m.plant_name} — ${m.machine_name}`, secondary: m.issue_description || "No description" })),
+                items: downMachines.map((m) => ({ key: m.id, primary: `${m.plant_name} — ${m.machine_name}`, secondary: m.issue_description || "No description", machineId: m.id, actionType: "resolve" as const })),
               });
               if (escalations.length > 0) attentionRows.push({
-                id: "escalations", label: "Escalations", count: escalations.length, color: "#dc2626", linkHref: "/exceptions",
+                id: "escalations", label: "Escalations", count: escalations.length, color: "#dc2626",
                 items: escalations.map((e) => ({ key: e.sourceLabel, primary: `${e.plantName} — ${e.metric}`, secondary: e.detail })),
               });
               if (waitingReplies.length > 0) attentionRows.push({
-                id: "waiting", label: "Waiting Replies", count: waitingReplies.length, color: "#dc2626", linkHref: "/tasks",
-                items: waitingReplies.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority })),
+                id: "waiting", label: "Waiting Replies", count: waitingReplies.length, color: "#dc2626",
+                items: waitingReplies.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority, taskId: t.id, actionType: "reply" as const })),
               });
               if (missingPlants.length > 0) attentionRows.push({
-                id: "missing", label: "Plants Not Reported", count: missingPlants.length, color: "#ef4444", linkHref: "/production",
+                id: "missing", label: "Plants Not Reported", count: missingPlants.length, color: "#ef4444",
                 items: missingPlants.map((s) => ({ key: s.plant.id, primary: s.plant.name, secondary: `Type: ${s.plant.type}` })),
               });
               if (dueThisWeekTasks.length > 0) attentionRows.push({
-                id: "dueweek", label: "Due This Week", count: dueThisWeekTasks.length, color: "#d97706", linkHref: "/tasks",
-                items: dueThisWeekTasks.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority })),
+                id: "dueweek", label: "Due This Week", count: dueThisWeekTasks.length, color: "#d97706",
+                items: dueThisWeekTasks.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority, taskId: t.id, actionType: "complete" as const })),
               });
               for (const a of cashAlerts) {
-                attentionRows.push({ id: `cash-${a.title}`, label: a.title, count: a.value, color: a.color, linkHref: "/finance", items: [] });
+                attentionRows.push({ id: `cash-${a.title}`, label: a.title, count: a.value, color: a.color, items: [] });
               }
+
+              const totalAttentionCount = attentionRows.reduce((s, r) => s + r.count, 0);
+
+              const actionBtn = (label: string, color: string, onClick: () => void, disabled: boolean) => (
+                <button onClick={(e) => { e.stopPropagation(); onClick(); }} disabled={disabled} style={{
+                  backgroundColor: color, color: "white", border: "none", borderRadius: "5px",
+                  padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: disabled ? "wait" : "pointer",
+                  opacity: disabled ? 0.5 : 1, whiteSpace: "nowrap",
+                }}>{label}</button>
+              );
 
               return hasAttention ? (
               <>
-                {/* Critical banner */}
-                {hasCritical && (
-                  <div style={{
-                    backgroundColor: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    borderLeft: "4px solid #dc2626",
-                    borderRadius: "8px",
-                    padding: "12px 16px",
-                    marginBottom: "12px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                  }}>
-                    <span style={{ fontSize: "20px", flexShrink: 0 }}>⚠</span>
-                    <div>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>Action needed today</div>
-                      <div style={{ fontSize: "15px", color: "#991b1b", marginTop: "2px" }}>{criticalItems.join(" · ")}</div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Clickable attention rows */}
-                <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
-                  {attentionRows.map((row) => {
-                    const isOpen = expandedCard === row.id;
-                    return (
-                      <div key={row.id} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                        <div
-                          onClick={() => row.items.length > 0 ? setExpandedCard(isOpen ? null : row.id) : undefined}
-                          style={{
-                            display: "flex", justifyContent: "space-between", alignItems: "center",
-                            padding: "10px 14px", cursor: row.items.length > 0 ? "pointer" : "default",
-                            backgroundColor: isOpen ? "#f8fafc" : "white",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <span style={{
-                              width: "28px", height: "28px", borderRadius: "50%",
-                              backgroundColor: row.color, color: "white",
-                              display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              fontSize: "14px", fontWeight: 700, flexShrink: 0,
-                            }}>{row.count}</span>
-                            <span style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>{row.label}</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            {row.linkHref && (
-                              <a href={row.linkHref} onClick={(e) => e.stopPropagation()} style={{ fontSize: "13px", color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>View all →</a>
-                            )}
-                            {row.items.length > 0 && (
-                              <span style={{ fontSize: "14px", color: SLATE }}>{isOpen ? "▼" : "▶"}</span>
-                            )}
-                          </div>
+                {/* Single collapsible banner — everything hidden inside */}
+                <div style={{
+                  border: `1px solid ${hasCritical ? "#fecaca" : BORDER}`,
+                  borderLeft: `4px solid ${hasCritical ? "#dc2626" : "#d97706"}`,
+                  borderRadius: "8px",
+                  backgroundColor: hasCritical ? "#fef2f2" : "#fffbeb",
+                  overflow: "hidden",
+                  marginBottom: "14px",
+                }}>
+                  {/* Banner header — always visible, click to expand */}
+                  <div
+                    onClick={() => setBannerOpen(!bannerOpen)}
+                    style={{
+                      padding: "12px 16px",
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <span style={{ fontSize: "20px", flexShrink: 0 }}>⚠</span>
+                      <div>
+                        <div style={{ fontSize: "16px", fontWeight: 700, color: hasCritical ? "#991b1b" : "#92400e" }}>
+                          Action needed today — {totalAttentionCount} item{totalAttentionCount > 1 ? "s" : ""}
                         </div>
-
-                        {isOpen && row.items.length > 0 && (
-                          <div style={{ maxHeight: "250px", overflowY: "auto" }}>
-                            {row.items.map((item) => (
-                              <div key={item.key} style={{ padding: "8px 14px 8px 52px", borderTop: `1px solid #f1f5f9`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY }}>{item.primary}</div>
-                                  <div style={{ fontSize: "13px", color: SLATE, marginTop: "1px" }}>{item.secondary}</div>
-                                </div>
-                                {item.badge && (
-                                  <span style={{
-                                    fontSize: "12px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px",
-                                    whiteSpace: "nowrap", flexShrink: 0,
-                                    backgroundColor: item.badge === "High" || item.badge === "Urgent" ? "#dc2626" : item.badge === "Medium" ? "#0070f3" : "#64748b",
-                                    color: "white",
-                                  }}>{item.badge}</span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        <div style={{ fontSize: "14px", color: hasCritical ? "#991b1b" : "#92400e", marginTop: "2px" }}>
+                          {criticalItems.join(" · ")}
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                    <span style={{ fontSize: "16px", color: hasCritical ? "#991b1b" : "#92400e", fontWeight: 700 }}>{bannerOpen ? "▲ Hide" : "▼ Show"}</span>
+                  </div>
 
-                {expandedCard === null && escalations.length > 0 && <EscalationTrafficLights escalations={escalations} />}
+                  {/* Expanded content — categories then items then actions */}
+                  {bannerOpen && (
+                    <div style={{ borderTop: `1px solid ${hasCritical ? "#fecaca" : "#fde68a"}` }}>
+                      {attentionRows.map((row) => {
+                        const isOpen = expandedCard === row.id;
+                        return (
+                          <div key={row.id}>
+                            {/* Category row */}
+                            <div
+                              onClick={() => row.items.length > 0 ? setExpandedCard(isOpen ? null : row.id) : undefined}
+                              style={{
+                                display: "flex", justifyContent: "space-between", alignItems: "center",
+                                padding: "9px 16px", cursor: row.items.length > 0 ? "pointer" : "default",
+                                backgroundColor: isOpen ? "white" : "transparent",
+                                borderBottom: `1px solid ${hasCritical ? "#fecaca" : "#fde68a"}`,
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <span style={{
+                                  width: "24px", height: "24px", borderRadius: "50%",
+                                  backgroundColor: row.color, color: "white",
+                                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                  fontSize: "12px", fontWeight: 700, flexShrink: 0,
+                                }}>{row.count}</span>
+                                <span style={{ fontSize: "14px", fontWeight: 600, color: NAVY }}>{row.label}</span>
+                              </div>
+                              {row.items.length > 0 && (
+                                <span style={{ fontSize: "13px", color: SLATE }}>{isOpen ? "▼" : "▶"}</span>
+                              )}
+                            </div>
+
+                            {/* Expanded items with actions */}
+                            {isOpen && row.items.length > 0 && (
+                              <div style={{ backgroundColor: "white" }}>
+                                {row.items.map((item) => {
+                                  const isActioning = actioningTask === (item.taskId || item.machineId);
+                                  return (
+                                    <div key={item.key} style={{
+                                      padding: "8px 16px 8px 48px",
+                                      borderBottom: `1px solid #f1f5f9`,
+                                      display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+                                    }}>
+                                      <div style={{ minWidth: 0, flex: 1 }}>
+                                        <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY }}>{item.primary}</div>
+                                        <div style={{ fontSize: "12px", color: SLATE, marginTop: "1px" }}>{item.secondary}</div>
+                                      </div>
+                                      <div style={{ display: "flex", gap: "5px", alignItems: "center", flexShrink: 0 }}>
+                                        {item.badge && (
+                                          <span style={{
+                                            fontSize: "11px", fontWeight: 700, padding: "2px 7px", borderRadius: "8px",
+                                            backgroundColor: item.badge === "High" || item.badge === "Urgent" ? "#dc2626" : item.badge === "Medium" ? "#0070f3" : "#64748b",
+                                            color: "white",
+                                          }}>{item.badge}</span>
+                                        )}
+                                        {item.actionType === "complete" && item.taskId && actionBtn("Complete", "#16a34a", () => quickTaskAction(item.taskId!, "Completed"), isActioning)}
+                                        {item.actionType === "reply" && item.taskId && actionBtn("View", "#2563eb", () => { window.location.href = "/tasks"; }, false)}
+                                        {item.actionType === "resolve" && item.machineId && actionBtn("Resolve", "#16a34a", () => quickMachineResolve(item.machineId!), isActioning)}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <div style={{
