@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
+import { COLOURS, SectionTitle, PageHeader } from "../lib/SharedUI";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 
 type OpeningBalance = {
@@ -32,32 +33,15 @@ type DailyPosition = {
   closing_after_post_dated: number;
 };
 
-const NAVY = "#1e293b";
-const SLATE = "#64748b";
-const BORDER = "#e2e8f0";
-const GREEN = "#16a34a";
-const RED = "#dc2626";
-const BLUE = "#2563eb";
+const NAVY = COLOURS.NAVY;
+const SLATE = COLOURS.SLATE;
+const BORDER = COLOURS.BORDER;
+const GREEN = COLOURS.GREEN;
+const RED = COLOURS.RED;
+const BLUE = COLOURS.BLUE;
 
 function fmt(n: number) {
   return n.toLocaleString();
-}
-
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <h2
-      style={{
-        fontSize: "17px",
-        fontWeight: 700,
-        color: NAVY,
-        margin: "20px 0 10px",
-        paddingLeft: "9px",
-        borderLeft: `3px solid ${NAVY}`,
-      }}
-    >
-      {title}
-    </h2>
-  );
 }
 
 export default function FinanceManager({ companyId, companyName }: { companyId: string; companyName: string }) {
@@ -399,27 +383,51 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   }
 
   if (loading) {
-    return <p style={{ color: SLATE, fontSize: "17px" }}>Loading finance data…</p>;
+    return <p style={{ color: SLATE, fontSize: "15px" }}>Loading finance data…</p>;
   }
 
   const latestPosition = positions[0] || null;
+  const staleDays = latestPosition ? Math.floor((Date.now() - new Date(latestPosition.position_date + "T00:00:00").getTime()) / 86400000) : 999;
+
+  // Alert items
+  const alerts: string[] = [];
+  if (positions.length === 0) alerts.push("No daily position entered yet");
+  else if (staleDays > 1) alerts.push(`Cash data is ${staleDays} days old`);
+  if (!plan) alerts.push("No monthly plan set");
+  if (!opening) alerts.push("No opening balance set");
+  const hasAlerts = alerts.length > 0;
 
   return (
     <div>
       {msg && (
-        <div
-          style={{
-            border: `1px solid ${BORDER}`,
-            borderLeft: `4px solid ${msg.startsWith("Error") ? RED : GREEN}`,
-            borderRadius: "6px",
-            padding: "10px 14px",
-            marginBottom: "14px",
-            backgroundColor: "white",
-            fontSize: "17px",
-            color: NAVY,
-          }}
-        >
+        <div style={{
+          border: `1px solid ${BORDER}`,
+          borderLeft: `4px solid ${msg.startsWith("Error") ? RED : GREEN}`,
+          borderRadius: "6px", padding: "10px 14px", marginBottom: "14px",
+          backgroundColor: "white", fontSize: "15px", color: NAVY,
+        }}>
           {msg}
+        </div>
+      )}
+
+      {/* ── ALERT BANNER ── */}
+      {hasAlerts && (
+        <div style={{
+          border: `1px solid ${staleDays > 1 ? "#fecaca" : BORDER}`,
+          borderLeft: `4px solid ${staleDays > 1 ? RED : "#d97706"}`,
+          borderRadius: "8px", padding: "12px 16px", marginBottom: "14px",
+          backgroundColor: staleDays > 1 ? "#fef2f2" : "#fffbeb",
+          display: "flex", alignItems: "center", gap: "10px",
+        }}>
+          <span style={{ fontSize: "20px", flexShrink: 0 }}>⚠</span>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: staleDays > 1 ? "#991b1b" : "#92400e" }}>
+              Setup needed
+            </div>
+            <div style={{ fontSize: "13px", color: staleDays > 1 ? "#991b1b" : "#92400e", marginTop: "1px" }}>
+              {alerts.join(" · ")}
+            </div>
+          </div>
         </div>
       )}
 
@@ -483,7 +491,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         >
           <div>
             <SectionTitle title="Automatic Ingestion" />
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>
               Gmail: {gmailConnected ? (
                 <span style={{ color: GREEN }}>Connected</span>
               ) : (
@@ -661,7 +669,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
         {!showManualForecast ? (
           <>
-            <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
+            <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
               Upload the projected cash flow Excel. The system reads the &quot;Monthly-CF&quot; sheet and saves monthly budgets by category (inflows and outflows).
             </p>
 
@@ -735,7 +743,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                   border: `1px solid ${BORDER}`,
                   borderLeft: `4px solid ${forecastResult.success ? GREEN : RED}`,
                   backgroundColor: "#fafbfc",
-                  fontSize: "16px",
+                  fontSize: "14px",
                 }}
               >
                 {forecastResult.success ? (
@@ -750,7 +758,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           </>
         ) : (
           <>
-            <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
+            <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
               Add a single forecast line manually. Use this to add or update individual budget items without uploading a full spreadsheet.
             </p>
             <form onSubmit={saveManualForecast}>
@@ -906,7 +914,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           marginBottom: "14px",
         }}>
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
               Cash Balance — Last 30 Days
             </div>
             <ResponsiveContainer width="100%" height={200}>
@@ -923,7 +931,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           </div>
 
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
               Daily Receipts vs Payments
             </div>
             <ResponsiveContainer width="100%" height={200}>
@@ -953,7 +961,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       >
         <SectionTitle title="Daily Position — Last 30 Days" />
         {positions.length === 0 ? (
-          <p style={{ fontSize: "16px", color: SLATE }}>
+          <p style={{ fontSize: "14px", color: SLATE }}>
             No daily positions recorded yet.
           </p>
         ) : (
@@ -1014,7 +1022,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       {/* ── MODALS ── */}
       {openModal === "opening" && (
         <Modal title="Opening Balance" onClose={() => setOpenModal(null)}>
-          <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
+          <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
             Set the starting cash balance. The system counts forward from here.
           </p>
           <form onSubmit={saveOpeningBalance}>
@@ -1058,7 +1066,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
       {openModal === "plan" && (
         <Modal title="Monthly Cash Plan" onClose={() => setOpenModal(null)}>
-          <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
+          <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
             Set expected receivables and payouts for the month. Used to calculate cash health on the Executive dashboard.
           </p>
           <form onSubmit={saveMonthlyPlan}>
@@ -1137,19 +1145,12 @@ function SummaryCard({
         position: "relative",
       }}
     >
-      <div
-        style={{
-          color: SLATE,
-          fontSize: "15px",
-          marginBottom: "4px",
-          fontWeight: 600,
-        }}
-      >
+      <div style={{ color: SLATE, fontSize: "13px", marginBottom: "2px", fontWeight: 600 }}>
         {label}
       </div>
-      <div style={{ fontSize: "17px", fontWeight: 800, color }}>{value}</div>
+      <div style={{ fontSize: "18px", fontWeight: 800, color }}>{value}</div>
       {sub && (
-        <div style={{ fontSize: "14px", color: SLATE, marginTop: "3px" }}>
+        <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>
           {sub}
         </div>
       )}
@@ -1223,7 +1224,7 @@ function Modal({
             borderBottom: `1px solid ${BORDER}`,
           }}
         >
-          <h2 style={{ fontSize: "17px", fontWeight: 700, color: NAVY, margin: 0 }}>
+          <h2 style={{ fontSize: "14px", fontWeight: 700, color: NAVY, margin: 0 }}>
             {title}
           </h2>
           <button
@@ -1250,10 +1251,10 @@ function Modal({
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "16px",
+  fontSize: "14px",
   fontWeight: 600,
   color: NAVY,
-  marginBottom: "10px",
+  marginBottom: "8px",
 };
 
 const inputStyle: React.CSSProperties = {
@@ -1263,7 +1264,7 @@ const inputStyle: React.CSSProperties = {
   marginTop: "3px",
   border: `1px solid ${BORDER}`,
   borderRadius: "6px",
-  fontSize: "17px",
+  fontSize: "15px",
   boxSizing: "border-box",
 };
 
@@ -1272,8 +1273,8 @@ const btnStyle: React.CSSProperties = {
   color: "white",
   border: "none",
   borderRadius: "6px",
-  padding: "9px 18px",
-  fontSize: "17px",
+  padding: "8px 16px",
+  fontSize: "15px",
   fontWeight: 700,
   cursor: "pointer",
   marginTop: "4px",
@@ -1284,8 +1285,8 @@ const cancelBtnStyle: React.CSSProperties = {
   color: NAVY,
   border: `1px solid ${BORDER}`,
   borderRadius: "6px",
-  padding: "9px 18px",
-  fontSize: "17px",
+  padding: "8px 16px",
+  fontSize: "15px",
   fontWeight: 600,
   cursor: "pointer",
   marginTop: "4px",
@@ -1295,15 +1296,15 @@ const th: React.CSSProperties = {
   textAlign: "left",
   borderBottom: `1px solid ${BORDER}`,
   padding: "6px 10px",
-  fontSize: "15px",
+  fontSize: "14px",
   color: SLATE,
   fontWeight: 700,
 };
 
 const td: React.CSSProperties = {
-  borderBottom: `1px solid #f1f5f9`,
+  borderBottom: `1px solid ${COLOURS.LIGHT}`,
   padding: "7px 10px",
-  fontSize: "16px",
+  fontSize: "15px",
 };
 
 const tdBold: React.CSSProperties = {
