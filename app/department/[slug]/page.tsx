@@ -5,6 +5,7 @@ import AuthWrapper from "../../lib/AuthWrapper";
 import RoleGuard from "../../lib/RoleGuard";
 import { getDepartmentConfig } from "../../lib/department-config";
 import DepartmentDashboard from "./DepartmentDashboard";
+import AuditDashboard from "./AuditDashboard";
 
 export default function DepartmentPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -24,7 +25,7 @@ export default function DepartmentPage({ params }: { params: Promise<{ slug: str
   return (
     <AuthWrapper>
       <RoleGuard allowedRoles={config.allowedRoles}>
-        <DepartmentDashboard config={config} />
+        {slug === "audit" ? <AuditDashboard /> : <DepartmentDashboard config={config} />}
       </RoleGuard>
     </AuthWrapper>
   );

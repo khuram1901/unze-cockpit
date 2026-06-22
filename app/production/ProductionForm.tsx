@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import ReceivablesSection from "./ReceivablesSection";
 import { logAction } from "../lib/audit-log";
+import { formatDateUK } from "../lib/dateUtils";
 
 type Plant = {
   id: string;
@@ -25,11 +26,22 @@ const REASONS = [
 
 const MACHINE_STATUSES = ["Down", "Partially Working", "Resolved"];
 
+type PastEntry = {
+  entry_date: string;
+  qty_31: number;
+  qty_36: number;
+  qty_45: number;
+  qty_meter: number;
+  type: "Production" | "Dispatch" | "Breakage";
+};
+
 export default function ProductionForm() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [plantId, setPlantId] = useState("");
   const [loadingPlants, setLoadingPlants] = useState(true);
   const [noAccess, setNoAccess] = useState(false);
+  const [pastEntries, setPastEntries] = useState<PastEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
 
@@ -125,6 +137,30 @@ export default function ProductionForm() {
 
     load();
   }, []);
+
+  useEffect(() => {
+    if (!plantId) { setPastEntries([]); return; }
+    async function loadHistory() {
+      const fourteenAgo = new Date();
+      fourteenAgo.setDate(fourteenAgo.getDate() - 14);
+      const since = fourteenAgo.toISOString().slice(0, 10);
+
+      const [prodRes, dispRes, brkRes] = await Promise.all([
+        supabase.from("production_entries").select("entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
+        supabase.from("dispatch_entries").select("entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
+        supabase.from("breakage_entries").select("entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
+      ]);
+
+      const entries: PastEntry[] = [
+        ...(prodRes.data || []).map((r) => ({ ...r, type: "Production" as const })),
+        ...(dispRes.data || []).map((r) => ({ ...r, type: "Dispatch" as const })),
+        ...(brkRes.data || []).map((r) => ({ ...r, type: "Breakage" as const })),
+      ];
+      entries.sort((a, b) => b.entry_date.localeCompare(a.entry_date) || a.type.localeCompare(b.type));
+      setPastEntries(entries);
+    }
+    loadHistory();
+  }, [plantId]);
 
   const selectedPlant = plants.find((p) => p.id === plantId);
   const isMeter = selectedPlant?.type === "meter";
@@ -498,6 +534,75 @@ export default function ProductionForm() {
           <label>General notes (optional)<textarea style={{ ...inputStyle, height: "60px" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any issues, e.g. half day, machine down" /></label>
         </div>
       )}
+
+      {/* My Past Entries */}
+      {plantId && pastEntries.length > 0 && (
+        <div style={{ marginTop: "20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: 0, paddingLeft: "9px", borderLeft: "3px solid #1e293b" }}>
+              My Past Entries (Last 14 Days)
+            </h2>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              style={{
+                backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: "6px",
+                padding: "6px 14px", fontSize: "15px", fontWeight: 600, color: "#1e293b", cursor: "pointer",
+              }}
+            >
+              {showHistory ? "Hide" : `Show (${pastEntries.length})`}
+            </button>
+          </div>
+
+          {showHistory && (
+            <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "500px" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#f8fafc" }}>
+                      <th style={histTh}>Date</th>
+                      <th style={histTh}>Type</th>
+                      <th style={histTh}>31</th>
+                      <th style={histTh}>36</th>
+                      <th style={histTh}>45</th>
+                      {selectedPlant?.type === "meter" && <th style={histTh}>Meter</th>}
+                      <th style={histTh}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pastEntries.map((e, i) => {
+                      const total = (e.qty_31 || 0) + (e.qty_36 || 0) + (e.qty_45 || 0) + (e.qty_meter || 0);
+                      const typeColor = e.type === "Production" ? "#16a34a" : e.type === "Dispatch" ? "#7c3aed" : "#dc2626";
+                      return (
+                        <tr key={`${e.entry_date}-${e.type}-${i}`}>
+                          <td style={histTd}>{formatDateUK(e.entry_date)}</td>
+                          <td style={histTd}>
+                            <span style={{ fontSize: "13px", fontWeight: 700, color: "white", backgroundColor: typeColor, padding: "2px 8px", borderRadius: "8px" }}>
+                              {e.type}
+                            </span>
+                          </td>
+                          <td style={histTd}>{e.qty_31 || 0}</td>
+                          <td style={histTd}>{e.qty_36 || 0}</td>
+                          <td style={histTd}>{e.qty_45 || 0}</td>
+                          {selectedPlant?.type === "meter" && <td style={histTd}>{e.qty_meter || 0}</td>}
+                          <td style={{ ...histTd, fontWeight: 700, color: "#1e293b" }}>{total}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
+const histTh: React.CSSProperties = {
+  textAlign: "left", borderBottom: "1px solid #e2e8f0", padding: "6px 10px",
+  fontSize: "14px", color: "#64748b", fontWeight: 700,
+};
+const histTd: React.CSSProperties = {
+  borderBottom: "1px solid #f1f5f9", padding: "7px 10px", fontSize: "15px",
+};
