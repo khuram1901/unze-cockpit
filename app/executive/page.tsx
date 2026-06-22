@@ -1450,76 +1450,55 @@ function SlimAlert({ color, text }: { color: string; text: string }) {
 }
 
 function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRows: PerformanceRow[]; deptPeopleMap: Map<string, PerformanceRow[]> }) {
-  const [expandedDept, setExpandedDept] = useState<string | null>(null);
+  const [selectedDept, setSelectedDept] = useState<string | null>(null);
 
   if (departmentRows.length === 0) return <p style={{ color: SLATE, fontSize: "17px" }}>No task data yet.</p>;
 
-  function trafficDot(count: number, color: string) {
-    if (count === 0) return null;
-    return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-        <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, display: "inline-block", boxShadow: `0 0 4px ${color}40` }} />
-        <span style={{ fontWeight: 700, fontSize: "15px", color }}>{count}</span>
-      </span>
-    );
-  }
+  const chartData = departmentRows.map((d) => ({
+    name: d.name.length > 16 ? d.name.slice(0, 14) + "…" : d.name,
+    fullName: d.name,
+    Overdue: d.red,
+    "In Progress": d.amber,
+    Completed: d.green,
+  }));
+
+  const selectedPeople = selectedDept ? (deptPeopleMap.get(selectedDept) || []).filter((p) => p.total > 0) : [];
 
   return (
-    <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "12px", overflowX: "auto" }}>
-      <table style={{ borderCollapse: "collapse", width: "100%" }}>
-        <thead>
-          <tr style={{ backgroundColor: "#f8fafc" }}>
-            <th style={th}>Department</th>
-            <th style={{ ...th, textAlign: "center" }}>Status</th>
-            <th style={{ ...th, textAlign: "center", width: "60px" }}>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {departmentRows.map((dept) => {
-            const isExpanded = expandedDept === dept.name;
-            const deptPeople = deptPeopleMap.get(dept.name) || [];
-            const status = dept.red > 0 ? "RED" : dept.amber > 0 ? "AMBER" : "GREEN";
-            const statusColor = status === "RED" ? "#dc2626" : status === "AMBER" ? "#d97706" : "#16a34a";
+    <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "12px" }}>
+      <div style={{ padding: "14px" }}>
+        <ResponsiveContainer width="100%" height={Math.max(180, departmentRows.length * 38)}>
+          <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 0, bottom: 0 }} onClick={(state: unknown) => { const s = state as { activePayload?: { payload?: { fullName?: string } }[] }; const fn = s?.activePayload?.[0]?.payload?.fullName; if (fn) setSelectedDept(selectedDept === fn ? null : fn); }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+            <XAxis type="number" tick={{ fontSize: 12, fill: SLATE }} />
+            <YAxis dataKey="name" type="category" tick={{ fontSize: 13, fill: NAVY, fontWeight: 600 }} width={130} />
+            <Tooltip />
+            <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
+            <Bar dataKey="Overdue" stackId="a" fill="#dc2626" radius={[0, 0, 0, 0]} cursor="pointer" />
+            <Bar dataKey="In Progress" stackId="a" fill="#d97706" cursor="pointer" />
+            <Bar dataKey="Completed" stackId="a" fill="#16a34a" radius={[0, 4, 4, 0]} cursor="pointer" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
 
-            return (
-              <React.Fragment key={dept.name}>
-                <tr
-                  onClick={() => setExpandedDept(isExpanded ? null : dept.name)}
-                  style={{ cursor: "pointer", borderBottom: isExpanded ? "none" : `1px solid ${BORDER}` }}
-                >
-                  <td style={{ ...tdBold, borderBottom: isExpanded ? "none" : undefined }}>
-                    <span style={{ fontSize: "14px", color: SLATE, marginRight: "6px" }}>{isExpanded ? "▼" : "▶"}</span>
-                    {dept.name}
-                  </td>
-                  <td style={{ ...td, textAlign: "center", borderBottom: isExpanded ? "none" : undefined }}>
-                    <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-                      {trafficDot(dept.red, "#dc2626")}
-                      {trafficDot(dept.amber, "#d97706")}
-                      {trafficDot(dept.green, "#16a34a")}
-                    </div>
-                  </td>
-                  <td style={{ ...td, textAlign: "center", fontWeight: 700, color: statusColor, borderBottom: isExpanded ? "none" : undefined }}>
-                    {dept.total}
-                  </td>
-                </tr>
-                {isExpanded && deptPeople.filter((p) => p.total > 0).map((person) => (
-                  <tr key={person.name} style={{ backgroundColor: "#f8fafc" }}>
-                    <td style={{ ...td, paddingLeft: "32px", fontSize: "15px", color: NAVY }}>{person.name}</td>
-                    <td style={{ ...td, textAlign: "center" }}>
-                      <div style={{ display: "flex", justifyContent: "center", gap: "12px" }}>
-                        {trafficDot(person.red, "#dc2626")}
-                        {trafficDot(person.amber, "#d97706")}
-                        {trafficDot(person.green, "#16a34a")}
-                      </div>
-                    </td>
-                    <td style={{ ...td, textAlign: "center", color: SLATE }}>{person.total}</td>
-                  </tr>
-                ))}
-              </React.Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+      {selectedDept && selectedPeople.length > 0 && (
+        <div style={{ borderTop: `1px solid ${BORDER}`, padding: "10px 14px", backgroundColor: "#f8fafc" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>{selectedDept} — People</span>
+            <button onClick={() => setSelectedDept(null)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: "5px", padding: "3px 10px", fontSize: "13px", color: SLATE, cursor: "pointer" }}>Close</button>
+          </div>
+          {selectedPeople.map((person) => (
+            <div key={person.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ fontSize: "14px", fontWeight: 600, color: NAVY }}>{person.name}</span>
+              <div style={{ display: "flex", gap: "10px", fontSize: "13px", fontWeight: 700 }}>
+                {person.red > 0 && <span style={{ color: "#dc2626" }}>{person.red} overdue</span>}
+                {person.amber > 0 && <span style={{ color: "#d97706" }}>{person.amber} active</span>}
+                {person.green > 0 && <span style={{ color: "#16a34a" }}>{person.green} done</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
