@@ -1035,34 +1035,34 @@ export default function ExecutiveDashboardPage() {
                 </div>
               )}
 
-              {/* Receipts vs Payments monthly bar chart */}
+              {/* Receipts vs Payments monthly line chart */}
               {(() => {
-                const utplFinance = companyFinance.find((c) => c.companyId === UTPL_COMPANY_ID);
-                if (!utplFinance || utplFinance.cashPositions.length === 0) return null;
                 const monthMap = new Map<string, { month: string; receipts: number; payments: number }>();
-                for (const p of utplFinance.cashPositions) {
-                  const m = p.position_date.slice(0, 7);
-                  if (!monthMap.has(m)) monthMap.set(m, { month: m, receipts: 0, payments: 0 });
-                  monthMap.get(m)!.receipts += p.total_receipts;
-                  monthMap.get(m)!.payments += p.total_payments;
+                for (const cfd of companyFinance) {
+                  for (const p of cfd.cashPositions) {
+                    const m = p.position_date.slice(0, 7);
+                    if (!monthMap.has(m)) monthMap.set(m, { month: m, receipts: 0, payments: 0 });
+                    monthMap.get(m)!.receipts += p.total_receipts;
+                    monthMap.get(m)!.payments += p.total_payments;
+                  }
                 }
                 const cashData = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
                 if (cashData.length === 0) return null;
                 return (
                   <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
                     <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
-                      Receipts vs Payments
+                      Monthly Receipts vs Payments
                     </div>
                     <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={cashData.map((d) => ({ ...d, month: d.month.slice(5) }))}>
+                      <LineChart data={cashData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                         <XAxis dataKey="month" tick={{ fontSize: 12, fill: SLATE }} />
                         <YAxis tick={{ fontSize: 12, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
-                        <Tooltip formatter={(value) => Number(value).toLocaleString()} />
-                        <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
-                        <Bar dataKey="receipts" fill="#16a34a" name="Money In" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="payments" fill="#dc2626" name="Money Out" radius={[4, 4, 0, 0]} />
-                      </BarChart>
+                        <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: "13px" }} />
+                        <Line type="monotone" dataKey="receipts" stroke="#16a34a" strokeWidth={2} dot={{ r: 4 }} name="Money In" />
+                        <Line type="monotone" dataKey="payments" stroke="#dc2626" strokeWidth={2} dot={{ r: 4 }} name="Money Out" />
+                      </LineChart>
                     </ResponsiveContainer>
                   </div>
                 );
