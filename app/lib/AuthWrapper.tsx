@@ -79,8 +79,12 @@ export default function AuthWrapper({
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifItems, setNotifItems] = useState<{ label: string; count: number; href: string }[]>([]);
 
   const settingsRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   // Detect mobile
   useEffect(() => {
@@ -124,21 +128,63 @@ export default function AuthWrapper({
     return () => { subscription.unsubscribe(); };
   }, [router]);
 
-  // Close settings dropdown when clicking outside
+  // Load notification counts
+  async function loadNotifications() {
+    if (!email || !member) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const role = member.role;
+    const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || email;
+    const isAdmin = role === "Admin" || role === "Executive";
+
+    let query = supabase.from("tasks").select("id, status, due_date, assigned_to_email, assigned_to");
+    if (!isAdmin) {
+      query = query.eq("assigned_to_email", email);
+    }
+
+    const { data: tasks } = await query;
+    if (!tasks) return;
+
+    const myTasks = isAdmin ? tasks : tasks.filter((t) => t.assigned_to_email === email || t.assigned_to === userName);
+    const open = myTasks.filter((t: Record<string, unknown>) => t.status !== "Completed" && t.status !== "Cancelled");
+    const overdue = open.filter((t: Record<string, unknown>) => t.due_date && (t.due_date as string) < todayStr);
+    const waiting = open.filter((t: Record<string, unknown>) => t.status === "Waiting Reply");
+
+    const items: { label: string; count: number; href: string }[] = [];
+    if (overdue.length > 0) items.push({ label: "Overdue tasks", count: overdue.length, href: "/tasks" });
+    if (waiting.length > 0) items.push({ label: "Waiting reply", count: waiting.length, href: "/tasks" });
+
+    if (isAdmin) {
+      const { data: machines } = await supabase.from("machine_issues").select("id").eq("issue_status", "Down");
+      if (machines && machines.length > 0) items.push({ label: "Machines down", count: machines.length, href: "/dashboard" });
+    }
+
+    setNotifItems(items);
+    setNotifCount(items.reduce((s, i) => s + i.count, 0));
+  }
+
+  useEffect(() => {
+    if (!loading && email && member) {
+      loadNotifications();
+      const channel = supabase
+        .channel("notif-bell")
+        .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => loadNotifications())
+        .on("postgres_changes", { event: "*", schema: "public", table: "machine_issues" }, () => loadNotifications())
+        .subscribe();
+      return () => { supabase.removeChannel(channel); };
+    }
+  }, [loading, email, member]);
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        settingsRef.current &&
-        !settingsRef.current.contains(e.target as Node)
-      ) {
-        setSettingsOpen(false);
-      }
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setSettingsOpen(false);
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
     }
-    if (settingsOpen) {
+    if (settingsOpen || notifOpen) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [settingsOpen]);
+  }, [settingsOpen, notifOpen]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -326,6 +372,69 @@ export default function AuthWrapper({
                 </span>
               </>
             )}
+
+            {/* Notification bell */}
+            <div ref={notifRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setNotifOpen((v) => !v)}
+                style={{
+                  position: "relative",
+                  backgroundColor: "white",
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: "7px",
+                  padding: "6px 10px",
+                  fontSize: "18px",
+                  cursor: "pointer",
+                  lineHeight: 1,
+                  color: notifCount > 0 ? "#dc2626" : NAVY,
+                }}
+                aria-label="Notifications"
+              >
+                🔔
+                {notifCount > 0 && (
+                  <span style={{
+                    position: "absolute", top: "-4px", right: "-4px",
+                    backgroundColor: "#dc2626", color: "white",
+                    fontSize: "11px", fontWeight: 700,
+                    width: "18px", height: "18px",
+                    borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>{notifCount > 9 ? "9+" : notifCount}</span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0,
+                  minWidth: "240px", backgroundColor: "white",
+                  border: `1px solid ${BORDER}`, borderRadius: "8px",
+                  boxShadow: "0 4px 14px rgba(15,23,42,0.10)",
+                  zIndex: 30, overflow: "hidden",
+                }}>
+                  <div style={{ padding: "8px 12px", borderBottom: `1px solid ${BORDER}`, fontSize: "13px", fontWeight: 700, color: NAVY }}>
+                    Notifications
+                  </div>
+                  {notifItems.length === 0 ? (
+                    <div style={{ padding: "12px", fontSize: "14px", color: SLATE, textAlign: "center" }}>
+                      All clear — nothing needs attention
+                    </div>
+                  ) : (
+                    notifItems.map((item) => (
+                      <a key={item.label} href={item.href} onClick={() => setNotifOpen(false)}
+                        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderBottom: `1px solid ${LIGHT}`, textDecoration: "none", color: "inherit" }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = LIGHT; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "transparent"; }}
+                      >
+                        <span style={{ fontSize: "14px", color: NAVY, fontWeight: 500 }}>{item.label}</span>
+                        <span style={{
+                          fontSize: "12px", fontWeight: 700, color: "white",
+                          backgroundColor: "#dc2626", borderRadius: "10px", padding: "2px 7px",
+                        }}>{item.count}</span>
+                      </a>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Settings dropdown — only Admin / Executive */}
             {canSeeSettings && (
