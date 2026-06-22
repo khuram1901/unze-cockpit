@@ -167,6 +167,8 @@ export default function DashboardView() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bannerOpen, setBannerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"production" | "dispatch" | "breakage" | "tasks">("production");
 
   async function loadAll() {
     const currentMonth = getMonthFromDate(today);
@@ -336,124 +338,208 @@ export default function DashboardView() {
   const completedCount = myTasks.filter((t) => t.status === "Completed").length;
   const visibleTasks = showCompleted ? myTasks : openTasks;
 
+  const downMachines = machineIssues.filter((m) => m.issue_status === "Down");
+  const overdueTaskCount = openTasks.filter((t) => t.due_date && t.due_date < today).length;
+
+  // Banner alerts
+  const bannerItems: string[] = [];
+  if (downMachines.length > 0) bannerItems.push(`${downMachines.length} machine${downMachines.length > 1 ? "s" : ""} down`);
+  if (missingPlants.length > 0) bannerItems.push(`${missingPlants.length} plant${missingPlants.length > 1 ? "s" : ""} not reported`);
+  if (overdueTaskCount > 0) bannerItems.push(`${overdueTaskCount} overdue task${overdueTaskCount > 1 ? "s" : ""}`);
+  const hasBannerItems = bannerItems.length > 0;
+  const hasCritical = downMachines.length > 0 || overdueTaskCount > 0;
+
   return (
     <div style={{ maxWidth: "100vw", overflowX: "hidden" }}>
-      <p style={{ color: SLATE, fontSize: "17px", marginBottom: "16px" }}>
-        {`Operations command centre for ${today} (month-week ${weekNum} of 4). Today's snapshot, open issues, your tasks and KPIs in one place.`}
-      </p>
 
-      {/* ===== TODAY'S SNAPSHOT ===== */}
-      <SectionTitle title="Today's Snapshot" />
+      {/* ═══ ZONE 1: ALERT BANNER ═══ */}
+      {hasBannerItems ? (
+        <div style={{
+          border: `1px solid ${hasCritical ? "#fecaca" : BORDER}`,
+          borderLeft: `4px solid ${hasCritical ? "#dc2626" : "#d97706"}`,
+          borderRadius: "8px",
+          backgroundColor: hasCritical ? "#fef2f2" : "#fffbeb",
+          overflow: "hidden", marginBottom: "14px",
+        }}>
+          <div onClick={() => setBannerOpen(!bannerOpen)} style={{
+            padding: "12px 16px", cursor: "pointer",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "20px" }}>⚠</span>
+              <div>
+                <div style={{ fontSize: "16px", fontWeight: 700, color: hasCritical ? "#991b1b" : "#92400e" }}>
+                  Attention needed — {bannerItems.length} issue{bannerItems.length > 1 ? "s" : ""}
+                </div>
+                <div style={{ fontSize: "13px", color: hasCritical ? "#991b1b" : "#92400e", marginTop: "1px" }}>
+                  {bannerItems.join(" · ")}
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: hasCritical ? "#991b1b" : "#92400e" }}>{bannerOpen ? "▲" : "▼"}</span>
+          </div>
+
+          {bannerOpen && (
+            <div style={{ borderTop: `1px solid ${hasCritical ? "#fecaca" : "#fde68a"}`, backgroundColor: "white" }}>
+              {/* Machines Down */}
+              {downMachines.length > 0 && (
+                <>
+                  <div style={{ padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#dc2626", borderBottom: `1px solid #f1f5f9` }}>Machines Down ({downMachines.length})</div>
+                  {machineIssues.filter((m) => m.issue_status === "Down").map((m) => (
+                    <div key={m.id} style={{ padding: "7px 16px 7px 48px", borderBottom: `1px solid #f1f5f9`, fontSize: "14px" }}>
+                      <span style={{ fontWeight: 600, color: NAVY }}>{m.plant_name} — {m.machine_name}</span>
+                      <span style={{ color: SLATE, marginLeft: "8px" }}>{m.issue_description || ""}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+              {/* Missing Plants */}
+              {missingPlants.length > 0 && (
+                <>
+                  <div style={{ padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#d97706", borderBottom: `1px solid #f1f5f9` }}>Plants Not Reported ({missingPlants.length})</div>
+                  {missingPlants.map((s) => (
+                    <div key={s.plant.id} style={{ padding: "7px 16px 7px 48px", borderBottom: `1px solid #f1f5f9`, fontSize: "14px", display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontWeight: 600, color: NAVY }}>{s.plant.name}</span>
+                      <span style={{ color: s.productionDaysMissing >= 3 || s.dispatchDaysMissing >= 3 ? "#dc2626" : "#d97706", fontWeight: 700, fontSize: "13px" }}>
+                        {s.productionDaysMissing >= 3 || s.dispatchDaysMissing >= 3 ? "Escalated (3+ days)" : "Chase today"}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+              {/* Overdue Tasks */}
+              {overdueTaskCount > 0 && (
+                <>
+                  <div style={{ padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#dc2626", borderBottom: `1px solid #f1f5f9` }}>Overdue Tasks ({overdueTaskCount})</div>
+                  {openTasks.filter((t) => t.due_date && t.due_date < today).map((t) => (
+                    <a key={t.id} href={`/tasks?task=${t.id}`} style={{ textDecoration: "none", color: "inherit", display: "block", padding: "7px 16px 7px 48px", borderBottom: `1px solid #f1f5f9`, fontSize: "14px" }}>
+                      <span style={{ fontWeight: 600, color: NAVY }}>{t.description}</span>
+                      <span style={{ color: "#dc2626", marginLeft: "8px", fontWeight: 700 }}>Due: {formatDateUK(t.due_date)}</span>
+                      <span style={{ color: "#2563eb", marginLeft: "8px", fontSize: "12px" }}>Open →</span>
+                    </a>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ border: `1px solid ${BORDER}`, borderLeft: "4px solid #16a34a", borderRadius: "6px", padding: "12px 16px", backgroundColor: "white", fontSize: "16px", color: NAVY, fontWeight: 600, marginBottom: "14px" }}>
+          All clear — no machines down, all plants reported, no overdue tasks.
+        </div>
+      )}
+
+      {/* ═══ SUMMARY CARDS ═══ */}
       <div style={squareGrid}>
         <Card label="Produced Today" value={totalProducedToday} color="#16a34a" />
         <Card label="Dispatched Today" value={totalDispatchedToday} color="#059669" />
         <Card label="Broken Today" value={totalBrokenToday} color="#dc2626" />
-        <Card label="Plants Missing" value={missingPlants.length} color={missingPlants.length > 0 ? "#dc2626" : "#16a34a"} />
-        <Card label="Closing Good Stock" value={totalClosingGoodStock} color="#2563eb" />
-        <Card label="Closing Broken Stock" value={totalClosingBrokenStock} color="#dc2626" />
+        <Card label="Good Stock" value={totalClosingGoodStock} color="#2563eb" />
+        <Card label="Broken Stock" value={totalClosingBrokenStock} color="#dc2626" />
+        <Card label="Machine Issues" value={machineIssues.length} color={machineIssues.length > 0 ? "#dc2626" : "#16a34a"} />
       </div>
 
-      {/* ===== PLANT COMPARISON CHART ===== */}
-      {summaries.length > 1 && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "16px" }}>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
-            Plant Comparison — This Month
-          </div>
-          <ResponsiveContainer width="100%" height={Math.max(180, summaries.length * 45)}>
-            <BarChart
-              data={summaries.map((s) => ({
-                name: s.plant.name.replace(" Plant", ""),
-                Produced: s.production.monthActual,
-                Dispatched: s.dispatch.monthActual,
-                Target: s.production.monthlyTarget,
-              }))}
-              layout="vertical"
-              margin={{ left: 10, right: 20, top: 0, bottom: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 12, fill: SLATE }} />
-              <YAxis dataKey="name" type="category" tick={{ fontSize: 13, fill: NAVY, fontWeight: 600 }} width={80} />
-              <Tooltip formatter={(value) => Number(value).toLocaleString()} />
-              <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
-              <Bar dataKey="Target" fill="#cbd5e1" name="Monthly Target (grey)" radius={[0, 4, 4, 0]} />
-              <Bar dataKey="Produced" fill="#16a34a" name="Produced MTD (green)" radius={[0, 4, 4, 0]} />
-              <Bar dataKey="Dispatched" fill="#059669" name="Dispatched MTD (teal)" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* ===== MACHINE ISSUES ===== */}
-      <SectionTitle title={`Machine Issues · ${machineIssues.length} open`} />
-      <div style={{ marginBottom: "24px" }}>
-        {machineIssues.length === 0 ? (
-          <div style={okBoxStyle}>No open machine issues across any plant.</div>
-        ) : (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", overflowX: "auto" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: isMobile ? "500px" : undefined }}>
-              <thead>
-                <tr style={{ backgroundColor: "#f8fafc" }}>
-                  <th style={th}>Plant</th>
-                  <th style={th}>Machine</th>
-                  <th style={th}>Status</th>
-                  <th style={th}>Expected fix</th>
-                  <th style={th}>Issue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {machineIssues.map((m) => (
-                  <tr key={m.id}>
-                    <td style={tdBold}>{m.plant_name}</td>
-                    <td style={td}>{m.machine_name}</td>
-                    <td style={{ ...td, color: m.issue_status === "Down" ? "#dc2626" : "#d97706", fontWeight: 700 }}>
-                      {m.issue_status}
-                    </td>
-                    <td style={td}>{m.expected_resolution || "—"}</td>
-                    <td style={{ ...td, color: SLATE }}>{m.issue_description || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* ═══ ZONE 2: CHARTS ROW ═══ */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
+        {/* Plant Comparison Chart */}
+        {summaries.length > 0 && (
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Plant Comparison — This Month</div>
+            <ResponsiveContainer width="100%" height={Math.max(160, summaries.length * 40)}>
+              <BarChart
+                data={summaries.map((s) => ({
+                  name: s.plant.name.replace(" Plant", ""),
+                  Produced: s.production.monthActual,
+                  Dispatched: s.dispatch.monthActual,
+                  Target: s.production.monthlyTarget,
+                }))}
+                layout="vertical"
+                margin={{ left: 5, right: 10, top: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: SLATE }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: NAVY, fontWeight: 600 }} width={70} />
+                <Tooltip formatter={(value) => Number(value).toLocaleString()} />
+                <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
+                <Bar dataKey="Target" fill="#cbd5e1" name="Target (grey)" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Produced" fill="#16a34a" name="Produced (green)" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Dispatched" fill="#059669" name="Dispatched (teal)" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         )}
+
+        {/* Breakage Rate Gauges */}
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
+            Breakage Rate by Plant <span style={{ fontSize: "12px", fontWeight: 400, color: SLATE }}>(limit: 1.5%)</span>
+          </div>
+          {summaries.map((s) => {
+            const rate = s.breakageRate;
+            const color = s.breakageStatus === "red" ? "#dc2626" : s.breakageStatus === "amber" ? "#d97706" : "#16a34a";
+            const width = s.breakageStatus === "none" ? 0 : Math.min(rate / 3 * 100, 100);
+            return (
+              <div key={s.plant.id} style={{ marginBottom: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "3px" }}>
+                  <span style={{ fontWeight: 600, color: NAVY }}>{s.plant.name.replace(" Plant", "")}</span>
+                  <span style={{ fontWeight: 700, color }}>
+                    {s.breakageStatus === "none" ? "No data" : `${rate.toFixed(2)}%`}
+                  </span>
+                </div>
+                <div style={{ height: "10px", backgroundColor: "#f1f5f9", borderRadius: "5px", position: "relative" }}>
+                  <div style={{ width: `${width}%`, height: "100%", backgroundColor: color, borderRadius: "5px", transition: "width 0.3s" }} />
+                  <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: "2px", backgroundColor: "#dc2626", opacity: 0.4 }} title="1.5% limit" />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ===== MISSING ENTRIES — chase list ===== */}
-      <SectionTitle title="Missing Entries — Chase List" />
-      <div style={{ marginBottom: "24px" }}>
-        {missingPlants.length === 0 ? (
-          <div style={okBoxStyle}>All active plants have submitted both production and dispatch today.</div>
-        ) : (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", overflowX: "auto" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: isMobile ? "480px" : undefined }}>
+      {/* ═══ ZONE 3: TABBED DETAIL ═══ */}
+      <div style={{ display: "flex", gap: "4px", marginBottom: "10px", flexWrap: "wrap" }}>
+        {([
+          { key: "production" as const, label: "Production KPI" },
+          { key: "dispatch" as const, label: "Dispatch KPI" },
+          { key: "breakage" as const, label: "Breakage" },
+          { key: "tasks" as const, label: `My Tasks (${openTasks.length})` },
+        ]).map((tab) => (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+            backgroundColor: activeTab === tab.key ? NAVY : "white",
+            color: activeTab === tab.key ? "white" : NAVY,
+            border: `1px solid ${activeTab === tab.key ? NAVY : BORDER}`,
+            borderRadius: "6px", padding: "7px 14px", fontSize: "14px", fontWeight: 600, cursor: "pointer",
+          }}>{tab.label}</button>
+        ))}
+      </div>
+
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
+        {activeTab === "production" && <KPITable summaries={summaries} metric="production" />}
+        {activeTab === "dispatch" && <KPITable summaries={summaries} metric="dispatch" />}
+
+        {activeTab === "breakage" && (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ borderCollapse: "collapse", width: "100%" }}>
               <thead>
                 <tr style={{ backgroundColor: "#f8fafc" }}>
                   <th style={th}>Plant</th>
-                  <th style={th}>Production today</th>
-                  <th style={th}>Dispatch today</th>
+                  <th style={th}>Month Produced</th>
+                  <th style={th}>Breakage Rate</th>
                   <th style={th}>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {missingPlants.map((s) => {
-                  const escalated = s.productionDaysMissing >= 3 || s.dispatchDaysMissing >= 3;
+                {summaries.map((s) => {
+                  const color = statusColor(s.breakageStatus);
                   return (
                     <tr key={s.plant.id}>
                       <td style={tdBold}>{s.plant.name}</td>
-                      <td style={{ ...td, color: s.enteredProductionToday ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
-                        {s.enteredProductionToday ? "✓ In" : `Missing (${s.productionDaysMissing >= 999 ? "—" : s.productionDaysMissing} wd behind)`}
+                      <td style={td}>{s.production.monthActual.toLocaleString()}</td>
+                      <td style={{ ...td, color, fontWeight: 700 }}>
+                        {s.breakageStatus === "none" ? "—" : `${s.breakageRate.toFixed(2)}%`}
                       </td>
-                      <td style={{ ...td, color: s.enteredDispatchToday ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
-                        {s.enteredDispatchToday ? "✓ In" : `Missing (${s.dispatchDaysMissing >= 999 ? "—" : s.dispatchDaysMissing} wd behind)`}
-                      </td>
-                      <td style={td}>
-                        {escalated ? (
-                          <span style={{ fontSize: "15px", fontWeight: 700, color: "white", backgroundColor: "#dc2626", borderRadius: "10px", padding: "2px 8px" }}>
-                            3+ days — escalated to Executive
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: "15px", fontWeight: 700, color: "#d97706" }}>Chase today</span>
-                        )}
+                      <td style={{ ...td, color, fontWeight: 700 }}>
+                        {s.breakageStatus === "none" ? "No Production" : statusLabel(s.breakageStatus)}
                       </td>
                     </tr>
                   );
@@ -462,83 +548,36 @@ export default function DashboardView() {
             </table>
           </div>
         )}
-      </div>
 
-      {/* ===== MY TASKS — accountability items assigned to me ===== */}
-      <SectionTitle title={`My Tasks · ${openTasks.length} outstanding`} />
-      <div style={{ marginBottom: "24px" }}>
-        {myTasks.length === 0 ? (
-          <div style={okBoxStyle}>No tasks assigned to you. Nothing outstanding.</div>
-        ) : (
-          <>
-            {completedCount > 0 && (
-              <div style={{ textAlign: "right", marginBottom: "8px" }}>
-                <button
-                  onClick={() => setShowCompleted((v) => !v)}
-                  style={{ fontSize: "16px", fontWeight: 600, color: NAVY, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 11px", cursor: "pointer" }}
-                >
-                  {showCompleted ? "Hide completed" : `Show completed (${completedCount})`}
-                </button>
+        {activeTab === "tasks" && (
+          myTasks.length === 0 ? (
+            <div style={{ padding: "16px", color: SLATE, textAlign: "center" }}>No tasks assigned to you.</div>
+          ) : (
+            <>
+              {completedCount > 0 && (
+                <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BORDER}`, textAlign: "right" }}>
+                  <button onClick={() => setShowCompleted((v) => !v)}
+                    style={{ fontSize: "13px", fontWeight: 600, color: NAVY, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "5px", padding: "4px 10px", cursor: "pointer" }}>
+                    {showCompleted ? "Hide completed" : `Show completed (${completedCount})`}
+                  </button>
+                </div>
+              )}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                  <tbody>
+                    {visibleTasks.map((task) => {
+                      const open = expandedTaskId === task.id;
+                      return (
+                        <FragmentRow key={task.id} task={task} open={open}
+                          onToggle={() => setExpandedTaskId(open ? null : task.id)} onChanged={loadAll} />
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            )}
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                <tbody>
-                  {visibleTasks.map((task) => {
-                    const open = expandedTaskId === task.id;
-                    return (
-                      <FragmentRow
-                        key={task.id}
-                        task={task}
-                        open={open}
-                        onToggle={() => setExpandedTaskId(open ? null : task.id)}
-                        onChanged={loadAll}
-                      />
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
+            </>
+          )
         )}
-      </div>
-
-      {/* ===== KPI TABLES (reference) ===== */}
-      <SectionTitle title="Production KPI" />
-      <KPITable summaries={summaries} metric="production" />
-
-      <SectionTitle title="Dispatch KPI" />
-      <KPITable summaries={summaries} metric="dispatch" />
-
-      <SectionTitle title="Breakage KPI" />
-      <div style={{ overflowX: "auto", marginBottom: "24px" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
-          <thead>
-            <tr style={{ backgroundColor: "#f8fafc" }}>
-              <th style={th}>Plant</th>
-              <th style={th}>Month Produced</th>
-              <th style={th}>Breakage Rate</th>
-              <th style={th}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {summaries.map((s) => {
-              const color = statusColor(s.breakageStatus);
-              return (
-                <tr key={s.plant.id}>
-                  <td style={tdBold}>{s.plant.name}</td>
-                  <td style={td}>{s.production.monthActual.toLocaleString()}</td>
-                  <td style={{ ...td, color, fontWeight: 700 }}>
-                    {s.breakageStatus === "none" ? "—" : `${s.breakageRate.toFixed(2)}%`}
-                  </td>
-                  <td style={{ ...td, color, fontWeight: 700 }}>
-                    {s.breakageStatus === "none" ? "No Production" : statusLabel(s.breakageStatus)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
       </div>
     </div>
   );
@@ -683,12 +722,3 @@ const tdBold: React.CSSProperties = {
   color: NAVY,
 };
 
-const okBoxStyle = {
-  border: "1px solid #bbf7d0",
-  backgroundColor: "#f0fdf4",
-  color: "#166534",
-  borderRadius: "8px",
-  padding: "12px 14px",
-  fontWeight: "bold" as const,
-  fontSize: "17px",
-};
