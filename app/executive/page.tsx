@@ -1399,7 +1399,7 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
               "Cash Available",
               latest ? `PKR ${fmtMoney(latest.closing_after_post_dated)}` : "—",
               latest ? `Updated ${formatDateUK(latest.position_date)}${staleDays > 1 ? " (STALE)" : ""}` : "No data",
-              staleDays > 1 ? "#dc2626" : (latest?.closing_after_post_dated ?? 0) >= 0 ? "#16a34a" : "#dc2626"
+              !latest ? "#2563eb" : latest.closing_after_post_dated < 0 ? "#dc2626" : "#16a34a"
             )}
             {summaryCard(
               "Money In (MTD)",
