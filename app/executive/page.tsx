@@ -915,8 +915,40 @@ export default function ExecutiveDashboardPage() {
               }
               const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0;
 
+              const criticalItems: string[] = [];
+              if (overdueTasks.length > 0) criticalItems.push(`${overdueTasks.length} overdue task${overdueTasks.length > 1 ? "s" : ""}`);
+              if (downMachines.length > 0) criticalItems.push(`${downMachines.length} machine${downMachines.length > 1 ? "s" : ""} down`);
+              if (escalations.length > 0) criticalItems.push(`${escalations.length} escalation${escalations.length > 1 ? "s" : ""}`);
+              if (waitingReplies.length > 0) criticalItems.push(`${waitingReplies.length} waiting repl${waitingReplies.length > 1 ? "ies" : "y"}`);
+              if (missingPlants.length > 0) criticalItems.push(`${missingPlants.length} plant${missingPlants.length > 1 ? "s" : ""} not reported`);
+              const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0;
+
               return hasAttention ? (
               <>
+                {hasCritical && (
+                  <div style={{
+                    backgroundColor: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    borderLeft: "4px solid #dc2626",
+                    borderRadius: "8px",
+                    padding: "12px 16px",
+                    marginBottom: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}>
+                    <span style={{ fontSize: "20px", flexShrink: 0 }}>⚠</span>
+                    <div>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
+                        Action needed today
+                      </div>
+                      <div style={{ fontSize: "15px", color: "#991b1b", marginTop: "2px" }}>
+                        {criticalItems.join(" · ")}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <SectionTitle title="Needs Your Attention" />
                 <div style={squareGrid}>
                   {overdueTasks.length > 0 && <Card title="Overdue Tasks" value={overdueTasks.length} color="#dc2626" onClick={() => toggleCard("overdue")} />}
