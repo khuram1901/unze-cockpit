@@ -113,7 +113,9 @@ export default function TaxationDashboard() {
 
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
-      <PageHeader title="Taxation" subtitle="Tax notices, hearings, and financial exposure tracking" />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+        <PageHeader title="Taxation" subtitle="Tax notices, hearings, and financial exposure tracking" />
+      </div>
 
       {message && (
         <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "white", fontSize: "15px", color: COLOURS.NAVY }}>{message}</div>
@@ -183,14 +185,20 @@ export default function TaxationDashboard() {
         </div>
       )}
 
-      {/* Add button + form */}
+      {/* Notices header with + button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <SectionTitle title="Notices" />
-        <button onClick={() => setShowForm(!showForm)} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>{showForm ? "Cancel" : "+ Add"}</button>
+        <SectionTitle title="Notices by Company" />
+        <button onClick={() => setShowForm(!showForm)} style={{
+          backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
+          width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+        }} title="Add notice">{showForm ? "×" : "+"}</button>
       </div>
 
       {showForm && (
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>New Notice</div>
           <form onSubmit={handleAdd}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
               <label style={lbl}>Notice Title <input style={inp} value={formData.title || ""} onChange={(e) => setField("title", e.target.value)} required placeholder="e.g. Income Tax Notice FY2025" /></label>
@@ -203,58 +211,91 @@ export default function TaxationDashboard() {
               <label style={lbl}>Our Action Required <textarea style={{ ...inp, height: "50px" }} value={formData.our_action_required || ""} onChange={(e) => setField("our_action_required", e.target.value)} /></label>
               <label style={lbl}>Consultant Action <textarea style={{ ...inp, height: "50px" }} value={formData.consultant_action_required || ""} onChange={(e) => setField("consultant_action_required", e.target.value)} /></label>
             </div>
-            <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Save"}</button>
+            <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Add Notice"}</button>
           </form>
         </div>
       )}
 
-      {/* Records */}
+      {/* Notices grouped by company */}
       {loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : items.length === 0 ? (
         <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", color: COLOURS.SLATE }}>No notices yet.</div>
-      ) : (
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
-          {items.map((item) => {
-            const isOpen = expandedId === item.id;
-            const hearingDays = daysUntil(item.hearing_deadline);
-            const isUrgent = item.resolution_status === "pending" && hearingDays >= 0 && hearingDays <= 7;
-            return (
-              <div key={item.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}` }}>
-                <div onClick={() => setExpandedId(isOpen ? null : item.id)} style={{
-                  padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                  backgroundColor: isUrgent ? "#fef2f2" : isOpen ? "#f8fafc" : "white",
-                }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{item.title}</div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                      {item.company_name || "—"} · {item.notice_type || "—"} · {item.consultant_name || "No consultant"}
+      ) : (() => {
+        const groups = new Map<string, Notice[]>();
+        for (const item of items) {
+          const c = item.company_name || "Unassigned";
+          if (!groups.has(c)) groups.set(c, []);
+          groups.get(c)!.push(item);
+        }
+        const companyNames = Array.from(groups.keys()).sort();
+
+        return (
+          <>
+            {companyNames.map((company) => {
+              const notices = groups.get(company)!;
+              const companyPending = notices.filter((n) => n.resolution_status === "pending");
+              const companyExposure = companyPending.reduce((s, n) => s + (n.financial_exposure || 0), 0);
+              const companyHearingSoon = companyPending.filter((n) => { const d = daysUntil(n.hearing_deadline); return d >= 0 && d <= 7; }).length;
+
+              return (
+                <div key={company} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "10px" }}>
+                  {/* Company header */}
+                  <div style={{ padding: "8px 14px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{company.replace(" PVT Limited", "")}</span>
+                    <div style={{ display: "flex", gap: "10px", fontSize: "12px" }}>
+                      {companyHearingSoon > 0 && <span style={{ fontWeight: 700, color: COLOURS.RED }}>{companyHearingSoon} hearing soon</span>}
+                      {companyExposure > 0 && <span style={{ fontWeight: 700, color: COLOURS.RED }}>PKR {companyExposure.toLocaleString()}</span>}
+                      <span style={{ color: COLOURS.SLATE }}>{companyPending.length} pending · {notices.length} total</span>
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
-                    {item.financial_exposure && <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED }}>PKR {item.financial_exposure.toLocaleString()}</span>}
-                    <StatusBadge status={item.resolution_status} />
-                    <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>{isOpen ? "▼" : "▶"}</span>
-                  </div>
+
+                  {/* Notice rows */}
+                  {notices.map((item) => {
+                    const isOpen = expandedId === item.id;
+                    const hearingDays = daysUntil(item.hearing_deadline);
+                    const isUrgent = item.resolution_status === "pending" && hearingDays >= 0 && hearingDays <= 7;
+                    return (
+                      <div key={item.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                        <div onClick={() => setExpandedId(isOpen ? null : item.id)} style={{
+                          padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+                          backgroundColor: isUrgent ? "#fef2f2" : isOpen ? "#f8fafc" : "white",
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{item.title}</div>
+                            <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                              {item.notice_type || "—"} · {item.consultant_name || "No consultant"}
+                              {item.hearing_deadline && <span style={{ color: isUrgent ? COLOURS.RED : COLOURS.SLATE, fontWeight: isUrgent ? 700 : 400 }}> · Hearing: {formatDateUK(item.hearing_deadline)}{isUrgent ? ` (${hearingDays}d)` : ""}</span>}
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
+                            {item.financial_exposure ? <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED }}>PKR {item.financial_exposure.toLocaleString()}</span> : null}
+                            <StatusBadge status={item.resolution_status} />
+                            <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>{isOpen ? "▼" : "▶"}</span>
+                          </div>
+                        </div>
+                        {isOpen && (
+                          <div style={{ padding: "10px 14px", backgroundColor: "#f8fafc", borderTop: `1px solid ${COLOURS.BORDER}`, fontSize: "13px", color: COLOURS.SLATE }}>
+                            {item.hearing_deadline && <div style={{ marginBottom: "4px" }}>Hearing: <strong style={{ color: isUrgent ? COLOURS.RED : COLOURS.NAVY }}>{formatDateUK(item.hearing_deadline)}{isUrgent ? ` (${hearingDays}d away)` : ""}</strong></div>}
+                            {item.received_date && <div style={{ marginBottom: "4px" }}>Received: {formatDateUK(item.received_date)}</div>}
+                            {item.our_action_required && <div style={{ marginBottom: "4px" }}>Our action: {item.our_action_required}</div>}
+                            {item.consultant_action_required && <div style={{ marginBottom: "4px" }}>Consultant action: {item.consultant_action_required}</div>}
+                            {item.notes && <div style={{ marginBottom: "6px" }}>Notes: {item.notes}</div>}
+                            <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "6px" }}>
+                              <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>Status:</span>
+                              <select value={item.resolution_status} onChange={(e) => updateStatus(item.id, e.target.value)} style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}>
+                                {STATUSES.map((s) => <option key={s}>{s}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                {isOpen && (
-                  <div style={{ padding: "10px 14px", backgroundColor: "#f8fafc", borderTop: `1px solid ${COLOURS.BORDER}`, fontSize: "13px", color: COLOURS.SLATE }}>
-                    {item.hearing_deadline && <div style={{ marginBottom: "4px" }}>Hearing: <strong style={{ color: isUrgent ? COLOURS.RED : COLOURS.NAVY }}>{formatDateUK(item.hearing_deadline)}{isUrgent ? ` (${hearingDays}d away)` : ""}</strong></div>}
-                    {item.received_date && <div style={{ marginBottom: "4px" }}>Received: {formatDateUK(item.received_date)}</div>}
-                    {item.our_action_required && <div style={{ marginBottom: "4px" }}>Our action: {item.our_action_required}</div>}
-                    {item.consultant_action_required && <div style={{ marginBottom: "4px" }}>Consultant action: {item.consultant_action_required}</div>}
-                    {item.notes && <div style={{ marginBottom: "6px" }}>Notes: {item.notes}</div>}
-                    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "6px" }}>
-                      <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>Status:</span>
-                      <select value={item.resolution_status} onChange={(e) => updateStatus(item.id, e.target.value)} style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}>
-                        {STATUSES.map((s) => <option key={s}>{s}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </>
+        );
+      })()}
     </main>
   );
 }
