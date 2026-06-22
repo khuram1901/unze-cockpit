@@ -129,7 +129,7 @@ function statusColor(s: Status) {
   if (s === "green") return "#16a34a";
   if (s === "amber") return "#d97706";
   if (s === "red") return "#dc2626";
-  return "#666";
+  return "#64748b";
 }
 function statusLabel(s: Status) {
   if (s === "none") return "No Target";
@@ -591,8 +591,8 @@ function taskBadgeColor(status: string) {
     case "Completed": return "#16a34a";
     case "Submitted": return "#d97706";
     case "Waiting Reply": return "#dc2626";
-    case "Cancelled": return "#888";
-    case "In Progress": return "#0070f3";
+    case "Cancelled": return "#64748b";
+    case "In Progress": return "#d97706";
     default: return "#64748b";
   }
 }
@@ -626,7 +626,7 @@ function KPITable({ summaries, metric }: { summaries: PlantSummary[]; metric: "p
                 <td style={{ ...td, color, fontWeight: 700 }}>{k.monthlyTarget > 0 ? `${k.monthAchievement}%` : "—"}</td>
                 <td style={td}>{k.quarterTarget.toLocaleString()}</td>
                 <td style={td}>{k.quarterActual.toLocaleString()}</td>
-                <td style={{ ...td, color: k.monthlyTarget > 0 ? wkColor : "#666", fontWeight: 700 }}>{k.monthlyTarget > 0 ? `${k.quarterAchievement}%` : "—"}</td>
+                <td style={{ ...td, color: k.monthlyTarget > 0 ? wkColor : "#64748b", fontWeight: 700 }}>{k.monthlyTarget > 0 ? `${k.quarterAchievement}%` : "—"}</td>
                 <td style={{ ...td, color, fontWeight: 700 }}>{statusLabel(k.status)}</td>
               </tr>
             );

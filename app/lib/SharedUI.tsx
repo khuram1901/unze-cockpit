@@ -14,7 +14,8 @@ export const COLOURS = {
   GREEN: "#16a34a",
   AMBER: "#d97706",
   RED: "#dc2626",
-  BLUE: "#0070f3",
+  BLUE: "#2563eb",
+  TEAL: "#059669",
   PURPLE: "#7c3aed",
 };
 
@@ -30,18 +31,19 @@ export function statusColor(status: string | null): string {
     case "Resolved":
     case "Collected":
       return COLOURS.GREEN;
-    case "Submitted":
     case "In Progress":
     case "Pending":
     case "Partially Working":
       return COLOURS.AMBER;
+    case "Submitted":
+      return COLOURS.BLUE;
     case "Waiting Reply":
     case "Open":
     case "Down":
     case "Rejected":
       return COLOURS.RED;
     case "Cancelled":
-      return "#888";
+      return COLOURS.SLATE;
     default:
       return COLOURS.SLATE;
   }

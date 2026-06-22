@@ -145,7 +145,7 @@ export default function TaskStatus({
 
   const controlStyle = {
     padding: "6px",
-    border: "1px solid #ccc",
+    border: "1px solid #e2e8f0",
     borderRadius: "6px",
     fontSize: "16px",
   };
@@ -154,7 +154,7 @@ export default function TaskStatus({
     width: "100%",
     maxWidth: "520px",
     padding: "8px",
-    border: "1px solid #ccc",
+    border: "1px solid #e2e8f0",
     borderRadius: "6px",
     fontSize: "16px",
     display: "block",
@@ -163,7 +163,7 @@ export default function TaskStatus({
   };
 
   return (
-    <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #eee" }}>
+    <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e2e8f0" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         <span style={{ fontSize: "16px", fontWeight: "bold" }}>Update status:</span>
 
@@ -179,7 +179,7 @@ export default function TaskStatus({
         </select>
 
         {savedMessage && <span style={{ color: "green", fontSize: "16px" }}>{savedMessage}</span>}
-        {saving && <span style={{ color: "#888", fontSize: "16px" }}>Saving…</span>}
+        {saving && <span style={{ color: "#64748b", fontSize: "16px" }}>Saving…</span>}
       </div>
 
       {/* Due-date editor: Admin / Executive only */}
@@ -218,7 +218,7 @@ export default function TaskStatus({
             Save date
           </button>
           {dateMessage && <span style={{ color: "green", fontSize: "16px" }}>{dateMessage}</span>}
-          {savingDate && <span style={{ color: "#888", fontSize: "16px" }}>Saving…</span>}
+          {savingDate && <span style={{ color: "#64748b", fontSize: "16px" }}>Saving…</span>}
         </div>
       )}
 

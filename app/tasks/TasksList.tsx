@@ -38,13 +38,13 @@ function statusColor(status: string) {
     case "Completed":
       return "#16a34a";
     case "Submitted":
-      return "#d97706";
+      return "#2563eb";
     case "Waiting Reply":
       return "#dc2626";
     case "Cancelled":
-      return "#888";
+      return "#64748b";
     case "In Progress":
-      return "#0070f3";
+      return "#d97706";
     default:
       return "#64748b";
   }

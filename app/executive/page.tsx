@@ -947,7 +947,7 @@ export default function ExecutiveDashboardPage() {
                 items: overdueTasks.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority, taskId: t.id, actionType: "complete" as const })),
               });
               if (downMachines.length > 0) attentionRows.push({
-                id: "machines", label: "Machines Down", count: downMachines.length, color: "#b91c1c",
+                id: "machines", label: "Machines Down", count: downMachines.length, color: "#dc2626",
                 items: downMachines.map((m) => ({ key: m.id, primary: `${m.plant_name} — ${m.machine_name}`, secondary: m.issue_description || "No description", machineId: m.id, actionType: "resolve" as const })),
               });
               if (escalations.length > 0) attentionRows.push({
@@ -959,7 +959,7 @@ export default function ExecutiveDashboardPage() {
                 items: waitingReplies.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority, taskId: t.id, actionType: "reply" as const })),
               });
               if (missingPlants.length > 0) attentionRows.push({
-                id: "missing", label: "Plants Not Reported", count: missingPlants.length, color: "#ef4444",
+                id: "missing", label: "Plants Not Reported", count: missingPlants.length, color: "#dc2626",
                 items: missingPlants.map((s) => ({ key: s.plant.id, primary: s.plant.name, secondary: `Type: ${s.plant.type}` })),
               });
               if (dueThisWeekTasks.length > 0) attentionRows.push({
@@ -1065,7 +1065,7 @@ export default function ExecutiveDashboardPage() {
                                         {item.badge && (
                                           <span style={{
                                             fontSize: "11px", fontWeight: 700, padding: "2px 7px", borderRadius: "8px",
-                                            backgroundColor: item.badge === "High" || item.badge === "Urgent" ? "#dc2626" : item.badge === "Medium" ? "#0070f3" : "#64748b",
+                                            backgroundColor: item.badge === "High" || item.badge === "Urgent" ? "#dc2626" : item.badge === "Medium" ? "#2563eb" : "#64748b",
                                             color: "white",
                                           }}>{item.badge}</span>
                                         )}
@@ -1206,7 +1206,7 @@ export default function ExecutiveDashboardPage() {
                       Receivables: <span style={{ color: recRed > 0 ? "#dc2626" : "#16a34a" }}>{recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}</span>
                     </div>
                     <div style={miniGrid}>
-                      <Mini label="Total Tracked" value={fmtMoney(recTotal)} color="#0070f3" />
+                      <Mini label="Total Tracked" value={fmtMoney(recTotal)} color="#2563eb" />
                       <Mini label="On Time" value={fmtMoney(recGreen)} color="#16a34a" />
                       <Mini label="Due Soon" value={fmtMoney(recAmber)} color="#d97706" />
                       <Mini label="Stuck" value={fmtMoney(recRed)} color="#dc2626" />
@@ -1555,7 +1555,7 @@ function DetailRow({ primary, secondary, badge }: { primary: string; secondary?:
       {badge && (
         <span style={{
           fontSize: "12px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", whiteSpace: "nowrap", flexShrink: 0,
-          backgroundColor: badge === "High" || badge === "Urgent" ? "#dc2626" : badge === "Medium" ? "#0070f3" : "#64748b",
+          backgroundColor: badge === "High" || badge === "Urgent" ? "#dc2626" : badge === "Medium" ? "#2563eb" : "#64748b",
           color: "white",
         }}>
           {badge}

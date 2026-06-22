@@ -330,7 +330,7 @@ export default function ProductionForm() {
   function SectionMessage({ section }: { section: string }) {
     if (!sectionMsg || sectionMsg.section !== section) return null;
     return (
-      <p style={{ marginTop: "8px", fontSize: "16px", fontWeight: 700, color: sectionMsg.ok ? "#16a34a" : "#c0392b" }}>
+      <p style={{ marginTop: "8px", fontSize: "16px", fontWeight: 700, color: sectionMsg.ok ? "#16a34a" : "#dc2626" }}>
         {sectionMsg.text}
       </p>
     );
@@ -354,7 +354,7 @@ export default function ProductionForm() {
   if (noAccess) {
     return (
       <div style={{ ...sectionStyle, maxWidth: "520px" }}>
-        <p style={{ color: "#991b1b", fontWeight: "bold" }}>You are not assigned to any plant yet.</p>
+        <p style={{ color: "#dc2626", fontWeight: "bold" }}>You are not assigned to any plant yet.</p>
         <p style={{ color: "#666", fontSize: "16px" }}>
           Please ask an administrator to assign you to a plant on the Members page before entering data.
         </p>
@@ -571,7 +571,7 @@ export default function ProductionForm() {
                   <tbody>
                     {pastEntries.map((e, i) => {
                       const total = (e.qty_31 || 0) + (e.qty_36 || 0) + (e.qty_45 || 0) + (e.qty_meter || 0);
-                      const typeColor = e.type === "Production" ? "#16a34a" : e.type === "Dispatch" ? "#7c3aed" : "#dc2626";
+                      const typeColor = e.type === "Production" ? "#16a34a" : e.type === "Dispatch" ? "#059669" : "#dc2626";
                       return (
                         <tr key={`${e.entry_date}-${e.type}-${i}`}>
                           <td style={histTd}>{formatDateUK(e.entry_date)}</td>

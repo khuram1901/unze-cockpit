@@ -37,7 +37,7 @@ const SLATE = "#64748b";
 const BORDER = "#e2e8f0";
 const GREEN = "#16a34a";
 const RED = "#dc2626";
-const BLUE = "#0070f3";
+const BLUE = "#2563eb";
 
 function fmt(n: number) {
   return n.toLocaleString();
@@ -916,7 +916,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
                 <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: "13px" }} />
-                <Line type="monotone" dataKey="closing" stroke="#0070f3" strokeWidth={2} dot={false} name="Closing Balance" />
+                <Line type="monotone" dataKey="closing" stroke="#2563eb" strokeWidth={2} dot={false} name="Closing Balance" />
                 <Line type="monotone" dataKey="net" stroke={NAVY} strokeWidth={2} dot={false} name="After Post-dated" strokeDasharray="5 3" />
               </LineChart>
             </ResponsiveContainer>

@@ -235,7 +235,7 @@ export default function MonthlyOperationsTargetsPage() {
                   style={{
                     border: `1px solid #fecaca`,
                     backgroundColor: "#fef2f2",
-                    color: "#991b1b",
+                    color: "#dc2626",
                     borderRadius: "6px",
                     padding: "10px 12px",
                     marginBottom: "12px",
@@ -293,7 +293,7 @@ export default function MonthlyOperationsTargetsPage() {
                     style={{
                       border: `1px solid #fed7aa`,
                       backgroundColor: "#fff7ed",
-                      color: "#9a3412",
+                      color: "#d97706",
                       borderRadius: "6px",
                       padding: "8px 10px",
                       marginBottom: "10px",

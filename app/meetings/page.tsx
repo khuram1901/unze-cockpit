@@ -650,7 +650,7 @@ export default function MeetingsPage() {
                     </select>
                   </div>
                   <button onClick={() => removeActionItem(i)}
-                    style={{ backgroundColor: "white", border: `1px solid #e0a0a0`, color: "#c0392b", borderRadius: "6px", padding: "6px 10px", fontSize: "14px", cursor: "pointer", height: "fit-content" }}>
+                    style={{ backgroundColor: "white", border: `1px solid #dc2626`, color: "#dc2626", borderRadius: "6px", padding: "6px 10px", fontSize: "14px", cursor: "pointer", height: "fit-content" }}>
                     Remove
                   </button>
                 </div>
@@ -722,7 +722,7 @@ export default function MeetingsPage() {
                 const match = memberEmails.find((m) => m.name.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(m.name.toLowerCase()));
                 if (!match?.email) return (
                   <div key={a} style={{ padding: "4px 0", fontSize: "14px", color: COLOURS.SLATE }}>
-                    {a} <span style={{ fontSize: "12px", color: "#92400e" }}>(no email match)</span>
+                    {a} <span style={{ fontSize: "12px", color: "#d97706" }}>(no email match)</span>
                   </div>
                 );
                 return (
