@@ -154,43 +154,6 @@ type BudgetRow = {
   budget_month?: string;
 };
 
-type BankSnapshot = {
-  position_date: string;
-  cash_at_office: number;
-  js_bank_unze_trading: number;
-  askari_bank_saving: number;
-  allied_bank_unze_trading: number;
-  dib_bank: number;
-  silk_bank_saving: number;
-  mcb_unze_trading: number;
-  askari_saving_1489: number;
-  askari_saving_unze_trading: number;
-  hbl_pf_unze_trading: number;
-  meezan_bank_unze_trading: number;
-  hbl_unze_trading: number;
-  hbl_h_unze_trading: number;
-  faysal_bank_unze_trading: number;
-  total_available_balance: number;
-  post_dated_cheques_total: number;
-  reconciled: boolean;
-};
-
-const BANK_DISPLAY_NAMES: Record<string, string> = {
-  cash_at_office: "Cash at Office",
-  js_bank_unze_trading: "JS Bank",
-  askari_bank_saving: "Askari Bank Saving",
-  allied_bank_unze_trading: "Allied Bank",
-  dib_bank: "DIB Bank",
-  silk_bank_saving: "Silk Bank Saving",
-  mcb_unze_trading: "MCB Bank",
-  askari_saving_1489: "Askari Saving 1489",
-  askari_saving_unze_trading: "Askari Saving",
-  hbl_pf_unze_trading: "HBL PF",
-  meezan_bank_unze_trading: "Meezan Bank",
-  hbl_unze_trading: "HBL",
-  hbl_h_unze_trading: "HBL - H",
-  faysal_bank_unze_trading: "Faysal Bank",
-};
 
 const NAVY = "#1e293b";
 const SLATE = "#64748b";
@@ -354,7 +317,6 @@ export default function ExecutiveDashboardPage() {
     cashOpening: OpeningBalance | null;
     cashPlan: MonthlyPlan | null;
     cashPositions: DailyPosition[];
-    bankSnapshot: BankSnapshot | null;
     lastYearReceipts: number | null;
     lastYearPayments: number | null;
     forecast: BudgetRow[];
@@ -539,11 +501,10 @@ export default function ExecutiveDashboardPage() {
 
     const allCompanyFinance: CompanyFinanceData[] = [];
     for (const company of COMPANIES) {
-      const [cashOpenRes, cashPlanRes, cashPosRes, bankSnapRes, lyRes, forecastRes] = await Promise.all([
+      const [cashOpenRes, cashPlanRes, cashPosRes, lyRes, forecastRes] = await Promise.all([
         supabase.from("cash_opening_balance").select("*").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
         supabase.from("monthly_cash_plan").select("*").eq("company_id", company.id).eq("plan_month", currentMonthForCash).maybeSingle(),
         supabase.from("daily_cash_position").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(30),
-        supabase.from("bank_position_snapshots").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(1),
         supabase.from("daily_cash_position").select("total_receipts, total_payments").eq("company_id", company.id).gte("position_date", lastYearMonth + "-01").lte("position_date", lastYearMonth + "-31"),
         supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("company_id", company.id).gte("budget_month", currentMonthForCash).order("budget_month", { ascending: true }),
       ]);
@@ -562,7 +523,6 @@ export default function ExecutiveDashboardPage() {
         cashOpening: cashOpenRes.data && cashOpenRes.data.length > 0 ? cashOpenRes.data[0] : null,
         cashPlan: cashPlanRes.data || null,
         cashPositions: cashPosRes.data || [],
-        bankSnapshot: bankSnapRes.data && bankSnapRes.data.length > 0 ? bankSnapRes.data[0] : null,
         lastYearReceipts: lyReceipts,
         lastYearPayments: lyPayments,
         forecast: (() => {
@@ -1155,8 +1115,7 @@ function panelCardRAG(status: RAGStatus): React.CSSProperties {
   };
 }
 
-function CompanyFinancePanel({ data }: { data: { companyId: string; companyName: string; cashOpening: OpeningBalance | null; cashPlan: MonthlyPlan | null; cashPositions: DailyPosition[]; bankSnapshot: BankSnapshot | null; lastYearReceipts: number | null; lastYearPayments: number | null; forecast: BudgetRow[] } }) {
-  const [bankExpanded, setBankExpanded] = useState(true);
+function CompanyFinancePanel({ data }: { data: { companyId: string; companyName: string; cashOpening: OpeningBalance | null; cashPlan: MonthlyPlan | null; cashPositions: DailyPosition[]; lastYearReceipts: number | null; lastYearPayments: number | null; forecast: BudgetRow[] } }) {
   const financeMonth = formatDate(new Date()).slice(0, 7);
   const monthPositions = data.cashPositions.filter((p) => p.position_date.slice(0, 7) === financeMonth);
   const actualReceiptsMTD = monthPositions.reduce((s, p) => s + p.total_receipts, 0);
@@ -1178,7 +1137,6 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
   const payPct = expPay > 0 ? (actualPaymentsMTD / expPay) * 100 : 100;
   const payStatus: RAGStatus = payPct <= 105 ? "GREEN" : payPct <= 115 ? "AMBER" : "RED";
   const headline: RAGStatus = recvStatus === "RED" || payStatus === "RED" ? "RED" : recvStatus === "AMBER" || payStatus === "AMBER" ? "AMBER" : "GREEN";
-  const isUTPC = data.companyId === UTPL_COMPANY_ID;
 
   const staleDays = latest ? Math.floor((Date.now() - new Date(latest.position_date + "T00:00:00").getTime()) / 86400000) : 999;
 
@@ -1267,28 +1225,6 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
                 {fRow("Total budgeted outflows", `PKR ${fmtMoney(forecastTotalOut)}`, { bold: true, color: "#dc2626" })}
 
                 {fRow("Net cash flow (in minus out)", `PKR ${fmtMoney(forecastNet)}`, { bold: true, borderTop: true, color: forecastNet >= 0 ? "#16a34a" : "#dc2626" })}
-              </div>
-            </>
-          )}
-
-          {/* ── Bank breakdown ── */}
-          {data.bankSnapshot && (
-            <>
-              <div style={{ marginTop: "4px" }}>
-                <button onClick={() => setBankExpanded(!bankExpanded)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "5px 12px", fontSize: "15px", fontWeight: 600, color: NAVY, cursor: "pointer", width: "100%", textAlign: "left" }}>
-                  {bankExpanded ? "▼" : "▶"} Bank Account Breakdown
-                  {!data.bankSnapshot.reconciled && <span style={{ color: "#dc2626", marginLeft: "8px" }}>NOT RECONCILED</span>}
-                </button>
-                {bankExpanded && (
-                  <div style={{ padding: "6px 0" }}>
-                    {Object.entries(BANK_DISPLAY_NAMES).map(([key, label]) => {
-                      const val = (data.bankSnapshot as unknown as Record<string, unknown>)[key];
-                      const amount = typeof val === "number" ? val : 0;
-                      return fRow(label, `PKR ${fmtMoney(amount)}`, { indent: true });
-                    })}
-                    {fRow("Total across all banks", `PKR ${fmtMoney(data.bankSnapshot.total_available_balance)}`, { bold: true, borderTop: true, color: "#0070f3" })}
-                  </div>
-                )}
               </div>
             </>
           )}
