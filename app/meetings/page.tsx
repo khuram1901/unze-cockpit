@@ -59,6 +59,7 @@ export default function MeetingsPage() {
 
   // Step tracking: extract → review → approve → send
   const [step, setStep] = useState<"input" | "review" | "approved">("input");
+  const [showMinutesFlow, setShowMinutesFlow] = useState(false);
 
   // Input method tab
   const [inputMethod, setInputMethod] = useState<"paste" | "upload" | "email">("paste");
@@ -331,29 +332,38 @@ export default function MeetingsPage() {
     setStep("input");
     setExternalEmails("");
     setMessage("");
+    setShowMinutesFlow(false);
   }
 
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
-        <PageHeader
-          title="Meeting Minutes"
-          subtitle="Paste, upload, or email minutes → AI extracts → Review → Approve → Send"
-        />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
+          <PageHeader
+            title="Meeting Minutes"
+            subtitle="Paste, upload, or email minutes → AI extracts → Review → Approve → Send"
+          />
+          <button onClick={() => setShowMinutesFlow(!showMinutesFlow)} style={{
+            backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
+            width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+          }} title="Add minutes">{showMinutesFlow ? "×" : "+"}</button>
+        </div>
 
         {message && (
           <div style={{
             border: `1px solid ${COLOURS.BORDER}`,
             borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`,
             borderRadius: "6px", padding: "10px 14px", marginBottom: "14px",
-            backgroundColor: "white", fontSize: "16px", color: COLOURS.NAVY,
+            backgroundColor: "white", fontSize: "15px", color: COLOURS.NAVY,
           }}>
             {message}
           </div>
         )}
 
         {/* Step 1: Input */}
-        {step === "input" && (
+        {showMinutesFlow && step === "input" && (
           <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "white", marginBottom: "16px" }}>
             <SectionTitle title="Step 1: Add Minutes" />
 
@@ -497,7 +507,7 @@ export default function MeetingsPage() {
         )}
 
         {/* Step 2: Review & Edit */}
-        {step === "review" && extracted && (() => {
+        {showMinutesFlow && step === "review" && extracted && (() => {
           const updateActionItem = (index: number, updates: Partial<ExtractedMinutes["action_items"][0]>) => {
             const items = [...extracted.action_items];
             items[index] = { ...items[index], ...updates };
@@ -681,7 +691,7 @@ export default function MeetingsPage() {
         })()}
 
         {/* Step 3: Approved — send to attendees */}
-        {step === "approved" && extracted && (() => {
+        {showMinutesFlow && step === "approved" && extracted && (() => {
           const toggleRecipient = (email: string) => {
             setSelectedRecipients((prev) => {
               const next = new Set(prev);
