@@ -122,6 +122,25 @@ export default function AdminDashboard() {
     { name: "Completed", value: completed, color: COLOURS.GREEN },
   ].filter((d) => d.value > 0);
 
+  const companyColors: Record<string, string> = {
+    "Unze Trading PVT Limited": "#1e293b",
+    "Imperial Footwear PVT Limited": "#2563eb",
+    "Haute Dolci": "#7c3aed",
+    "Barahn PVT Limited": "#059669",
+    "K&K Jhang": "#d97706",
+  };
+  const companyDonutData = Array.from(
+    openTasks.reduce((map, t) => {
+      const c = t.project || "Unassigned";
+      map.set(c, (map.get(c) || 0) + 1);
+      return map;
+    }, new Map<string, number>())
+  ).map(([name, value]) => ({
+    name: name.replace(" PVT Limited", ""),
+    value,
+    color: companyColors[name] || COLOURS.SLATE,
+  })).sort((a, b) => b.value - a.value);
+
   // Filter by priority
   const filteredOpen = priorityFilter === "all"
     ? openTasks
@@ -204,18 +223,22 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* KPI + Donut */}
+      {/* KPI Cards */}
       {!loading && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
+          <CountCard label="Open" value={openTasks.length} color="#d97706" />
+          <CountCard label="Overdue" value={overdueTasks.length} color={COLOURS.RED} />
+          <CountCard label="Urgent/High" value={urgentCount} color={COLOURS.RED} />
+          <CountCard label="Completed" value={completed} color={COLOURS.GREEN} />
+        </div>
+      )}
+
+      {/* Two donuts side by side */}
+      {!loading && (donutData.length > 0 || companyDonutData.length > 0) && (
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
-            <CountCard label="Open" value={openTasks.length} color="#d97706" />
-            <CountCard label="Overdue" value={overdueTasks.length} color={COLOURS.RED} />
-            <CountCard label="Urgent/High" value={urgentCount} color={COLOURS.RED} />
-            <CountCard label="Completed" value={completed} color={COLOURS.GREEN} />
-          </div>
           {donutData.length > 0 && (
             <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>Task Status</div>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>By Status</div>
               <ResponsiveContainer width="100%" height={160}>
                 <PieChart>
                   <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
@@ -226,6 +249,26 @@ export default function AdminDashboard() {
               </ResponsiveContainer>
               <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
                 {donutData.map((d) => (
+                  <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: COLOURS.SLATE }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {companyDonutData.length > 0 && (
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>By Company</div>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={companyDonutData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
+                    {companyDonutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(value, name) => [`${value} task${Number(value) > 1 ? "s" : ""}`, name]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
+                {companyDonutData.map((d) => (
                   <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: COLOURS.SLATE }}>
                     <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                   </div>
