@@ -82,6 +82,11 @@ export default function AuthWrapper({
   const [isMobile, setIsMobile] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<{ type: string; label: string; sub: string; href: string }[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifItems, setNotifItems] = useState<{ label: string; count: number; href: string }[]>([]);
 
@@ -176,17 +181,58 @@ export default function AuthWrapper({
     }
   }, [loading, email, member]);
 
+  // Global search
+  async function runSearch(q: string) {
+    if (q.length < 2) { setSearchResults([]); return; }
+    setSearching(true);
+    const lower = q.toLowerCase();
+    const results: { type: string; label: string; sub: string; href: string }[] = [];
+
+    const { data: tasks } = await supabase.from("tasks").select("id, description, assigned_to, status").limit(100);
+    for (const t of (tasks || [])) {
+      if (t.description?.toLowerCase().includes(lower) || t.assigned_to?.toLowerCase().includes(lower)) {
+        results.push({ type: "Task", label: t.description, sub: `${t.assigned_to || "Unassigned"} · ${t.status}`, href: `/tasks?task=${t.id}` });
+      }
+      if (results.length >= 8) break;
+    }
+
+    const { data: members } = await supabase.from("members").select("name, email, role, department").limit(50);
+    for (const m of (members || [])) {
+      if (m.name?.toLowerCase().includes(lower) || m.email?.toLowerCase().includes(lower)) {
+        results.push({ type: "Member", label: m.name || m.email || "", sub: `${m.role} · ${m.department || "—"}`, href: "/members" });
+      }
+      if (results.length >= 12) break;
+    }
+
+    const { data: meetings } = await supabase.from("meetings").select("id, title, meeting_date").limit(30);
+    for (const mt of (meetings || [])) {
+      if (mt.title?.toLowerCase().includes(lower)) {
+        results.push({ type: "Meeting", label: mt.title, sub: mt.meeting_date, href: `/my-minutes?meeting=${mt.id}` });
+      }
+      if (results.length >= 15) break;
+    }
+
+    setSearchResults(results.slice(0, 10));
+    setSearching(false);
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => { if (searchQuery) runSearch(searchQuery); else setSearchResults([]); }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setSettingsOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }
     }
-    if (settingsOpen || notifOpen) {
+    if (settingsOpen || notifOpen || searchOpen) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [settingsOpen, notifOpen]);
+  }, [settingsOpen, notifOpen, searchOpen]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -374,6 +420,64 @@ export default function AuthWrapper({
                 </span>
               </>
             )}
+
+            {/* Global search */}
+            <div ref={searchRef} style={{ position: "relative" }}>
+              {searchOpen ? (
+                <input
+                  type="text"
+                  placeholder="Search tasks, members, meetings..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                  style={{
+                    width: isMobile ? "140px" : "220px", padding: "6px 10px",
+                    border: `1px solid ${BORDER}`, borderRadius: "7px", fontSize: "14px",
+                  }}
+                  onKeyDown={(e) => { if (e.key === "Escape") { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); } }}
+                />
+              ) : (
+                <button onClick={() => setSearchOpen(true)} style={{
+                  backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "7px",
+                  padding: "6px 10px", fontSize: "16px", cursor: "pointer", color: NAVY,
+                }} title="Search">
+                  🔍
+                </button>
+              )}
+              {searchOpen && searchResults.length > 0 && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0,
+                  minWidth: "300px", maxWidth: "400px", backgroundColor: "white",
+                  border: `1px solid ${BORDER}`, borderRadius: "8px",
+                  boxShadow: "0 4px 14px rgba(15,23,42,0.10)", zIndex: 30, overflow: "hidden",
+                }}>
+                  {searchResults.map((r, i) => (
+                    <a key={i} href={r.href} onClick={() => { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                      style={{ display: "block", padding: "8px 12px", borderBottom: `1px solid ${LIGHT}`, textDecoration: "none", color: "inherit" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = LIGHT; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "transparent"; }}>
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        <span style={{
+                          fontSize: "10px", fontWeight: 700, padding: "1px 5px", borderRadius: "4px",
+                          backgroundColor: r.type === "Task" ? "#fef3c7" : r.type === "Member" ? "#dbeafe" : "#dcfce7",
+                          color: r.type === "Task" ? "#92400e" : r.type === "Member" ? "#1e40af" : "#166534",
+                        }}>{r.type}</span>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
+                      </div>
+                      <div style={{ fontSize: "12px", color: SLATE, marginTop: "1px" }}>{r.sub}</div>
+                    </a>
+                  ))}
+                </div>
+              )}
+              {searchOpen && searchQuery.length >= 2 && searchResults.length === 0 && !searching && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0, minWidth: "200px",
+                  backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "8px",
+                  boxShadow: "0 4px 14px rgba(15,23,42,0.10)", padding: "12px", zIndex: 30,
+                  textAlign: "center", fontSize: "13px", color: SLATE,
+                }}>No results found</div>
+              )}
+            </div>
 
             {/* Notification bell */}
             <div ref={notifRef} style={{ position: "relative" }}>
