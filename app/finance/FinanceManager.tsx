@@ -48,6 +48,7 @@ function fmt(n: number) {
 export default function FinanceManager({ companyId, companyName }: { companyId: string; companyName: string }) {
   const isMobile = useMobile();
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string>("Member");
 
   const [opening, setOpening] = useState<OpeningBalance | null>(null);
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
@@ -218,6 +219,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
   async function loadData() {
     setLoading(true);
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData.user?.email) {
+      const { data: memberData } = await supabase.from("members").select("role").eq("email", userData.user.email).maybeSingle();
+      if (memberData) setUserRole(memberData.role);
+    }
     const [obRes, planRes, posRes] = await Promise.all([
       supabase
         .from("cash_opening_balance")
@@ -388,6 +394,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   }
 
   const latestPosition = positions[0] || null;
+  const canEditAll = userRole === "Admin" || userRole === "Executive";
   const staleDays = latestPosition ? Math.floor((Date.now() - new Date(latestPosition.position_date + "T00:00:00").getTime()) / 86400000) : 999;
 
   // Alert items
@@ -447,21 +454,21 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           value={opening ? `PKR ${fmt(opening.opening_amount)}` : "Not set"}
           sub={opening ? `as of ${formatDateUK(opening.as_of_date)}` : "Click edit to set"}
           color={BLUE}
-          onEdit={openOpeningModal}
+          onEdit={canEditAll ? openOpeningModal : undefined}
         />
         <SummaryCard
           label="Planned Receivables"
           value={plan ? `PKR ${fmt(plan.tentative_receivables)}` : "Not set"}
           sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
           color={GREEN}
-          onEdit={openPlanModal}
+          onEdit={canEditAll ? openPlanModal : undefined}
         />
         <SummaryCard
           label="Planned Payouts"
           value={plan ? `PKR ${fmt(plan.tentative_payouts)}` : "Not set"}
           sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
           color={RED}
-          onEdit={openPlanModal}
+          onEdit={canEditAll ? openPlanModal : undefined}
         />
         <SummaryCard
           label="Latest Closing"
@@ -471,7 +478,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         />
       </div>
 
-      {/* ── ROW: INGESTION + PDF UPLOAD side by side ── */}
+      {/* ── ROW: INGESTION + PDF UPLOAD side by side (Admin/Executive only) ── */}
+      {canEditAll && (
       <div style={{
         display: "grid",
         gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
@@ -618,6 +626,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           )}
         </div>
       </div>
+
+      )}
 
       {/* ── ROW: FORECAST + DAILY ENTRY side by side ── */}
       <div style={{
@@ -820,7 +830,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         )}
       </div>
 
-      {/* RIGHT — Daily entry form */}
+      {/* RIGHT — Daily entry form (Admin/Executive only) */}
+      {canEditAll && (
       <div
         style={{
           border: `1px solid ${BORDER}`,
@@ -904,6 +915,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           </button>
         </form>
       </div>
+      )}
       </div>
 
       {/* ── CHARTS ── */}

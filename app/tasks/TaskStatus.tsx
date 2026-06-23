@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 
@@ -34,6 +34,7 @@ export default function TaskStatus({
   onChanged: () => void;
 }) {
   const [status, setStatus] = useState(task.status);
+  const [memberNames, setMemberNames] = useState<{ name: string; email: string | null; department: string | null }[]>([]);
   const [replyText, setReplyText] = useState(task.reply_text || "");
   const [correctiveAction, setCorrectiveAction] = useState(task.corrective_action || "");
   const [recoveryDate, setRecoveryDate] = useState(task.recovery_date || "");
@@ -47,8 +48,15 @@ export default function TaskStatus({
   const [savedMessage, setSavedMessage] = useState("");
 
   const isReviewer = currentRole === "Admin" || currentRole === "Executive";
-  // Only Admin / Executive may change due dates. Managers and Members cannot.
   const canEditDate = currentRole === "Admin" || currentRole === "Executive";
+
+  useEffect(() => {
+    if (canEditDate) {
+      supabase.from("members").select("name, email, department").order("name").then(({ data }) => {
+        if (data) setMemberNames(data.map((m) => ({ name: m.name || "", email: m.email, department: m.department })));
+      });
+    }
+  }, [canEditDate]);
 
   async function saveStatus(newStatus: string) {
     setSaving(true);
@@ -219,6 +227,32 @@ export default function TaskStatus({
           </button>
           {dateMessage && <span style={{ color: "green", fontSize: "16px" }}>{dateMessage}</span>}
           {savingDate && <span style={{ color: "#64748b", fontSize: "16px" }}>Saving…</span>}
+        </div>
+      )}
+
+      {/* Reassign: Admin / Executive only */}
+      {canEditDate && (
+        <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "14px", fontWeight: "bold" }}>Reassign to:</span>
+          <select
+            style={controlStyle}
+            defaultValue=""
+            onChange={async (e) => {
+              if (!e.target.value) return;
+              const m = memberNames.find((mem) => mem.name === e.target.value);
+              await supabase.from("tasks").update({
+                assigned_to: e.target.value,
+                assigned_to_email: m?.email || null,
+                assigned_to_department: m?.department || null,
+                updated_at: new Date().toISOString(),
+              }).eq("id", task.id);
+              logAction("Updated", "tasks", `Reassigned to ${e.target.value}`, task.id);
+              onChanged();
+            }}
+          >
+            <option value="">Select person...</option>
+            {memberNames.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+          </select>
         </div>
       )}
 
