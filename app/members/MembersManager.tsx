@@ -146,12 +146,11 @@ export default function MembersManager() {
     e.preventDefault();
     if (!isValidEmail(email)) { alert("A valid email address is required."); return; }
     setSaving(true);
-    const keepsDept = roleHasDeptAndBU(role);
     const { error } = await supabase.from("members").insert({
       first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}`.trim(),
       email: email.trim(), role,
-      department: keepsDept ? department || null : null,
-      business_unit: keepsDept ? businessUnit || null : null,
+      department: department || null,
+      business_unit: businessUnit || null,
       company: company || null,
     });
     setSaving(false);
@@ -196,7 +195,7 @@ export default function MembersManager() {
       if (updates.email !== undefined) { alert("The owner email cannot be changed."); loadData(); return; }
     }
     if (member?.role === "Admin" && myRole !== "Admin") { alert("Only Admin can edit another Admin."); loadData(); return; }
-    if (updates.role !== undefined && !roleHasDeptAndBU(updates.role)) updates = { ...updates, department: null, business_unit: null };
+    // Department and business unit are preserved for all roles
     if (updates.department !== undefined) {
       const valid = businessUnitsFor(updates.department);
       if (member?.business_unit && !valid.includes(member.business_unit)) updates = { ...updates, business_unit: null };
@@ -346,27 +345,23 @@ export default function MembersManager() {
             <div><label style={lbl}>Last Name</label><input style={inp} value={lastName} onChange={(e) => setLastName(e.target.value)} required /></div>
             <div><label style={lbl}>Email</label><input style={inp} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
             <div><label style={lbl}>Role</label>
-              <select style={inp} value={role} onChange={(e) => { setRole(e.target.value); if (!roleHasDeptAndBU(e.target.value)) { setDepartment(""); setBusinessUnit(""); } }}>
+              <select style={inp} value={role} onChange={(e) => setRole(e.target.value)}>
                 {ROLES.map((r) => <option key={r}>{r}</option>)}
               </select>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : roleHasDeptAndBU(role) ? "1fr 1fr 1fr" : "1fr", gap: "8px", marginTop: "8px" }}>
-            {roleHasDeptAndBU(role) && (
-              <>
-                <div><label style={lbl}>Department</label>
-                  <select style={inp} value={department} onChange={(e) => { setDepartment(e.target.value); setBusinessUnit(""); }}>
-                    <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div><label style={lbl}>Business Unit</label>
-                  <select style={inp} value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value)} disabled={!department}>
-                    <option value="">{department ? "Select" : "Dept first"}</option>
-                    {businessUnitsFor(department).map((b) => <option key={b}>{b}</option>)}
-                  </select>
-                </div>
-              </>
-            )}
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", marginTop: "8px" }}>
+            <div><label style={lbl}>Department</label>
+              <select style={inp} value={department} onChange={(e) => { setDepartment(e.target.value); setBusinessUnit(""); }}>
+                <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+              </select>
+            </div>
+            <div><label style={lbl}>Business Unit</label>
+              <select style={inp} value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value)} disabled={!department}>
+                <option value="">{department ? "Select" : "Dept first"}</option>
+                {businessUnitsFor(department).map((b) => <option key={b}>{b}</option>)}
+              </select>
+            </div>
             <div><label style={lbl}>Company</label>
               <select style={inp} value={company} onChange={(e) => setCompany(e.target.value)}>
                 <option value="">Select</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}
@@ -465,33 +460,27 @@ export default function MembersManager() {
                     <div><label style={lbl}>Role</label><select style={inp} value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></div>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : showsDept ? "1fr 1fr 1fr auto" : "1fr", gap: "8px", marginBottom: "10px", alignItems: "end" }}>
-                    {showsDept && (
-                      <>
-                        <div><label style={lbl}>Department</label>
-                          <select style={inp} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}>
-                            <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
-                          </select>
-                        </div>
-                        <div><label style={lbl}>Business Unit</label>
-                          <select style={inp} value={m.business_unit || ""} onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })} disabled={!m.department}>
-                            <option value="">{m.department ? "Select" : "Dept first"}</option>
-                            {businessUnitsFor(m.department).map((b) => <option key={b}>{b}</option>)}
-                          </select>
-                        </div>
-                      </>
-                    )}
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto", gap: "8px", marginBottom: "10px", alignItems: "end" }}>
+                    <div><label style={lbl}>Department</label>
+                      <select style={inp} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}>
+                        <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+                      </select>
+                    </div>
+                    <div><label style={lbl}>Business Unit</label>
+                      <select style={inp} value={m.business_unit || ""} onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })} disabled={!m.department}>
+                        <option value="">{m.department ? "Select" : "Dept first"}</option>
+                        {businessUnitsFor(m.department).map((b) => <option key={b}>{b}</option>)}
+                      </select>
+                    </div>
                     <div><label style={lbl}>Company</label>
                       <select style={inp} value={m.company || ""} onChange={(e) => updateMember(m.id, { company: e.target.value || null })}>
                         <option value="">Select</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}
                       </select>
                     </div>
-                    {showsDept && (
-                      <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "6px" }}>
-                        <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} />
-                        HOD
-                      </label>
-                    )}
+                    <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "6px" }}>
+                      <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} />
+                      HOD
+                    </label>
                   </div>
 
                   {/* Plant assignments inline */}
