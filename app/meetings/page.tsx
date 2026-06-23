@@ -649,9 +649,12 @@ export default function MeetingsPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", padding: "8px 0", borderTop: `2px solid ${COLOURS.NAVY}`, marginTop: "12px" }}>
               <SectionTitle title={`Action Items (${extracted.action_items.length})`} />
-              <button onClick={addActionItem} style={{ ...primaryButtonStyle, padding: "6px 14px", fontSize: "14px" }}>
+              <button onClick={addActionItem} style={{
+                backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
+                padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer",
+              }}>
                 + Add Task
               </button>
             </div>
