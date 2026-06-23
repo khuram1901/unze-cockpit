@@ -244,6 +244,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         .order("position_date", { ascending: false })
         .limit(30),
     ]);
+    if (obRes.error) console.error("Opening balance error:", obRes.error);
+    if (planRes.error) console.error("Monthly plan error:", planRes.error);
+    if (posRes.error) console.error("Positions error:", posRes.error);
+    console.log("Finance data loaded:", { opening: obRes.data?.length, plan: !!planRes.data, positions: posRes.data?.length, companyId });
     setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
     setPlan(planRes.data || null);
     setPositions(posRes.data || []);
