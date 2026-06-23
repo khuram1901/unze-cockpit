@@ -346,12 +346,21 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
               downloadCSV(`tasks-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
             }}
             onImport={async (rows) => {
+              const { data: allMembers } = await supabase.from("members").select("name, first_name, last_name, email, department");
+              const memberList = allMembers || [];
               let count = 0;
               for (const row of rows) {
                 if (!row["Description"]?.trim()) continue;
+                const assignedName = row["Assigned To"]?.trim() || null;
+                const member = assignedName ? memberList.find((m) => {
+                  const full = `${m.first_name || ""} ${m.last_name || ""}`.trim();
+                  return full === assignedName || m.name === assignedName;
+                }) : null;
                 await supabase.from("tasks").insert({
                   description: row["Description"].trim(),
-                  assigned_to: row["Assigned To"]?.trim() || null,
+                  assigned_to: assignedName,
+                  assigned_to_email: member?.email || null,
+                  assigned_to_department: member?.department || null,
                   priority: row["Priority"]?.trim() || "Normal",
                   due_date: row["Due Date"]?.trim() || null,
                   status: "Not Started",

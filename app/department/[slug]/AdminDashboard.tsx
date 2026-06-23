@@ -65,6 +65,7 @@ export default function AdminDashboard() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>("Member");
   const [bannerOpen, setBannerOpen] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
 
@@ -77,6 +78,11 @@ export default function AdminDashboard() {
 
   async function loadData() {
     setLoading(true);
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData.user?.email) {
+      const { data: memberData } = await supabase.from("members").select("role").eq("email", userData.user.email).maybeSingle();
+      if (memberData) setUserRole(memberData.role);
+    }
     const { data } = await supabase.from("tasks").select("*").eq("assigned_to_department", "Admin").order("created_at", { ascending: false });
     setItems(data || []);
     setLoading(false);
@@ -396,12 +402,16 @@ export default function AdminDashboard() {
                           }} style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}>
                             <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
                           </select>
-                          <div style={{ flex: 1 }} />
-                          <button onClick={async () => {
-                            if (!confirm(`Delete "${task.description}"? This cannot be undone.`)) return;
-                            await supabase.from("tasks").delete().eq("id", task.id);
-                            loadData();
-                          }} style={{ backgroundColor: "white", color: "#dc2626", border: "1px solid #dc2626", borderRadius: "5px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }} title="Delete this task">Delete</button>
+                          {(userRole === "Admin" || userRole === "Executive") && (
+                            <>
+                              <div style={{ flex: 1 }} />
+                              <button onClick={async () => {
+                                if (!confirm(`Delete "${task.description}"? This cannot be undone.`)) return;
+                                await supabase.from("tasks").delete().eq("id", task.id);
+                                loadData();
+                              }} style={{ backgroundColor: "white", color: "#dc2626", border: "1px solid #dc2626", borderRadius: "5px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }} title="Delete this task">Delete</button>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
