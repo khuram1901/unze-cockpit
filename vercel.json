@@ -5,24 +5,24 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/meetings/check-inbox",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/notifications/digest",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/backup",
-      "schedule": "0 21 * * *"
-    },
-    {
-      "path": "/api/reports/weekly",
-      "schedule": "0 10 * * 5"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/tasks/recurring",
-      "schedule": "0 4 * * *"
+      "schedule": "30 0 * * *"
     },
     {
-      "path": "/api/meetings/check-inbox",
-      "schedule": "0 * * * *"
+      "path": "/api/reports/weekly",
+      "schedule": "0 5 * * 5"
+    },
+    {
+      "path": "/api/backup",
+      "schedule": "0 18 * * *"
     }
   ]
 }
