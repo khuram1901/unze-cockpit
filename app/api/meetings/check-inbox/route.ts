@@ -5,7 +5,19 @@ import { safeDecrypt, encrypt } from "../../../lib/crypto";
 import pdfParse from "pdf-parse";
 import * as mammoth from "mammoth";
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return Response.json({ error: "Unauthorised" }, { status: 401 });
+  }
+  return handleCheckInbox();
+}
+
+export async function POST(_request: NextRequest) {
+  return handleCheckInbox();
+}
+
+async function handleCheckInbox() {
   try {
     const supabase = createServiceClient();
     const { data: notifToken } = await supabase
