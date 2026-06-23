@@ -118,10 +118,10 @@ export default function LoginPage() {
             ← Back to Home
           </Link>
 
-          <h1 style={{ ...titleStyle, fontSize: isMobile ? "24px" : "42px", margin: isMobile ? "16px 0 10px" : "28px 0 14px" }}>Unze Group Cockpit</h1>
+          <h1 style={{ ...titleStyle, fontSize: isMobile ? "24px" : "42px", margin: isMobile ? "16px 0 10px" : "28px 0 14px" }}>Unze Pulse Dashboard</h1>
 
           <p style={{ ...subtitleStyle, fontSize: isMobile ? "13px" : "17px", marginBottom: isMobile ? "16px" : "26px" }}>
-            Sign in to access your dashboard, tasks, and management cockpit.
+            Sign in to access your dashboard, tasks, and operations pulse.
           </p>
 
           <form onSubmit={handleSubmit}>
@@ -181,7 +181,7 @@ export default function LoginPage() {
         {!isMobile && <HeroCarousel slide={slide} active={active} setActive={setActive} />}
       </section>
 
-      <div style={footerStyle}>© Unze Group 1989–2026 · Cockpit v1.0</div>
+      <div style={footerStyle}>© Unze Group 1989–2026 · Pulse v2.0</div>
     </main>
   );
 }

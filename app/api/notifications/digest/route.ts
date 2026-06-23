@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         subject,
         heading: `Good Morning ${adminName}`,
         body: `
-          <p>Here is your daily cockpit summary:</p>
+          <p>Here is your daily Pulse summary:</p>
           <ul style="padding-left:20px;line-height:2">${items.join("")}</ul>
           ${overdue.length > 0 ? `
           <p style="margin-top:12px"><strong>Top overdue:</strong></p>
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
         triggerType: "daily_digest",
         recipientName: adminName,
         whatsAppPhone: admin.notify_whatsapp ? admin.phone_e164 : null,
-        whatsAppMessage: `Daily Cockpit: ${overdue.length} overdue, ${waitingReply.length} waiting reply, ${escalations.length} escalations. Check the cockpit for details.`,
+        whatsAppMessage: `Daily Pulse: ${overdue.length} overdue, ${waitingReply.length} waiting reply, ${escalations.length} escalations. Check the dashboard for details.`,
       });
 
       sent++;

@@ -1,6 +1,6 @@
 {
-  "name": "Unze Group Cockpit",
-  "short_name": "Cockpit",
+  "name": "Unze Pulse Dashboard",
+  "short_name": "Unze Pulse",
   "description": "Unze Group operations and finance dashboard",
   "start_url": "/executive",
   "display": "standalone",

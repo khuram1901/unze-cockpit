@@ -48,7 +48,7 @@ export default function ProfilePage() {
     setMessage("");
     const { data, error } = await supabase.auth.mfa.enroll({
       factorType: "totp",
-      friendlyName: "Cockpit Authenticator",
+      friendlyName: "Unze Pulse Authenticator",
     });
 
     if (error) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "cockpit-v1";
+const CACHE_NAME = "pulse-v2";
 const OFFLINE_URLS = ["/production", "/tasks"];
 
 self.addEventListener("install", (event) => {

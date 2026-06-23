@@ -335,7 +335,7 @@ export default function AuthWrapper({
                   paddingLeft: "14px",
                 }}
               >
-                Cockpit
+                Pulse
               </span>
             )}
           </div>

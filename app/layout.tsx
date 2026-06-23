@@ -8,13 +8,13 @@ const sourceSans = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "Unze Group Cockpit",
+  title: "Unze Pulse Dashboard",
   description: "Unze Group operations and finance dashboard",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Cockpit",
+    title: "Unze Pulse",
   },
 };
 

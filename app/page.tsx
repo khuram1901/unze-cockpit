@@ -65,7 +65,7 @@ export default function HomePage() {
           </p>
 
           <Link href="/login" style={{ ...primaryButtonStyle, padding: isMobile ? "12px 20px" : "14px 24px" }}>
-            Enter Cockpit
+            Enter Pulse Dashboard
           </Link>
         </div>
 
@@ -77,7 +77,7 @@ export default function HomePage() {
         />
       </section>
 
-      <div style={footerStyle}>© Unze Group 1989–2026 · Cockpit v1.0</div>
+      <div style={footerStyle}>© Unze Group 1989–2026 · Pulse v2.0</div>
     </main>
   );
 }

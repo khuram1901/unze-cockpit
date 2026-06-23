@@ -33,7 +33,7 @@ function buildEmailHtml({
 <body style="font-family:system-ui,sans-serif;background:#f3f5f8;padding:24px">
   <div style="max-width:560px;margin:0 auto;background:white;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden">
     <div style="background:#1e293b;padding:16px 20px">
-      <h1 style="margin:0;color:white;font-size:18px;font-weight:700">Unze Group Cockpit</h1>
+      <h1 style="margin:0;color:white;font-size:18px;font-weight:700">Unze Pulse Dashboard</h1>
     </div>
     <div style="padding:20px">
       <h2 style="color:#1e293b;font-size:16px;margin:0 0 12px">${heading}</h2>
@@ -44,7 +44,7 @@ function buildEmailHtml({
       ${whatsAppButton}
     </div>
     <div style="background:#f8fafc;padding:12px 20px;border-top:1px solid #e2e8f0;color:#64748b;font-size:12px">
-      Unze Group Cockpit · Automated notification
+      Unze Pulse Dashboard · Automated notification
     </div>
   </div>
 </body>
@@ -54,7 +54,7 @@ function buildEmailHtml({
 function buildRawEmail(to: string, from: string, subject: string, htmlBody: string): string {
   const boundary = "boundary_" + Date.now();
   const raw = [
-    `From: Unze Cockpit (No Reply) <${from}>`,
+    `From: Unze Pulse (No Reply) <${from}>`,
     `To: ${to}`,
     `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
     `MIME-Version: 1.0`,
