@@ -7,6 +7,7 @@ import TaskStatus from "./TaskStatus";
 import { formatDateUK } from "../lib/dateUtils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { downloadCSV } from "../lib/exportUtils";
+import ImportExportButtons from "../lib/ImportExportButtons";
 
 type Task = {
   id: string;
@@ -319,13 +320,39 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
           <MiniCard label="Waiting Reply" value={waitingReply.length} color="#d97706" />
           <MiniCard label="Completed" value={completedAll.length} color="#16a34a" />
         </div>
-        <button onClick={() => {
-          const headers = ["Description", "Assigned To", "Priority", "Due Date", "Status", "Project"];
-          const rows = scopedTasks.map((t) => [t.description, t.assigned_to || "—", t.priority || "—", t.due_date || "—", t.status, t.project || "—"]);
-          downloadCSV(`tasks-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-        }} style={{ backgroundColor: "white", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", height: "fit-content" }}>
-          Export CSV
-        </button>
+        {isPrivileged && (
+          <ImportExportButtons
+            onExport={() => {
+              const headers = ["Description", "Assigned To", "Priority", "Due Date", "Status", "Project"];
+              const rows = scopedTasks.map((t) => [t.description, t.assigned_to || "—", t.priority || "—", t.due_date || "—", t.status, t.project || "—"]);
+              downloadCSV(`tasks-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+            }}
+            onImport={async (rows) => {
+              let count = 0;
+              for (const row of rows) {
+                if (!row["Description"]?.trim()) continue;
+                await supabase.from("tasks").insert({
+                  description: row["Description"].trim(),
+                  assigned_to: row["Assigned To"]?.trim() || null,
+                  priority: row["Priority"]?.trim() || "Normal",
+                  due_date: row["Due Date"]?.trim() || null,
+                  status: "Not Started",
+                  project: row["Project"]?.trim() || null,
+                  task_type: "Task",
+                  assigned_by: "CSV Import",
+                  assigned_date: new Date().toISOString().slice(0, 10),
+                });
+                count++;
+              }
+              alert(`Imported ${count} task${count !== 1 ? "s" : ""}.`);
+              loadTasks();
+            }}
+            templateHeaders={["Description", "Assigned To", "Priority", "Due Date", "Project"]}
+            templateFilename="tasks-import-template.csv"
+            exportLabel="Export all tasks as CSV"
+            importLabel="Import tasks from CSV"
+          />
+        )}
       </div>
 
       {/* ═══ TIME VIEW TOGGLE ═══ */}

@@ -5,6 +5,8 @@ import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
+import { downloadCSV } from "../lib/exportUtils";
+import ImportExportButtons from "../lib/ImportExportButtons";
 
 type Member = {
   id: string;
@@ -279,13 +281,45 @@ export default function MembersManager() {
         </div>
       </div>
 
-      {/* ── Search ───────────────────────────────────── */}
-      <div style={{ marginBottom: "14px" }}>
+      {/* ── Search + Import/Export ───────────────────────────────────── */}
+      <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "14px", flexWrap: "wrap" }}>
         <input
           type="text" placeholder="Search by name, email, role, department..." value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          style={{ ...inp, maxWidth: "400px" }}
+          style={{ ...inp, flex: "1 1 200px", maxWidth: "400px" }}
         />
+        {isAdmin && (
+          <ImportExportButtons
+            onExport={() => {
+              const headers = ["First Name", "Last Name", "Email", "Role", "Department", "Business Unit", "Company"];
+              const rows = members.map((m) => [m.first_name || "", m.last_name || "", m.email || "", m.role, m.department || "", m.business_unit || "", m.company || ""]);
+              downloadCSV(`members-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+            }}
+            onImport={async (rows) => {
+              let count = 0;
+              for (const row of rows) {
+                if (!row["Email"]?.trim()) continue;
+                await supabase.from("members").insert({
+                  first_name: row["First Name"]?.trim() || null,
+                  last_name: row["Last Name"]?.trim() || null,
+                  name: `${row["First Name"] || ""} ${row["Last Name"] || ""}`.trim() || null,
+                  email: row["Email"].trim(),
+                  role: row["Role"]?.trim() || "Member",
+                  department: row["Department"]?.trim() || null,
+                  business_unit: row["Business Unit"]?.trim() || null,
+                  company: row["Company"]?.trim() || null,
+                });
+                count++;
+              }
+              alert(`Imported ${count} member${count !== 1 ? "s" : ""}.`);
+              loadData();
+            }}
+            templateHeaders={["First Name", "Last Name", "Email", "Role", "Department", "Business Unit", "Company"]}
+            templateFilename="members-import-template.csv"
+            exportLabel="Export members as CSV"
+            importLabel="Import members from CSV"
+          />
+        )}
       </div>
 
       {/* ── Add form ──────────────────────────────────── */}

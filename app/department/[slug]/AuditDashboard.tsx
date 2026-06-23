@@ -9,6 +9,7 @@ import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../..
 import { logAction } from "../../lib/audit-log";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { downloadCSV } from "../../lib/exportUtils";
+import ImportExportButtons from "../../lib/ImportExportButtons";
 
 const AUDIT_STAGES: { label: string; pct: number }[] = [
   { label: "Audit Planning", pct: 0 },
@@ -318,15 +319,32 @@ export default function AuditDashboard() {
       {/* ═══ ZONE 3: RECORDS GROUPED BY STATUS ═══ */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <SectionTitle title="Audit Records" />
-        {items.length > 0 && (
-          <button onClick={() => {
+        <ImportExportButtons
+          onExport={() => {
             const headers = ["Audit Area", "Type", "Stage", "Completion %", "Status", "Assigned To", "Target Date", "Planned Date"];
             const rows = items.map((i) => [i.audit_area, i.audit_type || "—", i.audit_stage || "—", String(i.completion_pct || 0), i.status, i.assigned_to || "—", i.target_date || "—", i.planned_date || "—"]);
             downloadCSV(`audit-records-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-          }} style={{ backgroundColor: "white", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-            Export CSV
-          </button>
-        )}
+          }}
+          onImport={async (rows) => {
+            let count = 0;
+            for (const row of rows) {
+              if (!row["Audit Area"]?.trim()) continue;
+              await supabase.from("audit_plan_items").insert({
+                company_id: UTPL_COMPANY_ID, audit_area: row["Audit Area"].trim(),
+                audit_type: row["Type"]?.trim() || null, assigned_to: row["Assigned To"]?.trim() || null,
+                target_date: row["Target Date"]?.trim() || null, planned_date: row["Planned Date"]?.trim() || null,
+                scope: row["Scope"]?.trim() || null, status: "Planned", audit_stage: "Audit Planning", completion_pct: 0,
+              });
+              count++;
+            }
+            alert(`Imported ${count} audit${count !== 1 ? "s" : ""}.`);
+            loadData();
+          }}
+          templateHeaders={["Audit Area", "Type", "Assigned To", "Target Date", "Planned Date", "Scope"]}
+          templateFilename="audit-import-template.csv"
+          exportLabel="Export audit records as CSV"
+          importLabel="Import audit records from CSV"
+        />
       </div>
 
       {loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : items.length === 0 ? (

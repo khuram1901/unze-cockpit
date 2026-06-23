@@ -35,3 +35,25 @@ main {
 table {
   max-width: 100%;
 }
+
+/* Tooltip on hover for icon buttons */
+button[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 50;
+  pointer-events: none;
+}
+
+button[title] {
+  position: relative;
+}
