@@ -247,28 +247,45 @@ export default function MembersManager() {
 
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "760px" }}>
-      <PageHeader title="Members" subtitle="Manage team members, roles, and access" />
-
-      {/* ── Summary strip ─────────────────────────────── */}
-      <div style={{ display: "flex", gap: "16px", marginBottom: "16px", fontSize: "14px", color: COLOURS.SLATE }}>
-        <span><strong style={{ color: COLOURS.NAVY }}>{counts.total}</strong> total</span>
-        <span><strong style={{ color: COLOURS.PURPLE }}>{counts.admin}</strong> admin/exec</span>
-        <span><strong style={{ color: COLOURS.GREEN }}>{counts.manager}</strong> managers</span>
-        <span><strong style={{ color: COLOURS.SLATE }}>{counts.member}</strong> members</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
+        <PageHeader title="Members" subtitle="Manage team members, roles, and access" />
+        {isAdmin && (
+          <button onClick={() => setShowAddForm(!showAddForm)} style={{
+            backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
+            width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+          }} title="Add member">{showAddForm ? "×" : "+"}</button>
+        )}
       </div>
 
-      {/* ── Toolbar ───────────────────────────────────── */}
-      <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "14px", flexWrap: "wrap" }}>
+      {/* ── Summary cards ─────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
+        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
+          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Total</div>
+          <div style={{ fontSize: "20px", fontWeight: 800, color: COLOURS.NAVY }}>{counts.total}</div>
+        </div>
+        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.PURPLE}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
+          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Admin/Exec</div>
+          <div style={{ fontSize: "20px", fontWeight: 800, color: COLOURS.PURPLE }}>{counts.admin}</div>
+        </div>
+        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.GREEN}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
+          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Managers</div>
+          <div style={{ fontSize: "20px", fontWeight: 800, color: COLOURS.GREEN }}>{counts.manager}</div>
+        </div>
+        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.SLATE}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
+          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Members</div>
+          <div style={{ fontSize: "20px", fontWeight: 800, color: COLOURS.SLATE }}>{counts.member}</div>
+        </div>
+      </div>
+
+      {/* ── Search ───────────────────────────────────── */}
+      <div style={{ marginBottom: "14px" }}>
         <input
-          type="text" placeholder="Search..." value={filter}
+          type="text" placeholder="Search by name, email, role, department..." value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          style={{ ...inp, flex: "1 1 200px", maxWidth: "280px" }}
+          style={{ ...inp, maxWidth: "400px" }}
         />
-        {isAdmin && (
-          <button onClick={() => setShowAddForm(!showAddForm)} style={smallBtn(COLOURS.NAVY, true)}>
-            {showAddForm ? "Cancel" : "+ Add"}
-          </button>
-        )}
       </div>
 
       {/* ── Add form ──────────────────────────────────── */}

@@ -5,6 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { useMobile } from "../lib/useMobile";
+import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
 
 type Member = {
   id: string;
@@ -30,12 +31,12 @@ type Task = {
   status: string;
 };
 
-const NAVY = "#1e293b";
-const SLATE = "#64748b";
-const BORDER = "#e2e8f0";
+const NAVY = COLOURS.NAVY;
+const SLATE = COLOURS.SLATE;
+const BORDER = COLOURS.BORDER;
 const OPEN_STATUSES = ["Not Started", "In Progress", "Waiting Reply"];
 
-function SectionTitle({ title }: { title: string }) {
+function _SectionTitle({ title }: { title: string }) {
   return (
     <h2
       style={{
@@ -166,14 +167,7 @@ export default function DepartmentOwnersPage() {
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
-        <div style={{ marginBottom: "16px" }}>
-          <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>
-            Department Owners
-          </h1>
-          <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px" }}>
-            Set primary, backup, and escalation owners per department. Use task reassignment when someone leaves or changes role.
-          </p>
-        </div>
+        <PageHeader title="Department Owners" subtitle="Set primary, backup, and escalation owners per department" />
 
         {/* Reassign tasks */}
         <div
