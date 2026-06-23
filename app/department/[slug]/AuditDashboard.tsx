@@ -409,7 +409,12 @@ export default function AuditDashboard() {
 
                     {isOpen && (
                       <div style={{ padding: "10px 14px", backgroundColor: "#f8fafc", borderTop: `1px solid ${COLOURS.BORDER}` }}>
-                        {/* Audit Area — read only */}
+                        {/* Audit Area — editable */}
+                        <div style={{ marginBottom: "8px" }}>
+                          <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "3px" }}>Audit Area</div>
+                          <input style={inp} defaultValue={item.audit_area}
+                            onBlur={(e) => { if (e.target.value.trim() !== item.audit_area) updateField(item.id, "audit_area", e.target.value.trim()); }} />
+                        </div>
                         <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "8px" }}>
                           {item.scope && <div style={{ marginBottom: "4px" }}><strong>Scope:</strong> {item.scope}</div>}
                           {item.notes && <div style={{ marginBottom: "4px" }}><strong>Notes:</strong> {item.notes}</div>}
