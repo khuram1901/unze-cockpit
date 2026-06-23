@@ -18,6 +18,12 @@ export default function ProfilePage() {
   const [message, setMessage] = useState("");
   const [enrolling, setEnrolling] = useState(false);
 
+  // Change password
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [changingPw, setChangingPw] = useState(false);
+
   useEffect(() => {
     checkMFA();
   }, []);
@@ -101,6 +107,41 @@ export default function ProfilePage() {
     setMessage("2FA disabled.");
     setMfaEnabled(false);
     setFactorId(null);
+  }
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPw.length < 6) { setMessage("Error: Password must be at least 6 characters."); return; }
+    if (newPw !== confirmPw) { setMessage("Error: Passwords do not match."); return; }
+
+    setChangingPw(true);
+    setMessage("");
+
+    // Re-authenticate with current password first
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPw,
+    });
+
+    if (signInError) {
+      setMessage("Error: Current password is incorrect.");
+      setChangingPw(false);
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPw });
+    setChangingPw(false);
+
+    if (error) {
+      setMessage("Error: " + error.message);
+      return;
+    }
+
+    logAction("Updated", "auth", "Changed password");
+    setMessage("Password changed successfully.");
+    setCurrentPw("");
+    setNewPw("");
+    setConfirmPw("");
   }
 
   return (
@@ -252,6 +293,86 @@ export default function ProfilePage() {
                   </button>
                 </>
               )}
+            </div>
+
+            <SectionTitle title="Change Password" />
+            <div style={{
+              border: `1px solid ${COLOURS.BORDER}`,
+              borderRadius: "8px",
+              padding: "16px",
+              backgroundColor: "white",
+            }}>
+              <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+                Enter your current password and choose a new one. Minimum 6 characters.
+              </p>
+              <form onSubmit={changePassword}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                  <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
+                    Current Password
+                    <input
+                      type="password"
+                      value={currentPw}
+                      onChange={(e) => setCurrentPw(e.target.value)}
+                      required
+                      placeholder="Enter current password"
+                      style={{
+                        display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
+                        border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+                      }}
+                    />
+                  </label>
+                  <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
+                    New Password
+                    <input
+                      type="password"
+                      value={newPw}
+                      onChange={(e) => setNewPw(e.target.value)}
+                      required
+                      minLength={6}
+                      placeholder="Min 6 characters"
+                      style={{
+                        display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
+                        border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+                      }}
+                    />
+                  </label>
+                  <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
+                    Confirm New Password
+                    <input
+                      type="password"
+                      value={confirmPw}
+                      onChange={(e) => setConfirmPw(e.target.value)}
+                      required
+                      minLength={6}
+                      placeholder="Repeat new password"
+                      style={{
+                        display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
+                        border: `1px solid ${newPw && confirmPw && newPw !== confirmPw ? COLOURS.RED : COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+                      }}
+                    />
+                  </label>
+                </div>
+                {newPw && confirmPw && newPw !== confirmPw && (
+                  <div style={{ fontSize: "13px", color: COLOURS.RED, marginBottom: "8px" }}>Passwords do not match</div>
+                )}
+                <button
+                  type="submit"
+                  disabled={changingPw || !currentPw || newPw.length < 6 || newPw !== confirmPw}
+                  style={{
+                    backgroundColor: COLOURS.NAVY,
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "8px 18px",
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    cursor: changingPw || !currentPw || newPw.length < 6 || newPw !== confirmPw ? "not-allowed" : "pointer",
+                    opacity: changingPw || !currentPw || newPw.length < 6 || newPw !== confirmPw ? 0.5 : 1,
+                  }}
+                >
+                  {changingPw ? "Changing..." : "Change Password"}
+                </button>
+              </form>
             </div>
           </>
         )}
