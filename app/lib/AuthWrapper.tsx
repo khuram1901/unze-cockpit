@@ -38,6 +38,7 @@ function displayName(member: Member | null, email: string | null) {
 // Main navigation — daily work
 // ─────────────────────────────────────────────────────────────────
 const MAIN_NAV: NavItem[] = [
+  { label: "My Dashboard", href: "/my-dashboard", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
   { label: "Executive", href: "/executive", allowedRoles: ["Admin", "Executive"] },
   { label: "PA Dashboard", href: "/pa", allowedRoles: ["Admin", "Executive"] },
   { label: "Operations", href: "/dashboard", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Unze Trading Ops"] },

@@ -42,24 +42,9 @@ const slides = [
 
 function getLandingRoute(profile: MemberProfile | null, email: string) {
   if (email.toLowerCase() === "khuram1901@gmail.com") return "/executive";
-
   const role = profile?.role || "Member";
-  const department = profile?.department || "";
-
   if (role === "Admin" || role === "Executive") return "/executive";
-
-  if (
-    role === "Manager" &&
-    ["Operations", "Production", "Unze Pole Production", "Manufacturing"].includes(department)
-  ) {
-    return "/dashboard";
-  }
-
-  if (role === "Manager" && department === "Finance") return "/finance";
-
-  if (role === "Manager") return "/dashboard";
-
-  return "/tasks";
+  return "/my-dashboard";
 }
 
 export default function LoginPage() {
