@@ -1394,7 +1394,7 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px", backgroundColor: "white", marginBottom: "8px" }}>
 
           {/* ── Summary cards row ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px", marginBottom: "8px" }}>
             {summaryCard(
               "Cash Available",
               latest ? `PKR ${fmtMoney(latest.closing_after_post_dated)}` : "—",
