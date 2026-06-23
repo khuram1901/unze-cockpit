@@ -445,80 +445,59 @@ export default function MembersManager() {
                 </div>
               )}
 
-              {/* ── Edit panel ────────────────────────── */}
+              {/* ── Edit panel (compact) ────────────────────────── */}
               {isAdmin && isEditing && (
-                <div style={{ padding: "12px", borderTop: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.LIGHT }}>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 2fr 0.8fr", gap: "8px", marginBottom: "10px" }}>
-                    <div><label style={lbl}>First Name</label><input style={inp} value={m.first_name || ""} onChange={(e) => updateMember(m.id, { first_name: e.target.value })} /></div>
-                    <div><label style={lbl}>Last Name</label><input style={inp} value={m.last_name || ""} onChange={(e) => updateMember(m.id, { last_name: e.target.value })} /></div>
-                    <div><label style={lbl}>Email</label><input style={inp} defaultValue={m.email || ""} onBlur={(e) => { if (e.target.value.trim() !== (m.email || "")) updateMember(m.id, { email: e.target.value }); }} /></div>
-                    <div><label style={lbl}>Role</label><select style={inp} value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></div>
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto", gap: "8px", marginBottom: "10px", alignItems: "end" }}>
-                    <div><label style={lbl}>Department</label>
-                      <select style={inp} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}>
-                        <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
-                      </select>
-                    </div>
-                    <div><label style={lbl}>Business Unit</label>
-                      <select style={inp} value={m.business_unit || ""} onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })} disabled={!m.department}>
-                        <option value="">{m.department ? "Select" : "Dept first"}</option>
-                        {businessUnitsFor(m.department).map((b) => <option key={b}>{b}</option>)}
-                      </select>
-                    </div>
-                    <div><label style={lbl}>Company</label>
-                      <select style={inp} value={m.company || ""} onChange={(e) => updateMember(m.id, { company: e.target.value || null })}>
-                        <option value="">Select</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "13px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "6px" }}>
-                      <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} />
-                      HOD
+                <div style={{ padding: "8px 12px", borderTop: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.LIGHT }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1.5fr 0.6fr 1fr 1fr 1fr 0.5fr", gap: "6px", marginBottom: "6px", alignItems: "end" }}>
+                    <div><label style={lblC}>First Name</label><input style={inpC} value={m.first_name || ""} onChange={(e) => updateMember(m.id, { first_name: e.target.value })} /></div>
+                    <div><label style={lblC}>Last Name</label><input style={inpC} value={m.last_name || ""} onChange={(e) => updateMember(m.id, { last_name: e.target.value })} /></div>
+                    <div><label style={lblC}>Email</label><input style={inpC} defaultValue={m.email || ""} onBlur={(e) => { if (e.target.value.trim() !== (m.email || "")) updateMember(m.id, { email: e.target.value }); }} /></div>
+                    <div><label style={lblC}>Role</label><select style={inpC} value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></div>
+                    <div><label style={lblC}>Department</label><select style={inpC} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}><option value="">—</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></div>
+                    <div><label style={lblC}>Business Unit</label><select style={inpC} value={m.business_unit || ""} onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })} disabled={!m.department}><option value="">—</option>{businessUnitsFor(m.department).map((b) => <option key={b}>{b}</option>)}</select></div>
+                    <div><label style={lblC}>Company</label><select style={inpC} value={m.company || ""} onChange={(e) => updateMember(m.id, { company: e.target.value || null })}><option value="">—</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></div>
+                    <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }}>
+                      <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} /> HOD
                     </label>
                   </div>
 
-                  {/* Plant assignments inline */}
-                  {showsDept && plants.length > 0 && (
-                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "10px" }}>
-                      <span style={lbl}>Plants:</span>
-                      {plants.map((p) => {
-                        const on = memberPlants.has(p.id);
-                        const key = `${m.id}-${p.id}`;
-                        return (
-                          <label key={p.id} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: COLOURS.NAVY, cursor: savingAssignment === key ? "wait" : "pointer", opacity: savingAssignment === key ? 0.5 : 1 }}>
-                            <input type="checkbox" checked={on} disabled={savingAssignment === key} onChange={() => togglePlant(m.id, p.id, on)} />
-                            {p.name}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Notifications */}
-                  <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap", marginBottom: "10px" }}>
-                    <span style={{ ...lbl, marginBottom: 0 }}>Notify:</span>
-                    <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", cursor: "pointer" }}>
-                      <input type="checkbox" checked={m.notify_email} onChange={(e) => updateMember(m.id, { notify_email: e.target.checked })} /> Email
+                  {/* Plants + Notifications in one row */}
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "6px", fontSize: "12px" }}>
+                    {showsDept && plants.length > 0 && (
+                      <>
+                        <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Plants:</span>
+                        {plants.map((p) => {
+                          const on = memberPlants.has(p.id);
+                          const key = `${m.id}-${p.id}`;
+                          return (
+                            <label key={p.id} style={{ display: "flex", alignItems: "center", gap: "2px", color: COLOURS.NAVY, cursor: savingAssignment === key ? "wait" : "pointer", opacity: savingAssignment === key ? 0.5 : 1 }}>
+                              <input type="checkbox" checked={on} disabled={savingAssignment === key} onChange={() => togglePlant(m.id, p.id, on)} style={{ width: "13px", height: "13px" }} />
+                              {p.name}
+                            </label>
+                          );
+                        })}
+                        <span style={{ color: COLOURS.BORDER }}>|</span>
+                      </>
+                    )}
+                    <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Notify:</span>
+                    <label style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
+                      <input type="checkbox" checked={m.notify_email} onChange={(e) => updateMember(m.id, { notify_email: e.target.checked })} style={{ width: "13px", height: "13px" }} /> Email
                     </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", cursor: "pointer" }}>
-                      <input type="checkbox" checked={m.notify_whatsapp || false} onChange={(e) => updateMember(m.id, { notify_whatsapp: e.target.checked })} /> WhatsApp
+                    <label style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
+                      <input type="checkbox" checked={m.notify_whatsapp || false} onChange={(e) => updateMember(m.id, { notify_whatsapp: e.target.checked })} style={{ width: "13px", height: "13px" }} /> WA
                     </label>
                     {m.notify_whatsapp && (
                       <input placeholder="+92..." defaultValue={m.phone_e164 || ""} onBlur={(e) => { if (e.target.value !== (m.phone_e164 || "")) updateMember(m.id, { phone_e164: e.target.value || null }); }}
-                        style={{ ...inp, width: "120px" }} />
+                        style={{ ...inpC, width: "110px" }} />
                     )}
-                  </div>
-
-                  {/* Actions */}
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", paddingTop: "8px", borderTop: `1px solid ${COLOURS.BORDER}` }}>
+                    <span style={{ color: COLOURS.BORDER }}>|</span>
                     <button onClick={() => sendPwReset(m.email || "", dn)} disabled={!m.email || resettingPw === m.email}
-                      style={{ ...smallBtn(COLOURS.BLUE), opacity: resettingPw === m.email ? 0.5 : 1 }}>
-                      {resettingPw === m.email ? "Sending..." : "Send Reset"}
+                      style={{ ...smallBtn(COLOURS.BLUE), fontSize: "11px", padding: "3px 8px", opacity: resettingPw === m.email ? 0.5 : 1 }}>
+                      {resettingPw === m.email ? "..." : "Reset PW"}
                     </button>
                     <button onClick={() => { setSettingPwFor(settingPwFor === m.id ? null : m.id); setNewPw(""); }}
-                      style={smallBtn(COLOURS.PURPLE)}>Set Password</button>
-                    <button onClick={() => deleteMember(m.id, dn)} style={smallBtn(COLOURS.RED)}>Remove</button>
+                      style={{ ...smallBtn(COLOURS.PURPLE), fontSize: "11px", padding: "3px 8px" }}>Set PW</button>
+                    <button onClick={() => deleteMember(m.id, dn)} style={{ ...smallBtn(COLOURS.RED), fontSize: "11px", padding: "3px 8px" }}>Remove</button>
                   </div>
 
                   {/* Set password inline */}
@@ -546,3 +525,11 @@ export default function MembersManager() {
     </main>
   );
 }
+
+const inpC: React.CSSProperties = {
+  width: "100%", padding: "4px 6px", border: `1px solid ${COLOURS.BORDER}`,
+  borderRadius: "4px", fontSize: "13px", boxSizing: "border-box",
+};
+const lblC: React.CSSProperties = {
+  display: "block", fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "1px",
+};
