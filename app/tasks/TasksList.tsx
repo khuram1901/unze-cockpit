@@ -352,6 +352,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
                 const line = i + 2;
                 if (!row["Description"]?.trim()) { errors.push(`Row ${line}: Description is required`); return; }
                 if (!row["Assigned To"]?.trim()) { errors.push(`Row ${line}: Assigned To is required`); return; }
+                if (!row["Assigned By"]?.trim()) { errors.push(`Row ${line}: Assigned By is required`); return; }
                 if (!row["Due Date"]?.trim()) { errors.push(`Row ${line}: Due Date is required`); return; }
                 if (!row["Priority"]?.trim()) { errors.push(`Row ${line}: Priority is required`); return; }
                 if (!row["Department / Area"]?.trim()) { errors.push(`Row ${line}: Department / Area is required`); return; }
@@ -382,15 +383,15 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
                   project: row["Department / Area"].trim(),
                   notes: row["Notes"]?.trim() || null,
                   task_type: "Task",
-                  assigned_by: "CSV Import",
-                  assigned_date: new Date().toISOString().slice(0, 10),
+                  assigned_by: row["Assigned By"].trim(),
+                  assigned_date: row["Assigned Date"]?.trim() || new Date().toISOString().slice(0, 10),
                 });
                 count++;
               }
               alert(`Successfully imported ${count} task${count !== 1 ? "s" : ""}.`);
               loadTasks();
             }}
-            templateHeaders={["Description", "Assigned To", "Due Date", "Priority", "Department / Area", "Starting Status", "Notes"]}
+            templateHeaders={["Description", "Assigned To", "Assigned By", "Assigned Date", "Due Date", "Priority", "Department / Area", "Starting Status", "Notes"]}
             templateFilename="tasks-import-template.csv"
             exportLabel="Export all tasks as CSV"
             importLabel="Import tasks from CSV"
