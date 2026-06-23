@@ -292,6 +292,12 @@ export default function PADashboardPage() {
             <div style={{ display: "flex", gap: "6px" }}>
               <button onClick={() => chaseTask(task)} style={actionBtn("#2563eb")}>Chase</button>
               <button onClick={() => closeTask(task.id)} style={actionBtn(COLOURS.GREEN)}>Complete</button>
+              <button onClick={async () => {
+                if (!confirm(`Delete "${task.description}"? This cannot be undone.`)) return;
+                await supabase.from("tasks").delete().eq("id", task.id);
+                showMsg("Task deleted.");
+                loadData();
+              }} style={{ ...actionBtn("#dc2626"), backgroundColor: "white", color: "#dc2626", border: "1px solid #dc2626" }} title="Delete this task">Delete</button>
             </div>
             <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "6px" }}>
               By: {task.assigned_by || "—"} · Dept: {task.assigned_to_department || "—"} · Project: {task.project || "—"}

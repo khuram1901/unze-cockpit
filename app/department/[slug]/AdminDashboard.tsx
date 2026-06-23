@@ -396,6 +396,12 @@ export default function AdminDashboard() {
                           }} style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}>
                             <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
                           </select>
+                          <div style={{ flex: 1 }} />
+                          <button onClick={async () => {
+                            if (!confirm(`Delete "${task.description}"? This cannot be undone.`)) return;
+                            await supabase.from("tasks").delete().eq("id", task.id);
+                            loadData();
+                          }} style={{ backgroundColor: "white", color: "#dc2626", border: "1px solid #dc2626", borderRadius: "5px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }} title="Delete this task">Delete</button>
                         </div>
                       </div>
                     )}

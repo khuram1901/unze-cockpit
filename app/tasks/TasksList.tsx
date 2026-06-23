@@ -261,6 +261,24 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
               </div>
             )}
             <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} />
+            {isPrivileged && (
+              <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Delete task "${task.description}"? This cannot be undone.`)) return;
+                    await supabase.from("tasks").delete().eq("id", task.id);
+                    loadTasks();
+                  }}
+                  style={{
+                    backgroundColor: "white", color: "#dc2626", border: "1px solid #dc2626",
+                    borderRadius: "5px", padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                  }}
+                  title="Permanently delete this task"
+                >
+                  Delete Task
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
