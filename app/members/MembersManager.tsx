@@ -261,23 +261,18 @@ export default function MembersManager() {
       </div>
 
       {/* ── Summary cards ─────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
-          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Total</div>
-          <div style={{ fontSize: "20px", fontWeight: 800, color: COLOURS.NAVY }}>{counts.total}</div>
-        </div>
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.PURPLE}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
-          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Admin/Exec</div>
-          <div style={{ fontSize: "20px", fontWeight: 800, color: COLOURS.PURPLE }}>{counts.admin}</div>
-        </div>
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.GREEN}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
-          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Managers</div>
-          <div style={{ fontSize: "20px", fontWeight: 800, color: COLOURS.GREEN }}>{counts.manager}</div>
-        </div>
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.SLATE}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
-          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Members</div>
-          <div style={{ fontSize: "20px", fontWeight: 800, color: COLOURS.SLATE }}>{counts.member}</div>
-        </div>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
+        {[
+          { label: "Total", value: counts.total, color: COLOURS.NAVY },
+          { label: "Admin/Exec", value: counts.admin, color: COLOURS.PURPLE },
+          { label: "Managers", value: counts.manager, color: COLOURS.GREEN },
+          { label: "Members", value: counts.member, color: COLOURS.SLATE },
+        ].map((c) => (
+          <div key={c.label} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${c.color}`, borderRadius: "7px", padding: "6px 14px", backgroundColor: "white", minWidth: "80px" }}>
+            <div style={{ color: COLOURS.SLATE, fontSize: "12px" }}>{c.label}</div>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: c.color }}>{c.value}</div>
+          </div>
+        ))}
       </div>
 
       {/* ── Search + Import/Export ───────────────────────────────────── */}
