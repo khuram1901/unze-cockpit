@@ -308,23 +308,51 @@ export default function AdminDashboard() {
       ) : (
         companyNames.map((company) => {
           const tasks = companyGroups.get(company)!;
+          const compOverdue = tasks.filter(isOverdue).length;
+          const compUrgent = tasks.filter((t) => t.priority === "Urgent" || t.priority === "High").length;
+          const compInProgress = tasks.filter((t) => t.status === "In Progress").length;
+          const compNotStarted = tasks.filter((t) => t.status === "Not Started").length;
+          const companyColor = companyColors[company] || COLOURS.SLATE;
+
           return (
-            <div key={company} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "10px" }}>
-              {/* Company header */}
-              <div style={{ padding: "8px 14px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{company.replace(" PVT Limited", "")}</span>
-                <div style={{ display: "flex", gap: "8px", fontSize: "12px" }}>
-                  {(() => {
-                    const u = tasks.filter((t) => t.priority === "Urgent" || t.priority === "High").length;
-                    const o = tasks.filter(isOverdue).length;
-                    return (
-                      <>
-                        {o > 0 && <span style={{ fontWeight: 700, color: COLOURS.RED }}>{o} overdue</span>}
-                        {u > 0 && <span style={{ fontWeight: 700, color: "#dc2626" }}>{u} urgent/high</span>}
-                        <span style={{ color: COLOURS.SLATE }}>{tasks.length} total</span>
-                      </>
-                    );
-                  })()}
+            <div key={company} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${companyColor}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "12px" }}>
+              {/* Company header with mini stats */}
+              <div style={{ padding: "10px 14px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{company.replace(" PVT Limited", "")}</span>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE }}>{tasks.length} task{tasks.length > 1 ? "s" : ""}</span>
+                </div>
+                <div style={{ display: "flex", gap: "12px", fontSize: "12px" }}>
+                  {compOverdue > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.RED }} />
+                      <span style={{ fontWeight: 700, color: COLOURS.RED }}>{compOverdue} overdue</span>
+                    </div>
+                  )}
+                  {compUrgent > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#dc2626" }} />
+                      <span style={{ fontWeight: 700, color: "#dc2626" }}>{compUrgent} urgent/high</span>
+                    </div>
+                  )}
+                  {compInProgress > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#d97706" }} />
+                      <span style={{ fontWeight: 600, color: "#d97706" }}>{compInProgress} in progress</span>
+                    </div>
+                  )}
+                  {compNotStarted > 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.SLATE }} />
+                      <span style={{ color: COLOURS.SLATE }}>{compNotStarted} not started</span>
+                    </div>
+                  )}
+                  {compOverdue === 0 && compUrgent === 0 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                      <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.GREEN }} />
+                      <span style={{ fontWeight: 600, color: COLOURS.GREEN }}>On track</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
