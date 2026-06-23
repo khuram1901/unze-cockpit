@@ -29,7 +29,7 @@ type Plant = { id: string; name: string };
 const ROLES = ["Admin", "Executive", "Manager", "Member"];
 
 const DEPARTMENTS = [
-  "Unze Trading Ops", "Unze Trading Accounts", "Finance", "HR", "Admin",
+  "Unze Trading Ops", "Finance", "HR", "Admin",
   "IT", "Tax", "Legal", "Sales", "Audit", "S&M Investment", "BINC",
 ];
 

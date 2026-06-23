@@ -24,7 +24,6 @@ type DepartmentOwner = {
 
 const PROJECT_AREAS = [
   "Unze Trading Ops",
-  "Unze Trading Accounts",
   "Finance",
   "HR",
   "Admin",
