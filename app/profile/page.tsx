@@ -17,6 +17,18 @@ export default function ProfilePage() {
   const [verifyCode, setVerifyCode] = useState("");
   const [message, setMessage] = useState("");
   const [enrolling, setEnrolling] = useState(false);
+  const [userRole, setUserRole] = useState("");
+
+  // Notification preferences
+  const [notifPrefs, setNotifPrefs] = useState({
+    notif_task_assigned: true,
+    notif_task_overdue: true,
+    notif_escalations: true,
+    notif_meetings: true,
+    notif_daily_digest: true,
+    notif_weekly_report: true,
+  });
+  const [savingNotif, setSavingNotif] = useState(false);
 
   // Change password
   const [currentPw, setCurrentPw] = useState("");
@@ -33,12 +45,29 @@ export default function ProfilePage() {
     const { data: { user } } = await supabase.auth.getUser();
     setEmail(user?.email || "");
 
+    // Load MFA
     const { data } = await supabase.auth.mfa.listFactors();
     const totpFactors = data?.totp || [];
     const verified = totpFactors.filter((f) => f.status === "verified");
     setMfaEnabled(verified.length > 0);
-    if (verified.length > 0) {
-      setFactorId(verified[0].id);
+    if (verified.length > 0) setFactorId(verified[0].id);
+
+    // Load notification preferences
+    if (user?.email) {
+      const { data: member } = await supabase.from("members")
+        .select("role, notif_task_assigned, notif_task_overdue, notif_escalations, notif_meetings, notif_daily_digest, notif_weekly_report")
+        .eq("email", user.email).maybeSingle();
+      if (member) {
+        setUserRole(member.role || "");
+        setNotifPrefs({
+          notif_task_assigned: member.notif_task_assigned ?? true,
+          notif_task_overdue: member.notif_task_overdue ?? true,
+          notif_escalations: member.notif_escalations ?? true,
+          notif_meetings: member.notif_meetings ?? true,
+          notif_daily_digest: member.notif_daily_digest ?? true,
+          notif_weekly_report: member.notif_weekly_report ?? true,
+        });
+      }
     }
     setLoading(false);
   }
@@ -371,6 +400,55 @@ export default function ProfilePage() {
                   {changingPw ? "Changing..." : "Change Password"}
                 </button>
               </form>
+            </div>
+            <SectionTitle title="Notification Preferences" />
+            <div style={{
+              border: `1px solid ${COLOURS.BORDER}`,
+              borderRadius: "8px",
+              padding: "16px",
+              backgroundColor: "white",
+            }}>
+              <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+                Choose which notifications you receive. {userRole !== "Admin" ? "At least one must stay on." : "Admin can disable all."}
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
+                {([
+                  { key: "notif_task_assigned" as const, label: "Task assigned to me", desc: "When someone assigns you a new task" },
+                  { key: "notif_task_overdue" as const, label: "Overdue task reminders", desc: "When your tasks pass their due date" },
+                  { key: "notif_escalations" as const, label: "Escalations", desc: "KPI and receivable escalation alerts" },
+                  { key: "notif_meetings" as const, label: "Meeting notifications", desc: "Meeting minutes and approvals" },
+                  { key: "notif_daily_digest" as const, label: "Daily digest", desc: "Morning summary email" },
+                  { key: "notif_weekly_report" as const, label: "Weekly report", desc: "Friday weekly pulse report" },
+                ]).map((pref) => {
+                  const isOn = notifPrefs[pref.key];
+                  const otherOn = Object.entries(notifPrefs).filter(([k]) => k !== pref.key).some(([, v]) => v);
+                  const canTurnOff = userRole === "Admin" || otherOn;
+                  return (
+                    <label key={pref.key} style={{
+                      display: "flex", gap: "10px", alignItems: "flex-start", padding: "8px 10px",
+                      border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", cursor: canTurnOff || !isOn ? "pointer" : "not-allowed",
+                      backgroundColor: isOn ? "white" : "#f8fafc", opacity: canTurnOff || !isOn ? 1 : 0.6,
+                    }}>
+                      <input type="checkbox" checked={isOn} disabled={!canTurnOff && isOn}
+                        onChange={async () => {
+                          if (!canTurnOff && isOn) return;
+                          const updated = { ...notifPrefs, [pref.key]: !isOn };
+                          setNotifPrefs(updated);
+                          setSavingNotif(true);
+                          await supabase.from("members").update({ [pref.key]: !isOn }).eq("email", email);
+                          logAction("Updated", "members", `Notification: ${pref.key} = ${!isOn}`);
+                          setSavingNotif(false);
+                        }}
+                        style={{ marginTop: "2px", width: "16px", height: "16px" }} />
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{pref.label}</div>
+                        <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{pref.desc}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              {savingNotif && <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "8px" }}>Saving...</div>}
             </div>
           </>
         )}
