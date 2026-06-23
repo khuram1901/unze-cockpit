@@ -333,6 +333,7 @@ export default function AuditDashboard() {
               if (!row["Audit Area"]?.trim()) { errors.push(`Row ${line}: Audit Area is required`); return; }
               if (!row["Type"]?.trim()) { errors.push(`Row ${line}: Type is required`); return; }
               if (!row["Assigned To"]?.trim()) { errors.push(`Row ${line}: Assigned To is required`); return; }
+              if (!row["Created By"]?.trim()) { errors.push(`Row ${line}: Created By is required`); return; }
               if (!row["Target Date"]?.trim()) { errors.push(`Row ${line}: Target Date is required`); return; }
               validRows.push(row);
             });
@@ -342,11 +343,14 @@ export default function AuditDashboard() {
             }
             let count = 0;
             for (const row of validRows) {
+              const createdBy = row["Created By"].trim();
+              const userNotes = row["Notes"]?.trim() || "";
               await supabase.from("audit_plan_items").insert({
                 company_id: UTPL_COMPANY_ID, audit_area: row["Audit Area"].trim(),
                 audit_type: row["Type"].trim(), assigned_to: row["Assigned To"].trim(),
                 target_date: row["Target Date"].trim(), planned_date: row["Planned Date"]?.trim() || null,
-                scope: row["Scope"]?.trim() || null, notes: row["Notes"]?.trim() || null,
+                scope: row["Scope"]?.trim() || null,
+                notes: userNotes ? `Created by: ${createdBy}\n${userNotes}` : `Created by: ${createdBy}`,
                 status: "Planned", audit_stage: "Audit Planning", completion_pct: 0,
               });
               count++;
@@ -354,7 +358,7 @@ export default function AuditDashboard() {
             alert(`Successfully imported ${count} audit${count !== 1 ? "s" : ""}.`);
             loadData();
           }}
-          templateHeaders={["Audit Area", "Type", "Assigned To", "Target Date", "Planned Date", "Scope", "Notes"]}
+          templateHeaders={["Audit Area", "Type", "Assigned To", "Created By", "Target Date", "Planned Date", "Scope", "Notes"]}
           templateFilename="audit-import-template.csv"
           exportLabel="Export audit records as CSV"
           importLabel="Import audit records from CSV"

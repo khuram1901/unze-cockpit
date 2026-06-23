@@ -281,6 +281,7 @@ export default function TaxationDashboard() {
               if (!row["Title"]?.trim()) { errors.push(`Row ${line}: Title is required`); return; }
               if (!row["Company"]?.trim()) { errors.push(`Row ${line}: Company is required`); return; }
               if (!row["Type"]?.trim()) { errors.push(`Row ${line}: Type is required`); return; }
+              if (!row["Recorded By"]?.trim()) { errors.push(`Row ${line}: Recorded By is required`); return; }
               validRows.push(row);
             });
             if (errors.length > 0) {
@@ -289,12 +290,15 @@ export default function TaxationDashboard() {
             }
             let count = 0;
             for (const row of validRows) {
+              const recordedBy = row["Recorded By"].trim();
+              const userNotes = row["Notes"]?.trim() || "";
               await supabase.from("legal_notices").insert({
                 company_id: UTPL_COMPANY_ID, title: row["Title"].trim(),
                 company_name: row["Company"].trim(), notice_type: row["Type"].trim(),
                 consultant_name: row["Consultant"]?.trim() || null, hearing_deadline: row["Hearing Date"]?.trim() || null,
                 financial_exposure: row["Exposure (PKR)"] ? Number(row["Exposure (PKR)"]) : null,
                 received_date: row["Received"]?.trim() || null, our_action_required: row["Our Action"]?.trim() || null,
+                notes: userNotes ? `Recorded by: ${recordedBy}\n${userNotes}` : `Recorded by: ${recordedBy}`,
                 resolution_status: "pending",
               });
               count++;
@@ -302,7 +306,7 @@ export default function TaxationDashboard() {
             alert(`Successfully imported ${count} notice${count !== 1 ? "s" : ""}.`);
             loadData();
           }}
-          templateHeaders={["Title", "Company", "Type", "Consultant", "Hearing Date", "Exposure (PKR)", "Received", "Our Action"]}
+          templateHeaders={["Title", "Company", "Type", "Recorded By", "Consultant", "Hearing Date", "Exposure (PKR)", "Received", "Our Action", "Notes"]}
           templateFilename="tax-notices-import-template.csv"
           exportLabel="Export notices as CSV"
           importLabel="Import notices from CSV"
