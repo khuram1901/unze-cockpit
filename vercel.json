@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/finance/check-inbox",
-      "schedule": "0 6 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/notifications/digest",
