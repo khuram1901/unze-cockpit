@@ -43,6 +43,29 @@ type Meeting = {
   created_at: string;
 };
 
+function bestMatch(name: string, members: { name: string; email: string }[]): { name: string; email: string } | undefined {
+  const lower = name.toLowerCase().trim();
+  const exact = members.find((m) => m.name.toLowerCase() === lower);
+  if (exact) return exact;
+  const fullContains = members.find((m) => m.name.toLowerCase() === lower || lower === m.name.toLowerCase());
+  if (fullContains) return fullContains;
+  const parts = lower.split(/\s+/);
+  const lastWord = parts[parts.length - 1];
+  const firstWord = parts[0];
+  const byLastName = members.filter((m) => {
+    const mParts = m.name.toLowerCase().split(/\s+/);
+    return mParts[mParts.length - 1] === lastWord;
+  });
+  if (byLastName.length === 1) return byLastName[0];
+  const byFirstName = members.filter((m) => {
+    const mParts = m.name.toLowerCase().split(/\s+/);
+    return mParts[0] === firstWord || mParts[mParts.length - 1] === firstWord;
+  });
+  if (byFirstName.length === 1) return byFirstName[0];
+  const partial = members.find((m) => m.name.toLowerCase().includes(lower) || lower.includes(m.name.toLowerCase()));
+  return partial;
+}
+
 export default function MeetingsPage() {
   const isMobile = useMobile();
   const [transcript, setTranscript] = useState("");
@@ -231,7 +254,7 @@ export default function MeetingsPage() {
 
     let tasksCreated = 0;
     for (const item of extracted.action_items) {
-      const memberMatch = memberEmails.find((m) => m.name.toLowerCase().includes(item.owner_name.toLowerCase()) || item.owner_name.toLowerCase().includes(m.name.toLowerCase()));
+      const memberMatch = bestMatch(item.owner_name, memberEmails);
 
       const { data: task } = await supabase
         .from("tasks")
@@ -272,7 +295,7 @@ export default function MeetingsPage() {
 
     // Link meeting to HOD attendees
     for (const attendee of extracted.attendees) {
-      const match = memberEmails.find((m) => m.name.toLowerCase().includes(attendee.toLowerCase()) || attendee.toLowerCase().includes(m.name.toLowerCase()));
+      const match = bestMatch(attendee, memberEmails);
       if (match?.email) {
         await supabase.from("meeting_attendees").upsert({
           meeting_id: meeting.id,
@@ -289,7 +312,7 @@ export default function MeetingsPage() {
     // Pre-select all matched attendee emails + external emails
     const allRecipients = new Set<string>();
     for (const attendee of extracted.attendees) {
-      const match = memberEmails.find((m) => m.name.toLowerCase().includes(attendee.toLowerCase()) || attendee.toLowerCase().includes(m.name.toLowerCase()));
+      const match = bestMatch(attendee, memberEmails);
       if (match?.email) allRecipients.add(match.email);
     }
     if (externalEmails.trim()) {
@@ -715,7 +738,7 @@ export default function MeetingsPage() {
           const selectAll = () => {
             const all = new Set<string>();
             extracted.attendees.forEach((a) => {
-              const match = memberEmails.find((m) => m.name.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(m.name.toLowerCase()));
+              const match = bestMatch(a, memberEmails);
               if (match?.email) all.add(match.email);
             });
             if (externalEmails.trim()) externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).forEach((e) => all.add(e));
@@ -741,7 +764,7 @@ export default function MeetingsPage() {
 
               {/* Internal attendees */}
               {extracted.attendees.map((a) => {
-                const match = memberEmails.find((m) => m.name.toLowerCase().includes(a.toLowerCase()) || a.toLowerCase().includes(m.name.toLowerCase()));
+                const match = bestMatch(a, memberEmails);
                 if (!match?.email) return (
                   <div key={a} style={{ padding: "4px 0", fontSize: "14px", color: COLOURS.SLATE }}>
                     {a} <span style={{ fontSize: "12px", color: "#d97706" }}>(no email match)</span>
