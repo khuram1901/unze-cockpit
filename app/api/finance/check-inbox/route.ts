@@ -63,14 +63,21 @@ export async function GET(request: NextRequest) {
     const messagesRes = await gmail.users.messages.list({
       userId: "me",
       labelIds: [cockpitLabel.id],
-      q: "is:unread",
-      maxResults: 5,
+      q: "newer_than:30d",
+      maxResults: 20,
     });
 
     const messageIds = messagesRes.data.messages || [];
     if (messageIds.length === 0) {
-      return Response.json({ ok: true, message: "No new emails", processed: 0 });
+      return Response.json({ ok: true, message: "No emails with cockpit-cash label in last 30 days", processed: 0 });
     }
+
+    // Get existing dates so we skip already-processed ones
+    const { data: existingPositions } = await supabase
+      .from("daily_cash_position")
+      .select("position_date")
+      .eq("company_id", UTPL_COMPANY_ID);
+    const existingDates = new Set((existingPositions || []).map((p) => p.position_date));
 
     const results: { messageId: string; status: string; date?: string }[] = [];
 
@@ -117,13 +124,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (pdfAttachments.length < 2) {
-        results.push({ messageId: msg.id, status: "skipped — need 2 PDF attachments" });
-        // Mark as read anyway so we don't re-process
-        await gmail.users.messages.modify({
-          userId: "me",
-          id: msg.id,
-          requestBody: { removeLabelIds: ["UNREAD"] },
-        });
+        results.push({ messageId: msg.id, status: `skipped — found ${pdfAttachments.length} PDF(s), need 2` });
         continue;
       }
 
@@ -147,8 +148,13 @@ export async function GET(request: NextRequest) {
           const positionDate = cashFlow.date || bankPosition.date;
 
           if (positionDate) {
-            await saveToDatabase(positionDate, cashFlow, bankPosition, result, pdf1.filename, pdf2.filename);
-            results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate });
+            if (existingDates.has(positionDate)) {
+              results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate });
+            } else {
+              await saveToDatabase(positionDate, cashFlow, bankPosition, result, pdf1.filename, pdf2.filename);
+              existingDates.add(positionDate);
+              results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate });
+            }
           } else {
             results.push({ messageId: msg.id, status: "error — no date found in PDFs" });
           }
@@ -163,8 +169,13 @@ export async function GET(request: NextRequest) {
           const positionDate = cashFlow.date || bankPosition.date;
 
           if (positionDate) {
-            await saveToDatabase(positionDate, cashFlow, bankPosition, result, cashFlowPdf.filename, bankPositionPdf.filename);
-            results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate });
+            if (existingDates.has(positionDate)) {
+              results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate });
+            } else {
+              await saveToDatabase(positionDate, cashFlow, bankPosition, result, cashFlowPdf.filename, bankPositionPdf.filename);
+              existingDates.add(positionDate);
+              results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate });
+            }
           } else {
             results.push({ messageId: msg.id, status: "error — no date found in PDFs" });
           }
