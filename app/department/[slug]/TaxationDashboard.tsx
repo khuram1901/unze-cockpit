@@ -7,7 +7,7 @@ import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 
 type Notice = {
   id: string;
@@ -153,37 +153,114 @@ export default function TaxationDashboard() {
         </div>
       )}
 
-      {/* KPIs + Exposure Chart */}
+      {/* KPI Row */}
       {!loading && (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-          <div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px", marginBottom: "8px" }}>
-              <CountCard label="Pending" value={pending.length} color="#d97706" />
-              <CountCard label="Hearing < 7 Days" value={hearingSoon.length} color={COLOURS.RED} />
-              <CountCard label="High Exposure" value={highExposure.length} color={COLOURS.RED} />
-              <CountCard label="Resolved" value={resolved} color={COLOURS.GREEN} />
-            </div>
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.BLUE}`, borderRadius: "7px", padding: "10px 12px", backgroundColor: "white" }}>
-              <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Total Pending Exposure</div>
-              <div style={{ fontSize: "20px", fontWeight: 800, color: totalExposure > 0 ? COLOURS.RED : COLOURS.GREEN }}>PKR {totalExposure.toLocaleString()}</div>
-            </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
+          <CountCard label="Pending" value={pending.length} color="#d97706" />
+          <CountCard label="Hearing Soon" value={hearingSoon.length} color={COLOURS.RED} />
+          <CountCard label="High Exposure" value={highExposure.length} color={COLOURS.RED} />
+          <CountCard label="Resolved" value={resolved} color={COLOURS.GREEN} />
+          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${totalExposure > 0 ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "1px" }}>Total Exposure</div>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: totalExposure > 0 ? COLOURS.RED : COLOURS.GREEN }}>PKR {totalExposure.toLocaleString()}</div>
           </div>
-          {exposureData.length > 0 && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>Exposure by Company</div>
-              <ResponsiveContainer width="100%" height={Math.max(140, exposureData.length * 35)}>
-                <BarChart data={exposureData} layout="vertical" margin={{ left: 5, right: 10, top: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: COLOURS.SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
-                  <YAxis dataKey="company" type="category" tick={{ fontSize: 12, fill: COLOURS.NAVY, fontWeight: 600 }} width={100} />
-                  <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
-                  <Bar dataKey="amount" fill={COLOURS.RED} name="Exposure (PKR)" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
         </div>
       )}
+
+      {/* Three chart panels */}
+      {!loading && items.length > 0 && (() => {
+        const companyColors: Record<string, string> = {
+          "Unze Trading PVT Limited": "#1e293b", "Imperial Footwear PVT Limited": "#2563eb",
+          "Haute Dolci": "#7c3aed", "Barahn PVT Limited": "#059669", "K&K Jhang": "#d97706",
+        };
+        const companyDonut = Array.from(
+          pending.reduce((map, n) => {
+            const c = n.company_name || "Unknown";
+            map.set(c, (map.get(c) || 0) + 1);
+            return map;
+          }, new Map<string, number>())
+        ).map(([name, value]) => ({
+          name: name.replace(" PVT Limited", ""), value, color: companyColors[name] || COLOURS.SLATE,
+        })).sort((a, b) => b.value - a.value);
+
+        const typeColors: Record<string, string> = {
+          "income tax": "#dc2626", "sales tax": "#d97706", "withholding tax": "#2563eb",
+          "FBR notice": "#7c3aed", "provincial tax": "#059669", "customs": "#1e293b", "other": COLOURS.SLATE,
+        };
+        const typeDonut = Array.from(
+          pending.reduce((map, n) => {
+            const t = n.notice_type || "other";
+            map.set(t, (map.get(t) || 0) + 1);
+            return map;
+          }, new Map<string, number>())
+        ).map(([name, value]) => ({
+          name, value, color: typeColors[name] || COLOURS.SLATE,
+        })).sort((a, b) => b.value - a.value);
+
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
+            {/* Notices by Company donut */}
+            {companyDonut.length > 0 && (
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>Pending by Company</div>
+                <ResponsiveContainer width="100%" height={150}>
+                  <PieChart>
+                    <Pie data={companyDonut} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
+                      {companyDonut.map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(value, name) => [`${value} notice${Number(value) > 1 ? "s" : ""}`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                  {companyDonut.map((d) => (
+                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.SLATE }}>
+                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notices by Type donut */}
+            {typeDonut.length > 0 && (
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>Pending by Type</div>
+                <ResponsiveContainer width="100%" height={150}>
+                  <PieChart>
+                    <Pie data={typeDonut} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
+                      {typeDonut.map((d, i) => <Cell key={i} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(value, name) => [`${value} notice${Number(value) > 1 ? "s" : ""}`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                  {typeDonut.map((d) => (
+                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.SLATE }}>
+                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Exposure by Company bar */}
+            {exposureData.length > 0 && (
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>Exposure by Company</div>
+                <ResponsiveContainer width="100%" height={Math.max(140, exposureData.length * 32)}>
+                  <BarChart data={exposureData} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: COLOURS.SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+                    <YAxis dataKey="company" type="category" tick={{ fontSize: 11, fill: COLOURS.NAVY, fontWeight: 600 }} width={90} />
+                    <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
+                    <Bar dataKey="amount" fill={COLOURS.RED} name="Exposure (PKR)" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Notices header with + button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
