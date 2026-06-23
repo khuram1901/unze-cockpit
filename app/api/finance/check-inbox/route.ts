@@ -48,14 +48,16 @@ export async function GET(request: NextRequest) {
 
     // Find unread emails with the cockpit-cash label
     const labelsRes = await gmail.users.labels.list({ userId: "me" });
+    const allLabels = (labelsRes.data.labels || []).map((l) => l.name);
     const cockpitLabel = labelsRes.data.labels?.find(
-      (l) => l.name?.toLowerCase() === "cockpit-cash"
+      (l) => l.name?.toLowerCase().includes("cockpit")
     );
 
     if (!cockpitLabel?.id) {
       return Response.json({
-        ok: true,
-        message: "No 'cockpit-cash' label found. Create a Gmail label called 'cockpit-cash' and set up a filter.",
+        ok: false,
+        message: "No cockpit label found",
+        allLabels: allLabels.filter((l) => l).slice(0, 30),
         processed: 0,
       });
     }
@@ -69,7 +71,7 @@ export async function GET(request: NextRequest) {
 
     const messageIds = messagesRes.data.messages || [];
     if (messageIds.length === 0) {
-      return Response.json({ ok: true, message: "No emails with cockpit-cash label in last 30 days", processed: 0 });
+      return Response.json({ ok: true, message: "Label found but no emails in last 30 days", labelName: cockpitLabel.name, labelId: cockpitLabel.id, processed: 0 });
     }
 
     // Get existing dates so we skip already-processed ones
