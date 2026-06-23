@@ -117,31 +117,29 @@ export default function ProfilePage() {
     setChangingPw(true);
     setMessage("");
 
-    // Re-authenticate with current password first
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password: currentPw,
-    });
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, currentPassword: currentPw, newPassword: newPw }),
+      });
+      const data = await res.json();
 
-    if (signInError) {
-      setMessage("Error: Current password is incorrect.");
-      setChangingPw(false);
-      return;
+      if (!res.ok) {
+        setMessage("Error: " + (data.error || "Failed to change password."));
+        setChangingPw(false);
+        return;
+      }
+
+      logAction("Updated", "auth", "Changed password");
+      setMessage("Password changed successfully.");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+    } catch {
+      setMessage("Error: Network error.");
     }
-
-    const { error } = await supabase.auth.updateUser({ password: newPw });
     setChangingPw(false);
-
-    if (error) {
-      setMessage("Error: " + error.message);
-      return;
-    }
-
-    logAction("Updated", "auth", "Changed password");
-    setMessage("Password changed successfully.");
-    setCurrentPw("");
-    setNewPw("");
-    setConfirmPw("");
   }
 
   return (
