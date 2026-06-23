@@ -66,8 +66,8 @@ async function handleCheckInbox() {
     const messagesRes = await gmail.users.messages.list({
       userId: "me",
       labelIds: [minutesLabel.id],
-      q: "is:unread",
-      maxResults: 5,
+      q: "newer_than:30d",
+      maxResults: 20,
     });
 
     const messageIds = messagesRes.data.messages || [];
@@ -157,12 +157,6 @@ async function handleCheckInbox() {
         emails.push({ id: msg.id, subject, from, date, text: bodyText.trim() });
       }
 
-      // Mark as read
-      await gmail.users.messages.modify({
-        userId: "me",
-        id: msg.id,
-        requestBody: { removeLabelIds: ["UNREAD"] },
-      });
     }
 
     return Response.json({ success: true, emails });
