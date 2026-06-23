@@ -345,6 +345,7 @@ export default function NewTaskForm() {
           style={inputStyle}
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
+          required
         />
       </label>
 

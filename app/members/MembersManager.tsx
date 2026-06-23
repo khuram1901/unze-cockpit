@@ -296,22 +296,35 @@ export default function MembersManager() {
               downloadCSV(`members-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
             }}
             onImport={async (rows) => {
+              const errors: string[] = [];
+              const validRows: Record<string, string>[] = [];
+              rows.forEach((row, i) => {
+                const line = i + 2;
+                if (!row["First Name"]?.trim()) { errors.push(`Row ${line}: First Name is required`); return; }
+                if (!row["Last Name"]?.trim()) { errors.push(`Row ${line}: Last Name is required`); return; }
+                if (!row["Email"]?.trim()) { errors.push(`Row ${line}: Email is required`); return; }
+                if (!row["Role"]?.trim()) { errors.push(`Row ${line}: Role is required`); return; }
+                validRows.push(row);
+              });
+              if (errors.length > 0) {
+                alert(`Import validation failed:\n\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`);
+                return;
+              }
               let count = 0;
-              for (const row of rows) {
-                if (!row["Email"]?.trim()) continue;
+              for (const row of validRows) {
                 await supabase.from("members").insert({
-                  first_name: row["First Name"]?.trim() || null,
-                  last_name: row["Last Name"]?.trim() || null,
-                  name: `${row["First Name"] || ""} ${row["Last Name"] || ""}`.trim() || null,
+                  first_name: row["First Name"].trim(),
+                  last_name: row["Last Name"].trim(),
+                  name: `${row["First Name"].trim()} ${row["Last Name"].trim()}`,
                   email: row["Email"].trim(),
-                  role: row["Role"]?.trim() || "Member",
+                  role: row["Role"].trim(),
                   department: row["Department"]?.trim() || null,
                   business_unit: row["Business Unit"]?.trim() || null,
                   company: row["Company"]?.trim() || null,
                 });
                 count++;
               }
-              alert(`Imported ${count} member${count !== 1 ? "s" : ""}.`);
+              alert(`Successfully imported ${count} member${count !== 1 ? "s" : ""}.`);
               loadData();
             }}
             templateHeaders={["First Name", "Last Name", "Email", "Role", "Department", "Business Unit", "Company"]}

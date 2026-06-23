@@ -346,35 +346,51 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
               downloadCSV(`tasks-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
             }}
             onImport={async (rows) => {
-              const { data: allMembers } = await supabase.from("members").select("name, first_name, last_name, email, department");
+              const errors: string[] = [];
+              const validRows: Record<string, string>[] = [];
+              rows.forEach((row, i) => {
+                const line = i + 2;
+                if (!row["Description"]?.trim()) { errors.push(`Row ${line}: Description is required`); return; }
+                if (!row["Assigned To"]?.trim()) { errors.push(`Row ${line}: Assigned To is required`); return; }
+                if (!row["Due Date"]?.trim()) { errors.push(`Row ${line}: Due Date is required`); return; }
+                if (!row["Priority"]?.trim()) { errors.push(`Row ${line}: Priority is required`); return; }
+                if (!row["Department / Area"]?.trim()) { errors.push(`Row ${line}: Department / Area is required`); return; }
+                validRows.push(row);
+              });
+              if (errors.length > 0) {
+                alert(`Import validation failed:\n\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`);
+                return;
+              }
+              const { data: allMembers } = await supabase.from("members").select("name, first_name, last_name, email, department, business_unit");
               const memberList = allMembers || [];
               let count = 0;
-              for (const row of rows) {
-                if (!row["Description"]?.trim()) continue;
-                const assignedName = row["Assigned To"]?.trim() || null;
-                const member = assignedName ? memberList.find((m) => {
+              for (const row of validRows) {
+                const assignedName = row["Assigned To"].trim();
+                const member = memberList.find((m) => {
                   const full = `${m.first_name || ""} ${m.last_name || ""}`.trim();
                   return full === assignedName || m.name === assignedName;
-                }) : null;
+                });
                 await supabase.from("tasks").insert({
                   description: row["Description"].trim(),
                   assigned_to: assignedName,
                   assigned_to_email: member?.email || null,
-                  assigned_to_department: member?.department || null,
-                  priority: row["Priority"]?.trim() || "Normal",
-                  due_date: row["Due Date"]?.trim() || null,
-                  status: "Not Started",
-                  project: row["Project"]?.trim() || null,
+                  assigned_to_department: member?.department || row["Department / Area"].trim(),
+                  assigned_to_business_unit: member?.business_unit || null,
+                  priority: row["Priority"].trim(),
+                  due_date: row["Due Date"].trim(),
+                  status: row["Starting Status"]?.trim() || "Not Started",
+                  project: row["Department / Area"].trim(),
+                  notes: row["Notes"]?.trim() || null,
                   task_type: "Task",
                   assigned_by: "CSV Import",
                   assigned_date: new Date().toISOString().slice(0, 10),
                 });
                 count++;
               }
-              alert(`Imported ${count} task${count !== 1 ? "s" : ""}.`);
+              alert(`Successfully imported ${count} task${count !== 1 ? "s" : ""}.`);
               loadTasks();
             }}
-            templateHeaders={["Description", "Assigned To", "Priority", "Due Date", "Project"]}
+            templateHeaders={["Description", "Assigned To", "Due Date", "Priority", "Department / Area", "Starting Status", "Notes"]}
             templateFilename="tasks-import-template.csv"
             exportLabel="Export all tasks as CSV"
             importLabel="Import tasks from CSV"

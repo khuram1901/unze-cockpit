@@ -205,8 +205,8 @@ export default function AuditDashboard() {
           <form onSubmit={handleAdd}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
               <label style={lbl}>Audit Area <input style={inp} value={auditArea} onChange={(e) => setAuditArea(e.target.value)} required placeholder="e.g. Procurement Process" /></label>
-              <label style={lbl}>Audit Type <select style={inp} value={auditType} onChange={(e) => setAuditType(e.target.value)}><option value="">Select</option>{AUDIT_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
-              <label style={lbl}>Assigned To <input style={inp} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder="Auditor name" /></label>
+              <label style={lbl}>Audit Type <select style={inp} value={auditType} onChange={(e) => setAuditType(e.target.value)} required><option value="">Select</option>{AUDIT_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
+              <label style={lbl}>Assigned To <input style={inp} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder="Auditor name" required /></label>
               <label style={lbl}>Planned Date <input type="date" style={inp} value={plannedDate} onChange={(e) => setPlannedDate(e.target.value)} /></label>
               <label style={lbl}>Target Date <input type="date" style={inp} value={targetDate} onChange={(e) => setTargetDate(e.target.value)} required /></label>
               <label style={lbl}>Scope <textarea style={{ ...inp, height: "50px" }} value={scope} onChange={(e) => setScope(e.target.value)} placeholder="What will be audited" /></label>
@@ -326,21 +326,35 @@ export default function AuditDashboard() {
             downloadCSV(`audit-records-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
           }}
           onImport={async (rows) => {
+            const errors: string[] = [];
+            const validRows: Record<string, string>[] = [];
+            rows.forEach((row, i) => {
+              const line = i + 2;
+              if (!row["Audit Area"]?.trim()) { errors.push(`Row ${line}: Audit Area is required`); return; }
+              if (!row["Type"]?.trim()) { errors.push(`Row ${line}: Type is required`); return; }
+              if (!row["Assigned To"]?.trim()) { errors.push(`Row ${line}: Assigned To is required`); return; }
+              if (!row["Target Date"]?.trim()) { errors.push(`Row ${line}: Target Date is required`); return; }
+              validRows.push(row);
+            });
+            if (errors.length > 0) {
+              alert(`Import validation failed:\n\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`);
+              return;
+            }
             let count = 0;
-            for (const row of rows) {
-              if (!row["Audit Area"]?.trim()) continue;
+            for (const row of validRows) {
               await supabase.from("audit_plan_items").insert({
                 company_id: UTPL_COMPANY_ID, audit_area: row["Audit Area"].trim(),
-                audit_type: row["Type"]?.trim() || null, assigned_to: row["Assigned To"]?.trim() || null,
-                target_date: row["Target Date"]?.trim() || null, planned_date: row["Planned Date"]?.trim() || null,
-                scope: row["Scope"]?.trim() || null, status: "Planned", audit_stage: "Audit Planning", completion_pct: 0,
+                audit_type: row["Type"].trim(), assigned_to: row["Assigned To"].trim(),
+                target_date: row["Target Date"].trim(), planned_date: row["Planned Date"]?.trim() || null,
+                scope: row["Scope"]?.trim() || null, notes: row["Notes"]?.trim() || null,
+                status: "Planned", audit_stage: "Audit Planning", completion_pct: 0,
               });
               count++;
             }
-            alert(`Imported ${count} audit${count !== 1 ? "s" : ""}.`);
+            alert(`Successfully imported ${count} audit${count !== 1 ? "s" : ""}.`);
             loadData();
           }}
-          templateHeaders={["Audit Area", "Type", "Assigned To", "Target Date", "Planned Date", "Scope"]}
+          templateHeaders={["Audit Area", "Type", "Assigned To", "Target Date", "Planned Date", "Scope", "Notes"]}
           templateFilename="audit-import-template.csv"
           exportLabel="Export audit records as CSV"
           importLabel="Import audit records from CSV"

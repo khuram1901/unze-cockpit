@@ -274,22 +274,35 @@ export default function TaxationDashboard() {
             downloadCSV(`tax-notices-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
           }}
           onImport={async (rows) => {
+            const errors: string[] = [];
+            const validRows: Record<string, string>[] = [];
+            rows.forEach((row, i) => {
+              const line = i + 2;
+              if (!row["Title"]?.trim()) { errors.push(`Row ${line}: Title is required`); return; }
+              if (!row["Company"]?.trim()) { errors.push(`Row ${line}: Company is required`); return; }
+              if (!row["Type"]?.trim()) { errors.push(`Row ${line}: Type is required`); return; }
+              validRows.push(row);
+            });
+            if (errors.length > 0) {
+              alert(`Import validation failed:\n\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`);
+              return;
+            }
             let count = 0;
-            for (const row of rows) {
-              if (!row["Title"]?.trim()) continue;
+            for (const row of validRows) {
               await supabase.from("legal_notices").insert({
                 company_id: UTPL_COMPANY_ID, title: row["Title"].trim(),
-                company_name: row["Company"]?.trim() || null, notice_type: row["Type"]?.trim() || null,
+                company_name: row["Company"].trim(), notice_type: row["Type"].trim(),
                 consultant_name: row["Consultant"]?.trim() || null, hearing_deadline: row["Hearing Date"]?.trim() || null,
                 financial_exposure: row["Exposure (PKR)"] ? Number(row["Exposure (PKR)"]) : null,
-                received_date: row["Received"]?.trim() || null, resolution_status: "pending",
+                received_date: row["Received"]?.trim() || null, our_action_required: row["Our Action"]?.trim() || null,
+                resolution_status: "pending",
               });
               count++;
             }
-            alert(`Imported ${count} notice${count !== 1 ? "s" : ""}.`);
+            alert(`Successfully imported ${count} notice${count !== 1 ? "s" : ""}.`);
             loadData();
           }}
-          templateHeaders={["Title", "Company", "Type", "Consultant", "Hearing Date", "Exposure (PKR)", "Received"]}
+          templateHeaders={["Title", "Company", "Type", "Consultant", "Hearing Date", "Exposure (PKR)", "Received", "Our Action"]}
           templateFilename="tax-notices-import-template.csv"
           exportLabel="Export notices as CSV"
           importLabel="Import notices from CSV"
@@ -308,8 +321,8 @@ export default function TaxationDashboard() {
           <form onSubmit={handleAdd}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
               <label style={lbl}>Notice Title <input style={inp} value={formData.title || ""} onChange={(e) => setField("title", e.target.value)} required placeholder="e.g. Income Tax Notice FY2025" /></label>
-              <label style={lbl}>Type <select style={inp} value={formData.notice_type || ""} onChange={(e) => setField("notice_type", e.target.value)}><option value="">Select</option>{NOTICE_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
-              <label style={lbl}>Company <select style={inp} value={formData.company_name || ""} onChange={(e) => setField("company_name", e.target.value)}><option value="">Select</option>{COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></label>
+              <label style={lbl}>Type <select style={inp} value={formData.notice_type || ""} onChange={(e) => setField("notice_type", e.target.value)} required><option value="">Select</option>{NOTICE_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
+              <label style={lbl}>Company <select style={inp} value={formData.company_name || ""} onChange={(e) => setField("company_name", e.target.value)} required><option value="">Select</option>{COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></label>
               <label style={lbl}>Consultant <select style={inp} value={formData.consultant_name || ""} onChange={(e) => setField("consultant_name", e.target.value)}><option value="">Select</option>{CONSULTANTS.map((c) => <option key={c}>{c}</option>)}</select></label>
               <label style={lbl}>Received Date <input type="date" style={inp} value={formData.received_date || ""} onChange={(e) => setField("received_date", e.target.value)} /></label>
               <label style={lbl}>Hearing Deadline <input type="date" style={inp} value={formData.hearing_deadline || ""} onChange={(e) => setField("hearing_deadline", e.target.value)} /></label>
