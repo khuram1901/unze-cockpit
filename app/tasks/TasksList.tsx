@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import TaskStatus from "./TaskStatus";
 import { formatDateUK } from "../lib/dateUtils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import { downloadCSV } from "../lib/exportUtils";
 
 type Task = {
   id: string;
@@ -311,11 +312,20 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
       )}
 
       {/* ═══ SUMMARY ROW ═══ */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-        <MiniCard label="Open" value={allOpen.length} color="#2563eb" />
-        <MiniCard label="Overdue" value={overdueTasks.length} color="#dc2626" />
-        <MiniCard label="Waiting Reply" value={waitingReply.length} color="#d97706" />
-        <MiniCard label="Completed" value={completedAll.length} color="#16a34a" />
+      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", flex: 1 }}>
+          <MiniCard label="Open" value={allOpen.length} color="#2563eb" />
+          <MiniCard label="Overdue" value={overdueTasks.length} color="#dc2626" />
+          <MiniCard label="Waiting Reply" value={waitingReply.length} color="#d97706" />
+          <MiniCard label="Completed" value={completedAll.length} color="#16a34a" />
+        </div>
+        <button onClick={() => {
+          const headers = ["Description", "Assigned To", "Priority", "Due Date", "Status", "Project"];
+          const rows = scopedTasks.map((t) => [t.description, t.assigned_to || "—", t.priority || "—", t.due_date || "—", t.status, t.project || "—"]);
+          downloadCSV(`tasks-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+        }} style={{ backgroundColor: "white", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", height: "fit-content" }}>
+          Export CSV
+        </button>
       </div>
 
       {/* ═══ TIME VIEW TOGGLE ═══ */}

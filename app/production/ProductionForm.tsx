@@ -397,6 +397,35 @@ export default function ProductionForm() {
         </div>
       </div>
 
+      {/* Today's status summary */}
+      {plantId && (() => {
+        const todayEntries = pastEntries.filter((e) => e.entry_date === entryDate);
+        const hasProd = todayEntries.some((e) => e.type === "Production");
+        const hasDisp = todayEntries.some((e) => e.type === "Dispatch");
+        const hasBrk = todayEntries.some((e) => e.type === "Breakage");
+        const allDone = hasProd && hasDisp;
+        return (
+          <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasProd ? "#16a34a" : "#e2e8f0"}`, backgroundColor: hasProd ? "#dcfce7" : "white", color: hasProd ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+              {hasProd ? "✓" : "○"} Production
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasDisp ? "#16a34a" : "#e2e8f0"}`, backgroundColor: hasDisp ? "#dcfce7" : "white", color: hasDisp ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+              {hasDisp ? "✓" : "○"} Dispatch
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasBrk ? "#16a34a" : "#e2e8f0"}`, backgroundColor: hasBrk ? "#dcfce7" : "white", color: hasBrk ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+              {hasBrk ? "✓" : "○"} Breakage
+            </div>
+            {allDone ? (
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a", padding: "4px 0", display: "flex", alignItems: "center" }}>All submitted for today</span>
+            ) : (
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "#d97706", padding: "4px 0", display: "flex", alignItems: "center" }}>
+                {!hasProd && !hasDisp ? "Production and Dispatch needed" : !hasProd ? "Production needed" : "Dispatch needed"}
+              </span>
+            )}
+          </div>
+        );
+      })()}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "14px", alignItems: "start" }}>
         {/* Production */}
         {plantId && (

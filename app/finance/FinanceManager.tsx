@@ -6,6 +6,7 @@ import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/d
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, SectionTitle, PageHeader } from "../lib/SharedUI";
+import { downloadCSV } from "../lib/exportUtils";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 
 type OpeningBalance = {
@@ -950,16 +951,27 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       )}
 
       {/* ── DAILY POSITION HISTORY TABLE (full width) ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+        <SectionTitle title="Daily Position — Last 30 Days" />
+        {positions.length > 0 && (
+          <button onClick={() => {
+            const headers = ["Date", "Opening", "Receipts", "Payments", "Closing", "Post-dated", "Net"];
+            const rows = positions.map((p) => [formatDateUK(p.position_date), String(p.opening_balance), String(p.total_receipts), String(p.total_payments), String(p.closing_balance), String(p.post_dated_total), String(p.closing_after_post_dated)]);
+            downloadCSV(`cash-positions-${companyName.replace(/ /g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+          }} style={{ backgroundColor: "white", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+            Export CSV
+          </button>
+        )}
+      </div>
       <div
         style={{
           border: `1px solid ${BORDER}`,
           borderRadius: "8px",
-          padding: "16px",
+          padding: "14px",
           backgroundColor: "white",
           marginBottom: "16px",
         }}
       >
-        <SectionTitle title="Daily Position — Last 30 Days" />
         {positions.length === 0 ? (
           <p style={{ fontSize: "14px", color: SLATE }}>
             No daily positions recorded yet.

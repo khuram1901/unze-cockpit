@@ -246,6 +246,21 @@ export default function DepartmentOwnersPage() {
         </div>
 
         {/* Department owner cards */}
+        {/* Vacancy alert */}
+        {(() => {
+          const vacant = departments.filter((d) => !d.primary_owner_member_id);
+          if (vacant.length === 0) return null;
+          return (
+            <div style={{ border: "1px solid #fecaca", borderLeft: "4px solid #dc2626", borderRadius: "8px", backgroundColor: "#fef2f2", padding: "12px 16px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "20px" }}>⚠</span>
+              <div>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: "#991b1b" }}>{vacant.length} department{vacant.length > 1 ? "s" : ""} without a primary owner</div>
+                <div style={{ fontSize: "13px", color: "#991b1b", marginTop: "1px" }}>{vacant.map((d) => d.department_name).join(" · ")}</div>
+              </div>
+            </div>
+          );
+        })()}
+
         <SectionTitle title="Department Ownership" />
         <div style={{ display: "grid", gap: "10px", maxWidth: "760px" }}>
           {departments.map((dept) => (

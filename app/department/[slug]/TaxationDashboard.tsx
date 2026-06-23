@@ -8,6 +8,7 @@ import { useMobile } from "../../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
+import { downloadCSV } from "../../lib/exportUtils";
 
 type Notice = {
   id: string;
@@ -262,9 +263,18 @@ export default function TaxationDashboard() {
         );
       })()}
 
-      {/* Notices header with + button */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+      {/* Notices header with export + button */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", gap: "8px" }}>
         <SectionTitle title="Notices by Company" />
+        {items.length > 0 && (
+          <button onClick={() => {
+            const headers = ["Title", "Company", "Type", "Consultant", "Hearing Date", "Exposure (PKR)", "Status", "Received"];
+            const rows = items.map((i) => [i.title, i.company_name || "—", i.notice_type || "—", i.consultant_name || "—", i.hearing_deadline || "—", String(i.financial_exposure || 0), i.resolution_status, i.received_date || "—"]);
+            downloadCSV(`tax-notices-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+          }} style={{ backgroundColor: "white", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+            Export CSV
+          </button>
+        )}
         <button onClick={() => setShowForm(!showForm)} style={{
           backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
           width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",

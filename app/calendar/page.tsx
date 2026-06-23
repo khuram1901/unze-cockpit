@@ -49,6 +49,15 @@ type Member = {
 
 type BusySlot = { start: string; end: string };
 
+type TaskDue = {
+  id: string;
+  description: string;
+  due_date: string;
+  priority: string | null;
+  status: string;
+  assigned_to: string | null;
+};
+
 const MEETING_TYPES = ["Operations", "Strategy", "Finance", "Ad-hoc", "HR", "Legal"];
 const HOURS = Array.from({ length: 11 }, (_, i) => i + 8); // 8am to 6pm
 
@@ -100,6 +109,8 @@ export default function CalendarPage() {
   const [weekStart, setWeekStart] = useState(new Date().toISOString().slice(0, 10));
   const [busySlots, setBusySlots] = useState<BusySlot[]>([]);
   const [busyLoading, setBusyLoading] = useState(false);
+  const [tasksDue, setTasksDue] = useState<TaskDue[]>([]);
+  const [showForm, setShowForm] = useState(false);
 
   const isMobile = useMobile();
   const canManageRequests = member?.role === "Admin" || member?.role === "Executive";
@@ -119,13 +130,15 @@ export default function CalendarPage() {
       if (memberData) setMember(memberData);
     }
 
-    const [reqRes, membersRes] = await Promise.all([
+    const [reqRes, membersRes, tasksRes] = await Promise.all([
       supabase.from("meeting_requests").select("*").order("created_at", { ascending: false }),
       supabase.from("members").select("first_name, last_name, name, email, department, role, is_hod"),
+      supabase.from("tasks").select("id, description, due_date, priority, status, assigned_to").not("due_date", "is", null).not("status", "in", '("Completed","Cancelled")').order("due_date"),
     ]);
 
     setRequests(reqRes.data || []);
     setAllMembers(membersRes.data || []);
+    setTasksDue((tasksRes.data || []) as TaskDue[]);
     setLoading(false);
   }
 
@@ -259,20 +272,30 @@ export default function CalendarPage() {
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
-        <PageHeader
-          title="Calendar & Meeting Requests"
-          subtitle="View availability, request meetings, and manage approvals"
-        />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
+          <PageHeader
+            title="Calendar & Meeting Requests"
+            subtitle="View availability, request meetings, and manage approvals"
+          />
+          <button onClick={() => setShowForm(!showForm)} style={{
+            backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
+            width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+          }} title="Request meeting">{showForm ? "×" : "+"}</button>
+        </div>
 
-        {/* ── REQUEST FORM ── */}
+        {/* ── REQUEST FORM (collapsible) ── */}
+        {showForm && (
         <div style={{
           display: "grid",
           gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 500px) minmax(200px, 1fr)",
           gap: "16px",
           alignItems: "start",
+          marginBottom: "14px",
         }}>
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "white" }}>
-            <SectionTitle title="Request a Meeting" />
+          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>Request a Meeting</div>
             <form onSubmit={submitRequest}>
               <label style={labelStyle}>
                 Meeting title
@@ -373,23 +396,8 @@ export default function CalendarPage() {
               )}
             </form>
           </div>
-
-          {/* How it works */}
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "#f8fafc" }}>
-            <SectionTitle title="How this works" />
-            {[
-              { step: "1. Check availability", detail: "The week view shows Khuram's busy/free slots. Click a free slot to pre-fill the form." },
-              { step: "2. Request", detail: "Submit with purpose, date, type, and attendees." },
-              { step: "3. Approval", detail: "Heads of Department are auto-approved. Others need Admin/PA approval." },
-              { step: "4. Calendar", detail: "Approved meetings are synced to Google Calendar with invites to all attendees." },
-            ].map((row) => (
-              <div key={row.step} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "10px 0", fontSize: "16px", color: COLOURS.SLATE }}>
-                <div style={{ fontWeight: 700, color: COLOURS.NAVY, marginBottom: "3px" }}>{row.step}</div>
-                {row.detail}
-              </div>
-            ))}
-          </div>
         </div>
+        )}
 
         {/* ── WEEK VIEW ── */}
         <SectionTitle title="Weekly Availability" />
@@ -478,6 +486,42 @@ export default function CalendarPage() {
             <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: "2px", marginRight: "4px" }} />Free — click to request</span>
           </div>
         </div>
+
+        {/* ── TASKS DUE THIS WEEK ── */}
+        {(() => {
+          const weekDates = getWeekDates(weekStart);
+          const weekTasksDue = tasksDue.filter((t) => t.due_date >= weekDates[0] && t.due_date <= weekDates[6]);
+          if (weekTasksDue.length === 0) return null;
+          const todayStr = new Date().toISOString().slice(0, 10);
+          return (
+            <>
+              <SectionTitle title={`Tasks Due This Week (${weekTasksDue.length})`} />
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
+                {weekTasksDue.map((t) => {
+                  const overdue = t.due_date < todayStr;
+                  const isToday = t.due_date === todayStr;
+                  return (
+                    <a key={t.id} href={`/tasks?task=${t.id}`} style={{ textDecoration: "none", color: "inherit", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.LIGHT}`, backgroundColor: overdue ? "#fef2f2" : "white" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = overdue ? "#fef2f2" : "#f8fafc"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = overdue ? "#fef2f2" : "white"; }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.description}</div>
+                        <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{t.assigned_to || "Unassigned"}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
+                        <span style={{ fontSize: "13px", fontWeight: 700, color: overdue ? COLOURS.RED : isToday ? "#d97706" : COLOURS.SLATE }}>
+                          {overdue ? "Overdue" : isToday ? "Today" : formatDateUK(t.due_date)}
+                        </span>
+                        {t.priority && <PriorityBadge priority={t.priority} />}
+                        <span style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600 }}>Open →</span>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </>
+          );
+        })()}
 
         {/* ── ALL REQUESTS TABLE ── */}
         <SectionTitle title="All Meeting Requests" />

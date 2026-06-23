@@ -98,10 +98,9 @@ export default function ExceptionsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
               gap: "8px",
-              marginBottom: "20px",
-              maxWidth: "720px",
+              marginBottom: "14px",
             }}
           >
             <CountCard label="Waiting Reply" value={waitingReply.length} color={COLOURS.RED} />

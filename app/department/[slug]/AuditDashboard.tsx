@@ -8,6 +8,7 @@ import { useMobile } from "../../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
+import { downloadCSV } from "../../lib/exportUtils";
 
 const AUDIT_STAGES: { label: string; pct: number }[] = [
   { label: "Audit Planning", pct: 0 },
@@ -315,7 +316,18 @@ export default function AuditDashboard() {
       )}
 
       {/* ═══ ZONE 3: RECORDS GROUPED BY STATUS ═══ */}
-      <SectionTitle title="Audit Records" />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+        <SectionTitle title="Audit Records" />
+        {items.length > 0 && (
+          <button onClick={() => {
+            const headers = ["Audit Area", "Type", "Stage", "Completion %", "Status", "Assigned To", "Target Date", "Planned Date"];
+            const rows = items.map((i) => [i.audit_area, i.audit_type || "—", i.audit_stage || "—", String(i.completion_pct || 0), i.status, i.assigned_to || "—", i.target_date || "—", i.planned_date || "—"]);
+            downloadCSV(`audit-records-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+          }} style={{ backgroundColor: "white", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+            Export CSV
+          </button>
+        )}
+      </div>
 
       {loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : items.length === 0 ? (
         <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", color: COLOURS.SLATE }}>No audit records yet.</div>

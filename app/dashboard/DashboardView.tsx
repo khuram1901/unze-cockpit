@@ -6,6 +6,7 @@ import TaskStatus from "../tasks/TaskStatus";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import { downloadCSV } from "../lib/exportUtils";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number };
@@ -497,7 +498,7 @@ export default function DashboardView() {
       </div>
 
       {/* ═══ ZONE 3: TABBED DETAIL ═══ */}
-      <div style={{ display: "flex", gap: "4px", marginBottom: "10px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "4px", marginBottom: "10px", flexWrap: "wrap", alignItems: "center" }}>
         {([
           { key: "production" as const, label: "Production KPI" },
           { key: "dispatch" as const, label: "Dispatch KPI" },
@@ -511,6 +512,20 @@ export default function DashboardView() {
             borderRadius: "6px", padding: "7px 14px", fontSize: "14px", fontWeight: 600, cursor: "pointer",
           }}>{tab.label}</button>
         ))}
+        <div style={{ flex: 1 }} />
+        {(activeTab === "production" || activeTab === "dispatch") && summaries.length > 0 && (
+          <button onClick={() => {
+            const metric = activeTab;
+            const headers = ["Plant", "Monthly Target", "Month Actual", "Month %", "Week Target", "Week Actual", "Week %", "Status"];
+            const rows = summaries.map((s) => {
+              const k = s[metric];
+              return [s.plant.name, String(k.monthlyTarget), String(k.monthActual), `${k.monthAchievement}%`, String(k.quarterTarget), String(k.quarterActual), `${k.quarterAchievement}%`, statusLabel(k.status)];
+            });
+            downloadCSV(`${metric}-kpi-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+          }} style={{ backgroundColor: "white", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+            Export CSV
+          </button>
+        )}
       </div>
 
       <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
