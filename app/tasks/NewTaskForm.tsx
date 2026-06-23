@@ -197,15 +197,12 @@ export default function NewTaskForm() {
         <form
       onSubmit={handleSubmit}
       style={{
-        border: "1px solid #e2e8f0",
-        borderRadius: "8px",
-        padding: "16px",
-        marginBottom: "20px",
+        padding: "14px",
         backgroundColor: "white",
       }}
     >
-      <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", marginBottom: "12px", paddingLeft: "9px", borderLeft: "3px solid #1e293b" }}>
-        Create task
+      <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", marginBottom: "12px" }}>
+        New Task
       </h2>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0 16px" }}>
