@@ -15,6 +15,10 @@
     {
       "path": "/api/reports/weekly",
       "schedule": "0 10 * * 5"
+    },
+    {
+      "path": "/api/tasks/recurring",
+      "schedule": "0 4 * * *"
     }
   ]
 }
