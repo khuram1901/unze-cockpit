@@ -30,6 +30,7 @@ type Task = {
   corrective_action: string | null;
   recovery_date: string | null;
   impact_on_monthly_target: string | null;
+  meeting_id: string | null;
   created_at: string | null;
 };
 
@@ -250,6 +251,9 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
           <div style={{ padding: "10px 14px", backgroundColor: "#f8fafc", borderTop: `1px solid ${BORDER}` }}>
             <div style={{ fontSize: "13px", color: SLATE, marginBottom: "6px" }}>
               Type: <strong>{task.task_type || "Task"}</strong> · Assigned by: <strong>{task.assigned_by || "—"}</strong> · Date: {formatDateUK(task.assigned_date)} · Project: {task.project || "—"}
+              {task.meeting_id && (
+                <span> · <a href={`/my-minutes?meeting=${task.meeting_id}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>View Minutes →</a></span>
+              )}
             </div>
             {task.notes && <div style={{ fontSize: "13px", color: SLATE, marginBottom: "6px" }}>Notes: {task.notes}</div>}
             {task.reply_text && (

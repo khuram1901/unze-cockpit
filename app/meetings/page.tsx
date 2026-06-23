@@ -270,6 +270,18 @@ export default function MeetingsPage() {
       }
     }
 
+    // Link meeting to HOD attendees
+    for (const attendee of extracted.attendees) {
+      const match = memberEmails.find((m) => m.name.toLowerCase().includes(attendee.toLowerCase()) || attendee.toLowerCase().includes(m.name.toLowerCase()));
+      if (match?.email) {
+        await supabase.from("meeting_attendees").upsert({
+          meeting_id: meeting.id,
+          member_email: match.email,
+          member_name: match.name,
+        }, { onConflict: "meeting_id,member_email" });
+      }
+    }
+
     logAction("Created", "meetings", `${extracted.meeting_title} - ${tasksCreated} tasks created`, meeting.id);
     setMessage(`Approved: meeting saved and ${tasksCreated} task${tasksCreated !== 1 ? "s" : ""} created.`);
     setSaving(false);
