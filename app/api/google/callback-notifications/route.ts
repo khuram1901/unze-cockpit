@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
+import { encrypt } from "../../../lib/crypto";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -46,8 +47,8 @@ export async function GET(request: NextRequest) {
     await supabase.from("google_oauth_tokens").upsert(
       {
         user_email: email,
-        access_token: tokens.access_token || "",
-        refresh_token: tokens.refresh_token || "",
+        access_token: tokens.access_token ? encrypt(tokens.access_token) : "",
+        refresh_token: tokens.refresh_token ? encrypt(tokens.refresh_token) : "",
         token_expiry: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null,
         scopes: tokens.scope || "gmail.send",
         updated_at: new Date().toISOString(),

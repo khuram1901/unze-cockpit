@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
+import { rateLimitByIP, rateLimitResponse } from "../../../lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+  const rl = rateLimitByIP(request, 5, 300000);
+  if (!rl.allowed) return rateLimitResponse();
   try {
     const { email, password } = await request.json();
     if (!email || !password) {

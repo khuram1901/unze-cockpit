@@ -5,6 +5,7 @@ import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-par
 import { reconcile } from "../../../lib/pdf-parsers/reconcile";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { UTPL_COMPANY_ID } from "../../../lib/constants";
+import { safeDecrypt, encrypt } from "../../../lib/crypto";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -31,14 +32,14 @@ export async function GET(request: NextRequest) {
       (process.env.GOOGLE_REDIRECT_URI || "").replace("/callback", "/callback-notifications")
     );
     oauth2Client.setCredentials({
-      access_token: notifToken.access_token,
-      refresh_token: notifToken.refresh_token,
+      access_token: safeDecrypt(notifToken.access_token),
+      refresh_token: safeDecrypt(notifToken.refresh_token),
       expiry_date: notifToken.token_expiry ? new Date(notifToken.token_expiry).getTime() : undefined,
     });
 
     oauth2Client.on("tokens", async (newTokens) => {
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (newTokens.access_token) updates.access_token = newTokens.access_token;
+      if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
       if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
       await supabase.from("google_oauth_tokens").update(updates).eq("id", notifToken.id);
     });

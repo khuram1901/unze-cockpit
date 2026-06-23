@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { google } from "googleapis";
 import { createServiceClient } from "../../../lib/supabase-server";
+import { safeDecrypt, encrypt } from "../../../lib/crypto";
 
 export async function GET(request: NextRequest) {
   const dateParam = request.nextUrl.searchParams.get("date");
@@ -37,15 +38,15 @@ export async function GET(request: NextRequest) {
           process.env.GOOGLE_REDIRECT_URI
         );
         oauth2Client.setCredentials({
-          access_token: tokenRow.access_token,
-          refresh_token: tokenRow.refresh_token,
+          access_token: safeDecrypt(tokenRow.access_token),
+          refresh_token: safeDecrypt(tokenRow.refresh_token),
           expiry_date: tokenRow.token_expiry ? new Date(tokenRow.token_expiry).getTime() : undefined,
         });
 
         // Auto-refresh tokens
         oauth2Client.on("tokens", async (newTokens) => {
           const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-          if (newTokens.access_token) updates.access_token = newTokens.access_token;
+          if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
           if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
           await supabase.from("google_oauth_tokens").update(updates).eq("id", tokenRow.id);
         });

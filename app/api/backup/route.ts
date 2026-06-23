@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { google } from "googleapis";
 import { createServiceClient } from "../../lib/supabase-server";
+import { safeDecrypt } from "../../lib/crypto";
 
 const BACKUP_FOLDER_NAME = "cockpit-backups";
 const MAX_BACKUPS = 35;
@@ -59,8 +60,8 @@ export async function GET(request: NextRequest) {
       (process.env.GOOGLE_REDIRECT_URI || "").replace("/callback", "/callback-notifications")
     );
     oauth2Client.setCredentials({
-      access_token: token.access_token,
-      refresh_token: token.refresh_token,
+      access_token: safeDecrypt(token.access_token),
+      refresh_token: safeDecrypt(token.refresh_token),
       expiry_date: token.token_expiry ? new Date(token.token_expiry).getTime() : undefined,
     });
 

@@ -1,10 +1,13 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { sendNotificationEmail } from "../../../lib/send-email";
+import { rateLimitByIP, rateLimitResponse } from "../../../lib/rate-limit";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://unze-cockpit.vercel.app";
 
 export async function POST(request: NextRequest) {
+  const rl = rateLimitByIP(request, 20, 60000);
+  if (!rl.allowed) return rateLimitResponse();
   try {
     const { type, taskId, recipientEmail } = await request.json();
 
