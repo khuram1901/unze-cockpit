@@ -53,6 +53,13 @@ function MyMinutesPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [addingTaskFor, setAddingTaskFor] = useState<string | null>(null);
+  const [newTaskDesc, setNewTaskDesc] = useState("");
+  const [newTaskOwner, setNewTaskOwner] = useState("");
+  const [newTaskDue, setNewTaskDue] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState("Normal");
+  const [savingNewTask, setSavingNewTask] = useState(false);
+  const [allMembers, setAllMembers] = useState<{ name: string; email: string | null; department: string | null }[]>([]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -121,6 +128,15 @@ function MyMinutesPage() {
 
     setMeetings(meetingsData);
 
+    // Load members for task creation
+    const { data: membersData } = await supabase.from("members").select("name, first_name, last_name, email, department");
+    if (membersData) {
+      setAllMembers(membersData.map((m) => ({
+        name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || "",
+        email: m.email, department: m.department,
+      })).filter((m) => m.name));
+    }
+
     // Load meeting tasks
     const { data: mtData } = await supabase.from("meeting_tasks").select("*");
     setMeetingTasks(mtData || []);
@@ -153,6 +169,40 @@ function MyMinutesPage() {
         m.attendees?.some((a) => a.toLowerCase().includes(filter.toLowerCase()))
       )
     : meetings;
+
+  async function addTaskToMeeting(meetingId: string) {
+    if (!newTaskDesc.trim() || !newTaskOwner) return;
+    setSavingNewTask(true);
+    const member = allMembers.find((m) => m.name === newTaskOwner);
+    const { data: task } = await supabase.from("tasks").insert({
+      description: newTaskDesc.trim(),
+      assigned_to: newTaskOwner,
+      assigned_to_email: member?.email || null,
+      assigned_to_department: member?.department || null,
+      assigned_by: "Meeting Minutes",
+      assigned_date: new Date().toISOString().slice(0, 10),
+      due_date: newTaskDue || null,
+      priority: newTaskPriority,
+      status: "Not Started",
+      meeting_id: meetingId,
+      task_type: "Task",
+    }).select("id").single();
+
+    if (task) {
+      await supabase.from("meeting_tasks").insert({ meeting_id: meetingId, task_id: task.id });
+      if (member?.email) {
+        fetch("/api/notifications/send", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "task_assigned", taskId: task.id, recipientEmail: member.email }),
+        }).catch(() => {});
+      }
+    }
+
+    setNewTaskDesc(""); setNewTaskOwner(""); setNewTaskDue(""); setNewTaskPriority("Normal");
+    setAddingTaskFor(null);
+    setSavingNewTask(false);
+    loadData();
+  }
 
   if (!loading && !isHOD && !isAdmin) {
     return (
@@ -270,9 +320,43 @@ function MyMinutesPage() {
                       )}
 
                       {/* Action Items / Tasks */}
-                      {mTasks.length > 0 && (
-                        <div>
-                          <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.AMBER, marginBottom: "6px" }}>Action Items ({mTasks.length})</div>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.AMBER }}>Action Items ({mTasks.length})</div>
+                          {isAdmin && (
+                            <button onClick={() => setAddingTaskFor(addingTaskFor === meeting.id ? null : meeting.id)} style={{
+                              backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "5px",
+                              padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                            }}>{addingTaskFor === meeting.id ? "Cancel" : "+ Add Task"}</button>
+                          )}
+                        </div>
+
+                        {/* Inline add task form */}
+                        {addingTaskFor === meeting.id && (
+                          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "6px", padding: "10px", marginBottom: "8px", backgroundColor: "white" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr 1fr", gap: "6px", marginBottom: "6px" }}>
+                              <input placeholder="Task description" value={newTaskDesc} onChange={(e) => setNewTaskDesc(e.target.value)} required
+                                style={{ padding: "6px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px" }} />
+                              <select value={newTaskOwner} onChange={(e) => setNewTaskOwner(e.target.value)} required
+                                style={{ padding: "6px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px" }}>
+                                <option value="">Assign to...</option>
+                                {allMembers.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+                              </select>
+                              <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)}
+                                style={{ padding: "6px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px" }} />
+                              <select value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value)}
+                                style={{ padding: "6px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px" }}>
+                                <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
+                              </select>
+                            </div>
+                            <button onClick={() => addTaskToMeeting(meeting.id)} disabled={savingNewTask || !newTaskDesc.trim() || !newTaskOwner}
+                              style={{ backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "5px", padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: savingNewTask || !newTaskDesc.trim() || !newTaskOwner ? 0.5 : 1 }}>
+                              {savingNewTask ? "Adding..." : "Add Task"}
+                            </button>
+                          </div>
+                        )}
+
+                        {mTasks.length > 0 && (
                           <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", overflow: "hidden" }}>
                             {mTasks.map((t) => (
                               <a key={t.id} href={`/tasks?task=${t.id}`} style={{
@@ -293,8 +377,8 @@ function MyMinutesPage() {
                               </a>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
