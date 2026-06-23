@@ -13,6 +13,7 @@ type Task = {
   corrective_action: string | null;
   recovery_date: string | null;
   impact_on_monthly_target: string | null;
+  time_spent_minutes: number | null;
 };
 
 const STATUSES = [
@@ -229,6 +230,32 @@ export default function TaskStatus({
           {savingDate && <span style={{ color: "#64748b", fontSize: "16px" }}>Saving…</span>}
         </div>
       )}
+
+      {/* Time tracking */}
+      <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "14px", fontWeight: "bold" }}>Time spent:</span>
+        <input
+          type="number"
+          min="0"
+          step="15"
+          defaultValue={task.time_spent_minutes || 0}
+          onBlur={async (e) => {
+            const mins = Number(e.target.value) || 0;
+            if (mins !== (task.time_spent_minutes || 0)) {
+              await supabase.from("tasks").update({ time_spent_minutes: mins, updated_at: new Date().toISOString() }).eq("id", task.id);
+              logAction("Updated", "tasks", `Time: ${mins} minutes`, task.id);
+              onChanged();
+            }
+          }}
+          style={{ ...controlStyle, width: "80px" }}
+        />
+        <span style={{ fontSize: "13px", color: "#64748b" }}>minutes</span>
+        {(task.time_spent_minutes || 0) > 0 && (
+          <span style={{ fontSize: "13px", color: "#1e293b", fontWeight: 600 }}>
+            ({Math.floor((task.time_spent_minutes || 0) / 60)}h {(task.time_spent_minutes || 0) % 60}m)
+          </span>
+        )}
+      </div>
 
       {/* Reassign: Admin / Executive only */}
       {canEditDate && (

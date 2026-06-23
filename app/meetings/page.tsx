@@ -827,6 +827,36 @@ export default function MeetingsPage() {
         })()}
 
         {/* Past meetings */}
+        {/* Meeting frequency chart */}
+        {meetings.length > 1 && (() => {
+          const monthMap = new Map<string, number>();
+          for (const m of meetings) {
+            const mo = m.meeting_date.slice(0, 7);
+            monthMap.set(mo, (monthMap.get(mo) || 0) + 1);
+          }
+          const chartData = Array.from(monthMap.entries()).sort().slice(-6).map(([month, count]) => ({ month, count }));
+          if (chartData.length < 2) return null;
+          return (
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>Meeting Frequency</div>
+              <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", height: "80px" }}>
+                {chartData.map((d) => {
+                  const max = Math.max(...chartData.map((c) => c.count));
+                  const h = max > 0 ? (d.count / max) * 70 : 0;
+                  return (
+                    <div key={d.month} style={{ flex: 1, textAlign: "center" }}>
+                      <div style={{ backgroundColor: COLOURS.BLUE, borderRadius: "4px 4px 0 0", height: `${h}px`, marginBottom: "4px", display: "flex", alignItems: "flex-start", justifyContent: "center" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "white", padding: "2px" }}>{d.count}</span>
+                      </div>
+                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{d.month.slice(5)}/{d.month.slice(2, 4)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         <SectionTitle title="Past Meetings" />
         {meetings.length === 0 ? (
           <p style={{ color: COLOURS.SLATE, fontSize: "16px" }}>No meetings recorded yet.</p>

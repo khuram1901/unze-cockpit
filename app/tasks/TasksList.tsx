@@ -31,6 +31,7 @@ type Task = {
   recovery_date: string | null;
   impact_on_monthly_target: string | null;
   meeting_id: string | null;
+  time_spent_minutes: number | null;
   created_at: string | null;
 };
 

@@ -85,6 +85,7 @@ type Task = {
   corrective_action: string | null;
   recovery_date: string | null;
   impact_on_monthly_target: string | null;
+  time_spent_minutes: number | null;
 };
 
 const NAVY = "#1e293b";
