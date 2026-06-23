@@ -32,6 +32,7 @@ type Task = {
   exception_type: string | null;
   assigned_to_department: string | null;
   reply_text: string | null;
+  notes: string | null;
   created_at: string | null;
 };
 
@@ -93,6 +94,10 @@ export default function PADashboardPage() {
   const [viewPerson, setViewPerson] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"upcoming" | "people" | "all">("upcoming");
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState(false);
+  const [quickNote, setQuickNote] = useState<{ taskId: string; text: string } | null>(null);
+  const [savingNote, setSavingNote] = useState(false);
 
   // New task form
   const [showNewTask, setShowNewTask] = useState(false);
@@ -152,6 +157,62 @@ export default function PADashboardPage() {
       }).catch(() => {});
     }
     showMsg(`Chase sent to ${task.assigned_to || "assignee"}.`);
+  }
+
+  function toggleSelect(taskId: string) {
+    setSelectedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
+      return next;
+    });
+  }
+
+  async function bulkComplete() {
+    if (selectedTasks.size === 0) return;
+    if (!confirm(`Mark ${selectedTasks.size} task${selectedTasks.size > 1 ? "s" : ""} as Completed?`)) return;
+    for (const id of selectedTasks) {
+      await supabase.from("tasks").update({ status: "Completed", updated_at: new Date().toISOString() }).eq("id", id);
+    }
+    logAction("Updated", "tasks", `Bulk completed ${selectedTasks.size} tasks`);
+    setSelectedTasks(new Set());
+    showMsg(`${selectedTasks.size} tasks completed.`);
+    loadData();
+  }
+
+  async function bulkReassign(newPerson: string) {
+    if (selectedTasks.size === 0 || !newPerson) return;
+    const member = members.find((m) => memberName(m) === newPerson);
+    const previousAssignees = new Set<string>();
+    for (const id of selectedTasks) {
+      const task = tasks.find((t) => t.id === id);
+      if (task?.assigned_to) previousAssignees.add(task.assigned_to);
+      await supabase.from("tasks").update({
+        assigned_to: newPerson, assigned_to_email: member?.email || null,
+        assigned_to_department: member?.department || null,
+        notes: `Reassigned from ${task?.assigned_to || "unassigned"} to ${newPerson} by ${currentUserName || "PA"}`,
+        updated_at: new Date().toISOString(),
+      }).eq("id", id);
+    }
+    logAction("Updated", "tasks", `Bulk reassigned ${selectedTasks.size} tasks to ${newPerson} (from: ${Array.from(previousAssignees).join(", ")})`);
+    setSelectedTasks(new Set());
+    showMsg(`${selectedTasks.size} tasks reassigned to ${newPerson}.`);
+    loadData();
+  }
+
+  async function saveQuickNote() {
+    if (!quickNote?.taskId || !quickNote.text.trim()) return;
+    setSavingNote(true);
+    const task = tasks.find((t) => t.id === quickNote.taskId);
+    const existing = task?.notes || "";
+    const timestamp = new Date().toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const newNote = `[${timestamp} — ${currentUserName || "PA"}] ${quickNote.text.trim()}`;
+    const updated = existing ? `${existing}\n${newNote}` : newNote;
+    await supabase.from("tasks").update({ notes: updated, updated_at: new Date().toISOString() }).eq("id", quickNote.taskId);
+    logAction("Updated", "tasks", `Added note to task`, quickNote.taskId);
+    setSavingNote(false);
+    setQuickNote(null);
+    showMsg("Note added.");
+    loadData();
   }
 
   async function approveMeeting(id: string) {
@@ -248,8 +309,12 @@ export default function PADashboardPage() {
     const od = daysOverdue(task);
     return (
       <div style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: isOverdue(task) ? "#fef2f2" : "white" }}>
-        <div onClick={() => setExpandedTask(isExpanded ? null : task.id)}
-          style={{ padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+        <div style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px" }}>
+          {bulkAction && (
+            <input type="checkbox" checked={selectedTasks.has(task.id)} onChange={() => toggleSelect(task.id)}
+              style={{ width: "16px", height: "16px", flexShrink: 0, cursor: "pointer" }} />
+          )}
+          <div onClick={() => setExpandedTask(isExpanded ? null : task.id)} style={{ flex: 1, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
             <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
@@ -264,6 +329,7 @@ export default function PADashboardPage() {
             </div>
           </div>
           <span style={{ color: COLOURS.SLATE, fontSize: "13px", flexShrink: 0 }}>{isExpanded ? "▼" : "▶"}</span>
+          </div>
         </div>
 
         {isExpanded && (
@@ -283,15 +349,35 @@ export default function PADashboardPage() {
               <input type="date" value={task.due_date || ""} onChange={(e) => updateTask(task.id, { due_date: e.target.value || null })} style={controlStyle} />
               <select value={task.assigned_to || ""} onChange={(e) => {
                 const m = members.find((mem) => memberName(mem) === e.target.value);
-                updateTask(task.id, { assigned_to: e.target.value, assigned_to_email: m?.email || null, assigned_to_department: m?.department || null });
+                const prevOwner = task.assigned_to || "unassigned";
+                const newOwner = e.target.value;
+                const delegationNote = `Reassigned from ${prevOwner} to ${newOwner} by ${currentUserName || "PA"}`;
+                const existingNotes = task.notes || "";
+                updateTask(task.id, {
+                  assigned_to: newOwner, assigned_to_email: m?.email || null, assigned_to_department: m?.department || null,
+                  notes: existingNotes ? `${existingNotes}\n[${new Date().toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}] ${delegationNote}` : delegationNote,
+                });
               }} style={controlStyle}>
                 <option value="">Reassign...</option>
                 {members.map((m) => { const n = memberName(m); return <option key={n} value={n}>{n}</option>; })}
               </select>
             </div>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <button onClick={() => chaseTask(task)} style={actionBtn("#2563eb")}>Chase</button>
-              <button onClick={() => closeTask(task.id)} style={actionBtn(COLOURS.GREEN)}>Complete</button>
+            {/* Quick note */}
+            {quickNote?.taskId === task.id ? (
+              <div style={{ display: "flex", gap: "6px", marginBottom: "8px", alignItems: "center" }}>
+                <input type="text" placeholder="Add a note..." value={quickNote.text} onChange={(e) => setQuickNote({ ...quickNote, text: e.target.value })}
+                  style={{ flex: 1, padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveQuickNote(); }} autoFocus />
+                <button onClick={saveQuickNote} disabled={savingNote || !quickNote.text.trim()} style={actionBtn(COLOURS.GREEN)}>{savingNote ? "..." : "Save"}</button>
+                <button onClick={() => setQuickNote(null)} style={actionBtn(COLOURS.SLATE)}>Cancel</button>
+              </div>
+            ) : (
+              task.notes && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "6px", padding: "6px 8px", backgroundColor: "#f1f5f9", borderRadius: "4px", whiteSpace: "pre-line" }}>{task.notes}</div>
+            )}
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              <button onClick={() => chaseTask(task)} style={actionBtn("#2563eb")} title="Send chase notification">Chase</button>
+              <button onClick={() => closeTask(task.id)} style={actionBtn(COLOURS.GREEN)} title="Mark as completed">Complete</button>
+              <button onClick={() => setQuickNote({ taskId: task.id, text: "" })} style={actionBtn("#7c3aed")} title="Add a note to this task">Note</button>
               <button onClick={async () => {
                 if (!confirm(`Delete "${task.description}"? This cannot be undone.`)) return;
                 await supabase.from("tasks").delete().eq("id", task.id);
@@ -482,8 +568,22 @@ export default function PADashboardPage() {
               </div>
 
               {/* ═══ ZONE 3: TASK MANAGEMENT ═══ */}
+              {/* Bulk action bar */}
+              {bulkAction && selectedTasks.size > 0 && (
+                <div style={{ display: "flex", gap: "6px", alignItems: "center", padding: "10px 14px", backgroundColor: "#f8fafc", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{selectedTasks.size} selected</span>
+                  <button onClick={bulkComplete} style={actionBtn(COLOURS.GREEN)} title="Complete all selected">Complete All</button>
+                  <select onChange={(e) => { if (e.target.value) bulkReassign(e.target.value); e.target.value = ""; }}
+                    style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}>
+                    <option value="">Reassign to...</option>
+                    {members.map((m) => { const n = memberName(m); return <option key={n} value={n}>{n}</option>; })}
+                  </select>
+                  <button onClick={() => { setSelectedTasks(new Set()); setBulkAction(false); }} style={actionBtn(COLOURS.SLATE)}>Cancel</button>
+                </div>
+              )}
+
               {/* Tab bar */}
-              <div style={{ display: "flex", gap: "4px", marginBottom: "10px" }}>
+              <div style={{ display: "flex", gap: "4px", marginBottom: "10px", flexWrap: "wrap", alignItems: "center" }}>
                 {([
                   { key: "upcoming" as const, label: `Due This Week (${upcomingTasks.length})` },
                   { key: "people" as const, label: `By Person (${people.length})` },
@@ -496,6 +596,12 @@ export default function PADashboardPage() {
                     borderRadius: "6px", padding: "7px 14px", fontSize: "14px", fontWeight: 600, cursor: "pointer",
                   }}>{tab.label}</button>
                 ))}
+                <div style={{ flex: 1 }} />
+                <button onClick={() => { setBulkAction(!bulkAction); setSelectedTasks(new Set()); }} style={{
+                  backgroundColor: bulkAction ? "#d97706" : "white", color: bulkAction ? "white" : COLOURS.NAVY,
+                  border: `1px solid ${bulkAction ? "#d97706" : COLOURS.BORDER}`,
+                  borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                }} title="Select multiple tasks for bulk actions">{bulkAction ? "Cancel Select" : "Bulk Select"}</button>
               </div>
 
               {/* Tab content */}

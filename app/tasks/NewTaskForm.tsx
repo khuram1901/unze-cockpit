@@ -24,9 +24,12 @@ type DepartmentOwner = {
 
 const PROJECT_AREAS = [
   "Unze Trading Ops",
+  "Unze Trading Accounts",
   "Finance",
   "HR",
   "Admin",
+  "IT",
+  "Tax",
   "Legal",
   "Sales",
   "Audit",
@@ -227,6 +230,7 @@ export default function NewTaskForm() {
           required
         >
           <option value="">-- Select department / area --</option>
+          <option value="General">General / Executive</option>
           {PROJECT_AREAS.map((area) => (
             <option key={area}>{area}</option>
           ))}
