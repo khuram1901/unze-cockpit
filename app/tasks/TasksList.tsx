@@ -8,6 +8,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
+import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
 
 type Task = {
   id: string;
@@ -94,6 +95,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
   const [timeView, setTimeView] = useState<"weekly" | "monthly" | "quarterly">("weekly");
   const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "person">("all");
   const [bannerOpen, setBannerOpen] = useState(false);
+  const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
 
   const isPrivileged = currentRole === "Admin" || currentRole === "Executive";
 
@@ -112,7 +114,14 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
     setLoading(false);
   }
 
-  useEffect(() => { loadTasks(); }, []);
+  useEffect(() => {
+    loadTasks();
+    supabase.from("members").select("name, phone_e164").then(({ data }) => {
+      const phones: Record<string, string> = {};
+      for (const m of (data || [])) { if (m.name && m.phone_e164) phones[m.name] = m.phone_e164; }
+      setMemberPhones(phones);
+    });
+  }, []);
 
   useEffect(() => {
     if (taskIdFromUrl && tasks.length > 0) {
@@ -267,7 +276,16 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
             )}
             <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} />
             {isPrivileged && (
-              <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end" }}>
+              <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                {task.assigned_to && memberPhones[task.assigned_to] && (
+                  <a href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
+                    target="_blank" rel="noopener noreferrer" style={{
+                      backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "5px",
+                      padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer", textDecoration: "none",
+                    }} title="Send WhatsApp reminder to assignee">
+                    WhatsApp
+                  </a>
+                )}
                 <button
                   onClick={async () => {
                     if (!confirm(`Delete task "${task.description}"? This cannot be undone.`)) return;

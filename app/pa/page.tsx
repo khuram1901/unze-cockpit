@@ -16,6 +16,7 @@ import {
   StatusBadge,
   PriorityBadge,
 } from "../lib/SharedUI";
+import { whatsappLink, taskChaseMessage } from "../lib/whatsapp";
 import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 type Task = {
@@ -51,6 +52,7 @@ type Member = {
   name: string | null;
   email: string | null;
   department: string | null;
+  phone_e164: string | null;
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -126,7 +128,7 @@ export default function PADashboardPage() {
     const [tasksRes, meetingsRes, membersRes] = await Promise.all([
       supabase.from("tasks").select("*").order("created_at", { ascending: false }),
       supabase.from("meeting_requests").select("*").eq("status", "Pending").order("created_at", { ascending: false }),
-      supabase.from("members").select("first_name, last_name, name, email, department"),
+      supabase.from("members").select("first_name, last_name, name, email, department, phone_e164"),
     ]);
 
     setTasks(tasksRes.data || []);
@@ -375,7 +377,16 @@ export default function PADashboardPage() {
               task.notes && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "6px", padding: "6px 8px", backgroundColor: "#f1f5f9", borderRadius: "4px", whiteSpace: "pre-line" }}>{task.notes}</div>
             )}
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              <button onClick={() => chaseTask(task)} style={actionBtn("#2563eb")} title="Send chase notification">Chase</button>
+              <button onClick={() => chaseTask(task)} style={actionBtn("#2563eb")} title="Send chase email notification">Chase</button>
+              {(() => {
+                const m = members.find((mem) => memberName(mem) === task.assigned_to);
+                const waLink = m ? whatsappLink(m.phone_e164, taskChaseMessage(task.description, task.assigned_to, task.due_date ? formatDateUK(task.due_date) : null)) : null;
+                return waLink ? (
+                  <a href={waLink} target="_blank" rel="noopener noreferrer" style={{ ...actionBtn("#16a34a"), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "3px" }} title="Send WhatsApp reminder">
+                    WA
+                  </a>
+                ) : null;
+              })()}
               <button onClick={() => closeTask(task.id)} style={actionBtn(COLOURS.GREEN)} title="Mark as completed">Complete</button>
               <button onClick={() => setQuickNote({ taskId: task.id, text: "" })} style={actionBtn("#7c3aed")} title="Add a note to this task">Note</button>
               <button onClick={async () => {

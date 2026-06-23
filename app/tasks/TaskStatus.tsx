@@ -3,11 +3,14 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
+import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
 
 type Task = {
   id: string;
   status: string;
   due_date: string | null;
+  assigned_to: string | null;
+  assigned_by: string | null;
   reply_required: boolean | null;
   reply_text: string | null;
   corrective_action: string | null;
@@ -35,7 +38,7 @@ export default function TaskStatus({
   onChanged: () => void;
 }) {
   const [status, setStatus] = useState(task.status);
-  const [memberNames, setMemberNames] = useState<{ name: string; email: string | null; department: string | null }[]>([]);
+  const [memberNames, setMemberNames] = useState<{ name: string; email: string | null; department: string | null; phone_e164: string | null }[]>([]);
   const [replyText, setReplyText] = useState(task.reply_text || "");
   const [correctiveAction, setCorrectiveAction] = useState(task.corrective_action || "");
   const [recoveryDate, setRecoveryDate] = useState(task.recovery_date || "");
@@ -53,8 +56,8 @@ export default function TaskStatus({
 
   useEffect(() => {
     if (canEditDate) {
-      supabase.from("members").select("name, email, department").order("name").then(({ data }) => {
-        if (data) setMemberNames(data.map((m) => ({ name: m.name || "", email: m.email, department: m.department })));
+      supabase.from("members").select("name, email, department, phone_e164").order("name").then(({ data }) => {
+        if (data) setMemberNames(data.map((m) => ({ name: m.name || "", email: m.email, department: m.department, phone_e164: m.phone_e164 || null })));
       });
     }
   }, [canEditDate]);
