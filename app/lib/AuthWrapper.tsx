@@ -40,34 +40,15 @@ function displayName(member: Member | null, email: string | null) {
 const MAIN_NAV: NavItem[] = [
   { label: "Home", href: "/home", allowedRoles: ["Admin", "Executive"] },
   { label: "My Dashboard", href: "/my-dashboard", allowedRoles: ["Manager", "Member"] },
-  { label: "Executive", href: "/executive", allowedRoles: ["Admin", "Executive"] },
-  { label: "PA Dashboard", href: "/pa", allowedRoles: ["Admin", "Executive"] },
-  { label: "Operations", href: "/dashboard", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Unze Trading Ops"] },
-  { label: "Daily Entry", href: "/production", allowedRoles: ["Admin", "Executive", "Manager", "Member"], managerDepartments: ["Unze Trading Ops"] },
-  { label: "Monthly Targets", href: "/monthly-operations-targets", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Unze Trading Ops"] },
-  { label: "Tasks", href: "/tasks", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
-  { label: "Calendar", href: "/calendar", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
-  { label: "My Minutes", href: "/my-minutes", allowedRoles: ["Admin", "Executive", "Manager"] },
-  { label: "Receivables", href: "/receivables", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Unze Trading Ops"] },
-  { label: "Meetings", href: "/meetings", allowedRoles: ["Admin", "Executive"] },
-  { label: "Finance", href: "/finance", allowedRoles: ["Admin", "Executive", "Manager"], financeManagerException: true },
-  { label: "Audit", href: "/department/audit", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Audit"] },
-  { label: "HR", href: "/department/hr", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["HR"] },
-  { label: "Taxation", href: "/department/taxation", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Tax"] },
-  { label: "Admin Dept", href: "/department/admin", allowedRoles: ["Admin", "Executive", "Manager"], managerDepartments: ["Admin"] },
+  { label: "Tasks", href: "/tasks", allowedRoles: ["Manager", "Member"] },
+  { label: "Calendar", href: "/calendar", allowedRoles: ["Manager", "Member"] },
+  { label: "My Minutes", href: "/my-minutes", allowedRoles: ["Manager"] },
+  { label: "Daily Entry", href: "/production", allowedRoles: ["Manager", "Member"], managerDepartments: ["Unze Trading Ops"] },
+  { label: "Finance", href: "/finance", allowedRoles: ["Manager"], financeManagerException: true },
+  { label: "My Profile", href: "/profile", allowedRoles: ["Manager", "Member"] },
 ];
 
-// ─────────────────────────────────────────────────────────────────
-// Settings — admin/executive configuration, not used daily
-// ─────────────────────────────────────────────────────────────────
-const SETTINGS_NAV: NavItem[] = [
-  { label: "Members", href: "/members", allowedRoles: ["Admin", "Executive"] },
-  { label: "Opening Balances", href: "/opening-balances", allowedRoles: ["Admin", "Executive"] },
-  { label: "Recurring Tasks", href: "/recurring-tasks", allowedRoles: ["Admin", "Executive"] },
-  { label: "Exceptions", href: "/exceptions", allowedRoles: ["Admin", "Executive"] },
-  { label: "Audit Log", href: "/audit-log", allowedRoles: ["Admin"] },
-  { label: "My Profile", href: "/profile", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
-];
+const SETTINGS_NAV: NavItem[] = [];
 
 export default function AuthWrapper({
   children,
