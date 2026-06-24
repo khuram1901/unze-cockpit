@@ -139,6 +139,11 @@ export async function parseCashFlowPDF(buffer: Buffer): Promise<CashFlowParsed> 
   const date = extractDate(text);
   const company = detectCompany(text);
 
-  if (company === "imperial") return parseImperial(text, date);
-  return parseUnzeTrading(text, date);
+  const result = company === "imperial" ? parseImperial(text, date) : parseUnzeTrading(text, date);
+
+  if (result.openingBalanceTotal === 0 && result.receiptsTotal === 0 && result.paymentsTotal === 0 && result.closingBalanceUnzeTrading === 0) {
+    throw new Error(`PDF parsed but all values are zero — likely unreadable or unsupported format (${date || "no date"}, ${company})`);
+  }
+
+  return result;
 }
