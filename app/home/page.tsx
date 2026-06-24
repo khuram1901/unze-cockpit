@@ -11,13 +11,18 @@ type Badge = { value: string; color: string };
 type CardDef = { title: string; subtitle: string; href: string; badge?: Badge; icon: string };
 type GroupDef = { title: string; colour: string; cards: CardDef[] };
 
+const CEO_EMAIL = "k.saleem@unzegroup.com";
+
 export default function HomePage() {
   const isMobile = useMobile();
   const [loading, setLoading] = useState(true);
   const [badges, setBadges] = useState<Record<string, Badge>>({});
+  const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
     async function loadBadges() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserEmail(user?.email || "");
       const today = new Date().toISOString().slice(0, 10);
       const month = today.slice(0, 7);
 
@@ -66,7 +71,54 @@ export default function HomePage() {
     loadBadges();
   }, []);
 
-  const groups: GroupDef[] = [
+  const isCEO = userEmail.toLowerCase() === CEO_EMAIL;
+
+  const groups: GroupDef[] = isCEO ? [
+    {
+      title: "Command Centre",
+      colour: COLOURS.NAVY,
+      cards: [
+        { title: "Executive Dashboard", subtitle: "Full company overview — operations, finance, tasks", href: "/executive", icon: "📊", badge: badges.executive },
+      ],
+    },
+    {
+      title: "Finance",
+      colour: "#16a34a",
+      cards: [
+        { title: "Unze Trading", subtitle: "Cash position, forecasts, budgets", href: "/finance/unze-trading", icon: "🏢", badge: badges.utplFinance },
+        { title: "Imperial Footwear", subtitle: "Cash position, forecasts, budgets", href: "/finance/imperial", icon: "👟", badge: badges.ifplFinance },
+      ],
+    },
+    {
+      title: "Tasks & Meetings",
+      colour: "#d97706",
+      cards: [
+        { title: "Tasks", subtitle: "All tasks across departments", href: "/tasks", icon: "✅", badge: badges.tasks },
+        { title: "Calendar", subtitle: "Tasks and deadlines view", href: "/calendar", icon: "📅", badge: badges.calendar },
+        { title: "Meetings", subtitle: "Minutes, approvals, action items", href: "/meetings", icon: "🤝", badge: badges.meetings },
+        { title: "My Minutes", subtitle: "Meeting minutes for HODs", href: "/my-minutes", icon: "📄", badge: badges.minutes },
+      ],
+    },
+    {
+      title: "Departments",
+      colour: "#7c3aed",
+      cards: [
+        { title: "Audit", subtitle: "Internal audit tracking", href: "/department/audit", icon: "🔍", badge: badges.audit },
+        { title: "HR", subtitle: "Human resources dashboard", href: "/department/hr", icon: "👥" },
+        { title: "Taxation", subtitle: "Tax notices and compliance", href: "/department/taxation", icon: "📑" },
+        { title: "Admin", subtitle: "Administration dashboard", href: "/department/admin", icon: "🏛️" },
+      ],
+    },
+    {
+      title: "Settings",
+      colour: COLOURS.SLATE,
+      cards: [
+        { title: "Exceptions", subtitle: "Exception management and alerts", href: "/exceptions", icon: "⚠️" },
+        { title: "Audit Log", subtitle: "System activity trail", href: "/audit-log", icon: "📜" },
+        { title: "My Profile", subtitle: "Your account and preferences", href: "/profile", icon: "⚙️" },
+      ],
+    },
+  ] : [
     {
       title: "Command Centre",
       colour: COLOURS.NAVY,
