@@ -7,6 +7,8 @@ import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, SectionTitle, PageHeader } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
+import ImportExportButtons from "../lib/ImportExportButtons";
+import * as XLSX from "xlsx";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 
 type OpeningBalance = {
@@ -1141,6 +1143,62 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px",
                 padding: "5px 12px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
               }}>{showBudgetForm ? "Cancel" : "+ Add"}</button>
+              <ImportExportButtons
+                onExport={() => {
+                  const headers = ["Department", "Category", "Budgeted", "Actual", "Notes"];
+                  const rows = budgets.map((b) => [b.department, b.category, String(b.budgeted_amount), String(b.actual_amount), b.notes || ""]);
+                  downloadCSV(`dept-budgets-${companyName.replace(/\s+/g, "-")}-${budgetMonth}.csv`, headers, rows);
+                }}
+                onImport={async (rows) => {
+                  let count = 0;
+                  const invalid: string[] = [];
+                  for (const row of rows) {
+                    const dept = row["Department"]?.trim();
+                    const cat = row["Category"]?.trim();
+                    if (!dept || !cat) continue;
+                    if (!validDepts.includes(dept)) { invalid.push(dept); continue; }
+                    await supabase.from("department_budgets").upsert({
+                      company_id: companyId, department: dept, budget_month: budgetMonth, category: cat,
+                      budgeted_amount: Number(row["Budgeted"]) || 0, actual_amount: Number(row["Actual"]) || 0,
+                      notes: row["Notes"]?.trim() || null,
+                    }, { onConflict: "company_id,department,budget_month,category" });
+                    count++;
+                  }
+                  if (invalid.length > 0) alert(`Imported ${count} entries.\n\nSkipped ${invalid.length} row(s) with invalid departments:\n${[...new Set(invalid)].join(", ")}\n\nValid: ${validDepts.join(", ")}`);
+                  else setMsg(`Imported ${count} budget entries.`);
+                  loadBudgets();
+                }}
+                templateHeaders={["Department", "Category", "Budgeted", "Actual", "Notes"]}
+                templateFilename={`dept-budget-template-${companyName.replace(/\s+/g, "-")}.csv`}
+                exportLabel="Export"
+                importLabel="Import"
+              />
+              <button onClick={() => {
+                const wb = XLSX.utils.book_new();
+                const dataRows = [["Department", "Category", "Budgeted", "Actual", "Notes"], ...validDepts.map((d) => [d, "", 0, 0, ""])];
+                const ws1 = XLSX.utils.aoa_to_sheet(dataRows);
+                ws1["!cols"] = [{ wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 25 }];
+                XLSX.utils.book_append_sheet(wb, ws1, "Budget Data");
+                const notesRows = [
+                  [`Budget Template — ${companyName}`], [""],
+                  ["Valid Departments"], ...validDepts.map((d) => [d]), [""],
+                  ["Suggested Categories"],
+                  ...BUDGET_CATEGORIES.map((c) => [c]), [""],
+                  ["How to Use"],
+                  ["1. Fill in Category and amounts for each department"],
+                  ["2. Delete departments you don't need"],
+                  ["3. Add more rows for additional categories"],
+                  ["4. Save and upload using the Import button"],
+                  [""], ["Duplicate department+category rows update existing entries"],
+                ];
+                const ws2 = XLSX.utils.aoa_to_sheet(notesRows);
+                ws2["!cols"] = [{ wch: 40 }];
+                XLSX.utils.book_append_sheet(wb, ws2, "Instructions");
+                XLSX.writeFile(wb, `budget-template-${companyName.replace(/\s+/g, "-")}.xlsx`);
+              }} style={{
+                backgroundColor: "white", color: NAVY, border: `1px solid ${BORDER}`,
+                borderRadius: "6px", padding: "6px 10px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+              }} title="Download Excel template with instructions">Template</button>
             </div>
 
             {showBudgetForm && (
