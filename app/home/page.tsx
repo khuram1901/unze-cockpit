@@ -182,7 +182,7 @@ export default function HomePage() {
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
-        <PageHeader title="Unze Group Dashboard" subtitle="Your command centre — everything at a glance" hideHome />
+        <PageHeader title="Dashboard" subtitle="Your command centre — everything at a glance" hideHome />
 
         {loading ? (
           <p style={{ color: COLOURS.SLATE }}>Loading...</p>
