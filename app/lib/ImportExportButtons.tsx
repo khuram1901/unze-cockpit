@@ -8,6 +8,7 @@ type Props = {
   onImport: (rows: Record<string, string>[]) => void;
   templateHeaders: string[];
   templateFilename: string;
+  templateRows?: string[][];
   importLabel?: string;
   exportLabel?: string;
 };
@@ -37,8 +38,11 @@ function parseCSV(text: string): Record<string, string>[] {
   return rows;
 }
 
-function generateTemplate(headers: string[], filename: string) {
-  const csv = headers.join(",") + "\n";
+function generateTemplate(headers: string[], filename: string, rows?: string[][]) {
+  let csv = headers.join(",") + "\n";
+  if (rows) {
+    for (const row of rows) csv += row.map((c) => c.includes(",") ? `"${c}"` : c).join(",") + "\n";
+  }
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -48,7 +52,7 @@ function generateTemplate(headers: string[], filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export default function ImportExportButtons({ onExport, onImport, templateHeaders, templateFilename, importLabel, exportLabel }: Props) {
+export default function ImportExportButtons({ onExport, onImport, templateHeaders, templateFilename, templateRows, importLabel, exportLabel }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
 
@@ -104,7 +108,7 @@ export default function ImportExportButtons({ onExport, onImport, templateHeader
       {/* Download template */}
       <div style={{ position: "relative" }} className="tooltip-wrap">
         <button
-          onClick={() => generateTemplate(templateHeaders, templateFilename)}
+          onClick={() => generateTemplate(templateHeaders, templateFilename, templateRows)}
           style={iconBtn}
           title="Download CSV template"
         >

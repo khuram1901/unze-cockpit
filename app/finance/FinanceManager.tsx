@@ -1153,21 +1153,28 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 }}
                 onImport={async (rows) => {
                   let count = 0;
+                  const invalid: string[] = [];
                   for (const row of rows) {
-                    if (!row["Department"]?.trim() || !row["Category"]?.trim()) continue;
+                    const dept = row["Department"]?.trim();
+                    const cat = row["Category"]?.trim();
+                    if (!dept || !cat) continue;
+                    if (!BUDGET_DEPARTMENTS.includes(dept)) { invalid.push(dept); continue; }
                     await supabase.from("department_budgets").upsert({
-                      company_id: companyId, department: row["Department"].trim(),
-                      budget_month: budgetMonth, category: row["Category"].trim(),
+                      company_id: companyId, department: dept,
+                      budget_month: budgetMonth, category: cat,
                       budgeted_amount: Number(row["Budgeted"]) || 0,
                       actual_amount: Number(row["Actual"]) || 0,
                       notes: row["Notes"]?.trim() || null,
                     }, { onConflict: "company_id,department,budget_month,category" });
                     count++;
                   }
-                  setMsg(`Imported ${count} budget entries.`);
+                  const msg = `Imported ${count} budget entries.`;
+                  if (invalid.length > 0) alert(`${msg}\n\nSkipped ${invalid.length} row(s) with invalid departments:\n${[...new Set(invalid)].join(", ")}\n\nValid: ${BUDGET_DEPARTMENTS.join(", ")}`);
+                  else setMsg(msg);
                   loadBudgets();
                 }}
                 templateHeaders={["Department", "Category", "Budgeted", "Actual", "Notes"]}
+                templateRows={BUDGET_DEPARTMENTS.map((d) => [d, "", "0", "0", ""])}
                 templateFilename="dept-budget-import-template.csv"
                 exportLabel="Export"
                 importLabel="Import"
