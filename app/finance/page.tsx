@@ -6,6 +6,34 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import { COMPANIES, getCompanyByName } from "../lib/constants";
 import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
+import { downloadCSV } from "../lib/exportUtils";
+import ImportExportButtons from "../lib/ImportExportButtons";
+import { logAction } from "../lib/audit-log";
+
+type Budget = {
+  id: string;
+  company_id: string | null;
+  department: string;
+  budget_month: string;
+  category: string;
+  budgeted_amount: number;
+  actual_amount: number;
+  notes: string | null;
+};
+
+const COMPANY_DEPARTMENTS: Record<string, string[]> = {
+  "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit", "Unze Trading Ops"],
+  "77921705-8a15-4406-847a-b234f84b5ec3": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"],
+};
+
+function deptsForCompany(companyId: string): string[] {
+  return COMPANY_DEPARTMENTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
+}
+
+function companyShortName(companyId: string): string {
+  const c = COMPANIES.find((x) => x.id === companyId);
+  return c?.shortCode || "?";
+}
 
 export default function FinancePage() {
   const router = useRouter();
@@ -14,6 +42,19 @@ export default function FinancePage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [bulkMsg, setBulkMsg] = useState("");
   const [uploading, setUploading] = useState(false);
+
+  const [showBudgets, setShowBudgets] = useState(false);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [budgetMonth, setBudgetMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [budgetCompany, setBudgetCompany] = useState(COMPANIES[0]?.id || "");
+  const [showBudgetForm, setShowBudgetForm] = useState(false);
+  const [bdDept, setBdDept] = useState("");
+  const [bdCategory, setBdCategory] = useState("");
+  const [bdBudgeted, setBdBudgeted] = useState("");
+  const [bdActual, setBdActual] = useState("");
+  const [bdNotes, setBdNotes] = useState("");
+  const [bdSaving, setBdSaving] = useState(false);
+  const [bdMsg, setBdMsg] = useState("");
 
   useEffect(() => {
     async function checkAndRedirect() {
@@ -45,6 +86,13 @@ export default function FinancePage() {
     checkAndRedirect();
   }, [router]);
 
+  async function loadBudgets(cId?: string, month?: string) {
+    const c = cId || budgetCompany;
+    const m = month || budgetMonth;
+    const { data } = await supabase.from("department_budgets").select("*").eq("company_id", c).eq("budget_month", m).order("department");
+    setBudgets(data || []);
+  }
+
   async function handleBulkUpload(e: React.FormEvent) {
     e.preventDefault();
     const input = (e.currentTarget as HTMLFormElement).querySelector('input[type="file"]') as HTMLInputElement;
@@ -71,6 +119,39 @@ export default function FinancePage() {
     setUploading(false);
   }
 
+  async function handleAddBudget(e: React.FormEvent) {
+    e.preventDefault();
+    setBdSaving(true);
+    const { error } = await supabase.from("department_budgets").upsert({
+      company_id: budgetCompany, department: bdDept, budget_month: budgetMonth, category: bdCategory,
+      budgeted_amount: Number(bdBudgeted) || 0, actual_amount: Number(bdActual) || 0, notes: bdNotes || null,
+    }, { onConflict: "company_id,department,budget_month,category" });
+    setBdSaving(false);
+    if (error) { setBdMsg("Error: " + error.message); return; }
+    logAction("Created", "department_budgets", `${bdDept} ${bdCategory} ${budgetMonth}`);
+    setBdCategory(""); setBdBudgeted(""); setBdActual(""); setBdNotes("");
+    loadBudgets();
+  }
+
+  async function updateBudgetActual(id: string, value: number) {
+    await supabase.from("department_budgets").update({ actual_amount: value }).eq("id", id);
+    loadBudgets();
+  }
+
+  async function deleteBudgetEntry(id: string) {
+    if (!confirm("Delete this budget entry?")) return;
+    await supabase.from("department_budgets").delete().eq("id", id);
+    loadBudgets();
+  }
+
+  const validDepts = deptsForCompany(budgetCompany);
+
+  const budgetGroups = new Map<string, Budget[]>();
+  for (const b of budgets) { if (!budgetGroups.has(b.department)) budgetGroups.set(b.department, []); budgetGroups.get(b.department)!.push(b); }
+  const totalBudgeted = budgets.reduce((s, b) => s + b.budgeted_amount, 0);
+  const totalActual = budgets.reduce((s, b) => s + b.actual_amount, 0);
+  const variance = totalBudgeted - totalActual;
+
   if (loading) {
     return (
       <AuthWrapper>
@@ -84,9 +165,8 @@ export default function FinancePage() {
   return (
     <AuthWrapper>
       <main style={{ padding: "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
-        <PageHeader title="Finance" subtitle="Cash position, daily banking, and forecasting" />
+        <PageHeader title="Finance" subtitle="Cash position, daily banking, forecasting, and budgets" />
 
-        {/* Company selector */}
         {showPicker && (
           <>
             <SectionTitle title="Select Company" />
@@ -124,7 +204,6 @@ export default function FinancePage() {
               ))}
             </div>
 
-            {/* Bulk upload — all companies */}
             {isAdmin && (
               <>
                 <SectionTitle title="Bulk Upload Cash Flow PDFs" />
@@ -148,9 +227,172 @@ export default function FinancePage() {
                 </div>
               </>
             )}
+
+            {/* Department Budgets */}
+            <div style={{ marginTop: "20px" }}>
+              <div onClick={() => { setShowBudgets(!showBudgets); if (!showBudgets) loadBudgets(); }} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
+                border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px 16px",
+                backgroundColor: showBudgets ? COLOURS.NAVY : "white", maxWidth: "600px",
+              }}>
+                <div>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: showBudgets ? "white" : COLOURS.NAVY }}>Department Budgets</div>
+                  <div style={{ fontSize: "12px", color: showBudgets ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>Budgeted vs actual spending per department, per company</div>
+                </div>
+                <span style={{ color: showBudgets ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{showBudgets ? "▲" : "▼"}</span>
+              </div>
+
+              {showBudgets && (
+                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "white", padding: "14px", maxWidth: "600px" }}>
+                  {/* Company + Month selector */}
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
+                    <select value={budgetCompany} onChange={(e) => { setBudgetCompany(e.target.value); setBdDept(""); loadBudgets(e.target.value); }}
+                      style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px", fontWeight: 600 }}>
+                      {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.shortCode}</option>)}
+                    </select>
+                    <input type="month" value={budgetMonth} onChange={(e) => { setBudgetMonth(e.target.value); loadBudgets(undefined, e.target.value); }}
+                      style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px" }} />
+                    <button onClick={() => setShowBudgetForm(!showBudgetForm)} style={{
+                      backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "5px",
+                      padding: "5px 12px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                    }}>{showBudgetForm ? "Cancel" : "+ Add"}</button>
+                    <ImportExportButtons
+                      onExport={() => {
+                        const headers = ["Company", "Department", "Category", "Budgeted", "Actual", "Notes"];
+                        const rows = budgets.map((b) => [companyShortName(budgetCompany), b.department, b.category, String(b.budgeted_amount), String(b.actual_amount), b.notes || ""]);
+                        downloadCSV(`dept-budgets-${companyShortName(budgetCompany)}-${budgetMonth}.csv`, headers, rows);
+                      }}
+                      onImport={async (rows) => {
+                        let count = 0;
+                        const invalid: string[] = [];
+                        for (const row of rows) {
+                          const dept = row["Department"]?.trim();
+                          const cat = row["Category"]?.trim();
+                          if (!dept || !cat) continue;
+                          const cId = row["Company"]?.trim();
+                          const targetCompany = cId
+                            ? COMPANIES.find((c) => c.shortCode === cId || c.name.startsWith(cId))?.id || budgetCompany
+                            : budgetCompany;
+                          const targetDepts = deptsForCompany(targetCompany);
+                          if (!targetDepts.includes(dept)) { invalid.push(`${dept} (${cId || companyShortName(targetCompany)})`); continue; }
+                          await supabase.from("department_budgets").upsert({
+                            company_id: targetCompany, department: dept,
+                            budget_month: budgetMonth, category: cat,
+                            budgeted_amount: Number(row["Budgeted"]) || 0,
+                            actual_amount: Number(row["Actual"]) || 0,
+                            notes: row["Notes"]?.trim() || null,
+                          }, { onConflict: "company_id,department,budget_month,category" });
+                          count++;
+                        }
+                        const msg = `Imported ${count} budget entries.`;
+                        if (invalid.length > 0) alert(`${msg}\n\nSkipped ${invalid.length} row(s) with invalid departments:\n${[...new Set(invalid)].join(", ")}`);
+                        else setBdMsg(msg);
+                        setTimeout(() => setBdMsg(""), 4000);
+                        loadBudgets();
+                      }}
+                      templateHeaders={["Company", "Department", "Category", "Budgeted", "Actual", "Notes"]}
+                      templateRows={COMPANIES.flatMap((c) => deptsForCompany(c.id).map((d) => [c.shortCode, d, "", "0", "0", ""]))}
+                      templateFilename="dept-budget-import-template.csv"
+                      exportLabel="Export"
+                      importLabel="Import"
+                    />
+                  </div>
+
+                  {bdMsg && (
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: bdMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, marginBottom: "8px" }}>{bdMsg}</div>
+                  )}
+
+                  {/* Add form */}
+                  {showBudgetForm && (
+                    <form onSubmit={handleAddBudget} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "12px", backgroundColor: "#f8fafc" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                        <div><label style={lbl}>Department</label>
+                          <select style={inp} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
+                            <option value="">Select</option>{validDepts.map((d) => <option key={d}>{d}</option>)}
+                          </select>
+                        </div>
+                        <div><label style={lbl}>Category</label>
+                          <input style={inp} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required placeholder="e.g. Salaries" />
+                        </div>
+                        <div><label style={lbl}>Budgeted (PKR)</label>
+                          <input type="number" style={inp} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" />
+                        </div>
+                        <div><label style={lbl}>Actual (PKR)</label>
+                          <input type="number" style={inp} value={bdActual} onChange={(e) => setBdActual(e.target.value)} placeholder="0" />
+                        </div>
+                        <div style={{ gridColumn: "1 / -1" }}><label style={lbl}>Notes</label>
+                          <input style={inp} value={bdNotes} onChange={(e) => setBdNotes(e.target.value)} placeholder="Optional" />
+                        </div>
+                      </div>
+                      <button type="submit" disabled={bdSaving} style={{
+                        backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "5px",
+                        padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", marginTop: "8px",
+                      }}>{bdSaving ? "Saving..." : "Save"}</button>
+                    </form>
+                  )}
+
+                  {/* Summary cards */}
+                  {budgets.length > 0 && (
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.BLUE}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "white" }}>
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Budgeted</div>
+                        <div style={{ fontSize: "15px", fontWeight: 800, color: COLOURS.BLUE }}>PKR {totalBudgeted.toLocaleString()}</div>
+                      </div>
+                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${totalActual > totalBudgeted ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "white" }}>
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Actual</div>
+                        <div style={{ fontSize: "15px", fontWeight: 800, color: totalActual > totalBudgeted ? COLOURS.RED : COLOURS.GREEN }}>PKR {totalActual.toLocaleString()}</div>
+                      </div>
+                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${variance >= 0 ? COLOURS.GREEN : COLOURS.RED}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "white" }}>
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Variance</div>
+                        <div style={{ fontSize: "15px", fontWeight: 800, color: variance >= 0 ? COLOURS.GREEN : COLOURS.RED }}>PKR {variance.toLocaleString()}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Budget entries by department */}
+                  {Array.from(budgetGroups.entries()).map(([deptName, items]) => {
+                    const dB = items.reduce((s, i) => s + i.budgeted_amount, 0);
+                    const dA = items.reduce((s, i) => s + i.actual_amount, 0);
+                    const over = dA > dB;
+                    return (
+                      <div key={deptName} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${over ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", overflow: "hidden", marginBottom: "8px" }}>
+                        <div style={{ padding: "6px 12px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{deptName}</span>
+                          <div style={{ fontSize: "11px", display: "flex", gap: "8px" }}>
+                            <span style={{ color: COLOURS.SLATE }}>Budget: PKR {dB.toLocaleString()}</span>
+                            <span style={{ fontWeight: 700, color: over ? COLOURS.RED : COLOURS.GREEN }}>Actual: PKR {dA.toLocaleString()}</span>
+                          </div>
+                        </div>
+                        {items.map((b) => (
+                          <div key={b.id} style={{ padding: "5px 12px", borderBottom: `1px solid #f1f5f9`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{b.category}</span>
+                              {b.notes && <span style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "4px" }}>({b.notes})</span>}
+                            </div>
+                            <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", flexShrink: 0 }}>
+                              <span style={{ color: COLOURS.SLATE }}>PKR {b.budgeted_amount.toLocaleString()}</span>
+                              <input type="number" defaultValue={b.actual_amount} onBlur={(e) => { const v = Number(e.target.value); if (v !== b.actual_amount) updateBudgetActual(b.id, v); }}
+                                style={{ width: "80px", padding: "2px 5px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "3px", fontSize: "12px" }} title="Update actual" />
+                              {isAdmin && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: COLOURS.RED, fontSize: "14px", cursor: "pointer" }} title="Delete">×</button>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+
+                  {budgets.length === 0 && (
+                    <div style={{ padding: "12px", color: COLOURS.SLATE, textAlign: "center", fontSize: "14px" }}>No budget entries for {companyShortName(budgetCompany)} — {budgetMonth}.</div>
+                  )}
+                </div>
+              )}
+            </div>
           </>
         )}
       </main>
     </AuthWrapper>
   );
 }
+
+const inp: React.CSSProperties = { display: "block", width: "100%", padding: "5px 8px", marginTop: "2px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px", boxSizing: "border-box" };
+const lbl: React.CSSProperties = { display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE };
