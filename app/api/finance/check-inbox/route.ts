@@ -4,7 +4,7 @@ import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
 import { reconcile } from "../../../lib/pdf-parsers/reconcile";
 import { createServiceClient } from "../../../lib/supabase-server";
-import { UTPL_COMPANY_ID } from "../../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID } from "../../../lib/constants";
 import { safeDecrypt, encrypt } from "../../../lib/crypto";
 
 export async function GET(request: NextRequest) {
@@ -211,10 +211,11 @@ async function saveToDatabase(
   bankPositionFilename: string
 ) {
   const supabase = createServiceClient();
+  const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
 
   await supabase.from("daily_cash_position").upsert(
     {
-      company_id: UTPL_COMPANY_ID,
+      company_id: companyId,
       position_date: positionDate,
       opening_balance: cashFlow.openingBalanceTotal,
       total_receipts: cashFlow.receiptsTotal,
@@ -231,7 +232,7 @@ async function saveToDatabase(
 
   await supabase.from("bank_position_snapshots").upsert(
     {
-      company_id: UTPL_COMPANY_ID,
+      company_id: companyId,
       position_date: positionDate,
       ...bankPosition.banks,
       total_available_balance: bankPosition.totalAvailableBalance,
