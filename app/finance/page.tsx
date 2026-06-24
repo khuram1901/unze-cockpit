@@ -30,6 +30,8 @@ function deptsForCompany(companyId: string): string[] {
   return COMPANY_DEPARTMENTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
 }
 
+const COMMON_CATEGORIES = ["Salaries", "Utilities", "Rent", "Travel", "Software", "Maintenance", "Raw Materials", "Freight", "Insurance", "Marketing", "Professional Fees", "Miscellaneous"];
+
 function companyShortName(companyId: string): string {
   const c = COMPANIES.find((x) => x.id === companyId);
   return c?.shortCode || "?";
@@ -291,11 +293,26 @@ export default function FinancePage() {
                         loadBudgets();
                       }}
                       templateHeaders={["Company", "Department", "Category", "Budgeted", "Actual", "Notes"]}
-                      templateRows={COMPANIES.flatMap((c) => deptsForCompany(c.id).map((d) => [c.shortCode, d, "", "0", "0", ""]))}
+                      templateRows={COMPANIES.flatMap((c) => deptsForCompany(c.id).flatMap((d) => COMMON_CATEGORIES.map((cat) => [c.shortCode, d, cat, "0", "0", ""])))}
                       templateFilename="dept-budget-import-template.csv"
                       exportLabel="Export"
                       importLabel="Import"
                     />
+                  </div>
+
+                  {/* Help box */}
+                  <div style={{ backgroundColor: "#f8fafc", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px 12px", marginBottom: "12px", fontSize: "12px", color: COLOURS.SLATE, lineHeight: 1.7 }}>
+                    <div style={{ fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px", fontSize: "13px" }}>How to fill the template</div>
+                    <div style={{ marginBottom: "6px" }}>
+                      <strong>Company codes:</strong>{" "}
+                      {COMPANIES.map((c) => <span key={c.id}><strong>{c.shortCode}</strong> = {c.name}{" · "}</span>)}
+                    </div>
+                    <div style={{ marginBottom: "4px" }}>
+                      <strong>Suggested categories:</strong> Salaries, Utilities, Rent, Travel, Software, Maintenance, Raw Materials, Freight, Insurance, Marketing, Professional Fees, Miscellaneous
+                    </div>
+                    <div>
+                      <strong>Notes:</strong> Each row needs a Company code, Department, and Category. Budgeted and Actual are in PKR. If a department does not apply to a company, delete that row. Duplicate rows (same company + department + category) will update the existing entry.
+                    </div>
                   </div>
 
                   {bdMsg && (
