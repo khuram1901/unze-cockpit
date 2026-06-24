@@ -19,6 +19,11 @@ export const COLOURS = {
   PURPLE: "#7c3aed",
 };
 
+export function displayRole(role: string, email?: string | null): string {
+  if (email === "k.saleem@unzegroup.com") return "CEO";
+  return role;
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Status colour map — for tasks, exceptions, calendar, etc.
 // ─────────────────────────────────────────────────────────────────

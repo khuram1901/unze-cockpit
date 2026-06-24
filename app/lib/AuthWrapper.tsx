@@ -186,7 +186,8 @@ export default function AuthWrapper({
     const { data: members } = await supabase.from("members").select("name, email, role, department").limit(50);
     for (const m of (members || [])) {
       if (m.name?.toLowerCase().includes(lower) || m.email?.toLowerCase().includes(lower)) {
-        results.push({ type: "Member", label: m.name || m.email || "", sub: `${m.role} · ${m.department || "—"}`, href: "/members" });
+        const roleLabel = m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role;
+        results.push({ type: "Member", label: m.name || m.email || "", sub: `${roleLabel} · ${m.department || "—"}`, href: "/members" });
       }
       if (results.length >= 12) break;
     }

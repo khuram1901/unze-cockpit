@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, displayRole } from "../lib/SharedUI";
 
 export default function ProfilePage() {
   const isMobile = useMobile();
