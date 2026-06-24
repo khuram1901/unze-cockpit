@@ -99,11 +99,7 @@ export default function LoginPage() {
     <main style={{ ...pageStyle, padding: isMobile ? "16px" : "32px" }}>
       <section style={{ ...shellStyle, gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(320px, 1fr))", gap: isMobile ? "20px" : "36px" }}>
         <div style={{ ...loginCardStyle, padding: isMobile ? "20px" : "34px" }}>
-          <Link href="/" style={backLinkStyle}>
-            ← Back to Home
-          </Link>
-
-          <h1 style={{ ...titleStyle, fontSize: isMobile ? "24px" : "42px", margin: isMobile ? "16px 0 10px" : "28px 0 14px" }}>Unze Pulse Dashboard</h1>
+          <h1 style={{ ...titleStyle, fontSize: isMobile ? "24px" : "42px", margin: isMobile ? "0 0 10px" : "0 0 14px" }}>Unze Pulse Dashboard</h1>
 
           <p style={{ ...subtitleStyle, fontSize: isMobile ? "13px" : "17px", marginBottom: isMobile ? "16px" : "26px" }}>
             Sign in to access your dashboard, tasks, and operations pulse.
