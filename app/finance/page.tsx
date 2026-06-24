@@ -46,32 +46,46 @@ function downloadBudgetTemplate() {
   XLSX.utils.book_append_sheet(wb, ws1, "Budget Data");
 
   const notesRows = [
-    ["Department Budget Template — Instructions"],
+    ["INSTRUCTIONS"],
     [""],
-    ["Company Codes"],
-    ["UTPL", "Unze Trading PVT Limited"],
-    ["IFPL", "Imperial Footwear PVT Limited"],
+    ["Copy and paste values from the lists below into the Budget Data sheet."],
+    ["All values must match exactly — incorrect entries will be rejected."],
     [""],
-    ["Valid Departments per Company"],
-    ["UTPL", "Finance, HR, Admin, IT, Tax, Legal, Sales, Audit, Unze Trading Ops"],
-    ["IFPL", "Finance, HR, Admin, IT, Tax, Legal, Sales, Audit"],
+    ["═══════════════════════════════"],
+    ["COMPANY CODES (copy one per row)"],
+    ["═══════════════════════════════"],
+    ["UTPL"],
+    ["IFPL"],
     [""],
-    ["Suggested Categories"],
+    ["UTPL = Unze Trading PVT Limited"],
+    ["IFPL = Imperial Footwear PVT Limited"],
+    [""],
+    ["═══════════════════════════════════"],
+    ["DEPARTMENTS — UTPL (copy one per row)"],
+    ["═══════════════════════════════════"],
+    ...COMPANY_DEPARTMENTS["15884c2d-48a4-4d43-be90-0ef6e130790c"].map((d) => [d]),
+    [""],
+    ["═══════════════════════════════════"],
+    ["DEPARTMENTS — IFPL (copy one per row)"],
+    ["═══════════════════════════════════"],
+    ...COMPANY_DEPARTMENTS["77921705-8a15-4406-847a-b234f84b5ec3"].map((d) => [d]),
+    [""],
+    ["═══════════════════════════"],
+    ["CATEGORIES (copy one per row)"],
+    ["═══════════════════════════"],
     ...COMMON_CATEGORIES.map((c) => [c]),
     [""],
-    ["How to Use"],
+    ["═══════════════"],
+    ["HOW TO USE"],
+    ["═══════════════"],
     ["1. Go to the 'Budget Data' sheet"],
-    ["2. Enter one row per department + category combination"],
-    ["3. Use the Company codes above (UTPL or IFPL)"],
-    ["4. Use exact Department names as listed above"],
-    ["5. Budgeted and Actual amounts are in PKR"],
-    ["6. Delete the example rows and add your own"],
-    ["7. Save and upload on the Finance page"],
+    ["2. Each row = one department + category entry"],
+    ["3. Copy Company, Department, and Category from this sheet"],
+    ["4. Enter Budgeted and Actual amounts in PKR"],
+    ["5. Delete the example rows and add your own"],
+    ["6. Save and upload on the Finance page"],
     [""],
-    ["Notes"],
-    ["- Duplicate rows (same company + department + category) will update existing entries"],
-    ["- Categories not in the suggested list are accepted — use any name you like"],
-    ["- Departments must match exactly (case-sensitive)"],
+    ["Duplicate rows (same company + department + category) update existing entries."],
   ];
   const ws2 = XLSX.utils.aoa_to_sheet(notesRows);
   ws2["!cols"] = [{ wch: 25 }, { wch: 60 }];
@@ -313,30 +327,39 @@ export default function FinancePage() {
                         downloadCSV(`dept-budgets-${companyShortName(budgetCompany)}-${budgetMonth}.csv`, headers, rows);
                       }}
                       onImport={async (rows) => {
-                        let count = 0;
-                        const invalid: string[] = [];
-                        for (const row of rows) {
+                        const errors: string[] = [];
+                        const validRows: { company: string; dept: string; cat: string; budgeted: number; actual: number; notes: string }[] = [];
+                        const validCompanyCodes = COMPANIES.map((c) => c.shortCode);
+
+                        for (let i = 0; i < rows.length; i++) {
+                          const row = rows[i];
+                          const line = i + 2;
+                          const cId = row["Company"]?.trim();
                           const dept = row["Department"]?.trim();
                           const cat = row["Category"]?.trim();
-                          if (!dept || !cat) continue;
-                          const cId = row["Company"]?.trim();
-                          const targetCompany = cId
-                            ? COMPANIES.find((c) => c.shortCode === cId || c.name.startsWith(cId))?.id || budgetCompany
-                            : budgetCompany;
+                          if (!cId && !dept && !cat) continue;
+                          if (!cId || !validCompanyCodes.includes(cId)) { errors.push(`Row ${line}: Invalid company "${cId || "(empty)"}". Must be ${validCompanyCodes.join(" or ")}`); continue; }
+                          const targetCompany = COMPANIES.find((c) => c.shortCode === cId)!.id;
                           const targetDepts = deptsForCompany(targetCompany);
-                          if (!targetDepts.includes(dept)) { invalid.push(`${dept} (${cId || companyShortName(targetCompany)})`); continue; }
-                          await supabase.from("department_budgets").upsert({
-                            company_id: targetCompany, department: dept,
-                            budget_month: budgetMonth, category: cat,
-                            budgeted_amount: Number(row["Budgeted"]) || 0,
-                            actual_amount: Number(row["Actual"]) || 0,
-                            notes: row["Notes"]?.trim() || null,
-                          }, { onConflict: "company_id,department,budget_month,category" });
-                          count++;
+                          if (!dept || !targetDepts.includes(dept)) { errors.push(`Row ${line}: Invalid department "${dept || "(empty)"}" for ${cId}. Must be one of: ${targetDepts.join(", ")}`); continue; }
+                          if (!cat || !COMMON_CATEGORIES.includes(cat)) { errors.push(`Row ${line}: Invalid category "${cat || "(empty)"}". Must be one of: ${COMMON_CATEGORIES.join(", ")}`); continue; }
+                          validRows.push({ company: targetCompany, dept, cat, budgeted: Number(row["Budgeted"]) || 0, actual: Number(row["Actual"]) || 0, notes: row["Notes"]?.trim() || "" });
                         }
-                        const msg = `Imported ${count} budget entries.`;
-                        if (invalid.length > 0) alert(`${msg}\n\nSkipped ${invalid.length} row(s) with invalid departments:\n${[...new Set(invalid)].join(", ")}`);
-                        else setBdMsg(msg);
+
+                        if (errors.length > 0) {
+                          alert(`Upload rejected — please fix and re-upload:\n\n${errors.slice(0, 15).join("\n")}${errors.length > 15 ? `\n\n...and ${errors.length - 15} more errors` : ""}`);
+                          return;
+                        }
+
+                        if (validRows.length === 0) { alert("No valid data rows found in the file."); return; }
+
+                        for (const r of validRows) {
+                          await supabase.from("department_budgets").upsert({
+                            company_id: r.company, department: r.dept, budget_month: budgetMonth, category: r.cat,
+                            budgeted_amount: r.budgeted, actual_amount: r.actual, notes: r.notes || null,
+                          }, { onConflict: "company_id,department,budget_month,category" });
+                        }
+                        setBdMsg(`Imported ${validRows.length} budget entries.`);
                         setTimeout(() => setBdMsg(""), 4000);
                         loadBudgets();
                       }}
