@@ -276,6 +276,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
     setPlan(planRes.data || null);
     setPositions(posRes.data || []);
+
+    const { data: budgetData } = await supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", budgetMonth).order("department");
+    setBudgets(budgetData || []);
+
     setLoading(false);
   }
 
@@ -902,7 +906,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         </div>
       )}
 
-      {/* ── DAILY POSITION HISTORY TABLE (full width) ── */}
+      {/* ── DAILY POSITION + DEPARTMENT BUDGETS side by side ── */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "3fr 2fr", gap: "14px", marginBottom: "16px", alignItems: "start" }}>
+
+      {/* LEFT — Daily Position History */}
+      <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <SectionTitle title="Daily Position — Last 30 Days" />
         {positions.length > 0 && (
@@ -989,21 +997,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         )}
       </div>
 
-      {/* ── DEPARTMENT BUDGETS ── */}
-      <div style={{ marginTop: "16px" }}>
-        <div onClick={() => { setShowBudgets(!showBudgets); if (!showBudgets) loadBudgets(); }} style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
-          border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px 16px",
-          backgroundColor: showBudgets ? NAVY : "white",
-        }}>
-          <div>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: showBudgets ? "white" : NAVY }}>Department Budgets</div>
-            <div style={{ fontSize: "12px", color: showBudgets ? "rgba(255,255,255,0.7)" : SLATE }}>Budgeted vs actual spending per department</div>
-          </div>
-          <span style={{ color: showBudgets ? "white" : SLATE, fontSize: "14px" }}>{showBudgets ? "▲" : "▼"}</span>
-        </div>
+      </div>
 
-        {showBudgets && (() => {
+      {/* RIGHT — Department Budgets */}
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+        <SectionTitle title="Department Budgets" />
+        {(() => {
           const validDepts = COMPANY_DEPTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
           const validCats = COMPANY_CATS[companyId] || ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
           const totalB = budgets.reduce((s, b) => s + b.budgeted_amount, 0);
@@ -1012,7 +1011,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           for (const b of budgets) { if (!groups.has(b.department)) groups.set(b.department, []); groups.get(b.department)!.push(b); }
 
           return (
-          <div style={{ border: `1px solid ${BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "white", padding: "14px" }}>
+          <>
             <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
               <input type="month" value={budgetMonth} onChange={(e) => { setBudgetMonth(e.target.value); loadBudgets(e.target.value); }}
                 style={{ padding: "5px 8px", border: `1px solid ${BORDER}`, borderRadius: "5px", fontSize: "13px" }} />
@@ -1180,9 +1179,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             {budgets.length === 0 && (
               <div style={{ padding: "12px", color: SLATE, textAlign: "center", fontSize: "14px" }}>No budget entries for {budgetMonth}.</div>
             )}
-          </div>
+          </>
           );
         })()}
+      </div>
+
       </div>
 
       {/* ── MODALS ── */}
