@@ -658,208 +658,68 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       </div>
       )}
 
-      {/* ── ROW: FORECAST + DAILY ENTRY side by side ── */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-        gap: "14px",
-        marginBottom: "14px",
-      }}>
-      {/* LEFT — Cash Flow Forecast */}
-      <div
-        style={{
-          border: `1px solid ${BORDER}`,
-          borderRadius: "8px",
-          padding: "14px 16px",
-          backgroundColor: "white",
-        }}
-      >
+      {/* ── CASH FLOW FORECAST (compact) ── */}
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "white", marginBottom: "14px" }}>
         <SectionTitle title="Cash Flow Forecast" />
-        {/* Tab buttons */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
-          <button
-            onClick={() => setShowManualForecast(false)}
-            style={{
-              ...btnStyle,
-              backgroundColor: !showManualForecast ? NAVY : "white",
-              color: !showManualForecast ? "white" : NAVY,
-              border: `1px solid ${!showManualForecast ? NAVY : BORDER}`,
-              fontSize: "15px",
-              padding: "7px 14px",
-              marginTop: 0,
-            }}
-          >
-            Upload Excel
-          </button>
-          <button
-            onClick={() => setShowManualForecast(true)}
-            style={{
-              ...btnStyle,
-              backgroundColor: showManualForecast ? NAVY : "white",
-              color: showManualForecast ? "white" : NAVY,
-              border: `1px solid ${showManualForecast ? NAVY : BORDER}`,
-              fontSize: "15px",
-              padding: "7px 14px",
-              marginTop: 0,
-            }}
-          >
-            Manual Entry
-          </button>
+        <div style={{ display: "flex", gap: "0", marginBottom: "10px", borderBottom: `2px solid ${BORDER}` }}>
+          {([{ key: false, label: "Upload Excel" }, { key: true, label: "Manual Entry" }] as const).map((tab) => (
+            <button key={String(tab.key)} onClick={() => setShowManualForecast(tab.key)} style={{
+              padding: "6px 14px", fontSize: "13px", fontWeight: showManualForecast === tab.key ? 700 : 500,
+              color: showManualForecast === tab.key ? NAVY : SLATE, backgroundColor: "transparent", border: "none",
+              borderBottom: showManualForecast === tab.key ? `3px solid ${NAVY}` : "3px solid transparent",
+              cursor: "pointer", marginBottom: "-2px",
+            }}>{tab.label}</button>
+          ))}
         </div>
 
         {!showManualForecast ? (
-          <>
-            <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
-              Upload the projected cash flow Excel. The system reads the &quot;Monthly-CF&quot; sheet and saves monthly budgets by category (inflows and outflows).
-            </p>
-
-            {/* Template info */}
-            <div style={{
-              border: `1px solid ${BORDER}`,
-              borderRadius: "6px",
-              padding: "12px 14px",
-              backgroundColor: "#f8fafc",
-              marginBottom: "14px",
-              fontSize: "15px",
-              color: NAVY,
-            }}>
-              <div style={{ fontWeight: 700, marginBottom: "6px" }}>Template for {companyName}:</div>
-              <div style={{ color: SLATE, lineHeight: 1.6 }}>
-                {companyName.startsWith("Imperial") ? (
-                  <>
-                    <div><strong>Inflows:</strong> Gross Sales - Retail, Gross Sales - Online, Other Income</div>
-                    <div><strong>Outflows:</strong> Salaries, Marketing, Admin Expenses</div>
-                    <div><strong>Adjustment:</strong> Less: Depreciation (non-cash) — subtracted since we track actual cash movement</div>
-                  </>
-                ) : (
-                  <>
-                    <div><strong>Inflows:</strong> Revenue by plant (PESCO, MEPCO, FESCO, Meters), Other Income</div>
-                    <div><strong>Outflows:</strong> Salaries, Admin Expenses, Welfare</div>
-                    <div><strong>Adjustment:</strong> Less: Depreciation (non-cash) — subtracted since we track actual cash movement</div>
-                  </>
-                )}
-                <div style={{ marginTop: "4px" }}>Sheet name: <strong>Monthly-CF</strong> | Row 1 = month headers | Column A = category names</div>
-                <div style={{ fontStyle: "italic" }}>Rows labelled TOTAL, CLOSING, or OPENING BALANCE are skipped automatically.</div>
-              </div>
-              <div style={{ marginTop: "10px" }}>
-                <a
-                  href={companyName.startsWith("Imperial") ? "/cash-flow-forecast-imperial.xlsx" : "/cash-flow-forecast-unze-trading.xlsx"}
-                  download
-                  style={{ fontSize: "15px", fontWeight: 600, color: BLUE, textDecoration: "underline" }}
-                >
-                  Download {companyName.startsWith("Imperial") ? "Imperial Footwear" : "Unze Trading"} Template (.xlsx)
-                </a>
-              </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", alignItems: "end" }}>
+            <div>
+              <form onSubmit={handleForecastUpload} style={{ display: "flex", gap: "6px", alignItems: "end", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: "150px" }}>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Forecast Excel (.xlsx)</label>
+                  <input type="file" accept=".xlsx,.xls" onChange={(e) => setForecastFile(e.target.files?.[0] || null)} style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }} />
+                </div>
+                <button type="submit" disabled={forecastUploading || !forecastFile}
+                  style={{ ...btnStyle, fontSize: "13px", padding: "6px 12px", opacity: forecastUploading || !forecastFile ? 0.5 : 1 }}>
+                  {forecastUploading ? "Parsing..." : "Upload"}
+                </button>
+              </form>
+              {forecastResult && (
+                <div style={{ marginTop: "6px", fontSize: "12px", color: forecastResult.success ? GREEN : RED, fontWeight: 600 }}>
+                  {forecastResult.success ? `Saved: ${forecastResult.categories} categories, ${forecastResult.totalRows} rows` : forecastResult.error}
+                </div>
+              )}
             </div>
-
-            <form onSubmit={handleForecastUpload}>
-              <label style={labelStyle}>
-                Cash Flow Forecast Excel (.xlsx)
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={(e) => setForecastFile(e.target.files?.[0] || null)}
-                  style={{ ...inputStyle, padding: "6px 8px" }}
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={forecastUploading || !forecastFile}
-                style={{
-                  ...btnStyle,
-                  opacity: forecastUploading || !forecastFile ? 0.5 : 1,
-                }}
-              >
-                {forecastUploading ? "Parsing…" : "Upload & Parse Forecast"}
-              </button>
-            </form>
-
-            {forecastResult && (
-              <div
-                style={{
-                  marginTop: "12px",
-                  padding: "10px 14px",
-                  borderRadius: "6px",
-                  border: `1px solid ${BORDER}`,
-                  borderLeft: `4px solid ${forecastResult.success ? GREEN : RED}`,
-                  backgroundColor: "#fafbfc",
-                  fontSize: "14px",
-                }}
-              >
-                {forecastResult.success ? (
-                  <div style={{ color: NAVY }}>
-                    <span style={{ fontWeight: 700 }}>Saved</span> — {forecastResult.categories} categories across {forecastResult.months?.join(", ")} ({forecastResult.totalRows} rows)
-                  </div>
-                ) : (
-                  <div style={{ color: RED, fontWeight: 600 }}>{forecastResult.error}</div>
-                )}
-              </div>
-            )}
-          </>
+            <div style={{ fontSize: "12px", color: SLATE }}>
+              <a href={companyName.startsWith("Imperial") ? "/cash-flow-forecast-imperial.xlsx" : "/cash-flow-forecast-unze-trading.xlsx"}
+                download style={{ fontWeight: 600, color: BLUE, textDecoration: "underline" }}>
+                Download template
+              </a>
+              <span> · Sheet: Monthly-CF · Row 1 = months · Col A = categories</span>
+            </div>
+          </div>
         ) : (
-          <>
-            <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
-              Add a single forecast line manually. Use this to add or update individual budget items without uploading a full spreadsheet.
-            </p>
-            <form onSubmit={saveManualForecast}>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-                <label style={labelStyle}>
-                  Category
-                  <input
-                    type="text"
-                    value={mfCategory}
-                    onChange={(e) => setMfCategory(e.target.value)}
-                    placeholder="e.g. Sales Revenue, Rent, Salaries"
-                    style={inputStyle}
-                    required
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Type
-                  <select
-                    value={mfFlowType}
-                    onChange={(e) => setMfFlowType(e.target.value as "inflow" | "outflow")}
-                    style={inputStyle}
-                  >
-                    <option value="inflow">Inflow (money in)</option>
-                    <option value="outflow">Outflow (money out)</option>
-                  </select>
-                </label>
-                <label style={labelStyle}>
-                  Month
-                  <input
-                    type="month"
-                    value={mfMonth}
-                    onChange={(e) => setMfMonth(e.target.value)}
-                    style={inputStyle}
-                    required
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Budgeted Amount (PKR)
-                  <input
-                    type="number"
-                    value={mfAmount}
-                    onChange={(e) => setMfAmount(e.target.value)}
-                    placeholder="0"
-                    style={inputStyle}
-                    required
-                  />
-                </label>
+          <form onSubmit={saveManualForecast}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr auto", gap: "6px", alignItems: "end" }}>
+              <div><label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Category</label>
+                <input type="text" value={mfCategory} onChange={(e) => setMfCategory(e.target.value)} placeholder="e.g. Salaries" style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }} required />
               </div>
-              <button
-                type="submit"
-                disabled={mfSaving}
-                style={{ ...btnStyle, opacity: mfSaving ? 0.5 : 1 }}
-              >
-                {mfSaving ? "Saving…" : "Save Forecast Entry"}
-              </button>
-            </form>
-          </>
+              <div><label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Type</label>
+                <select value={mfFlowType} onChange={(e) => setMfFlowType(e.target.value as "inflow" | "outflow")} style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }}>
+                  <option value="inflow">Inflow</option><option value="outflow">Outflow</option>
+                </select>
+              </div>
+              <div><label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Month</label>
+                <input type="month" value={mfMonth} onChange={(e) => setMfMonth(e.target.value)} style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }} required />
+              </div>
+              <div><label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Amount (PKR)</label>
+                <input type="number" value={mfAmount} onChange={(e) => setMfAmount(e.target.value)} placeholder="0" style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }} required />
+              </div>
+              <button type="submit" disabled={mfSaving} style={{ ...btnStyle, fontSize: "13px", padding: "5px 10px" }}>{mfSaving ? "..." : "Save"}</button>
+            </div>
+          </form>
         )}
-      </div>
-
-      {/* RIGHT — Daily entry form (Admin/Executive only) */}
       </div>
 
       {/* ── CHARTS ── */}
