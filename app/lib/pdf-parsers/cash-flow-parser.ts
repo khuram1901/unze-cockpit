@@ -119,7 +119,7 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
   // Post-dated cheques
   const pdcMatch = text.match(/Total PDC['']s Balance\s+([\d,]+(?:\.\d+)?)/i);
   const pdcTotal = pdcMatch ? parseAmount(pdcMatch[1]) : 0;
-  const closingAfterPDC = closingBalance - pdcTotal;
+  const closingAfterPDC = closingBalance + pdcTotal;
 
   return {
     openingBalanceTotal: openingBalance,
