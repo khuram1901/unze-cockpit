@@ -25,6 +25,17 @@ type Member = {
 };
 
 type Plant = { id: string; name: string };
+type DepartmentOwner = {
+  id: string;
+  department_name: string;
+  primary_owner_member_id: string | null;
+  secondary_owner_member_id: string | null;
+  escalation_owner_member_id: string | null;
+  primary_owner_name: string | null;
+  secondary_owner_name: string | null;
+  escalation_owner_name: string | null;
+};
+type TaskSummary = { id: string; assigned_to: string | null; status: string };
 
 const ROLES = ["Admin", "Executive", "Manager", "Member"];
 
@@ -104,6 +115,15 @@ export default function MembersManager() {
   const [savingPw, setSavingPw] = useState(false);
   const [filter, setFilter] = useState("");
 
+  const [departments, setDepartments] = useState<DepartmentOwner[]>([]);
+  const [openTasks, setOpenTasks] = useState<TaskSummary[]>([]);
+  const [showDeptOwners, setShowDeptOwners] = useState(false);
+  const [showReassign, setShowReassign] = useState(false);
+  const [fromMemberId, setFromMemberId] = useState("");
+  const [toMemberId, setToMemberId] = useState("");
+  const [reassigning, setReassigning] = useState(false);
+  const [reassignMsg, setReassignMsg] = useState("");
+
   async function loadData() {
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user) {
@@ -122,6 +142,14 @@ export default function MembersManager() {
     const g: Record<string, Set<string>> = {};
     (mp || []).forEach((r) => { if (!g[r.member_id]) g[r.member_id] = new Set(); g[r.member_id].add(r.plant_id); });
     setAssignments(g);
+
+    const { data: deptData } = await supabase.from("department_owners").select("*").order("department_name");
+    setDepartments(deptData || []);
+
+    const OPEN_STATUSES = ["Not Started", "In Progress", "Waiting Reply"];
+    const { data: taskData } = await supabase.from("tasks").select("id, assigned_to, status").in("status", OPEN_STATUSES);
+    setOpenTasks(taskData || []);
+
     setLoading(false);
   }
 
@@ -223,6 +251,47 @@ export default function MembersManager() {
   }
 
   const isAdmin = myRole === "Admin" || myRole === "Executive";
+
+  async function saveDeptOwner(row: DepartmentOwner) {
+    const primary = members.find((m) => m.id === row.primary_owner_member_id);
+    const secondary = members.find((m) => m.id === row.secondary_owner_member_id);
+    const escalation = members.find((m) => m.id === row.escalation_owner_member_id);
+    const { error } = await supabase.from("department_owners").update({
+      primary_owner_member_id: primary?.id || null, primary_owner_name: primary?.name || null, primary_owner_email: primary?.email || null,
+      secondary_owner_member_id: secondary?.id || null, secondary_owner_name: secondary?.name || null, secondary_owner_email: secondary?.email || null,
+      escalation_owner_member_id: escalation?.id || null, escalation_owner_name: escalation?.name || null, escalation_owner_email: escalation?.email || null,
+    }).eq("id", row.id);
+    if (error) { alert(error.message); return; }
+    logAction("Updated", "department_owners", `Updated owners for ${row.department_name}`, row.id);
+    loadData();
+  }
+
+  const openTaskCounts = new Map<string, number>();
+  for (const t of openTasks) { const n = t.assigned_to || "Unassigned"; openTaskCounts.set(n, (openTaskCounts.get(n) || 0) + 1); }
+
+  async function reassignOpenTasks() {
+    setReassignMsg("");
+    if (!fromMemberId || !toMemberId) { setReassignMsg("Select both current and new owner."); return; }
+    if (fromMemberId === toMemberId) { setReassignMsg("Cannot reassign to the same person."); return; }
+    const fromM = members.find((m) => m.id === fromMemberId);
+    const toM = members.find((m) => m.id === toMemberId);
+    if (!fromM || !toM) return;
+    if (!confirm(`Move all open tasks from ${fromM.name} to ${toM.name}?\n\nNot Started, In Progress and Waiting Reply tasks only.`)) return;
+    setReassigning(true);
+    const OPEN_STATUSES = ["Not Started", "In Progress", "Waiting Reply"];
+    const { data: tasksToMove } = await supabase.from("tasks").select("id").eq("assigned_to", fromM.name).in("status", OPEN_STATUSES);
+    const ids = (tasksToMove || []).map((t) => t.id);
+    if (ids.length === 0) { setReassigning(false); setReassignMsg(`No open tasks found for ${fromM.name}.`); return; }
+    const { error } = await supabase.from("tasks").update({
+      assigned_to: toM.name, assigned_to_email: toM.email, assigned_to_department: toM.department, assigned_to_business_unit: toM.business_unit, updated_at: new Date().toISOString(),
+    }).in("id", ids);
+    setReassigning(false);
+    if (error) { setReassignMsg("Error: " + error.message); return; }
+    logAction("Updated", "tasks", `Reassigned ${ids.length} tasks from ${fromM.name} to ${toM.name}`);
+    setReassignMsg(`Moved ${ids.length} open task(s) from ${fromM.name} to ${toM.name}.`);
+    setFromMemberId(""); setToMemberId("");
+    loadData();
+  }
 
   if (loading) return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}>
@@ -522,6 +591,120 @@ export default function MembersManager() {
           <div style={{ padding: "20px 12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "14px" }}>No members found.</div>
         )}
       </div>
+
+      {/* ── Department Ownership ─────────────────────── */}
+      {isAdmin && departments.length > 0 && (
+        <div style={{ marginTop: "16px" }}>
+          <div onClick={() => setShowDeptOwners(!showDeptOwners)} style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
+            border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px 16px",
+            backgroundColor: showDeptOwners ? COLOURS.NAVY : "white",
+          }}>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: showDeptOwners ? "white" : COLOURS.NAVY }}>Department Ownership</div>
+              <div style={{ fontSize: "12px", color: showDeptOwners ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
+                Primary, backup, and escalation owners
+                {(() => { const v = departments.filter((d) => !d.primary_owner_member_id).length; return v > 0 ? ` · ${v} vacant` : ""; })()}
+              </div>
+            </div>
+            <span style={{ color: showDeptOwners ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{showDeptOwners ? "▲" : "▼"}</span>
+          </div>
+
+          {showDeptOwners && (
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "white", padding: "12px" }}>
+              {departments.map((dept) => (
+                <div key={dept.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px 12px", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px", paddingBottom: "6px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                    {dept.department_name}
+                    {!dept.primary_owner_member_id && <span style={{ fontSize: "11px", color: COLOURS.RED, marginLeft: "8px", fontWeight: 600 }}>NO PRIMARY OWNER</span>}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
+                    <div>
+                      <label style={lblC}>Primary Owner</label>
+                      <select style={inpC} value={dept.primary_owner_member_id || ""}
+                        onChange={(e) => setDepartments((prev) => prev.map((d) => d.id === dept.id ? { ...d, primary_owner_member_id: e.target.value || null } : d))}>
+                        <option value="">— None —</option>
+                        {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={lblC}>Backup Owner</label>
+                      <select style={inpC} value={dept.secondary_owner_member_id || ""}
+                        onChange={(e) => setDepartments((prev) => prev.map((d) => d.id === dept.id ? { ...d, secondary_owner_member_id: e.target.value || null } : d))}>
+                        <option value="">— None —</option>
+                        {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={lblC}>Escalation</label>
+                      <select style={inpC} value={dept.escalation_owner_member_id || ""}
+                        onChange={(e) => setDepartments((prev) => prev.map((d) => d.id === dept.id ? { ...d, escalation_owner_member_id: e.target.value || null } : d))}>
+                        <option value="">— None —</option>
+                        {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                      </select>
+                    </div>
+                    <button onClick={() => saveDeptOwner(dept)} style={{ ...smallBtn(COLOURS.NAVY, true), fontSize: "12px", padding: "5px 12px", height: "fit-content" }}>Save</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Reassign Open Tasks ──────────────────────── */}
+      {isAdmin && (
+        <div style={{ marginTop: "12px" }}>
+          <div onClick={() => setShowReassign(!showReassign)} style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
+            border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px 16px",
+            backgroundColor: showReassign ? COLOURS.NAVY : "white",
+          }}>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: showReassign ? "white" : COLOURS.NAVY }}>Reassign Open Tasks</div>
+              <div style={{ fontSize: "12px", color: showReassign ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
+                Transfer tasks when a member leaves or changes role
+              </div>
+            </div>
+            <span style={{ color: showReassign ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{showReassign ? "▲" : "▼"}</span>
+          </div>
+
+          {showReassign && (
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "white", padding: "14px" }}>
+              <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "10px" }}>
+                Moves Not Started, In Progress, and Waiting Reply tasks only. Completed tasks stay with the original owner.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "10px", maxWidth: "500px" }}>
+                <div>
+                  <label style={lblC}>Current owner</label>
+                  <select style={inpC} value={fromMemberId} onChange={(e) => setFromMemberId(e.target.value)}>
+                    <option value="">— Select —</option>
+                    {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)} ({openTaskCounts.get(m.name || "") || 0} open)</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lblC}>New owner</label>
+                  <select style={inpC} value={toMemberId} onChange={(e) => setToMemberId(e.target.value)}>
+                    <option value="">— Select —</option>
+                    {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                  </select>
+                </div>
+              </div>
+              {fromMemberId && (() => {
+                const fm = members.find((m) => m.id === fromMemberId);
+                const count = fm ? openTaskCounts.get(fm.name || "") || 0 : 0;
+                return <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "8px" }}>{fm?.name} has <strong>{count}</strong> open task(s).</p>;
+              })()}
+              <button onClick={reassignOpenTasks} disabled={reassigning} style={{ ...smallBtn(COLOURS.RED, true), fontSize: "13px", padding: "6px 14px" }}>
+                {reassigning ? "Reassigning..." : "Move Open Tasks"}
+              </button>
+              {reassignMsg && (
+                <p style={{ marginTop: "8px", fontSize: "13px", fontWeight: 600, color: reassignMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{reassignMsg}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </main>
   );
 }
