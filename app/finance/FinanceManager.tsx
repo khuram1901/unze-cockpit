@@ -658,8 +658,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       </div>
       )}
 
-      {/* ── CASH FLOW FORECAST (compact) ── */}
-      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "white", marginBottom: "14px" }}>
+      {/* ── FORECAST + DEPARTMENT BUDGETS side by side ── */}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px", alignItems: "start" }}>
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "white" }}>
         <SectionTitle title="Cash Flow Forecast" />
         <div style={{ display: "flex", gap: "0", marginBottom: "10px", borderBottom: `2px solid ${BORDER}` }}>
           {([{ key: false, label: "Upload Excel" }, { key: true, label: "Manual Entry" }] as const).map((tab) => (
@@ -722,6 +723,123 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         )}
       </div>
 
+      {/* RIGHT — Department Budgets */}
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "white" }}>
+        <SectionTitle title="Department Budgets" />
+        {(() => {
+          const validDepts = COMPANY_DEPTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
+          const validCats = COMPANY_CATS[companyId] || ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
+          const totalB = budgets.reduce((s, b) => s + b.budgeted_amount, 0);
+          const totalA = budgets.reduce((s, b) => s + b.actual_amount, 0);
+          const groups = new Map<string, DeptBudget[]>();
+          for (const b of budgets) { if (!groups.has(b.department)) groups.set(b.department, []); groups.get(b.department)!.push(b); }
+          return (
+          <>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "10px", flexWrap: "wrap" }}>
+              <input type="month" value={budgetMonth} onChange={(e) => { setBudgetMonth(e.target.value); loadBudgets(e.target.value); }}
+                style={{ padding: "4px 6px", border: `1px solid ${BORDER}`, borderRadius: "4px", fontSize: "12px" }} />
+              <button onClick={() => setShowBudgetForm(!showBudgetForm)} style={{
+                backgroundColor: NAVY, color: "white", border: "none", borderRadius: "4px",
+                padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+              }}>{showBudgetForm ? "Cancel" : "+ Add"}</button>
+              <ImportExportButtons
+                onExport={() => {
+                  const headers = ["Department", "Category", "Budgeted", "Actual", "Notes"];
+                  const rows = budgets.map((b) => [b.department, b.category, String(b.budgeted_amount), String(b.actual_amount), b.notes || ""]);
+                  downloadCSV(`dept-budgets-${companyName.replace(/\s+/g, "-")}-${budgetMonth}.csv`, headers, rows);
+                }}
+                onImport={async (rows) => {
+                  const errors: string[] = [];
+                  const valid: { dept: string; cat: string; budgeted: number; actual: number; notes: string }[] = [];
+                  for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i]; const line = i + 2;
+                    const dept = row["Department"]?.trim(); const cat = row["Category"]?.trim();
+                    if (!dept && !cat) continue;
+                    if (!dept || !validDepts.includes(dept)) { errors.push("Row " + line + ": Invalid department: " + (dept || "(empty)")); continue; }
+                    if (!cat || !validCats.includes(cat)) { errors.push("Row " + line + ": Invalid category: " + (cat || "(empty)")); continue; }
+                    valid.push({ dept, cat, budgeted: Number(row["Budgeted"]) || 0, actual: Number(row["Actual"]) || 0, notes: row["Notes"]?.trim() || "" });
+                  }
+                  if (errors.length > 0) { alert(`Upload rejected:\n\n${errors.slice(0, 15).join("\n")}`); return; }
+                  if (valid.length === 0) { alert("No valid rows."); return; }
+                  for (const r of valid) {
+                    await supabase.from("department_budgets").upsert({
+                      company_id: companyId, department: r.dept, budget_month: budgetMonth, category: r.cat,
+                      budgeted_amount: r.budgeted, actual_amount: r.actual, notes: r.notes || null,
+                    }, { onConflict: "company_id,department,budget_month,category" });
+                  }
+                  setMsg(`Imported ${valid.length} entries.`); loadBudgets();
+                }}
+                templateHeaders={["Department", "Category", "Budgeted", "Actual", "Notes"]}
+                templateFilename={`budget-template-${companyName.replace(/\s+/g, "-")}.csv`}
+                exportLabel="Export" importLabel="Import"
+              />
+            </div>
+
+            {showBudgetForm && (
+              <form onSubmit={handleAddBudget} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "8px", marginBottom: "10px", backgroundColor: "#f8fafc" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", alignItems: "end" }}>
+                  <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Department</label>
+                    <select style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
+                      <option value="">Select</option>{validDepts.map((d) => <option key={d}>{d}</option>)}
+                    </select></div>
+                  <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Category</label>
+                    <select style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required>
+                      <option value="">Select</option>{validCats.map((c) => <option key={c}>{c}</option>)}
+                    </select></div>
+                  <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Budgeted</label>
+                    <input type="number" style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" /></div>
+                  <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Actual</label>
+                    <input type="number" style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdActual} onChange={(e) => setBdActual(e.target.value)} placeholder="0" /></div>
+                </div>
+                <button type="submit" disabled={bdSaving} style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "4px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", marginTop: "6px" }}>{bdSaving ? "..." : "Save"}</button>
+              </form>
+            )}
+
+            {budgets.length > 0 && (
+              <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexWrap: "wrap" }}>
+                {[{ label: "Budgeted", val: totalB, col: BLUE }, { label: "Actual", val: totalA, col: totalA > totalB ? RED : GREEN }, { label: "Variance", val: totalB - totalA, col: totalB - totalA >= 0 ? GREEN : RED }].map((c) => (
+                  <div key={c.label} style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${c.col}`, borderRadius: "5px", padding: "4px 10px" }}>
+                    <div style={{ fontSize: "10px", color: SLATE }}>{c.label}</div>
+                    <div style={{ fontSize: "13px", fontWeight: 800, color: c.col }}>PKR {c.val.toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {Array.from(groups.entries()).map(([deptName, items]) => {
+              const dB = items.reduce((s, i) => s + i.budgeted_amount, 0);
+              const dA = items.reduce((s, i) => s + i.actual_amount, 0);
+              const over = dA > dB;
+              return (
+                <div key={deptName} style={{ border: `1px solid ${BORDER}`, borderTop: `2px solid ${over ? RED : GREEN}`, borderRadius: "5px", overflow: "hidden", marginBottom: "6px" }}>
+                  <div style={{ padding: "4px 10px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: NAVY }}>{deptName}</span>
+                    <span style={{ fontSize: "10px", fontWeight: 700, color: over ? RED : GREEN }}>PKR {dA.toLocaleString()} / {dB.toLocaleString()}</span>
+                  </div>
+                  {items.map((b) => (
+                    <div key={b.id} style={{ padding: "3px 10px", borderBottom: `1px solid ${COLOURS.LIGHT}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "4px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: NAVY }}>{b.category}</span>
+                      <div style={{ display: "flex", gap: "4px", alignItems: "center", fontSize: "11px", flexShrink: 0 }}>
+                        <span style={{ color: SLATE }}>PKR {b.budgeted_amount.toLocaleString()}</span>
+                        <input type="number" defaultValue={b.actual_amount} onBlur={(e) => { const v = Number(e.target.value); if (v !== b.actual_amount) updateBudgetActual(b.id, v); }}
+                          style={{ width: "70px", padding: "1px 4px", border: `1px solid ${BORDER}`, borderRadius: "3px", fontSize: "11px" }} />
+                        {canEditAll && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: RED, fontSize: "12px", cursor: "pointer" }}>×</button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+
+            {budgets.length === 0 && (
+              <div style={{ padding: "10px", color: SLATE, textAlign: "center", fontSize: "13px" }}>No budget entries for {budgetMonth}.</div>
+            )}
+          </>
+          );
+        })()}
+      </div>
+      </div>
+
       {/* ── CHARTS ── */}
       {positions.length > 1 && (
         <div style={{
@@ -766,10 +884,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         </div>
       )}
 
-      {/* ── DAILY POSITION + DEPARTMENT BUDGETS side by side ── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "3fr 2fr", gap: "14px", marginBottom: "16px", alignItems: "start" }}>
-
-      {/* LEFT — Daily Position History */}
+      {/* ── DAILY POSITION HISTORY (full width) ── */}
       <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <SectionTitle title="Daily Position — Last 30 Days" />
@@ -855,193 +970,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             </table>
           </div>
         )}
-      </div>
-
-      </div>
-
-      {/* RIGHT — Department Budgets */}
-      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-        <SectionTitle title="Department Budgets" />
-        {(() => {
-          const validDepts = COMPANY_DEPTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
-          const validCats = COMPANY_CATS[companyId] || ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
-          const totalB = budgets.reduce((s, b) => s + b.budgeted_amount, 0);
-          const totalA = budgets.reduce((s, b) => s + b.actual_amount, 0);
-          const groups = new Map<string, DeptBudget[]>();
-          for (const b of budgets) { if (!groups.has(b.department)) groups.set(b.department, []); groups.get(b.department)!.push(b); }
-
-          return (
-          <>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
-              <input type="month" value={budgetMonth} onChange={(e) => { setBudgetMonth(e.target.value); loadBudgets(e.target.value); }}
-                style={{ padding: "5px 8px", border: `1px solid ${BORDER}`, borderRadius: "5px", fontSize: "13px" }} />
-              <button onClick={() => setShowBudgetForm(!showBudgetForm)} style={{
-                backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px",
-                padding: "5px 12px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
-              }}>{showBudgetForm ? "Cancel" : "+ Add"}</button>
-              <ImportExportButtons
-                onExport={() => {
-                  const headers = ["Department", "Category", "Budgeted", "Actual", "Notes"];
-                  const rows = budgets.map((b) => [b.department, b.category, String(b.budgeted_amount), String(b.actual_amount), b.notes || ""]);
-                  downloadCSV(`dept-budgets-${companyName.replace(/\s+/g, "-")}-${budgetMonth}.csv`, headers, rows);
-                }}
-                onImport={async (rows) => {
-                  const errors: string[] = [];
-                  const valid: { dept: string; cat: string; budgeted: number; actual: number; notes: string }[] = [];
-                  for (let i = 0; i < rows.length; i++) {
-                    const row = rows[i];
-                    const line = i + 2;
-                    const dept = row["Department"]?.trim();
-                    const cat = row["Category"]?.trim();
-                    if (!dept && !cat) continue;
-                    if (!dept || !validDepts.includes(dept)) { errors.push(`Row ${line}: Invalid department "${dept || "(empty)"}". Must be one of: ${validDepts.join(", ")}`); continue; }
-                    if (!cat || !validCats.includes(cat)) { errors.push(`Row ${line}: Invalid category "${cat || "(empty)"}". Must be one of: ${validCats.join(", ")}`); continue; }
-                    valid.push({ dept, cat, budgeted: Number(row["Budgeted"]) || 0, actual: Number(row["Actual"]) || 0, notes: row["Notes"]?.trim() || "" });
-                  }
-                  if (errors.length > 0) {
-                    alert(`Upload rejected — please fix and re-upload:\n\n${errors.slice(0, 15).join("\n")}${errors.length > 15 ? `\n\n...and ${errors.length - 15} more errors` : ""}`);
-                    return;
-                  }
-                  if (valid.length === 0) { alert("No valid data rows found."); return; }
-                  for (const r of valid) {
-                    await supabase.from("department_budgets").upsert({
-                      company_id: companyId, department: r.dept, budget_month: budgetMonth, category: r.cat,
-                      budgeted_amount: r.budgeted, actual_amount: r.actual, notes: r.notes || null,
-                    }, { onConflict: "company_id,department,budget_month,category" });
-                  }
-                  setMsg(`Imported ${valid.length} budget entries.`);
-                  loadBudgets();
-                }}
-                templateHeaders={["Department", "Category", "Budgeted", "Actual", "Notes"]}
-                templateFilename={`dept-budget-template-${companyName.replace(/\s+/g, "-")}.csv`}
-                exportLabel="Export"
-                importLabel="Import"
-              />
-              <button onClick={() => {
-                const wb = XLSX.utils.book_new();
-                const dataRows = [["Department", "Category", "Budgeted", "Actual", "Notes"], ...validDepts.map((d) => [d, "", 0, 0, ""])];
-                const ws1 = XLSX.utils.aoa_to_sheet(dataRows);
-                ws1["!cols"] = [{ wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 25 }];
-                XLSX.utils.book_append_sheet(wb, ws1, "Budget Data");
-                const notesRows = [
-                  ["INSTRUCTIONS"],
-                  [""],
-                  ["Copy and paste values from the lists below into the Budget Data sheet."],
-                  ["All values must match exactly — incorrect entries will be rejected."],
-                  [""],
-                  ["═══════════════════════════════════"],
-                  [`DEPARTMENTS — ${companyName} (copy one per row)`],
-                  ["═══════════════════════════════════"],
-                  ...validDepts.map((d) => [d]),
-                  [""],
-                  ["═══════════════════════════"],
-                  ["CATEGORIES (copy one per row)"],
-                  ["═══════════════════════════"],
-                  ...validCats.map((c) => [c]),
-                  [""],
-                  ["═══════════════"],
-                  ["HOW TO USE"],
-                  ["═══════════════"],
-                  ["1. Go to the 'Budget Data' sheet"],
-                  ["2. Each row = one department + category entry"],
-                  ["3. Copy Department and Category from this sheet"],
-                  ["4. Enter Budgeted and Actual amounts in PKR"],
-                  ["5. Delete example rows and add your own"],
-                  ["6. Save and upload using the Import button"],
-                  [""],
-                  ["Duplicate department+category rows update existing entries."],
-                ];
-                const ws2 = XLSX.utils.aoa_to_sheet(notesRows);
-                ws2["!cols"] = [{ wch: 40 }];
-                XLSX.utils.book_append_sheet(wb, ws2, "Instructions");
-                XLSX.writeFile(wb, `budget-template-${companyName.replace(/\s+/g, "-")}.xlsx`);
-              }} style={{
-                backgroundColor: "white", color: NAVY, border: `1px solid ${BORDER}`,
-                borderRadius: "6px", padding: "6px 10px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
-              }} title="Download Excel template with instructions">Template</button>
-            </div>
-
-            {showBudgetForm && (
-              <form onSubmit={handleAddBudget} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "12px", backgroundColor: "#f8fafc" }}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr 1fr", gap: "6px", alignItems: "end" }}>
-                  <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Department</label>
-                    <select style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
-                      <option value="">Select</option>{validDepts.map((d) => <option key={d}>{d}</option>)}
-                    </select>
-                  </div>
-                  <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Category</label>
-                    <select style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required>
-                      <option value="">Select</option>
-                      {validCats.map((c) => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Budgeted (PKR)</label>
-                    <input type="number" style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" />
-                  </div>
-                  <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Actual (PKR)</label>
-                    <input type="number" style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdActual} onChange={(e) => setBdActual(e.target.value)} placeholder="0" />
-                  </div>
-                  <button type="submit" disabled={bdSaving} style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px", padding: "5px 10px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
-                    {bdSaving ? "..." : "Save"}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {budgets.length > 0 && (
-              <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-                <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${BLUE}`, borderRadius: "6px", padding: "6px 12px" }}>
-                  <div style={{ fontSize: "11px", color: SLATE }}>Budgeted</div>
-                  <div style={{ fontSize: "15px", fontWeight: 800, color: BLUE }}>PKR {totalB.toLocaleString()}</div>
-                </div>
-                <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${totalA > totalB ? RED : GREEN}`, borderRadius: "6px", padding: "6px 12px" }}>
-                  <div style={{ fontSize: "11px", color: SLATE }}>Actual</div>
-                  <div style={{ fontSize: "15px", fontWeight: 800, color: totalA > totalB ? RED : GREEN }}>PKR {totalA.toLocaleString()}</div>
-                </div>
-                <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${totalB - totalA >= 0 ? GREEN : RED}`, borderRadius: "6px", padding: "6px 12px" }}>
-                  <div style={{ fontSize: "11px", color: SLATE }}>Variance</div>
-                  <div style={{ fontSize: "15px", fontWeight: 800, color: totalB - totalA >= 0 ? GREEN : RED }}>PKR {(totalB - totalA).toLocaleString()}</div>
-                </div>
-              </div>
-            )}
-
-            {Array.from(groups.entries()).map(([deptName, items]) => {
-              const dB = items.reduce((s, i) => s + i.budgeted_amount, 0);
-              const dA = items.reduce((s, i) => s + i.actual_amount, 0);
-              const over = dA > dB;
-              return (
-                <div key={deptName} style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${over ? RED : GREEN}`, borderRadius: "6px", overflow: "hidden", marginBottom: "8px" }}>
-                  <div style={{ padding: "6px 12px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{deptName}</span>
-                    <div style={{ fontSize: "11px", display: "flex", gap: "8px" }}>
-                      <span style={{ color: SLATE }}>Budget: PKR {dB.toLocaleString()}</span>
-                      <span style={{ fontWeight: 700, color: over ? RED : GREEN }}>Actual: PKR {dA.toLocaleString()}</span>
-                    </div>
-                  </div>
-                  {items.map((b) => (
-                    <div key={b.id} style={{ padding: "5px 12px", borderBottom: `1px solid ${COLOURS.LIGHT}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{b.category}</span>
-                        {b.notes && <span style={{ fontSize: "11px", color: SLATE, marginLeft: "4px" }}>({b.notes})</span>}
-                      </div>
-                      <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", flexShrink: 0 }}>
-                        <span style={{ color: SLATE }}>PKR {b.budgeted_amount.toLocaleString()}</span>
-                        <input type="number" defaultValue={b.actual_amount} onBlur={(e) => { const v = Number(e.target.value); if (v !== b.actual_amount) updateBudgetActual(b.id, v); }}
-                          style={{ width: "80px", padding: "2px 5px", border: `1px solid ${BORDER}`, borderRadius: "3px", fontSize: "12px" }} title="Update actual" />
-                        {canEditAll && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: RED, fontSize: "14px", cursor: "pointer" }} title="Delete">×</button>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-
-            {budgets.length === 0 && (
-              <div style={{ padding: "12px", color: SLATE, textAlign: "center", fontSize: "14px" }}>No budget entries for {budgetMonth}.</div>
-            )}
-          </>
-          );
-        })()}
       </div>
 
       </div>
