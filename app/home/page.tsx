@@ -12,6 +12,7 @@ type CardDef = { title: string; subtitle: string; href: string; badge?: Badge; i
 type GroupDef = { title: string; colour: string; cards: CardDef[] };
 
 const CEO_EMAIL = "k.saleem@unzegroup.com";
+const ADMIN_EMAIL = "khuram1901@gmail.com";
 
 export default function HomePage() {
   const isMobile = useMobile();
@@ -72,6 +73,8 @@ export default function HomePage() {
   }, []);
 
   const isCEO = userEmail.toLowerCase() === CEO_EMAIL;
+  const isMainAdmin = userEmail.toLowerCase() === ADMIN_EMAIL;
+  const showIcons = !isMainAdmin;
 
   const groups: GroupDef[] = isCEO ? [
     {
@@ -231,7 +234,7 @@ export default function HomePage() {
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <span style={{ fontSize: "24px" }}>{card.icon}</span>
+                      {showIcons && <span style={{ fontSize: "24px" }}>{card.icon}</span>}
                       {card.badge && (
                         <span style={{
                           fontSize: "11px", fontWeight: 700, color: "white",

@@ -71,8 +71,9 @@ function isValidEmail(e: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.tr
 function fullName(f: string | null, l: string | null, n?: string | null) {
   return `${f || ""} ${l || ""}`.trim() || n || "Unnamed";
 }
-function roleBg(r: string) {
-  return r === "Admin" ? COLOURS.BLUE : r === "Executive" ? COLOURS.PURPLE : r === "Manager" ? COLOURS.GREEN : COLOURS.SLATE;
+function roleBg(r: string, email?: string | null) {
+  if (email === "k.saleem@unzegroup.com") return COLOURS.BLUE;
+  return r === "Admin" ? "#111827" : r === "Executive" ? COLOURS.PURPLE : r === "Manager" ? COLOURS.GREEN : COLOURS.SLATE;
 }
 
 const inp: React.CSSProperties = {
@@ -503,9 +504,9 @@ export default function MembersManager() {
                 {/* Role badge */}
                 <span style={{
                   fontSize: "12px", fontWeight: 700, padding: "2px 8px", borderRadius: "8px",
-                  color: "white", backgroundColor: roleBg(m.role), width: "fit-content",
+                  color: "white", backgroundColor: roleBg(m.role, m.email), width: "fit-content",
                   justifySelf: isMobile ? "end" : "start",
-                }}>{m.role}</span>
+                }}>{m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role}</span>
               </div>
 
               {/* ── Mobile sub-row ────────────────────── */}
