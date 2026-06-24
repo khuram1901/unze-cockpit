@@ -252,18 +252,19 @@ export default function MembersManager() {
 
   const isAdmin = myRole === "Admin" || myRole === "Executive";
 
-  async function saveDeptOwner(row: DepartmentOwner) {
-    const primary = members.find((m) => m.id === row.primary_owner_member_id);
-    const secondary = members.find((m) => m.id === row.secondary_owner_member_id);
-    const escalation = members.find((m) => m.id === row.escalation_owner_member_id);
-    const { error } = await supabase.from("department_owners").update({
-      primary_owner_member_id: primary?.id || null, primary_owner_name: primary?.name || null, primary_owner_email: primary?.email || null,
-      secondary_owner_member_id: secondary?.id || null, secondary_owner_name: secondary?.name || null, secondary_owner_email: secondary?.email || null,
-      escalation_owner_member_id: escalation?.id || null, escalation_owner_name: escalation?.name || null, escalation_owner_email: escalation?.email || null,
-    }).eq("id", row.id);
+  async function updateDeptOwner(deptId: string, field: "primary" | "secondary" | "escalation", memberId: string) {
+    const m = memberId ? members.find((x) => x.id === memberId) : null;
+    const prefix = field === "primary" ? "primary_owner" : field === "secondary" ? "secondary_owner" : "escalation_owner";
+    const updates: Record<string, string | null> = {
+      [`${prefix}_member_id`]: m?.id || null,
+      [`${prefix}_name`]: m?.name || null,
+      [`${prefix}_email`]: m?.email || null,
+    };
+    setDepartments((prev) => prev.map((d) => d.id === deptId ? { ...d, [`${prefix}_member_id`]: memberId || null } : d));
+    const dept = departments.find((d) => d.id === deptId);
+    const { error } = await supabase.from("department_owners").update(updates).eq("id", deptId);
     if (error) { alert(error.message); return; }
-    logAction("Updated", "department_owners", `Updated owners for ${row.department_name}`, row.id);
-    loadData();
+    logAction("Updated", "department_owners", `Set ${field} owner for ${dept?.department_name || deptId}`, deptId);
   }
 
   const openTaskCounts = new Map<string, number>();
@@ -618,11 +619,11 @@ export default function MembersManager() {
                     {dept.department_name}
                     {!dept.primary_owner_member_id && <span style={{ fontSize: "11px", color: COLOURS.RED, marginLeft: "8px", fontWeight: 600 }}>NO PRIMARY OWNER</span>}
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", alignItems: "end" }}>
                     <div>
                       <label style={lblC}>Primary Owner</label>
                       <select style={inpC} value={dept.primary_owner_member_id || ""}
-                        onChange={(e) => setDepartments((prev) => prev.map((d) => d.id === dept.id ? { ...d, primary_owner_member_id: e.target.value || null } : d))}>
+                        onChange={(e) => updateDeptOwner(dept.id, "primary", e.target.value)}>
                         <option value="">— None —</option>
                         {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
                       </select>
@@ -630,7 +631,7 @@ export default function MembersManager() {
                     <div>
                       <label style={lblC}>Backup Owner</label>
                       <select style={inpC} value={dept.secondary_owner_member_id || ""}
-                        onChange={(e) => setDepartments((prev) => prev.map((d) => d.id === dept.id ? { ...d, secondary_owner_member_id: e.target.value || null } : d))}>
+                        onChange={(e) => updateDeptOwner(dept.id, "secondary", e.target.value)}>
                         <option value="">— None —</option>
                         {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
                       </select>
@@ -638,12 +639,11 @@ export default function MembersManager() {
                     <div>
                       <label style={lblC}>Escalation</label>
                       <select style={inpC} value={dept.escalation_owner_member_id || ""}
-                        onChange={(e) => setDepartments((prev) => prev.map((d) => d.id === dept.id ? { ...d, escalation_owner_member_id: e.target.value || null } : d))}>
+                        onChange={(e) => updateDeptOwner(dept.id, "escalation", e.target.value)}>
                         <option value="">— None —</option>
                         {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
                       </select>
                     </div>
-                    <button onClick={() => saveDeptOwner(dept)} style={{ ...smallBtn(COLOURS.NAVY, true), fontSize: "12px", padding: "5px 12px", height: "fit-content" }}>Save</button>
                   </div>
                 </div>
               ))}
