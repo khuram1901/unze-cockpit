@@ -353,13 +353,16 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   async function saveDailyPosition(e: React.FormEvent) {
     e.preventDefault();
 
-    // Validate opening matches previous day's closing
+    // Validate opening matches previous day's closing (only warn for consecutive days)
     const prevDay = positions.find((p) => p.position_date < dpDate);
-    if (prevDay && Math.abs(Number(dpOpening) - prevDay.closing_balance) > 0.01) {
-      const proceed = confirm(
-        `Warning: Opening balance (${fmt(Number(dpOpening))}) does not match previous day's closing balance (${fmt(prevDay.closing_balance)} on ${formatDateUK(prevDay.position_date)}).\n\nSave anyway?`
-      );
-      if (!proceed) return;
+    if (prevDay) {
+      const diffDays = (new Date(dpDate).getTime() - new Date(prevDay.position_date).getTime()) / (1000 * 60 * 60 * 24);
+      if (diffDays <= 1 && Math.abs(Number(dpOpening) - prevDay.closing_balance) > 0.01) {
+        const proceed = confirm(
+          `Warning: Opening balance (${fmt(Number(dpOpening))}) does not match previous day's closing balance (${fmt(prevDay.closing_balance)} on ${formatDateUK(prevDay.position_date)}).\n\nSave anyway?`
+        );
+        if (!proceed) return;
+      }
     }
 
     setSaving(true);
@@ -477,7 +480,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           label="Latest Closing"
           value={latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}
           sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
-          color={NAVY}
+          color={latestPosition && latestPosition.closing_balance < 0 ? RED : GREEN}
         />
       </div>
 
@@ -611,8 +614,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                   {(() => {
                     if (!uploadResult.cashFlow || !uploadResult.date) return null;
                     const prevDay = positions.find((p) => p.position_date < uploadResult.date!);
+                    if (!prevDay) return null;
+                    const diffDays = (new Date(uploadResult.date!).getTime() - new Date(prevDay.position_date).getTime()) / (1000 * 60 * 60 * 24);
+                    if (diffDays > 1) return null;
                     const opening = (uploadResult.cashFlow as Record<string, number>).openingBalance;
-                    if (prevDay && opening && Math.abs(opening - prevDay.closing_balance) > 0.01) {
+                    if (opening && Math.abs(opening - prevDay.closing_balance) > 0.01) {
                       return (
                         <div style={{ color: RED, fontWeight: 700, marginTop: "4px", fontSize: "13px" }}>
                           Opening ({opening.toLocaleString()}) does not match previous closing ({prevDay.closing_balance.toLocaleString()})
@@ -1014,7 +1020,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                     const diffDays = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
                     return diffDays <= 1;
                   })();
-                  const mismatch = prevDay && isConsecutive && Math.abs(p.opening_balance - Math.abs(prevDay.closing_balance)) > 0.01;
+                  const mismatch = prevDay && isConsecutive && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01;
                   return (
                     <tr key={p.id} style={mismatch ? { backgroundColor: "#fef2f2" } : undefined}>
                       <td style={tdBold}>
@@ -1034,13 +1040,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                       <td style={{ ...td, color: RED, fontWeight: 600 }}>
                         {fmt(p.total_payments)}
                       </td>
-                      <td style={{ ...td, fontWeight: 700, color: NAVY }}>
+                      <td style={{ ...td, fontWeight: 700, color: p.closing_balance < 0 ? RED : GREEN }}>
                         {fmt(p.closing_balance)}
                       </td>
                       <td style={{ ...td, color: SLATE }}>
                         {fmt(p.post_dated_total)}
                       </td>
-                      <td style={{ ...td, fontWeight: 700 }}>
+                      <td style={{ ...td, fontWeight: 700, color: p.closing_after_post_dated < 0 ? RED : GREEN }}>
                         {fmt(p.closing_after_post_dated)}
                       </td>
                     </tr>
