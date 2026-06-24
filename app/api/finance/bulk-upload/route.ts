@@ -30,6 +30,11 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
+        if (parsed.openingBalanceTotal === 0 && parsed.receiptsTotal === 0 && parsed.paymentsTotal === 0 && parsed.closingBalanceUnzeTrading === 0) {
+          results.push({ filename: file.name, status: "skipped — all values zero", date: parsed.date, company: parsed.company });
+          continue;
+        }
+
         const companyId = parsed.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
 
         const { error } = await supabase.from("daily_cash_position").upsert(

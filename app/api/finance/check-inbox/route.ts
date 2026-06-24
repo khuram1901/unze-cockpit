@@ -144,6 +144,10 @@ export async function GET(request: NextRequest) {
             results.push({ messageId: msg.id, status: "error — no date found in PDF" });
             continue;
           }
+          if (cashFlow.openingBalanceTotal === 0 && cashFlow.receiptsTotal === 0 && cashFlow.paymentsTotal === 0 && cashFlow.closingBalanceUnzeTrading === 0) {
+            results.push({ messageId: msg.id, status: "skipped — all values zero", date: positionDate });
+            continue;
+          }
           const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
           const dateSet = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
           if (dateSet.has(positionDate)) {
