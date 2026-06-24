@@ -213,14 +213,14 @@ export default function MembersManager() {
     setSavingPw(false);
   }
 
-  const OWNER_EMAIL = "khuram1901@gmail.com";
+  const PROTECTED_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 
   async function updateMember(id: string, updates: Partial<Member>) {
     if (updates.email !== undefined && !isValidEmail(updates.email || "")) { alert("Valid email required."); loadData(); return; }
     const member = members.find((m) => m.id === id);
-    if (member?.email === OWNER_EMAIL) {
-      if (updates.role !== undefined && updates.role !== "Admin") { alert("The owner account must remain Admin."); loadData(); return; }
-      if (updates.email !== undefined) { alert("The owner email cannot be changed."); loadData(); return; }
+    if (member?.email && PROTECTED_EMAILS.includes(member.email)) {
+      if (updates.role !== undefined && updates.role !== "Admin") { alert("This account must remain Admin."); loadData(); return; }
+      if (updates.email !== undefined) { alert("This account's email cannot be changed."); loadData(); return; }
     }
     if (member?.role === "Admin" && myRole !== "Admin") { alert("Only Admin can edit another Admin."); loadData(); return; }
     // Department and business unit are preserved for all roles
@@ -241,7 +241,7 @@ export default function MembersManager() {
 
   async function deleteMember(id: string, nm: string) {
     const m = members.find((x) => x.id === id);
-    if (m?.email === OWNER_EMAIL) { alert("Owner account cannot be removed."); return; }
+    if (m?.email && PROTECTED_EMAILS.includes(m.email)) { alert("This account cannot be removed."); return; }
     if (m?.role === "Admin" && myRole !== "Admin") { alert("Only Admin can remove another Admin."); return; }
     if (!confirm(`Remove ${nm}?`)) return;
     const { error } = await supabase.from("members").delete().eq("id", id);
