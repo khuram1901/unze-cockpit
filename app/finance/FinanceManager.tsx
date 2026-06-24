@@ -633,45 +633,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
       )}
 
-      {/* ── BULK UPLOAD (Admin/Executive only) ── */}
-      {canEditAll && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
-          <SectionTitle title="Bulk Upload Cash Flow PDFs" />
-          <p style={{ fontSize: "13px", color: SLATE, marginBottom: "10px" }}>
-            Select multiple cash flow PDFs at once. The system auto-detects company (Imperial vs Unze Trading) and date from each PDF.
-          </p>
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            const input = (e.currentTarget.querySelector('input[type="file"]') as HTMLInputElement);
-            const files = input?.files;
-            if (!files || files.length === 0) return;
-            showMsg("Uploading " + files.length + " file(s)...");
-            const fd = new FormData();
-            for (let i = 0; i < files.length; i++) fd.append("files", files[i]);
-            try {
-              const res = await fetch("/api/finance/bulk-upload", { method: "POST", body: fd });
-              const data = await res.json();
-              if (data.ok) {
-                const details = (data.results || []).map((r: { filename: string; status: string; date?: string; company?: string }) =>
-                  `${r.company || "?"} ${r.date || "?"}: ${r.status}`
-                ).join("\n");
-                showMsg(`Bulk upload: ${data.saved} saved, ${data.errors} errors out of ${data.total} files.`);
-                if (data.errors > 0) alert("Details:\n\n" + details);
-                input.value = "";
-                loadData();
-              } else {
-                showMsg("Error: " + (data.error || "Upload failed"));
-              }
-            } catch { showMsg("Error: Network error"); }
-          }}>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-              <input type="file" accept=".pdf" multiple style={{ fontSize: "14px" }} />
-              <button type="submit" style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "6px", padding: "7px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>Upload All</button>
-            </div>
-          </form>
-        </div>
-      )}
-
       {/* ── ROW: FORECAST + DAILY ENTRY side by side ── */}
       <div style={{
         display: "grid",
