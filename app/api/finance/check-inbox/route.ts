@@ -74,12 +74,17 @@ export async function GET(request: NextRequest) {
       return Response.json({ ok: true, message: "Label found but no emails in last 30 days", labelName: cockpitLabel.name, labelId: cockpitLabel.id, processed: 0 });
     }
 
-    // Get existing dates so we skip already-processed ones
-    const { data: existingPositions } = await supabase
+    // Get existing dates for BOTH companies so we skip already-processed ones
+    const { data: existingUtpl } = await supabase
       .from("daily_cash_position")
       .select("position_date")
       .eq("company_id", UTPL_COMPANY_ID);
-    const existingDates = new Set((existingPositions || []).map((p) => p.position_date));
+    const { data: existingIfpl } = await supabase
+      .from("daily_cash_position")
+      .select("position_date")
+      .eq("company_id", IFPL_COMPANY_ID);
+    const existingDatesUtpl = new Set((existingUtpl || []).map((p) => p.position_date));
+    const existingDatesIfpl = new Set((existingIfpl || []).map((p) => p.position_date));
 
     const results: { messageId: string; status: string; date?: string }[] = [];
 
@@ -139,11 +144,12 @@ export async function GET(request: NextRequest) {
             results.push({ messageId: msg.id, status: "error — no date found in PDF" });
             continue;
           }
-          if (existingDates.has(positionDate)) {
+          const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
+          const dateSet = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
+          if (dateSet.has(positionDate)) {
             results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate });
             continue;
           }
-          const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
           await supabase.from("daily_cash_position").upsert({
             company_id: companyId,
             position_date: positionDate,
@@ -156,7 +162,7 @@ export async function GET(request: NextRequest) {
             raw_pdf_filename: pdfAttachments[0].filename,
             uploaded_by: "gmail-auto",
           }, { onConflict: "company_id,position_date" });
-          existingDates.add(positionDate);
+          dateSet.add(positionDate);
           results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (single PDF)`, date: positionDate });
         } catch (e) {
           results.push({ messageId: msg.id, status: `error — ${e instanceof Error ? e.message : "parse failed"}` });
@@ -184,11 +190,12 @@ export async function GET(request: NextRequest) {
           const positionDate = cashFlow.date || bankPosition.date;
 
           if (positionDate) {
-            if (existingDates.has(positionDate)) {
+            const ds = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
+            if (ds.has(positionDate)) {
               results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate });
             } else {
               await saveToDatabase(positionDate, cashFlow, bankPosition, result, pdf1.filename, pdf2.filename);
-              existingDates.add(positionDate);
+              ds.add(positionDate);
               results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate });
             }
           } else {
@@ -205,11 +212,12 @@ export async function GET(request: NextRequest) {
           const positionDate = cashFlow.date || bankPosition.date;
 
           if (positionDate) {
-            if (existingDates.has(positionDate)) {
+            const ds = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
+            if (ds.has(positionDate)) {
               results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate });
             } else {
               await saveToDatabase(positionDate, cashFlow, bankPosition, result, cashFlowPdf.filename, bankPositionPdf.filename);
-              existingDates.add(positionDate);
+              ds.add(positionDate);
               results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate });
             }
           } else {

@@ -247,7 +247,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     if (obRes.error) console.error("Opening balance error:", obRes.error);
     if (planRes.error) console.error("Monthly plan error:", planRes.error);
     if (posRes.error) console.error("Positions error:", posRes.error);
-    console.log("Finance data loaded:", { opening: obRes.data?.length, plan: !!planRes.data, positions: posRes.data?.length, companyId });
     setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
     setPlan(planRes.data || null);
     setPositions(posRes.data || []);
@@ -1009,7 +1008,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               <tbody>
                 {positions.map((p, idx) => {
                   const prevDay = positions[idx + 1];
-                  const mismatch = prevDay && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01;
+                  const isConsecutive = prevDay && (() => {
+                    const curr = new Date(p.position_date);
+                    const prev = new Date(prevDay.position_date);
+                    const diffDays = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
+                    return diffDays <= 1;
+                  })();
+                  const mismatch = prevDay && isConsecutive && Math.abs(p.opening_balance - Math.abs(prevDay.closing_balance)) > 0.01;
                   return (
                     <tr key={p.id} style={mismatch ? { backgroundColor: "#fef2f2" } : undefined}>
                       <td style={tdBold}>
