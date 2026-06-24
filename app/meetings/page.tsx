@@ -125,6 +125,7 @@ export default function MeetingsPage() {
   const [allTasks, setAllTasks] = useState<MeetingTask[]>([]);
   const [activePendingId, setActivePendingId] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState<"date" | "department">("date");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => { loadData(); }, []);
 
@@ -452,7 +453,13 @@ export default function MeetingsPage() {
   const thisMonthMeetings = meetings.filter((m) => m.meeting_date.slice(0, 7) === currentMonth);
   const openTasks = allTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
 
-  const groupedMeetings = (() => {
+  const formatMonthLabel = (ym: string) => {
+    const [y, m] = ym.split("-");
+    const months = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    return `${months[parseInt(m)]} ${y}`;
+  };
+
+  const groupedMeetings: [string, Meeting[]][] = (() => {
     if (groupBy === "department") {
       const groups = new Map<string, Meeting[]>();
       for (const m of meetings) {
@@ -462,8 +469,27 @@ export default function MeetingsPage() {
       }
       return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
     }
-    return [["All Meetings", meetings] as [string, Meeting[]]];
+    const groups = new Map<string, Meeting[]>();
+    for (const m of meetings) {
+      const mo = m.meeting_date.slice(0, 7);
+      if (!groups.has(mo)) groups.set(mo, []);
+      groups.get(mo)!.push(m);
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => b.localeCompare(a));
   })();
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  // Auto-expand latest group on first render
+  if (expandedGroups.size === 0 && groupedMeetings.length > 0) {
+    expandedGroups.add(groupedMeetings[0][0]);
+  }
 
   return (
     <AuthWrapper>
@@ -968,7 +994,7 @@ export default function MeetingsPage() {
               <SectionTitle title="Past Meetings" />
               <div style={{ display: "flex", gap: "4px" }}>
                 {(["date", "department"] as const).map((g) => (
-                  <button key={g} onClick={() => setGroupBy(g)} style={{
+                  <button key={g} onClick={() => { setGroupBy(g); setExpandedGroups(new Set()); }} style={{
                     padding: "4px 12px", fontSize: "13px", fontWeight: groupBy === g ? 700 : 500, borderRadius: "14px",
                     border: `1px solid ${groupBy === g ? COLOURS.NAVY : COLOURS.BORDER}`,
                     backgroundColor: groupBy === g ? COLOURS.NAVY : "white",
@@ -983,14 +1009,36 @@ export default function MeetingsPage() {
             {meetings.length === 0 ? (
               <p style={{ color: COLOURS.SLATE, fontSize: "16px" }}>No meetings recorded yet.</p>
             ) : (
-              groupedMeetings.map(([groupLabel, groupMeetings]) => (
-                <div key={groupLabel} style={{ marginBottom: "12px" }}>
-                  {groupBy === "department" && (
-                    <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, padding: "6px 0", borderBottom: `2px solid ${COLOURS.NAVY}`, marginBottom: "6px" }}>
-                      {groupLabel} ({groupMeetings.length})
+              groupedMeetings.map(([groupKey, groupMeetings]) => {
+                const isGroupOpen = expandedGroups.has(groupKey);
+                const groupLabel = groupBy === "date" ? formatMonthLabel(groupKey) : groupKey;
+                const groupTasks = groupMeetings.flatMap((m) => getTasksForMeeting(m.id));
+                const groupOpen = groupTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
+
+                return (
+                <div key={groupKey} style={{
+                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "10px", backgroundColor: "white",
+                  overflow: "hidden", marginBottom: "10px",
+                }}>
+                  <div onClick={() => toggleGroup(groupKey)} style={{
+                    padding: "12px 16px", cursor: "pointer",
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    backgroundColor: isGroupOpen ? COLOURS.NAVY : "white",
+                    borderBottom: isGroupOpen ? `1px solid ${COLOURS.BORDER}` : "none",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: isGroupOpen ? "white" : COLOURS.NAVY }}>
+                        {groupLabel}
+                      </div>
+                      <div style={{ fontSize: "12px", color: isGroupOpen ? "rgba(255,255,255,0.7)" : COLOURS.SLATE, marginTop: "1px" }}>
+                        {groupMeetings.length} meeting{groupMeetings.length !== 1 ? "s" : ""}
+                        {groupOpen > 0 && <span style={{ color: isGroupOpen ? "#fbbf24" : "#d97706", fontWeight: 700 }}> · {groupOpen} open task{groupOpen !== 1 ? "s" : ""}</span>}
+                      </div>
                     </div>
-                  )}
-                  {groupMeetings.map((m) => {
+                    <span style={{ color: isGroupOpen ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{isGroupOpen ? "▲" : "▼"}</span>
+                  </div>
+
+                  {isGroupOpen && groupMeetings.map((m) => {
                     const isOpen = expandedId === m.id;
                     const mTasks = getTasksForMeeting(m.id);
                     const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
@@ -1097,7 +1145,8 @@ export default function MeetingsPage() {
                     );
                   })}
                 </div>
-              ))
+                );
+              })
             )}
           </>
         )}
