@@ -312,6 +312,8 @@ export default function ExecutiveDashboardPage() {
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [loading, setLoading] = useState(true);
 
+  type DeptBudgetRow = { department: string; category: string; budgeted_amount: number; actual_amount: number };
+
   type CompanyFinanceData = {
     companyId: string;
     companyName: string;
@@ -321,6 +323,7 @@ export default function ExecutiveDashboardPage() {
     lastYearReceipts: number | null;
     lastYearPayments: number | null;
     forecast: BudgetRow[];
+    deptBudgets: DeptBudgetRow[];
   };
 
   const [companyFinance, setCompanyFinance] = useState<CompanyFinanceData[]>([]);
@@ -525,12 +528,13 @@ export default function ExecutiveDashboardPage() {
 
     const allCompanyFinance: CompanyFinanceData[] = [];
     for (const company of COMPANIES) {
-      const [cashOpenRes, cashPlanRes, cashPosRes, lyRes, forecastRes] = await Promise.all([
+      const [cashOpenRes, cashPlanRes, cashPosRes, lyRes, forecastRes, deptBudgetRes] = await Promise.all([
         supabase.from("cash_opening_balance").select("*").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
         supabase.from("monthly_cash_plan").select("*").eq("company_id", company.id).eq("plan_month", currentMonthForCash).maybeSingle(),
         supabase.from("daily_cash_position").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(30),
         supabase.from("daily_cash_position").select("total_receipts, total_payments").eq("company_id", company.id).gte("position_date", lastYearMonth + "-01").lte("position_date", lastYearMonth + "-31"),
         supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("company_id", company.id).gte("budget_month", currentMonthForCash).order("budget_month", { ascending: true }),
+        supabase.from("department_budgets").select("department, category, budgeted_amount, actual_amount").eq("company_id", company.id).eq("budget_month", currentMonthForCash),
       ]);
 
       let lyReceipts: number | null = null;
@@ -555,6 +559,7 @@ export default function ExecutiveDashboardPage() {
           const firstMonth = all[0].budget_month;
           return all.filter((r) => r.budget_month === firstMonth);
         })(),
+        deptBudgets: (deptBudgetRes.data || []) as DeptBudgetRow[],
       });
     }
     setCompanyFinance(allCompanyFinance);
@@ -1320,7 +1325,7 @@ function panelCardRAG(status: RAGStatus): React.CSSProperties {
   };
 }
 
-function CompanyFinancePanel({ data }: { data: { companyId: string; companyName: string; cashOpening: OpeningBalance | null; cashPlan: MonthlyPlan | null; cashPositions: DailyPosition[]; lastYearReceipts: number | null; lastYearPayments: number | null; forecast: BudgetRow[] } }) {
+function CompanyFinancePanel({ data }: { data: { companyId: string; companyName: string; cashOpening: OpeningBalance | null; cashPlan: MonthlyPlan | null; cashPositions: DailyPosition[]; lastYearReceipts: number | null; lastYearPayments: number | null; forecast: BudgetRow[]; deptBudgets: { department: string; category: string; budgeted_amount: number; actual_amount: number }[] } }) {
   const financeMonth = formatDate(new Date()).slice(0, 7);
   const monthPositions = data.cashPositions.filter((p) => p.position_date.slice(0, 7) === financeMonth);
   const actualReceiptsMTD = monthPositions.reduce((s, p) => s + p.total_receipts, 0);
@@ -1460,6 +1465,26 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
               {fRow("Difference", `${actualReceiptsMTD >= data.lastYearReceipts! ? "+" : ""}PKR ${fmtMoney(actualReceiptsMTD - data.lastYearReceipts!)}`, { bold: true, color: actualReceiptsMTD >= data.lastYearReceipts! ? "#16a34a" : "#dc2626" })}
             </div>
           ))}
+
+          {data.deptBudgets.length > 0 && (() => {
+            const totalB = data.deptBudgets.reduce((s, b) => s + b.budgeted_amount, 0);
+            const totalA = data.deptBudgets.reduce((s, b) => s + b.actual_amount, 0);
+            const over = totalA > totalB;
+            return expandSection("deptbudget", `Department Budgets — ${over ? "Over" : "Under"} by PKR ${fmtMoney(Math.abs(totalB - totalA))}`, (
+              <div style={{ fontSize: "14px" }}>
+                {data.deptBudgets.map((b, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: `1px solid ${BORDER}` }}>
+                    <span style={{ color: SLATE }}>{b.department} — {b.category}</span>
+                    <span style={{ fontWeight: 600, color: b.actual_amount > b.budgeted_amount ? "#dc2626" : "#16a34a" }}>
+                      PKR {fmtMoney(b.actual_amount)} / {fmtMoney(b.budgeted_amount)}
+                    </span>
+                  </div>
+                ))}
+                {fRow("Total Budget", `PKR ${fmtMoney(totalB)}`, { bold: true, borderTop: true })}
+                {fRow("Total Actual", `PKR ${fmtMoney(totalA)}`, { bold: true, color: over ? "#dc2626" : "#16a34a" })}
+              </div>
+            ));
+          })()}
         </div>
       )}
     </>

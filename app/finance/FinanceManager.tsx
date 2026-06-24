@@ -43,7 +43,10 @@ const COMPANY_DEPTS: Record<string, string[]> = {
   "77921705-8a15-4406-847a-b234f84b5ec3": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"],
 };
 
-const BUDGET_CATEGORIES = ["Salaries", "Utilities", "Rent", "Travel", "Software", "Maintenance", "Raw Materials", "Freight", "Insurance", "Marketing", "Professional Fees", "Miscellaneous"];
+const COMPANY_CATS: Record<string, string[]> = {
+  "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Salaries", "Rent/Utilities", "Admin", "Welfare", "Freight", "Travel"],
+  "77921705-8a15-4406-847a-b234f84b5ec3": ["Salaries", "Rent/Utilities", "Admin", "Marketing", "Freight", "Travel"],
+};
 
 const NAVY = COLOURS.NAVY;
 const SLATE = COLOURS.SLATE;
@@ -1129,6 +1132,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
         {showBudgets && (() => {
           const validDepts = COMPANY_DEPTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
+          const validCats = COMPANY_CATS[companyId] || ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
           const totalB = budgets.reduce((s, b) => s + b.budgeted_amount, 0);
           const totalA = budgets.reduce((s, b) => s + b.actual_amount, 0);
           const groups = new Map<string, DeptBudget[]>();
@@ -1159,7 +1163,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                     const cat = row["Category"]?.trim();
                     if (!dept && !cat) continue;
                     if (!dept || !validDepts.includes(dept)) { errors.push(`Row ${line}: Invalid department "${dept || "(empty)"}". Must be one of: ${validDepts.join(", ")}`); continue; }
-                    if (!cat || !BUDGET_CATEGORIES.includes(cat)) { errors.push(`Row ${line}: Invalid category "${cat || "(empty)"}". Must be one of: ${BUDGET_CATEGORIES.join(", ")}`); continue; }
+                    if (!cat || !validCats.includes(cat)) { errors.push(`Row ${line}: Invalid category "${cat || "(empty)"}". Must be one of: ${validCats.join(", ")}`); continue; }
                     valid.push({ dept, cat, budgeted: Number(row["Budgeted"]) || 0, actual: Number(row["Actual"]) || 0, notes: row["Notes"]?.trim() || "" });
                   }
                   if (errors.length > 0) {
@@ -1201,7 +1205,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                   ["═══════════════════════════"],
                   ["CATEGORIES (copy one per row)"],
                   ["═══════════════════════════"],
-                  ...BUDGET_CATEGORIES.map((c) => [c]),
+                  ...validCats.map((c) => [c]),
                   [""],
                   ["═══════════════"],
                   ["HOW TO USE"],
@@ -1236,12 +1240,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                   <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Category</label>
                     <select style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required>
                       <option value="">Select</option>
-                      {BUDGET_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                      <option value="__custom">Other (type below)</option>
+                      {validCats.map((c) => <option key={c}>{c}</option>)}
                     </select>
-                    {bdCategory === "__custom" && (
-                      <input style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px", marginTop: "4px" }} value="" onChange={(e) => setBdCategory(e.target.value)} placeholder="Type custom category" autoFocus />
-                    )}
                   </div>
                   <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Budgeted (PKR)</label>
                     <input type="number" style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" />

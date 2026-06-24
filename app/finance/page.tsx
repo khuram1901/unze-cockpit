@@ -31,7 +31,16 @@ function deptsForCompany(companyId: string): string[] {
   return COMPANY_DEPARTMENTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
 }
 
-const COMMON_CATEGORIES = ["Salaries", "Utilities", "Rent", "Travel", "Software", "Maintenance", "Raw Materials", "Freight", "Insurance", "Marketing", "Professional Fees", "Miscellaneous"];
+const COMPANY_CATEGORIES: Record<string, string[]> = {
+  "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Salaries", "Rent/Utilities", "Admin", "Welfare", "Freight", "Travel"],
+  "77921705-8a15-4406-847a-b234f84b5ec3": ["Salaries", "Rent/Utilities", "Admin", "Marketing", "Freight", "Travel"],
+};
+
+function catsForCompany(companyId: string): string[] {
+  return COMPANY_CATEGORIES[companyId] || ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
+}
+
+const ALL_CATEGORIES = [...new Set(Object.values(COMPANY_CATEGORIES).flat())];
 
 function downloadBudgetTemplate() {
   const wb = XLSX.utils.book_new();
@@ -70,10 +79,15 @@ function downloadBudgetTemplate() {
     ["═══════════════════════════════════"],
     ...COMPANY_DEPARTMENTS["77921705-8a15-4406-847a-b234f84b5ec3"].map((d) => [d]),
     [""],
-    ["═══════════════════════════"],
-    ["CATEGORIES (copy one per row)"],
-    ["═══════════════════════════"],
-    ...COMMON_CATEGORIES.map((c) => [c]),
+    ["══════════════════════════════════"],
+    ["CATEGORIES — UTPL (copy one per row)"],
+    ["══════════════════════════════════"],
+    ...COMPANY_CATEGORIES["15884c2d-48a4-4d43-be90-0ef6e130790c"].map((c) => [c]),
+    [""],
+    ["══════════════════════════════════"],
+    ["CATEGORIES — IFPL (copy one per row)"],
+    ["══════════════════════════════════"],
+    ...COMPANY_CATEGORIES["77921705-8a15-4406-847a-b234f84b5ec3"].map((c) => [c]),
     [""],
     ["═══════════════"],
     ["HOW TO USE"],
@@ -209,6 +223,7 @@ export default function FinancePage() {
   }
 
   const validDepts = deptsForCompany(budgetCompany);
+  const validCats = catsForCompany(budgetCompany);
 
   const budgetGroups = new Map<string, Budget[]>();
   for (const b of budgets) { if (!budgetGroups.has(b.department)) budgetGroups.set(b.department, []); budgetGroups.get(b.department)!.push(b); }
@@ -342,7 +357,8 @@ export default function FinancePage() {
                           const targetCompany = COMPANIES.find((c) => c.shortCode === cId)!.id;
                           const targetDepts = deptsForCompany(targetCompany);
                           if (!dept || !targetDepts.includes(dept)) { errors.push(`Row ${line}: Invalid department "${dept || "(empty)"}" for ${cId}. Must be one of: ${targetDepts.join(", ")}`); continue; }
-                          if (!cat || !COMMON_CATEGORIES.includes(cat)) { errors.push(`Row ${line}: Invalid category "${cat || "(empty)"}". Must be one of: ${COMMON_CATEGORIES.join(", ")}`); continue; }
+                          const validCats = catsForCompany(targetCompany);
+                          if (!cat || !validCats.includes(cat)) { errors.push(`Row ${line}: Invalid category "${cat || "(empty)"}" for ${cId}. Must be one of: ${validCats.join(", ")}`); continue; }
                           validRows.push({ company: targetCompany, dept, cat, budgeted: Number(row["Budgeted"]) || 0, actual: Number(row["Actual"]) || 0, notes: row["Notes"]?.trim() || "" });
                         }
 
@@ -390,12 +406,8 @@ export default function FinancePage() {
                         <div><label style={lbl}>Category</label>
                           <select style={inp} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required>
                             <option value="">Select</option>
-                            {COMMON_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-                            <option value="__custom">Other (type below)</option>
+                            {validCats.map((c) => <option key={c}>{c}</option>)}
                           </select>
-                          {bdCategory === "__custom" && (
-                            <input style={{ ...inp, marginTop: "4px" }} value="" onChange={(e) => setBdCategory(e.target.value)} placeholder="Type custom category" autoFocus />
-                          )}
                         </div>
                         <div><label style={lbl}>Budgeted (PKR)</label>
                           <input type="number" style={inp} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" />
@@ -407,10 +419,10 @@ export default function FinancePage() {
                           <input style={inp} value={bdNotes} onChange={(e) => setBdNotes(e.target.value)} placeholder="Optional" />
                         </div>
                       </div>
-                      <button type="submit" disabled={bdSaving || bdCategory === "__custom"} style={{
+                      <button type="submit" disabled={bdSaving} style={{
                         backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "5px",
                         padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", marginTop: "8px",
-                        opacity: bdSaving || bdCategory === "__custom" ? 0.5 : 1,
+                        opacity: bdSaving ? 0.5 : 1,
                       }}>{bdSaving ? "Saving..." : "Save"}</button>
                     </form>
                   )}
