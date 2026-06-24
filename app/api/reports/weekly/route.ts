@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     // Build HTML report
     const html = `
-      <h2 style="color:#1e293b;margin:0 0 12px">Weekly Pulse Report</h2>
+      <h2 style="color:#1e293b;margin:0 0 12px">Weekly Report</h2>
       <p style="color:#64748b;font-size:14px">Week ending ${today} (from ${since})</p>
 
       <h3 style="color:#1e293b;border-left:3px solid #1e293b;padding-left:8px;margin:20px 0 8px">Tasks</h3>
@@ -93,11 +93,11 @@ export async function GET(request: NextRequest) {
       if (!admin.email) continue;
       await sendNotificationEmail({
         to: admin.email,
-        subject: `Weekly Pulse Report — ${today}`,
+        subject: `Weekly Report — ${today}`,
         heading: `Weekly Report for ${admin.first_name || admin.name || "Team"}`,
         body: html,
         linkUrl: `${APP_URL}/executive`,
-        linkLabel: "Open Pulse Dashboard",
+        linkLabel: "Open Unze Group Dashboard",
         triggerType: "weekly_report",
         recipientName: admin.first_name || admin.name || admin.email,
       });

@@ -10,7 +10,7 @@ export function taskReminderMessage(description: string, dueDate: string | null,
   let msg = `Task Reminder: ${description}`;
   if (dueDate) msg += `\nDue: ${dueDate}`;
   if (assignedBy) msg += `\nAssigned by: ${assignedBy}`;
-  msg += `\n\nPlease check Unze Pulse Dashboard for details.`;
+  msg += `\n\nPlease check Unze Group Dashboard for details.`;
   return msg;
 }
 
@@ -18,6 +18,6 @@ export function taskChaseMessage(description: string, assignedTo: string | null,
   let msg = `Hi ${assignedTo || "there"}, this is a reminder about your task:`;
   msg += `\n\n${description}`;
   if (dueDate) msg += `\nDue: ${dueDate}`;
-  msg += `\n\nPlease update the status on Unze Pulse Dashboard.`;
+  msg += `\n\nPlease update the status on Unze Group Dashboard.`;
   return msg;
 }

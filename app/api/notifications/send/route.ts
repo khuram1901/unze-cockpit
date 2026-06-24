@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
         triggerRecordId: taskId,
         recipientName: memberName,
         whatsAppPhone: member.notify_whatsapp ? member.phone_e164 : null,
-        whatsAppMessage: `New task assigned: ${task.description?.slice(0, 100)}. Priority: ${task.priority}. Check Pulse Dashboard for details.`,
+        whatsAppMessage: `New task assigned: ${task.description?.slice(0, 100)}. Priority: ${task.priority}. Check the dashboard for details.`,
       });
 
       return Response.json({ success: true });
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
         triggerRecordId: taskId,
         recipientName: memberName,
         whatsAppPhone: member.notify_whatsapp ? member.phone_e164 : null,
-        whatsAppMessage: `Escalation: ${task.description?.slice(0, 100)}. Please check Pulse Dashboard and respond.`,
+        whatsAppMessage: `Escalation: ${task.description?.slice(0, 100)}. Please check the dashboard and respond.`,
       });
 
       return Response.json({ success: true });

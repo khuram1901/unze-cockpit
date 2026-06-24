@@ -370,7 +370,7 @@ export default function AuthWrapper({
                   paddingLeft: "14px",
                 }}
               >
-                Pulse
+                Unze Group
               </span>
             )}
           </div>

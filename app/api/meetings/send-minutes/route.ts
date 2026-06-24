@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
           ${actionsHtml}
         `,
         linkUrl: process.env.NEXT_PUBLIC_APP_URL || "https://unze-cockpit.vercel.app",
-        linkLabel: "Open Pulse Dashboard",
+        linkLabel: "Open Unze Group Dashboard",
         triggerType: "meeting_minutes",
         recipientName: email,
       });

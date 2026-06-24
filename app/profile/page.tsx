@@ -77,7 +77,7 @@ export default function ProfilePage() {
     setMessage("");
     const { data, error } = await supabase.auth.mfa.enroll({
       factorType: "totp",
-      friendlyName: "Unze Pulse Authenticator",
+      friendlyName: "Unze Group Dashboard Authenticator",
     });
 
     if (error) {

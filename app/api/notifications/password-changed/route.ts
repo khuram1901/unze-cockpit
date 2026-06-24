@@ -23,17 +23,17 @@ export async function POST(request: NextRequest) {
 
     await sendNotificationEmail({
       to: email,
-      subject: "Password Changed - Unze Pulse Dashboard",
+      subject: "Password Changed - Unze Group Dashboard",
       heading: "Your Password Was Changed",
       body: `
         <p>Hi <strong>${memberName}</strong>,</p>
-        <p>Your password for the Unze Pulse Dashboard was successfully changed on <strong>${timeStr} (PKT)</strong>.</p>
+        <p>Your password for the Unze Group Dashboard was successfully changed on <strong>${timeStr} (PKT)</strong>.</p>
         <p style="background:#fef2f2;padding:12px;border-radius:6px;border-left:3px solid #dc2626;font-size:14px">
           If you did not make this change, please contact your administrator immediately and reset your password.
         </p>
       `,
       linkUrl: process.env.NEXT_PUBLIC_APP_URL || "https://unze-cockpit.vercel.app",
-      linkLabel: "Open Pulse Dashboard",
+      linkLabel: "Open Unze Group Dashboard",
       triggerType: "password_changed",
       recipientName: memberName,
     });
