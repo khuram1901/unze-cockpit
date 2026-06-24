@@ -61,15 +61,29 @@ export default function ImportExportButtons({ onExport, onImport, templateHeader
     if (!file) return;
     setImporting(true);
     try {
-      const text = await file.text();
-      const rows = parseCSV(text);
+      let rows: Record<string, string>[] = [];
+      if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
+        const XLSX = await import("xlsx");
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer);
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
+        rows = data.map((r) => {
+          const out: Record<string, string> = {};
+          for (const [k, v] of Object.entries(r)) out[k] = String(v);
+          return out;
+        });
+      } else {
+        const text = await file.text();
+        rows = parseCSV(text);
+      }
       if (rows.length === 0) {
-        alert("No data rows found in the CSV. Make sure the first row is headers.");
+        alert("No data rows found. Make sure the first row is headers.");
       } else {
         onImport(rows);
       }
     } catch {
-      alert("Failed to read the CSV file.");
+      alert("Failed to read the file.");
     }
     setImporting(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -102,7 +116,7 @@ export default function ImportExportButtons({ onExport, onImport, templateHeader
             <path d="M8 10V2M5 5l3-3 3 3M3 12h10" />
           </svg>
         </button>
-        <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} style={{ display: "none" }} />
+        <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} style={{ display: "none" }} />
       </div>
 
       {/* Download template */}

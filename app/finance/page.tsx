@@ -9,6 +9,7 @@ import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { logAction } from "../lib/audit-log";
+import * as XLSX from "xlsx";
 
 type Budget = {
   id: string;
@@ -31,6 +32,53 @@ function deptsForCompany(companyId: string): string[] {
 }
 
 const COMMON_CATEGORIES = ["Salaries", "Utilities", "Rent", "Travel", "Software", "Maintenance", "Raw Materials", "Freight", "Insurance", "Marketing", "Professional Fees", "Miscellaneous"];
+
+function downloadBudgetTemplate() {
+  const wb = XLSX.utils.book_new();
+
+  const dataRows = [
+    ["Company", "Department", "Category", "Budgeted", "Actual", "Notes"],
+    ["UTPL", "Finance", "Salaries", 0, 0, ""],
+    ["IFPL", "Finance", "Salaries", 0, 0, ""],
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(dataRows);
+  ws1["!cols"] = [{ wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 25 }];
+  XLSX.utils.book_append_sheet(wb, ws1, "Budget Data");
+
+  const notesRows = [
+    ["Department Budget Template — Instructions"],
+    [""],
+    ["Company Codes"],
+    ["UTPL", "Unze Trading PVT Limited"],
+    ["IFPL", "Imperial Footwear PVT Limited"],
+    [""],
+    ["Valid Departments per Company"],
+    ["UTPL", "Finance, HR, Admin, IT, Tax, Legal, Sales, Audit, Unze Trading Ops"],
+    ["IFPL", "Finance, HR, Admin, IT, Tax, Legal, Sales, Audit"],
+    [""],
+    ["Suggested Categories"],
+    ...COMMON_CATEGORIES.map((c) => [c]),
+    [""],
+    ["How to Use"],
+    ["1. Go to the 'Budget Data' sheet"],
+    ["2. Enter one row per department + category combination"],
+    ["3. Use the Company codes above (UTPL or IFPL)"],
+    ["4. Use exact Department names as listed above"],
+    ["5. Budgeted and Actual amounts are in PKR"],
+    ["6. Delete the example rows and add your own"],
+    ["7. Save and upload on the Finance page"],
+    [""],
+    ["Notes"],
+    ["- Duplicate rows (same company + department + category) will update existing entries"],
+    ["- Categories not in the suggested list are accepted — use any name you like"],
+    ["- Departments must match exactly (case-sensitive)"],
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(notesRows);
+  ws2["!cols"] = [{ wch: 25 }, { wch: 60 }];
+  XLSX.utils.book_append_sheet(wb, ws2, "Instructions");
+
+  XLSX.writeFile(wb, "dept-budget-template.xlsx");
+}
 
 function companyShortName(companyId: string): string {
   const c = COMPANIES.find((x) => x.id === companyId);
@@ -293,21 +341,14 @@ export default function FinancePage() {
                         loadBudgets();
                       }}
                       templateHeaders={["Company", "Department", "Category", "Budgeted", "Actual", "Notes"]}
-                      templateRows={[
-                        ["--- INSTRUCTIONS ---", "", "", "", "", ""],
-                        ["Company codes:", "UTPL = Unze Trading", "IFPL = Imperial Footwear", "", "", ""],
-                        ["UTPL departments:", "Finance, HR, Admin, IT, Tax, Legal, Sales, Audit, Unze Trading Ops", "", "", "", ""],
-                        ["IFPL departments:", "Finance, HR, Admin, IT, Tax, Legal, Sales, Audit", "", "", "", ""],
-                        ["Categories:", "Salaries, Utilities, Rent, Travel, Software, Maintenance, Raw Materials, Freight, Insurance, Marketing, Professional Fees, Miscellaneous", "", "", "", ""],
-                        ["Notes:", "Delete these instruction rows before importing. Duplicate company+dept+category rows update existing entries.", "", "", "", ""],
-                        ["--- DATA BELOW ---", "", "", "", "", ""],
-                        ["UTPL", "Finance", "Salaries", "0", "0", "Example — delete or edit"],
-                        ["IFPL", "Finance", "Salaries", "0", "0", "Example — delete or edit"],
-                      ]}
                       templateFilename="dept-budget-import-template.csv"
                       exportLabel="Export"
                       importLabel="Import"
                     />
+                    <button onClick={downloadBudgetTemplate} style={{
+                      backgroundColor: "white", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`,
+                      borderRadius: "6px", padding: "6px 10px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                    }} title="Download Excel template with instructions">Template</button>
                   </div>
 
                   {bdMsg && (
