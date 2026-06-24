@@ -125,8 +125,42 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      if (pdfAttachments.length < 2) {
-        results.push({ messageId: msg.id, status: `skipped — found ${pdfAttachments.length} PDF(s), need 2` });
+      if (pdfAttachments.length === 0) {
+        results.push({ messageId: msg.id, status: "skipped — no PDF attachments" });
+        continue;
+      }
+
+      // Single PDF — just cash flow, save without bank reconciliation
+      if (pdfAttachments.length === 1) {
+        try {
+          const cashFlow = await parseCashFlowPDF(pdfAttachments[0].data);
+          const positionDate = cashFlow.date;
+          if (!positionDate) {
+            results.push({ messageId: msg.id, status: "error — no date found in PDF" });
+            continue;
+          }
+          if (existingDates.has(positionDate)) {
+            results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate });
+            continue;
+          }
+          const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
+          await supabase.from("daily_cash_position").upsert({
+            company_id: companyId,
+            position_date: positionDate,
+            opening_balance: cashFlow.openingBalanceTotal,
+            total_receipts: cashFlow.receiptsTotal,
+            total_payments: cashFlow.paymentsTotal,
+            closing_balance: cashFlow.closingBalanceUnzeTrading,
+            post_dated_total: cashFlow.loanPostDatedCHQs,
+            closing_after_post_dated: cashFlow.closingAfterLoanPostDated,
+            raw_pdf_filename: pdfAttachments[0].filename,
+            uploaded_by: "gmail-auto",
+          }, { onConflict: "company_id,position_date" });
+          existingDates.add(positionDate);
+          results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (single PDF)`, date: positionDate });
+        } catch (e) {
+          results.push({ messageId: msg.id, status: `error — ${e instanceof Error ? e.message : "parse failed"}` });
+        }
         continue;
       }
 
