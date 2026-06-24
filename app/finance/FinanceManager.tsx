@@ -34,6 +34,13 @@ type DailyPosition = {
   closing_after_post_dated: number;
 };
 
+type DeptBudget = { id: string; department: string; budget_month: string; category: string; budgeted_amount: number; actual_amount: number; notes: string | null };
+
+const COMPANY_DEPTS: Record<string, string[]> = {
+  "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit", "Unze Trading Ops"],
+  "77921705-8a15-4406-847a-b234f84b5ec3": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"],
+};
+
 const NAVY = COLOURS.NAVY;
 const SLATE = COLOURS.SLATE;
 const BORDER = COLOURS.BORDER;
@@ -96,6 +103,17 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [mfMonth, setMfMonth] = useState(currentMonthISO());
   const [mfAmount, setMfAmount] = useState("");
   const [mfSaving, setMfSaving] = useState(false);
+
+  const [budgets, setBudgets] = useState<DeptBudget[]>([]);
+  const [showBudgets, setShowBudgets] = useState(false);
+  const [showBudgetForm, setShowBudgetForm] = useState(false);
+  const [budgetMonth, setBudgetMonth] = useState(currentMonthISO());
+  const [bdDept, setBdDept] = useState("");
+  const [bdCategory, setBdCategory] = useState("");
+  const [bdBudgeted, setBdBudgeted] = useState("");
+  const [bdActual, setBdActual] = useState("");
+  const [bdNotes, setBdNotes] = useState("");
+  const [bdSaving, setBdSaving] = useState(false);
 
   async function handleForecastUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -251,6 +269,36 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     setPlan(planRes.data || null);
     setPositions(posRes.data || []);
     setLoading(false);
+  }
+
+  async function loadBudgets(month?: string) {
+    const { data } = await supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", month || budgetMonth).order("department");
+    setBudgets(data || []);
+  }
+
+  async function handleAddBudget(e: React.FormEvent) {
+    e.preventDefault();
+    setBdSaving(true);
+    const { error } = await supabase.from("department_budgets").upsert({
+      company_id: companyId, department: bdDept, budget_month: budgetMonth, category: bdCategory,
+      budgeted_amount: Number(bdBudgeted) || 0, actual_amount: Number(bdActual) || 0, notes: bdNotes || null,
+    }, { onConflict: "company_id,department,budget_month,category" });
+    setBdSaving(false);
+    if (error) { setMsg("Error: " + error.message); return; }
+    logAction("Created", "department_budgets", `${bdDept} ${bdCategory} ${budgetMonth}`);
+    setBdCategory(""); setBdBudgeted(""); setBdActual(""); setBdNotes("");
+    loadBudgets();
+  }
+
+  async function updateBudgetActual(id: string, value: number) {
+    await supabase.from("department_budgets").update({ actual_amount: value }).eq("id", id);
+    loadBudgets();
+  }
+
+  async function deleteBudgetEntry(id: string) {
+    if (!confirm("Delete this budget entry?")) return;
+    await supabase.from("department_budgets").delete().eq("id", id);
+    loadBudgets();
   }
 
   useEffect(() => {
@@ -1059,6 +1107,118 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             </table>
           </div>
         )}
+      </div>
+
+      {/* ── DEPARTMENT BUDGETS ── */}
+      <div style={{ marginTop: "16px" }}>
+        <div onClick={() => { setShowBudgets(!showBudgets); if (!showBudgets) loadBudgets(); }} style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
+          border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px 16px",
+          backgroundColor: showBudgets ? NAVY : "white",
+        }}>
+          <div>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: showBudgets ? "white" : NAVY }}>Department Budgets</div>
+            <div style={{ fontSize: "12px", color: showBudgets ? "rgba(255,255,255,0.7)" : SLATE }}>Budgeted vs actual spending per department</div>
+          </div>
+          <span style={{ color: showBudgets ? "white" : SLATE, fontSize: "14px" }}>{showBudgets ? "▲" : "▼"}</span>
+        </div>
+
+        {showBudgets && (() => {
+          const validDepts = COMPANY_DEPTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
+          const totalB = budgets.reduce((s, b) => s + b.budgeted_amount, 0);
+          const totalA = budgets.reduce((s, b) => s + b.actual_amount, 0);
+          const groups = new Map<string, DeptBudget[]>();
+          for (const b of budgets) { if (!groups.has(b.department)) groups.set(b.department, []); groups.get(b.department)!.push(b); }
+
+          return (
+          <div style={{ border: `1px solid ${BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "white", padding: "14px" }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
+              <input type="month" value={budgetMonth} onChange={(e) => { setBudgetMonth(e.target.value); loadBudgets(e.target.value); }}
+                style={{ padding: "5px 8px", border: `1px solid ${BORDER}`, borderRadius: "5px", fontSize: "13px" }} />
+              <button onClick={() => setShowBudgetForm(!showBudgetForm)} style={{
+                backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px",
+                padding: "5px 12px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+              }}>{showBudgetForm ? "Cancel" : "+ Add"}</button>
+            </div>
+
+            {showBudgetForm && (
+              <form onSubmit={handleAddBudget} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "12px", backgroundColor: "#f8fafc" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr 1fr", gap: "6px", alignItems: "end" }}>
+                  <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Department</label>
+                    <select style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
+                      <option value="">Select</option>{validDepts.map((d) => <option key={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Category</label>
+                    <input style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required placeholder="e.g. Salaries" />
+                  </div>
+                  <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Budgeted (PKR)</label>
+                    <input type="number" style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" />
+                  </div>
+                  <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Actual (PKR)</label>
+                    <input type="number" style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdActual} onChange={(e) => setBdActual(e.target.value)} placeholder="0" />
+                  </div>
+                  <button type="submit" disabled={bdSaving} style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px", padding: "5px 10px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                    {bdSaving ? "..." : "Save"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {budgets.length > 0 && (
+              <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+                <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${BLUE}`, borderRadius: "6px", padding: "6px 12px" }}>
+                  <div style={{ fontSize: "11px", color: SLATE }}>Budgeted</div>
+                  <div style={{ fontSize: "15px", fontWeight: 800, color: BLUE }}>PKR {totalB.toLocaleString()}</div>
+                </div>
+                <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${totalA > totalB ? RED : GREEN}`, borderRadius: "6px", padding: "6px 12px" }}>
+                  <div style={{ fontSize: "11px", color: SLATE }}>Actual</div>
+                  <div style={{ fontSize: "15px", fontWeight: 800, color: totalA > totalB ? RED : GREEN }}>PKR {totalA.toLocaleString()}</div>
+                </div>
+                <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${totalB - totalA >= 0 ? GREEN : RED}`, borderRadius: "6px", padding: "6px 12px" }}>
+                  <div style={{ fontSize: "11px", color: SLATE }}>Variance</div>
+                  <div style={{ fontSize: "15px", fontWeight: 800, color: totalB - totalA >= 0 ? GREEN : RED }}>PKR {(totalB - totalA).toLocaleString()}</div>
+                </div>
+              </div>
+            )}
+
+            {Array.from(groups.entries()).map(([deptName, items]) => {
+              const dB = items.reduce((s, i) => s + i.budgeted_amount, 0);
+              const dA = items.reduce((s, i) => s + i.actual_amount, 0);
+              const over = dA > dB;
+              return (
+                <div key={deptName} style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${over ? RED : GREEN}`, borderRadius: "6px", overflow: "hidden", marginBottom: "8px" }}>
+                  <div style={{ padding: "6px 12px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{deptName}</span>
+                    <div style={{ fontSize: "11px", display: "flex", gap: "8px" }}>
+                      <span style={{ color: SLATE }}>Budget: PKR {dB.toLocaleString()}</span>
+                      <span style={{ fontWeight: 700, color: over ? RED : GREEN }}>Actual: PKR {dA.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  {items.map((b) => (
+                    <div key={b.id} style={{ padding: "5px 12px", borderBottom: `1px solid ${COLOURS.LIGHT}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{b.category}</span>
+                        {b.notes && <span style={{ fontSize: "11px", color: SLATE, marginLeft: "4px" }}>({b.notes})</span>}
+                      </div>
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", flexShrink: 0 }}>
+                        <span style={{ color: SLATE }}>PKR {b.budgeted_amount.toLocaleString()}</span>
+                        <input type="number" defaultValue={b.actual_amount} onBlur={(e) => { const v = Number(e.target.value); if (v !== b.actual_amount) updateBudgetActual(b.id, v); }}
+                          style={{ width: "80px", padding: "2px 5px", border: `1px solid ${BORDER}`, borderRadius: "3px", fontSize: "12px" }} title="Update actual" />
+                        {canEditAll && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: RED, fontSize: "14px", cursor: "pointer" }} title="Delete">×</button>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+
+            {budgets.length === 0 && (
+              <div style={{ padding: "12px", color: SLATE, textAlign: "center", fontSize: "14px" }}>No budget entries for {budgetMonth}.</div>
+            )}
+          </div>
+          );
+        })()}
       </div>
 
       {/* ── MODALS ── */}
