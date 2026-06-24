@@ -1405,13 +1405,13 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
               "Money In (MTD)",
               `PKR ${fmtMoney(actualReceiptsMTD)}`,
               plannedRecv > 0 ? `${Math.round(recvPct)}% of expected` : "No plan set",
-              recvStatus === "RED" ? "#dc2626" : "#16a34a"
+              plannedRecv > 0 ? (recvStatus === "RED" ? "#dc2626" : recvStatus === "AMBER" ? "#d97706" : "#16a34a") : "#2563eb"
             )}
             {summaryCard(
               "Money Out (MTD)",
               `PKR ${fmtMoney(actualPaymentsMTD)}`,
               plannedPay > 0 ? `${Math.round(payPct)}% of expected` : "No plan set",
-              payStatus === "RED" ? "#dc2626" : payStatus === "AMBER" ? "#d97706" : "#dc2626"
+              plannedPay > 0 ? (payStatus === "RED" ? "#dc2626" : payStatus === "AMBER" ? "#d97706" : "#16a34a") : "#2563eb"
             )}
           </div>
 
