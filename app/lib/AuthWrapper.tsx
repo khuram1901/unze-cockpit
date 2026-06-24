@@ -167,6 +167,9 @@ export default function AuthWrapper({
     if (isAdmin) {
       const { data: machines } = await supabase.from("machine_issues").select("id").eq("issue_status", "Down");
       if (machines && machines.length > 0) items.push({ label: "Machines down", count: machines.length, href: "/dashboard" });
+
+      const { data: pendingMins } = await supabase.from("pending_minutes").select("id").eq("status", "pending");
+      if (pendingMins && pendingMins.length > 0) items.push({ label: "Minutes pending", count: pendingMins.length, href: "/meetings" });
     }
 
     setNotifItems(items);
@@ -180,6 +183,7 @@ export default function AuthWrapper({
         .channel("notif-bell")
         .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => loadNotifications())
         .on("postgres_changes", { event: "*", schema: "public", table: "machine_issues" }, () => loadNotifications())
+        .on("postgres_changes", { event: "*", schema: "public", table: "pending_minutes" }, () => loadNotifications())
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }

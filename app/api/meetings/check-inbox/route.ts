@@ -10,14 +10,14 @@ export async function GET(request: NextRequest) {
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorised" }, { status: 401 });
   }
-  return handleCheckInbox();
+  return handleCheckInbox(true);
 }
 
 export async function POST(_request: NextRequest) {
-  return handleCheckInbox();
+  return handleCheckInbox(false);
 }
 
-async function handleCheckInbox() {
+async function handleCheckInbox(isCron: boolean) {
   try {
     const supabase = createServiceClient();
     const { data: notifToken } = await supabase
@@ -59,7 +59,7 @@ async function handleCheckInbox() {
       return Response.json({
         success: true,
         emails: [],
-        message: "No 'minutes-of-meeting' label found. Create a Gmail label called 'minutes-of-meeting' and set up a filter to auto-label forwarded minutes.",
+        message: "No 'minutes-of-meeting' label found. Create a Gmail label called 'minutes-of-meeting' and set up a filter to auto-label these emails.",
       });
     }
 
@@ -76,6 +76,7 @@ async function handleCheckInbox() {
     }
 
     const emails: { id: string; subject: string; from: string; date: string; text: string }[] = [];
+    let newPendingCount = 0;
 
     for (const msg of messageIds) {
       if (!msg.id) continue;
@@ -130,7 +131,6 @@ async function handleCheckInbox() {
         }
       }
 
-      // If no attachment text, use the email body
       if (!bodyText.trim()) {
         const extractPlainText = (parts: GmailPart[]): string => {
           for (const part of parts) {
@@ -147,7 +147,6 @@ async function handleCheckInbox() {
 
         bodyText = extractPlainText(allParts);
 
-        // Fallback: try top-level body
         if (!bodyText && fullMsg.data.payload?.body?.data) {
           bodyText = Buffer.from(fullMsg.data.payload.body.data, "base64url").toString("utf-8");
         }
@@ -155,11 +154,67 @@ async function handleCheckInbox() {
 
       if (bodyText.trim()) {
         emails.push({ id: msg.id, subject, from, date, text: bodyText.trim() });
+
+        // Auto-save to pending_minutes (dedup on gmail_message_id)
+        const { data: existing } = await supabase
+          .from("pending_minutes")
+          .select("id")
+          .eq("gmail_message_id", msg.id)
+          .maybeSingle();
+
+        if (!existing) {
+          const { error: insertErr } = await supabase
+            .from("pending_minutes")
+            .insert({
+              gmail_message_id: msg.id,
+              subject,
+              from_address: from,
+              email_date: date,
+              raw_text: bodyText.trim(),
+              status: "pending",
+            });
+
+          if (!insertErr) newPendingCount++;
+        }
       }
 
+      // Mark as read
+      await gmail.users.messages.modify({
+        userId: "me",
+        id: msg.id,
+        requestBody: { removeLabelIds: ["UNREAD"] },
+      });
     }
 
-    return Response.json({ success: true, emails });
+    // Send notifications for new pending minutes (cron only)
+    if (isCron && newPendingCount > 0) {
+      const { data: admins } = await supabase
+        .from("members")
+        .select("email, role")
+        .in("role", ["Admin", "Executive"]);
+
+      const notifyEmails = new Set((admins || []).map((a) => a.email));
+      notifyEmails.add("pa.ceo@unze.co.uk");
+
+      for (const recipientEmail of notifyEmails) {
+        await supabase.from("notifications").insert({
+          user_email: recipientEmail,
+          type: "pending_minutes",
+          title: `${newPendingCount} new meeting minutes awaiting review`,
+          body: `${newPendingCount} new minutes email${newPendingCount > 1 ? "s have" : " has"} been received. Review and approve on the Meetings page.`,
+          link: "/meetings",
+        });
+      }
+    }
+
+    return Response.json({
+      success: true,
+      emails,
+      newPending: newPendingCount,
+      message: emails.length > 0
+        ? `Found ${emails.length} minutes email${emails.length !== 1 ? "s" : ""}${newPendingCount > 0 ? ` (${newPendingCount} new)` : ""}.`
+        : "No new minutes emails found.",
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Minutes inbox check error:", message);

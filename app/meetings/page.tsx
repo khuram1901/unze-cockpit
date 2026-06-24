@@ -11,6 +11,8 @@ import {
   SectionTitle,
   PageHeader,
   PriorityBadge,
+  StatusBadge,
+  CountCard,
   primaryButtonStyle,
   labelStyle,
   inputStyle,
@@ -40,7 +42,34 @@ type Meeting = {
   meeting_date: string;
   title: string;
   executive_summary: string | null;
+  decisions: string[] | null;
+  risks: string[] | null;
+  opportunities: string[] | null;
+  attendees: string[] | null;
+  department: string | null;
+  company: string | null;
   created_at: string;
+};
+
+type PendingMinute = {
+  id: string;
+  gmail_message_id: string;
+  subject: string | null;
+  from_address: string | null;
+  email_date: string | null;
+  raw_text: string;
+  status: string;
+  created_at: string;
+};
+
+type MeetingTask = {
+  id: string;
+  description: string;
+  assigned_to: string | null;
+  due_date: string | null;
+  priority: string | null;
+  status: string;
+  meeting_id: string | null;
 };
 
 function bestMatch(name: string, members: { name: string; email: string }[]): { name: string; email: string } | undefined {
@@ -80,21 +109,22 @@ export default function MeetingsPage() {
   const [memberDetails, setMemberDetails] = useState<{ name: string; role: string; department: string | null }[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
-  // Step tracking: extract → review → approve → send
   const [step, setStep] = useState<"input" | "review" | "approved">("input");
   const [showMinutesFlow, setShowMinutesFlow] = useState(false);
 
-  // Input method tab
   const [inputMethod, setInputMethod] = useState<"paste" | "upload" | "email">("paste");
   const [uploading, setUploading] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [emailResults, setEmailResults] = useState<{ id: string; subject: string; from: string; date: string; text: string }[]>([]);
 
-  // External attendee emails
   const [externalEmails, setExternalEmails] = useState("");
-
-  // Selected recipients for sending minutes
   const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set());
+
+  const [pendingMinutes, setPendingMinutes] = useState<PendingMinute[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [allTasks, setAllTasks] = useState<MeetingTask[]>([]);
+  const [activePendingId, setActivePendingId] = useState<string | null>(null);
+  const [groupBy, setGroupBy] = useState<"date" | "department">("date");
 
   useEffect(() => { loadData(); }, []);
 
@@ -123,10 +153,27 @@ export default function MeetingsPage() {
 
     const { data: meetingsData } = await supabase
       .from("meetings")
-      .select("id, meeting_date, title, executive_summary, created_at")
+      .select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at")
       .order("meeting_date", { ascending: false })
-      .limit(20);
+      .limit(50);
     setMeetings(meetingsData || []);
+
+    const { data: pendingData } = await supabase
+      .from("pending_minutes")
+      .select("*")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    setPendingMinutes(pendingData || []);
+
+    const { data: taskData } = await supabase
+      .from("tasks")
+      .select("id, description, assigned_to, due_date, priority, status, meeting_id")
+      .not("meeting_id", "is", null);
+    setAllTasks(taskData || []);
+  }
+
+  function getTasksForMeeting(meetingId: string): MeetingTask[] {
+    return allTasks.filter((t) => t.meeting_id === meetingId);
   }
 
   async function handleExtract() {
@@ -204,7 +251,7 @@ export default function MeetingsPage() {
         setMessage("Error: " + (data.error || "Inbox check failed"));
       } else if (data.emails && data.emails.length > 0) {
         setEmailResults(data.emails);
-        setMessage(`Found ${data.emails.length} unread minutes email${data.emails.length !== 1 ? "s" : ""}.`);
+        setMessage(`Found ${data.emails.length} minutes email${data.emails.length !== 1 ? "s" : ""}.`);
       } else {
         setMessage(data.message || "No new minutes emails found.");
       }
@@ -219,6 +266,29 @@ export default function MeetingsPage() {
     setInputMethod("paste");
     setEmailResults([]);
     setMessage("Email content loaded — review below and click Extract.");
+  }
+
+  async function handleReviewPending(pending: PendingMinute) {
+    setTranscript(pending.raw_text);
+    setInputMethod("paste");
+    setShowMinutesFlow(true);
+    setStep("input");
+    setActivePendingId(pending.id);
+    setMessage(`Loaded: "${pending.subject || "Untitled"}". Click Extract to process with AI.`);
+
+    await supabase
+      .from("pending_minutes")
+      .update({ status: "processing", reviewed_by: currentUserEmail })
+      .eq("id", pending.id);
+  }
+
+  async function handleDismissPending(pendingId: string) {
+    if (!confirm("Dismiss this minute? It won't appear in the pending list again.")) return;
+    await supabase
+      .from("pending_minutes")
+      .update({ status: "dismissed", reviewed_by: currentUserEmail, reviewed_at: new Date().toISOString() })
+      .eq("id", pendingId);
+    setPendingMinutes((prev) => prev.filter((p) => p.id !== pendingId));
   }
 
   async function handleApprove() {
@@ -240,6 +310,8 @@ export default function MeetingsPage() {
         risks: extracted.risks,
         opportunities: extracted.opportunities,
         attendees: extracted.attendees,
+        department: extracted.department || "General",
+        company: extracted.company || "General",
         raw_transcript: transcript,
         created_by: currentUserEmail,
       })
@@ -280,7 +352,6 @@ export default function MeetingsPage() {
           task_id: task.id,
         });
 
-        // Notify assignee
         if (memberMatch?.email) {
           fetch("/api/notifications/send", {
             method: "POST",
@@ -293,7 +364,6 @@ export default function MeetingsPage() {
       }
     }
 
-    // Link meeting to HOD attendees
     for (const attendee of extracted.attendees) {
       const match = bestMatch(attendee, memberEmails);
       if (match?.email) {
@@ -305,11 +375,18 @@ export default function MeetingsPage() {
       }
     }
 
+    if (activePendingId) {
+      await supabase
+        .from("pending_minutes")
+        .update({ status: "approved", meeting_id: meeting.id, reviewed_at: new Date().toISOString() })
+        .eq("id", activePendingId);
+      setActivePendingId(null);
+    }
+
     logAction("Created", "meetings", `${extracted.meeting_title} - ${tasksCreated} tasks created`, meeting.id);
     setMessage(`Approved: meeting saved and ${tasksCreated} task${tasksCreated !== 1 ? "s" : ""} created.`);
     setSaving(false);
 
-    // Pre-select all matched attendee emails + external emails
     const allRecipients = new Set<string>();
     for (const attendee of extracted.attendees) {
       const match = bestMatch(attendee, memberEmails);
@@ -368,7 +445,25 @@ export default function MeetingsPage() {
     setExternalEmails("");
     setMessage("");
     setShowMinutesFlow(false);
+    setActivePendingId(null);
   }
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const thisMonthMeetings = meetings.filter((m) => m.meeting_date.slice(0, 7) === currentMonth);
+  const openTasks = allTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+
+  const groupedMeetings = (() => {
+    if (groupBy === "department") {
+      const groups = new Map<string, Meeting[]>();
+      for (const m of meetings) {
+        const dept = m.department || m.company || "General";
+        if (!groups.has(dept)) groups.set(dept, []);
+        groups.get(dept)!.push(m);
+      }
+      return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+    }
+    return [["All Meetings", meetings] as [string, Meeting[]]];
+  })();
 
   return (
     <AuthWrapper>
@@ -376,7 +471,7 @@ export default function MeetingsPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
           <PageHeader
             title="Meeting Minutes"
-            subtitle="Paste, upload, or email minutes → AI extracts → Review → Approve → Send"
+            subtitle="Paste, upload, or email minutes — AI extracts — Review — Approve — Send"
           />
           <button onClick={() => setShowMinutesFlow(!showMinutesFlow)} style={{
             backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
@@ -397,12 +492,58 @@ export default function MeetingsPage() {
           </div>
         )}
 
+        {/* Summary strip */}
+        {!showMinutesFlow && (
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "8px", marginBottom: "14px" }}>
+            <CountCard label="Pending Review" value={pendingMinutes.length} color={pendingMinutes.length > 0 ? "#d97706" : COLOURS.SLATE} />
+            <CountCard label="This Month" value={thisMonthMeetings.length} color={COLOURS.NAVY} />
+            <CountCard label="Open Tasks" value={openTasks.length} color={openTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
+            <CountCard label="Total Meetings" value={meetings.length} color={COLOURS.BLUE} />
+          </div>
+        )}
+
+        {/* Pending Review */}
+        {pendingMinutes.length > 0 && !showMinutesFlow && (
+          <div style={{ marginBottom: "16px" }}>
+            <SectionTitle title={`Pending Review (${pendingMinutes.length})`} />
+            {pendingMinutes.map((p) => (
+              <div key={p.id} style={{
+                border: `1px solid ${COLOURS.BORDER}`,
+                borderLeft: `4px solid #d97706`,
+                borderRadius: "8px", padding: "12px 14px", backgroundColor: "white", marginBottom: "8px",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.NAVY }}>
+                      {p.subject || "Untitled Minutes"}
+                    </div>
+                    <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                      From: {p.from_address || "Unknown"}{p.email_date ? ` · ${p.email_date}` : ""}
+                    </div>
+                    <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                      {p.raw_text.slice(0, 150)}{p.raw_text.length > 150 ? "..." : ""}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                    <button onClick={() => handleReviewPending(p)} style={{
+                      ...primaryButtonStyle, padding: "6px 14px", fontSize: "14px",
+                    }}>Review</button>
+                    <button onClick={() => handleDismissPending(p.id)} style={{
+                      ...primaryButtonStyle, padding: "6px 14px", fontSize: "14px",
+                      backgroundColor: "white", color: COLOURS.SLATE, border: `1px solid ${COLOURS.BORDER}`,
+                    }}>Dismiss</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Step 1: Input */}
         {showMinutesFlow && step === "input" && (
           <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "white", marginBottom: "16px" }}>
             <SectionTitle title="Step 1: Add Minutes" />
 
-            {/* Input method tabs */}
             <div style={{ display: "flex", gap: "0", marginBottom: "16px", borderBottom: `2px solid ${COLOURS.BORDER}` }}>
               {([
                 { key: "paste" as const, label: "Paste Text" },
@@ -429,7 +570,6 @@ export default function MeetingsPage() {
               ))}
             </div>
 
-            {/* Paste tab */}
             {inputMethod === "paste" && (
               <>
                 <textarea
@@ -445,7 +585,6 @@ export default function MeetingsPage() {
               </>
             )}
 
-            {/* Upload tab */}
             {inputMethod === "upload" && (
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -462,7 +601,7 @@ export default function MeetingsPage() {
                 }}
               >
                 <div style={{ fontSize: "36px", marginBottom: "10px", opacity: 0.5 }}>
-                  {uploading ? "..." : "⬆️"}
+                  {uploading ? "..." : ""}
                 </div>
                 <p style={{ fontSize: "17px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "6px" }}>
                   {uploading ? "Reading file..." : dragging ? "Drop your file here" : "Drag & drop your file here"}
@@ -492,7 +631,6 @@ export default function MeetingsPage() {
               </div>
             )}
 
-            {/* Email tab */}
             {inputMethod === "email" && (
               <div style={{ padding: "8px 0" }}>
                 <div style={{ backgroundColor: "#f8fafc", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", marginBottom: "16px" }}>
@@ -765,7 +903,6 @@ export default function MeetingsPage() {
                 </div>
               </div>
 
-              {/* Internal attendees */}
               {extracted.attendees.map((a) => {
                 const match = bestMatch(a, memberEmails);
                 if (!match?.email) return (
@@ -783,7 +920,6 @@ export default function MeetingsPage() {
                 );
               })}
 
-              {/* External emails */}
               {externalEmails.trim() && externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).map((ext) => (
                 <label key={ext} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
                   <input type="checkbox" checked={selectedRecipients.has(ext)}
@@ -793,7 +929,6 @@ export default function MeetingsPage() {
                 </label>
               ))}
 
-              {/* Add extra recipient */}
               <div style={{ marginTop: "8px", display: "flex", gap: "6px", alignItems: "center" }}>
                 <input
                   type="email" placeholder="Add another email..."
@@ -827,53 +962,144 @@ export default function MeetingsPage() {
         })()}
 
         {/* Past meetings */}
-        {/* Meeting frequency chart */}
-        {meetings.length > 1 && (() => {
-          const monthMap = new Map<string, number>();
-          for (const m of meetings) {
-            const mo = m.meeting_date.slice(0, 7);
-            monthMap.set(mo, (monthMap.get(mo) || 0) + 1);
-          }
-          const chartData = Array.from(monthMap.entries()).sort().slice(-6).map(([month, count]) => ({ month, count }));
-          if (chartData.length < 2) return null;
-          return (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>Meeting Frequency</div>
-              <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", height: "80px" }}>
-                {chartData.map((d) => {
-                  const max = Math.max(...chartData.map((c) => c.count));
-                  const h = max > 0 ? (d.count / max) * 70 : 0;
-                  return (
-                    <div key={d.month} style={{ flex: 1, textAlign: "center" }}>
-                      <div style={{ backgroundColor: COLOURS.BLUE, borderRadius: "4px 4px 0 0", height: `${h}px`, marginBottom: "4px", display: "flex", alignItems: "flex-start", justifyContent: "center" }}>
-                        <span style={{ fontSize: "11px", fontWeight: 700, color: "white", padding: "2px" }}>{d.count}</span>
-                      </div>
-                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{d.month.slice(5)}/{d.month.slice(2, 4)}</div>
-                    </div>
-                  );
-                })}
+        {!showMinutesFlow && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <SectionTitle title="Past Meetings" />
+              <div style={{ display: "flex", gap: "4px" }}>
+                {(["date", "department"] as const).map((g) => (
+                  <button key={g} onClick={() => setGroupBy(g)} style={{
+                    padding: "4px 12px", fontSize: "13px", fontWeight: groupBy === g ? 700 : 500, borderRadius: "14px",
+                    border: `1px solid ${groupBy === g ? COLOURS.NAVY : COLOURS.BORDER}`,
+                    backgroundColor: groupBy === g ? COLOURS.NAVY : "white",
+                    color: groupBy === g ? "white" : COLOURS.SLATE, cursor: "pointer",
+                  }}>
+                    {g === "date" ? "By Date" : "By Department"}
+                  </button>
+                ))}
               </div>
             </div>
-          );
-        })()}
 
-        <SectionTitle title="Past Meetings" />
-        {meetings.length === 0 ? (
-          <p style={{ color: COLOURS.SLATE, fontSize: "16px" }}>No meetings recorded yet.</p>
-        ) : (
-          <div>
-            {meetings.map((m) => (
-              <div key={m.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "10px 12px", backgroundColor: "white", marginBottom: "6px" }}>
-                <div style={{ fontWeight: 700, fontSize: "16px", color: COLOURS.NAVY }}>{m.title}</div>
-                <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "2px" }}>{formatDateUK(m.meeting_date)}</div>
-                {m.executive_summary && (
-                  <div style={{ fontSize: "15px", color: COLOURS.SLATE, marginTop: "6px", lineHeight: 1.5 }}>
-                    {m.executive_summary.slice(0, 200)}{m.executive_summary.length > 200 ? "..." : ""}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+            {meetings.length === 0 ? (
+              <p style={{ color: COLOURS.SLATE, fontSize: "16px" }}>No meetings recorded yet.</p>
+            ) : (
+              groupedMeetings.map(([groupLabel, groupMeetings]) => (
+                <div key={groupLabel} style={{ marginBottom: "12px" }}>
+                  {groupBy === "department" && (
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, padding: "6px 0", borderBottom: `2px solid ${COLOURS.NAVY}`, marginBottom: "6px" }}>
+                      {groupLabel} ({groupMeetings.length})
+                    </div>
+                  )}
+                  {groupMeetings.map((m) => {
+                    const isOpen = expandedId === m.id;
+                    const mTasks = getTasksForMeeting(m.id);
+                    const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
+                    const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
+
+                    return (
+                      <div key={m.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "6px" }}>
+                        <div onClick={() => setExpandedId(isOpen ? null : m.id)} style={{
+                          padding: "10px 14px", cursor: "pointer",
+                          display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+                          backgroundColor: isOpen ? "#f8fafc" : "white",
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, minWidth: "80px" }}>{formatDateUK(m.meeting_date)}</span>
+                              <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{m.title}</span>
+                            </div>
+                            {mTasks.length > 0 && (
+                              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                                {completedTasks}/{mTasks.length} tasks done
+                                {openTaskCount > 0 && <span style={{ color: "#d97706", fontWeight: 700 }}> · {openTaskCount} open</span>}
+                              </div>
+                            )}
+                          </div>
+                          <span style={{ color: COLOURS.SLATE, fontSize: "13px", flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
+                        </div>
+
+                        {isOpen && (
+                          <div style={{ padding: "14px", borderTop: `1px solid ${COLOURS.BORDER}` }}>
+                            {m.executive_summary && (
+                              <div style={{ marginBottom: "12px" }}>
+                                <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Summary</div>
+                                <div style={{ fontSize: "14px", color: COLOURS.SLATE, lineHeight: 1.6 }}>{m.executive_summary}</div>
+                              </div>
+                            )}
+
+                            {m.attendees && m.attendees.length > 0 && (
+                              <div style={{ marginBottom: "12px" }}>
+                                <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Attendees</div>
+                                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                  {m.attendees.map((a, i) => (
+                                    <span key={i} style={{ fontSize: "12px", padding: "2px 8px", backgroundColor: COLOURS.LIGHT, borderRadius: "10px", color: COLOURS.NAVY }}>{a}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+                              {m.decisions && m.decisions.length > 0 && (
+                                <div>
+                                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.GREEN, marginBottom: "4px" }}>Decisions ({m.decisions.length})</div>
+                                  {m.decisions.map((d, i) => (
+                                    <div key={i} style={{ fontSize: "13px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {d}</div>
+                                  ))}
+                                </div>
+                              )}
+                              {m.risks && m.risks.length > 0 && (
+                                <div>
+                                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED, marginBottom: "4px" }}>Risks ({m.risks.length})</div>
+                                  {m.risks.map((r, i) => (
+                                    <div key={i} style={{ fontSize: "13px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {r}</div>
+                                  ))}
+                                </div>
+                              )}
+                              {m.opportunities && m.opportunities.length > 0 && (
+                                <div>
+                                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.BLUE, marginBottom: "4px" }}>Opportunities ({m.opportunities.length})</div>
+                                  {m.opportunities.map((o, i) => (
+                                    <div key={i} style={{ fontSize: "13px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {o}</div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: "#d97706", marginBottom: "6px" }}>
+                                Action Items ({mTasks.length})
+                              </div>
+                              {mTasks.length > 0 ? (
+                                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", overflow: "hidden" }}>
+                                  {mTasks.map((t) => (
+                                    <a key={t.id} href={`/tasks?task=${t.id}`} style={{
+                                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                                      padding: "8px 12px", borderBottom: `1px solid ${COLOURS.LIGHT}`,
+                                      textDecoration: "none", color: "inherit",
+                                    }}>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
+                                        <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                                          {t.assigned_to || "Unassigned"}{t.due_date ? ` · Due: ${formatDateUK(t.due_date)}` : ""}
+                                        </div>
+                                      </div>
+                                      <StatusBadge status={t.status} />
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: "14px", color: COLOURS.SLATE }}>No action items recorded.</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))
+            )}
+          </>
         )}
       </main>
     </AuthWrapper>
