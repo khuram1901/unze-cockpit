@@ -293,7 +293,17 @@ export default function FinancePage() {
                         loadBudgets();
                       }}
                       templateHeaders={["Company", "Department", "Category", "Budgeted", "Actual", "Notes"]}
-                      templateRows={[["UTPL", "Finance", "Salaries", "0", "0", "Example row — delete or edit"]]}
+                      templateRows={[
+                        ["--- INSTRUCTIONS ---", "", "", "", "", ""],
+                        ["Company codes:", "UTPL = Unze Trading", "IFPL = Imperial Footwear", "", "", ""],
+                        ["UTPL departments:", "Finance, HR, Admin, IT, Tax, Legal, Sales, Audit, Unze Trading Ops", "", "", "", ""],
+                        ["IFPL departments:", "Finance, HR, Admin, IT, Tax, Legal, Sales, Audit", "", "", "", ""],
+                        ["Categories:", "Salaries, Utilities, Rent, Travel, Software, Maintenance, Raw Materials, Freight, Insurance, Marketing, Professional Fees, Miscellaneous", "", "", "", ""],
+                        ["Notes:", "Delete these instruction rows before importing. Duplicate company+dept+category rows update existing entries.", "", "", "", ""],
+                        ["--- DATA BELOW ---", "", "", "", "", ""],
+                        ["UTPL", "Finance", "Salaries", "0", "0", "Example — delete or edit"],
+                        ["IFPL", "Finance", "Salaries", "0", "0", "Example — delete or edit"],
+                      ]}
                       templateFilename="dept-budget-import-template.csv"
                       exportLabel="Export"
                       importLabel="Import"
