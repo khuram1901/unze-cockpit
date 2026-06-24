@@ -88,12 +88,23 @@ export function SectionTitle({ title }: { title: string }) {
 export function PageHeader({
   title,
   subtitle,
+  hideHome,
 }: {
   title: string;
   subtitle?: string;
+  hideHome?: boolean;
 }) {
   return (
     <div style={{ marginBottom: "16px" }}>
+      {!hideHome && (
+        <a href="/home" style={{
+          display: "inline-flex", alignItems: "center", gap: "4px",
+          fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, textDecoration: "none",
+          marginBottom: "6px",
+        }}>
+          ← Home
+        </a>
+      )}
       <h1 style={{ fontSize: "24px", fontWeight: 800, color: COLOURS.NAVY, margin: 0 }}>
         {title}
       </h1>
