@@ -897,6 +897,7 @@ export default function ExecutiveDashboardPage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
+            <a href="/home" style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 600, color: SLATE, textDecoration: "none", marginBottom: "6px" }}>← Home</a>
             <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>{new Date().getHours() < 12 ? "Good Morning" : new Date().getHours() < 17 ? "Good Afternoon" : "Good Evening"}{userName ? ` ${userName}` : ""}</h1>
             <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px", maxWidth: "640px" }}>
               Exceptions surface automatically. If nothing needs your attention, everything is on track.
