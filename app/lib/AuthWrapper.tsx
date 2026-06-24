@@ -63,7 +63,6 @@ const SETTINGS_NAV: NavItem[] = [
   { label: "Members", href: "/members", allowedRoles: ["Admin", "Executive"] },
   { label: "Opening Balances", href: "/opening-balances", allowedRoles: ["Admin", "Executive"] },
   { label: "Recurring Tasks", href: "/recurring-tasks", allowedRoles: ["Admin", "Executive"] },
-  { label: "Dept Budgets", href: "/department-budgets", allowedRoles: ["Admin", "Executive"] },
   { label: "Exceptions", href: "/exceptions", allowedRoles: ["Admin", "Executive"] },
   { label: "Audit Log", href: "/audit-log", allowedRoles: ["Admin"] },
   { label: "My Profile", href: "/profile", allowedRoles: ["Admin", "Executive", "Manager", "Member"] },
