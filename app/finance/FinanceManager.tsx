@@ -366,7 +366,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     }
 
     setSaving(true);
-    const closingAfterPD = Number(dpClosing) - Number(dpPostDated);
+    const isImperial = companyId === "77921705-8a15-4406-847a-b234f84b5ec3";
+    const closingAfterPD = isImperial
+      ? Number(dpClosing) + Number(dpPostDated)
+      : Number(dpClosing) - Number(dpPostDated);
     const { error } = await supabase.from("daily_cash_position").upsert(
       {
         company_id: companyId,
