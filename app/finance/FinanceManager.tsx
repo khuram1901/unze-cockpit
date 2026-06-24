@@ -41,6 +41,8 @@ const COMPANY_DEPTS: Record<string, string[]> = {
   "77921705-8a15-4406-847a-b234f84b5ec3": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"],
 };
 
+const BUDGET_CATEGORIES = ["Salaries", "Utilities", "Rent", "Travel", "Software", "Maintenance", "Raw Materials", "Freight", "Insurance", "Marketing", "Professional Fees", "Miscellaneous"];
+
 const NAVY = COLOURS.NAVY;
 const SLATE = COLOURS.SLATE;
 const BORDER = COLOURS.BORDER;
@@ -1150,7 +1152,14 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                     </select>
                   </div>
                   <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Category</label>
-                    <input style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required placeholder="e.g. Salaries" />
+                    <select style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required>
+                      <option value="">Select</option>
+                      {BUDGET_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                      <option value="__custom">Other (type below)</option>
+                    </select>
+                    {bdCategory === "__custom" && (
+                      <input style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px", marginTop: "4px" }} value="" onChange={(e) => setBdCategory(e.target.value)} placeholder="Type custom category" autoFocus />
+                    )}
                   </div>
                   <div><label style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>Budgeted (PKR)</label>
                     <input type="number" style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" />

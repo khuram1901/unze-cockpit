@@ -293,26 +293,11 @@ export default function FinancePage() {
                         loadBudgets();
                       }}
                       templateHeaders={["Company", "Department", "Category", "Budgeted", "Actual", "Notes"]}
-                      templateRows={COMPANIES.flatMap((c) => deptsForCompany(c.id).flatMap((d) => COMMON_CATEGORIES.map((cat) => [c.shortCode, d, cat, "0", "0", ""])))}
+                      templateRows={[["UTPL", "Finance", "Salaries", "0", "0", "Example row — delete or edit"]]}
                       templateFilename="dept-budget-import-template.csv"
                       exportLabel="Export"
                       importLabel="Import"
                     />
-                  </div>
-
-                  {/* Help box */}
-                  <div style={{ backgroundColor: "#f8fafc", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px 12px", marginBottom: "12px", fontSize: "12px", color: COLOURS.SLATE, lineHeight: 1.7 }}>
-                    <div style={{ fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px", fontSize: "13px" }}>How to fill the template</div>
-                    <div style={{ marginBottom: "6px" }}>
-                      <strong>Company codes:</strong>{" "}
-                      {COMPANIES.map((c) => <span key={c.id}><strong>{c.shortCode}</strong> = {c.name}{" · "}</span>)}
-                    </div>
-                    <div style={{ marginBottom: "4px" }}>
-                      <strong>Suggested categories:</strong> Salaries, Utilities, Rent, Travel, Software, Maintenance, Raw Materials, Freight, Insurance, Marketing, Professional Fees, Miscellaneous
-                    </div>
-                    <div>
-                      <strong>Notes:</strong> Each row needs a Company code, Department, and Category. Budgeted and Actual are in PKR. If a department does not apply to a company, delete that row. Duplicate rows (same company + department + category) will update the existing entry.
-                    </div>
                   </div>
 
                   {bdMsg && (
@@ -329,7 +314,14 @@ export default function FinancePage() {
                           </select>
                         </div>
                         <div><label style={lbl}>Category</label>
-                          <input style={inp} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required placeholder="e.g. Salaries" />
+                          <select style={inp} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required>
+                            <option value="">Select</option>
+                            {COMMON_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                            <option value="__custom">Other (type below)</option>
+                          </select>
+                          {bdCategory === "__custom" && (
+                            <input style={{ ...inp, marginTop: "4px" }} value="" onChange={(e) => setBdCategory(e.target.value)} placeholder="Type custom category" autoFocus />
+                          )}
                         </div>
                         <div><label style={lbl}>Budgeted (PKR)</label>
                           <input type="number" style={inp} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" />
@@ -341,12 +333,18 @@ export default function FinancePage() {
                           <input style={inp} value={bdNotes} onChange={(e) => setBdNotes(e.target.value)} placeholder="Optional" />
                         </div>
                       </div>
-                      <button type="submit" disabled={bdSaving} style={{
+                      <button type="submit" disabled={bdSaving || bdCategory === "__custom"} style={{
                         backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "5px",
                         padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", marginTop: "8px",
+                        opacity: bdSaving || bdCategory === "__custom" ? 0.5 : 1,
                       }}>{bdSaving ? "Saving..." : "Save"}</button>
                     </form>
                   )}
+
+                  {/* Company codes reference */}
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "8px" }}>
+                    {COMPANIES.map((c) => <span key={c.id} style={{ marginRight: "10px" }}><strong>{c.shortCode}</strong> = {c.name}</span>)}
+                  </div>
 
                   {/* Summary cards */}
                   {budgets.length > 0 && (
