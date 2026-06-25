@@ -43,7 +43,7 @@ const MAIN_NAV: NavItem[] = [
   { label: "Calendar", href: "/calendar", allowedRoles: ["Manager", "Member"] },
   { label: "My Minutes", href: "/my-minutes", allowedRoles: ["Manager"] },
   { label: "Daily Entry", href: "/production", allowedRoles: ["Manager", "Member"], managerDepartments: ["Unze Trading Ops"] },
-  { label: "Receivables", href: "/receivables", allowedRoles: ["Manager"], managerDepartments: ["Unze Trading Ops"] },
+  { label: "Receivables", href: "/receivables", allowedRoles: ["Manager"], managerDepartments: ["Unze Trading Ops", "Finance"] },
   { label: "Finance", href: "/finance", allowedRoles: ["Manager"], financeManagerException: true },
   { label: "My Profile", href: "/profile", allowedRoles: ["Manager", "Member"] },
 ];
@@ -237,6 +237,7 @@ export default function AuthWrapper({
 
   const currentRole = member?.role || "Member";
   const currentDepartment = member?.department || null;
+  const displayRoleLabel = email === "k.saleem@unzegroup.com" ? "CEO" : currentRole;
 
   // Filter main nav items
   const visibleMainNav = MAIN_NAV.filter((item) => {
@@ -263,8 +264,10 @@ export default function AuthWrapper({
   const canSeeSettings = visibleSettingsNav.length > 0;
 
   const roleColor =
-    currentRole === "Admin"
+    email === "k.saleem@unzegroup.com"
       ? "#2563eb"
+      : currentRole === "Admin"
+      ? "#111827"
       : currentRole === "Executive"
       ? "#7c3aed"
       : currentRole === "Manager"
@@ -404,7 +407,7 @@ export default function AuthWrapper({
                     flexShrink: 0,
                   }}
                 >
-                  {currentRole}
+                  {displayRoleLabel}
                 </span>
               </>
             )}

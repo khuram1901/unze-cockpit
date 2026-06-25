@@ -447,8 +447,8 @@ export default function DashboardView() {
         {/* Plant Comparison Chart */}
         {summaries.length > 0 && (
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Plant Comparison — This Month</div>
-            <ResponsiveContainer width="100%" height={Math.max(160, summaries.length * 40)}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Plant Comparison — This Month</div>
+            <ResponsiveContainer width="100%" height={Math.max(220, summaries.length * 55)}>
               <BarChart
                 data={summaries.map((s) => ({
                   name: s.plant.name.replace(" Plant", ""),
@@ -460,10 +460,10 @@ export default function DashboardView() {
                 margin={{ left: 5, right: 10, top: 0, bottom: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: SLATE }} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: NAVY, fontWeight: 600 }} width={70} />
+                <XAxis type="number" tick={{ fontSize: 13, fill: SLATE }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 14, fill: NAVY, fontWeight: 600 }} width={80} />
                 <Tooltip formatter={(value) => Number(value).toLocaleString()} />
-                <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
+                <Legend iconType="square" wrapperStyle={{ fontSize: "14px" }} />
                 <Bar dataKey="Target" fill="#cbd5e1" name="Target (grey)" radius={[0, 4, 4, 0]} />
                 <Bar dataKey="Produced" fill="#16a34a" name="Produced (green)" radius={[0, 4, 4, 0]} />
                 <Bar dataKey="Dispatched" fill="#059669" name="Dispatched (teal)" radius={[0, 4, 4, 0]} />
@@ -474,16 +474,16 @@ export default function DashboardView() {
 
         {/* Breakage Rate Gauges */}
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
-            Breakage Rate by Plant <span style={{ fontSize: "12px", fontWeight: 400, color: SLATE }}>(limit: 1.5%)</span>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+            Breakage Rate by Plant <span style={{ fontSize: "13px", fontWeight: 400, color: SLATE }}>(limit: 1.5%)</span>
           </div>
           {summaries.map((s) => {
             const rate = s.breakageRate;
             const color = s.breakageStatus === "red" ? "#dc2626" : s.breakageStatus === "amber" ? "#d97706" : "#16a34a";
             const width = s.breakageStatus === "none" ? 0 : Math.min(rate / 3 * 100, 100);
             return (
-              <div key={s.plant.id} style={{ marginBottom: "10px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "3px" }}>
+              <div key={s.plant.id} style={{ marginBottom: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", marginBottom: "4px" }}>
                   <span style={{ fontWeight: 600, color: NAVY }}>{s.plant.name.replace(" Plant", "")}</span>
                   <span style={{ fontWeight: 700, color }}>
                     {s.breakageStatus === "none" ? "No data" : `${rate.toFixed(2)}%`}
@@ -711,17 +711,17 @@ function SectionTitle({ title }: { title: string }) {
 
 function Card({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
-      <div style={{ color: SLATE, fontSize: "15px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
-      <div style={{ fontSize: "19px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
+    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "10px 12px", backgroundColor: "white" }}>
+      <div style={{ color: SLATE, fontSize: "14px", marginBottom: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+      <div style={{ fontSize: "22px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
     </div>
   );
 }
 
 const squareGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(118px, 1fr))",
-  gap: "8px",
+  gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+  gap: "10px",
   marginBottom: "24px",
 };
 
