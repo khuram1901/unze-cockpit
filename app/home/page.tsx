@@ -190,7 +190,7 @@ export default function HomePage() {
         <div style={{
           backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.NAVY}`,
           borderRadius: "8px", padding: isMobile ? "12px 14px" : "14px 20px", marginBottom: "16px",
-          fontSize: isMobile ? "13px" : "15px", color: COLOURS.SLATE, lineHeight: 1.7, fontStyle: "italic",
+          fontSize: isMobile ? "13px" : "15px", color: COLOURS.NAVY, lineHeight: 1.7, fontStyle: "italic", fontWeight: 600,
         }}>
           &ldquo;Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.&rdquo;
         </div>

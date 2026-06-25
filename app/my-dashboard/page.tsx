@@ -120,7 +120,7 @@ export default function MyDashboardPage() {
             <div style={{
               backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.NAVY}`,
               borderRadius: "8px", padding: isMobile ? "10px 12px" : "12px 18px", marginBottom: "14px",
-              fontSize: isMobile ? "12px" : "14px", color: COLOURS.SLATE, lineHeight: 1.7, fontStyle: "italic",
+              fontSize: isMobile ? "12px" : "14px", color: COLOURS.NAVY, lineHeight: 1.7, fontStyle: "italic", fontWeight: 600,
             }}>
               &ldquo;Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.&rdquo;
             </div>
