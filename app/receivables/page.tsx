@@ -154,6 +154,31 @@ export default function ReceivablesPage() {
     return workingDaysSince(b.current_stage_entered_date) >= stage.working_day_budget;
   });
 
+  // Build customer summary (same logic as executive dashboard)
+  const customerRows = (() => {
+    type CustRow = { customer: string; greenAmount: number; amberAmount: number; redAmount: number; totalAmount: number; redCount: number };
+    const map = new Map<string, CustRow>();
+    for (const bill of bills) {
+      const key = bill.utility || "Unknown";
+      if (!map.has(key)) map.set(key, { customer: key, greenAmount: 0, amberAmount: 0, redAmount: 0, totalAmount: 0, redCount: 0 });
+      const row = map.get(key)!;
+      const stage = stages.find((s) => s.stage_order === bill.current_stage_order);
+      const elapsed = workingDaysSince(bill.current_stage_entered_date);
+      const budget = stage?.working_day_budget || 0;
+      const rag = budget <= 0 ? "green" : elapsed >= budget ? "red" : elapsed >= budget - 1 ? "amber" : "green";
+      const amt = Number(bill.amount) || 0;
+      row.totalAmount += amt;
+      if (rag === "green") row.greenAmount += amt;
+      else if (rag === "amber") row.amberAmount += amt;
+      else { row.redAmount += amt; row.redCount += 1; }
+    }
+    return Array.from(map.values()).sort((a, b) => b.redAmount - a.redAmount || b.totalAmount - a.totalAmount);
+  })();
+  const recGreen = customerRows.reduce((s, r) => s + r.greenAmount, 0);
+  const recAmber = customerRows.reduce((s, r) => s + r.amberAmount, 0);
+  const recRed = customerRows.reduce((s, r) => s + r.redAmount, 0);
+  const recRedCount = customerRows.reduce((s, r) => s + r.redCount, 0);
+
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
@@ -226,6 +251,50 @@ export default function ReceivablesPage() {
             <CountCard label="Total Bills" value={bills.length} color={COLOURS.BLUE} />
             <CountCard label="Total Amount" value={Math.round(totalAmount)} color={COLOURS.NAVY} />
             <CountCard label="Stuck" value={stuckBills.length} color={stuckBills.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
+          </div>
+        )}
+
+        {/* Bills in Progress — Customer Summary */}
+        {!loading && customerRows.length > 0 && (
+          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, marginBottom: "10px", color: COLOURS.NAVY }}>
+              Bills in Progress: <span style={{ color: recRed > 0 ? COLOURS.RED : COLOURS.GREEN }}>{recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "8px", marginBottom: "12px" }}>
+              {[
+                { label: "Total Tracked", value: totalAmount, color: COLOURS.BLUE },
+                { label: "On Time", value: recGreen, color: COLOURS.GREEN },
+                { label: "Due Soon", value: recAmber, color: "#d97706" },
+                { label: "Stuck", value: recRed, color: COLOURS.RED },
+              ].map((c) => (
+                <div key={c.label} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${c.color}`, borderRadius: "6px", padding: "6px 10px" }}>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{c.label}</div>
+                  <div style={{ fontSize: "16px", fontWeight: 800, color: c.color }}>PKR {c.value.toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "420px" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f8fafc" }}>
+                    {["Customer", "On Time", "Due Soon", "Stuck", "Total"].map((h) => (
+                      <th key={h} style={{ textAlign: "left", borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "6px 10px", fontSize: "13px", color: COLOURS.SLATE, fontWeight: 700 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {customerRows.map((r) => (
+                    <tr key={r.customer}>
+                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{r.customer}</td>
+                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", color: COLOURS.GREEN }}>{r.greenAmount.toLocaleString()}</td>
+                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", color: "#d97706" }}>{r.amberAmount.toLocaleString()}</td>
+                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", color: COLOURS.RED, fontWeight: r.redAmount > 0 ? 700 : 400 }}>{r.redAmount.toLocaleString()}</td>
+                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", fontWeight: 600 }}>{r.totalAmount.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
