@@ -82,6 +82,7 @@ export default function HomePage() {
       colour: COLOURS.NAVY,
       cards: [
         { title: "Executive Dashboard", subtitle: "Full company overview — operations, finance, tasks", href: "/executive", icon: "📊", badge: badges.executive },
+        { title: "Operations Dashboard", subtitle: "Production, dispatch, stock, machines", href: "/dashboard", icon: "🏭", badge: badges.operations },
       ],
     },
     {
