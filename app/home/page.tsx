@@ -137,7 +137,6 @@ export default function HomePage() {
       cards: [
         { title: "Operations Dashboard", subtitle: "Production, dispatch, stock, machines", href: "/dashboard", icon: "🏭", badge: badges.operations },
         { title: "Daily Entry", subtitle: "Log daily production and dispatch", href: "/production", icon: "📝" },
-        { title: "Monthly Targets", subtitle: "Set and track monthly production targets", href: "/monthly-operations-targets", icon: "🎯" },
         { title: "Receivables", subtitle: "Track bills in progress", href: "/receivables", icon: "💰", badge: badges.receivables },
       ],
     },

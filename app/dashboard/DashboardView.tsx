@@ -7,6 +7,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { downloadCSV } from "../lib/exportUtils";
+import MonthlyTargets from "./MonthlyTargets";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number };
@@ -594,6 +595,14 @@ export default function DashboardView() {
             </>
           )
         )}
+      </div>
+
+      {/* Monthly Targets */}
+      <div style={{ marginTop: "24px" }}>
+        <SectionTitle title="Monthly Targets" />
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+          <MonthlyTargets />
+        </div>
       </div>
     </div>
   );
