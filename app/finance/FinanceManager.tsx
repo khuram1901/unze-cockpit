@@ -583,7 +583,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             <>
               <p style={{ fontSize: "13px", color: SLATE, marginBottom: "8px" }}>Upload Cash Flow + Bank Position PDFs. System extracts, reconciles, and saves.</p>
               <form onSubmit={handlePDFUpload}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
                   <label style={{ ...labelStyle, fontSize: "13px" }}>Cash Flow PDF
                     <input type="file" accept=".pdf" onChange={(e) => setCashFlowFile(e.target.files?.[0] || null)} style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} />
                   </label>
@@ -633,7 +633,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 <label style={{ ...labelStyle, fontSize: "13px" }}>Date
                   <input type="date" value={dpDate} onChange={(e) => setDpDate(e.target.value)} style={inputStyle} required />
                 </label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
                   <label style={{ ...labelStyle, fontSize: "13px" }}>Opening (PKR)
                     <input type="number" value={dpOpening} onChange={(e) => setDpOpening(e.target.value)} placeholder="0" style={inputStyle} />
                   </label>
@@ -777,7 +777,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
             {showBudgetForm && (
               <form onSubmit={handleAddBudget} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "8px", marginBottom: "10px", backgroundColor: "#f8fafc" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px", alignItems: "end" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "4px", alignItems: "end" }}>
                   <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Department</label>
                     <select style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
                       <option value="">Select</option>{validDepts.map((d) => <option key={d}>{d}</option>)}

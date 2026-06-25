@@ -307,7 +307,7 @@ export default function CalendarPage() {
                 <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" }} value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Why do you need this meeting?" />
               </label>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
                 <label style={labelStyle}>
                   Type
                   <select style={inputStyle} value={meetingType} onChange={(e) => setMeetingType(e.target.value)}>
@@ -332,7 +332,7 @@ export default function CalendarPage() {
                 <input type="time" style={inputStyle} value={preferredTime} onChange={(e) => setPreferredTime(e.target.value)} />
               </label>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
                 <label style={labelStyle}>
                   Duration
                   <select style={inputStyle} value={duration} onChange={(e) => setDuration(e.target.value)}>

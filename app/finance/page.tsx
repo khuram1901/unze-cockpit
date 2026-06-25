@@ -9,6 +9,7 @@ import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { logAction } from "../lib/audit-log";
+import { useMobile } from "../lib/useMobile";
 import * as XLSX from "xlsx";
 
 type Budget = {
@@ -115,6 +116,7 @@ function companyShortName(companyId: string): string {
 
 export default function FinancePage() {
   const router = useRouter();
+  const isMobile = useMobile();
   const [loading, setLoading] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -243,7 +245,7 @@ export default function FinancePage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
         <PageHeader title="Finance" subtitle="Cash position, daily banking, forecasting, and budgets" />
 
         {showPicker && (
@@ -397,7 +399,7 @@ export default function FinancePage() {
                   {/* Add form */}
                   {showBudgetForm && (
                     <form onSubmit={handleAddBudget} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "12px", backgroundColor: "#f8fafc" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "6px" }}>
                         <div><label style={lbl}>Department</label>
                           <select style={inp} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
                             <option value="">Select</option>{validDepts.map((d) => <option key={d}>{d}</option>)}
