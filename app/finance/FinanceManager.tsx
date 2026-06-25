@@ -540,10 +540,10 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           onEdit={canEditAll ? openPlanModal : undefined}
         />
         <SummaryCard
-          label="Latest Closing"
-          value={latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}
+          label="Net Position"
+          value={latestPosition ? `PKR ${fmt(latestPosition.closing_after_post_dated)}` : "—"}
           sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
-          color={latestPosition && latestPosition.closing_balance < 0 ? RED : GREEN}
+          color={latestPosition && latestPosition.closing_after_post_dated < 0 ? RED : GREEN}
         />
       </div>
 
