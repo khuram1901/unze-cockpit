@@ -30,6 +30,11 @@ export default function ProfilePage() {
   });
   const [savingNotif, setSavingNotif] = useState(false);
 
+  // Push notifications
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+
   // Change password
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -69,7 +74,88 @@ export default function ProfilePage() {
         });
       }
     }
+    // Check push notification status
+    if (typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window) {
+      setPushSupported(true);
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        setPushEnabled(!!sub);
+      } catch {
+        setPushEnabled(false);
+      }
+    }
+
     setLoading(false);
+  }
+
+  async function enablePush() {
+    setPushLoading(true);
+    setMessage("");
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setMessage("Error: Notification permission denied. Please allow notifications in your browser settings.");
+        setPushLoading(false);
+        return;
+      }
+
+      const reg = await navigator.serviceWorker.ready;
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        setMessage("Error: Push notifications are not configured on this server.");
+        setPushLoading(false);
+        return;
+      }
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey,
+      });
+
+      const res = await fetch("/api/notifications/push-subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, subscription: sub.toJSON() }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setMessage("Error: " + (data.error || "Failed to save subscription."));
+        setPushLoading(false);
+        return;
+      }
+
+      logAction("Updated", "push", "Enabled push notifications");
+      setMessage("Push notifications enabled on this device.");
+      setPushEnabled(true);
+    } catch (err) {
+      setMessage("Error: " + (err instanceof Error ? err.message : "Failed to enable push notifications."));
+    }
+    setPushLoading(false);
+  }
+
+  async function disablePush() {
+    setPushLoading(true);
+    setMessage("");
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+
+      await fetch("/api/notifications/push-subscribe", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      logAction("Updated", "push", "Disabled push notifications");
+      setMessage("Push notifications disabled.");
+      setPushEnabled(false);
+    } catch (err) {
+      setMessage("Error: " + (err instanceof Error ? err.message : "Failed to disable push notifications."));
+    }
+    setPushLoading(false);
   }
 
   async function startEnroll() {
@@ -450,6 +536,71 @@ export default function ProfilePage() {
               </div>
               {savingNotif && <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "8px" }}>Saving...</div>}
             </div>
+
+            {pushSupported && (
+              <>
+                <SectionTitle title="Push Notifications" />
+                <div style={{
+                  border: `1px solid ${COLOURS.BORDER}`,
+                  borderRadius: "8px",
+                  padding: "16px",
+                  backgroundColor: "white",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                    <span style={{
+                      width: "12px", height: "12px", borderRadius: "50%",
+                      backgroundColor: pushEnabled ? COLOURS.GREEN : COLOURS.AMBER,
+                      display: "inline-block",
+                    }} />
+                    <span style={{ fontSize: "17px", fontWeight: 700, color: pushEnabled ? COLOURS.GREEN : COLOURS.AMBER }}>
+                      Push Notifications: {pushEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+                    {pushEnabled
+                      ? "You will receive push notifications on this device for tasks, escalations and other alerts."
+                      : "Enable push notifications to receive instant alerts on this device, even when the browser is in the background."}
+                  </p>
+                  {pushEnabled ? (
+                    <button
+                      onClick={disablePush}
+                      disabled={pushLoading}
+                      style={{
+                        backgroundColor: "white",
+                        color: COLOURS.RED,
+                        border: `1px solid ${COLOURS.RED}`,
+                        borderRadius: "6px",
+                        padding: "8px 16px",
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        cursor: pushLoading ? "not-allowed" : "pointer",
+                        opacity: pushLoading ? 0.5 : 1,
+                      }}
+                    >
+                      {pushLoading ? "Disabling..." : "Disable Push Notifications"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={enablePush}
+                      disabled={pushLoading}
+                      style={{
+                        backgroundColor: COLOURS.NAVY,
+                        color: "white",
+                        border: "none",
+                        borderRadius: "6px",
+                        padding: "10px 20px",
+                        fontSize: "16px",
+                        fontWeight: 700,
+                        cursor: pushLoading ? "not-allowed" : "pointer",
+                        opacity: pushLoading ? 0.5 : 1,
+                      }}
+                    >
+                      {pushLoading ? "Enabling..." : "Enable Push Notifications"}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </>
         )}
       </main>

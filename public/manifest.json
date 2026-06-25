@@ -4,6 +4,11 @@
   "description": "Unze Group operations and finance dashboard",
   "start_url": "/executive",
   "display": "standalone",
+  "scope": "/",
+  "serviceworker": {
+    "src": "/sw.js",
+    "scope": "/"
+  },
   "background_color": "#eef2f7",
   "theme_color": "#1e293b",
   "orientation": "any",

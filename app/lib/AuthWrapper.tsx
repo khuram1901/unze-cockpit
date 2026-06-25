@@ -118,6 +118,15 @@ export default function AuthWrapper({
     return () => { subscription.unsubscribe(); };
   }, [router]);
 
+  // Register service worker for push notifications
+  useEffect(() => {
+    if (!loading && email && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        // Service worker registration failed — silent
+      });
+    }
+  }, [loading, email]);
+
   // Load notification counts
   async function loadNotifications() {
     if (!email || !member) return;

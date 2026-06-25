@@ -21,6 +21,10 @@
       "schedule": "0 5 * * 5"
     },
     {
+      "path": "/api/reports/daily-pdf",
+      "schedule": "30 3 * * *"
+    },
+    {
       "path": "/api/backup",
       "schedule": "0 18 * * *"
     }
