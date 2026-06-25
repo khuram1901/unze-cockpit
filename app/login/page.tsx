@@ -162,7 +162,7 @@ export default function LoginPage() {
         {!isMobile && <HeroCarousel slide={slide} active={active} setActive={setActive} />}
       </section>
 
-      <div style={footerStyle}>© Unze Group 1989–2026 · v3.0</div>
+      <div style={footerStyle}>© Unze Group 1989–2026 · v3.0 · All Rights Reserved</div>
     </main>
   );
 }
