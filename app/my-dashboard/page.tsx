@@ -113,8 +113,16 @@ export default function MyDashboardPage() {
             <div style={{ marginBottom: "16px" }}>
               <h1 style={{ fontSize: "24px", fontWeight: 800, color: COLOURS.NAVY, margin: 0 }}>{greeting}, {userName}</h1>
               <p style={{ color: COLOURS.SLATE, fontSize: "14px", marginTop: "4px" }}>
-                {userRole}{userDept ? ` · ${userDept}` : ""} · Here&apos;s your pulse for today
+                {userRole}{userDept ? ` · ${userDept}` : ""} · Here&apos;s your update for today
               </p>
+            </div>
+
+            <div style={{
+              backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.NAVY}`,
+              borderRadius: "8px", padding: isMobile ? "10px 12px" : "12px 18px", marginBottom: "14px",
+              fontSize: isMobile ? "12px" : "14px", color: COLOURS.SLATE, lineHeight: 1.7, fontStyle: "italic",
+            }}>
+              &ldquo;Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.&rdquo;
             </div>
 
             {/* Overdue banner */}
@@ -267,6 +275,10 @@ export default function MyDashboardPage() {
             )}
           </>
         )}
+
+        <div style={{ textAlign: "center", color: COLOURS.SLATE, fontSize: "12px", marginTop: "20px", paddingBottom: "10px" }}>
+          © Unze Group 1989–2026 · v3.0
+        </div>
       </main>
     </AuthWrapper>
   );

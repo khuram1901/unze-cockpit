@@ -187,6 +187,14 @@ export default function HomePage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
         <PageHeader title="Dashboard" subtitle="Your command centre — everything at a glance" hideHome />
 
+        <div style={{
+          backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.NAVY}`,
+          borderRadius: "8px", padding: isMobile ? "12px 14px" : "14px 20px", marginBottom: "16px",
+          fontSize: isMobile ? "13px" : "15px", color: COLOURS.SLATE, lineHeight: 1.7, fontStyle: "italic",
+        }}>
+          &ldquo;Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.&rdquo;
+        </div>
+
         {loading ? (
           <p style={{ color: COLOURS.SLATE }}>Loading...</p>
         ) : (
@@ -253,6 +261,10 @@ export default function HomePage() {
             </div>
           ))
         )}
+
+        <div style={{ textAlign: "center", color: COLOURS.SLATE, fontSize: "12px", marginTop: "20px", paddingBottom: "10px" }}>
+          © Unze Group 1989–2026 · v3.0
+        </div>
       </main>
     </AuthWrapper>
   );
