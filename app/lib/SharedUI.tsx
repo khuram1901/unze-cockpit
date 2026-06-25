@@ -102,21 +102,22 @@ export function PageHeader({
   return (
     <div style={{ marginBottom: "16px" }}>
       {!hideHome && (
-        <a href="/home" style={{
+        <button onClick={() => window.history.back()} style={{
           display: "inline-flex", alignItems: "center", gap: "6px",
           fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, textDecoration: "none",
           marginBottom: "8px", padding: "4px 10px 4px 6px",
           borderRadius: "16px", backgroundColor: COLOURS.LIGHT,
+          border: "none", cursor: "pointer",
           transition: "background-color 0.15s",
         }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.BORDER; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.LIGHT; }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = COLOURS.BORDER; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = COLOURS.LIGHT; }}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10 12L6 8l4-4" />
           </svg>
-          Dashboard
-        </a>
+          Back
+        </button>
       )}
       <h1 style={{ fontSize: "24px", fontWeight: 800, color: COLOURS.NAVY, margin: 0 }}>
         {title}
