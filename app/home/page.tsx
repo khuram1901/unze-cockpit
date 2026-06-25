@@ -91,6 +91,7 @@ export default function HomePage() {
       cards: [
         { title: "Unze Trading", subtitle: "Cash position, forecasts, budgets", href: "/finance/unze-trading", icon: "🏢", badge: badges.utplFinance },
         { title: "Imperial Footwear", subtitle: "Cash position, forecasts, budgets", href: "/finance/imperial", icon: "👟", badge: badges.ifplFinance },
+        { title: "Receivables", subtitle: "Track bills through collection stages", href: "/receivables", icon: "💰", badge: badges.receivables },
       ],
     },
     {
