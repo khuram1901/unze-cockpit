@@ -328,6 +328,7 @@ export default function ExecutiveDashboardPage() {
 
   const [companyFinance, setCompanyFinance] = useState<CompanyFinanceData[]>([]);
   const [receivableRows, setReceivableRows] = useState<ReceivableCustomerRow[]>([]);
+  const [recAgingTotals, setRecAgingTotals] = useState<{ "0-30": number; "31-60": number; "61-90": number; "90+": number }>({ "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 });
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
@@ -604,6 +605,17 @@ export default function ExecutiveDashboardPage() {
       (a, b) => b.redAmount - a.redAmount || b.totalAmount - a.totalAmount
     );
     setReceivableRows(recRows);
+
+    // Bill aging — calendar days since date_submitted
+    const aging = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 } as { "0-30": number; "31-60": number; "61-90": number; "90+": number };
+    const nowMs = new Date().setHours(0, 0, 0, 0);
+    for (const bill of bills) {
+      const startMs = new Date(bill.date_submitted + "T00:00:00").getTime();
+      const days = startMs > nowMs ? 0 : Math.floor((nowMs - startMs) / (1000 * 60 * 60 * 24));
+      const bucket = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
+      aging[bucket] += Number(bill.amount) || 0;
+    }
+    setRecAgingTotals(aging);
 
     for (const bill of bills) {
       if (billRagStatus(bill) === "red") {
@@ -1216,6 +1228,13 @@ export default function ExecutiveDashboardPage() {
                       <Mini label="On Time" value={fmtMoney(recGreen)} color="#16a34a" />
                       <Mini label="Due Soon" value={fmtMoney(recAmber)} color="#d97706" />
                       <Mini label="Stuck" value={fmtMoney(recRed)} color="#dc2626" />
+                    </div>
+                    <div style={{ fontSize: "13px", color: NAVY, marginTop: "4px", marginBottom: "8px", lineHeight: "1.6" }}>
+                      <span style={{ fontWeight: 700 }}>Aging:</span>{" "}
+                      <span style={{ color: "#16a34a" }}>PKR {fmtMoney(recAgingTotals["0-30"])} (0-30d)</span>{" · "}
+                      <span style={{ color: "#d97706" }}>PKR {fmtMoney(recAgingTotals["31-60"])} (31-60d)</span>{" · "}
+                      <span style={{ color: "#dc2626" }}>PKR {fmtMoney(recAgingTotals["61-90"])} (61-90d)</span>{" · "}
+                      <span style={{ color: "#991b1b", fontWeight: 700 }}>PKR {fmtMoney(recAgingTotals["90+"])} (90+d)</span>
                     </div>
                     {receivableRows.length > 0 && (
                       <div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse", width: "100%", marginTop: "12px", minWidth: "420px" }}>

@@ -179,6 +179,47 @@ export default function ReceivablesPage() {
   const recRed = customerRows.reduce((s, r) => s + r.redAmount, 0);
   const recRedCount = customerRows.reduce((s, r) => s + r.redCount, 0);
 
+  // Bill Aging — calendar days since date_submitted
+  function calendarDaysSince(dateStr: string): number {
+    const start = new Date(dateStr + "T00:00:00");
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    if (start > now) return 0;
+    return Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  function agingBucket(dateStr: string): "0-30" | "31-60" | "61-90" | "90+" {
+    const days = calendarDaysSince(dateStr);
+    if (days <= 30) return "0-30";
+    if (days <= 60) return "31-60";
+    if (days <= 90) return "61-90";
+    return "90+";
+  }
+  const AGING_COLOURS: Record<string, string> = { "0-30": COLOURS.GREEN, "31-60": "#d97706", "61-90": COLOURS.RED, "90+": "#991b1b" };
+
+  const agingTotals = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+  for (const bill of bills) {
+    agingTotals[agingBucket(bill.date_submitted)] += Number(bill.amount) || 0;
+  }
+
+  // Per-customer aging: worst (oldest) non-zero bucket
+  const customerAging = (() => {
+    const map = new Map<string, { "0-30": number; "31-60": number; "61-90": number; "90+": number }>();
+    for (const bill of bills) {
+      const key = bill.utility || "Unknown";
+      if (!map.has(key)) map.set(key, { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 });
+      const row = map.get(key)!;
+      row[agingBucket(bill.date_submitted)] += Number(bill.amount) || 0;
+    }
+    const result = new Map<string, string>();
+    for (const [cust, buckets] of map) {
+      if (buckets["90+"] > 0) result.set(cust, "90+");
+      else if (buckets["61-90"] > 0) result.set(cust, "61-90");
+      else if (buckets["31-60"] > 0) result.set(cust, "31-60");
+      else result.set(cust, "0-30");
+    }
+    return result;
+  })();
+
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
@@ -277,7 +318,7 @@ export default function ReceivablesPage() {
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "420px" }}>
                 <thead>
                   <tr style={{ backgroundColor: "#f8fafc" }}>
-                    {["Customer", "On Time", "Due Soon", "Stuck", "Total"].map((h) => (
+                    {["Customer", "On Time", "Due Soon", "Stuck", "Total", "Aging"].map((h) => (
                       <th key={h} style={{ textAlign: "left", borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "6px 10px", fontSize: "13px", color: COLOURS.SLATE, fontWeight: 700 }}>{h}</th>
                     ))}
                   </tr>
@@ -290,10 +331,33 @@ export default function ReceivablesPage() {
                       <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", color: "#d97706" }}>{r.amberAmount.toLocaleString()}</td>
                       <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", color: COLOURS.RED, fontWeight: r.redAmount > 0 ? 700 : 400 }}>{r.redAmount.toLocaleString()}</td>
                       <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", fontWeight: 600 }}>{r.totalAmount.toLocaleString()}</td>
+                      {(() => { const bucket = customerAging.get(r.customer) || "0-30"; return (
+                        <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "13px", fontWeight: 700, color: AGING_COLOURS[bucket] }}>{bucket === "90+" ? "90+ days" : `${bucket} days`}</td>
+                      ); })()}
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Bill Aging Report */}
+        {!loading && bills.length > 0 && (
+          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, marginBottom: "10px", color: COLOURS.NAVY }}>Bill Aging Report</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
+              {([
+                { label: "0-30 days", bucket: "0-30" as const },
+                { label: "31-60 days", bucket: "31-60" as const },
+                { label: "61-90 days", bucket: "61-90" as const },
+                { label: "90+ days", bucket: "90+" as const },
+              ] as const).map((c) => (
+                <div key={c.bucket} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${AGING_COLOURS[c.bucket]}`, borderRadius: "6px", padding: "8px 10px" }}>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{c.label}</div>
+                  <div style={{ fontSize: "18px", fontWeight: 800, color: AGING_COLOURS[c.bucket] }}>PKR {agingTotals[c.bucket].toLocaleString()}</div>
+                </div>
+              ))}
             </div>
           </div>
         )}
