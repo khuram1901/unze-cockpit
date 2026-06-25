@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
-import ReceivablesSection from "./ReceivablesSection";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK } from "../lib/dateUtils";
 
@@ -551,11 +550,6 @@ export default function ProductionForm() {
           </div>
         )}
       </div>
-
-      {/* Receivables — full width below */}
-      {plantId && selectedPlant && (
-        <ReceivablesSection plantId={plantId} plantName={selectedPlant.name} />
-      )}
 
       {/* General notes */}
       {plantId && (

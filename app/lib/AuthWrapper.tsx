@@ -44,6 +44,7 @@ const MAIN_NAV: NavItem[] = [
   { label: "Calendar", href: "/calendar", allowedRoles: ["Manager", "Member"] },
   { label: "My Minutes", href: "/my-minutes", allowedRoles: ["Manager"] },
   { label: "Daily Entry", href: "/production", allowedRoles: ["Manager", "Member"], managerDepartments: ["Unze Trading Ops"] },
+  { label: "Receivables", href: "/receivables", allowedRoles: ["Manager"], managerDepartments: ["Unze Trading Ops"] },
   { label: "Finance", href: "/finance", allowedRoles: ["Manager"], financeManagerException: true },
   { label: "My Profile", href: "/profile", allowedRoles: ["Manager", "Member"] },
 ];
