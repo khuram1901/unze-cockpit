@@ -38,7 +38,6 @@ function displayName(member: Member | null, email: string | null) {
 // Main navigation — daily work
 // ─────────────────────────────────────────────────────────────────
 const MAIN_NAV: NavItem[] = [
-  { label: "Home", href: "/home", allowedRoles: ["Admin", "Executive"] },
   { label: "My Dashboard", href: "/my-dashboard", allowedRoles: ["Manager", "Member"] },
   { label: "Tasks", href: "/tasks", allowedRoles: ["Manager", "Member"] },
   { label: "Calendar", href: "/calendar", allowedRoles: ["Manager", "Member"] },
