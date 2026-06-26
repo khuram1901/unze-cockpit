@@ -41,16 +41,18 @@ const PERM_COLUMNS = [
   { key: "can_manage_calendar", label: "Calendar Mgmt", group: "Tasks & Meetings", tip: "Approve/reject calendar requests" },
   { key: "can_see_all_minutes", label: "All Minutes", group: "Tasks & Meetings", tip: "See all meeting minutes vs only own" },
   // ── Departments
+  { key: "can_view_dept_ops", label: "Ops", group: "Departments", tip: "Access the Unze Trading Ops department dashboard" },
   { key: "can_view_dept_hr", label: "HR", group: "Departments", tip: "Access the HR department dashboard" },
   { key: "can_view_dept_tax", label: "Tax", group: "Departments", tip: "Access the Taxation department dashboard" },
   { key: "can_view_dept_audit", label: "Audit", group: "Departments", tip: "Access the Audit department dashboard" },
   { key: "can_view_dept_admin", label: "Admin Dept", group: "Departments", tip: "Access the Admin department dashboard" },
+  { key: "can_view_dept_it", label: "IT", group: "Departments", tip: "Access the IT department dashboard" },
   // ── Members Management
   { key: "can_view_members", label: "View Members", group: "Members", tip: "Access the members management page" },
   { key: "can_add_members", label: "Add Members", group: "Members", tip: "Create new team members" },
   { key: "can_edit_members", label: "Edit Members", group: "Members", tip: "Edit member profiles, roles, departments" },
   { key: "can_delete_members", label: "Delete Members", group: "Members", tip: "Remove members from the system" },
-  { key: "can_reset_passwords", label: "Reset PWs", group: "Members", tip: "Reset/set passwords for other users" },
+  { key: "can_reset_passwords", label: "Reset Others' PWs", group: "Members", tip: "Reset/set passwords for other users (everyone can always change their own)" },
   // ── Settings / Admin
   { key: "can_view_audit_log", label: "Audit Log", group: "Admin", tip: "View the system audit trail" },
   { key: "can_view_exceptions", label: "Exceptions", group: "Admin", tip: "View escalation/exception alerts" },
@@ -103,10 +105,12 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_manage_recurring_tasks": return admin || exec;
     case "can_manage_calendar": return admin || exec;
     case "can_see_all_minutes": return admin || exec;
-    case "can_view_dept_hr": return admin;
-    case "can_view_dept_tax": return admin;
-    case "can_view_dept_audit": return admin;
+    case "can_view_dept_ops": return admin || dept === "Unze Trading Ops";
+    case "can_view_dept_hr": return admin || dept === "HR";
+    case "can_view_dept_tax": return admin || dept === "Tax";
+    case "can_view_dept_audit": return admin || dept === "Audit";
     case "can_view_dept_admin": return admin || exec || dept === "Admin";
+    case "can_view_dept_it": return admin || dept === "IT";
     case "can_view_members": return admin || exec;
     case "can_add_members": return admin || exec;
     case "can_edit_members": return admin || exec;

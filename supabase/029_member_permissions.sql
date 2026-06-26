@@ -30,10 +30,12 @@ CREATE TABLE IF NOT EXISTS member_permissions (
   can_see_all_minutes boolean,
 
   -- Departments
+  can_view_dept_ops boolean,
   can_view_dept_hr boolean,
   can_view_dept_tax boolean,
   can_view_dept_audit boolean,
   can_view_dept_admin boolean,
+  can_view_dept_it boolean,
 
   -- Members Management
   can_view_members boolean,
