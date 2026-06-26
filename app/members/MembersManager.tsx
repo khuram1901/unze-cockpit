@@ -8,7 +8,7 @@ import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import AccessMatrix from "./AccessMatrix";
-import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, LOCKED_EMAILS, PROTECTED_EMAILS, type UserCtx } from "../lib/permissions";
+import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, canAddMembers, canImportExport, LOCKED_EMAILS, PROTECTED_EMAILS, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Member = {
   id: string;
@@ -95,6 +95,7 @@ export default function MembersManager() {
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState("Member");
   const [myEmail, setMyEmail] = useState("");
+  const [myOverrides, setMyOverrides] = useState<PermOverrides | null>(null);
   const [loading, setLoading] = useState(true);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [assignments, setAssignments] = useState<Record<string, Set<string>>>({});
@@ -130,8 +131,12 @@ export default function MembersManager() {
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user) {
       setMyEmail(userData.user.email || "");
-      const { data: me } = await supabase.from("members").select("role").eq("email", userData.user.email).single();
-      if (me) setMyRole(me.role);
+      const { data: me } = await supabase.from("members").select("id, role").eq("email", userData.user.email).single();
+      if (me) {
+        setMyRole(me.role);
+        const { data: perms } = await supabase.from("member_permissions").select("*").eq("member_id", me.id).maybeSingle();
+        if (perms) setMyOverrides(perms as PermOverrides);
+      }
     }
     const { data } = await supabase.from("members")
       .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, notify_email, notify_whatsapp, phone_e164")
@@ -260,7 +265,7 @@ export default function MembersManager() {
     loadData();
   }
 
-  const me: UserCtx = { email: myEmail, role: myRole };
+  const me: UserCtx = { email: myEmail, role: myRole, overrides: myOverrides };
   const isAdmin = myRole === "Admin" || myRole === "Executive"; // can access this page (privileged)
   const myAssignableRoles = assignableRoles(me);
 

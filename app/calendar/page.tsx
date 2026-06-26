@@ -16,6 +16,7 @@ import {
 } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
+import { canManageCalendarRequests, type PermOverrides, type UserCtx } from "../lib/permissions";
 
 type MeetingRequest = {
   id: string;
@@ -113,7 +114,9 @@ export default function CalendarPage() {
   const [showForm, setShowForm] = useState(false);
 
   const isMobile = useMobile();
-  const canManageRequests = member?.role === "Admin" || member?.role === "Executive";
+  const [permOverrides, setPermOverrides] = useState<PermOverrides | null>(null);
+  const calCtx: UserCtx | null = member ? { email: member.email, role: member.role, department: member.department, overrides: permOverrides } : null;
+  const canManageRequests = calCtx ? canManageCalendarRequests(calCtx) : false;
 
   async function loadData() {
     setLoading(true);
@@ -124,10 +127,14 @@ export default function CalendarPage() {
     if (userEmail) {
       const { data: memberData } = await supabase
         .from("members")
-        .select("first_name, last_name, name, email, department, role, is_hod")
+        .select("id, first_name, last_name, name, email, department, role, is_hod")
         .eq("email", userEmail)
         .single();
-      if (memberData) setMember(memberData);
+      if (memberData) {
+        setMember(memberData);
+        const { data: perms } = await supabase.from("member_permissions").select("*").eq("member_id", memberData.id).maybeSingle();
+        if (perms) setPermOverrides(perms as PermOverrides);
+      }
     }
 
     const [reqRes, membersRes, tasksRes] = await Promise.all([

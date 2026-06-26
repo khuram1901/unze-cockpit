@@ -1,48 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { useState } from "react";
 import { COLOURS, PageHeader } from "../lib/SharedUI";
+import { useUserCtx } from "../lib/useUserCtx";
+import { canCreateAssignments as checkCanCreate } from "../lib/permissions";
 import NewTaskForm from "./NewTaskForm";
 import TasksList from "./TasksList";
 
-type Member = {
-  name: string;
-  role: string;
-};
-
 export default function TasksPageClient() {
-  const [member, setMember] = useState<Member | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { ctx, loading } = useUserCtx();
   const [showForm, setShowForm] = useState(false);
-
-  useEffect(() => {
-    async function loadMember() {
-      const { data: userData } = await supabase.auth.getUser();
-      const email = userData.user?.email;
-
-      if (!email) {
-        setLoading(false);
-        return;
-      }
-
-      const { data } = await supabase
-        .from("members")
-        .select("name, role")
-        .eq("email", email)
-        .single();
-
-      if (data) setMember(data);
-      setLoading(false);
-    }
-
-    loadMember();
-  }, []);
 
   if (loading) return <p style={{ color: COLOURS.SLATE }}>Loading tasks…</p>;
 
-  const role = member?.role || "Member";
-  const canCreateAssignments = role === "Admin" || role === "Executive";
+  const role = ctx?.role || "Member";
+  const canCreateAssignments = ctx ? checkCanCreate(ctx) : false;
+  // TasksList/TaskStatus check role === "Admin" || "Executive" for privileged ops.
+  // If overrides grant task privs to a Manager/Member, pass "Executive" so children respect it.
+  const effectiveRole = canCreateAssignments && role !== "Admin" && role !== "Executive" ? "Executive" : role;
 
   return (
     <>
@@ -64,7 +39,7 @@ export default function TasksPageClient() {
         </div>
       )}
 
-      <TasksList currentRole={role} />
+      <TasksList currentRole={effectiveRole} />
     </>
   );
 }
