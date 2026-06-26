@@ -41,7 +41,9 @@ const slides = [
 ];
 
 function getLandingRoute(profile: MemberProfile | null, email: string) {
-  if (email.toLowerCase() === "khuram1901@gmail.com") return "/home";
+  const lower = email.toLowerCase();
+  if (lower === "khuram1901@gmail.com") return "/home";
+  if (lower === "pa.ceo@unze.co.uk") return "/home";
   const role = profile?.role || "Member";
   if (role === "Admin" || role === "Executive") return "/home";
   return "/my-dashboard";

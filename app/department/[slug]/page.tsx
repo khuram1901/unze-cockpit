@@ -3,6 +3,7 @@
 import { use } from "react";
 import AuthWrapper from "../../lib/AuthWrapper";
 import RoleGuard from "../../lib/RoleGuard";
+import { useRequireDepartment } from "../../lib/useRouteGuard";
 import { getDepartmentConfig } from "../../lib/department-config";
 import DepartmentDashboard from "./DepartmentDashboard";
 import AuditDashboard from "./AuditDashboard";
@@ -32,13 +33,18 @@ export default function DepartmentPage({ params }: { params: Promise<{ slug: str
     );
   }
 
-  const CustomDashboard = CUSTOM_DASHBOARDS[slug];
-
   return (
     <AuthWrapper>
       <RoleGuard allowedRoles={config.allowedRoles}>
-        {CustomDashboard ? <CustomDashboard /> : <DepartmentDashboard config={config} />}
+        <DepartmentGuarded slug={slug} departmentName={config.departmentName} config={config} />
       </RoleGuard>
     </AuthWrapper>
   );
+}
+
+function DepartmentGuarded({ slug, departmentName, config }: { slug: string; departmentName: string; config: ReturnType<typeof getDepartmentConfig> }) {
+  const { checking } = useRequireDepartment(departmentName);
+  if (checking) return null;
+  const CustomDashboard = CUSTOM_DASHBOARDS[slug];
+  return CustomDashboard ? <CustomDashboard /> : <DepartmentDashboard config={config!} />;
 }

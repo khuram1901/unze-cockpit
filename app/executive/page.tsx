@@ -8,6 +8,7 @@ import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtil
 import { RAGStatus, ragColour } from "../lib/SharedUI";
 import { UTPL_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
+import { useRequireCapability } from "../lib/useRouteGuard";
 import MyTasks from "../lib/MyTasks";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
@@ -305,6 +306,7 @@ function buildPerformanceRows(tasks: Task[], groupBy: "department" | "person"): 
 
 export default function ExecutiveDashboardPage() {
   const isMobile = useMobile();
+  const { checking } = useRequireCapability("executive");
   const [selectedDate, setSelectedDate] = useState(today);
   const [summaries, setSummaries] = useState<PlantExecutiveSummary[]>([]);
   const [machineIssues, setMachineIssues] = useState<MachineIssue[]>([]);
@@ -903,6 +905,8 @@ export default function ExecutiveDashboardPage() {
   const recRedCount = receivableRows.reduce((s, r) => s + r.redCount, 0);
 
   const anyCashPlanMissing = companyFinance.some((cfd) => !cfd.cashPlan);
+
+  if (checking) return null;
 
   return (
     <AuthWrapper>

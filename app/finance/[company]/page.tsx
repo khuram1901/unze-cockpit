@@ -5,12 +5,16 @@ import AuthWrapper from "../../lib/AuthWrapper";
 import { getCompanyBySlug } from "../../lib/constants";
 import { PageHeader } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
+import { useRequireCapability } from "../../lib/useRouteGuard";
 import FinanceManager from "../FinanceManager";
 
 export default function CompanyFinancePage({ params }: { params: Promise<{ company: string }> }) {
   const { company } = use(params);
   const isMobile = useMobile();
+  const { checking } = useRequireCapability("finance");
   const config = getCompanyBySlug(company);
+
+  if (checking) return null;
 
   if (!config) {
     return (

@@ -13,7 +13,9 @@ export default function RootPage() {
       if (user) {
         const { data: member } = await supabase.from("members").select("role").eq("email", user.email).single();
         const role = member?.role || "Member";
-        if (role === "Admin" || role === "Executive") router.replace("/home");
+        const lower = (user.email || "").toLowerCase();
+        if (lower === "khuram1901@gmail.com" || lower === "pa.ceo@unze.co.uk") router.replace("/home");
+        else if (role === "Admin" || role === "Executive") router.replace("/home");
         else router.replace("/my-dashboard");
       } else {
         router.replace("/login");

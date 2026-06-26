@@ -110,7 +110,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
   {
     slug: "taxation",
     title: "Taxation",
-    departmentName: "Legal",
+    departmentName: "Tax",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "legal_notices",
     statusField: "resolution_status",

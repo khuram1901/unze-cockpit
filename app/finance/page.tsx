@@ -10,6 +10,7 @@ import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { logAction } from "../lib/audit-log";
 import { useMobile } from "../lib/useMobile";
+import { useRequireCapability } from "../lib/useRouteGuard";
 import * as XLSX from "xlsx";
 
 type Budget = {
@@ -117,6 +118,7 @@ function companyShortName(companyId: string): string {
 export default function FinancePage() {
   const router = useRouter();
   const isMobile = useMobile();
+  const { checking } = useRequireCapability("finance");
   const [loading, setLoading] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -232,6 +234,8 @@ export default function FinancePage() {
   const totalBudgeted = budgets.reduce((s, b) => s + b.budgeted_amount, 0);
   const totalActual = budgets.reduce((s, b) => s + b.actual_amount, 0);
   const variance = totalBudgeted - totalActual;
+
+  if (checking) return null;
 
   if (loading) {
     return (

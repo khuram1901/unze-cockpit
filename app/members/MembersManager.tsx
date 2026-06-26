@@ -7,6 +7,8 @@ import { logAction } from "../lib/audit-log";
 import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
+import AccessMatrix from "./AccessMatrix";
+import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, LOCKED_EMAILS, PROTECTED_EMAILS, type UserCtx } from "../lib/permissions";
 
 type Member = {
   id: string;
@@ -36,8 +38,6 @@ type DepartmentOwner = {
   escalation_owner_name: string | null;
 };
 type TaskSummary = { id: string; assigned_to: string | null; status: string };
-
-const ROLES = ["Admin", "Executive", "Manager", "Member"];
 
 const DEPARTMENTS = [
   "Unze Trading Ops", "Finance", "HR", "Admin",
@@ -94,6 +94,7 @@ export default function MembersManager() {
   const isMobile = useMobile();
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState("Member");
+  const [myEmail, setMyEmail] = useState("");
   const [loading, setLoading] = useState(true);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [assignments, setAssignments] = useState<Record<string, Set<string>>>({});
@@ -128,6 +129,7 @@ export default function MembersManager() {
   async function loadData() {
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user) {
+      setMyEmail(userData.user.email || "");
       const { data: me } = await supabase.from("members").select("role").eq("email", userData.user.email).single();
       if (me) setMyRole(me.role);
     }
@@ -214,16 +216,23 @@ export default function MembersManager() {
     setSavingPw(false);
   }
 
-  const PROTECTED_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
-
   async function updateMember(id: string, updates: Partial<Member>) {
     if (updates.email !== undefined && !isValidEmail(updates.email || "")) { alert("Valid email required."); loadData(); return; }
     const member = members.find((m) => m.id === id);
+    const target: UserCtx = { email: member?.email, role: member?.role };
+    // Locked accounts (Admin/CEO/PA) — role and email immutable except by an admin-tier user on others
+    if (member?.email && LOCKED_EMAILS.includes(member.email.toLowerCase()) && member.email.toLowerCase() !== myEmail.toLowerCase()) {
+      if (!isAdminTier(me)) { alert("You cannot edit this protected account."); loadData(); return; }
+    }
     if (member?.email && PROTECTED_EMAILS.includes(member.email)) {
       if (updates.role !== undefined && updates.role !== "Admin") { alert("This account must remain Admin."); loadData(); return; }
       if (updates.email !== undefined) { alert("This account's email cannot be changed."); loadData(); return; }
     }
-    if (member?.role === "Admin" && myRole !== "Admin") { alert("Only Admin can edit another Admin."); loadData(); return; }
+    // PA's own role is locked; PA may only assign Manager/Member to others
+    if (updates.role !== undefined && !myAssignableRoles.includes(updates.role)) {
+      alert(`You are not allowed to set the role "${updates.role}".`); loadData(); return;
+    }
+    if (!canEditMember(me, target)) { alert("You do not have permission to edit this member."); loadData(); return; }
     // Department and business unit are preserved for all roles
     if (updates.department !== undefined) {
       const valid = businessUnitsFor(updates.department);
@@ -242,8 +251,8 @@ export default function MembersManager() {
 
   async function deleteMember(id: string, nm: string) {
     const m = members.find((x) => x.id === id);
-    if (m?.email && PROTECTED_EMAILS.includes(m.email)) { alert("This account cannot be removed."); return; }
-    if (m?.role === "Admin" && myRole !== "Admin") { alert("Only Admin can remove another Admin."); return; }
+    const target: UserCtx = { email: m?.email, role: m?.role };
+    if (!canDeleteMember(me, target)) { alert("You do not have permission to remove this member."); return; }
     if (!confirm(`Remove ${nm}?`)) return;
     const { error } = await supabase.from("members").delete().eq("id", id);
     if (error) { alert("Error: " + error.message); return; }
@@ -251,7 +260,9 @@ export default function MembersManager() {
     loadData();
   }
 
-  const isAdmin = myRole === "Admin" || myRole === "Executive";
+  const me: UserCtx = { email: myEmail, role: myRole };
+  const isAdmin = myRole === "Admin" || myRole === "Executive"; // can access this page (privileged)
+  const myAssignableRoles = assignableRoles(me);
 
   async function updateDeptOwner(deptId: string, field: "primary" | "secondary" | "escalation", memberId: string) {
     const m = memberId ? members.find((x) => x.id === memberId) : null;
@@ -412,7 +423,7 @@ export default function MembersManager() {
             <div><label style={lbl}>Email</label><input style={inp} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
             <div><label style={lbl}>Role</label>
               <select style={inp} value={role} onChange={(e) => setRole(e.target.value)}>
-                {ROLES.map((r) => <option key={r}>{r}</option>)}
+                {myAssignableRoles.map((r) => <option key={r}>{r}</option>)}
               </select>
             </div>
           </div>
@@ -523,7 +534,7 @@ export default function MembersManager() {
                     <div><label style={lblC}>First Name</label><input style={inpC} value={m.first_name || ""} onChange={(e) => updateMember(m.id, { first_name: e.target.value })} /></div>
                     <div><label style={lblC}>Last Name</label><input style={inpC} value={m.last_name || ""} onChange={(e) => updateMember(m.id, { last_name: e.target.value })} /></div>
                     <div><label style={lblC}>Email</label><input style={inpC} defaultValue={m.email || ""} onBlur={(e) => { if (e.target.value.trim() !== (m.email || "")) updateMember(m.id, { email: e.target.value }); }} /></div>
-                    <div><label style={lblC}>Role</label><select style={inpC} value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></div>
+                    <div><label style={lblC}>Role</label><select style={inpC} value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })} disabled={!canEditMember(me, { email: m.email, role: m.role })}>{Array.from(new Set([m.role, ...myAssignableRoles])).map((r) => <option key={r}>{r}</option>)}</select></div>
                     <div><label style={lblC}>Department</label><select style={inpC} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}><option value="">—</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></div>
                     <div><label style={lblC}>Business Unit</label><select style={inpC} value={m.business_unit || ""} onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })} disabled={!m.department}><option value="">—</option>{businessUnitsFor(m.department).map((b) => <option key={b}>{b}</option>)}</select></div>
                     <div><label style={lblC}>Company</label><select style={inpC} value={m.company || ""} onChange={(e) => updateMember(m.id, { company: e.target.value || null })}><option value="">—</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></div>
@@ -561,14 +572,20 @@ export default function MembersManager() {
                       <input placeholder="+92..." defaultValue={m.phone_e164 || ""} onBlur={(e) => { if (e.target.value !== (m.phone_e164 || "")) updateMember(m.id, { phone_e164: e.target.value || null }); }}
                         style={{ ...inpC, width: "110px" }} />
                     )}
-                    <span style={{ color: COLOURS.BORDER }}>|</span>
-                    <button onClick={() => sendPwReset(m.email || "", dn)} disabled={!m.email || resettingPw === m.email}
-                      style={{ ...smallBtn(COLOURS.BLUE), fontSize: "11px", padding: "3px 8px", opacity: resettingPw === m.email ? 0.5 : 1 }}>
-                      {resettingPw === m.email ? "..." : "Reset PW"}
-                    </button>
-                    <button onClick={() => { setSettingPwFor(settingPwFor === m.id ? null : m.id); setNewPw(""); }}
-                      style={{ ...smallBtn(COLOURS.PURPLE), fontSize: "11px", padding: "3px 8px" }}>Set PW</button>
-                    <button onClick={() => deleteMember(m.id, dn)} style={{ ...smallBtn(COLOURS.RED), fontSize: "11px", padding: "3px 8px" }}>Remove</button>
+                    {canChangePasswordFor(me, { email: m.email, role: m.role }) && (
+                      <>
+                        <span style={{ color: COLOURS.BORDER }}>|</span>
+                        <button onClick={() => sendPwReset(m.email || "", dn)} disabled={!m.email || resettingPw === m.email}
+                          style={{ ...smallBtn(COLOURS.BLUE), fontSize: "11px", padding: "3px 8px", opacity: resettingPw === m.email ? 0.5 : 1 }}>
+                          {resettingPw === m.email ? "..." : "Reset PW"}
+                        </button>
+                        <button onClick={() => { setSettingPwFor(settingPwFor === m.id ? null : m.id); setNewPw(""); }}
+                          style={{ ...smallBtn(COLOURS.PURPLE), fontSize: "11px", padding: "3px 8px" }}>Set PW</button>
+                      </>
+                    )}
+                    {canDeleteMember(me, { email: m.email, role: m.role }) && (
+                      <button onClick={() => deleteMember(m.id, dn)} style={{ ...smallBtn(COLOURS.RED), fontSize: "11px", padding: "3px 8px" }}>Remove</button>
+                    )}
                   </div>
 
                   {/* Set password inline */}
@@ -593,6 +610,9 @@ export default function MembersManager() {
           <div style={{ padding: "20px 12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "14px" }}>No members found.</div>
         )}
       </div>
+
+      {/* ── Access Control Matrix ────────────────────── */}
+      {isAdmin && <AccessMatrix members={members} isMobile={isMobile} />}
 
       {/* ── Department Ownership ─────────────────────── */}
       {isAdmin && departments.length > 0 && (

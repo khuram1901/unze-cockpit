@@ -7,6 +7,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
+import { useRequireCapability } from "../lib/useRouteGuard";
 
 type Stage = { id: string; stage_order: number; stage_name: string; working_day_budget: number };
 type Receivable = {
@@ -57,6 +58,7 @@ function workingDaysSince(dateStr: string): number {
 
 export default function ReceivablesPage() {
   const isMobile = useMobile();
+  const { checking } = useRequireCapability("receivables");
   const [stages, setStages] = useState<Stage[]>([]);
   const [bills, setBills] = useState<Receivable[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -219,6 +221,8 @@ export default function ReceivablesPage() {
     }
     return result;
   })();
+
+  if (checking) return null;
 
   return (
     <AuthWrapper>

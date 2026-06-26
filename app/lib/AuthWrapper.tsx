@@ -251,11 +251,10 @@ export default function AuthWrapper({
   // Filter main nav items
   const visibleMainNav = MAIN_NAV.filter((item) => {
     if (!item.allowedRoles.includes(currentRole)) return false;
-    // Finance — Manager only sees it if they're in Finance department
+    // Finance — Admin only, or Finance Managers. NOT Executive (= PA, no finance).
     if (item.financeManagerException) {
       return (
         currentRole === "Admin" ||
-        currentRole === "Executive" ||
         (currentRole === "Manager" && currentDepartment === "Finance")
       );
     }

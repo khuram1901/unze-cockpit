@@ -13,17 +13,23 @@ type GroupDef = { title: string; colour: string; cards: CardDef[] };
 
 const CEO_EMAIL = "k.saleem@unzegroup.com";
 const ADMIN_EMAIL = "khuram1901@gmail.com";
+const PA_EMAIL = "pa.ceo@unze.co.uk";
 
 export default function HomePage() {
   const isMobile = useMobile();
   const [loading, setLoading] = useState(true);
   const [badges, setBadges] = useState<Record<string, Badge>>({});
   const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState("");
 
   useEffect(() => {
     async function loadBadges() {
       const { data: { user } } = await supabase.auth.getUser();
       setUserEmail(user?.email || "");
+      if (user?.email) {
+        const { data: m } = await supabase.from("members").select("role").eq("email", user.email).maybeSingle();
+        setUserRole(m?.role || "");
+      }
       const today = new Date().toISOString().slice(0, 10);
       const month = today.slice(0, 7);
 
@@ -74,9 +80,49 @@ export default function HomePage() {
 
   const isCEO = userEmail.toLowerCase() === CEO_EMAIL;
   const isMainAdmin = userEmail.toLowerCase() === ADMIN_EMAIL;
+  const isPA = userEmail.toLowerCase() === PA_EMAIL || userRole === "Executive";
   const showIcons = !isMainAdmin;
 
-  const groups: GroupDef[] = isCEO ? [
+  const paGroups: GroupDef[] = [
+    {
+      title: "Command Centre",
+      colour: COLOURS.NAVY,
+      cards: [
+        { title: "PA Dashboard", subtitle: "Tasks, notes, quick actions, delegations", href: "/pa", icon: "📋", badge: badges.pa },
+        { title: "Operations Dashboard", subtitle: "Production, dispatch, stock, machines", href: "/dashboard", icon: "🏭", badge: badges.operations },
+      ],
+    },
+    {
+      title: "Tasks & Meetings",
+      colour: "#d97706",
+      cards: [
+        { title: "Tasks", subtitle: "All tasks across departments", href: "/tasks", icon: "✅", badge: badges.tasks },
+        { title: "Calendar", subtitle: "Tasks and deadlines view", href: "/calendar", icon: "📅", badge: badges.calendar },
+        { title: "Meetings", subtitle: "Minutes, approvals, action items", href: "/meetings", icon: "🤝", badge: badges.meetings },
+        { title: "My Minutes", subtitle: "Meeting minutes for HODs", href: "/my-minutes", icon: "📄", badge: badges.minutes },
+        { title: "Recurring Tasks", subtitle: "Manage recurring task templates", href: "/recurring-tasks", icon: "🔄" },
+      ],
+    },
+    {
+      title: "Departments",
+      colour: "#7c3aed",
+      cards: [
+        { title: "Admin", subtitle: "Administration dashboard", href: "/department/admin", icon: "🏛️" },
+      ],
+    },
+    {
+      title: "Settings",
+      colour: COLOURS.SLATE,
+      cards: [
+        { title: "Members", subtitle: "Team members, roles, access", href: "/members", icon: "👤", badge: badges.members },
+        { title: "Exceptions", subtitle: "Exception management and alerts", href: "/exceptions", icon: "⚠️" },
+        { title: "Audit Log", subtitle: "System activity trail", href: "/audit-log", icon: "📜" },
+        { title: "My Profile", subtitle: "Your account and preferences", href: "/profile", icon: "⚙️" },
+      ],
+    },
+  ];
+
+  const groups: GroupDef[] = isPA ? paGroups : isCEO ? [
     {
       title: "Command Centre",
       colour: COLOURS.NAVY,
