@@ -113,8 +113,15 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
 DROP POLICY IF EXISTS "members_write" ON members;
-CREATE POLICY "members_write" ON members FOR ALL
-  USING (can_manage_members_rls()) WITH CHECK (can_manage_members_rls());
+DROP POLICY IF EXISTS "members_insert" ON members;
+DROP POLICY IF EXISTS "members_update" ON members;
+DROP POLICY IF EXISTS "members_delete" ON members;
+CREATE POLICY "members_insert" ON members FOR INSERT
+  WITH CHECK (can_manage_members_rls());
+CREATE POLICY "members_update" ON members FOR UPDATE
+  USING (can_manage_members_rls());
+CREATE POLICY "members_delete" ON members FOR DELETE
+  USING (can_manage_members_rls());
 
 -- Audit log: override can_view_audit_log
 CREATE OR REPLACE FUNCTION can_view_audit_log_rls()
