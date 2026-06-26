@@ -450,6 +450,65 @@ export default function MembersManager() {
               </select>
             </div>
           </div>
+          {/* Permissions preview */}
+          {(role || department) && (
+            <div style={{ marginTop: "12px", padding: "10px 12px", backgroundColor: COLOURS.LIGHT, borderRadius: "6px", border: `1px solid ${COLOURS.BORDER}` }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>
+                Permissions Preview — this member will automatically get:
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {(() => {
+                  const isA = role === "Admin";
+                  const isE = role === "Executive";
+                  const isM = role === "Manager";
+                  const d = department;
+                  const perms: { label: string; on: boolean }[] = [
+                    { label: "Exec Dashboard", on: isA },
+                    { label: "Ops Dashboard", on: isA || isE || d === "Unze Trading Ops" },
+                    { label: "PA Dashboard", on: isA || isE },
+                    { label: "View Finance", on: isA || (isM && d === "Finance") },
+                    { label: "Edit Finance", on: isA || (isM && d === "Finance") },
+                    { label: "View Receivables", on: isA || (isM && (d === "Finance" || d === "Unze Trading Ops")) },
+                    { label: "All Tasks", on: isA || isE },
+                    { label: "Create Tasks", on: isA || isE },
+                    { label: "Review Tasks", on: isA || isE },
+                    { label: "Recurring Tasks", on: isA || isE },
+                    { label: "Calendar Mgmt", on: isA || isE },
+                    { label: "All Minutes", on: isA || isE },
+                    { label: "Ops Dept", on: isA || d === "Unze Trading Ops" },
+                    { label: "HR Dept", on: isA || d === "HR" },
+                    { label: "Tax Dept", on: isA || d === "Tax" },
+                    { label: "Audit Dept", on: isA || d === "Audit" },
+                    { label: "Admin Dept", on: isA || isE || d === "Admin" },
+                    { label: "IT Dept", on: isA || d === "IT" },
+                    { label: "View Members", on: isA || isE },
+                    { label: "Add Members", on: isA || isE },
+                    { label: "Edit Members", on: isA || isE },
+                    { label: "Delete Members", on: isA || isE },
+                    { label: "Reset Others' PWs", on: isA || isE },
+                    { label: "Audit Log", on: isA || isE },
+                    { label: "Exceptions", on: isA || isE },
+                    { label: "Import/Export", on: isA || isE },
+                    { label: "Daily Entry", on: isA || d === "Unze Trading Ops" },
+                  ];
+                  return perms.filter((p) => p.on).map((p) => (
+                    <span key={p.label} style={{
+                      fontSize: "11px", fontWeight: 600, color: "white",
+                      backgroundColor: COLOURS.GREEN, borderRadius: "6px", padding: "2px 8px",
+                    }}>{p.label}</span>
+                  ));
+                })()}
+                {role === "Member" && !department && (
+                  <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontStyle: "italic" }}>
+                    Members get own-task access only. Select a department for department-specific rights.
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "6px", fontStyle: "italic" }}>
+                You can adjust individual permissions in the Access Control Matrix after adding.
+              </div>
+            </div>
+          )}
           <div style={{ marginTop: "10px" }}>
             <button type="submit" disabled={saving} style={smallBtn(COLOURS.NAVY, true)}>{saving ? "Adding..." : "Add Member"}</button>
           </div>
