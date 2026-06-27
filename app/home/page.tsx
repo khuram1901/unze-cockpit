@@ -3,76 +3,11 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
-import { COLOURS, StatusBadge, PriorityBadge } from "../lib/SharedUI";
+import { COLOURS, StatusBadge } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import {
-  PAGE_REGISTRY, GROUP_ORDER, GROUP_COLOURS,
-  type PageCard,
-} from "../lib/pageRegistry";
-import {
-  isAdminTier, isCEO as checkIsCEO, canViewFinance, canEditFinance, financeCompanies,
-  canViewExecutiveDashboard, canViewOperations, canViewReceivables,
-  canSeeAllTasks, canCreateAssignments, canReviewTasks,
-  canManageRecurringTasks, canManageCalendarRequests, canSeeAllMinutes,
-  canViewDepartment, canManageMembers, canAddMembers,
-  canViewAuditLog, canViewExceptions, canImportExport,
-  canAccessDailyEntry, isPA as checkIsPA,
-  type UserCtx,
-} from "../lib/permissions";
-
-const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
-  can_view_executive_dashboard: canViewExecutiveDashboard,
-  can_view_operations_dashboard: canViewOperations,
-  can_view_pa_dashboard: (c) => checkIsPA(c) || isAdminTier(c),
-  can_view_finance: canViewFinance,
-  can_edit_finance: canEditFinance,
-  can_view_receivables: canViewReceivables,
-  can_see_all_tasks: canSeeAllTasks,
-  can_create_tasks: canCreateAssignments,
-  can_review_tasks: canReviewTasks,
-  can_manage_recurring_tasks: canManageRecurringTasks,
-  can_manage_calendar: canManageCalendarRequests,
-  can_see_all_minutes: canSeeAllMinutes,
-  can_view_dept_ops: (c) => canViewDepartment(c, "Unze Trading Ops"),
-  can_view_dept_hr: (c) => canViewDepartment(c, "HR"),
-  can_view_dept_tax: (c) => canViewDepartment(c, "Tax"),
-  can_view_dept_audit: (c) => canViewDepartment(c, "Audit"),
-  can_view_dept_admin: (c) => canViewDepartment(c, "Admin"),
-  can_view_dept_it: (c) => canViewDepartment(c, "IT"),
-  can_view_members: canManageMembers,
-  can_add_members: canAddMembers,
-  can_view_audit_log: canViewAuditLog,
-  can_view_exceptions: canViewExceptions,
-  can_import_export: canImportExport,
-  can_access_daily_entry: canAccessDailyEntry,
-};
-
-function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
-  const perms = ctx.overrides as Record<string, boolean | string | null> | null;
-  if (card.permKey.startsWith("_")) return true;
-  if (card.permKey === "can_view_finance_utpl") {
-    if (!canViewFinance(ctx)) return false;
-    const scope = financeCompanies(ctx);
-    return scope === "both" || scope === "UTPL";
-  }
-  if (card.permKey === "can_view_finance_ifpl") {
-    if (!canViewFinance(ctx)) return false;
-    const scope = financeCompanies(ctx);
-    return scope === "both" || scope === "IFPL";
-  }
-  if (perms) {
-    const val = perms[card.permKey];
-    if (val === true) return true;
-    if (val === false) return false;
-  }
-  const fn = PERM_FUNC[card.permKey];
-  if (fn) return fn(ctx);
-  return false;
-}
 
 type TaskRow = { id: string; description: string; status: string; due_date: string | null; assigned_to: string | null; assigned_to_email: string | null; assigned_by: string | null; project: string | null; priority: string | null; updated_at: string | null };
 type MeetingRow = { id: string; title: string; meeting_date: string };
@@ -107,7 +42,7 @@ function daysUntil(dateStr: string): number {
 
 export default function HomePage() {
   const isMobile = useMobile();
-  const { ctx, loading: ctxLoading } = useUserCtx();
+  const { loading: ctxLoading } = useUserCtx();
   const [loading, setLoading] = useState(true);
 
   // KPI data
@@ -129,8 +64,6 @@ export default function HomePage() {
   const [myCompletedMonth, setMyCompletedMonth] = useState(0);
   const [userName, setUserName] = useState("");
 
-  // Page nav
-  const [badges, setBadges] = useState<Record<string, { value: string; color: string }>>({});
 
   useEffect(() => {
     async function loadDashboard() {
@@ -150,25 +83,14 @@ export default function HomePage() {
       }
 
       const [
-        tasksRes, machinesRes, pendingMinsRes,
-        utplCashRes, ifplCashRes,
-        meetingsRes, membersRes, auditsRes, receivablesRes,
+        tasksRes, machinesRes, meetingsRes,
         myTasksRes, assignedByMeRes, activityRes,
       ] = await Promise.all([
         supabase.from("tasks").select("id, description, status, due_date, assigned_to, assigned_to_email, assigned_by, project, priority, updated_at").in("status", ["Not Started", "In Progress", "Waiting Reply"]),
         supabase.from("machine_issues").select("id").eq("issue_status", "Down"),
-        supabase.from("pending_minutes").select("id").eq("status", "pending"),
-        supabase.from("daily_cash_position").select("closing_after_post_dated, position_date").eq("company_id", UTPL_COMPANY_ID).order("position_date", { ascending: false }).limit(1),
-        supabase.from("daily_cash_position").select("closing_after_post_dated, position_date").eq("company_id", IFPL_COMPANY_ID).order("position_date", { ascending: false }).limit(1),
         supabase.from("meetings").select("id, title, meeting_date").gte("meeting_date", today).order("meeting_date", { ascending: true }).limit(5),
-        supabase.from("members").select("id"),
-        supabase.from("audit_items").select("id, status").in("status", ["Open", "In Progress"]),
-        supabase.from("receivables").select("id").neq("status", "Collected"),
-        // My tasks
         supabase.from("tasks").select("id, description, status, due_date, assigned_to, assigned_to_email, assigned_by, project, priority, updated_at").or(`assigned_to_email.eq.${email},assigned_to.eq.${fullName}`).order("created_at", { ascending: false }),
-        // Tasks I assigned to others
         supabase.from("tasks").select("id, description, status, due_date, assigned_to, assigned_to_email, assigned_by, project, priority, updated_at").eq("assigned_by", fullName).neq("assigned_to", fullName).order("created_at", { ascending: false }).limit(20),
-        // My recent activity
         supabase.from("audit_log").select("id, action, table_name, details, created_at").eq("user_email", email).order("created_at", { ascending: false }).limit(8),
       ]);
 
@@ -236,25 +158,6 @@ export default function HomePage() {
       setRecentActivity(activityRes.data || []);
       setMyCompletedMonth(myAll.filter((t) => t.status === "Completed" && t.updated_at && t.updated_at.slice(0, 7) === month).length);
 
-      // Badges
-      const b: Record<string, { value: string; color: string }> = {};
-      b.executive = { value: `${overdue.length} overdue`, color: overdue.length > 0 ? COLOURS.RED : COLOURS.GREEN };
-      b.pa = { value: `${tasks.length} open`, color: tasks.length > 0 ? "#d97706" : COLOURS.GREEN };
-      b.operations = { value: `${(machinesRes.data || []).length} down`, color: (machinesRes.data || []).length > 0 ? COLOURS.RED : COLOURS.GREEN };
-      b.tasks = { value: `${tasks.length} open`, color: tasks.length > 0 ? "#d97706" : COLOURS.GREEN };
-      b.calendar = { value: `${tasks.filter((t) => t.due_date && t.due_date >= today && t.due_date <= weekFromNow).length} this week`, color: COLOURS.BLUE };
-      const utplCash = utplCashRes.data?.[0];
-      const ifplCash = ifplCashRes.data?.[0];
-      const fmtPKR = (n: number) => `PKR ${Math.abs(n) >= 1000000 ? (n / 1000000).toFixed(1) + "M" : n.toLocaleString()}`;
-      b.utplFinance = utplCash ? { value: fmtPKR(utplCash.closing_after_post_dated), color: utplCash.closing_after_post_dated >= 0 ? COLOURS.GREEN : COLOURS.RED } : { value: "No data", color: COLOURS.SLATE };
-      b.ifplFinance = ifplCash ? { value: fmtPKR(ifplCash.closing_after_post_dated), color: ifplCash.closing_after_post_dated >= 0 ? COLOURS.GREEN : COLOURS.RED } : { value: "No data", color: COLOURS.SLATE };
-      b.meetings = { value: `${(meetingsRes.data || []).length} upcoming`, color: COLOURS.BLUE };
-      b.minutes = { value: `${(pendingMinsRes.data || []).length} pending`, color: (pendingMinsRes.data || []).length > 0 ? "#d97706" : COLOURS.GREEN };
-      b.members = { value: `${(membersRes.data || []).length} members`, color: "#0f172a" };
-      b.audit = { value: `${(auditsRes.data || []).length} open`, color: (auditsRes.data || []).length > 0 ? "#d97706" : COLOURS.GREEN };
-      b.receivables = { value: `${(receivablesRes.data || []).length} active`, color: (receivablesRes.data || []).length > 0 ? "#d97706" : COLOURS.GREEN };
-      setBadges(b);
-
       setLoading(false);
     }
 
@@ -262,15 +165,6 @@ export default function HomePage() {
   }, []);
 
   const allLoading = ctxLoading || loading;
-  const visibleCards = ctx ? PAGE_REGISTRY.filter((card) => isCardVisible(card, ctx)) : [];
-  const groups = GROUP_ORDER
-    .map((groupName) => ({
-      title: groupName,
-      colour: GROUP_COLOURS[groupName] || COLOURS.SLATE,
-      cards: visibleCards.filter((c) => c.group === groupName),
-    }))
-    .filter((g) => g.cards.length > 0);
-  const showIcons = ctx ? !isAdminTier(ctx) || checkIsCEO(ctx) : true;
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -662,77 +556,16 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* ── Quick Nav — page links grouped ── */}
-            {groups.length > 0 && (
-              <div style={{
-                backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
-                borderRadius: "12px", padding: "16px 18px",
-              }}>
-                {groups.map((group, gi) => (
-                  <div key={group.title} style={{ marginBottom: gi < groups.length - 1 ? "12px" : 0 }}>
-                    <div style={{
-                      fontSize: "10px", fontWeight: 700, color: "var(--text-muted)",
-                      textTransform: "uppercase", letterSpacing: "1.2px",
-                      padding: "0 0 4px", marginBottom: "2px",
-                      borderBottom: "1px solid var(--border-light)",
-                    }}>
-                      {group.title}
-                    </div>
-                    {group.cards.map((card) => {
-                      const badge = card.badgeKey ? badges[card.badgeKey] : undefined;
-                      return (
-                        <a
-                          key={card.href}
-                          href={card.href}
-                          style={{
-                            textDecoration: "none",
-                            display: "flex", alignItems: "center", gap: "10px",
-                            padding: "7px 8px",
-                            borderRadius: "6px",
-                            cursor: "pointer",
-                            transition: "background-color 0.15s",
-                            color: "inherit",
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-hover)"; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-                        >
-                          {showIcons && (
-                            <span style={{ fontSize: "15px", flexShrink: 0, width: "20px", textAlign: "center" }}>
-                              {card.icon}
-                            </span>
-                          )}
-                          <span style={{
-                            flex: 1, fontSize: "13px", fontWeight: 500,
-                            color: "var(--text-primary)",
-                          }}>
-                            {card.title}
-                          </span>
-                          {badge && (
-                            <span style={{
-                              fontSize: "11px", fontWeight: 600, color: badge.color,
-                              whiteSpace: "nowrap",
-                            }}>
-                              {badge.value}
-                            </span>
-                          )}
-                        </a>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {groups.length === 0 && (
-              <div style={{
-                border: "1px solid var(--border-color)", borderRadius: "12px", padding: "48px 20px",
-                backgroundColor: "var(--bg-card)", textAlign: "center", color: "var(--text-secondary)",
-              }}>
-                <div style={{ fontSize: "36px", marginBottom: "12px" }}>🔒</div>
-                <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px" }}>No pages assigned</div>
-                <div style={{ fontSize: "14px" }}>Contact your Admin to get access to dashboard sections.</div>
-              </div>
-            )}
+            {/* ── Purpose Statement ── */}
+            <div style={{
+              backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+              borderLeft: "4px solid var(--text-primary)",
+              borderRadius: "8px", padding: isMobile ? "10px 12px" : "12px 18px",
+              fontSize: isMobile ? "12px" : "14px", color: "var(--text-primary)",
+              lineHeight: 1.7, fontStyle: "italic", fontWeight: 600,
+            }}>
+              &ldquo;Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.&rdquo;
+            </div>
           </>
         )}
       </main>
