@@ -19,7 +19,7 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
   if (!config) {
     return (
       <AuthWrapper>
-        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}>
+        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <PageHeader title="Company not found" subtitle={`No finance data configured for "${company}".`} />
         </main>
       </AuthWrapper>

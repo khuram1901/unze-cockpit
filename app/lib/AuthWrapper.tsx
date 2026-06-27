@@ -205,7 +205,7 @@ export default function AuthWrapper({
 
   if (loading) {
     return (
-      <main style={{ padding: "24px" }}>
+      <main style={{ padding: "24px", maxWidth: "100%", overflowX: "hidden" }}>
         <p style={{ color: SLATE }}>Loading…</p>
       </main>
     );

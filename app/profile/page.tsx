@@ -362,7 +362,7 @@ export default function ProfilePage() {
                   <p style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>
                     Step 2: Enter the 6-digit code from your app
                   </p>
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
                     <input
                       type="text"
                       value={verifyCode}
@@ -377,7 +377,8 @@ export default function ProfilePage() {
                         fontWeight: 700,
                         letterSpacing: "8px",
                         textAlign: "center",
-                        width: "160px",
+                        width: "100%",
+                        maxWidth: "160px",
                       }}
                     />
                     <button

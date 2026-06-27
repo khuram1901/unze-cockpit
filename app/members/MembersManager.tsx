@@ -312,7 +312,7 @@ export default function MembersManager() {
   }
 
   if (loading) return (
-    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}>
+    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
       <p style={{ color: COLOURS.SLATE }}>Loading...</p>
     </main>
   );
@@ -594,7 +594,7 @@ export default function MembersManager() {
               {/* ── Edit panel (compact) ────────────────────────── */}
               {isAdmin && isEditing && (
                 <div style={{ padding: "8px 12px", borderTop: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.LIGHT }}>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1.5fr 0.6fr 1fr 1fr 1fr 0.5fr", gap: "6px", marginBottom: "6px", alignItems: "end" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(120px, 1fr))", gap: "6px", marginBottom: "6px", alignItems: "end" }}>
                     <div><label style={lblC}>First Name</label><input style={inpC} value={m.first_name || ""} onChange={(e) => updateMember(m.id, { first_name: e.target.value })} /></div>
                     <div><label style={lblC}>Last Name</label><input style={inpC} value={m.last_name || ""} onChange={(e) => updateMember(m.id, { last_name: e.target.value })} /></div>
                     <div><label style={lblC}>Email</label><input style={inpC} defaultValue={m.email || ""} onBlur={(e) => { if (e.target.value.trim() !== (m.email || "")) updateMember(m.id, { email: e.target.value }); }} /></div>
@@ -654,9 +654,9 @@ export default function MembersManager() {
 
                   {/* Set password inline */}
                   {settingPwFor === m.id && (
-                    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "8px" }}>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "8px", flexWrap: "wrap" }}>
                       <input type="text" placeholder="Min 6 characters" value={newPw} onChange={(e) => setNewPw(e.target.value)}
-                        style={{ ...inp, width: "180px" }} />
+                        style={{ ...inp, flex: "1 1 150px", maxWidth: "200px" }} />
                       <button onClick={() => setPwDirectly(m.email || "", dn)} disabled={savingPw || newPw.length < 6}
                         style={{ ...smallBtn(COLOURS.PURPLE, true), opacity: savingPw || newPw.length < 6 ? 0.5 : 1 }}>
                         {savingPw ? "Saving..." : "Save"}

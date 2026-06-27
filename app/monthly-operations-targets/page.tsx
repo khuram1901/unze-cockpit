@@ -171,7 +171,7 @@ export default function MonthlyOperationsTargetsPage() {
   }));
 
   if (loading) {
-    return <AuthWrapper><main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}><p style={{ color: COLOURS.SLATE }}>Loading…</p></main></AuthWrapper>;
+    return <AuthWrapper><main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}><p style={{ color: COLOURS.SLATE }}>Loading…</p></main></AuthWrapper>;
   }
 
   return (

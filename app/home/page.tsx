@@ -250,7 +250,7 @@ export default function HomePage() {
             {/* ── Two-column body ── */}
             <div style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "1fr 340px",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr minmax(280px, 340px)",
               gap: "20px", marginBottom: "28px",
             }}>
               {/* Left — Today's Tasks */}
@@ -559,7 +559,7 @@ function HomeSkeleton({ isMobile }: { isMobile: boolean }) {
         ))}
       </div>
       {/* Content skeleton */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: "20px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr minmax(280px, 340px)", gap: "20px" }}>
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "16px 18px" }}>
           <SkeletonPulse width="120px" height="16px" />
           <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>

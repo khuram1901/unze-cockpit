@@ -911,10 +911,8 @@ export default function ExecutiveDashboardPage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
-            <button onClick={() => window.history.back()} style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 600, color: NAVY, textDecoration: "none", marginBottom: "8px", padding: "4px 10px 4px 6px", borderRadius: "16px", backgroundColor: "#f1f5f9", border: "none", cursor: "pointer" }}><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 12L6 8l4-4" /></svg>Back</button>
-            <h1 style={{ fontSize: "26px", fontWeight: 800, color: NAVY, margin: 0 }}>{new Date().getHours() < 12 ? "Good Morning" : new Date().getHours() < 17 ? "Good Afternoon" : "Good Evening"}{userName ? ` ${userName}` : ""}</h1>
-            <p style={{ color: SLATE, fontSize: "16px", marginTop: "5px", maxWidth: "640px" }}>
-              Exceptions surface automatically. If nothing needs your attention, everything is on track.
+            <p style={{ color: SLATE, fontSize: "15px", marginTop: "2px", maxWidth: "640px" }}>
+              {new Date().getHours() < 12 ? "Good Morning" : new Date().getHours() < 17 ? "Good Afternoon" : "Good Evening"}{userName ? ` ${userName}` : ""} — exceptions surface automatically. If nothing needs your attention, everything is on track.
             </p>
           </div>
           <div style={{ backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "8px 12px" }}>
@@ -1207,7 +1205,7 @@ export default function ExecutiveDashboardPage() {
             </div>
 
             {/* Two continuous columns: left = Finance, right = Receivables + Dept Health + Performance */}
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(380px, 1fr))", gap: "14px", marginTop: "8px", alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginTop: "8px", alignItems: "start" }}>
               {/* LEFT COLUMN */}
               <div>
                 {userRole === "Admin" && companyFinance.map((cfd) => (

@@ -371,10 +371,10 @@ export default function ProductionForm() {
             <div style={{ fontSize: "17px", fontWeight: 700, color: "#1e293b" }}>{plants[0].name}</div>
           </div>
         ) : (
-          <div style={{ minWidth: "200px" }}>
+          <div style={{ minWidth: "150px" }}>
             <div style={{ fontSize: "15px", color: "#64748b", marginBottom: "2px" }}>Plant</div>
             <select
-              style={{ ...inputStyle, marginBottom: 0, width: "auto", minWidth: "200px" }}
+              style={{ ...inputStyle, marginBottom: 0, width: "auto", minWidth: "150px" }}
               value={plantId}
               onChange={(e) => setPlantId(e.target.value)}
               required

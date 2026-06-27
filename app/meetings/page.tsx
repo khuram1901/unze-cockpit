@@ -829,7 +829,7 @@ export default function MeetingsPage() {
                   <input value={item.description} onChange={(e) => updateActionItem(i, { description: e.target.value })}
                     placeholder="Task description" style={{ ...inputStyle, fontWeight: 600 }} />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
                   <div>
                     <label style={{ ...labelStyle, fontSize: "12px" }}>Owner</label>
                     <select value={item.owner_name} onChange={(e) => updateActionItem(i, { owner_name: e.target.value })} style={smallField}>

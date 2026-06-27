@@ -207,7 +207,7 @@ function MyMinutesPage() {
   if (!loading && !isHOD && !isAdmin) {
     return (
       <AuthWrapper>
-        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px" }}>
+        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <PageHeader title="My Minutes" subtitle="Meeting minutes for Heads of Department" />
           <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.AMBER}`, borderRadius: "6px", padding: "12px 16px", backgroundColor: "white", fontSize: "15px", color: COLOURS.NAVY }}>
             This page is available to Heads of Department only. Contact your administrator if you believe you should have access.

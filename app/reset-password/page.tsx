@@ -3,9 +3,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useMobile } from "../lib/useMobile";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const isMobile = useMobile();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -22,8 +25,6 @@ export default function ResetPasswordPage() {
       setChecking(false);
     };
 
-    // If URL has hash tokens (Supabase redirect), manually set the session
-    // This handles cases where the auto-detect misses the hash fragment
     const hash = window.location.hash;
     if (hash && hash.includes("access_token")) {
       const params = new URLSearchParams(hash.substring(1));
@@ -39,19 +40,16 @@ export default function ResetPasswordPage() {
       }
     }
 
-    // Listen for auth state changes — Supabase fires this when it processes the URL token
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) markReady();
     });
 
-    // Also check if there's already a session (e.g. user is already logged in)
     async function checkExisting() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) markReady();
     }
     checkExisting();
 
-    // Fallback timeout — if no session after 8 seconds, show error
     const timeout = setTimeout(() => {
       if (!settled) {
         setChecking(false);
@@ -86,7 +84,6 @@ export default function ResetPasswordPage() {
     if (error) {
       setMessage("Error: " + error.message);
     } else {
-      // Send password change confirmation email
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.email) {
         fetch("/api/notifications/password-changed", {
@@ -101,114 +98,128 @@ export default function ResetPasswordPage() {
     }
   }
 
-  const inputStyle = {
-    display: "block",
-    width: "100%",
-    padding: "10px",
-    marginTop: "4px",
-    marginBottom: "16px",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
-    fontSize: "16px",
-    boxSizing: "border-box" as const,
+  const inputProps = {
+    style: {
+      display: "block" as const, width: "100%", padding: "10px 14px",
+      border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "15px",
+      boxSizing: "border-box" as const, outline: "none",
+      transition: "border-color 0.15s",
+      backgroundColor: "#f8fafc",
+    },
+    onFocus: (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.backgroundColor = "#fff"; },
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.backgroundColor = "#f8fafc"; },
   };
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "sans-serif",
-        backgroundColor: "#f5f5f5",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "380px",
-          backgroundColor: "white",
-          padding: "32px",
-          borderRadius: "12px",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
-        }}
-      >
-        <h1 style={{ fontSize: "26px", fontWeight: "bold", marginBottom: "4px" }}>
-          Set a New Password
+    <main style={{
+      minHeight: "100vh",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      fontFamily: "sans-serif",
+      backgroundColor: "#f4f6f9",
+      padding: isMobile ? "16px" : "32px",
+    }}>
+      <div style={{
+        width: "100%", maxWidth: "420px",
+        backgroundColor: "#ffffff",
+        padding: isMobile ? "28px 24px" : "40px 36px",
+        borderRadius: "16px",
+        border: "1px solid #e2e8f0",
+        boxShadow: "0 8px 30px rgba(15,23,42,0.08)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
+          <img src="/unze-logo.png" alt="Unze Group" style={{ height: "32px", objectFit: "contain" }} />
+          <span style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>PulseDesk</span>
+        </div>
+
+        <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}>
+          Set a new password
         </h1>
-        <p style={{ color: "#777", fontSize: "16px", marginBottom: "24px" }}>
+        <p style={{ color: "#64748b", fontSize: "14px", margin: "0 0 24px", lineHeight: 1.5 }}>
           Enter your new password below.
         </p>
 
         {checking ? (
-          <p style={{ color: "#666", fontSize: "16px" }}>Verifying your reset link...</p>
+          <div style={{ padding: "20px 0", textAlign: "center" }}>
+            <div style={{ fontSize: "14px", color: "#64748b" }}>Verifying your reset link...</div>
+          </div>
         ) : sessionReady ? (
           <form onSubmit={handleSubmit}>
-            <label style={{ fontSize: "16px", fontWeight: 600 }}>
-              New password
+            <div style={{ marginBottom: "18px" }}>
+              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>
+                New password
+              </label>
               <input
                 type="password"
-                style={inputStyle}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
                 placeholder="At least 6 characters"
+                {...inputProps}
               />
-            </label>
+            </div>
 
-            <label style={{ fontSize: "16px", fontWeight: 600 }}>
-              Confirm password
+            <div style={{ marginBottom: "24px" }}>
+              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>
+                Confirm password
+              </label>
               <input
                 type="password"
-                style={inputStyle}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 minLength={6}
                 placeholder="Type password again"
+                {...inputProps}
               />
-            </label>
+            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: "100%",
-                backgroundColor: "#1e293b",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                padding: "12px",
-                fontSize: "17px",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
-              {loading ? "Updating..." : "Update Password"}
+            <button type="submit" disabled={loading} style={{
+              width: "100%", backgroundColor: "#0f172a", color: "white",
+              border: "none", borderRadius: "8px", padding: "11px 18px",
+              fontSize: "15px", fontWeight: 600, cursor: loading ? "wait" : "pointer",
+              transition: "background-color 0.15s",
+              opacity: loading ? 0.7 : 1,
+            }}>
+              {loading ? "Updating..." : "Update password"}
             </button>
           </form>
         ) : (
-          <div>
-            <a href="/forgot-password" style={{ color: "#2563eb", fontWeight: 600, fontSize: "16px" }}>
-              Request a new password reset →
-            </a>
+          <div style={{
+            padding: "16px", borderRadius: "8px",
+            backgroundColor: "#fef2f2", border: "1px solid #fecaca",
+          }}>
+            <Link href="/forgot-password" style={{ color: "#3b82f6", fontWeight: 600, fontSize: "14px", textDecoration: "none" }}>
+              Request a new password reset &rarr;
+            </Link>
           </div>
         )}
 
         {message && (
-          <p
-            style={{
-              marginTop: "16px",
-              fontSize: "16px",
-              color: message.startsWith("Error") ? "red" : "green",
-              fontWeight: 600,
-            }}
-          >
+          <div style={{
+            marginTop: "16px", padding: "10px 14px",
+            borderRadius: "8px", fontSize: "13px", fontWeight: 500,
+            backgroundColor: message.startsWith("Error") ? "#fef2f2" : "#f0fdf4",
+            color: message.startsWith("Error") ? "#dc2626" : "#16a34a",
+            border: `1px solid ${message.startsWith("Error") ? "#fecaca" : "#bbf7d0"}`,
+          }}>
             {message}
-          </p>
+          </div>
         )}
+
+        <div style={{ marginTop: "20px", textAlign: "center" }}>
+          <Link href="/login" style={{ fontSize: "13px", color: "#3b82f6", textDecoration: "none", fontWeight: 500 }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "middle", marginRight: "4px" }}>
+              <path d="M10 12L6 8l4-4" />
+            </svg>
+            Back to sign in
+          </Link>
+        </div>
+      </div>
+
+      <div style={{ marginTop: "24px", color: "#94a3b8", fontSize: "12px" }}>
+        &copy; Unze Group 1989&ndash;2026 &middot; v3.0 &middot; All Rights Reserved
       </div>
     </main>
   );
