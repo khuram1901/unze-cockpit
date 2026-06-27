@@ -209,12 +209,12 @@ export default function SidebarLayout({
               height: collapsed ? "28px" : "36px",
               width: "auto",
               objectFit: "contain",
-              filter: "brightness(0) invert(1)",
+              filter: "none",
             }}
             priority
           />
           {!collapsed && (
-            <span style={{ fontSize: "15px", fontWeight: 700, color: "white", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-sidebar-active)", whiteSpace: "nowrap" }}>
               Unze Group
             </span>
           )}
@@ -238,7 +238,7 @@ export default function SidebarLayout({
           {!collapsed && (
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{
-                fontSize: "13px", fontWeight: 600, color: "white",
+                fontSize: "13px", fontWeight: 600, color: "var(--text-sidebar-active)",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
                 {userName}

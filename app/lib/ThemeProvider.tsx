@@ -20,7 +20,7 @@ export function useTheme() {
 
 const LIGHT_VARS: Record<string, string> = {
   "--bg-page": "#f4f6f9",
-  "--bg-sidebar": "#1e3a5f",
+  "--bg-sidebar": "#ffffff",
   "--bg-card": "#ffffff",
   "--bg-card-hover": "#f8fafc",
   "--bg-input": "#ffffff",
@@ -30,18 +30,18 @@ const LIGHT_VARS: Record<string, string> = {
   "--text-primary": "#0f172a",
   "--text-secondary": "#64748b",
   "--text-muted": "#94a3b8",
-  "--text-sidebar": "rgba(255,255,255,0.7)",
-  "--text-sidebar-active": "#ffffff",
+  "--text-sidebar": "#64748b",
+  "--text-sidebar-active": "#0f172a",
   "--shadow-sm": "0 1px 3px rgba(15,23,42,0.06)",
   "--shadow-md": "0 4px 14px rgba(15,23,42,0.08)",
-  "--sidebar-active-bg": "rgba(255,255,255,0.12)",
-  "--sidebar-hover-bg": "rgba(255,255,255,0.06)",
-  "--sidebar-border": "rgba(255,255,255,0.08)",
+  "--sidebar-active-bg": "#f1f5f9",
+  "--sidebar-hover-bg": "#f8fafc",
+  "--sidebar-border": "#e2e8f0",
 };
 
 const DARK_VARS: Record<string, string> = {
   "--bg-page": "#0c0f1a",
-  "--bg-sidebar": "#142a45",
+  "--bg-sidebar": "#111827",
   "--bg-card": "#151926",
   "--bg-card-hover": "#1c2135",
   "--bg-input": "#1c2135",
@@ -51,13 +51,13 @@ const DARK_VARS: Record<string, string> = {
   "--text-primary": "#e2e8f0",
   "--text-secondary": "#94a3b8",
   "--text-muted": "#64748b",
-  "--text-sidebar": "rgba(255,255,255,0.6)",
-  "--text-sidebar-active": "#ffffff",
+  "--text-sidebar": "#94a3b8",
+  "--text-sidebar-active": "#e2e8f0",
   "--shadow-sm": "0 1px 3px rgba(0,0,0,0.3)",
   "--shadow-md": "0 4px 14px rgba(0,0,0,0.4)",
-  "--sidebar-active-bg": "rgba(255,255,255,0.12)",
-  "--sidebar-hover-bg": "rgba(255,255,255,0.06)",
-  "--sidebar-border": "rgba(255,255,255,0.06)",
+  "--sidebar-active-bg": "#1e293b",
+  "--sidebar-hover-bg": "#1c2135",
+  "--sidebar-border": "#1e293b",
 };
 
 function applyVars(vars: Record<string, string>) {
