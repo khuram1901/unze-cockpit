@@ -28,7 +28,7 @@ export default function CompanyFinancePage({ params }: { params: Promise<{ compa
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader title={`Finance — ${config.name}`} subtitle="Opening balance, monthly plan, daily cash position, and forecasts" />
         <FinanceManager companyId={config.id} companyName={config.name} />
       </main>

@@ -240,7 +240,7 @@ export default function FinancePage() {
   if (loading) {
     return (
       <AuthWrapper>
-        <main style={{ padding: "20px 24px" }}>
+        <main style={{ padding: "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <p style={{ color: COLOURS.SLATE }}>Loading...</p>
         </main>
       </AuthWrapper>
@@ -249,7 +249,7 @@ export default function FinancePage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader title="Finance" subtitle="Cash position, daily banking, forecasting, and budgets" />
 
         {showPicker && (

@@ -9,7 +9,7 @@ export default function OpeningBalancesPage() {
   const isMobile = useMobile();
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader title="Opening Balances" subtitle="Set starting stock for each plant — dashboard counts forward from here" />
         <OpeningBalancesForm />
       </main>

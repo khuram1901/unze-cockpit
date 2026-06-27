@@ -102,7 +102,7 @@ export default function HRDashboard() {
   ].filter((d) => d.value > 0);
 
   return (
-    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
       <PageHeader title="Human Resources" subtitle="Recruitment pipeline and position tracking" />
 
       {message && (

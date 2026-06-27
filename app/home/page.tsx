@@ -224,7 +224,7 @@ export default function HomePage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
 
         {/* Date subtitle */}
         <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: "0 0 20px" }}>

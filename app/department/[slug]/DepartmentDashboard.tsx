@@ -145,7 +145,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
   }
 
   return (
-    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
       <PageHeader title={config.title} subtitle={`${config.departmentName} department dashboard`} />
 
       {message && (

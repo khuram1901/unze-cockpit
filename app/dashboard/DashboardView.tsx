@@ -353,7 +353,7 @@ export default function DashboardView() {
   const hasCritical = downMachines.length > 0 || overdueTaskCount > 0;
 
   return (
-    <div style={{ maxWidth: "100vw", overflowX: "hidden" }}>
+    <div style={{ maxWidth: "100%", overflowX: "hidden" }}>
 
       {/* ═══ ZONE 1: ALERT BANNER ═══ */}
       {hasBannerItems ? (

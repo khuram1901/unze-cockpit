@@ -219,7 +219,7 @@ function MyMinutesPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader title="My Minutes" subtitle={isAdmin ? "All meeting minutes" : "Meeting minutes from meetings you attended"} />
 
         {!loading && (

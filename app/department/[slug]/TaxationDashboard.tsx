@@ -114,7 +114,7 @@ export default function TaxationDashboard() {
     .sort((a, b) => b.amount - a.amount);
 
   return (
-    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
         <PageHeader title="Taxation" subtitle="Tax notices, hearings, and financial exposure tracking" />
       </div>

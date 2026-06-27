@@ -105,7 +105,7 @@ export default function MyDashboardPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         {loading ? (
           <p style={{ color: COLOURS.SLATE }}>Loading your dashboard...</p>
         ) : (

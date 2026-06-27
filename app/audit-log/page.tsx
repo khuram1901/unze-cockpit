@@ -158,7 +158,7 @@ export default function AuditLogPage() {
   return (
     <AuthWrapper>
       <RoleGuard allowedRoles={["Admin"]}>
-        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <PageHeader title="Audit Log" subtitle="Who did what and when — system activity trail" />
 
           {/* KPI Row */}

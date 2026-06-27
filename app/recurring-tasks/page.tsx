@@ -94,7 +94,7 @@ export default function RecurringTasksPage() {
   return (
     <AuthWrapper>
       <RoleGuard allowedRoles={["Admin", "Executive"]}>
-        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
+        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
             <PageHeader title="Recurring Tasks" subtitle="Auto-create tasks on a schedule — daily, weekly, or monthly" />
             <button onClick={() => setShowForm(!showForm)} style={{
