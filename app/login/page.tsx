@@ -46,7 +46,7 @@ function getLandingRoute(profile: MemberProfile | null, email: string) {
   if (lower === "pa.ceo@unze.co.uk") return "/home";
   const role = profile?.role || "Member";
   if (role === "Admin" || role === "Executive") return "/home";
-  return "/my-dashboard";
+  return "/home";
 }
 
 export default function LoginPage() {

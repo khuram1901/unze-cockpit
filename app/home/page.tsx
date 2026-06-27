@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
-import { COLOURS } from "../lib/SharedUI";
+import { COLOURS, StatusBadge, PriorityBadge } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
+import { formatDateUK } from "../lib/dateUtils";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import {
   PAGE_REGISTRY, GROUP_ORDER, GROUP_COLOURS,
   type PageCard,
@@ -72,10 +74,11 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   return false;
 }
 
-type TaskRow = { id: string; description: string; status: string; due_date: string | null; assigned_to: string | null; assigned_to_email: string | null; project: string | null };
+type TaskRow = { id: string; description: string; status: string; due_date: string | null; assigned_to: string | null; assigned_to_email: string | null; assigned_by: string | null; project: string | null; priority: string | null; updated_at: string | null };
 type MeetingRow = { id: string; title: string; meeting_date: string };
 type WorkloadEntry = { name: string; count: number };
 type AttentionItem = { label: string; detail: string; href: string };
+type AuditEntry = { id: string; action: string; table_name: string; details: string | null; created_at: string };
 
 const STATUS_DOT: Record<string, string> = {
   "In Progress": COLOURS.BLUE,
@@ -85,6 +88,22 @@ const STATUS_DOT: Record<string, string> = {
   "To do": COLOURS.SLATE,
   "Blocked": COLOURS.RED,
 };
+
+const todayStr = new Date().toISOString().slice(0, 10);
+
+function isOverdue(t: TaskRow) {
+  if (t.status === "Completed" || t.status === "Cancelled") return false;
+  return !!t.due_date && t.due_date < todayStr;
+}
+
+function daysOverdue(t: TaskRow): number {
+  if (!t.due_date || !isOverdue(t)) return 0;
+  return Math.floor((Date.now() - new Date(t.due_date + "T00:00:00").getTime()) / 86400000);
+}
+
+function daysUntil(dateStr: string): number {
+  return Math.floor((new Date(dateStr + "T00:00:00").getTime() - Date.now()) / 86400000);
+}
 
 export default function HomePage() {
   const isMobile = useMobile();
@@ -101,21 +120,42 @@ export default function HomePage() {
   const [workload, setWorkload] = useState<WorkloadEntry[]>([]);
   const [attention, setAttention] = useState<AttentionItem[]>([]);
 
-  // Page nav (kept for fallback / non-admin views)
+  // My tasks (from My Dashboard)
+  const [myOpenTasks, setMyOpenTasks] = useState<TaskRow[]>([]);
+  const [myOverdueTasks, setMyOverdueTasks] = useState<TaskRow[]>([]);
+  const [myDueThisWeek, setMyDueThisWeek] = useState<TaskRow[]>([]);
+  const [assignedByMe, setAssignedByMe] = useState<TaskRow[]>([]);
+  const [recentActivity, setRecentActivity] = useState<AuditEntry[]>([]);
+  const [myCompletedMonth, setMyCompletedMonth] = useState(0);
+  const [userName, setUserName] = useState("");
+
+  // Page nav
   const [badges, setBadges] = useState<Record<string, { value: string; color: string }>>({});
 
   useEffect(() => {
     async function loadDashboard() {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayStr;
       const month = today.slice(0, 7);
       const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+
+      // Get current user info
+      const { data: { user } } = await supabase.auth.getUser();
+      const email = user?.email || "";
+      let fullName = email;
+
+      const { data: memberData } = await supabase.from("members").select("first_name, last_name, name").eq("email", email).maybeSingle();
+      if (memberData) {
+        fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim() || memberData.name || email;
+        setUserName(fullName);
+      }
 
       const [
         tasksRes, machinesRes, pendingMinsRes,
         utplCashRes, ifplCashRes,
         meetingsRes, membersRes, auditsRes, receivablesRes,
+        myTasksRes, assignedByMeRes, activityRes,
       ] = await Promise.all([
-        supabase.from("tasks").select("id, description, status, due_date, assigned_to, assigned_to_email, project").in("status", ["Not Started", "In Progress", "Waiting Reply"]),
+        supabase.from("tasks").select("id, description, status, due_date, assigned_to, assigned_to_email, assigned_by, project, priority, updated_at").in("status", ["Not Started", "In Progress", "Waiting Reply"]),
         supabase.from("machine_issues").select("id").eq("issue_status", "Down"),
         supabase.from("pending_minutes").select("id").eq("status", "pending"),
         supabase.from("daily_cash_position").select("closing_after_post_dated, position_date").eq("company_id", UTPL_COMPANY_ID).order("position_date", { ascending: false }).limit(1),
@@ -124,13 +164,18 @@ export default function HomePage() {
         supabase.from("members").select("id"),
         supabase.from("audit_items").select("id, status").in("status", ["Open", "In Progress"]),
         supabase.from("receivables").select("id").neq("status", "Collected"),
+        // My tasks
+        supabase.from("tasks").select("id, description, status, due_date, assigned_to, assigned_to_email, assigned_by, project, priority, updated_at").or(`assigned_to_email.eq.${email},assigned_to.eq.${fullName}`).order("created_at", { ascending: false }),
+        // Tasks I assigned to others
+        supabase.from("tasks").select("id, description, status, due_date, assigned_to, assigned_to_email, assigned_by, project, priority, updated_at").eq("assigned_by", fullName).neq("assigned_to", fullName).order("created_at", { ascending: false }).limit(20),
+        // My recent activity
+        supabase.from("audit_log").select("id, action, table_name, details, created_at").eq("user_email", email).order("created_at", { ascending: false }).limit(8),
       ]);
 
       const tasks = tasksRes.data || [] as TaskRow[];
       const overdue = tasks.filter((t) => t.due_date && t.due_date < today);
       const dueToday = tasks.filter((t) => t.due_date === today);
 
-      // Completed today count
       const { count: doneToday } = await supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "Completed").gte("updated_at", today + "T00:00:00");
 
       // KPIs
@@ -142,7 +187,7 @@ export default function HomePage() {
       });
       setCompletedToday(doneToday || 0);
 
-      // Today's tasks — due today or overdue, sorted by due date
+      // Today's tasks
       const todayAndOverdue = tasks
         .filter((t) => t.due_date && t.due_date <= today)
         .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
@@ -154,7 +199,7 @@ export default function HomePage() {
       // Meetings
       setMeetings(meetingsRes.data || []);
 
-      // Team workload — open tasks per person
+      // Team workload
       const countMap: Record<string, number> = {};
       for (const t of tasks) {
         const name = t.assigned_to || "Unassigned";
@@ -179,7 +224,19 @@ export default function HomePage() {
       }
       setAttention(att);
 
-      // Badges for nav section
+      // My personal task data
+      const myAll = myTasksRes.data || [];
+      const myOpen = myAll.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+      const myOD = myOpen.filter(isOverdue);
+      const myDTW = myOpen.filter((t) => t.due_date && t.due_date >= today && daysUntil(t.due_date) <= 7).sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
+      setMyOpenTasks(myOpen);
+      setMyOverdueTasks(myOD);
+      setMyDueThisWeek(myDTW);
+      setAssignedByMe((assignedByMeRes.data || []).filter((t) => t.status !== "Completed" && t.status !== "Cancelled"));
+      setRecentActivity(activityRes.data || []);
+      setMyCompletedMonth(myAll.filter((t) => t.status === "Completed" && t.updated_at && t.updated_at.slice(0, 7) === month).length);
+
+      // Badges
       const b: Record<string, { value: string; color: string }> = {};
       b.executive = { value: `${overdue.length} overdue`, color: overdue.length > 0 ? COLOURS.RED : COLOURS.GREEN };
       b.pa = { value: `${tasks.length} open`, color: tasks.length > 0 ? "#d97706" : COLOURS.GREEN };
@@ -222,6 +279,14 @@ export default function HomePage() {
 
   const maxWorkload = workload.length > 0 ? Math.max(...workload.map((w) => w.count)) : 1;
 
+  // Donut chart data for my tasks
+  const donutData = [
+    { name: "Overdue", value: myOverdueTasks.length, color: COLOURS.RED },
+    { name: "Waiting Reply", value: myOpenTasks.filter((t) => t.status === "Waiting Reply").length, color: "#d97706" },
+    { name: "In Progress", value: myOpenTasks.filter((t) => t.status === "In Progress").length, color: COLOURS.BLUE },
+    { name: "Not Started", value: myOpenTasks.filter((t) => t.status === "Not Started").length, color: COLOURS.SLATE },
+  ].filter((d) => d.value > 0);
+
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
@@ -235,14 +300,33 @@ export default function HomePage() {
           <HomeSkeleton isMobile={isMobile} />
         ) : (
           <>
+            {/* ── Overdue banner ── */}
+            {myOverdueTasks.length > 0 && (
+              <div style={{
+                border: "1px solid #fecaca", borderLeft: "4px solid #dc2626", borderRadius: "8px",
+                backgroundColor: "#fef2f2", padding: "10px 16px", marginBottom: "16px",
+                display: "flex", alignItems: "center", gap: "10px",
+              }}>
+                <span style={{ fontSize: "18px" }}>⚠</span>
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b" }}>
+                    {myOverdueTasks.length} overdue task{myOverdueTasks.length > 1 ? "s" : ""} assigned to you
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#991b1b", marginTop: "1px" }}>
+                    {myOverdueTasks.slice(0, 3).map((t) => t.description.slice(0, 35)).join(" · ")}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── KPI Cards ── */}
             <div style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+              gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
               gap: "14px", marginBottom: "24px",
             }}>
               <KPICard icon="📋" value={kpis.tasksDueToday} label="Tasks due today" />
-              <KPICard icon="📅" value={kpis.activeTasks} label="Open tasks" />
+              <KPICard icon="📂" value={myOpenTasks.length} label="My open tasks" />
               <KPICard icon="🏭" value={kpis.machinesDown} label={kpis.machinesDown === 0 ? "All machines up" : "Machines down"} alert={kpis.machinesDown > 0} />
               <KPICard icon="✅" value={completedToday} label="Completed today" />
             </div>
@@ -251,7 +335,7 @@ export default function HomePage() {
             <div style={{
               display: "grid",
               gridTemplateColumns: isMobile ? "1fr" : "1fr minmax(280px, 340px)",
-              gap: "20px", marginBottom: "28px",
+              gap: "20px", marginBottom: "24px",
             }}>
               {/* Left — Today's Tasks */}
               <div style={{
@@ -309,10 +393,8 @@ export default function HomePage() {
                           {task.project}
                         </span>
                       )}
-                      {task.due_date && task.due_date < new Date().toISOString().slice(0, 10) && (
-                        <span style={{
-                          fontSize: "11px", fontWeight: 600, color: COLOURS.RED, whiteSpace: "nowrap",
-                        }}>
+                      {task.due_date && task.due_date < todayStr && (
+                        <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.RED, whiteSpace: "nowrap" }}>
                           due {task.due_date.slice(5)}
                         </span>
                       )}
@@ -336,6 +418,75 @@ export default function HomePage() {
 
               {/* Right — Widgets */}
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {/* My Task Status donut */}
+                {donutData.length > 0 && (
+                  <div style={{
+                    backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                    borderRadius: "12px", overflow: "hidden",
+                  }}>
+                    <div style={{
+                      padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
+                      display: "flex", alignItems: "center", gap: "8px",
+                    }}>
+                      <span style={{ fontSize: "14px" }}>📊</span>
+                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>My Task Status</span>
+                    </div>
+                    <div style={{ padding: "12px 16px" }}>
+                      <ResponsiveContainer width="100%" height={130}>
+                        <PieChart>
+                          <Pie data={donutData} cx="50%" cy="50%" innerRadius={32} outerRadius={50} dataKey="value" paddingAngle={2}>
+                            {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                          </Pie>
+                          <Tooltip formatter={(value, name) => [`${value} task${Number(value) > 1 ? "s" : ""}`, name]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                        {donutData.map((d) => (
+                          <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: "var(--text-secondary)" }}>
+                            <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Due This Week */}
+                {myDueThisWeek.length > 0 && (
+                  <div style={{
+                    backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                    borderRadius: "12px", overflow: "hidden",
+                  }}>
+                    <div style={{
+                      padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
+                      display: "flex", alignItems: "center", gap: "8px",
+                    }}>
+                      <span style={{ fontSize: "14px" }}>📅</span>
+                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Due This Week ({myDueThisWeek.length})</span>
+                    </div>
+                    <div>
+                      {myDueThisWeek.slice(0, 5).map((t) => {
+                        const d = daysUntil(t.due_date!);
+                        const urgency = d <= 1 ? COLOURS.RED : d <= 3 ? "#d97706" : "var(--text-secondary)";
+                        return (
+                          <a key={t.id} href="/tasks" style={{
+                            display: "flex", justifyContent: "space-between", alignItems: "center",
+                            padding: "8px 16px", borderBottom: "1px solid var(--border-light)",
+                            textDecoration: "none", color: "inherit",
+                          }}>
+                            <span style={{ flex: 1, fontSize: "13px", color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                              {t.description}
+                            </span>
+                            <span style={{ fontSize: "12px", fontWeight: 700, color: urgency, flexShrink: 0, marginLeft: "8px" }}>
+                              {d === 0 ? "Today" : d === 1 ? "Tomorrow" : `${d}d`}
+                            </span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Meetings widget */}
                 <div style={{
                   backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
@@ -345,14 +496,12 @@ export default function HomePage() {
                     padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
                     display: "flex", alignItems: "center", gap: "8px",
                   }}>
-                    <span style={{ fontSize: "14px" }}>📅</span>
+                    <span style={{ fontSize: "14px" }}>🗓️</span>
                     <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Meetings</span>
                   </div>
                   <div style={{ padding: "12px 16px" }}>
                     {meetings.length === 0 ? (
-                      <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
-                        No upcoming meetings scheduled.
-                      </p>
+                      <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>No upcoming meetings scheduled.</p>
                     ) : (
                       meetings.map((m) => (
                         <a key={m.id} href="/meetings" style={{
@@ -436,6 +585,82 @@ export default function HomePage() {
                 )}
               </div>
             </div>
+
+            {/* ── Tasks I Assigned (for managers/execs) ── */}
+            {assignedByMe.length > 0 && (
+              <div style={{
+                backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                borderRadius: "12px", overflow: "hidden", marginBottom: "20px",
+              }}>
+                <div style={{
+                  padding: "12px 18px", borderBottom: "1px solid var(--border-color)",
+                  display: "flex", alignItems: "center", gap: "8px",
+                }}>
+                  <span style={{ fontSize: "14px" }}>📤</span>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Tasks I Assigned ({assignedByMe.length} open)</span>
+                </div>
+                {assignedByMe.slice(0, 10).map((t) => (
+                  <a key={t.id} href="/tasks" style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "8px 18px", borderBottom: "1px solid var(--border-light)",
+                    textDecoration: "none", color: "inherit",
+                    transition: "background-color 0.1s",
+                  }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t.description}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                        {t.assigned_to || "Unassigned"}{t.due_date && ` · Due: ${formatDateUK(t.due_date)}`}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "5px", alignItems: "center", flexShrink: 0 }}>
+                      {isOverdue(t) && <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.RED }}>{daysOverdue(t)}d late</span>}
+                      <StatusBadge status={t.status} />
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {/* ── My Recent Activity ── */}
+            {recentActivity.length > 0 && (
+              <div style={{
+                backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                borderRadius: "12px", overflow: "hidden", marginBottom: "20px",
+              }}>
+                <div style={{
+                  padding: "12px 18px", borderBottom: "1px solid var(--border-color)",
+                  display: "flex", alignItems: "center", gap: "8px",
+                }}>
+                  <span style={{ fontSize: "14px" }}>🕐</span>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Recent Activity</span>
+                </div>
+                {recentActivity.map((a) => (
+                  <div key={a.id} style={{
+                    padding: "8px 18px", borderBottom: "1px solid var(--border-light)",
+                    display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>
+                        <span style={{
+                          fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "6px", marginRight: "6px",
+                          backgroundColor: a.action === "Created" ? "#dcfce7" : a.action.startsWith("Updated") ? "#fef3c7" : "#fee2e2",
+                          color: a.action === "Created" ? "#16a34a" : a.action.startsWith("Updated") ? "#d97706" : "#dc2626",
+                        }}>{a.action}</span>
+                        {a.table_name}{a.details && ` — ${a.details.slice(0, 60)}`}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "12px", color: "var(--text-secondary)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      {formatDateUK(a.created_at.slice(0, 10))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* ── Quick Nav — page links grouped ── */}
             {groups.length > 0 && (
@@ -548,7 +773,6 @@ function SkeletonPulse({ width, height, borderRadius = "6px", style }: { width: 
 function HomeSkeleton({ isMobile }: { isMobile: boolean }) {
   return (
     <>
-      {/* KPI skeleton */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: "14px", marginBottom: "24px" }}>
         {[1, 2, 3, 4].map((i) => (
           <div key={i} style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "16px 18px" }}>
@@ -558,7 +782,6 @@ function HomeSkeleton({ isMobile }: { isMobile: boolean }) {
           </div>
         ))}
       </div>
-      {/* Content skeleton */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr minmax(280px, 340px)", gap: "20px" }}>
         <div style={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: "12px", padding: "16px 18px" }}>
           <SkeletonPulse width="120px" height="16px" />

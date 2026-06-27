@@ -168,7 +168,6 @@ export default function SidebarLayout({
   // Always-visible items not in registry
   const alwaysItems: PageCard[] = [
     { permKey: "_home", title: "Dashboard", subtitle: "", href: "/home", icon: "🏠", group: "_top" },
-    { permKey: "_my_dashboard", title: "My Dashboard", subtitle: "", href: "/my-dashboard", icon: "📊", group: "_top" },
   ];
 
   const sidebarW = isMobile ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;
