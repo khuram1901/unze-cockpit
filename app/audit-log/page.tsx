@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import RoleGuard from "../lib/RoleGuard";
+import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { formatDateTimeUK, formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
@@ -53,6 +53,7 @@ const ACTION_COLOURS: Record<string, { bg: string; text: string }> = {
 };
 
 export default function AuditLogPage() {
+  const { checking } = useRequireCapability("audit_log");
   const isMobile = useMobile();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,9 +156,10 @@ export default function AuditLogPage() {
     );
   }
 
+  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "#64748b" }}>Checking permissions...</p></main></AuthWrapper>;
+
   return (
     <AuthWrapper>
-      <RoleGuard allowedRoles={["Admin"]}>
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <PageHeader title="Audit Log" subtitle="Who did what and when — system activity trail" />
 
@@ -273,7 +275,6 @@ export default function AuditLogPage() {
             })
           )}
         </main>
-      </RoleGuard>
     </AuthWrapper>
   );
 }

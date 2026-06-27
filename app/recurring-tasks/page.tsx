@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import RoleGuard from "../lib/RoleGuard";
+import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
@@ -30,6 +30,7 @@ type Member = { name: string; email: string | null; department: string | null; f
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function RecurringTasksPage() {
+  const { checking } = useRequireCapability("recurring_tasks");
   const isMobile = useMobile();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -91,9 +92,10 @@ export default function RecurringTasksPage() {
     loadData();
   }
 
+  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "#64748b" }}>Checking permissions...</p></main></AuthWrapper>;
+
   return (
     <AuthWrapper>
-      <RoleGuard allowedRoles={["Admin", "Executive"]}>
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
             <PageHeader title="Recurring Tasks" subtitle="Auto-create tasks on a schedule — daily, weekly, or monthly" />
@@ -150,7 +152,6 @@ export default function RecurringTasksPage() {
             </div>
           )}
         </main>
-      </RoleGuard>
     </AuthWrapper>
   );
 }

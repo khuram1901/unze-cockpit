@@ -55,8 +55,8 @@ export const PAGE_REGISTRY: PageCard[] = [
   // ── Tasks & Meetings ──
   { permKey: "_tasks", title: "Tasks", subtitle: "View and manage tasks", href: "/tasks", icon: "✅", group: "Tasks & Meetings", badgeKey: "tasks" },
   { permKey: "_calendar", title: "Calendar", subtitle: "Tasks and deadlines view", href: "/calendar", icon: "📅", group: "Tasks & Meetings", badgeKey: "calendar" },
-  { permKey: "_meetings", title: "Meetings", subtitle: "Minutes, approvals, action items", href: "/meetings", icon: "🤝", group: "Tasks & Meetings", badgeKey: "meetings" },
-  { permKey: "_my_minutes", title: "My Minutes", subtitle: "Meeting minutes for HODs", href: "/my-minutes", icon: "📄", group: "Tasks & Meetings", badgeKey: "minutes" },
+  { permKey: "can_see_all_minutes", title: "Meetings", subtitle: "Minutes, approvals, action items", href: "/meetings", icon: "🤝", group: "Tasks & Meetings", badgeKey: "meetings" },
+  { permKey: "_my_minutes", title: "My Minutes", subtitle: "Meeting minutes you attended", href: "/my-minutes", icon: "📄", group: "Tasks & Meetings", badgeKey: "minutes" },
   { permKey: "can_manage_recurring_tasks", title: "Recurring Tasks", subtitle: "Manage recurring task templates", href: "/recurring-tasks", icon: "🔄", group: "Tasks & Meetings" },
 
   // ── Departments ──

@@ -104,10 +104,16 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
     const email = userData.user?.email || null;
     setMyEmail(email);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("tasks")
       .select("*")
       .order("created_at", { ascending: false });
+
+    if (!isPrivileged && email) {
+      query = query.eq("assigned_to_email", email);
+    }
+
+    const { data, error } = await query;
 
     if (error) setErrorMsg(error.message);
     else setTasks(data || []);
@@ -138,9 +144,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
   if (loading) return <p style={{ color: SLATE }}>Loading tasks…</p>;
   if (errorMsg) return <p style={{ color: "#dc2626" }}>Error: {errorMsg}</p>;
 
-  const scopedTasks = isPrivileged
-    ? tasks
-    : tasks.filter((t) => t.assigned_to_email && t.assigned_to_email === myEmail);
+  const scopedTasks = tasks;
 
   const allOpen = scopedTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const overdueTasks = allOpen.filter(isOverdue);

@@ -73,56 +73,56 @@ function MyMinutesPage() {
 
     const { data: memberData } = await supabase
       .from("members")
-      .select("role, is_hod")
+      .select("id, role, is_hod, name, first_name, last_name")
       .eq("email", email)
       .maybeSingle();
 
     const role = memberData?.role || "Member";
     const hod = memberData?.is_hod || false;
-    const admin = role === "Admin" || role === "Executive";
-    setIsHOD(hod);
-    setIsAdmin(admin);
 
-    if (!hod && !admin) { setLoading(false); return; }
+    // Check permissions properly (Admin/CEO/PA see all)
+    let privUser = role === "Admin" || role === "Executive";
+    if (!privUser && memberData?.id) {
+      const { data: perms } = await supabase.from("member_permissions").select("can_see_all_minutes").eq("member_id", memberData.id).maybeSingle();
+      if (perms?.can_see_all_minutes === true) privUser = true;
+    }
+
+    setIsHOD(hod);
+    setIsAdmin(privUser);
 
     let meetingsData: Meeting[] = [];
 
-    if (admin) {
+    if (privUser) {
+      // Admin / CEO / PA / override-granted: see ALL meetings
       const { data } = await supabase.from("meetings").select("*").order("meeting_date", { ascending: false });
       meetingsData = data || [];
     } else {
-      // HOD: only see meetings where they're an attendee
+      // Everyone else: only see meetings they attended
       const { data: attendeeLinks } = await supabase
         .from("meeting_attendees")
         .select("meeting_id")
         .eq("member_email", email);
 
-      const meetingIds = (attendeeLinks || []).map((a) => a.meeting_id);
+      const meetingIds = new Set((attendeeLinks || []).map((a) => a.meeting_id));
 
-      if (meetingIds.length > 0) {
+      // Also match by full name in the attendees JSON array
+      const fullName = memberData ? `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim() || memberData.name : "";
+      if (fullName && fullName.length >= 3) {
+        const { data: allMeetings } = await supabase.from("meetings").select("id, attendees").order("meeting_date", { ascending: false });
+        for (const m of allMeetings || []) {
+          if (m.attendees?.some((a: string) => a.toLowerCase() === fullName.toLowerCase())) {
+            meetingIds.add(m.id);
+          }
+        }
+      }
+
+      if (meetingIds.size > 0) {
         const { data } = await supabase
           .from("meetings")
           .select("*")
-          .in("id", meetingIds)
+          .in("id", Array.from(meetingIds))
           .order("meeting_date", { ascending: false });
         meetingsData = data || [];
-      }
-
-      // Also check meetings where attendees array contains their name
-      const { data: memberInfo } = await supabase.from("members").select("name, first_name, last_name").eq("email", email).maybeSingle();
-      const userName = memberInfo ? `${memberInfo.first_name || ""} ${memberInfo.last_name || ""}`.trim() || memberInfo.name : "";
-
-      if (userName) {
-        const { data: allMeetings } = await supabase.from("meetings").select("*").order("meeting_date", { ascending: false });
-        const nameMatches = (allMeetings || []).filter((m) =>
-          m.attendees?.some((a: string) => a.toLowerCase().includes(userName.toLowerCase()) || userName.toLowerCase().includes(a.toLowerCase()))
-        );
-        for (const m of nameMatches) {
-          if (!meetingsData.some((existing) => existing.id === m.id)) {
-            meetingsData.push(m);
-          }
-        }
-        meetingsData.sort((a, b) => b.meeting_date.localeCompare(a.meeting_date));
       }
     }
 
@@ -146,7 +146,7 @@ function MyMinutesPage() {
     setTasks(taskData || []);
 
     // Mark as viewed
-    if (!admin && email) {
+    if (!privUser && email) {
       for (const m of meetingsData) {
         await supabase.from("meeting_attendees").update({ viewed_at: new Date().toISOString() }).eq("meeting_id", m.id).eq("member_email", email).is("viewed_at", null);
       }
@@ -204,13 +204,13 @@ function MyMinutesPage() {
     loadData();
   }
 
-  if (!loading && !isHOD && !isAdmin) {
+  if (!loading && meetings.length === 0 && !isAdmin) {
     return (
       <AuthWrapper>
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-          <PageHeader title="My Minutes" subtitle="Meeting minutes for Heads of Department" />
+          <PageHeader title="My Minutes" subtitle="Meeting minutes from meetings you attended" />
           <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.AMBER}`, borderRadius: "6px", padding: "12px 16px", backgroundColor: "white", fontSize: "15px", color: COLOURS.NAVY }}>
-            This page is available to Heads of Department only. Contact your administrator if you believe you should have access.
+            No meeting minutes found. You will see minutes here once you are added as an attendee to a meeting.
           </div>
         </main>
       </AuthWrapper>

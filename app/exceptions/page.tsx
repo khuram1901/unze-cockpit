@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
+import { useRequireCapability } from "../lib/useRouteGuard";
 import {
   COLOURS,
   PageHeader,
@@ -56,6 +57,7 @@ function sourceLabel(s: string | null): string {
 }
 
 export default function ExceptionsPage() {
+  const { checking } = useRequireCapability("exceptions");
   const isMobile = useMobile();
   const [escalations, setEscalations] = useState<EscalationTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +87,8 @@ export default function ExceptionsPage() {
     (e) => e.status === "Completed" || e.status === "Cancelled"
   );
   const totalOpen = waitingReply.length + submitted.length;
+
+  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "#64748b" }}>Checking permissions...</p></main></AuthWrapper>;
 
   return (
     <AuthWrapper>

@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
+import { useRequireCapability } from "../lib/useRouteGuard";
 import {
   COLOURS,
   SectionTitle,
@@ -96,6 +97,7 @@ function bestMatch(name: string, members: { name: string; email: string }[]): { 
 }
 
 export default function MeetingsPage() {
+  const { checking } = useRequireCapability("meetings_admin");
   const isMobile = useMobile();
   const [transcript, setTranscript] = useState("");
   const [extracting, setExtracting] = useState(false);
@@ -490,6 +492,8 @@ export default function MeetingsPage() {
   if (expandedGroups.size === 0 && groupedMeetings.length > 0) {
     expandedGroups.add(groupedMeetings[0][0]);
   }
+
+  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "#64748b" }}>Checking permissions...</p></main></AuthWrapper>;
 
   return (
     <AuthWrapper>

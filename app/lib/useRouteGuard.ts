@@ -3,14 +3,30 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "./supabase";
-import { canViewFinance, canViewReceivables, canViewExecutiveDashboard, canViewDepartment, type UserCtx, type PermOverrides } from "./permissions";
+import {
+  canViewFinance, canViewReceivables, canViewExecutiveDashboard, canViewDepartment,
+  canViewOperations, canSeeAllMinutes, canSeeAllTasks, canManageRecurringTasks,
+  canManageMembers, canViewAuditLog, canViewExceptions, canImportExport,
+  isPrivileged, isAdminTier,
+  type UserCtx, type PermOverrides,
+} from "./permissions";
 
-type Capability = "finance" | "receivables" | "executive";
+type Capability = "finance" | "receivables" | "executive" | "operations"
+  | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
+  | "audit_log" | "exceptions" | "import_export";
 
 const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   finance: canViewFinance,
   receivables: canViewReceivables,
   executive: canViewExecutiveDashboard,
+  operations: canViewOperations,
+  minutes: (u) => isPrivileged(u) || canSeeAllMinutes(u),
+  meetings_admin: isPrivileged,
+  recurring_tasks: canManageRecurringTasks,
+  members: canManageMembers,
+  audit_log: canViewAuditLog,
+  exceptions: canViewExceptions,
+  import_export: canImportExport,
 };
 
 async function loadUserCtx(email: string): Promise<UserCtx> {
