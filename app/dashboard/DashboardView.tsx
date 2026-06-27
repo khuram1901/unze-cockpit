@@ -182,6 +182,28 @@ export default function DashboardView() {
     const email = userData.user?.email || null;
     setMyEmail(email);
 
+    // Determine role and assigned plants
+    let role = "Member";
+    let assignedPlantIds: Set<string> | null = null;
+    if (email) {
+      const { data: memberData } = await supabase
+        .from("members").select("id, role").eq("email", email).maybeSingle();
+      role = memberData?.role || "Member";
+      setMyRole(role);
+
+      if (role !== "Admin" && role !== "Executive") {
+        if (memberData?.id) {
+          const { data: mp } = await supabase
+            .from("member_plants").select("plant_id").eq("member_id", memberData.id);
+          assignedPlantIds = new Set((mp || []).map((r) => r.plant_id));
+        } else {
+          assignedPlantIds = new Set();
+        }
+      }
+    }
+
+    const isPriv = role === "Admin" || role === "Executive";
+
     const [
       plantsRes, openRes, brokenOpenRes, prodRes, dispRes, brkRes, scrapRes,
       prodTargetsRes, dispTargetsRes, machineRes, tasksRes,
@@ -196,10 +218,16 @@ export default function DashboardView() {
       supabase.from("monthly_production_targets").select("*").eq("target_month", currentMonth),
       supabase.from("monthly_dispatch_targets").select("*").eq("target_month", currentMonth),
       supabase.from("machine_issues").select("*").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
-      supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(500),
+      isPriv
+        ? supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(500)
+        : supabase.from("tasks").select("*").eq("assigned_to_email", email || "").order("created_at", { ascending: false }),
     ]);
 
-    const plants = plantsRes.data || [];
+    // Scope plants to user's assigned plants for non-privileged users
+    const allPlants = plantsRes.data || [];
+    const plants = assignedPlantIds ? allPlants.filter((p) => assignedPlantIds!.has(p.id)) : allPlants;
+    const plantIdSet = new Set(plants.map((p) => p.id));
+
     const opening = openRes.data || [];
     const brokenOpening = brokenOpenRes.data || [];
     const production = prodRes.data || [];
@@ -209,20 +237,16 @@ export default function DashboardView() {
     const prodTargets: MonthlyTarget[] = prodTargetsRes.data || [];
     const dispTargets: MonthlyTarget[] = dispTargetsRes.data || [];
 
-    setMachineIssues(machineRes.data || []);
+    const allMachineIssues = machineRes.data || [];
+    setMachineIssues(assignedPlantIds
+      ? allMachineIssues.filter((m) => plants.some((p) => p.name === m.plant_name))
+      : allMachineIssues);
 
-    // Only show tasks for managers/members, not admin/executive
     const allTasks: Task[] = tasksRes.data || [];
-    if (email) {
-      const { data: memberData } = await supabase
-        .from("members").select("role").eq("email", email).maybeSingle();
-      const role = memberData?.role || "Member";
-      setMyRole(role);
-      if (role === "Manager" || role === "Member") {
-        setMyTasks(allTasks.filter((t) => t.assigned_to_email === email));
-      } else {
-        setMyTasks([]);
-      }
+    if (role === "Manager" || role === "Member") {
+      setMyTasks(allTasks);
+    } else {
+      setMyTasks([]);
     }
 
     const weekNumber = getMonthWeekNumber(today);
