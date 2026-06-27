@@ -20,7 +20,7 @@ export function useTheme() {
 
 const LIGHT_VARS: Record<string, string> = {
   "--bg-page": "#f4f6f9",
-  "--bg-sidebar": "#0f172a",
+  "--bg-sidebar": "#1e3a5f",
   "--bg-card": "#ffffff",
   "--bg-card-hover": "#f8fafc",
   "--bg-input": "#ffffff",
@@ -41,7 +41,7 @@ const LIGHT_VARS: Record<string, string> = {
 
 const DARK_VARS: Record<string, string> = {
   "--bg-page": "#0c0f1a",
-  "--bg-sidebar": "#0a0d16",
+  "--bg-sidebar": "#142a45",
   "--bg-card": "#151926",
   "--bg-card-hover": "#1c2135",
   "--bg-input": "#1c2135",

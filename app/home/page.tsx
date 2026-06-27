@@ -176,21 +176,16 @@ export default function HomePage() {
         </div>
       ) : (
         groups.map((group) => (
-          <div key={group.title} style={{ marginBottom: "24px" }}>
+          <div key={group.title} style={{ marginBottom: "20px" }}>
             <div style={{
-              fontSize: "11px", fontWeight: 700, color: group.colour,
-              textTransform: "uppercase", letterSpacing: "1px",
-              padding: "0 0 8px", marginBottom: "10px",
-              borderBottom: `2px solid ${group.colour}`,
-              display: "flex", alignItems: "center", gap: "8px",
+              fontSize: "11px", fontWeight: 700, color: "var(--text-muted)",
+              textTransform: "uppercase", letterSpacing: "1.2px",
+              padding: "0 0 6px", marginBottom: "2px",
+              borderBottom: "1px solid var(--border-color)",
             }}>
               {group.title}
             </div>
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(230px, 1fr))",
-              gap: "12px",
-            }}>
+            <div>
               {group.cards.map((card) => {
                 const badge = card.badgeKey ? badges[card.badgeKey] : undefined;
                 return (
@@ -199,42 +194,37 @@ export default function HomePage() {
                     href={card.href}
                     style={{
                       textDecoration: "none",
-                      border: "1px solid var(--border-color)",
-                      borderRadius: "14px",
-                      padding: "16px 18px",
-                      backgroundColor: "var(--bg-card)",
+                      display: "flex", alignItems: "center", gap: "12px",
+                      padding: isMobile ? "10px 8px" : "10px 12px",
+                      borderRadius: "8px",
                       cursor: "pointer",
-                      transition: "all 0.2s ease",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
-                      position: "relative",
-                      overflow: "hidden",
-                      borderLeft: `4px solid ${group.colour}`,
+                      transition: "background-color 0.15s",
+                      color: "inherit",
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.boxShadow = "var(--shadow-md)";
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.boxShadow = "none";
-                      e.currentTarget.style.transform = "none";
-                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-hover)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      {showIcons && <span style={{ fontSize: "22px" }}>{card.icon}</span>}
-                      {badge && (
-                        <span style={{
-                          fontSize: "11px", fontWeight: 700, color: "white",
-                          backgroundColor: badge.color, borderRadius: "10px",
-                          padding: "2px 8px", whiteSpace: "nowrap",
-                        }}>
-                          {badge.value}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>{card.title}</div>
-                    <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.4 }}>{card.subtitle}</div>
+                    {showIcons && (
+                      <span style={{ fontSize: "18px", flexShrink: 0, width: "24px", textAlign: "center" }}>
+                        {card.icon}
+                      </span>
+                    )}
+                    <span style={{
+                      flex: 1, fontSize: "14px", fontWeight: 500,
+                      color: "var(--text-primary)",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {card.title}
+                    </span>
+                    {badge && (
+                      <span style={{
+                        fontSize: "11px", fontWeight: 700, color: "white",
+                        backgroundColor: badge.color, borderRadius: "10px",
+                        padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0,
+                      }}>
+                        {badge.value}
+                      </span>
+                    )}
                   </a>
                 );
               })}
@@ -259,47 +249,36 @@ function SkeletonPulse({ width, height, borderRadius = "6px", style }: { width: 
   );
 }
 
-function SkeletonCard() {
+function SkeletonRow() {
   return (
     <div style={{
-      border: "1px solid var(--border-color)", borderRadius: "14px",
-      borderLeft: "4px solid var(--border-color)",
-      padding: "16px 18px", backgroundColor: "var(--bg-card)",
-      display: "flex", flexDirection: "column", gap: "8px",
+      display: "flex", alignItems: "center", gap: "12px",
+      padding: "10px 12px",
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <SkeletonPulse width="28px" height="28px" borderRadius="6px" />
-        <SkeletonPulse width="70px" height="20px" borderRadius="10px" />
-      </div>
-      <SkeletonPulse width="65%" height="14px" />
-      <SkeletonPulse width="90%" height="12px" />
+      <SkeletonPulse width="24px" height="24px" borderRadius="4px" />
+      <SkeletonPulse width="45%" height="14px" style={{ flex: 1 }} />
+      <SkeletonPulse width="70px" height="20px" borderRadius="10px" />
     </div>
   );
 }
 
 function HomeSkeleton({ isMobile }: { isMobile: boolean }) {
   const groups = [
-    { width: "140px", cards: 3 },
-    { width: "90px", cards: 4 },
-    { width: "110px", cards: 5 },
+    { width: "140px", rows: 3 },
+    { width: "90px", rows: 4 },
+    { width: "110px", rows: 3 },
   ];
 
   return (
     <>
       {groups.map((g, gi) => (
-        <div key={gi} style={{ marginBottom: "24px" }}>
-          <div style={{ paddingBottom: "8px", marginBottom: "10px", borderBottom: "2px solid var(--border-color)" }}>
-            <SkeletonPulse width={g.width} height="14px" />
+        <div key={gi} style={{ marginBottom: "20px" }}>
+          <div style={{ paddingBottom: "6px", marginBottom: "2px", borderBottom: "1px solid var(--border-color)" }}>
+            <SkeletonPulse width={g.width} height="12px" />
           </div>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(230px, 1fr))",
-            gap: "12px",
-          }}>
-            {Array.from({ length: g.cards }).map((_, ci) => (
-              <SkeletonCard key={ci} />
-            ))}
-          </div>
+          {Array.from({ length: g.rows }).map((_, ri) => (
+            <SkeletonRow key={ri} />
+          ))}
         </div>
       ))}
     </>
