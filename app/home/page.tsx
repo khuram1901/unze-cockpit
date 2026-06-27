@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
-import { COLOURS, PageHeader } from "../lib/SharedUI";
+import { COLOURS } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
@@ -152,98 +152,96 @@ export default function HomePage() {
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100vw", overflowX: "hidden" }}>
-        <PageHeader title="Dashboard" subtitle="Your command centre — everything at a glance" hideHome />
+      {/* Purpose statement */}
+      <div style={{
+        backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+        borderLeft: `4px solid ${COLOURS.NAVY}`,
+        borderRadius: "12px", padding: isMobile ? "12px 14px" : "14px 20px", marginBottom: "20px",
+        fontSize: isMobile ? "13px" : "14px", color: "var(--text-primary)",
+        lineHeight: 1.7, fontStyle: "italic", fontWeight: 500,
+      }}>
+        &ldquo;Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.&rdquo;
+      </div>
 
+      {loading ? (
+        <HomeSkeleton isMobile={isMobile} />
+      ) : groups.length === 0 ? (
         <div style={{
-          backgroundColor: "white", border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.NAVY}`,
-          borderRadius: "8px", padding: isMobile ? "12px 14px" : "14px 20px", marginBottom: "16px",
-          fontSize: isMobile ? "13px" : "15px", color: COLOURS.NAVY, lineHeight: 1.7, fontStyle: "italic", fontWeight: 600,
+          border: "1px solid var(--border-color)", borderRadius: "14px", padding: "48px 20px",
+          backgroundColor: "var(--bg-card)", textAlign: "center", color: "var(--text-secondary)",
         }}>
-          &ldquo;Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.&rdquo;
+          <div style={{ fontSize: "36px", marginBottom: "12px" }}>🔒</div>
+          <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px" }}>No pages assigned</div>
+          <div style={{ fontSize: "14px" }}>Contact your Admin to get access to dashboard sections.</div>
         </div>
-
-        {loading ? (
-          <HomeSkeleton isMobile={isMobile} />
-        ) : groups.length === 0 ? (
-          <div style={{
-            border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "40px 20px",
-            backgroundColor: "white", textAlign: "center", color: COLOURS.SLATE,
-          }}>
-            <div style={{ fontSize: "32px", marginBottom: "12px" }}>🔒</div>
-            <div style={{ fontSize: "16px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px" }}>No pages assigned</div>
-            <div style={{ fontSize: "14px" }}>Contact your Admin to get access to dashboard sections.</div>
-          </div>
-        ) : (
-          groups.map((group) => (
-            <div key={group.title} style={{ marginBottom: "20px" }}>
-              <div style={{
-                fontSize: "15px", fontWeight: 700, color: group.colour,
-                padding: "6px 0", marginBottom: "8px",
-                borderBottom: `2px solid ${group.colour}`,
-                display: "flex", alignItems: "center", gap: "8px",
-              }}>
-                {group.title}
-              </div>
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))",
-                gap: "10px",
-              }}>
-                {group.cards.map((card) => {
-                  const badge = card.badgeKey ? badges[card.badgeKey] : undefined;
-                  return (
-                    <a
-                      key={card.href}
-                      href={card.href}
-                      style={{
-                        textDecoration: "none",
-                        border: `1px solid ${COLOURS.BORDER}`,
-                        borderRadius: "10px",
-                        padding: "14px 16px",
-                        backgroundColor: "white",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                        position: "relative",
-                        overflow: "hidden",
-                        borderTop: `3px solid ${group.colour}`,
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.1)";
-                        (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-2px)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none";
-                        (e.currentTarget as HTMLAnchorElement).style.transform = "none";
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        {showIcons && <span style={{ fontSize: "24px" }}>{card.icon}</span>}
-                        {badge && (
-                          <span style={{
-                            fontSize: "11px", fontWeight: 700, color: "white",
-                            backgroundColor: badge.color, borderRadius: "10px",
-                            padding: "2px 8px", whiteSpace: "nowrap",
-                          }}>
-                            {badge.value}
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{card.title}</div>
-                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, lineHeight: 1.4 }}>{card.subtitle}</div>
-                    </a>
-                  );
-                })}
-              </div>
+      ) : (
+        groups.map((group) => (
+          <div key={group.title} style={{ marginBottom: "24px" }}>
+            <div style={{
+              fontSize: "11px", fontWeight: 700, color: group.colour,
+              textTransform: "uppercase", letterSpacing: "1px",
+              padding: "0 0 8px", marginBottom: "10px",
+              borderBottom: `2px solid ${group.colour}`,
+              display: "flex", alignItems: "center", gap: "8px",
+            }}>
+              {group.title}
             </div>
-          ))
-        )}
-
-        <div style={{ textAlign: "center", color: COLOURS.SLATE, fontSize: "12px", marginTop: "20px", paddingBottom: "10px" }}>
-          © Unze Group 1989–2026 · v3.0 · All Rights Reserved
-        </div>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(230px, 1fr))",
+              gap: "12px",
+            }}>
+              {group.cards.map((card) => {
+                const badge = card.badgeKey ? badges[card.badgeKey] : undefined;
+                return (
+                  <a
+                    key={card.href}
+                    href={card.href}
+                    style={{
+                      textDecoration: "none",
+                      border: "1px solid var(--border-color)",
+                      borderRadius: "14px",
+                      padding: "16px 18px",
+                      backgroundColor: "var(--bg-card)",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      position: "relative",
+                      overflow: "hidden",
+                      borderLeft: `4px solid ${group.colour}`,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = "var(--shadow-md)";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = "none";
+                      e.currentTarget.style.transform = "none";
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      {showIcons && <span style={{ fontSize: "22px" }}>{card.icon}</span>}
+                      {badge && (
+                        <span style={{
+                          fontSize: "11px", fontWeight: 700, color: "white",
+                          backgroundColor: badge.color, borderRadius: "10px",
+                          padding: "2px 8px", whiteSpace: "nowrap",
+                        }}>
+                          {badge.value}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>{card.title}</div>
+                    <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.4 }}>{card.subtitle}</div>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        ))
+      )}
       </main>
     </AuthWrapper>
   );
@@ -253,7 +251,7 @@ function SkeletonPulse({ width, height, borderRadius = "6px", style }: { width: 
   return (
     <div style={{
       width, height, borderRadius,
-      background: "linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%)",
+      background: "linear-gradient(90deg, var(--border-color) 25%, var(--border-light) 50%, var(--border-color) 75%)",
       backgroundSize: "200% 100%",
       animation: "shimmer 1.5s ease-in-out infinite",
       ...style,
@@ -264,16 +262,16 @@ function SkeletonPulse({ width, height, borderRadius = "6px", style }: { width: 
 function SkeletonCard() {
   return (
     <div style={{
-      border: `1px solid ${COLOURS.BORDER}`, borderRadius: "10px",
-      borderTop: `3px solid ${COLOURS.BORDER}`,
-      padding: "14px 16px", backgroundColor: "white",
+      border: "1px solid var(--border-color)", borderRadius: "14px",
+      borderLeft: "4px solid var(--border-color)",
+      padding: "16px 18px", backgroundColor: "var(--bg-card)",
       display: "flex", flexDirection: "column", gap: "8px",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         <SkeletonPulse width="28px" height="28px" borderRadius="6px" />
         <SkeletonPulse width="70px" height="20px" borderRadius="10px" />
       </div>
-      <SkeletonPulse width="65%" height="16px" />
+      <SkeletonPulse width="65%" height="14px" />
       <SkeletonPulse width="90%" height="12px" />
     </div>
   );
@@ -288,16 +286,15 @@ function HomeSkeleton({ isMobile }: { isMobile: boolean }) {
 
   return (
     <>
-      <style>{`@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
       {groups.map((g, gi) => (
-        <div key={gi} style={{ marginBottom: "20px" }}>
-          <div style={{ paddingBottom: "8px", marginBottom: "8px", borderBottom: `2px solid ${COLOURS.BORDER}` }}>
-            <SkeletonPulse width={g.width} height="16px" />
+        <div key={gi} style={{ marginBottom: "24px" }}>
+          <div style={{ paddingBottom: "8px", marginBottom: "10px", borderBottom: "2px solid var(--border-color)" }}>
+            <SkeletonPulse width={g.width} height="14px" />
           </div>
           <div style={{
             display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(220px, 1fr))",
-            gap: "10px",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(230px, 1fr))",
+            gap: "12px",
           }}>
             {Array.from({ length: g.cards }).map((_, ci) => (
               <SkeletonCard key={ci} />

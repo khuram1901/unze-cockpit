@@ -1,0 +1,100 @@
+"use client";
+
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+
+type Theme = "light" | "dark";
+
+type ThemeContextType = {
+  theme: Theme;
+  toggleTheme: () => void;
+};
+
+const ThemeContext = createContext<ThemeContextType>({
+  theme: "light",
+  toggleTheme: () => {},
+});
+
+export function useTheme() {
+  return useContext(ThemeContext);
+}
+
+const LIGHT_VARS: Record<string, string> = {
+  "--bg-page": "#f4f6f9",
+  "--bg-sidebar": "#0f172a",
+  "--bg-card": "#ffffff",
+  "--bg-card-hover": "#f8fafc",
+  "--bg-input": "#ffffff",
+  "--bg-header": "#ffffff",
+  "--border-color": "#e2e8f0",
+  "--border-light": "#f1f5f9",
+  "--text-primary": "#0f172a",
+  "--text-secondary": "#64748b",
+  "--text-muted": "#94a3b8",
+  "--text-sidebar": "rgba(255,255,255,0.7)",
+  "--text-sidebar-active": "#ffffff",
+  "--shadow-sm": "0 1px 3px rgba(15,23,42,0.06)",
+  "--shadow-md": "0 4px 14px rgba(15,23,42,0.08)",
+  "--sidebar-active-bg": "rgba(255,255,255,0.12)",
+  "--sidebar-hover-bg": "rgba(255,255,255,0.06)",
+  "--sidebar-border": "rgba(255,255,255,0.08)",
+};
+
+const DARK_VARS: Record<string, string> = {
+  "--bg-page": "#0c0f1a",
+  "--bg-sidebar": "#0a0d16",
+  "--bg-card": "#151926",
+  "--bg-card-hover": "#1c2135",
+  "--bg-input": "#1c2135",
+  "--bg-header": "#151926",
+  "--border-color": "#1e293b",
+  "--border-light": "#1c2135",
+  "--text-primary": "#e2e8f0",
+  "--text-secondary": "#94a3b8",
+  "--text-muted": "#64748b",
+  "--text-sidebar": "rgba(255,255,255,0.6)",
+  "--text-sidebar-active": "#ffffff",
+  "--shadow-sm": "0 1px 3px rgba(0,0,0,0.3)",
+  "--shadow-md": "0 4px 14px rgba(0,0,0,0.4)",
+  "--sidebar-active-bg": "rgba(255,255,255,0.12)",
+  "--sidebar-hover-bg": "rgba(255,255,255,0.06)",
+  "--sidebar-border": "rgba(255,255,255,0.06)",
+};
+
+function applyVars(vars: Record<string, string>) {
+  const root = document.documentElement;
+  for (const [key, value] of Object.entries(vars)) {
+    root.style.setProperty(key, value);
+  }
+}
+
+export default function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setTheme] = useState<Theme>("light");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("unze-theme") as Theme | null;
+    const initial = stored || "light";
+    setTheme(initial);
+    applyVars(initial === "dark" ? DARK_VARS : LIGHT_VARS);
+    document.documentElement.setAttribute("data-theme", initial);
+    setMounted(true);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => {
+      const next = prev === "light" ? "dark" : "light";
+      localStorage.setItem("unze-theme", next);
+      applyVars(next === "dark" ? DARK_VARS : LIGHT_VARS);
+      document.documentElement.setAttribute("data-theme", next);
+      return next;
+    });
+  }, []);
+
+  if (!mounted) return null;
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}

@@ -3,10 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
-import Image from "next/image";
+import SidebarLayout from "./SidebarLayout";
+import type { UserCtx, PermOverrides } from "./permissions";
 
 type Member = {
+  id: string;
   name: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -15,18 +16,7 @@ type Member = {
   company: string | null;
 };
 
-type NavItem = {
-  label: string;
-  href: string;
-  allowedRoles: string[];
-  financeManagerException?: boolean;
-  managerDepartments?: string[];
-};
-
-const NAVY = "#1e293b";
 const SLATE = "#64748b";
-const LIGHT = "#f1f5f9";
-const BORDER = "#e2e8f0";
 
 function displayName(member: Member | null, email: string | null) {
   if (!member) return email || "User";
@@ -34,36 +24,17 @@ function displayName(member: Member | null, email: string | null) {
   return fullName || member.name || email || "User";
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Main navigation — daily work
-// ─────────────────────────────────────────────────────────────────
-const MAIN_NAV: NavItem[] = [
-  { label: "My Dashboard", href: "/my-dashboard", allowedRoles: ["Manager", "Member"] },
-  { label: "Tasks", href: "/tasks", allowedRoles: ["Manager", "Member"] },
-  { label: "Calendar", href: "/calendar", allowedRoles: ["Manager", "Member"] },
-  { label: "My Minutes", href: "/my-minutes", allowedRoles: ["Manager"] },
-  { label: "Daily Entry", href: "/production", allowedRoles: ["Manager", "Member"], managerDepartments: ["Unze Trading Ops"] },
-  { label: "Receivables", href: "/receivables", allowedRoles: ["Manager"], managerDepartments: ["Unze Trading Ops", "Finance"] },
-  { label: "Finance", href: "/finance", allowedRoles: ["Manager"], financeManagerException: true },
-  { label: "My Profile", href: "/profile", allowedRoles: ["Manager", "Member"] },
-];
-
-const SETTINGS_NAV: NavItem[] = [];
-
 export default function AuthWrapper({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
 
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
   const [member, setMember] = useState<Member | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [notifCount, setNotifCount] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -72,21 +43,9 @@ export default function AuthWrapper({
   const searchRef = useRef<HTMLDivElement>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifItems, setNotifItems] = useState<{ label: string; count: number; href: string }[]>([]);
-
-  const settingsRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  // Detect mobile
-  useEffect(() => {
-    function checkWidth() {
-      setIsMobile(window.innerWidth < 900);
-    }
-    checkWidth();
-    window.addEventListener("resize", checkWidth);
-    return () => window.removeEventListener("resize", checkWidth);
-  }, []);
-
-  // Auth check — use getSession() for faster local check + auto-refresh
+  // Auth check
   useEffect(() => {
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -98,17 +57,28 @@ export default function AuthWrapper({
       setEmail(user.email ?? null);
       const { data: memberData } = await supabase
         .from("members")
-        .select("name, first_name, last_name, role, department, company")
+        .select("id, name, first_name, last_name, role, department, company")
         .eq("email", user.email)
         .single();
       if (memberData) {
         setMember(memberData);
+        // Build UserCtx for sidebar permission checks
+        let overrides: PermOverrides | null = null;
+        const { data: perms } = await supabase
+          .from("member_permissions").select("*").eq("member_id", memberData.id).maybeSingle();
+        if (perms) overrides = perms as PermOverrides;
+        setUserCtx({
+          email: user.email,
+          role: memberData.role,
+          department: memberData.department,
+          company: memberData.company,
+          overrides,
+        });
       }
       setLoading(false);
     }
     checkAuth();
 
-    // Listen for auth changes (token refresh, sign out)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
         router.push("/login");
@@ -121,9 +91,7 @@ export default function AuthWrapper({
   // Register service worker for push notifications
   useEffect(() => {
     if (!loading && email && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Service worker registration failed — silent
-      });
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
   }, [loading, email]);
 
@@ -221,15 +189,14 @@ export default function AuthWrapper({
   // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) setSettingsOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }
     }
-    if (settingsOpen || notifOpen || searchOpen) {
+    if (notifOpen || searchOpen) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [settingsOpen, notifOpen, searchOpen]);
+  }, [notifOpen, searchOpen]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -245,31 +212,7 @@ export default function AuthWrapper({
   }
 
   const currentRole = member?.role || "Member";
-  const currentDepartment = member?.department || null;
   const displayRoleLabel = email === "k.saleem@unzegroup.com" ? "CEO" : currentRole;
-
-  // Filter main nav items
-  const visibleMainNav = MAIN_NAV.filter((item) => {
-    if (!item.allowedRoles.includes(currentRole)) return false;
-    // Finance — Admin only, or Finance Managers. NOT Executive (= PA, no finance).
-    if (item.financeManagerException) {
-      return (
-        currentRole === "Admin" ||
-        (currentRole === "Manager" && currentDepartment === "Finance")
-      );
-    }
-    // Department-scoped pages — Managers only see pages matching their department
-    if (item.managerDepartments && currentRole === "Manager") {
-      return currentDepartment !== null && item.managerDepartments.includes(currentDepartment);
-    }
-    return true;
-  });
-
-  // Filter settings items
-  const visibleSettingsNav = SETTINGS_NAV.filter((item) =>
-    item.allowedRoles.includes(currentRole)
-  );
-  const canSeeSettings = visibleSettingsNav.length > 0;
 
   const roleColor =
     email === "k.saleem@unzegroup.com"
@@ -282,453 +225,28 @@ export default function AuthWrapper({
       ? "#16a34a"
       : SLATE;
 
-  function NavLinks({ stacked }: { stacked: boolean }) {
-    return (
-      <>
-        {visibleMainNav.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setMenuOpen(false)}
-              style={{
-                textDecoration: "none",
-                fontSize: "15px",
-                fontWeight: active ? 700 : 500,
-                color: active ? "white" : stacked ? "white" : NAVY,
-                backgroundColor: active ? "#2563eb" : "transparent",
-                borderRadius: "7px",
-                padding: stacked ? "10px 12px" : "7px 12px",
-                whiteSpace: "nowrap",
-                border: stacked
-                  ? `1px solid ${active ? "#2563eb" : "rgba(255,255,255,0.18)"}`
-                  : "1px solid transparent",
-              }}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </>
-    );
-  }
-
   return (
-    <div style={{ minHeight: "100vh" }}>
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 20,
-          borderBottom: `3px solid ${NAVY}`,
-          backgroundColor: "white",
-          boxShadow: "0 1px 3px rgba(15,23,42,0.06)",
-        }}
-      >
-        {/* Top bar: logo + user + settings */}
-        <div
-          style={{
-            maxWidth: "1400px",
-            margin: "0 auto",
-            padding: "10px 18px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "8px" : "14px", minWidth: 0 }}>
-            {isMobile && (
-              <button
-                onClick={() => setMenuOpen((prev) => !prev)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "38px",
-                  height: "38px",
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: "8px",
-                  backgroundColor: LIGHT,
-                  cursor: "pointer",
-                  fontSize: "18px",
-                  color: NAVY,
-                  flexShrink: 0,
-                }}
-                aria-label="Toggle navigation"
-              >
-                ☰
-              </button>
-            )}
-
-            <Image
-              src="/unze-logo.png"
-              alt="Unze Group"
-              width={160}
-              height={64}
-              style={{ height: isMobile ? "32px" : "54px", width: "auto", objectFit: "contain", flexShrink: 0 }}
-              priority
-            />
-
-            {!isMobile && (
-              <span
-                style={{
-                  fontSize: "17px",
-                  fontWeight: 700,
-                  color: NAVY,
-                  whiteSpace: "nowrap",
-                  borderLeft: `1px solid ${BORDER}`,
-                  paddingLeft: "14px",
-                }}
-              >
-                Unze Group
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "10px", minWidth: 0 }}>
-            {!isMobile && (
-              <>
-                <span
-                  style={{
-                    fontSize: "17px",
-                    color: NAVY,
-                    fontWeight: 600,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    maxWidth: "220px",
-                  }}
-                >
-                  {displayName(member, email)}
-                </span>
-                <span
-                  style={{
-                    fontSize: "15px",
-                    fontWeight: 700,
-                    backgroundColor: roleColor,
-                    color: "white",
-                    padding: "2px 9px",
-                    borderRadius: "10px",
-                    whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                >
-                  {displayRoleLabel}
-                </span>
-              </>
-            )}
-
-            {/* Global search */}
-            <div ref={searchRef} style={{ position: "relative" }}>
-              {searchOpen ? (
-                <input
-                  type="text"
-                  placeholder="Search tasks, members, meetings..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                  style={{
-                    width: isMobile ? "140px" : "220px", padding: "6px 10px",
-                    border: `1px solid ${BORDER}`, borderRadius: "7px", fontSize: "14px",
-                  }}
-                  onKeyDown={(e) => { if (e.key === "Escape") { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); } }}
-                />
-              ) : (
-                <button onClick={() => setSearchOpen(true)} style={{
-                  backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "7px",
-                  padding: "6px 10px", fontSize: "16px", cursor: "pointer", color: NAVY,
-                }} title="Search">
-                  🔍
-                </button>
-              )}
-              {searchOpen && searchResults.length > 0 && (
-                <div style={{
-                  position: "absolute", top: "calc(100% + 6px)", right: 0,
-                  minWidth: "300px", maxWidth: "400px", backgroundColor: "white",
-                  border: `1px solid ${BORDER}`, borderRadius: "8px",
-                  boxShadow: "0 4px 14px rgba(15,23,42,0.10)", zIndex: 30, overflow: "hidden",
-                }}>
-                  {searchResults.map((r, i) => (
-                    <a key={i} href={r.href} onClick={() => { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
-                      style={{ display: "block", padding: "8px 12px", borderBottom: `1px solid ${LIGHT}`, textDecoration: "none", color: "inherit" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = LIGHT; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "transparent"; }}>
-                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                        <span style={{
-                          fontSize: "10px", fontWeight: 700, padding: "1px 5px", borderRadius: "4px",
-                          backgroundColor: r.type === "Task" ? "#fef3c7" : r.type === "Member" ? "#dbeafe" : "#dcfce7",
-                          color: r.type === "Task" ? "#92400e" : r.type === "Member" ? "#1e40af" : "#166534",
-                        }}>{r.type}</span>
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.label}</span>
-                      </div>
-                      <div style={{ fontSize: "12px", color: SLATE, marginTop: "1px" }}>{r.sub}</div>
-                    </a>
-                  ))}
-                </div>
-              )}
-              {searchOpen && searchQuery.length >= 2 && searchResults.length === 0 && !searching && (
-                <div style={{
-                  position: "absolute", top: "calc(100% + 6px)", right: 0, minWidth: "200px",
-                  backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "8px",
-                  boxShadow: "0 4px 14px rgba(15,23,42,0.10)", padding: "12px", zIndex: 30,
-                  textAlign: "center", fontSize: "13px", color: SLATE,
-                }}>No results found</div>
-              )}
-            </div>
-
-            {/* Notification bell */}
-            <div ref={notifRef} style={{ position: "relative" }}>
-              <button
-                onClick={() => setNotifOpen((v) => !v)}
-                style={{
-                  position: "relative",
-                  backgroundColor: "white",
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: "7px",
-                  padding: "6px 10px",
-                  fontSize: "18px",
-                  cursor: "pointer",
-                  lineHeight: 1,
-                  color: notifCount > 0 ? "#dc2626" : NAVY,
-                }}
-                aria-label="Notifications"
-              >
-                🔔
-                {notifCount > 0 && (
-                  <span style={{
-                    position: "absolute", top: "-4px", right: "-4px",
-                    backgroundColor: "#dc2626", color: "white",
-                    fontSize: "11px", fontWeight: 700,
-                    width: "18px", height: "18px",
-                    borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>{notifCount > 9 ? "9+" : notifCount}</span>
-                )}
-              </button>
-
-              {notifOpen && (
-                <div style={{
-                  position: "absolute", top: "calc(100% + 6px)", right: 0,
-                  minWidth: "240px", backgroundColor: "white",
-                  border: `1px solid ${BORDER}`, borderRadius: "8px",
-                  boxShadow: "0 4px 14px rgba(15,23,42,0.10)",
-                  zIndex: 30, overflow: "hidden",
-                }}>
-                  <div style={{ padding: "8px 12px", borderBottom: `1px solid ${BORDER}`, fontSize: "13px", fontWeight: 700, color: NAVY }}>
-                    Notifications
-                  </div>
-                  {notifItems.length === 0 ? (
-                    <div style={{ padding: "12px", fontSize: "14px", color: SLATE, textAlign: "center" }}>
-                      All clear — nothing needs attention
-                    </div>
-                  ) : (
-                    notifItems.map((item) => (
-                      <a key={item.label} href={item.href} onClick={() => setNotifOpen(false)}
-                        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderBottom: `1px solid ${LIGHT}`, textDecoration: "none", color: "inherit" }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = LIGHT; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "transparent"; }}
-                      >
-                        <span style={{ fontSize: "14px", color: NAVY, fontWeight: 500 }}>{item.label}</span>
-                        <span style={{
-                          fontSize: "12px", fontWeight: 700, color: "white",
-                          backgroundColor: "#dc2626", borderRadius: "10px", padding: "2px 7px",
-                        }}>{item.count}</span>
-                      </a>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Settings dropdown — only Admin / Executive */}
-            {canSeeSettings && (
-              <div ref={settingsRef} style={{ position: "relative" }}>
-                <button
-                  onClick={() => setSettingsOpen((v) => !v)}
-                  style={{
-                    backgroundColor: "white",
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: "7px",
-                    padding: "7px 12px",
-                    fontSize: "17px",
-                    fontWeight: 600,
-                    color: NAVY,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "5px",
-                  }}
-                  aria-label="Settings menu"
-                >
-                  <span style={{ fontSize: "16px" }}>⚙</span>{!isMobile && " Settings"}
-                  <span style={{ fontSize: "14px", color: SLATE }}>▾</span>
-                </button>
-
-                {settingsOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 6px)",
-                      right: 0,
-                      minWidth: "200px",
-                      backgroundColor: "white",
-                      border: `1px solid ${BORDER}`,
-                      borderRadius: "8px",
-                      boxShadow: "0 4px 14px rgba(15,23,42,0.10)",
-                      padding: "6px",
-                      zIndex: 30,
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: 700,
-                        color: SLATE,
-                        padding: "6px 10px 4px",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.5px",
-                      }}
-                    >
-                      Configuration
-                    </div>
-                    {visibleSettingsNav.map((item) => {
-                      const active = pathname === item.href;
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setSettingsOpen(false)}
-                          style={{
-                            display: "block",
-                            textDecoration: "none",
-                            fontSize: "17px",
-                            fontWeight: active ? 700 : 500,
-                            color: active ? "white" : NAVY,
-                            backgroundColor: active ? "#2563eb" : "transparent",
-                            borderRadius: "6px",
-                            padding: "8px 10px",
-                            marginBottom: "2px",
-                          }}
-                        >
-                          {item.label}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <button
-              onClick={handleSignOut}
-              style={{
-                backgroundColor: NAVY,
-                border: "none",
-                borderRadius: "7px",
-                padding: "8px 12px",
-                fontSize: "17px",
-                fontWeight: 600,
-                color: "white",
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-
-        {/* Permanent horizontal nav strip — desktop only */}
-        {!isMobile && (
-          <nav
-            style={{
-              borderTop: `1px solid ${BORDER}`,
-              backgroundColor: LIGHT,
-              padding: "8px 18px",
-            }}
-          >
-            <div
-              style={{
-                maxWidth: "1400px",
-                margin: "0 auto",
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "4px",
-                alignItems: "center",
-              }}
-            >
-              <NavLinks stacked={false} />
-            </div>
-          </nav>
-        )}
-
-        {/* Mobile dropdown nav */}
-        {isMobile && menuOpen && (
-          <nav
-            style={{
-              borderTop: `1px solid ${BORDER}`,
-              backgroundColor: NAVY,
-              padding: "12px 18px",
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-              gap: "8px",
-            }}
-          >
-            <NavLinks stacked={true} />
-            {canSeeSettings && (
-              <>
-                <div
-                  style={{
-                    gridColumn: "1 / -1",
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    color: "rgba(255,255,255,0.6)",
-                    padding: "8px 4px 4px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px",
-                    borderTop: "1px solid rgba(255,255,255,0.18)",
-                    marginTop: "4px",
-                  }}
-                >
-                  Settings
-                </div>
-                {visibleSettingsNav.map((item) => {
-                  const active = pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMenuOpen(false)}
-                      style={{
-                        textDecoration: "none",
-                        fontSize: "15px",
-                        fontWeight: active ? 700 : 500,
-                        color: "white",
-                        backgroundColor: active ? "#2563eb" : "transparent",
-                        borderRadius: "7px",
-                        padding: "10px 12px",
-                        whiteSpace: "nowrap",
-                        border: `1px solid ${
-                          active ? "#2563eb" : "rgba(255,255,255,0.18)"
-                        }`,
-                      }}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </>
-            )}
-          </nav>
-        )}
-      </header>
-
-      <div style={{ maxWidth: "1400px", margin: "0 auto", width: "100%" }}>
-        {children}
-      </div>
-    </div>
+    <SidebarLayout
+      userCtx={userCtx}
+      userName={displayName(member, email)}
+      userEmail={email || ""}
+      userRole={displayRoleLabel}
+      roleColor={roleColor}
+      notifCount={notifCount}
+      notifItems={notifItems}
+      searchOpen={searchOpen}
+      setSearchOpen={setSearchOpen}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+      searchResults={searchResults}
+      searching={searching}
+      searchRef={searchRef}
+      notifOpen={notifOpen}
+      setNotifOpen={setNotifOpen}
+      notifRef={notifRef}
+      onSignOut={handleSignOut}
+    >
+      {children}
+    </SidebarLayout>
   );
 }

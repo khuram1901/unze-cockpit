@@ -276,9 +276,6 @@ export default function MyDashboardPage() {
           </>
         )}
 
-        <div style={{ textAlign: "center", color: COLOURS.SLATE, fontSize: "12px", marginTop: "20px", paddingBottom: "10px" }}>
-          © Unze Group 1989–2026 · v3.0 · All Rights Reserved
-        </div>
       </main>
     </AuthWrapper>
   );

@@ -79,10 +79,10 @@ export function SectionTitle({ title }: { title: string }) {
       style={{
         fontSize: "17px",
         fontWeight: 700,
-        color: COLOURS.NAVY,
+        color: "var(--text-primary, #1e293b)",
         margin: "20px 0 10px",
         paddingLeft: "9px",
-        borderLeft: `3px solid ${COLOURS.NAVY}`,
+        borderLeft: "3px solid var(--text-primary, #1e293b)",
       }}
     >
       {title}
@@ -91,42 +91,33 @@ export function SectionTitle({ title }: { title: string }) {
 }
 
 export function PageHeader({
-  title,
-  subtitle,
+  title: _title,
+  subtitle: _subtitle,
   hideHome,
 }: {
   title: string;
   subtitle?: string;
   hideHome?: boolean;
 }) {
+  if (hideHome) return null;
   return (
-    <div style={{ marginBottom: "16px" }}>
-      {!hideHome && (
-        <button onClick={() => window.history.back()} style={{
-          display: "inline-flex", alignItems: "center", gap: "6px",
-          fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, textDecoration: "none",
-          marginBottom: "8px", padding: "4px 10px 4px 6px",
-          borderRadius: "16px", backgroundColor: COLOURS.LIGHT,
-          border: "none", cursor: "pointer",
-          transition: "background-color 0.15s",
-        }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = COLOURS.BORDER; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = COLOURS.LIGHT; }}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10 12L6 8l4-4" />
-          </svg>
-          Back
-        </button>
-      )}
-      <h1 style={{ fontSize: "24px", fontWeight: 800, color: COLOURS.NAVY, margin: 0 }}>
-        {title}
-      </h1>
-      {subtitle && (
-        <p style={{ color: COLOURS.SLATE, fontSize: "16px", marginTop: "5px" }}>
-          {subtitle}
-        </p>
-      )}
+    <div style={{ marginBottom: "8px" }}>
+      <button onClick={() => window.history.back()} style={{
+        display: "inline-flex", alignItems: "center", gap: "6px",
+        fontSize: "13px", fontWeight: 600, color: "var(--text-primary, #1e293b)", textDecoration: "none",
+        padding: "4px 10px 4px 6px",
+        borderRadius: "16px", backgroundColor: "var(--bg-card-hover, #f1f5f9)",
+        border: "1px solid var(--border-color, #e2e8f0)", cursor: "pointer",
+        transition: "background-color 0.15s",
+      }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--border-color, #e2e8f0)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--bg-card-hover, #f1f5f9)"; }}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 12L6 8l4-4" />
+        </svg>
+        Back
+      </button>
     </div>
   );
 }
@@ -183,16 +174,16 @@ export function CountCard({
   return (
     <div
       style={{
-        border: `1px solid ${COLOURS.BORDER}`,
+        border: "1px solid var(--border-color, #e2e8f0)",
         borderTop: `3px solid ${color}`,
         borderRadius: "7px",
         padding: "8px 10px",
-        backgroundColor: "white",
+        backgroundColor: "var(--bg-card, #ffffff)",
       }}
     >
       <div
         style={{
-          color: COLOURS.SLATE,
+          color: "var(--text-secondary, #64748b)",
           fontSize: "15px",
           marginBottom: "2px",
           whiteSpace: "nowrap",
@@ -206,7 +197,7 @@ export function CountCard({
         {typeof value === "number" ? value.toLocaleString() : value}
       </div>
       {sub && (
-        <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "2px" }}>
+        <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>
           {sub}
         </div>
       )}
