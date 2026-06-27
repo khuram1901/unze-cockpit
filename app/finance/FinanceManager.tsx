@@ -48,12 +48,7 @@ const COMPANY_CATS: Record<string, string[]> = {
   "77921705-8a15-4406-847a-b234f84b5ec3": ["Salaries", "Rent/Utilities", "Admin", "Marketing", "Freight", "Travel"],
 };
 
-const NAVY = COLOURS.NAVY;
-const SLATE = COLOURS.SLATE;
-const BORDER = COLOURS.BORDER;
-const GREEN = COLOURS.GREEN;
-const RED = COLOURS.RED;
-const BLUE = COLOURS.BLUE;
+const { NAVY, SLATE, BORDER, GREEN, RED, BLUE } = COLOURS;
 
 function fmt(n: number) {
   return n.toLocaleString();
@@ -275,7 +270,14 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     if (posRes.error) console.error("Positions error:", posRes.error);
     setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
     setPlan(planRes.data || null);
-    setPositions(posRes.data || []);
+    const isImperial = companyId === "77921705-8a15-4406-847a-b234f84b5ec3";
+    const rawPositions: DailyPosition[] = posRes.data || [];
+    if (isImperial) {
+      for (const p of rawPositions) {
+        p.closing_after_post_dated = p.closing_balance + p.post_dated_total;
+      }
+    }
+    setPositions(rawPositions);
 
     const { data: budgetData } = await supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", budgetMonth).order("department");
     setBudgets(budgetData || []);
@@ -417,7 +419,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     const prevDay = positions.find((p) => p.position_date < dpDate);
     if (prevDay) {
       const diffDays = (new Date(dpDate).getTime() - new Date(prevDay.position_date).getTime()) / (1000 * 60 * 60 * 24);
-      if (diffDays <= 1 && Math.abs(Number(dpOpening) - prevDay.closing_balance) > 0.01) {
+      if (diffDays <= 1 && Math.abs(Number(dpOpening) - prevDay.closing_balance) > 0.01 && Math.abs(Math.abs(Number(dpOpening)) - Math.abs(prevDay.closing_balance)) > 0.01) {
         const proceed = confirm(
           `Warning: Opening balance (${fmt(Number(dpOpening))}) does not match previous day's closing balance (${fmt(prevDay.closing_balance)} on ${formatDateUK(prevDay.position_date)}).\n\nSave anyway?`
         );
@@ -612,7 +614,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                         const diffDays = (new Date(uploadResult.date!).getTime() - new Date(prevDay.position_date).getTime()) / (1000 * 60 * 60 * 24);
                         if (diffDays > 1) return null;
                         const opening = (uploadResult.cashFlow as Record<string, number>).openingBalance;
-                        if (opening && Math.abs(opening - prevDay.closing_balance) > 0.01) {
+                        if (opening && Math.abs(opening - prevDay.closing_balance) > 0.01 && Math.abs(Math.abs(opening) - Math.abs(prevDay.closing_balance)) > 0.01) {
                           return <div style={{ color: RED, fontWeight: 700, marginTop: "4px", fontSize: "12px" }}>Opening ({opening.toLocaleString()}) does not match previous closing ({prevDay.closing_balance.toLocaleString()})</div>;
                         }
                         return null;
@@ -934,7 +936,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                     const diffDays = (curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24);
                     return diffDays <= 1;
                   })();
-                  const mismatch = prevDay && isConsecutive && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01;
+                  const mismatch = prevDay && isConsecutive
+                    && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01
+                    && Math.abs(Math.abs(p.opening_balance) - Math.abs(prevDay.closing_balance)) > 0.01;
                   return (
                     <tr key={p.id} style={mismatch ? { backgroundColor: "#fef2f2" } : undefined}>
                       <td style={tdBold}>

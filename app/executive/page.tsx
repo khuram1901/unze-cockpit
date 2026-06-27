@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import EscalationTrafficLights from "./EscalationTrafficLights";
 import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtils";
-import { RAGStatus, ragColour } from "../lib/SharedUI";
+import { COLOURS, SectionTitle, RAGStatus, ragColour } from "../lib/SharedUI";
 import { UTPL_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
@@ -157,9 +157,7 @@ type BudgetRow = {
 };
 
 
-const NAVY = "#1e293b";
-const SLATE = "#64748b";
-const BORDER = "#e2e8f0";
+const { NAVY, SLATE, BORDER } = COLOURS;
 
 function formatDate(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -1512,14 +1510,6 @@ function CompanyFinancePanel({ data }: { data: { companyId: string; companyName:
         </div>
       )}
     </>
-  );
-}
-
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <h2 style={{ fontSize: "17px", fontWeight: 700, color: NAVY, margin: "14px 0 8px", paddingLeft: "9px", borderLeft: `3px solid ${NAVY}` }}>
-      {title}
-    </h2>
   );
 }
 

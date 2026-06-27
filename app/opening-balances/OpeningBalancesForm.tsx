@@ -3,29 +3,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
+import { COLOURS, SectionTitle } from "../lib/SharedUI";
+import { canEditFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Plant = { id: string; name: string; type: string };
 
-const NAVY = "#1e293b";
-const SLATE = "#64748b";
-const BORDER = "#e2e8f0";
-
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <h2
-      style={{
-        fontSize: "17px",
-        fontWeight: 700,
-        color: NAVY,
-        margin: "16px 0 10px",
-        paddingLeft: "9px",
-        borderLeft: `3px solid ${NAVY}`,
-      }}
-    >
-      {title}
-    </h2>
-  );
-}
+const { NAVY, SLATE, BORDER } = COLOURS;
 
 export default function OpeningBalancesForm() {
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -39,7 +22,7 @@ export default function OpeningBalancesForm() {
   const [b36, setB36] = useState("");
   const [b45, setB45] = useState("");
 
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -49,10 +32,17 @@ export default function OpeningBalancesForm() {
       if (userData.user) {
         const { data: me } = await supabase
           .from("members")
-          .select("role")
+          .select("id, role, department, company")
           .eq("email", userData.user.email)
           .single();
-        setIsAdmin(me?.role === "Admin");
+        if (me) {
+          let overrides: PermOverrides | null = null;
+          const { data: p } = await supabase
+            .from("member_permissions").select("*").eq("member_id", me.id).maybeSingle();
+          if (p) overrides = p as PermOverrides;
+          const ctx: UserCtx = { email: userData.user.email, role: me.role, department: me.department, company: me.company, overrides };
+          setCanEdit(isAdminTier(ctx) || canEditFinance(ctx));
+        }
       }
       const { data } = await supabase
         .from("plants")
@@ -107,10 +97,10 @@ export default function OpeningBalancesForm() {
     setB31(""); setB36(""); setB45("");
   }
 
-  if (!isAdmin) {
+  if (!canEdit) {
     return (
       <p style={{ color: "#dc2626", fontSize: "17px" }}>
-        Only Admins can set opening balances.
+        You don&apos;t have permission to set opening balances.
       </p>
     );
   }
