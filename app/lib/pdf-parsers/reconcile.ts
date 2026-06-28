@@ -14,14 +14,17 @@ export function reconcile(
 ): ReconciliationResult {
   const cashFlowClosing = cashFlow.closingBalanceUnzeTrading;
   const bankPositionTotal = bankPosition.totalAvailableBalance;
-  const diff = Math.abs(cashFlowClosing - bankPositionTotal);
+  const diff = cashFlowClosing - bankPositionTotal;
+  const absDiff = Math.abs(diff);
+  const absValueDiff = Math.abs(Math.abs(cashFlowClosing) - Math.abs(bankPositionTotal));
 
-  const absDiff = Math.abs(Math.abs(cashFlowClosing) - Math.abs(bankPositionTotal));
+  const signsDiffer = Math.sign(cashFlowClosing) !== Math.sign(bankPositionTotal) && cashFlowClosing !== 0 && bankPositionTotal !== 0;
+  const matches = absDiff === 0 || (absValueDiff === 0 && signsDiffer);
 
   return {
-    matches: diff === 0 || absDiff === 0,
+    matches,
     cashFlowClosing,
     bankPositionTotal,
-    diff,
+    diff: matches ? 0 : absDiff,
   };
 }

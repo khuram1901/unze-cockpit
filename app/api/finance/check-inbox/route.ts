@@ -206,7 +206,6 @@ export async function GET(request: NextRequest) {
             const result = reconcile(cashFlow, bankPosition);
             const positionDate = cashFlow.date || bankPosition.date || groupDate;
             const ds = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
-            const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
 
             if (ds.has(positionDate)) {
               results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate, account: targetEmail });
