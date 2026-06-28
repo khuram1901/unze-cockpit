@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -40,6 +40,13 @@ const slides = [
   },
 ];
 
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
 function getLandingRoute(profile: MemberProfile | null, email: string) {
   const lower = email.toLowerCase();
   if (lower === "khuram1901@gmail.com") return "/home";
@@ -60,6 +67,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const greeting = useMemo(() => getGreeting(), []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -95,8 +104,7 @@ export default function LoginPage() {
   return (
     <main style={{
       minHeight: "100vh",
-      fontFamily: "sans-serif",
-      background: "#f4f6f9",
+      background: "var(--bg-page, #f4f6f9)",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -110,27 +118,62 @@ export default function LoginPage() {
         gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
         borderRadius: "16px",
         overflow: "hidden",
-        backgroundColor: "#ffffff",
-        border: "1px solid #e2e8f0",
-        boxShadow: "0 8px 30px rgba(15,23,42,0.08)",
+        backgroundColor: "var(--bg-card, #ffffff)",
+        border: "1px solid var(--border-color, #e2e8f0)",
+        boxShadow: "var(--shadow-md, 0 8px 30px rgba(15,23,42,0.08))",
+        animation: "loginFadeIn 0.5s ease-out",
       }}>
-        {/* Left — Form */}
-        <div style={{ padding: isMobile ? "28px 24px" : "48px 40px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "32px" }}>
-            <img src="/unze-logo.png" alt="Unze Group" style={{ height: "36px", objectFit: "contain" }} />
-            <span style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", letterSpacing: "-0.3px" }}>PulseDesk</span>
-          </div>
 
-          <h1 style={{ fontSize: isMobile ? "24px" : "28px", fontWeight: 800, color: "#0f172a", margin: "0 0 6px", lineHeight: 1.15 }}>
-            Welcome back
+        {/* Mobile brand strip */}
+        {isMobile && (
+          <div style={{
+            background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
+            padding: "20px 24px",
+            display: "flex",
+            alignItems: "center",
+            gap: "14px",
+          }}>
+            <img src="/unze-logo.png" alt="Unze Group" style={{
+              height: "32px", objectFit: "contain",
+              filter: "brightness(0) invert(1)",
+            }} />
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.3px" }}>
+                PulseDesk
+              </div>
+              <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "1px" }}>
+                {slide.title} · {slide.subtitle}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Left — Form */}
+        <div style={{
+          padding: isMobile ? "28px 24px" : "48px 40px",
+          display: "flex", flexDirection: "column", justifyContent: "center",
+          animation: "loginFadeIn 0.6s ease-out 0.1s both",
+        }}>
+          {!isMobile && (
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "32px" }}>
+              <img src="/unze-logo.png" alt="Unze Group" style={{ height: "36px", objectFit: "contain" }} />
+              <span style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary, #0f172a)", letterSpacing: "-0.3px" }}>PulseDesk</span>
+            </div>
+          )}
+
+          <h1 style={{
+            fontSize: isMobile ? "24px" : "28px", fontWeight: 800,
+            color: "var(--text-primary, #0f172a)", margin: "0 0 6px", lineHeight: 1.15,
+          }}>
+            {greeting}
           </h1>
-          <p style={{ color: "#64748b", fontSize: "15px", margin: "0 0 28px", lineHeight: 1.5 }}>
+          <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", margin: "0 0 28px", lineHeight: 1.5 }}>
             Sign in to access your dashboard
           </p>
 
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: "18px" }}>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>
+              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--text-primary, #334155)", marginBottom: "6px" }}>
                 Email address
               </label>
               <input
@@ -141,19 +184,20 @@ export default function LoginPage() {
                 placeholder="you@unzegroup.com"
                 style={{
                   display: "block", width: "100%", padding: "10px 14px",
-                  border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "15px",
+                  border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", fontSize: "15px",
                   boxSizing: "border-box", outline: "none",
-                  transition: "border-color 0.15s",
-                  backgroundColor: "#f8fafc",
+                  transition: "border-color 0.15s, background-color 0.15s",
+                  backgroundColor: "var(--bg-card-hover, #f8fafc)",
+                  color: "var(--text-primary, #0f172a)",
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.backgroundColor = "#fff"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.backgroundColor = "#f8fafc"; }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.backgroundColor = "var(--bg-card, #fff)"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-color, #e2e8f0)"; e.currentTarget.style.backgroundColor = "var(--bg-card-hover, #f8fafc)"; }}
               />
             </div>
 
             <div style={{ marginBottom: "24px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
-                <label style={{ fontSize: "13px", fontWeight: 600, color: "#334155" }}>Password</label>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary, #334155)" }}>Password</label>
                 <Link href="/forgot-password" style={{ fontSize: "12px", color: "#3b82f6", textDecoration: "none", fontWeight: 500 }}>
                   Forgot password?
                 </Link>
@@ -168,13 +212,14 @@ export default function LoginPage() {
                   placeholder="Enter your password"
                   style={{
                     display: "block", width: "100%", padding: "10px 42px 10px 14px",
-                    border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "15px",
+                    border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", fontSize: "15px",
                     boxSizing: "border-box", outline: "none",
-                    transition: "border-color 0.15s",
-                    backgroundColor: "#f8fafc",
+                    transition: "border-color 0.15s, background-color 0.15s",
+                    backgroundColor: "var(--bg-card-hover, #f8fafc)",
+                    color: "var(--text-primary, #0f172a)",
                   }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.backgroundColor = "#fff"; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.backgroundColor = "#f8fafc"; }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.backgroundColor = "var(--bg-card, #fff)"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-color, #e2e8f0)"; e.currentTarget.style.backgroundColor = "var(--bg-card-hover, #f8fafc)"; }}
                 />
                 <button
                   type="button"
@@ -183,7 +228,7 @@ export default function LoginPage() {
                   style={{
                     position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
                     border: "none", background: "transparent", cursor: "pointer",
-                    padding: "4px", color: "#94a3b8", display: "flex", alignItems: "center",
+                    padding: "4px", color: "var(--text-muted, #94a3b8)", display: "flex", alignItems: "center",
                   }}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -205,10 +250,10 @@ export default function LoginPage() {
             </div>
 
             <button type="submit" disabled={loading} style={{
-              width: "100%", backgroundColor: "#0f172a", color: "white",
+              width: "100%", backgroundColor: "var(--text-primary, #0f172a)", color: "white",
               border: "none", borderRadius: "8px", padding: "11px 18px",
               fontSize: "15px", fontWeight: 600, cursor: loading ? "wait" : "pointer",
-              transition: "background-color 0.15s",
+              transition: "opacity 0.15s",
               opacity: loading ? 0.7 : 1,
             }}>
               {loading ? "Signing in..." : "Sign in"}
@@ -222,6 +267,7 @@ export default function LoginPage() {
               backgroundColor: message.startsWith("Error") ? "#fef2f2" : "#f0fdf4",
               color: message.startsWith("Error") ? "#dc2626" : "#16a34a",
               border: `1px solid ${message.startsWith("Error") ? "#fecaca" : "#bbf7d0"}`,
+              animation: "loginFadeIn 0.3s ease-out",
             }}>
               {message}
             </div>
@@ -231,24 +277,33 @@ export default function LoginPage() {
         {/* Right — Carousel */}
         {!isMobile && (
           <div style={{ position: "relative", minHeight: "520px", overflow: "hidden" }}>
-            {slide.type === "logo" ? (
-              <div style={{
-                height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-                background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
-                padding: "48px",
+            {slides.map((s, i) => (
+              <div key={i} style={{
+                position: "absolute", inset: 0,
+                opacity: active === i ? 1 : 0,
+                transition: "opacity 0.8s ease-in-out",
+                pointerEvents: active === i ? "auto" : "none",
               }}>
-                <img src={slide.image} alt={slide.title} style={{
-                  maxWidth: "75%", maxHeight: "200px", objectFit: "contain",
-                  filter: "brightness(0) invert(1) drop-shadow(0 12px 24px rgba(0,0,0,0.3))",
-                }} />
+                {s.type === "logo" ? (
+                  <div style={{
+                    height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
+                    padding: "48px",
+                  }}>
+                    <img src={s.image} alt={s.title} style={{
+                      maxWidth: "75%", maxHeight: "200px", objectFit: "contain",
+                      filter: "brightness(0) invert(1) drop-shadow(0 12px 24px rgba(0,0,0,0.3))",
+                    }} />
+                  </div>
+                ) : (
+                  <div style={{
+                    height: "100%",
+                    backgroundImage: `linear-gradient(to bottom, rgba(15,23,42,0.10), rgba(15,23,42,0.55)), url('${s.image}')`,
+                    backgroundSize: "cover", backgroundPosition: "center",
+                  }} />
+                )}
               </div>
-            ) : (
-              <div style={{
-                height: "100%",
-                backgroundImage: `linear-gradient(to bottom, rgba(15,23,42,0.10), rgba(15,23,42,0.55)), url('${slide.image}')`,
-                backgroundSize: "cover", backgroundPosition: "center",
-              }} />
-            )}
+            ))}
 
             {/* Caption overlay */}
             <div style={{
@@ -256,11 +311,12 @@ export default function LoginPage() {
               backgroundColor: "rgba(15,23,42,0.85)", backdropFilter: "blur(12px)",
               borderRadius: "12px", padding: "16px 18px",
               border: "1px solid rgba(255,255,255,0.10)",
+              zIndex: 1,
             }}>
-              <div style={{ fontSize: "18px", fontWeight: 700, color: "#ffffff", marginBottom: "3px" }}>
+              <div key={`title-${active}`} style={{ fontSize: "18px", fontWeight: 700, color: "#ffffff", marginBottom: "3px", animation: "loginSlideFade 0.5s ease-out" }}>
                 {slide.title}
               </div>
-              <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)" }}>
+              <div key={`sub-${active}`} style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", animation: "loginSlideFade 0.5s ease-out 0.05s both" }}>
                 {slide.subtitle}
               </div>
               <div style={{ display: "flex", gap: "6px", marginTop: "12px" }}>
@@ -287,7 +343,7 @@ export default function LoginPage() {
         )}
       </div>
 
-      <div style={{ marginTop: "24px", color: "#94a3b8", fontSize: "12px", textAlign: "center" }}>
+      <div style={{ marginTop: "24px", color: "var(--text-muted, #94a3b8)", fontSize: "12px", textAlign: "center" }}>
         &copy; Unze Group 1989&ndash;2026 &middot; v3.0 &middot; All Rights Reserved
       </div>
     </main>

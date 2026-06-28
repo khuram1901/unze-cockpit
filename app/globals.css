@@ -69,6 +69,17 @@ nav::-webkit-scrollbar-thumb {
   100% { background-position: -200% 0; }
 }
 
+/* Login page animations */
+@keyframes loginFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loginSlideFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Tooltip on hover for icon buttons */
 button[title]:hover::after {
   content: attr(title);
