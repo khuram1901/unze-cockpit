@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { COMPANIES, getCompanyByName } from "../lib/constants";
 import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
@@ -11,6 +11,7 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import { logAction } from "../lib/audit-log";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
 import * as XLSX from "xlsx";
 
 type Budget = {
@@ -145,13 +146,17 @@ export default function FinancePage() {
 
       const { data: member } = await supabase
         .from("members")
-        .select("role, department, company")
+        .select("id, role, department, company")
         .eq("email", user.email)
         .single();
 
       if (!member) { setLoading(false); return; }
 
-      setIsAdmin(member.role === "Admin" || member.role === "Executive");
+      let overrides: PermOverrides | null = null;
+      const p = await loadMyPermissions();
+      if (p) overrides = p as PermOverrides;
+      const ctx: UserCtx = { email: user.email, role: member.role, department: member.department, company: member.company, overrides };
+      setIsAdmin(canEditFinance(ctx));
 
       if (member.role === "Manager" && member.department === "Finance" && member.company) {
         const config = getCompanyByName(member.company);

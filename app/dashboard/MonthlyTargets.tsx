@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS } from "../lib/SharedUI";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import { canEditOperationsTargets, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Plant = { id: string; name: string; type: string; active: boolean };
 type MonthlyTarget = {
@@ -53,8 +54,14 @@ export default function MonthlyTargets() {
   async function loadData() {
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user?.email) {
-      const { data: m } = await supabase.from("members").select("role").eq("email", userData.user.email).single();
-      if (m) setCanEdit(m.role === "Admin" || m.role === "Executive");
+      const { data: m } = await supabase.from("members").select("id, role, department, company").eq("email", userData.user.email).single();
+      if (m) {
+        let overrides: PermOverrides | null = null;
+        const p = await loadMyPermissions();
+        if (p) overrides = p as PermOverrides;
+        const ctx: UserCtx = { email: userData.user.email, role: m.role, department: m.department, company: m.company, overrides };
+        setCanEdit(canEditOperationsTargets(ctx));
+      }
     }
     const { data: pd } = await supabase.from("plants").select("*").eq("active", true).order("name");
     if (pd) setPlants(pd);

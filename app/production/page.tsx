@@ -3,9 +3,12 @@
 import AuthWrapper from "../lib/AuthWrapper";
 import ProductionForm from "./ProductionForm";
 import { useMobile } from "../lib/useMobile";
+import { useRequireCapability } from "../lib/useRouteGuard";
 
 export default function ProductionPage() {
   const isMobile = useMobile();
+  const { checking } = useRequireCapability("daily_entry");
+  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "#64748b" }}>Checking permissions...</p></main></AuthWrapper>;
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", fontFamily: "sans-serif", maxWidth: "100%", overflowX: "hidden" }}>

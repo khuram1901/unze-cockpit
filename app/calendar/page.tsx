@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK, formatDateTimeUK } from "../lib/dateUtils";
 import {
   COLOURS,
@@ -132,7 +132,7 @@ export default function CalendarPage() {
         .single();
       if (memberData) {
         setMember(memberData);
-        const { data: perms } = await supabase.from("member_permissions").select("*").eq("member_id", memberData.id).maybeSingle();
+        const perms = await loadMyPermissions();
         if (perms) setPermOverrides(perms as PermOverrides);
       }
     }

@@ -1,5 +1,63 @@
 # Improvements Log
 
+## 2026-06-28
+
+### Previous Items Status
+
+From 2026-06-27:
+- ✅ **Sidebar right border** — Done (`SidebarLayout.tsx` line 423)
+- ✅ **PERM_FUNC duplication** — Resolved. The duplicate in `home/page.tsx` was removed along with `PAHomeView`. Only `SidebarLayout.tsx` retains the canonical copy now — no extraction needed since there's only one consumer.
+- 🔲 **Dark mode migration (~20 pages)** — Still outstanding. Executive (21× `"white"`), members (17×), meetings (20×), PA (14×), calendar (13×) all still hardcode colors. The new investments page is *partially* migrated (6× CSS vars, but still has hardcoded `#f8fafc`, `#f1f5f9`, `#991b1b`, and `#fef2f2`).
+- 🔲 **Access Matrix accessibility** — Still outstanding. Toggles still lack `aria-label` / `aria-pressed`.
+- ✅ **`maximumScale: 1` removed** — Done (previous review)
+
+### Current State Assessment
+
+Big feature landed this session: full PSX Investments portfolio tracker — database schema, daily automated price fetching via Vercel Cron, dedicated 640-line investments page with charts, and executive dashboard integration. The permission model is clean: `canViewInvestments` in `permissions.ts` with override support via Access Matrix, gated to CEO + admin only. The investments page was built with partial CSS var awareness (`var(--bg-card, #fff)` for main cards) but still has hardcoded colors in alerts, table headers, and chart grids.
+
+The cron setup (`vercel.json` → `/api/investments/update-prices`) is well-structured with PSX primary + Yahoo fallback, CRON_SECRET protection, and service role for writes.
+
+### Design Inconsistencies & Issues Found
+
+1. **Investments alert banner uses hardcoded reds.** `investments/page.tsx` line 318-325 uses `backgroundColor: "#fef2f2"`, `color: "#991b1b"` for the stocks-down-5% alert. Every other alert-style element in the app should use CSS vars for dark mode compatibility. Same issue with table header row (`#f8fafc` at line 397) and chart grid lines (`#f1f5f9` at lines 527, 550).
+
+2. **Executive dashboard investment card uses `backgroundColor: "white"`.** `executive/page.tsx` line 977 — the investment summary card hardcodes `"white"` instead of `var(--bg-card)`. This is consistent with the rest of the executive page (which has 21 hardcoded whites) but will break in dark mode.
+
+3. **Price update API fetches sequentially.** `api/investments/update-prices/route.ts` lines 87-103 — each ticker is fetched one at a time in a `for` loop. With 20 tickers × 10s timeout, worst case is 200s. Using `Promise.allSettled` with a concurrency limit (e.g., 5 at a time) would cut this to ~40s and stay within Vercel's 300s function timeout.
+
+4. **No error state on the investments page.** If Supabase queries fail, the page shows empty tables with no feedback. Other pages in the app have similar gaps, but given investments shows financial data, a clear error state matters more here.
+
+### Top 3 Improvements (Ranked by Value vs Effort)
+
+#### 1. Parallelize price fetching in the cron job (Quick Win — 15 min)
+**File:** `app/api/investments/update-prices/route.ts` lines 87-103
+**What:** Replace the sequential `for` loop with batched `Promise.allSettled` (groups of 5). Each batch runs 5 fetches concurrently, then moves to the next batch.
+**Why:** 20 sequential HTTP calls with 10s timeouts risk hitting Vercel's function timeout. Batching by 5 cuts wall time by ~4×. The PSX API has no documented rate limit, and Yahoo Finance handles concurrent requests fine. Simple refactor, big reliability improvement.
+
+#### 2. Add error/empty states to the investments page (Quick Win — 20 min)
+**File:** `app/investments/page.tsx`
+**What:** Add a visible error banner if Supabase queries fail (currently silently swallowed), and an empty state with "No holdings found — add your first stock" message + CTA when the holdings array is empty.
+**Why:** Financial data pages need clear feedback when something goes wrong. Users currently see blank tables with no indication of whether data is loading, empty, or broken.
+
+#### 3. Dark mode migration — still outstanding (Larger Effort — 3-4 hrs)
+**Files:** ~20 inner pages (see 2026-06-27 entry for full list), plus the new `investments/page.tsx`
+**What:** Replace all hardcoded `"white"`, `"#f8fafc"`, `"#f1f5f9"` etc. with CSS vars (`var(--bg-card)`, `var(--bg-subtle)`, `var(--border-color)`). The investments page is partially done (6 CSS vars already) so it's a good candidate to finish first as a template for the rest.
+**Why:** Third consecutive review flagging this. The toggle exists, the shell works, but every page interior breaks. This is the single largest UX debt in the app.
+
+### Quick Win for Today
+
+**Parallelize the price fetcher.** In `route.ts`, replace the `for` loop (lines 87-103) with:
+```ts
+const BATCH = 5;
+for (let i = 0; i < tickers.length; i += BATCH) {
+  const batch = tickers.slice(i, i + BATCH);
+  const settled = await Promise.allSettled(batch.map(async (ticker) => { ... }));
+}
+```
+15 minutes, deploy. The daily cron becomes 4× faster and much less likely to timeout.
+
+---
+
 ## 2026-06-27
 
 ### Previous Items Status

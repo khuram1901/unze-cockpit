@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import RoleGuard from "../lib/RoleGuard";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, PageHeader, SectionTitle, CountCard } from "../lib/SharedUI";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import { useRequireCapability } from "../lib/useRouteGuard";
+import { canEditOperationsTargets, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Plant = { id: string; name: string; type: string; active: boolean };
 type MonthlyTarget = {
@@ -37,6 +38,7 @@ function getMonthEnd(m: string) {
 
 export default function MonthlyOperationsTargetsPage() {
   const isMobile = useMobile();
+  const { checking } = useRequireCapability("operations");
   const [member, setMember] = useState<Member | null>(null);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [productionTargets, setProductionTargets] = useState<MonthlyTarget[]>([]);
@@ -63,15 +65,22 @@ export default function MonthlyOperationsTargetsPage() {
 
   const selectedPlant = plants.find((p) => p.id === plantId);
   const isMeter = selectedPlant?.type === "meter";
-  const canEdit = member?.role === "Admin" || member?.role === "Executive";
+  const [canEdit, setCanEdit] = useState(false);
 
   async function loadInitialData() {
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
     const email = userData.user?.email;
     if (email) {
-      const { data: memberData } = await supabase.from("members").select("role").eq("email", email).single();
-      if (memberData) setMember(memberData);
+      const { data: memberData } = await supabase.from("members").select("id, role, department, company").eq("email", email).single();
+      if (memberData) {
+        setMember(memberData);
+        let overrides: PermOverrides | null = null;
+        const p = await loadMyPermissions();
+        if (p) overrides = p as PermOverrides;
+        const ctx: UserCtx = { email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
+        setCanEdit(canEditOperationsTargets(ctx));
+      }
     }
     const { data: plantsData } = await supabase.from("plants").select("*").eq("active", true).order("name");
     if (plantsData) setPlants(plantsData);
@@ -170,14 +179,13 @@ export default function MonthlyOperationsTargetsPage() {
     "Disp Actual": d.dispActual,
   }));
 
-  if (loading) {
-    return <AuthWrapper><main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}><p style={{ color: COLOURS.SLATE }}>Loading…</p></main></AuthWrapper>;
+  if (checking || loading) {
+    return <AuthWrapper><main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions…</p></main></AuthWrapper>;
   }
 
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-        <RoleGuard allowedRoles={["Admin", "Executive", "Manager"]}>
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
             <PageHeader title="Monthly Operations Targets" subtitle="Set targets and track achievement per plant" />
@@ -319,7 +327,6 @@ export default function MonthlyOperationsTargetsPage() {
 
           <SectionTitle title={`Dispatch Targets — ${formatMonthUK(targetMonth)}`} />
           <TargetsTable targets={dispatchTargets} actuals={dispActuals} mobile={isMobile} />
-        </RoleGuard>
       </main>
     </AuthWrapper>
   );

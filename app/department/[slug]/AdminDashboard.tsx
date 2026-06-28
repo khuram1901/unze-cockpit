@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
+import { canReviewTasks, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 
 type Task = {
@@ -66,6 +67,7 @@ export default function AdminDashboard() {
   const [message, setMessage] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string>("Member");
+  const [canDelete, setCanDelete] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
 
@@ -80,8 +82,15 @@ export default function AdminDashboard() {
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user?.email) {
-      const { data: memberData } = await supabase.from("members").select("role").eq("email", userData.user.email).maybeSingle();
-      if (memberData) setUserRole(memberData.role);
+      const { data: memberData } = await supabase.from("members").select("id, role, department, company").eq("email", userData.user.email).maybeSingle();
+      if (memberData) {
+        setUserRole(memberData.role);
+        let overrides: PermOverrides | null = null;
+        const p = await loadMyPermissions();
+        if (p) overrides = p as PermOverrides;
+        const ctx: UserCtx = { email: userData.user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
+        setCanDelete(canReviewTasks(ctx));
+      }
     }
     const { data } = await supabase.from("tasks").select("*").eq("assigned_to_department", "Admin").order("created_at", { ascending: false });
     setItems(data || []);
@@ -402,7 +411,7 @@ export default function AdminDashboard() {
                           }} style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}>
                             <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
                           </select>
-                          {(userRole === "Admin" || userRole === "Executive") && (
+                          {canDelete && (
                             <>
                               <div style={{ flex: 1 }} />
                               <button onClick={async () => {

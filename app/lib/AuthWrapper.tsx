@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "./supabase";
+import { supabase, loadMyPermissions } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
-import type { UserCtx, PermOverrides } from "./permissions";
+import { canSeeAllTasks, type UserCtx, type PermOverrides } from "./permissions";
 
 type Member = {
   id: string;
@@ -62,11 +62,9 @@ export default function AuthWrapper({
         .single();
       if (memberData) {
         setMember(memberData);
-        // Build UserCtx for sidebar permission checks
         let overrides: PermOverrides | null = null;
-        const { data: perms } = await supabase
-          .from("member_permissions").select("*").eq("member_id", memberData.id).maybeSingle();
-        if (perms) overrides = perms as PermOverrides;
+        const permData = await loadMyPermissions(session.access_token);
+        if (permData) overrides = permData as PermOverrides;
         setUserCtx({
           email: user.email,
           role: memberData.role,
@@ -101,7 +99,7 @@ export default function AuthWrapper({
     const todayStr = new Date().toISOString().slice(0, 10);
     const role = member.role;
     const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || email;
-    const isAdmin = role === "Admin" || role === "Executive";
+    const isAdmin = userCtx ? canSeeAllTasks(userCtx) : (role === "Admin" || role === "Executive");
 
     let query = supabase.from("tasks").select("id, status, due_date, assigned_to_email, assigned_to");
     if (!isAdmin) {

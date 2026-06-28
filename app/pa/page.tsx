@@ -4,7 +4,6 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import RoleGuard from "../lib/RoleGuard";
 import { supabase } from "../lib/supabase";
 import { formatDateUK, todayISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
@@ -17,7 +16,7 @@ import {
   PriorityBadge,
 } from "../lib/SharedUI";
 import { whatsappLink, taskChaseMessage } from "../lib/whatsapp";
-import { ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import { useRequireCapability } from "../lib/useRouteGuard";
 
 type Task = {
   id: string;
@@ -84,6 +83,7 @@ function memberName(m: Member): string {
 }
 
 export default function PADashboardPage() {
+  const { checking } = useRequireCapability("pa_dashboard");
   const isMobile = useMobile();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -94,7 +94,7 @@ export default function PADashboardPage() {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [viewPerson, setViewPerson] = useState<string | null>(null);
-  const [bannerOpen, setBannerOpen] = useState(false);
+  const [bannerOpen, setBannerOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<"upcoming" | "people" | "all">("upcoming");
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState(false);
@@ -263,10 +263,14 @@ export default function PADashboardPage() {
     loadData();
   }
 
+  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "#64748b" }}>Checking permissions...</p></main></AuthWrapper>;
+
   const openTasks = tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const completedTasks = tasks.filter((t) => t.status === "Completed");
   const overdueTasks = openTasks.filter(isOverdue);
   const waitingReply = openTasks.filter((t) => t.status === "Waiting Reply");
+  const inProgress = openTasks.filter((t) => t.status === "In Progress");
+  const notStarted = openTasks.filter((t) => t.status === "Not Started");
   const escalations = openTasks.filter((t) => t.source_type === "kpi_escalation" || t.source_type === "receivable_escalation");
   const next7 = sevenDaysFromNow();
   const upcomingTasks = openTasks.filter((t) => t.due_date && t.due_date >= today && t.due_date <= next7).sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
@@ -283,20 +287,6 @@ export default function PADashboardPage() {
     .sort((a, b) => b.overdue - a.overdue || b.total - a.total);
 
   const viewTasks = viewPerson ? (personMap.get(viewPerson) || []) : null;
-
-  // Chart data
-  const donutData = [
-    { name: "Overdue", value: overdueTasks.length, color: COLOURS.RED },
-    { name: "Waiting Reply", value: waitingReply.length, color: "#d97706" },
-    { name: "In Progress", value: openTasks.filter((t) => t.status === "In Progress").length, color: "#2563eb" },
-    { name: "Not Started", value: openTasks.filter((t) => t.status === "Not Started").length, color: COLOURS.SLATE },
-  ].filter((d) => d.value > 0);
-
-  const personChartData = people.slice(0, 8).map((p) => ({
-    name: p.name.length > 12 ? p.name.slice(0, 10) + "…" : p.name,
-    Overdue: p.overdue,
-    Active: p.total - p.overdue,
-  }));
 
   // Banner items
   const bannerItems: { label: string; count: number; color: string }[] = [];
@@ -407,7 +397,6 @@ export default function PADashboardPage() {
 
   return (
     <AuthWrapper>
-      <RoleGuard allowedRoles={["Admin", "Executive"]}>
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
             <PageHeader title="PA Command Centre" subtitle="Chase, close, reassign, allocate — full task control" />
@@ -459,7 +448,21 @@ export default function PADashboardPage() {
             <p style={{ color: COLOURS.SLATE }}>Loading...</p>
           ) : (
             <>
-              {/* ═══ ZONE 1: ACTION BANNER ═══ */}
+              {/* ═══ KPI CARDS — actionable numbers at a glance ═══ */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(6, 1fr)",
+                gap: "10px", marginBottom: "14px",
+              }}>
+                <KPICard value={overdueTasks.length} label="Overdue" color={overdueTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
+                <KPICard value={waitingReply.length} label="Waiting Reply" color={waitingReply.length > 0 ? "#d97706" : COLOURS.GREEN} />
+                <KPICard value={escalations.length} label="Escalations" color={escalations.length > 0 ? "#d97706" : COLOURS.GREEN} />
+                <KPICard value={upcomingTasks.length} label="Due This Week" color="#2563eb" />
+                <KPICard value={openTasks.length} label="Open Tasks" color={COLOURS.NAVY} />
+                <KPICard value={meetingRequests.length} label="To Approve" color={meetingRequests.length > 0 ? "#2563eb" : COLOURS.GREEN} />
+              </div>
+
+              {/* ═══ ACTION BANNER — overdue/waiting/escalations/approvals ═══ */}
               {bannerItems.length > 0 ? (
                 <div style={{
                   border: `1px solid ${hasCritical ? "#fecaca" : COLOURS.BORDER}`,
@@ -531,54 +534,7 @@ export default function PADashboardPage() {
                 </div>
               )}
 
-              {/* ═══ ZONE 2: CHARTS ROW ═══ */}
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 2fr", gap: "14px", marginBottom: "14px" }}>
-                {/* Task status donut */}
-                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-                  <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>Task Status</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, color: COLOURS.NAVY, textAlign: "center" }}>{openTasks.length} <span style={{ fontSize: "14px", fontWeight: 400, color: COLOURS.SLATE }}>open</span></div>
-                  {donutData.length > 0 && (
-                    <ResponsiveContainer width="100%" height={160}>
-                      <PieChart>
-                        <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
-                          {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                        </Pie>
-                        <Tooltip formatter={(value, name) => [`${value} tasks`, name]} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  )}
-                  <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap", marginTop: "4px" }}>
-                    {donutData.map((d) => (
-                      <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: COLOURS.SLATE }}>
-                        <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: d.color, display: "inline-block" }} />
-                        {d.name} ({d.value})
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ textAlign: "center", marginTop: "8px", fontSize: "13px", color: COLOURS.GREEN, fontWeight: 600 }}>
-                    {completedTasks.length} completed total
-                  </div>
-                </div>
-
-                {/* Person workload bar chart */}
-                {personChartData.length > 0 && (
-                  <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-                    <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>Workload by Person</div>
-                    <ResponsiveContainer width="100%" height={Math.max(160, personChartData.length * 32)}>
-                      <BarChart data={personChartData} layout="vertical" margin={{ left: 10, right: 10, top: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 11, fill: COLOURS.SLATE }} allowDecimals={false} />
-                        <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: COLOURS.NAVY, fontWeight: 600 }} width={90} />
-                        <Tooltip />
-                        <Bar dataKey="Overdue" stackId="a" fill={COLOURS.RED} name="Overdue (red)" radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="Active" stackId="a" fill="#2563eb" name="Active (blue)" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
-
-              {/* ═══ ZONE 3: TASK MANAGEMENT ═══ */}
+              {/* ═══ TASK MANAGEMENT ═══ */}
               {/* Bulk action bar */}
               {bulkAction && selectedTasks.size > 0 && (
                 <div style={{ display: "flex", gap: "6px", alignItems: "center", padding: "10px 14px", backgroundColor: "#f8fafc", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
@@ -678,16 +634,38 @@ export default function PADashboardPage() {
                 )}
 
                 {activeTab === "all" && (
-                  <div style={{ maxHeight: "500px", overflowY: "auto" }}>
-                    {openTasks.slice(0, 50).map((t) => <TaskCard key={t.id} task={t} />)}
+                  <div style={{ maxHeight: "600px", overflowY: "auto" }}>
+                    {openTasks.map((t) => <TaskCard key={t.id} task={t} />)}
                   </div>
                 )}
+              </div>
+
+              {/* ── Purpose Statement ── */}
+              <div style={{
+                backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                borderLeft: "4px solid var(--text-primary)",
+                borderRadius: "8px", padding: isMobile ? "10px 12px" : "12px 18px",
+                fontSize: isMobile ? "12px" : "14px", color: "var(--text-primary)",
+                lineHeight: 1.7, fontStyle: "italic", fontWeight: 600,
+              }}>
+                &ldquo;Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.&rdquo;
               </div>
             </>
           )}
         </main>
-      </RoleGuard>
     </AuthWrapper>
+  );
+}
+
+function KPICard({ value, label, color }: { value: number; label: string; color: string }) {
+  return (
+    <div style={{
+      border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${color}`,
+      borderRadius: "8px", padding: "12px 14px", backgroundColor: "white",
+    }}>
+      <div style={{ fontSize: "24px", fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+    </div>
   );
 }
 

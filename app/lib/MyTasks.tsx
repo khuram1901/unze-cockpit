@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "./supabase";
+import { supabase, loadMyPermissions } from "./supabase";
 import { formatDateUK } from "./dateUtils";
 import { COLOURS, SectionTitle, StatusBadge, PriorityBadge } from "./SharedUI";
+import { canSeeAllTasks, type UserCtx, type PermOverrides } from "./permissions";
 
 type UserTask = {
   id: string;
@@ -21,13 +22,15 @@ export default function MyTasks() {
   const [role, setRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
 
+  const [seeAll, setSeeAll] = useState(false);
+
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) { setLoaded(true); return; }
 
       const { data: member } = await supabase
-        .from("members").select("first_name, last_name, name, role")
+        .from("members").select("id, first_name, last_name, name, role, department, company")
         .eq("email", user.email).maybeSingle();
 
       if (!member) { setLoaded(true); return; }
@@ -36,7 +39,12 @@ export default function MyTasks() {
       setUserName(name);
       setRole(member.role);
 
-      const isAdminOrExec = member.role === "Admin" || member.role === "Executive";
+      let overrides: PermOverrides | null = null;
+      const p = await loadMyPermissions();
+      if (p) overrides = p as PermOverrides;
+      const ctx: UserCtx = { email: user.email, role: member.role, department: member.department, company: member.company, overrides };
+      const canSeeAll = canSeeAllTasks(ctx);
+      setSeeAll(canSeeAll);
 
       let query = supabase
         .from("tasks")
@@ -44,25 +52,22 @@ export default function MyTasks() {
         .not("status", "in", '("Completed","Cancelled")')
         .order("due_date", { ascending: true });
 
-      if (!isAdminOrExec) {
-        // Managers and Members only see their own tasks
+      if (!canSeeAll) {
         query = query.eq("assigned_to", name);
       }
 
-      const { data } = await query.limit(isAdminOrExec ? 30 : 15);
+      const { data } = await query.limit(canSeeAll ? 30 : 15);
       setTasks(data || []);
       setLoaded(true);
     }
     load();
   }, []);
 
-  // Admin/Executive have Tasks page and PA dashboard — don't show here
   if (!loaded || tasks.length === 0) return null;
-  if (role === "Admin" || role === "Executive") return null;
+  if (seeAll) return null;
 
   const today = new Date().toISOString().slice(0, 10);
-  const isAdminOrExec = role === "Admin" || role === "Executive";
-  const title = isAdminOrExec ? `All Open Tasks (${tasks.length})` : `Your Tasks (${tasks.length})`;
+  const title = `Your Tasks (${tasks.length})`;
 
   return (
     <>
@@ -83,7 +88,7 @@ export default function MyTasks() {
                   <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {t.description}
                   </div>
-                  {isAdminOrExec && (
+                  {seeAll && (
                     <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "1px" }}>
                       {t.assigned_to || "Unassigned"} {t.assigned_to_department ? `· ${t.assigned_to_department}` : ""}
                     </div>

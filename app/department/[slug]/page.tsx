@@ -2,7 +2,6 @@
 
 import { use } from "react";
 import AuthWrapper from "../../lib/AuthWrapper";
-import RoleGuard from "../../lib/RoleGuard";
 import { useRequireDepartment } from "../../lib/useRouteGuard";
 import { getDepartmentConfig } from "../../lib/department-config";
 import { useMobile } from "../../lib/useMobile";
@@ -37,16 +36,14 @@ export default function DepartmentPage({ params }: { params: Promise<{ slug: str
 
   return (
     <AuthWrapper>
-      <RoleGuard allowedRoles={config.allowedRoles}>
-        <DepartmentGuarded slug={slug} departmentName={config.departmentName} config={config} />
-      </RoleGuard>
+      <DepartmentGuarded slug={slug} departmentName={config.departmentName} config={config} />
     </AuthWrapper>
   );
 }
 
 function DepartmentGuarded({ slug, departmentName, config }: { slug: string; departmentName: string; config: ReturnType<typeof getDepartmentConfig> }) {
   const { checking } = useRequireDepartment(departmentName);
-  if (checking) return null;
+  if (checking) return <p style={{ padding: "20px 24px", color: "#64748b" }}>Checking permissions...</p>;
   const CustomDashboard = CUSTOM_DASHBOARDS[slug];
   return CustomDashboard ? <CustomDashboard /> : <DepartmentDashboard config={config!} />;
 }

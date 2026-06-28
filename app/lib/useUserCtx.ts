@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "./supabase";
+import { supabase, loadMyPermissions } from "./supabase";
 import type { UserCtx, PermOverrides } from "./permissions";
 
 export function useUserCtx(): { ctx: UserCtx | null; loading: boolean } {
@@ -17,11 +17,8 @@ export function useUserCtx(): { ctx: UserCtx | null; loading: boolean } {
         .from("members").select("id, role, department, company").eq("email", user.email).maybeSingle();
       if (!active) return;
       let overrides: PermOverrides | null = null;
-      if (m?.id) {
-        const { data: p } = await supabase
-          .from("member_permissions").select("*").eq("member_id", m.id).maybeSingle();
-        if (p && active) overrides = p as PermOverrides;
-      }
+      const permData = await loadMyPermissions();
+      if (permData) overrides = permData as PermOverrides;
       if (!active) return;
       setCtx({
         email: user.email,

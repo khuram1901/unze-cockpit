@@ -3,10 +3,11 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../lib/SharedUI";
+import { canSeeAllMinutes, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Meeting = {
   id: string;
@@ -73,19 +74,18 @@ function MyMinutesPage() {
 
     const { data: memberData } = await supabase
       .from("members")
-      .select("id, role, is_hod, name, first_name, last_name")
+      .select("id, role, is_hod, name, first_name, last_name, department, company")
       .eq("email", email)
       .maybeSingle();
 
     const role = memberData?.role || "Member";
     const hod = memberData?.is_hod || false;
 
-    // Check permissions properly (Admin/CEO/PA see all)
-    let privUser = role === "Admin" || role === "Executive";
-    if (!privUser && memberData?.id) {
-      const { data: perms } = await supabase.from("member_permissions").select("can_see_all_minutes").eq("member_id", memberData.id).maybeSingle();
-      if (perms?.can_see_all_minutes === true) privUser = true;
-    }
+    let overrides: PermOverrides | null = null;
+    const p = await loadMyPermissions();
+    if (p) overrides = p as PermOverrides;
+    const ctx: UserCtx = { email, role, department: memberData?.department, company: memberData?.company, overrides };
+    const privUser = canSeeAllMinutes(ctx);
 
     setIsHOD(hod);
     setIsAdmin(privUser);

@@ -83,7 +83,7 @@ function getQuarterLabel(dateStr: string): string {
   return `Q${q} ${y}`;
 }
 
-export default function TasksList({ currentRole }: { currentRole: string }) {
+export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean }) {
   const searchParams = useSearchParams();
   const taskIdFromUrl = searchParams.get("task");
 
@@ -97,7 +97,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
   const [bannerOpen, setBannerOpen] = useState(false);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
 
-  const isPrivileged = currentRole === "Admin" || currentRole === "Executive";
+  const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "Executive");
 
   async function loadTasks() {
     const { data: userData } = await supabase.auth.getUser();
@@ -278,8 +278,8 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
                 <div style={{ marginTop: "4px", fontSize: "12px" }}>By {task.reply_by || "unknown"} {task.reply_at ? `on ${formatDateUK(task.reply_at)}` : ""}</div>
               </div>
             )}
-            <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} />
-            {isPrivileged && (
+            <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} canReview={canReview ?? isPrivileged} canEditDueDate={canReview ?? isPrivileged} />
+            {(canDelete ?? isPrivileged) && (
               <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end", gap: "6px" }}>
                 {task.assigned_to && memberPhones[task.assigned_to] && (
                   <a href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
@@ -365,7 +365,7 @@ export default function TasksList({ currentRole }: { currentRole: string }) {
           <MiniCard label="Waiting Reply" value={waitingReply.length} color="#d97706" />
           <MiniCard label="Completed" value={completedAll.length} color="#16a34a" />
         </div>
-        {isPrivileged && (
+        {(canImport ?? isPrivileged) && (
           <ImportExportButtons
             onExport={() => {
               const headers = ["Description", "Assigned To", "Priority", "Due Date", "Status", "Project"];

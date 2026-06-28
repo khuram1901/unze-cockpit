@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, SectionTitle } from "../lib/SharedUI";
-import { canEditFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Plant = { id: string; name: string; type: string };
 
@@ -37,11 +37,10 @@ export default function OpeningBalancesForm() {
           .single();
         if (me) {
           let overrides: PermOverrides | null = null;
-          const { data: p } = await supabase
-            .from("member_permissions").select("*").eq("member_id", me.id).maybeSingle();
+          const p = await loadMyPermissions();
           if (p) overrides = p as PermOverrides;
           const ctx: UserCtx = { email: userData.user.email, role: me.role, department: me.department, company: me.company, overrides };
-          setCanEdit(isAdminTier(ctx) || canEditFinance(ctx));
+          setCanEdit(canEditFinance(ctx));
         }
       }
       const { data } = await supabase

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
@@ -10,6 +10,7 @@ import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import * as XLSX from "xlsx";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type OpeningBalance = {
   id: string;
@@ -58,6 +59,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const isMobile = useMobile();
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("Member");
+  const [userCanEdit, setUserCanEdit] = useState(false);
 
   const [opening, setOpening] = useState<OpeningBalance | null>(null);
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
@@ -242,8 +244,15 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user?.email) {
-      const { data: memberData } = await supabase.from("members").select("role").eq("email", userData.user.email).maybeSingle();
-      if (memberData) setUserRole(memberData.role);
+      const { data: memberData } = await supabase.from("members").select("id, role, department, company").eq("email", userData.user.email).maybeSingle();
+      if (memberData) {
+        setUserRole(memberData.role);
+        let overrides: PermOverrides | null = null;
+        const p = await loadMyPermissions();
+        if (p) overrides = p as PermOverrides;
+        const ctx: UserCtx = { email: userData.user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
+        setUserCanEdit(canEditFinance(ctx));
+      }
     }
     const [obRes, planRes, posRes] = await Promise.all([
       supabase
@@ -465,7 +474,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   }
 
   const latestPosition = positions[0] || null;
-  const canEditAll = userRole === "Admin" || userRole === "Executive";
+  const canEditAll = userCanEdit;
   const staleDays = latestPosition ? Math.floor((Date.now() - new Date(latestPosition.position_date + "T00:00:00").getTime()) / 86400000) : 999;
 
   // Alert items

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
@@ -134,7 +134,7 @@ export default function MembersManager() {
       const { data: me } = await supabase.from("members").select("id, role").eq("email", userData.user.email).single();
       if (me) {
         setMyRole(me.role);
-        const { data: perms } = await supabase.from("member_permissions").select("*").eq("member_id", me.id).maybeSingle();
+        const perms = await loadMyPermissions();
         if (perms) setMyOverrides(perms as PermOverrides);
       }
     }
@@ -312,7 +312,7 @@ export default function MembersManager() {
   }
 
   if (loading) return (
-    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
       <p style={{ color: COLOURS.SLATE }}>Loading...</p>
     </main>
   );
@@ -334,7 +334,7 @@ export default function MembersManager() {
   });
 
   return (
-    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
         <PageHeader title="Members" subtitle="Manage team members, roles, and access" />
         {isAdmin && (

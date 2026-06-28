@@ -17,6 +17,7 @@ type Task = {
   recovery_date: string | null;
   impact_on_monthly_target: string | null;
   time_spent_minutes: number | null;
+  notes: string | null;
 };
 
 const STATUSES = [
@@ -32,10 +33,14 @@ export default function TaskStatus({
   task,
   currentRole,
   onChanged,
+  canReview: canReviewProp,
+  canEditDueDate: canEditDateProp,
 }: {
   task: Task;
   currentRole: string;
   onChanged: () => void;
+  canReview?: boolean;
+  canEditDueDate?: boolean;
 }) {
   const [status, setStatus] = useState(task.status);
   const [memberNames, setMemberNames] = useState<{ name: string; email: string | null; department: string | null; phone_e164: string | null }[]>([]);
@@ -43,7 +48,7 @@ export default function TaskStatus({
   const [correctiveAction, setCorrectiveAction] = useState(task.corrective_action || "");
   const [recoveryDate, setRecoveryDate] = useState(task.recovery_date || "");
 
-  // Due-date editing (Admin / Executive only)
+  // Due-date editing
   const [dueDate, setDueDate] = useState(task.due_date || "");
   const [savingDate, setSavingDate] = useState(false);
   const [dateMessage, setDateMessage] = useState("");
@@ -51,8 +56,12 @@ export default function TaskStatus({
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
 
-  const isReviewer = currentRole === "Admin" || currentRole === "Executive";
-  const canEditDate = currentRole === "Admin" || currentRole === "Executive";
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  const isReviewer = canReviewProp ?? (currentRole === "Admin" || currentRole === "Executive");
+  const canEditDate = canEditDateProp ?? (currentRole === "Admin" || currentRole === "Executive");
 
   useEffect(() => {
     if (canEditDate) {
@@ -153,6 +162,33 @@ export default function TaskStatus({
     setSavedMessage("Response submitted ✓");
     onChanged();
     setTimeout(() => setSavedMessage(""), 2000);
+  }
+
+  async function saveNote() {
+    if (!noteText.trim()) return;
+    setSavingNote(true);
+
+    const { data: userData } = await supabase.auth.getUser();
+    const who = userData.user?.email || "unknown";
+    const timestamp = new Date().toLocaleDateString("en-GB");
+    const entry = `[${timestamp} — ${who}] ${noteText.trim()}`;
+    const updated = task.notes ? `${task.notes}\n${entry}` : entry;
+
+    const { error } = await supabase
+      .from("tasks")
+      .update({ notes: updated, updated_at: new Date().toISOString() })
+      .eq("id", task.id);
+
+    setSavingNote(false);
+    if (error) {
+      alert("Error saving note: " + error.message);
+      return;
+    }
+
+    logAction("Updated", "tasks", `Note added: ${noteText.trim().slice(0, 50)}`, task.id);
+    setNoteText("");
+    setShowNoteInput(false);
+    onChanged();
   }
 
   const controlStyle = {
@@ -257,6 +293,63 @@ export default function TaskStatus({
           <span style={{ fontSize: "13px", color: "#1e293b", fontWeight: 600 }}>
             ({Math.floor((task.time_spent_minutes || 0) / 60)}h {(task.time_spent_minutes || 0) % 60}m)
           </span>
+        )}
+      </div>
+
+      {/* Add note */}
+      <div style={{ marginTop: "12px" }}>
+        {!showNoteInput ? (
+          <button
+            onClick={() => setShowNoteInput(true)}
+            style={{
+              backgroundColor: "transparent",
+              color: "#2563eb",
+              border: "1px solid #2563eb",
+              borderRadius: "6px",
+              padding: "5px 14px",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            + Add Note
+          </button>
+        ) : (
+          <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+            <textarea
+              autoFocus
+              placeholder="Add a progress update or note..."
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              style={{
+                flex: 1, padding: "8px", border: "1px solid #e2e8f0",
+                borderRadius: "6px", fontSize: "14px", minHeight: "60px", resize: "vertical",
+              }}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <button
+                onClick={saveNote}
+                disabled={savingNote || !noteText.trim()}
+                style={{
+                  backgroundColor: "#16a34a", color: "white", border: "none",
+                  borderRadius: "6px", padding: "6px 12px", fontSize: "13px",
+                  fontWeight: 700, cursor: savingNote || !noteText.trim() ? "not-allowed" : "pointer",
+                  opacity: savingNote || !noteText.trim() ? 0.5 : 1,
+                }}
+              >
+                {savingNote ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={() => { setShowNoteInput(false); setNoteText(""); }}
+                style={{
+                  backgroundColor: "transparent", color: "#64748b", border: "none",
+                  fontSize: "12px", cursor: "pointer", padding: "4px",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

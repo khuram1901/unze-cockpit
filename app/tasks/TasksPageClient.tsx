@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { COLOURS, PageHeader } from "../lib/SharedUI";
 import { useUserCtx } from "../lib/useUserCtx";
-import { canCreateAssignments as checkCanCreate } from "../lib/permissions";
+import {
+  canCreateAssignments as checkCanCreate,
+  canSeeAllTasks, canReviewTasks, canImportExport,
+} from "../lib/permissions";
 import NewTaskForm from "./NewTaskForm";
 import TasksList from "./TasksList";
 
@@ -14,16 +17,16 @@ export default function TasksPageClient() {
   if (loading) return <p style={{ color: COLOURS.SLATE }}>Loading tasks…</p>;
 
   const role = ctx?.role || "Member";
-  const canCreateAssignments = ctx ? checkCanCreate(ctx) : false;
-  // TasksList/TaskStatus check role === "Admin" || "Executive" for privileged ops.
-  // If overrides grant task privs to a Manager/Member, pass "Executive" so children respect it.
-  const effectiveRole = canCreateAssignments && role !== "Admin" && role !== "Executive" ? "Executive" : role;
+  const canCreate = ctx ? checkCanCreate(ctx) : false;
+  const seeAll = ctx ? canSeeAllTasks(ctx) : false;
+  const review = ctx ? canReviewTasks(ctx) : false;
+  const impExp = ctx ? canImportExport(ctx) : false;
 
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-        <PageHeader title="Tasks & Assignments" subtitle={canCreateAssignments ? "Create, assign, track, and close tasks" : "Update your assigned tasks and submit replies"} />
-        {canCreateAssignments && (
+        <PageHeader title="Tasks & Assignments" subtitle={canCreate ? "Create, assign, track, and close tasks" : "Update your assigned tasks and submit replies"} />
+        {canCreate && (
           <button onClick={() => setShowForm(!showForm)} style={{
             backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
             width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
@@ -33,13 +36,13 @@ export default function TasksPageClient() {
         )}
       </div>
 
-      {canCreateAssignments && showForm && (
+      {canCreate && showForm && (
         <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", marginBottom: "14px", overflow: "hidden" }}>
           <NewTaskForm />
         </div>
       )}
 
-      <TasksList currentRole={effectiveRole} />
+      <TasksList currentRole={role} canSeeAll={seeAll} canReview={review} canDelete={review} canImport={impExp} />
     </>
   );
 }

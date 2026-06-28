@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
@@ -14,6 +14,7 @@ import {
 } from "../../lib/SharedUI";
 import { DepartmentConfig } from "../../lib/department-config";
 import { logAction } from "../../lib/audit-log";
+import { canSeeAllTasks, type UserCtx, type PermOverrides } from "../../lib/permissions";
 
 type UserTask = {
   id: string;
@@ -50,15 +51,18 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
     const { data } = await query;
     setRows(data || []);
 
-    // Load current user's tasks (managers only — admin/exec use Tasks page)
     const { data: { user } } = await supabase.auth.getUser();
     if (user?.email) {
       const { data: member } = await supabase
-        .from("members").select("first_name, last_name, name, role")
+        .from("members").select("id, first_name, last_name, name, role, department, company")
         .eq("email", user.email).maybeSingle();
       if (member) {
         setUserRole(member.role);
-        if (member.role === "Manager" || member.role === "Member") {
+        let overrides: PermOverrides | null = null;
+        const p = await loadMyPermissions();
+        if (p) overrides = p as PermOverrides;
+        const ctx: UserCtx = { email: user.email, role: member.role, department: member.department, company: member.company, overrides };
+        if (!canSeeAllTasks(ctx)) {
           const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || user.email;
           const { data: tasks } = await supabase
             .from("tasks")

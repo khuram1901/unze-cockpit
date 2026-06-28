@@ -11,13 +11,13 @@ import {
   type PageCard,
 } from "./pageRegistry";
 import {
-  isAdminTier, isCEO as checkIsCEO, canViewFinance, canEditFinance, financeCompanies,
+  isAdminTier, canViewFinance, canEditFinance, financeCompanies,
   canViewExecutiveDashboard, canViewOperations, canViewReceivables,
   canSeeAllTasks, canCreateAssignments, canReviewTasks,
   canManageRecurringTasks, canManageCalendarRequests, canSeeAllMinutes,
   canViewDepartment, canManageMembers, canAddMembers,
   canViewAuditLog, canViewExceptions, canImportExport,
-  canAccessDailyEntry, isPA as checkIsPA,
+  canAccessDailyEntry, canViewPADashboard, canViewInvestments,
   type UserCtx,
 } from "./permissions";
 
@@ -25,7 +25,7 @@ import {
 const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_view_executive_dashboard: canViewExecutiveDashboard,
   can_view_operations_dashboard: canViewOperations,
-  can_view_pa_dashboard: (c) => checkIsPA(c) || isAdminTier(c),
+  can_view_pa_dashboard: canViewPADashboard,
   can_view_finance: canViewFinance,
   can_edit_finance: canEditFinance,
   can_view_receivables: canViewReceivables,
@@ -47,11 +47,14 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_view_exceptions: canViewExceptions,
   can_import_export: canImportExport,
   can_access_daily_entry: canAccessDailyEntry,
+  can_view_investments: canViewInvestments,
 };
 
 function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   const perms = ctx.overrides as Record<string, boolean | string | null> | null;
   if (card.permKey.startsWith("_")) return true;
+  const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
+  if (isPACtx && card.permKey === "can_view_pa_dashboard") return false;
   if (card.permKey === "can_view_finance_utpl") {
     if (!canViewFinance(ctx)) return false;
     const scope = financeCompanies(ctx);
@@ -83,11 +86,11 @@ const SIDEBAR_GROUPS = [
 ] as const;
 
 const GROUP_ICONS: Record<string, string> = {
-  "Command Centre": "⚡",
-  "Tasks & Meetings": "📋",
-  Finance: "💰",
-  Operations: "🏭",
-  Departments: "🏢",
+  "Command Centre": "🚀",
+  "Tasks & Meetings": "✅",
+  Finance: "💎",
+  Operations: "🏗️",
+  Departments: "🗂️",
   Settings: "⚙️",
 };
 
@@ -165,9 +168,10 @@ export default function SidebarLayout({
   // Build visible nav items from registry + permissions
   const visibleCards = userCtx ? PAGE_REGISTRY.filter((card) => isCardVisible(card, userCtx)) : [];
 
-  // Always-visible items not in registry
+  const isPAUser = userCtx ? (userCtx.role === "Executive" || (userCtx.email || "").toLowerCase() === "pa.ceo@unze.co.uk") : false;
+
   const alwaysItems: PageCard[] = [
-    { permKey: "_home", title: "Dashboard", subtitle: "", href: "/home", icon: "🏠", group: "_top" },
+    { permKey: "_home", title: "Dashboard", subtitle: "", href: isPAUser ? "/pa" : "/home", icon: "🏠", group: "_top" },
   ];
 
   const sidebarW = isMobile ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;

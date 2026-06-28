@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
 import { COLOURS, StatusBadge } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
 import { useUserCtx } from "../lib/useUserCtx";
+import { isPA, isPrivileged, canCreateAssignments } from "../lib/permissions";
+import { displayRole } from "../lib/SharedUI";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 
 type TaskRow = { id: string; description: string; status: string; due_date: string | null; assigned_to: string | null; assigned_to_email: string | null; assigned_by: string | null; project: string | null; priority: string | null; updated_at: string | null };
@@ -41,21 +44,24 @@ function daysUntil(dateStr: string): number {
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const isMobile = useMobile();
-  const { loading: ctxLoading } = useUserCtx();
+  const { ctx, loading: ctxLoading } = useUserCtx();
   const [loading, setLoading] = useState(true);
 
-  // KPI data
-  const [kpis, setKpis] = useState({ tasksDueToday: 0, activeTasks: 0, machinesDown: 0, openTasks: 0 });
+  useEffect(() => {
+    if (!ctxLoading && ctx && isPA(ctx)) {
+      router.replace("/pa");
+    }
+  }, [ctxLoading, ctx, router]);
 
-  // Dashboard widgets
+  const [kpis, setKpis] = useState({ tasksDueToday: 0, activeTasks: 0, machinesDown: 0, openTasks: 0 });
   const [todayTasks, setTodayTasks] = useState<TaskRow[]>([]);
   const [completedToday, setCompletedToday] = useState(0);
   const [meetings, setMeetings] = useState<MeetingRow[]>([]);
   const [workload, setWorkload] = useState<WorkloadEntry[]>([]);
   const [attention, setAttention] = useState<AttentionItem[]>([]);
 
-  // My tasks (from My Dashboard)
   const [myOpenTasks, setMyOpenTasks] = useState<TaskRow[]>([]);
   const [myOverdueTasks, setMyOverdueTasks] = useState<TaskRow[]>([]);
   const [myDueThisWeek, setMyDueThisWeek] = useState<TaskRow[]>([]);
@@ -71,7 +77,6 @@ export default function HomePage() {
       const month = today.slice(0, 7);
       const weekFromNow = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
-      // Get current user info
       const { data: { user } } = await supabase.auth.getUser();
       const email = user?.email || "";
       let fullName = email;
@@ -100,7 +105,6 @@ export default function HomePage() {
 
       const { count: doneToday } = await supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "Completed").gte("updated_at", today + "T00:00:00");
 
-      // KPIs
       setKpis({
         tasksDueToday: dueToday.length,
         activeTasks: tasks.length,
@@ -109,7 +113,6 @@ export default function HomePage() {
       });
       setCompletedToday(doneToday || 0);
 
-      // Today's tasks
       const todayAndOverdue = tasks
         .filter((t) => t.due_date && t.due_date <= today)
         .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
@@ -118,10 +121,8 @@ export default function HomePage() {
         .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""));
       setTodayTasks([...todayAndOverdue, ...upcoming].slice(0, 15));
 
-      // Meetings
       setMeetings(meetingsRes.data || []);
 
-      // Team workload
       const countMap: Record<string, number> = {};
       for (const t of tasks) {
         const name = t.assigned_to || "Unassigned";
@@ -133,7 +134,6 @@ export default function HomePage() {
         .slice(0, 6);
       setWorkload(wl);
 
-      // Needs attention
       const att: AttentionItem[] = [];
       for (const t of overdue) {
         att.push({ label: t.description, detail: `overdue${t.due_date ? " / due " + t.due_date : ""} · ${t.assigned_to || "Unassigned"}`, href: "/tasks" });
@@ -146,7 +146,6 @@ export default function HomePage() {
       }
       setAttention(att);
 
-      // My personal task data
       const myAll = myTasksRes.data || [];
       const myOpen = myAll.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
       const myOD = myOpen.filter(isOverdue);
@@ -171,9 +170,9 @@ export default function HomePage() {
   const now = new Date();
   const dateStr = `${dayNames[now.getDay()]}, ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
 
+  const isTeamLead = ctx ? isPrivileged(ctx) || canCreateAssignments(ctx) : false;
   const maxWorkload = workload.length > 0 ? Math.max(...workload.map((w) => w.count)) : 1;
 
-  // Donut chart data for my tasks
   const donutData = [
     { name: "Overdue", value: myOverdueTasks.length, color: COLOURS.RED },
     { name: "Waiting Reply", value: myOpenTasks.filter((t) => t.status === "Waiting Reply").length, color: "#d97706" },
@@ -181,13 +180,41 @@ export default function HomePage() {
     { name: "Not Started", value: myOpenTasks.filter((t) => t.status === "Not Started").length, color: COLOURS.SLATE },
   ].filter((d) => d.value > 0);
 
+  function greetByTime() {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  }
+
+  const myTotalMonth = myOpenTasks.length + myCompletedMonth;
+  const progressPct = myTotalMonth > 0 ? Math.round((myCompletedMonth / myTotalMonth) * 100) : 0;
+
+  if (!ctxLoading && ctx && isPA(ctx)) {
+    return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "var(--text-secondary)" }}>Redirecting...</p></main></AuthWrapper>;
+  }
+
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
 
-        {/* Date subtitle */}
+        {!allLoading && userName && (
+          <div style={{ marginBottom: "4px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: isMobile ? "18px" : "22px", fontWeight: 800, color: "var(--text-primary)" }}>
+              {greetByTime()}, {userName.split(" ")[0]}
+            </span>
+            {ctx?.role && (
+              <span style={{
+                fontSize: "11px", fontWeight: 700, padding: "2px 10px", borderRadius: "10px",
+                backgroundColor: "var(--border-light)", color: "var(--text-secondary)",
+              }}>
+                {displayRole(ctx.role, ctx.email)}
+              </span>
+            )}
+          </div>
+        )}
         <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: "0 0 20px" }}>
-          {dateStr} &middot; here is your day
+          {dateStr}
         </p>
 
         {allLoading ? (
@@ -312,7 +339,6 @@ export default function HomePage() {
 
               {/* Right — Widgets */}
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {/* My Task Status donut */}
                 {donutData.length > 0 && (
                   <div style={{
                     backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
@@ -345,7 +371,6 @@ export default function HomePage() {
                   </div>
                 )}
 
-                {/* Due This Week */}
                 {myDueThisWeek.length > 0 && (
                   <div style={{
                     backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
@@ -381,7 +406,6 @@ export default function HomePage() {
                   </div>
                 )}
 
-                {/* Meetings widget */}
                 <div style={{
                   backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
                   borderRadius: "12px", overflow: "hidden",
@@ -410,48 +434,80 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Team Workload widget */}
-                <div style={{
-                  backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
-                  borderRadius: "12px", overflow: "hidden",
-                }}>
+                {isTeamLead ? (
                   <div style={{
-                    padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
-                    display: "flex", alignItems: "center", gap: "8px",
+                    backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                    borderRadius: "12px", overflow: "hidden",
                   }}>
-                    <span style={{ fontSize: "14px" }}>👥</span>
-                    <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Team Workload</span>
-                    <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "auto" }}>open tasks per person</span>
-                  </div>
-                  <div style={{ padding: "12px 16px" }}>
-                    {workload.map((w) => (
-                      <div key={w.name} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                        <span style={{
-                          fontSize: "12px", color: "var(--text-primary)", width: "90px",
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0,
-                        }}>
-                          {w.name}
-                        </span>
-                        <div style={{
-                          flex: 1, height: "8px", backgroundColor: "var(--border-light)", borderRadius: "4px", overflow: "hidden",
-                        }}>
+                    <div style={{
+                      padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
+                      display: "flex", alignItems: "center", gap: "8px",
+                    }}>
+                      <span style={{ fontSize: "14px" }}>👥</span>
+                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Team Workload</span>
+                      <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "auto" }}>open tasks per person</span>
+                    </div>
+                    <div style={{ padding: "12px 16px" }}>
+                      {workload.map((w) => (
+                        <div key={w.name} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                          <span style={{
+                            fontSize: "12px", color: "var(--text-primary)", width: "90px",
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0,
+                          }}>
+                            {w.name}
+                          </span>
                           <div style={{
-                            height: "100%", borderRadius: "4px",
-                            width: `${(w.count / maxWorkload) * 100}%`,
-                            backgroundColor: COLOURS.BLUE,
-                            transition: "width 0.3s ease",
-                          }} />
+                            flex: 1, height: "8px", backgroundColor: "var(--border-light)", borderRadius: "4px", overflow: "hidden",
+                          }}>
+                            <div style={{
+                              height: "100%", borderRadius: "4px",
+                              width: `${(w.count / maxWorkload) * 100}%`,
+                              backgroundColor: COLOURS.BLUE,
+                              transition: "width 0.3s ease",
+                            }} />
+                          </div>
+                          <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", width: "20px", textAlign: "right" }}>
+                            {w.count}
+                          </span>
                         </div>
-                        <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", width: "20px", textAlign: "right" }}>
-                          {w.count}
-                        </span>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div style={{
+                    backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                    borderRadius: "12px", overflow: "hidden",
+                  }}>
+                    <div style={{
+                      padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
+                      display: "flex", alignItems: "center", gap: "8px",
+                    }}>
+                      <span style={{ fontSize: "14px" }}>📊</span>
+                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>My Progress This Month</span>
+                    </div>
+                    <div style={{ padding: "16px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>{myCompletedMonth}</span>
+                        <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>of {myTotalMonth} tasks</span>
+                      </div>
+                      <div style={{
+                        height: "10px", backgroundColor: "var(--border-light)", borderRadius: "5px", overflow: "hidden", marginBottom: "8px",
+                      }}>
+                        <div style={{
+                          height: "100%", borderRadius: "5px",
+                          width: `${progressPct}%`,
+                          backgroundColor: progressPct >= 80 ? COLOURS.GREEN : progressPct >= 50 ? COLOURS.AMBER : COLOURS.BLUE,
+                          transition: "width 0.3s ease",
+                        }} />
+                      </div>
+                      <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                        {progressPct}% completed {myOpenTasks.length > 0 ? `· ${myOpenTasks.length} still open` : ""}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                {/* Needs Attention widget */}
-                {attention.length > 0 && (
+                {isTeamLead && attention.length > 0 && (
                   <div style={{
                     backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
                     borderRadius: "12px", overflow: "hidden",
@@ -480,8 +536,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* ── Tasks I Assigned (for managers/execs) ── */}
-            {assignedByMe.length > 0 && (
+            {isTeamLead && assignedByMe.length > 0 && (
               <div style={{
                 backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
                 borderRadius: "12px", overflow: "hidden", marginBottom: "20px",
@@ -520,7 +575,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* ── My Recent Activity ── */}
             {recentActivity.length > 0 && (
               <div style={{
                 backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",

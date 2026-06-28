@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import { canEditReceivables, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Stage = { id: string; stage_order: number; stage_name: string; working_day_budget: number };
 type Receivable = {
@@ -27,8 +28,6 @@ type Receivable = {
 };
 type Plant = { id: string; name: string; type: string };
 
-const EDIT_EMAILS = ["asif.shakoor@unze.co.uk", "usman.arshad@unze.co.uk"];
-const VIEW_EMAILS = ["sania.saleem@unze.co.uk", "nadeem.khan@unze.co.uk"];
 
 const PLANT_CUSTOMERS: Record<string, string[]> = {
   FIEDMC: ["FESCO", "GEPCO", "LESCO"],
@@ -85,9 +84,14 @@ export default function ReceivablesPage() {
     const email = user?.email || "";
 
     if (email) {
-      const { data: member } = await supabase.from("members").select("role").eq("email", email).single();
-      const role = member?.role || "Member";
-      setCanEdit(role === "Admin" || role === "Executive" || EDIT_EMAILS.includes(email));
+      const { data: member } = await supabase.from("members").select("id, role, department, company").eq("email", email).single();
+      if (member) {
+        let overrides: PermOverrides | null = null;
+        const p = await loadMyPermissions();
+        if (p) overrides = p as PermOverrides;
+        const ctx: UserCtx = { email, role: member.role, department: member.department, company: member.company, overrides };
+        setCanEdit(canEditReceivables(ctx));
+      }
     }
 
     const [stagesRes, billsRes, plantsRes] = await Promise.all([

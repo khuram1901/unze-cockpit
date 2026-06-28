@@ -107,7 +107,7 @@ export function canViewExecutiveDashboard(u: UserCtx) {
 export function canViewOperations(u: UserCtx) {
   const o = ov(u, "can_view_operations_dashboard");
   if (o !== null) return o;
-  return isPrivileged(u) || u.department === "Unze Trading Ops";
+  return isAdminTier(u) || u.department === "Unze Trading Ops";
 }
 
 // ── Tasks & meetings ──────────────────────────────────────────────
@@ -230,7 +230,6 @@ const DEPT_PERM_KEY: Record<string, string> = {
   IT: "can_view_dept_it",
 };
 
-const PA_BLOCKED_DEPTS = ["HR", "Tax", "Legal", "Audit"];
 
 export function canViewDepartment(u: UserCtx, departmentName: string): boolean {
   const permKey = DEPT_PERM_KEY[departmentName];
@@ -239,9 +238,16 @@ export function canViewDepartment(u: UserCtx, departmentName: string): boolean {
     if (o !== null) return o;
   }
   if (isAdminTier(u)) return true;
-  if (u.role === "Executive") return !PA_BLOCKED_DEPTS.includes(departmentName);
+  if (u.role === "Executive") return false;
   if (u.role === "Manager") return u.department === departmentName;
   return false;
+}
+
+// ── PA dashboard ─────────────────────────────────────────────────
+export function canViewPADashboard(u: UserCtx) {
+  const o = ov(u, "can_view_pa_dashboard");
+  if (o !== null) return o;
+  return isPA(u) || isAdminTier(u);
 }
 
 // ── Production ────────────────────────────────────────────────────
@@ -249,4 +255,16 @@ export function canAccessDailyEntry(u: UserCtx) {
   const o = ov(u, "can_access_daily_entry");
   if (o !== null) return o;
   return isAdminTier(u) || u.department === "Unze Trading Ops";
+}
+
+// ── Investments ──────────────────────────────────────────────────
+export function canViewInvestments(u: UserCtx) {
+  const o = ov(u, "can_view_investments");
+  if (o !== null) return o;
+  return isCEO(u) || isMainAdmin(u);
+}
+
+// ── Operations targets editing ───────────────────────────────────
+export function canEditOperationsTargets(u: UserCtx) {
+  return isPrivileged(u);
 }

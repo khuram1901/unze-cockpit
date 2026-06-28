@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import EscalationTrafficLights from "./EscalationTrafficLights";
 import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtils";
 import { COLOURS, SectionTitle, RAGStatus, ragColour } from "../lib/SharedUI";
@@ -11,6 +11,7 @@ import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import MyTasks from "../lib/MyTasks";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
+import { canViewFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 
 type Plant = { id: string; name: string; type: string };
@@ -331,6 +332,7 @@ export default function ExecutiveDashboardPage() {
   const [recAgingTotals, setRecAgingTotals] = useState<{ "0-30": number; "31-60": number; "61-90": number; "90+": number }>({ "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 });
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+  const [showFinance, setShowFinance] = useState(false);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
   const [actioningTask, setActioningTask] = useState<string | null>(null);
@@ -349,6 +351,17 @@ export default function ExecutiveDashboardPage() {
     setActioningTask(null);
   }
   const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[]>([]);
+
+  type InvestmentSummary = {
+    totalCost: number;
+    totalValue: number;
+    gainLoss: number;
+    gainLossPct: number;
+    stockCount: number;
+    losers: { ticker: string; company: string; pct: number }[];
+    priceDate: string | null;
+  };
+  const [investmentData, setInvestmentData] = useState<InvestmentSummary | null>(null);
 
   type DailyOpsPoint = { date: string; produced: number; dispatched: number; broken: number };
   const [dailyOpsData, setDailyOpsData] = useState<DailyOpsPoint[]>([]);
@@ -469,12 +482,17 @@ export default function ExecutiveDashboardPage() {
     if (user?.email) {
       const { data: memberData } = await supabase
         .from("members")
-        .select("role, first_name, name")
+        .select("id, role, first_name, name, department, company")
         .eq("email", user.email)
         .maybeSingle();
       if (memberData) {
         setUserRole(memberData.role);
         setUserName(memberData.first_name || memberData.name || null);
+        let overrides: PermOverrides | null = null;
+        const p = await loadMyPermissions();
+        if (p) overrides = p as PermOverrides;
+        const ctx: UserCtx = { email: user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
+        setShowFinance(canViewFinance(ctx));
       }
     }
 
@@ -830,6 +848,47 @@ export default function ExecutiveDashboardPage() {
     }
     setDeptHealth(healthResults);
 
+    // Investment portfolio summary
+    const [holdingsRes, pricesRes] = await Promise.all([
+      supabase.from("holdings").select("ticker, company_name, quantity, buy_price"),
+      supabase.from("current_prices").select("ticker, price, as_of_date"),
+    ]);
+    const hRows = holdingsRes.data || [];
+    const pRows = pricesRes.data || [];
+    if (hRows.length > 0) {
+      const priceMap = new Map(pRows.map((p: { ticker: string; price: number; as_of_date: string }) => [p.ticker, p]));
+      const stockMap = new Map<string, { ticker: string; company: string; totalQty: number; totalCost: number; currentPrice: number | null }>();
+      for (const h of hRows) {
+        if (!stockMap.has(h.ticker)) {
+          const cp = priceMap.get(h.ticker);
+          stockMap.set(h.ticker, { ticker: h.ticker, company: h.company_name || h.ticker, totalQty: 0, totalCost: 0, currentPrice: cp?.price ?? null });
+        }
+        const s = stockMap.get(h.ticker)!;
+        s.totalQty += h.quantity;
+        s.totalCost += h.quantity * h.buy_price;
+      }
+      let tCost = 0, tValue = 0;
+      const invLosers: { ticker: string; company: string; pct: number }[] = [];
+      for (const s of stockMap.values()) {
+        tCost += s.totalCost;
+        if (s.currentPrice !== null) {
+          const val = s.totalQty * s.currentPrice;
+          tValue += val;
+          const pct = ((val - s.totalCost) / s.totalCost) * 100;
+          if (pct < -5) invLosers.push({ ticker: s.ticker, company: s.company, pct });
+        }
+      }
+      setInvestmentData({
+        totalCost: tCost,
+        totalValue: tValue,
+        gainLoss: tValue - tCost,
+        gainLossPct: tCost > 0 ? ((tValue - tCost) / tCost) * 100 : 0,
+        stockCount: stockMap.size,
+        losers: invLosers.sort((a, b) => a.pct - b.pct),
+        priceDate: pRows[0]?.as_of_date || null,
+      });
+    }
+
     setLoading(false);
   }
 
@@ -938,7 +997,7 @@ export default function ExecutiveDashboardPage() {
             {/* ── SECTION 1: NEEDS YOUR ATTENTION ── */}
             {(() => {
               const cashAlerts: { title: string; value: number; color: string }[] = [];
-              if (userRole === "Admin") {
+              if (showFinance) {
                 for (const cfd of companyFinance) {
                   const latestDate = cfd.cashPositions[0]?.position_date;
                   const staleDays = latestDate ? Math.floor((Date.now() - new Date(latestDate + "T00:00:00").getTime()) / 86400000) : 999;
@@ -1208,7 +1267,7 @@ export default function ExecutiveDashboardPage() {
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginTop: "8px", alignItems: "start" }}>
               {/* LEFT COLUMN */}
               <div>
-                {userRole === "Admin" && companyFinance.map((cfd) => (
+                {showFinance && companyFinance.map((cfd) => (
                   <CompanyFinancePanel key={cfd.companyId} data={cfd} />
                 ))}
               </div>
@@ -1257,6 +1316,66 @@ export default function ExecutiveDashboardPage() {
                       </table></div>
                     )}
                   </div>
+                )}
+
+                {investmentData && (
+                  <>
+                    <SectionTitle title="Investments — PSX Portfolio" />
+                    <a href="/investments" style={{ textDecoration: "none", display: "block" }}>
+                      <div style={{
+                        border: `1px solid ${BORDER}`,
+                        borderLeft: `4px solid ${investmentData.gainLoss >= 0 ? "#16a34a" : "#dc2626"}`,
+                        borderRadius: "8px", padding: "14px 16px",
+                        backgroundColor: "white", marginBottom: "14px",
+                        cursor: "pointer", transition: "box-shadow 0.15s",
+                      }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
+                      >
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: investmentData.losers.length > 0 ? "10px" : "0" }}>
+                          <div>
+                            <div style={{ fontSize: "12px", color: SLATE }}>Invested</div>
+                            <div style={{ fontSize: "16px", fontWeight: 800, color: NAVY }}>Rs {fmtMoney(investmentData.totalCost)}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "12px", color: SLATE }}>Current Value</div>
+                            <div style={{ fontSize: "16px", fontWeight: 800, color: "#2563eb" }}>Rs {fmtMoney(investmentData.totalValue)}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "12px", color: SLATE }}>Gain/Loss</div>
+                            <div style={{ fontSize: "16px", fontWeight: 800, color: investmentData.gainLoss >= 0 ? "#16a34a" : "#dc2626" }}>
+                              {investmentData.gainLoss >= 0 ? "+" : ""}Rs {fmtMoney(Math.abs(investmentData.gainLoss))}
+                            </div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "12px", color: SLATE }}>Return</div>
+                            <div style={{
+                              fontSize: "16px", fontWeight: 800,
+                              color: investmentData.gainLossPct >= 0 ? "#16a34a" : "#dc2626",
+                            }}>
+                              {investmentData.gainLossPct >= 0 ? "+" : ""}{investmentData.gainLossPct.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+                        {investmentData.losers.length > 0 && (
+                          <div style={{
+                            borderTop: `1px solid #fecaca`, paddingTop: "8px",
+                            fontSize: "13px", color: "#991b1b",
+                          }}>
+                            <span style={{ fontWeight: 700 }}>{investmentData.losers.length} stock{investmentData.losers.length > 1 ? "s" : ""} down &gt;5%:</span>{" "}
+                            {investmentData.losers.map((l, i) => (
+                              <span key={l.ticker}>{i > 0 ? ", " : ""}{l.ticker} ({l.pct.toFixed(1)}%)</span>
+                            ))}
+                          </div>
+                        )}
+                        {investmentData.priceDate && (
+                          <div style={{ fontSize: "11px", color: SLATE, marginTop: "6px" }}>
+                            {investmentData.stockCount} stocks · Prices as of {investmentData.priceDate} · Click to view portfolio →
+                          </div>
+                        )}
+                      </div>
+                    </a>
+                  </>
                 )}
 
                 <SectionTitle title="Department Health" />

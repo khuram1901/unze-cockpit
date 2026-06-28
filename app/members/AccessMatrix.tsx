@@ -22,43 +22,36 @@ export type MatrixMember = {
 type PermRow = Record<string, boolean | string | null>;
 
 const PERM_COLUMNS = [
-  // ── Dashboards
-  { key: "can_view_executive_dashboard", label: "Exec Dashboard", group: "Dashboards", tip: "Access the Executive command-centre dashboard" },
-  { key: "can_view_operations_dashboard", label: "Ops Dashboard", group: "Dashboards", tip: "Access the Operations/production dashboard" },
-  { key: "can_view_pa_dashboard", label: "PA Dashboard", group: "Dashboards", tip: "Access the PA assistant dashboard" },
-  // ── Finance
-  { key: "can_view_finance", label: "View Finance", group: "Finance", tip: "View cash positions, budgets, forecasts" },
-  { key: "can_edit_finance", label: "Edit Finance", group: "Finance", tip: "Create/edit cash entries, plans, budgets" },
-  { key: "finance_company_scope", label: "Fin. Scope", group: "Finance", tip: "Which companies: UTPL / IFPL / both", type: "select" as const, options: ["both", "UTPL", "IFPL"] },
-  // ── Receivables
-  { key: "can_view_receivables", label: "View Recv.", group: "Receivables", tip: "View receivable bills and stages" },
-  { key: "can_edit_receivables", label: "Edit Recv.", group: "Receivables", tip: "Move bills, mark collected, add new" },
-  // ── Tasks & Meetings
-  { key: "can_see_all_tasks", label: "All Tasks", group: "Tasks & Meetings", tip: "See all tasks vs only own" },
-  { key: "can_create_tasks", label: "Create Tasks", group: "Tasks & Meetings", tip: "Create and assign tasks to others" },
-  { key: "can_review_tasks", label: "Review Tasks", group: "Tasks & Meetings", tip: "Edit due dates, close, reassign" },
-  { key: "can_manage_recurring_tasks", label: "Recurring", group: "Tasks & Meetings", tip: "Manage recurring task templates" },
-  { key: "can_manage_calendar", label: "Calendar Mgmt", group: "Tasks & Meetings", tip: "Approve/reject calendar requests" },
-  { key: "can_see_all_minutes", label: "All Minutes", group: "Tasks & Meetings", tip: "See all meeting minutes vs only own" },
-  // ── Departments
-  { key: "can_view_dept_ops", label: "Ops", group: "Departments", tip: "Access the Unze Trading Ops department dashboard" },
-  { key: "can_view_dept_hr", label: "HR", group: "Departments", tip: "Access the HR department dashboard" },
-  { key: "can_view_dept_tax", label: "Tax", group: "Departments", tip: "Access the Taxation department dashboard" },
-  { key: "can_view_dept_audit", label: "Audit", group: "Departments", tip: "Access the Audit department dashboard" },
-  { key: "can_view_dept_admin", label: "Admin Dept", group: "Departments", tip: "Access the Admin department dashboard" },
-  { key: "can_view_dept_it", label: "IT", group: "Departments", tip: "Access the IT department dashboard" },
-  // ── Members Management
-  { key: "can_view_members", label: "View Members", group: "Members", tip: "Access the members management page" },
-  { key: "can_add_members", label: "Add Members", group: "Members", tip: "Create new team members" },
-  { key: "can_edit_members", label: "Edit Members", group: "Members", tip: "Edit member profiles, roles, departments" },
-  { key: "can_delete_members", label: "Delete Members", group: "Members", tip: "Remove members from the system" },
-  { key: "can_reset_passwords", label: "Reset Others' PWs", group: "Members", tip: "Reset/set passwords for other users (everyone can always change their own)" },
-  // ── Settings / Admin
-  { key: "can_view_audit_log", label: "Audit Log", group: "Admin", tip: "View the system audit trail" },
-  { key: "can_view_exceptions", label: "Exceptions", group: "Admin", tip: "View escalation/exception alerts" },
-  { key: "can_import_export", label: "Import/Export", group: "Admin", tip: "Import/export member data via CSV" },
-  // ── Production
-  { key: "can_access_daily_entry", label: "Daily Entry", group: "Production", tip: "Log daily production, dispatch, breakage" },
+  { key: "can_view_executive_dashboard", label: "Exec", group: "Dashboards", tip: "Access the Executive command-centre dashboard" },
+  { key: "can_view_operations_dashboard", label: "Ops", group: "Dashboards", tip: "Access the Operations/production dashboard" },
+  { key: "can_view_pa_dashboard", label: "PA", group: "Dashboards", tip: "Access the PA assistant dashboard" },
+  { key: "can_view_finance", label: "View", group: "Finance", tip: "View cash positions, budgets, forecasts" },
+  { key: "can_edit_finance", label: "Edit", group: "Finance", tip: "Create/edit cash entries, plans, budgets" },
+  { key: "finance_company_scope", label: "Scope", group: "Finance", tip: "Which companies: UTPL / IFPL / both", type: "select" as const, options: ["both", "UTPL", "IFPL"] },
+  { key: "can_view_receivables", label: "View", group: "Recv.", tip: "View receivable bills and stages" },
+  { key: "can_edit_receivables", label: "Edit", group: "Recv.", tip: "Move bills, mark collected, add new" },
+  { key: "can_see_all_tasks", label: "All", group: "Tasks", tip: "See all tasks vs only own" },
+  { key: "can_create_tasks", label: "Create", group: "Tasks", tip: "Create and assign tasks to others" },
+  { key: "can_review_tasks", label: "Review", group: "Tasks", tip: "Edit due dates, close, reassign" },
+  { key: "can_manage_recurring_tasks", label: "Recur", group: "Tasks", tip: "Manage recurring task templates" },
+  { key: "can_manage_calendar", label: "Cal", group: "Tasks", tip: "Approve/reject calendar requests" },
+  { key: "can_see_all_minutes", label: "Mins", group: "Tasks", tip: "See all meeting minutes vs only own" },
+  { key: "can_view_dept_ops", label: "Ops", group: "Depts", tip: "Access the Unze Trading Ops department dashboard" },
+  { key: "can_view_dept_hr", label: "HR", group: "Depts", tip: "Access the HR department dashboard" },
+  { key: "can_view_dept_tax", label: "Tax", group: "Depts", tip: "Access the Taxation department dashboard" },
+  { key: "can_view_dept_audit", label: "Aud", group: "Depts", tip: "Access the Audit department dashboard" },
+  { key: "can_view_dept_admin", label: "Adm", group: "Depts", tip: "Access the Admin department dashboard" },
+  { key: "can_view_dept_it", label: "IT", group: "Depts", tip: "Access the IT department dashboard" },
+  { key: "can_view_members", label: "View", group: "Members", tip: "Access the members management page" },
+  { key: "can_add_members", label: "Add", group: "Members", tip: "Create new team members" },
+  { key: "can_edit_members", label: "Edit", group: "Members", tip: "Edit member profiles, roles, departments" },
+  { key: "can_delete_members", label: "Del", group: "Members", tip: "Remove members from the system" },
+  { key: "can_reset_passwords", label: "PW", group: "Members", tip: "Reset/set passwords for other users" },
+  { key: "can_view_audit_log", label: "Log", group: "Admin", tip: "View the system audit trail" },
+  { key: "can_view_exceptions", label: "Exc", group: "Admin", tip: "View escalation/exception alerts" },
+  { key: "can_import_export", label: "I/O", group: "Admin", tip: "Import/export member data via CSV" },
+  { key: "can_access_daily_entry", label: "Entry", group: "Prod.", tip: "Log daily production, dispatch, breakage" },
+  { key: "can_view_investments", label: "Inv", group: "Finance", tip: "View and manage PSX stock portfolio" },
 ] as const;
 
 type ColDef = (typeof PERM_COLUMNS)[number];
@@ -68,12 +61,12 @@ const GROUPS = [...new Set(PERM_COLUMNS.map((c) => c.group))];
 const GROUP_COLOURS: Record<string, string> = {
   Dashboards: "#6366f1",
   Finance: COLOURS.GREEN,
-  Receivables: COLOURS.AMBER,
-  "Tasks & Meetings": COLOURS.BLUE,
-  Departments: COLOURS.PURPLE,
+  "Recv.": COLOURS.AMBER,
+  Tasks: COLOURS.BLUE,
+  Depts: COLOURS.PURPLE,
   Members: COLOURS.TEAL,
   Admin: COLOURS.NAVY,
-  Production: "#ea580c",
+  "Prod.": "#ea580c",
 };
 
 function lc(s: string | null | undefined) { return (s || "").toLowerCase(); }
@@ -120,6 +113,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_exceptions": return admin || exec;
     case "can_import_export": return admin || exec;
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
+    case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
     default: return false;
   }
 }
@@ -199,13 +193,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
     setSaving(null);
   }
 
-  const rows = [...members].sort((a, b) => {
-    const rank = (m: MatrixMember) => {
-      const ctx: UserCtx = { email: m.email, role: m.role };
-      return isAdminTier(ctx) ? 0 : m.role === "Executive" ? 1 : m.role === "Manager" ? 2 : 3;
-    };
-    return rank(a) - rank(b) || fullName(a).localeCompare(fullName(b));
-  });
+  const rows = [...members].sort((a, b) => fullName(a).localeCompare(fullName(b)));
 
   const isProtected = (m: MatrixMember) => PROTECTED_EMAILS.includes(lc(m.email));
   const isSelf = (m: MatrixMember) => lc(m.email) === lc(myEmail);
@@ -230,180 +218,225 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
       {open && (
         <div style={{
           border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px",
-          backgroundColor: "white", padding: "0", overflowX: "auto",
+          backgroundColor: "white",
         }}>
           {!loaded ? (
             <div style={{ padding: "40px", textAlign: "center", color: COLOURS.SLATE }}>Loading permissions...</div>
           ) : (
             <>
               {/* Legend */}
-              <div style={{ padding: "12px 16px", display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "12px", color: COLOURS.SLATE, borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
+              <div style={{ padding: "8px 12px", display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "12px", color: COLOURS.SLATE, borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
                 <span style={{ fontWeight: 700 }}>Legend:</span>
-                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: COLOURS.GREEN, display: "inline-block" }} /> Enabled
+                <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: COLOURS.GREEN, display: "inline-block" }} /> On
                 </span>
-                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: "#e2e8f0", border: "1px solid #cbd5e1", display: "inline-block" }} /> Disabled
+                <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: "#e2e8f0", border: "1px solid #cbd5e1", display: "inline-block" }} /> Off
                 </span>
-                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: COLOURS.GREEN, opacity: 0.35, display: "inline-block" }} /> Role default (click to override)
+                <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: COLOURS.GREEN, opacity: 0.35, display: "inline-block" }} /> Default
                 </span>
-                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: 16, height: 16, borderRadius: 4, border: "2px solid #111827", display: "inline-block" }} /> Locked (Admin/CEO)
+                <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                  <span style={{ width: 14, height: 14, borderRadius: 3, border: "2px solid #111827", display: "inline-block" }} /> Locked
                 </span>
               </div>
 
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", minWidth: "1400px" }}>
-                <thead>
-                  {/* Group header row */}
-                  <tr>
-                    <th style={{ ...thStyle, minWidth: 180, position: "sticky", left: 0, zIndex: 3, backgroundColor: COLOURS.LIGHT }} />
-                    <th style={{ ...thStyle, minWidth: 60 }} />
-                    {GROUPS.map((g) => {
-                      const cols = PERM_COLUMNS.filter((c) => c.group === g);
-                      return (
-                        <th key={g} colSpan={cols.length} style={{
-                          ...thStyle,
-                          backgroundColor: GROUP_COLOURS[g] || COLOURS.SLATE,
-                          color: "white",
-                          textAlign: "center",
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          letterSpacing: "0.5px",
-                          borderLeft: "2px solid white",
-                        }}>{g}</th>
-                      );
-                    })}
-                  </tr>
-                  {/* Column header row */}
-                  <tr>
-                    <th style={{ ...thStyle, minWidth: 180, position: "sticky", left: 0, zIndex: 3, backgroundColor: COLOURS.LIGHT, textAlign: "left" }}>Member</th>
-                    <th style={{ ...thStyle, textAlign: "center" }}>Role</th>
-                    {PERM_COLUMNS.map((col, i) => {
-                      const isGroupStart = i === 0 || PERM_COLUMNS[i - 1].group !== col.group;
-                      return (
-                        <th key={col.key} title={col.tip} style={{
-                          ...thStyle,
-                          textAlign: "center",
-                          cursor: "help",
-                          whiteSpace: "nowrap",
-                          borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined,
-                          maxWidth: 75,
-                        }}>
-                          <div style={{ writingMode: isMobile ? undefined : "vertical-rl", transform: isMobile ? undefined : "rotate(180deg)", fontSize: "11px", lineHeight: 1.2, padding: "4px 0" }}>
+              {/* Scrollable table container */}
+              <div style={{
+                overflow: "auto",
+                maxHeight: "calc(100vh - 220px)",
+              }}>
+                <table style={{
+                  width: "100%",
+                  borderCollapse: "separate",
+                  borderSpacing: 0,
+                  tableLayout: "fixed",
+                }}>
+                  <colgroup>
+                    <col style={{ width: isMobile ? 110 : 140 }} />
+                    <col style={{ width: 46 }} />
+                    {PERM_COLUMNS.map((col) => (
+                      <col key={col.key} style={{ width: col.key === "finance_company_scope" ? 50 : 30 }} />
+                    ))}
+                  </colgroup>
+                  <thead>
+                    {/* Group header row */}
+                    <tr>
+                      <th style={{
+                        ...stickyTh, left: 0, zIndex: 14, width: isMobile ? 110 : 140,
+                        backgroundColor: "#f1f5f9", borderBottom: "none",
+                      }} />
+                      <th style={{
+                        ...stickyTh, left: isMobile ? 110 : 140, zIndex: 14, width: 46,
+                        backgroundColor: "#f1f5f9", borderBottom: "none",
+                      }} />
+                      {GROUPS.map((g) => {
+                        const cols = PERM_COLUMNS.filter((c) => c.group === g);
+                        return (
+                          <th key={g} colSpan={cols.length} style={{
+                            position: "sticky", top: 0, zIndex: 10,
+                            padding: "6px 2px",
+                            backgroundColor: GROUP_COLOURS[g] || COLOURS.SLATE,
+                            color: "white",
+                            textAlign: "center",
+                            fontSize: "11px",
+                            fontWeight: 700,
+                            letterSpacing: "0.3px",
+                            borderLeft: "2px solid white",
+                            borderBottom: "none",
+                          }}>{g}</th>
+                        );
+                      })}
+                    </tr>
+                    {/* Column header row */}
+                    <tr>
+                      <th style={{
+                        ...stickyTh, top: 28, left: 0, zIndex: 14, width: isMobile ? 110 : 140,
+                        backgroundColor: "#f1f5f9", textAlign: "left",
+                        fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY,
+                      }}>Member</th>
+                      <th style={{
+                        ...stickyTh, top: 28, left: isMobile ? 110 : 140, zIndex: 14, width: 46,
+                        backgroundColor: "#f1f5f9", textAlign: "center",
+                        fontSize: "11px", fontWeight: 700, color: COLOURS.NAVY,
+                      }}>Role</th>
+                      {PERM_COLUMNS.map((col, i) => {
+                        const isGroupStart = i === 0 || PERM_COLUMNS[i - 1].group !== col.group;
+                        return (
+                          <th key={col.key} title={col.tip} style={{
+                            position: "sticky", top: 28, zIndex: 10,
+                            padding: "5px 1px",
+                            textAlign: "center",
+                            cursor: "help",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            color: COLOURS.SLATE,
+                            backgroundColor: "#f1f5f9",
+                            borderBottom: `2px solid ${COLOURS.BORDER}`,
+                            borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                          }}>
                             {col.label}
-                          </div>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((m) => {
-                    const locked = isProtected(m);
-                    const self = isSelf(m);
-                    const overrides = perms[m.id] || null;
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((m) => {
+                      const locked = isProtected(m);
+                      const self = isSelf(m);
+                      const overrides = perms[m.id] || null;
 
-                    return (
-                      <tr key={m.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: locked ? "#fafafa" : "white" }}>
-                        <td style={{ ...tdStyle, position: "sticky", left: 0, zIndex: 1, backgroundColor: locked ? "#fafafa" : "white", minWidth: 180 }}>
-                          <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "13px" }}>{fullName(m)}</div>
-                          <div style={{ fontSize: "10px", color: COLOURS.SLATE }}>{m.email || "—"}</div>
-                        </td>
-                        <td style={{ ...tdStyle, textAlign: "center" }}>
-                          <span style={{
-                            display: "inline-block", fontSize: "10px", fontWeight: 700, color: "white",
-                            backgroundColor: roleBadgeColor(m), borderRadius: "6px", padding: "2px 8px",
-                          }}>{effectiveLabel(m)}</span>
-                        </td>
-                        {PERM_COLUMNS.map((col, i) => {
-                          const isGroupStart = i === 0 || PERM_COLUMNS[i - 1].group !== col.group;
-                          const eff = effectiveValue(col, m, overrides);
-                          const hasOverride = overrides?.[col.key] !== null && overrides?.[col.key] !== undefined;
-                          const isLoading = saving === m.id + col.key;
-                          const canToggle = !locked && !self;
+                      return (
+                        <tr key={m.id} style={{ backgroundColor: locked ? "#fafafa" : "white" }}>
+                          <td style={{
+                            ...stickyTd, left: 0, zIndex: 3,
+                            backgroundColor: locked ? "#fafafa" : "white",
+                            borderRight: `1px solid ${COLOURS.BORDER}`,
+                            borderBottom: `1px solid ${COLOURS.BORDER}`,
+                            padding: "4px 6px",
+                          }}>
+                            <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(m)}</div>
+                          </td>
+                          <td style={{
+                            ...stickyTd, left: isMobile ? 110 : 140, zIndex: 3,
+                            backgroundColor: locked ? "#fafafa" : "white",
+                            borderRight: `1px solid ${COLOURS.BORDER}`,
+                            borderBottom: `1px solid ${COLOURS.BORDER}`,
+                            textAlign: "center", padding: "4px 2px",
+                          }}>
+                            <span style={{
+                              display: "inline-block", fontSize: "10px", fontWeight: 700, color: "white",
+                              backgroundColor: roleBadgeColor(m), borderRadius: "6px", padding: "2px 6px",
+                            }}>{effectiveLabel(m)}</span>
+                          </td>
+                          {PERM_COLUMNS.map((col, i) => {
+                            const isGroupStart = i === 0 || PERM_COLUMNS[i - 1].group !== col.group;
+                            const eff = effectiveValue(col, m, overrides);
+                            const hasOverride = overrides?.[col.key] !== null && overrides?.[col.key] !== undefined;
+                            const isLoading = saving === m.id + col.key;
+                            const canToggle = !locked && !self;
 
-                          if (col.key === "finance_company_scope") {
-                            const financeOn = effectiveValue(
-                              PERM_COLUMNS.find((c) => c.key === "can_view_finance")!,
-                              m, overrides
-                            );
-                            if (!financeOn) {
-                              return <td key={col.key} style={{ ...tdStyle, textAlign: "center", borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined, color: "#cbd5e1" }}>—</td>;
+                            if (col.key === "finance_company_scope") {
+                              const financeOn = effectiveValue(
+                                PERM_COLUMNS.find((c) => c.key === "can_view_finance")!,
+                                m, overrides
+                              );
+                              if (!financeOn) {
+                                return <td key={col.key} style={{ ...cellStyle, borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined, color: "#cbd5e1" }}>—</td>;
+                              }
+                              return (
+                                <td key={col.key} style={{ ...cellStyle, borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined }}>
+                                  <select
+                                    value={(eff as string) || "both"}
+                                    onChange={(e) => togglePerm(m.id, col, e.target.value)}
+                                    disabled={!canToggle || isLoading}
+                                    style={{
+                                      fontSize: "9px", padding: "1px 2px", borderRadius: 3,
+                                      border: `1px solid ${COLOURS.BORDER}`, cursor: canToggle ? "pointer" : "not-allowed",
+                                      backgroundColor: hasOverride ? "#dbeafe" : "white",
+                                      opacity: isLoading ? 0.5 : 1,
+                                      width: "100%", maxWidth: 44,
+                                    }}
+                                  >
+                                    {(col as unknown as { options: readonly string[] }).options.map((o: string) => (
+                                      <option key={o} value={o}>{o.toUpperCase()}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                              );
                             }
+
+                            const on = eff === true;
                             return (
-                              <td key={col.key} style={{ ...tdStyle, textAlign: "center", borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined }}>
-                                <select
-                                  value={(eff as string) || "both"}
-                                  onChange={(e) => togglePerm(m.id, col, e.target.value)}
-                                  disabled={!canToggle || isLoading}
-                                  style={{
-                                    fontSize: "10px", padding: "2px 4px", borderRadius: 4,
-                                    border: `1px solid ${COLOURS.BORDER}`, cursor: canToggle ? "pointer" : "not-allowed",
-                                    backgroundColor: hasOverride ? "#dbeafe" : "white",
-                                    opacity: isLoading ? 0.5 : 1,
-                                  }}
-                                >
-                                  {(col as unknown as { options: readonly string[] }).options.map((o: string) => (
-                                    <option key={o} value={o}>{o.toUpperCase()}</option>
-                                  ))}
-                                </select>
+                              <td key={col.key} style={{ ...cellStyle, borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined }}>
+                                {locked ? (
+                                  <div style={{
+                                    width: 18, height: 18, margin: "0 auto",
+                                    borderRadius: 4,
+                                    border: "2px solid #111827",
+                                    backgroundColor: on ? COLOURS.GREEN : "#e2e8f0",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                  }} title="Locked — Admin/CEO permissions cannot be changed">
+                                    {on && <span style={{ color: "white", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      if (!canToggle) return;
+                                      togglePerm(m.id, col, !on);
+                                    }}
+                                    disabled={isLoading || !canToggle}
+                                    title={
+                                      isLoading ? "Saving..." :
+                                      !canToggle ? "Cannot modify your own permissions" :
+                                      hasOverride ? `Override — click to toggle` :
+                                      `Default: ${on ? "on" : "off"} — click to override`
+                                    }
+                                    style={{
+                                      width: 18, height: 18, padding: 0, margin: "0 auto",
+                                      borderRadius: 4, cursor: canToggle ? "pointer" : "not-allowed",
+                                      border: hasOverride ? "2px solid #3b82f6" : "1px solid #cbd5e1",
+                                      backgroundColor: on ? COLOURS.GREEN : "#e2e8f0",
+                                      opacity: isLoading ? 0.3 : hasOverride ? 1 : 0.55,
+                                      display: "flex", alignItems: "center", justifyContent: "center",
+                                      transition: "all 0.15s",
+                                    }}
+                                  >
+                                    {on && <span style={{ color: "white", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                                  </button>
+                                )}
                               </td>
                             );
-                          }
-
-                          const on = eff === true;
-                          return (
-                            <td key={col.key} style={{ ...tdStyle, textAlign: "center", borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined }}>
-                              {locked ? (
-                                <div style={{
-                                  width: 22, height: 22, margin: "0 auto",
-                                  borderRadius: 5,
-                                  border: "2px solid #111827",
-                                  backgroundColor: on ? COLOURS.GREEN : "#e2e8f0",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                }} title="Locked — Admin/CEO permissions cannot be changed">
-                                  {on && <span style={{ color: "white", fontSize: 12, fontWeight: 700 }}>✓</span>}
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    if (!canToggle) return;
-                                    const newVal = hasOverride ? null : !roleDefault(col, m);
-                                    if (newVal === null) {
-                                      togglePerm(m.id, col, null);
-                                    } else {
-                                      togglePerm(m.id, col, !on);
-                                    }
-                                  }}
-                                  disabled={isLoading || !canToggle}
-                                  title={
-                                    isLoading ? "Saving..." :
-                                    !canToggle ? "Cannot modify your own permissions" :
-                                    hasOverride ? `Override active — click to reset to role default (${roleDefault(col, m) ? "on" : "off"})` :
-                                    `Role default: ${on ? "on" : "off"} — click to override`
-                                  }
-                                  style={{
-                                    width: 22, height: 22, padding: 0, margin: "0 auto",
-                                    borderRadius: 5, cursor: canToggle ? "pointer" : "not-allowed",
-                                    border: hasOverride ? "2px solid #3b82f6" : "1px solid #cbd5e1",
-                                    backgroundColor: on ? COLOURS.GREEN : "#e2e8f0",
-                                    opacity: isLoading ? 0.3 : hasOverride ? 1 : 0.55,
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    transition: "all 0.15s",
-                                  }}
-                                >
-                                  {on && <span style={{ color: "white", fontSize: 12, fontWeight: 700 }}>✓</span>}
-                                </button>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </div>
@@ -412,19 +445,22 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
   );
 }
 
-const thStyle: React.CSSProperties = {
-  padding: "6px 8px",
-  fontSize: "11px",
-  fontWeight: 700,
-  color: COLOURS.SLATE,
-  textTransform: "uppercase",
-  letterSpacing: "0.3px",
+const stickyTh: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 10,
+  padding: "6px 4px",
   borderBottom: `2px solid ${COLOURS.BORDER}`,
-  backgroundColor: COLOURS.LIGHT,
-  whiteSpace: "nowrap",
 };
 
-const tdStyle: React.CSSProperties = {
-  padding: "6px 8px",
+const stickyTd: React.CSSProperties = {
+  position: "sticky",
   verticalAlign: "middle",
+};
+
+const cellStyle: React.CSSProperties = {
+  padding: "3px 1px",
+  textAlign: "center",
+  verticalAlign: "middle",
+  borderBottom: `1px solid ${COLOURS.BORDER}`,
 };

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK } from "../lib/dateUtils";
+import { canAccessDailyEntry, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Plant = {
   id: string;
@@ -103,7 +104,12 @@ export default function ProductionForm() {
         .single();
 
       const role = me?.role || "Member";
-      const isAdminOrExec = role === "Admin" || role === "Executive";
+
+      let overrides: PermOverrides | null = null;
+      const p = await loadMyPermissions();
+      if (p) overrides = p as PermOverrides;
+      const ctx: UserCtx = { email, role, department: null, company: null, overrides };
+      const hasFullAccess = canAccessDailyEntry(ctx);
 
       const { data: allPlants } = await supabase
         .from("plants")
@@ -113,7 +119,7 @@ export default function ProductionForm() {
 
       const active = allPlants || [];
 
-      if (isAdminOrExec) {
+      if (hasFullAccess) {
         setPlants(active);
       } else if (me) {
         const { data: mp } = await supabase

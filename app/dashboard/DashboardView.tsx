@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import TaskStatus from "../tasks/TaskStatus";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { downloadCSV } from "../lib/exportUtils";
 import MonthlyTargets from "./MonthlyTargets";
+import { canSeeAllTasks, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number };
@@ -182,16 +183,23 @@ export default function DashboardView() {
     const email = userData.user?.email || null;
     setMyEmail(email);
 
-    // Determine role and assigned plants
+    // Determine role, overrides, and assigned plants
     let role = "Member";
     let assignedPlantIds: Set<string> | null = null;
+    let userCtx: UserCtx = { email, role: null };
     if (email) {
       const { data: memberData } = await supabase
-        .from("members").select("id, role").eq("email", email).maybeSingle();
+        .from("members").select("id, role, department, company").eq("email", email).maybeSingle();
       role = memberData?.role || "Member";
       setMyRole(role);
 
-      if (role !== "Admin" && role !== "Executive") {
+      let overrides: PermOverrides | null = null;
+      const p = await loadMyPermissions();
+      if (p) overrides = p as PermOverrides;
+      userCtx = { email, role, department: memberData?.department, company: memberData?.company, overrides };
+
+      const seeAll = canSeeAllTasks(userCtx);
+      if (!seeAll) {
         if (memberData?.id) {
           const { data: mp } = await supabase
             .from("member_plants").select("plant_id").eq("member_id", memberData.id);
@@ -202,7 +210,7 @@ export default function DashboardView() {
       }
     }
 
-    const isPriv = role === "Admin" || role === "Executive";
+    const isPriv = canSeeAllTasks(userCtx);
 
     const [
       plantsRes, openRes, brokenOpenRes, prodRes, dispRes, brkRes, scrapRes,
@@ -243,7 +251,7 @@ export default function DashboardView() {
       : allMachineIssues);
 
     const allTasks: Task[] = tasksRes.data || [];
-    if (role === "Manager" || role === "Member") {
+    if (!isPriv) {
       setMyTasks(allTasks);
     } else {
       setMyTasks([]);

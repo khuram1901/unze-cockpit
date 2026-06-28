@@ -27,6 +27,10 @@
     {
       "path": "/api/backup",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/investments/update-prices",
+      "schedule": "30 4 * * 1-5"
     }
   ]
 }

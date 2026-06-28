@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "./supabase";
+import { supabase, loadMyPermissions } from "./supabase";
 import {
   canViewFinance, canViewReceivables, canViewExecutiveDashboard, canViewDepartment,
   canViewOperations, canSeeAllMinutes, canSeeAllTasks, canManageRecurringTasks,
   canManageMembers, canViewAuditLog, canViewExceptions, canImportExport,
+  canAccessDailyEntry, canViewPADashboard, canViewInvestments,
   isPrivileged, isAdminTier,
   type UserCtx, type PermOverrides,
 } from "./permissions";
 
 type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
-  | "audit_log" | "exceptions" | "import_export";
+  | "audit_log" | "exceptions" | "import_export" | "daily_entry"
+  | "pa_dashboard" | "investments";
 
 const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   finance: canViewFinance,
@@ -27,19 +29,17 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   audit_log: canViewAuditLog,
   exceptions: canViewExceptions,
   import_export: canImportExport,
+  daily_entry: canAccessDailyEntry,
+  pa_dashboard: canViewPADashboard,
+  investments: canViewInvestments,
 };
 
 async function loadUserCtx(email: string): Promise<UserCtx> {
   const { data: m } = await supabase
     .from("members").select("id, role, department, company").eq("email", email).maybeSingle();
   let overrides: PermOverrides | null = null;
-  if (m?.id) {
-    const { data: p } = await supabase
-      .from("member_permissions").select("*").eq("member_id", m.id).maybeSingle();
-    if (p) {
-      overrides = p as PermOverrides;
-    }
-  }
+  const permData = await loadMyPermissions();
+  if (permData) overrides = permData as PermOverrides;
   return {
     email,
     role: m?.role ?? null,
