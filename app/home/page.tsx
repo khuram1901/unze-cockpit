@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
-import { COLOURS, StatusBadge, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../lib/SharedUI";
+import { COLOURS, StatusBadge, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR, FreshnessBadge } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
 import { useUserCtx } from "../lib/useUserCtx";
 import { isPA, isPrivileged, canCreateAssignments } from "../lib/permissions";
 import { displayRole } from "../lib/SharedUI";
+import { logAction } from "../lib/audit-log";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 
 type TaskRow = { id: string; description: string; status: string; due_date: string | null; assigned_to: string | null; assigned_to_email: string | null; assigned_by: string | null; project: string | null; priority: string | null; updated_at: string | null };
@@ -69,6 +70,28 @@ export default function HomePage() {
   const [recentActivity, setRecentActivity] = useState<AuditEntry[]>([]);
   const [myCompletedMonth, setMyCompletedMonth] = useState(0);
   const [userName, setUserName] = useState("");
+
+  // Morning briefing + sparkline data
+  const [briefing, setBriefing] = useState<{ cashTotal: number | null; prodPct: number | null; stuckBills: number; cashDate: string | null }>({ cashTotal: null, prodPct: null, stuckBills: 0, cashDate: null });
+  const [sparklines, setSparklines] = useState<{ dueByDay: number[]; completedByDay: number[] }>({ dueByDay: [], completedByDay: [] });
+  const [toast, setToast] = useState<string | null>(null);
+
+  async function quickAction(taskId: string, action: "complete" | "chase", task: TaskRow) {
+    if (action === "complete") {
+      await supabase.from("tasks").update({ status: "Completed" }).eq("id", taskId);
+      logAction("Updated", "tasks", `Completed: ${task.description}`);
+      setAssignedByMe((prev) => prev.filter((t) => t.id !== taskId));
+      setToast("Task marked complete");
+    } else if (action === "chase" && task.assigned_to_email) {
+      await fetch("/api/notifications/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "task_chase", taskId, recipientEmail: task.assigned_to_email }),
+      });
+      setToast(`Chase sent to ${task.assigned_to}`);
+    }
+    setTimeout(() => setToast(null), 3000);
+  }
 
 
   useEffect(() => {
@@ -157,6 +180,40 @@ export default function HomePage() {
       setRecentActivity(activityRes.data || []);
       setMyCompletedMonth(myAll.filter((t) => t.status === "Completed" && t.updated_at && t.updated_at.slice(0, 7) === month).length);
 
+      // Extra queries for briefing + sparklines (non-blocking)
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const [cashRes, recRes, prodRes, targRes, completedWeekRes] = await Promise.all([
+        supabase.from("daily_cash_position").select("closing_balance, position_date").order("position_date", { ascending: false }).limit(2),
+        supabase.from("receivables").select("id").in("current_stage", ["Stage 2", "Stage 3"]).eq("status", "In Progress"),
+        supabase.from("production_entries").select("pairs_produced").eq("entry_date", yesterday),
+        supabase.from("monthly_production_targets").select("target_pairs").eq("month", today.slice(0, 7)),
+        supabase.from("tasks").select("due_date, updated_at, status").gte("due_date", sevenDaysAgo).lte("due_date", today),
+      ]);
+
+      const cashRows = cashRes.data || [];
+      const cashTotal = cashRows.length > 0 ? cashRows.reduce((s, r) => s + (r.closing_balance || 0), 0) : null;
+      const cashDate = cashRows.length > 0 ? cashRows[0].position_date : null;
+      const stuckBills = (recRes.data || []).length;
+
+      const prodTotal = (prodRes.data || []).reduce((s, r) => s + (r.pairs_produced || 0), 0);
+      const targTotal = (targRes.data || []).reduce((s, r) => s + (r.target_pairs || 0), 0);
+      const dailyTarget = targTotal > 0 ? Math.round(targTotal / 26) : 0;
+      const prodPct = dailyTarget > 0 ? Math.round((prodTotal / dailyTarget) * 100) : null;
+
+      setBriefing({ cashTotal, prodPct, stuckBills, cashDate });
+
+      // 7-day sparkline: tasks due per day and completed per day
+      const allWeekTasks = completedWeekRes.data || [];
+      const dueByDay: number[] = [];
+      const completedByDay: number[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        dueByDay.push(allWeekTasks.filter((t) => t.due_date === d).length);
+        completedByDay.push(allWeekTasks.filter((t) => t.status === "Completed" && t.updated_at && t.updated_at.slice(0, 10) === d).length);
+      }
+      setSparklines({ dueByDay, completedByDay });
+
       setLoading(false);
     }
 
@@ -236,16 +293,45 @@ export default function HomePage() {
               </div>
             )}
 
+            {/* ── Morning Briefing ── */}
+            {isTeamLead && (briefing.cashTotal !== null || briefing.prodPct !== null || myOverdueTasks.length > 0 || briefing.stuckBills > 0) && (
+              <div style={{
+                backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                borderLeft: `4px solid ${myOverdueTasks.length > 2 || briefing.stuckBills > 2 ? COLOURS.RED : myOverdueTasks.length > 0 || briefing.stuckBills > 0 ? COLOURS.AMBER : COLOURS.GREEN}`,
+                borderRadius: "8px", padding: "14px 18px", marginBottom: "16px",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Morning Briefing</span>
+                  {briefing.cashDate && <FreshnessBadge date={briefing.cashDate} label="Finance" />}
+                </div>
+                <div style={{ fontSize: "15px", color: "var(--text-secondary)", lineHeight: 1.7 }}>
+                  {briefing.cashTotal !== null && (
+                    <span>Cash position: <strong style={{ color: "var(--text-primary)" }}>PKR {(briefing.cashTotal / 1000000).toFixed(1)}M</strong> across companies. </span>
+                  )}
+                  {myOverdueTasks.length > 0 && (
+                    <span style={{ color: COLOURS.RED }}><strong>{myOverdueTasks.length} task{myOverdueTasks.length > 1 ? "s" : ""} overdue</strong>. </span>
+                  )}
+                  {myOverdueTasks.length === 0 && <span style={{ color: COLOURS.GREEN }}>No overdue tasks. </span>}
+                  {briefing.prodPct !== null && (
+                    <span>Yesterday&apos;s production: <strong style={{ color: briefing.prodPct >= 90 ? COLOURS.GREEN : briefing.prodPct >= 70 ? COLOURS.AMBER : COLOURS.RED }}>{briefing.prodPct}%</strong> of daily target. </span>
+                  )}
+                  {briefing.stuckBills > 0 && (
+                    <span><strong>{briefing.stuckBills}</strong> receivable bill{briefing.stuckBills > 1 ? "s" : ""} stuck at Stage 2/3. </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* ── KPI Cards ── */}
             <div style={{
               display: "grid",
               gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
               gap: "14px", marginBottom: "24px",
             }}>
-              <KPICard icon="📋" value={kpis.tasksDueToday} label="Tasks due today" />
+              <KPICard icon="📋" value={kpis.tasksDueToday} label="Tasks due today" sparkline={sparklines.dueByDay} />
               <KPICard icon="📂" value={myOpenTasks.length} label="My open tasks" />
               <KPICard icon="🏭" value={kpis.machinesDown} label={kpis.machinesDown === 0 ? "All machines up" : "Machines down"} alert={kpis.machinesDown > 0} />
-              <KPICard icon="✅" value={completedToday} label="Completed today" />
+              <KPICard icon="✅" value={completedToday} label="Completed today" sparkline={sparklines.completedByDay} />
             </div>
 
             {/* ── Two-column body ── */}
@@ -565,6 +651,22 @@ export default function HomePage() {
                     <div style={{ display: "flex", gap: "5px", alignItems: "center", flexShrink: 0 }}>
                       {isOverdue(t) && <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED }}>{daysOverdue(t)}d late</span>}
                       <StatusBadge status={t.status} />
+                      <button
+                        title="Mark complete"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); quickAction(t.id, "complete", t); }}
+                        style={{ background: "none", border: `1px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "2px 8px", fontSize: "12px", fontWeight: 700, color: COLOURS.GREEN, cursor: "pointer", marginLeft: "4px" }}
+                      >
+                        Done
+                      </button>
+                      {t.assigned_to_email && (
+                        <button
+                          title="Send chase email"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); quickAction(t.id, "chase", t); }}
+                          style={{ background: "none", border: `1px solid ${COLOURS.AMBER}`, borderRadius: "6px", padding: "2px 8px", fontSize: "12px", fontWeight: 700, color: COLOURS.AMBER, cursor: "pointer" }}
+                        >
+                          Chase
+                        </button>
+                      )}
                     </div>
                   </a>
                 ))}
@@ -618,12 +720,22 @@ export default function HomePage() {
             </div>
           </>
         )}
+        {toast && (
+          <div style={{
+            position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)",
+            backgroundColor: COLOURS.NAVY, color: "white", padding: "10px 20px",
+            borderRadius: "8px", fontSize: "14px", fontWeight: 600, zIndex: 1000,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          }}>
+            {toast}
+          </div>
+        )}
       </main>
     </AuthWrapper>
   );
 }
 
-function KPICard({ icon, value, label, alert }: { icon: string; value: number; label: string; alert?: boolean }) {
+function KPICard({ icon, value, label, alert, sparkline }: { icon: string; value: number; label: string; alert?: boolean; sparkline?: number[] }) {
   return (
     <div style={{
       backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
@@ -637,7 +749,23 @@ function KPICard({ icon, value, label, alert }: { icon: string; value: number; l
         {value}
       </div>
       <div style={{ fontSize: "15px", color: "var(--text-secondary)", marginTop: "4px" }}>{label}</div>
+      {sparkline && sparkline.length > 1 && <MiniSparkline data={sparkline} color={alert ? COLOURS.RED : COLOURS.BLUE} />}
     </div>
+  );
+}
+
+function MiniSparkline({ data, color }: { data: number[]; color: string }) {
+  const max = Math.max(...data, 1);
+  const w = 80;
+  const h = 24;
+  const points = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - (v / max) * (h - 4) - 2}`).join(" ");
+  const lastX = w;
+  const lastY = h - (data[data.length - 1] / max) * (h - 4) - 2;
+  return (
+    <svg width={w} height={h} style={{ marginTop: "6px", display: "block" }}>
+      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity={0.5} />
+      <circle cx={lastX} cy={lastY} r="2.5" fill={color} />
+    </svg>
   );
 }
 

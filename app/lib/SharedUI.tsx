@@ -241,6 +241,46 @@ export function TrafficLight({
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Data freshness badge — shows how recent the data is
+// ─────────────────────────────────────────────────────────────────
+export function FreshnessBadge({ date, label }: { date: string | null; label?: string }) {
+  if (!date) return null;
+  const now = new Date();
+  const dataDate = new Date(date + (date.length <= 10 ? "T00:00:00" : ""));
+  const diffMs = now.getTime() - dataDate.getTime();
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  let text: string;
+  let color: string;
+  if (diffDays === 0) {
+    text = diffHours <= 1 ? "Just now" : `${diffHours}h ago`;
+    color = COLOURS.GREEN;
+  } else if (diffDays === 1) {
+    text = "Yesterday";
+    color = COLOURS.GREEN;
+  } else if (diffDays <= 3) {
+    text = `${diffDays}d ago`;
+    color = COLOURS.AMBER;
+  } else {
+    text = `${diffDays}d ago`;
+    color = COLOURS.RED;
+  }
+
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: "4px",
+      fontSize: "12px", fontWeight: 600, color,
+      padding: "2px 8px", borderRadius: "8px",
+      backgroundColor: `${color}10`,
+    }}>
+      <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: color }} />
+      {label ? `${label}: ${text}` : text}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Warning / alert banner wrapper
 // ─────────────────────────────────────────────────────────────────
 export const WARNING_BANNER_STYLE: React.CSSProperties = {
