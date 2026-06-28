@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { createServiceClient } from "./supabase-server";
+import { encrypt, safeDecrypt } from "./crypto";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -46,14 +47,14 @@ export async function getAuthenticatedClient() {
 
   const oauth2Client = getOAuth2Client();
   oauth2Client.setCredentials({
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
+    access_token: safeDecrypt(data.access_token),
+    refresh_token: safeDecrypt(data.refresh_token),
     expiry_date: data.token_expiry ? new Date(data.token_expiry).getTime() : undefined,
   });
 
   oauth2Client.on("tokens", async (newTokens) => {
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    if (newTokens.access_token) updates.access_token = newTokens.access_token;
+    if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
     if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
     await supabase
       .from("google_oauth_tokens")
@@ -72,8 +73,8 @@ export async function saveTokens(
   await supabase.from("google_oauth_tokens").upsert(
     {
       user_email: email,
-      access_token: tokens.access_token || "",
-      refresh_token: tokens.refresh_token || "",
+      access_token: tokens.access_token ? encrypt(tokens.access_token) : "",
+      refresh_token: tokens.refresh_token ? encrypt(tokens.refresh_token) : "",
       token_expiry: tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : null,
       scopes: tokens.scope || SCOPES.join(" "),
       updated_at: new Date().toISOString(),

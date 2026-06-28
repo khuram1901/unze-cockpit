@@ -1,6 +1,6 @@
 import { google } from "googleapis";
-import { getAuthenticatedClient } from "./google-client";
 import { createServiceClient } from "./supabase-server";
+import { encrypt, safeDecrypt } from "./crypto";
 
 function buildWhatsAppLink(phone: string, message: string): string {
   const encoded = encodeURIComponent(message);
@@ -116,14 +116,14 @@ export async function sendNotificationEmail({
       (process.env.GOOGLE_REDIRECT_URI || "").replace("/callback", "/callback-notifications")
     );
     oauth2Client.setCredentials({
-      access_token: notifToken.access_token,
-      refresh_token: notifToken.refresh_token,
+      access_token: safeDecrypt(notifToken.access_token),
+      refresh_token: safeDecrypt(notifToken.refresh_token),
       expiry_date: notifToken.token_expiry ? new Date(notifToken.token_expiry).getTime() : undefined,
     });
 
     oauth2Client.on("tokens", async (newTokens) => {
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (newTokens.access_token) updates.access_token = newTokens.access_token;
+      if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
       if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
       await supabaseForTokens.from("google_oauth_tokens").update(updates).eq("id", notifToken.id);
     });

@@ -19,7 +19,7 @@ const TABLES = [
   "recruitment_positions", "performance_evaluations", "hr_strategy_goals",
   "legal_notices", "admin_categories", "admin_spend",
   "meetings", "meeting_tasks", "monthly_budgets", "quarterly_forecasts",
-  "google_oauth_tokens", "audit_log", "notification_log",
+  "audit_log", "notification_log",
 ];
 
 export async function GET(request: NextRequest) {
