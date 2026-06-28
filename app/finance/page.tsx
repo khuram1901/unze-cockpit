@@ -11,7 +11,7 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import { logAction } from "../lib/audit-log";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
-import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canEditFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
 import * as XLSX from "xlsx";
 
 type Budget = {
@@ -123,6 +123,7 @@ export default function FinancePage() {
   const [loading, setLoading] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
   const [bulkMsg, setBulkMsg] = useState("");
   const [uploading, setUploading] = useState(false);
 
@@ -156,7 +157,8 @@ export default function FinancePage() {
       const p = await loadMyPermissions();
       if (p) overrides = p as PermOverrides;
       const ctx: UserCtx = { email: user.email, role: member.role, department: member.department, company: member.company, overrides };
-      setIsAdmin(canEditFinance(ctx));
+      setIsAdmin(isAdminTier(ctx));
+      setCanEdit(canEditFinance(ctx));
 
       if (member.role === "Manager" && member.department === "Finance" && member.company) {
         const config = getCompanyByName(member.company);
@@ -485,7 +487,7 @@ export default function FinancePage() {
                               <span style={{ color: COLOURS.SLATE }}>PKR {b.budgeted_amount.toLocaleString()}</span>
                               <input type="number" defaultValue={b.actual_amount} onBlur={(e) => { const v = Number(e.target.value); if (v !== b.actual_amount) updateBudgetActual(b.id, v); }}
                                 style={{ width: "80px", padding: "2px 5px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "3px", fontSize: "12px" }} title="Update actual" />
-                              {isAdmin && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: COLOURS.RED, fontSize: "14px", cursor: "pointer" }} title="Delete">×</button>}
+                              {canEdit && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: COLOURS.RED, fontSize: "14px", cursor: "pointer" }} title="Delete">×</button>}
                             </div>
                           </div>
                         ))}
