@@ -240,13 +240,13 @@ export default function NewTaskForm() {
         <div
           style={{
             maxWidth: "440px",
-            border: "1px solid #e0e0e0",
+            border: "1px solid var(--border-color, #e2e8f0)",
             borderRadius: "6px",
             padding: "10px",
             marginBottom: "12px",
-            backgroundColor: "#fafafa",
+            backgroundColor: "var(--bg-card-hover, #f8fafc)",
             fontSize: "17px",
-            color: "#555",
+            color: "var(--text-secondary, #64748b)",
           }}
         >
           Default owner:{" "}
@@ -293,13 +293,13 @@ export default function NewTaskForm() {
         <div
           style={{
             maxWidth: "440px",
-            border: "1px solid #e0e0e0",
+            border: "1px solid var(--border-color, #e2e8f0)",
             borderRadius: "6px",
             padding: "10px",
             marginBottom: "12px",
-            backgroundColor: "#fafafa",
+            backgroundColor: "var(--bg-card-hover, #f8fafc)",
             fontSize: "17px",
-            color: "#555",
+            color: "var(--text-secondary, #64748b)",
           }}
         >
           <div>
@@ -319,10 +319,10 @@ export default function NewTaskForm() {
           style={{
             maxWidth: "440px",
             padding: "8px",
-            border: "1px solid #e0e0e0",
+            border: "1px solid var(--border-color, #e2e8f0)",
             borderRadius: "6px",
-            backgroundColor: "#fafafa",
-            color: "#555",
+            backgroundColor: "var(--bg-card-hover, #f8fafc)",
+            color: "var(--text-secondary, #64748b)",
             fontSize: "16px",
           }}
         >
@@ -368,7 +368,7 @@ export default function NewTaskForm() {
         type="submit"
         disabled={saving}
         style={{
-          backgroundColor: "#1e293b",
+          backgroundColor: "var(--text-primary, #1e293b)",
           color: "white",
           border: "none",
           borderRadius: "6px",

@@ -168,7 +168,7 @@ export function CountCard({
       style={{
         border: "1px solid var(--border-color, #e2e8f0)",
         borderTop: `3px solid ${color}`,
-        borderRadius: "7px",
+        borderRadius: "8px",
         padding: "8px 10px",
         backgroundColor: "var(--bg-card, #ffffff)",
       }}
@@ -239,6 +239,25 @@ export function TrafficLight({
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Warning / alert banner wrapper
+// ─────────────────────────────────────────────────────────────────
+export const WARNING_BANNER_STYLE: React.CSSProperties = {
+  border: "1px solid #fecaca",
+  borderLeft: "4px solid #dc2626",
+  borderRadius: "8px",
+  backgroundColor: "#fef2f2",
+  overflow: "hidden",
+  marginBottom: "14px",
+};
+
+export const WARNING_BANNER_INNER: React.CSSProperties = {
+  borderTop: "1px solid #fecaca",
+  backgroundColor: "var(--bg-card, #ffffff)",
+};
+
+export const WARNING_TITLE_COLOR = "#991b1b";
 
 // ─────────────────────────────────────────────────────────────────
 // Shared table styles

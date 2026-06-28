@@ -12,6 +12,8 @@ import {
   PriorityBadge,
   tableHeaderStyle,
   tableCellStyle,
+  WARNING_BANNER_STYLE,
+  WARNING_TITLE_COLOR,
 } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
@@ -402,16 +404,13 @@ export default function CalendarPage() {
 
         {/* ── Calendar Connection Status ── */}
         {calendarError && (
-          <div style={{
-            border: "1px solid #fecaca", borderLeft: "4px solid #dc2626", borderRadius: "8px",
-            backgroundColor: "#fef2f2", padding: "12px 16px", marginBottom: "14px",
-          }}>
+          <div style={{ ...WARNING_BANNER_STYLE, padding: "12px 16px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", justifyContent: "space-between", flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1 }}>
                 <span style={{ fontSize: "18px" }}>⚠</span>
                 <div>
-                  <div style={{ fontSize: "15px", fontWeight: 700, color: "#991b1b" }}>Google Calendar Not Syncing</div>
-                  <div style={{ fontSize: "13px", color: "#991b1b", marginTop: "3px" }}>{calendarError}</div>
+                  <div style={{ fontSize: "15px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>Google Calendar Not Syncing</div>
+                  <div style={{ fontSize: "13px", color: WARNING_TITLE_COLOR, marginTop: "3px" }}>{calendarError}</div>
                 </div>
               </div>
               {isAdmin && (

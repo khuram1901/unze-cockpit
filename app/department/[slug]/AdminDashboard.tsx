@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { canReviewTasks, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
@@ -211,19 +211,19 @@ export default function AdminDashboard() {
 
       {/* Alert Banner */}
       {!loading && overdueTasks.length > 0 && (
-        <div style={{ border: "1px solid #fecaca", borderLeft: "4px solid #dc2626", borderRadius: "8px", backgroundColor: "#fef2f2", overflow: "hidden", marginBottom: "14px" }}>
+        <div style={WARNING_BANNER_STYLE}>
           <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ fontSize: "20px" }}>⚠</span>
               <div>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: "#991b1b" }}>{overdueTasks.length} overdue task{overdueTasks.length > 1 ? "s" : ""}</div>
-                <div style={{ fontSize: "13px", color: "#991b1b", marginTop: "1px" }}>{overdueTasks.slice(0, 3).map((t) => `${t.description.slice(0, 25)}${t.description.length > 25 ? "…" : ""}`).join(" · ")}</div>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{overdueTasks.length} overdue task{overdueTasks.length > 1 ? "s" : ""}</div>
+                <div style={{ fontSize: "13px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>{overdueTasks.slice(0, 3).map((t) => `${t.description.slice(0, 25)}${t.description.length > 25 ? "…" : ""}`).join(" · ")}</div>
               </div>
             </div>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b" }}>{bannerOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
           </div>
           {bannerOpen && (
-            <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "var(--bg-card, #ffffff)" }}>
+            <div style={WARNING_BANNER_INNER}>
               {overdueTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a)).map((t) => (
                 <div key={t.id} onClick={() => { setExpandedId(t.id); setBannerOpen(false); }} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>

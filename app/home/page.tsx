@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
-import { COLOURS, StatusBadge } from "../lib/SharedUI";
+import { COLOURS, StatusBadge, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
 import { useUserCtx } from "../lib/useUserCtx";
@@ -19,8 +19,8 @@ type AttentionItem = { label: string; detail: string; href: string };
 type AuditEntry = { id: string; action: string; table_name: string; details: string | null; created_at: string };
 
 const STATUS_DOT: Record<string, string> = {
-  "In Progress": COLOURS.BLUE,
-  "Waiting Reply": COLOURS.AMBER,
+  "In Progress": COLOURS.AMBER,
+  "Waiting Reply": COLOURS.RED,
   "Not Started": COLOURS.SLATE,
   "Approved": COLOURS.GREEN,
   "To do": COLOURS.SLATE,
@@ -223,17 +223,13 @@ export default function HomePage() {
           <>
             {/* ── Overdue banner ── */}
             {myOverdueTasks.length > 0 && (
-              <div style={{
-                border: "1px solid #fecaca", borderLeft: "4px solid #dc2626", borderRadius: "8px",
-                backgroundColor: "#fef2f2", padding: "10px 16px", marginBottom: "16px",
-                display: "flex", alignItems: "center", gap: "10px",
-              }}>
+              <div style={{ ...WARNING_BANNER_STYLE, padding: "10px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
                 <span style={{ fontSize: "18px" }}>⚠</span>
                 <div>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
                     {myOverdueTasks.length} overdue task{myOverdueTasks.length > 1 ? "s" : ""} assigned to you
                   </div>
-                  <div style={{ fontSize: "14px", color: "#991b1b", marginTop: "1px" }}>
+                  <div style={{ fontSize: "14px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
                     {myOverdueTasks.slice(0, 3).map((t) => t.description.slice(0, 35)).join(" · ")}
                   </div>
                 </div>

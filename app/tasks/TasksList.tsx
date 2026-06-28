@@ -9,6 +9,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Cart
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
+import { statusColor, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../lib/SharedUI";
 
 type Task = {
   id: string;
@@ -40,16 +41,6 @@ const NAVY = "var(--text-primary, #1e293b)";
 const SLATE = "var(--text-secondary, #64748b)";
 const BORDER = "var(--border-color, #e2e8f0)";
 
-function statusColor(status: string) {
-  switch (status) {
-    case "Completed": return "#16a34a";
-    case "Submitted": return "#2563eb";
-    case "Waiting Reply": return "#dc2626";
-    case "Cancelled": return SLATE;
-    case "In Progress": return "#d97706";
-    default: return SLATE;
-  }
-}
 
 const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -316,10 +307,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     <div>
       {/* ═══ OVERDUE BANNER ═══ */}
       {overdueTasks.length > 0 && (
-        <div style={{
-          border: "1px solid #fecaca", borderLeft: "4px solid #dc2626", borderRadius: "8px",
-          backgroundColor: "#fef2f2", overflow: "hidden", marginBottom: "14px",
-        }}>
+        <div style={WARNING_BANNER_STYLE}>
           <div onClick={() => setBannerOpen(!bannerOpen)} style={{
             padding: "12px 16px", cursor: "pointer",
             display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -327,19 +315,19 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ fontSize: "20px" }}>⚠</span>
               <div>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
+                <div style={{ fontSize: "16px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
                   {overdueTasks.length} overdue task{overdueTasks.length > 1 ? "s" : ""} need attention
                 </div>
-                <div style={{ fontSize: "15px", color: "#991b1b", marginTop: "1px" }}>
+                <div style={{ fontSize: "15px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
                   {overdueTasks.slice(0, 3).map((t) => `${t.assigned_to || "Unassigned"}: ${t.description.slice(0, 30)}${t.description.length > 30 ? "…" : ""}`).join(" · ")}
                   {overdueTasks.length > 3 && ` · +${overdueTasks.length - 3} more`}
                 </div>
               </div>
             </div>
-            <span style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>{bannerOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize: "16px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
           </div>
           {bannerOpen && (
-            <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "var(--bg-card, #ffffff)" }}>
+            <div style={WARNING_BANNER_INNER}>
               {overdueTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a)).map((t) => (
                 <div key={t.id} onClick={() => { setExpandedTaskId(t.id); setBannerOpen(false); setTimeout(() => document.getElementById(`task-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}
                   style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}

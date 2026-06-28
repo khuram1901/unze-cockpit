@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, PageHeader, SectionTitle, CountCard } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, CountCard, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../lib/SharedUI";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { canEditOperationsTargets, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -234,19 +234,19 @@ export default function MonthlyOperationsTargetsPage() {
 
           {/* Alert banner for plants below 85% */}
           {behindPlants.length > 0 && (
-            <div style={{ border: "1px solid #fecaca", borderLeft: "4px solid #dc2626", borderRadius: "8px", backgroundColor: "#fef2f2", overflow: "hidden", marginBottom: "14px" }}>
+            <div style={WARNING_BANNER_STYLE}>
               <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={{ fontSize: "20px" }}>⚠</span>
                   <div>
-                    <div style={{ fontSize: "15px", fontWeight: 700, color: "#991b1b" }}>{behindPlants.length} plant{behindPlants.length > 1 ? "s" : ""} below 85% achievement</div>
-                    <div style={{ fontSize: "13px", color: "#991b1b", marginTop: "1px" }}>{behindPlants.map((d) => d.plant.name.replace(" Plant", "")).join(" · ")}</div>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{behindPlants.length} plant{behindPlants.length > 1 ? "s" : ""} below 85% achievement</div>
+                    <div style={{ fontSize: "13px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>{behindPlants.map((d) => d.plant.name.replace(" Plant", "")).join(" · ")}</div>
                   </div>
                 </div>
-                <span style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b" }}>{bannerOpen ? "▲" : "▼"}</span>
+                <span style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
               </div>
               {bannerOpen && (
-                <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                <div style={WARNING_BANNER_INNER}>
                   {behindPlants.map((d) => (
                     <div key={d.plant.id} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{d.plant.name}</span>

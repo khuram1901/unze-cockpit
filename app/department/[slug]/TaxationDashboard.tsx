@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { downloadCSV } from "../../lib/exportUtils";
@@ -125,19 +125,19 @@ export default function TaxationDashboard() {
 
       {/* Alert Banner */}
       {!loading && hearingSoon.length > 0 && (
-        <div style={{ border: "1px solid #fecaca", borderLeft: "4px solid #dc2626", borderRadius: "8px", backgroundColor: "#fef2f2", overflow: "hidden", marginBottom: "14px" }}>
+        <div style={WARNING_BANNER_STYLE}>
           <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ fontSize: "20px" }}>⚠</span>
               <div>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: "#991b1b" }}>{hearingSoon.length} hearing{hearingSoon.length > 1 ? "s" : ""} within 7 days</div>
-                <div style={{ fontSize: "13px", color: "#991b1b", marginTop: "1px" }}>{hearingSoon.map((i) => `${i.title} (${formatDateUK(i.hearing_deadline)})`).join(" · ")}</div>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{hearingSoon.length} hearing{hearingSoon.length > 1 ? "s" : ""} within 7 days</div>
+                <div style={{ fontSize: "13px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>{hearingSoon.map((i) => `${i.title} (${formatDateUK(i.hearing_deadline)})`).join(" · ")}</div>
               </div>
             </div>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b" }}>{bannerOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
           </div>
           {bannerOpen && (
-            <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "var(--bg-card, #ffffff)" }}>
+            <div style={WARNING_BANNER_INNER}>
               {hearingSoon.map((i) => (
                 <div key={i.id} onClick={() => { setExpandedId(i.id); setBannerOpen(false); }} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
