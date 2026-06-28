@@ -76,6 +76,9 @@ export default function HomePage() {
   const [sparklines, setSparklines] = useState<{ dueByDay: number[]; completedByDay: number[] }>({ dueByDay: [], completedByDay: [] });
   const [toast, setToast] = useState<string | null>(null);
 
+  type ManagerBriefingItem = { label: string; value: string; rag: "GREEN" | "AMBER" | "RED" };
+  const [managerBriefing, setManagerBriefing] = useState<ManagerBriefingItem[]>([]);
+
   async function quickAction(taskId: string, action: "complete" | "chase", task: TaskRow) {
     if (action === "complete") {
       await supabase.from("tasks").update({ status: "Completed" }).eq("id", taskId);
@@ -104,7 +107,7 @@ export default function HomePage() {
       const email = user?.email || "";
       let fullName = email;
 
-      const { data: memberData } = await supabase.from("members").select("first_name, last_name, name").eq("email", email).maybeSingle();
+      const { data: memberData } = await supabase.from("members").select("first_name, last_name, name, role, department").eq("email", email).maybeSingle();
       if (memberData) {
         fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim() || memberData.name || email;
         setUserName(fullName);
@@ -214,6 +217,147 @@ export default function HomePage() {
       }
       setSparklines({ dueByDay, completedByDay });
 
+      // Manager-specific briefing
+      const userRole = memberData?.role || "";
+      const userDept = memberData?.department || "";
+
+      if (userRole === "Manager" && userDept === "Unze Trading Ops") {
+        const items: ManagerBriefingItem[] = [];
+        const mStart = today.slice(0, 7) + "-01";
+
+        const [prodTodayRes, prodYestRes, targRes2, dispRes, breakRes, machRes, deptTasksRes] = await Promise.all([
+          supabase.from("production_entries").select("qty_31, qty_36, qty_45, qty_meter").eq("entry_date", today),
+          supabase.from("production_entries").select("qty_31, qty_36, qty_45, qty_meter").eq("entry_date", yesterday),
+          supabase.from("monthly_production_targets").select("target_pairs").eq("month", today.slice(0, 7)),
+          supabase.from("dispatch_entries").select("qty_31, qty_36, qty_45, qty_meter").gte("entry_date", mStart).lte("entry_date", today),
+          supabase.from("breakage_entries").select("qty_31, qty_36, qty_45, qty_meter").gte("entry_date", sevenDaysAgo).lte("entry_date", today),
+          supabase.from("machine_issues").select("id, issue_status").neq("issue_status", "Resolved"),
+          supabase.from("tasks").select("id, status, due_date").eq("assigned_to_department", "Unze Trading Ops").not("status", "in", '("Completed","Cancelled")'),
+        ]);
+
+        const sumQty = (rows: { qty_31?: number; qty_36?: number; qty_45?: number; qty_meter?: number }[]) =>
+          rows.reduce((s, r) => s + (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0) + (r.qty_meter || 0), 0);
+
+        const todayProd = sumQty(prodTodayRes.data || []);
+        const yesterdayProd = sumQty(prodYestRes.data || []);
+        const monthTarget = (targRes2.data || []).reduce((s, r) => s + (r.target_pairs || 0), 0);
+        const dailyTarget2 = monthTarget > 0 ? Math.round(monthTarget / 26) : 0;
+
+        if (todayProd === 0 && yesterdayProd === 0) {
+          items.push({ label: "No production entered", value: "No data for today or yesterday", rag: "RED" });
+        } else if (todayProd === 0) {
+          items.push({ label: "No production today yet", value: `Yesterday: ${yesterdayProd.toLocaleString()} pairs`, rag: "AMBER" });
+        } else {
+          const pct = dailyTarget2 > 0 ? Math.round((todayProd / dailyTarget2) * 100) : 100;
+          items.push({ label: "Today's production", value: `${todayProd.toLocaleString()} pairs (${pct}% of daily target)`, rag: pct >= 90 ? "GREEN" : pct >= 70 ? "AMBER" : "RED" });
+        }
+
+        const monthProdRes = await supabase.from("production_entries").select("qty_31, qty_36, qty_45, qty_meter").gte("entry_date", mStart).lte("entry_date", today);
+        const monthProd = sumQty(monthProdRes.data || []);
+        const dayOfMonth = new Date().getDate();
+        const expectedPct = monthTarget > 0 ? Math.round((dayOfMonth / 26) * 100) : 0;
+        const actualPct = monthTarget > 0 ? Math.round((monthProd / monthTarget) * 100) : 100;
+        if (monthTarget > 0) {
+          const onTrack = actualPct >= expectedPct - 10;
+          items.push({ label: "Month-to-date", value: `${monthProd.toLocaleString()} of ${monthTarget.toLocaleString()} (${actualPct}%)`, rag: onTrack ? "GREEN" : actualPct >= expectedPct - 20 ? "AMBER" : "RED" });
+        }
+
+        const monthDisp = sumQty(dispRes.data || []);
+        const dispatchRatio = monthProd > 0 ? Math.round((monthDisp / monthProd) * 100) : 100;
+        items.push({ label: "Dispatch ratio", value: `${monthDisp.toLocaleString()} dispatched (${dispatchRatio}% of produced)`, rag: dispatchRatio >= 85 ? "GREEN" : dispatchRatio >= 70 ? "AMBER" : "RED" });
+
+        const weekBreakage = sumQty(breakRes.data || []);
+        const weekProdForBreak = yesterdayProd * 7;
+        const breakPct = weekProdForBreak > 0 ? Math.round((weekBreakage / weekProdForBreak) * 100) : 0;
+        items.push({ label: "Breakage (7-day)", value: `${weekBreakage.toLocaleString()} pairs (${breakPct}% rate)`, rag: breakPct <= 2 ? "GREEN" : breakPct <= 5 ? "AMBER" : "RED" });
+
+        const machDown = (machRes.data || []).filter((m) => m.issue_status === "Down").length;
+        const machPartial = (machRes.data || []).filter((m) => m.issue_status === "Partially Working").length;
+        if (machDown > 0) {
+          items.push({ label: "Machines down", value: `${machDown} down${machPartial > 0 ? `, ${machPartial} partial` : ""}`, rag: "RED" });
+        } else if (machPartial > 0) {
+          items.push({ label: "Machine issues", value: `${machPartial} partially working`, rag: "AMBER" });
+        } else {
+          items.push({ label: "All machines", value: "Running normally", rag: "GREEN" });
+        }
+
+        const deptOverdue = (deptTasksRes.data || []).filter((t) => t.due_date && t.due_date < today).length;
+        const deptOpen = (deptTasksRes.data || []).length;
+        items.push({ label: "Ops tasks", value: `${deptOpen} open${deptOverdue > 0 ? `, ${deptOverdue} overdue` : ""}`, rag: deptOverdue === 0 ? "GREEN" : deptOverdue <= 3 ? "AMBER" : "RED" });
+
+        setManagerBriefing(items);
+      }
+
+      if (userRole === "Manager" && userDept === "Finance") {
+        const items: ManagerBriefingItem[] = [];
+
+        const [cashPosRes, recOpenRes, recStagesRes, budgetRes, deptTasksRes] = await Promise.all([
+          supabase.from("daily_cash_position").select("closing_balance, total_receipts, total_payments, position_date").order("position_date", { ascending: false }).limit(7),
+          supabase.from("receivables").select("id, amount, date_submitted, current_stage_order, current_stage_entered_date, status").neq("status", "Collected"),
+          supabase.from("receivable_stages").select("stage_order, stage_name, working_day_budget"),
+          supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("budget_month", today.slice(0, 7)),
+          supabase.from("tasks").select("id, status, due_date").eq("assigned_to_department", "Finance").not("status", "in", '("Completed","Cancelled")'),
+        ]);
+
+        const cashRows = cashPosRes.data || [];
+        if (cashRows.length === 0) {
+          items.push({ label: "Cash position", value: "No data entered", rag: "RED" });
+        } else {
+          const latest = cashRows[0];
+          const latestDate = latest.position_date;
+          const daysSinceEntry = Math.floor((Date.now() - new Date(latestDate + "T00:00:00").getTime()) / 86400000);
+          if (daysSinceEntry > 1) {
+            items.push({ label: "Cash position stale", value: `Last entry ${daysSinceEntry} days ago (${latestDate})`, rag: daysSinceEntry > 3 ? "RED" : "AMBER" });
+          } else {
+            items.push({ label: "Cash position", value: `PKR ${(latest.closing_balance || 0).toLocaleString()}`, rag: "GREEN" });
+          }
+
+          if (cashRows.length >= 3) {
+            const declining = cashRows[0].closing_balance < cashRows[1].closing_balance && cashRows[1].closing_balance < cashRows[2].closing_balance;
+            if (declining) {
+              items.push({ label: "Cash trend", value: "Declining 3 days straight", rag: "RED" });
+            }
+          }
+
+          const weekReceipts = cashRows.reduce((s, r) => s + (r.total_receipts || 0), 0);
+          const weekPayments = cashRows.reduce((s, r) => s + (r.total_payments || 0), 0);
+          const netFlow = weekReceipts - weekPayments;
+          items.push({ label: "Net flow (7 days)", value: `PKR ${netFlow.toLocaleString()} (in: ${weekReceipts.toLocaleString()}, out: ${weekPayments.toLocaleString()})`, rag: netFlow >= 0 ? "GREEN" : "RED" });
+        }
+
+        const openRec = recOpenRes.data || [];
+        const stages = recStagesRes.data || [];
+        const totalOutstanding = openRec.reduce((s, r) => s + (r.amount || 0), 0);
+        items.push({ label: "Outstanding receivables", value: `PKR ${totalOutstanding.toLocaleString()} across ${openRec.length} bills`, rag: openRec.length > 10 ? "RED" : openRec.length > 5 ? "AMBER" : "GREEN" });
+
+        let overdueRec = 0;
+        for (const bill of openRec) {
+          const stage = stages.find((s) => s.stage_order === bill.current_stage_order);
+          if (stage && bill.current_stage_entered_date) {
+            const entered = new Date(bill.current_stage_entered_date + "T00:00:00");
+            const daysInStage = Math.floor((Date.now() - entered.getTime()) / 86400000);
+            if (daysInStage > stage.working_day_budget) overdueRec++;
+          }
+        }
+        if (overdueRec > 0) {
+          items.push({ label: "Overdue receivables", value: `${overdueRec} bill${overdueRec > 1 ? "s" : ""} past stage deadline`, rag: overdueRec > 3 ? "RED" : "AMBER" });
+        } else {
+          items.push({ label: "Receivable stages", value: "All within deadline", rag: "GREEN" });
+        }
+
+        const budgets = budgetRes.data || [];
+        if (budgets.length > 0) {
+          const totalBudget = budgets.reduce((s, r) => s + (r.budgeted_amount || 0), 0);
+          items.push({ label: "Monthly budget set", value: `PKR ${totalBudget.toLocaleString()} across ${budgets.length} categories`, rag: "GREEN" });
+        }
+
+        const finOverdue = (deptTasksRes.data || []).filter((t) => t.due_date && t.due_date < today).length;
+        const finOpen = (deptTasksRes.data || []).length;
+        items.push({ label: "Finance tasks", value: `${finOpen} open${finOverdue > 0 ? `, ${finOverdue} overdue` : ""}`, rag: finOverdue === 0 ? "GREEN" : finOverdue <= 3 ? "AMBER" : "RED" });
+
+        setManagerBriefing(items);
+      }
+
       setLoading(false);
     }
 
@@ -319,6 +463,50 @@ export default function HomePage() {
                     <span><strong>{briefing.stuckBills}</strong> receivable bill{briefing.stuckBills > 1 ? "s" : ""} stuck at Stage 2/3. </span>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* ── Manager Briefing (Ops / Finance) ── */}
+            {managerBriefing.length > 0 && (
+              <div style={{
+                backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                borderRadius: "8px", overflow: "hidden", marginBottom: "16px",
+              }}>
+                <div style={{
+                  padding: "12px 18px", borderBottom: "1px solid var(--border-color)",
+                  display: "flex", alignItems: "center", gap: "8px",
+                }}>
+                  <span style={{ fontSize: "15px" }}>{ctx?.department === "Finance" ? "💰" : "🏭"}</span>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
+                    {ctx?.department === "Finance" ? "Finance" : "Operations"} Briefing
+                  </span>
+                  <span style={{
+                    marginLeft: "auto", fontSize: "12px", fontWeight: 600, padding: "2px 8px",
+                    borderRadius: "8px", color: "white",
+                    backgroundColor: managerBriefing.some((i) => i.rag === "RED") ? COLOURS.RED : managerBriefing.some((i) => i.rag === "AMBER") ? COLOURS.AMBER : COLOURS.GREEN,
+                  }}>
+                    {managerBriefing.filter((i) => i.rag === "RED").length > 0
+                      ? `${managerBriefing.filter((i) => i.rag === "RED").length} alert${managerBriefing.filter((i) => i.rag === "RED").length > 1 ? "s" : ""}`
+                      : managerBriefing.some((i) => i.rag === "AMBER") ? "Needs attention" : "All clear"}
+                  </span>
+                </div>
+                {managerBriefing.map((item, i) => (
+                  <div key={i} style={{
+                    padding: "10px 18px",
+                    borderBottom: i < managerBriefing.length - 1 ? "1px solid var(--border-light)" : "none",
+                    display: "flex", alignItems: "center", gap: "10px",
+                  }}>
+                    <span style={{
+                      width: "10px", height: "10px", borderRadius: "50%", flexShrink: 0,
+                      backgroundColor: item.rag === "GREEN" ? COLOURS.GREEN : item.rag === "AMBER" ? COLOURS.AMBER : COLOURS.RED,
+                      boxShadow: `0 0 4px ${item.rag === "GREEN" ? COLOURS.GREEN : item.rag === "AMBER" ? COLOURS.AMBER : COLOURS.RED}40`,
+                    }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>{item.label}</div>
+                      <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{item.value}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
