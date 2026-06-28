@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import EscalationTrafficLights from "./EscalationTrafficLights";
 import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtils";
-import { COLOURS, SectionTitle, RAGStatus, ragColour } from "../lib/SharedUI";
+import { COLOURS, SectionTitle, RAGStatus, ragColour, FreshnessBadge } from "../lib/SharedUI";
 import { UTPL_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
@@ -330,6 +330,7 @@ export default function ExecutiveDashboardPage() {
   const [companyFinance, setCompanyFinance] = useState<CompanyFinanceData[]>([]);
   const [receivableRows, setReceivableRows] = useState<ReceivableCustomerRow[]>([]);
   const [recAgingTotals, setRecAgingTotals] = useState<{ "0-30": number; "31-60": number; "61-90": number; "90+": number }>({ "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 });
+  const [recAgingByCustomer, setRecAgingByCustomer] = useState<{ customer: string; "0-30": number; "31-60": number; "61-90": number; "90+": number; total: number }[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [showFinance, setShowFinance] = useState(false);
@@ -350,7 +351,7 @@ export default function ExecutiveDashboardPage() {
     await loadExecutiveData(selectedDate);
     setActioningTask(null);
   }
-  const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[]>([]);
+  const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[]>([]);
 
   type InvestmentSummary = {
     totalCost: number;
@@ -635,6 +636,20 @@ export default function ExecutiveDashboardPage() {
     }
     setRecAgingTotals(aging);
 
+    const custAgingMap = new Map<string, { customer: string; "0-30": number; "31-60": number; "61-90": number; "90+": number; total: number }>();
+    for (const bill of bills) {
+      const key = bill.utility || "Unknown";
+      if (!custAgingMap.has(key)) custAgingMap.set(key, { customer: key, "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0, total: 0 });
+      const row = custAgingMap.get(key)!;
+      const startMs = new Date(bill.date_submitted + "T00:00:00").getTime();
+      const days = startMs > nowMs ? 0 : Math.floor((nowMs - startMs) / (1000 * 60 * 60 * 24));
+      const bucket = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
+      const amt = Number(bill.amount) || 0;
+      row[bucket] += amt;
+      row.total += amt;
+    }
+    setRecAgingByCustomer(Array.from(custAgingMap.values()).sort((a, b) => b.total - a.total));
+
     for (const bill of bills) {
       if (billRagStatus(bill) === "red") {
         await autoCreateReceivableTask(bill, stageNameFor(bill.current_stage_order), taskData, owner);
@@ -833,17 +848,29 @@ export default function ExecutiveDashboardPage() {
     setDailyOpsData(Array.from(opsMap.values()).sort((a, b) => a.date.localeCompare(b.date)));
 
     // Department Health roll-up
-    const healthResults: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED" }[] = [];
+    const [deptOwnersRes] = await Promise.all([
+      supabase.from("department_owners").select("department_name, primary_owner_name").eq("active", true),
+    ]);
+    const ownerMap = new Map((deptOwnersRes.data || []).map((o: { department_name: string; primary_owner_name: string | null }) => [o.department_name, o.primary_owner_name || "—"]));
+
+    const healthResults: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[] = [];
     for (const deptConfig of DEPARTMENT_CONFIGS) {
       const { data: deptData } = await supabase
         .from(deptConfig.table)
         .select("*")
         .eq("company_id", UTPL_COMPANY_ID);
       const deptRows = (deptData || []) as Record<string, unknown>[];
+      const status = getDepartmentHealthStatus(deptRows, deptConfig);
+      const openCount = deptRows.filter((r) => {
+        const s = (r.status as string) || "";
+        return s !== "Completed" && s !== "Cancelled" && s !== "Closed" && s !== "Resolved";
+      }).length;
       healthResults.push({
         slug: deptConfig.slug,
         title: deptConfig.title,
-        status: getDepartmentHealthStatus(deptRows, deptConfig),
+        status,
+        owner: ownerMap.get(deptConfig.title) || "—",
+        detail: `${openCount} open`,
       });
     }
     setDeptHealth(healthResults);
@@ -1261,6 +1288,66 @@ export default function ExecutiveDashboardPage() {
                   </div>
                 );
               })()}
+
+              {/* Cash Flow Waterfall — latest day */}
+              {(() => {
+                const waterfallData: { company: string; opening: number; receipts: number; payments: number; postDated: number; closing: number }[] = [];
+                for (const cfd of companyFinance) {
+                  const latest = cfd.cashPositions[0];
+                  if (!latest) continue;
+                  waterfallData.push({
+                    company: cfd.companyName,
+                    opening: latest.opening_balance,
+                    receipts: latest.total_receipts,
+                    payments: latest.total_payments,
+                    postDated: latest.post_dated_total,
+                    closing: latest.closing_balance,
+                  });
+                }
+                if (waterfallData.length === 0) return null;
+                return (
+                  <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginTop: "14px" }}>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>
+                      Cash Flow Waterfall — Latest Day
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${waterfallData.length}, 1fr)`, gap: "16px" }}>
+                      {waterfallData.map((w) => {
+                        const maxVal = Math.max(Math.abs(w.opening), Math.abs(w.receipts), Math.abs(w.payments), Math.abs(w.postDated), Math.abs(w.closing), 1);
+                        const barHeight = (v: number) => Math.max(4, (Math.abs(v) / maxVal) * 80);
+                        const items = [
+                          { label: "Opening", value: w.opening, color: COLOURS.BLUE },
+                          { label: "Receipts", value: w.receipts, color: COLOURS.GREEN },
+                          { label: "Payments", value: -w.payments, color: COLOURS.RED },
+                          { label: "Post-dated", value: -w.postDated, color: COLOURS.AMBER },
+                          { label: "Closing", value: w.closing, color: COLOURS.NAVY },
+                        ];
+                        return (
+                          <div key={w.company}>
+                            <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "10px" }}>{w.company}</div>
+                            <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "100px" }}>
+                              {items.map((item) => (
+                                <div key={item.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                  <div style={{ fontSize: "11px", fontWeight: 600, color: item.color, marginBottom: "4px", whiteSpace: "nowrap" }}>
+                                    {item.value >= 0 ? "" : "−"}{fmtMoney(Math.abs(item.value))}
+                                  </div>
+                                  <div style={{
+                                    width: "100%", maxWidth: "40px",
+                                    height: `${barHeight(item.value)}px`,
+                                    backgroundColor: item.color,
+                                    borderRadius: "4px 4px 0 0",
+                                    opacity: 0.8,
+                                  }} />
+                                  <div style={{ fontSize: "10px", color: SLATE, marginTop: "4px", textAlign: "center" }}>{item.label}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Two continuous columns: left = Finance, right = Receivables + Dept Health + Performance */}
@@ -1295,6 +1382,41 @@ export default function ExecutiveDashboardPage() {
                       <span style={{ color: "#dc2626" }}>PKR {fmtMoney(recAgingTotals["61-90"])} (61-90d)</span>{" · "}
                       <span style={{ color: "#991b1b", fontWeight: 700 }}>PKR {fmtMoney(recAgingTotals["90+"])} (90+d)</span>
                     </div>
+                    {recAgingByCustomer.length > 0 && (
+                      <div style={{ overflowX: "auto", marginBottom: "8px" }}>
+                        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "380px" }}>
+                          <thead>
+                            <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                              <th style={th}>Customer</th>
+                              <th style={{ ...th, textAlign: "right" }}>0-30d</th>
+                              <th style={{ ...th, textAlign: "right" }}>31-60d</th>
+                              <th style={{ ...th, textAlign: "right" }}>61-90d</th>
+                              <th style={{ ...th, textAlign: "right" }}>90+d</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {recAgingByCustomer.map((r) => {
+                              const maxAmt = Math.max(...recAgingByCustomer.map((c) => Math.max(c["0-30"], c["31-60"], c["61-90"], c["90+"])), 1);
+                              return (
+                                <tr key={r.customer}>
+                                  <td style={tdBold}>{r.customer}</td>
+                                  {(["0-30", "31-60", "61-90", "90+"] as const).map((bucket) => {
+                                    const amt = r[bucket];
+                                    const intensity = amt > 0 ? Math.max(0.08, Math.min(0.5, amt / maxAmt)) : 0;
+                                    const bgColor = bucket === "0-30" ? `rgba(22,163,74,${intensity})` : bucket === "31-60" ? `rgba(217,119,6,${intensity})` : `rgba(220,38,38,${intensity})`;
+                                    return (
+                                      <td key={bucket} style={{ ...td, textAlign: "right", backgroundColor: amt > 0 ? bgColor : "transparent", fontWeight: amt > 0 ? 600 : 400 }}>
+                                        {amt > 0 ? fmtMoney(amt) : "—"}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                     {receivableRows.length > 0 && (
                       <div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse", width: "100%", marginTop: "12px", minWidth: "420px" }}>
                         <thead>
@@ -1380,36 +1502,36 @@ export default function ExecutiveDashboardPage() {
 
                 <SectionTitle title="Department Health" />
                 <div style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(140px, 1fr))",
-                  gap: "8px",
+                  border: `1px solid ${BORDER}`, borderRadius: "8px",
+                  backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden",
                   marginBottom: "14px",
                 }}>
-                  {deptHealth.map((d) => (
-                    <a key={d.slug} href={`/department/${d.slug}`} style={{ textDecoration: "none" }}>
-                      <div style={{
-                        border: `1px solid ${BORDER}`,
-                        borderTop: `3px solid ${d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626"}`,
-                        borderRadius: "7px",
-                        padding: "8px 10px",
-                        backgroundColor: "var(--bg-card, #ffffff)",
-                        cursor: "pointer",
-                        transition: "box-shadow 0.15s",
+                  {deptHealth.map((d, i) => {
+                    const statusColor = d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626";
+                    return (
+                      <a key={d.slug} href={`/department/${d.slug}`} style={{
+                        display: "flex", alignItems: "center", gap: "10px",
+                        padding: "10px 14px", textDecoration: "none", color: "inherit",
+                        borderBottom: i < deptHealth.length - 1 ? `1px solid var(--border-light, #f1f5f9)` : "none",
+                        transition: "background-color 0.1s",
                       }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-hover, #f8fafc)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
                       >
-                        <div style={{ fontSize: "15px", color: SLATE, marginBottom: "2px" }}>{d.title} →</div>
-                        <div style={{
-                          fontSize: "17px",
-                          fontWeight: 800,
-                          color: d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626",
-                        }}>
-                          {d.status}
+                        <span style={{
+                          width: "10px", height: "10px", borderRadius: "50%",
+                          backgroundColor: statusColor, flexShrink: 0,
+                          boxShadow: `0 0 4px ${statusColor}40`,
+                        }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{d.title}</div>
+                          <div style={{ fontSize: "13px", color: SLATE }}>{d.owner}</div>
                         </div>
-                      </div>
-                    </a>
-                  ))}
+                        <span style={{ fontSize: "13px", color: SLATE, flexShrink: 0 }}>{d.detail}</span>
+                        <span style={{ fontSize: "14px", fontWeight: 700, color: statusColor, flexShrink: 0, minWidth: "50px", textAlign: "right" }}>{d.status}</span>
+                      </a>
+                    );
+                  })}
                 </div>
 
                 <SectionTitle title="Performance by Department" />
