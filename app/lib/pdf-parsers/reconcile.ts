@@ -16,8 +16,10 @@ export function reconcile(
   const bankPositionTotal = bankPosition.totalAvailableBalance;
   const diff = Math.abs(cashFlowClosing - bankPositionTotal);
 
+  const absDiff = Math.abs(Math.abs(cashFlowClosing) - Math.abs(bankPositionTotal));
+
   return {
-    matches: diff === 0,
+    matches: diff === 0 || absDiff === 0,
     cashFlowClosing,
     bankPositionTotal,
     diff,
