@@ -83,7 +83,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [errorMsg, setErrorMsg] = useState("");
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(taskIdFromUrl);
-  const [timeView, setTimeView] = useState<"weekly" | "monthly" | "quarterly">("weekly");
+  const [timeView, setTimeView] = useState<"weekly" | "monthly" | "quarterly" | "timeline">("weekly");
   const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "person">("all");
   const [bannerOpen, setBannerOpen] = useState(false);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
@@ -416,7 +416,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
       {/* ═══ TIME VIEW TOGGLE ═══ */}
       <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap" }}>
-        {(["weekly", "monthly", "quarterly"] as const).map((v) => (
+        {(["weekly", "monthly", "quarterly", "timeline"] as const).map((v) => (
           <button key={v} onClick={() => setTimeView(v)} style={{
             backgroundColor: timeView === v ? NAVY : "var(--bg-card, #ffffff)",
             color: timeView === v ? "white" : NAVY,
@@ -532,6 +532,77 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           </div>
         </>
       )}
+
+      {/* ═══ TIMELINE VIEW ═══ */}
+      {timeView === "timeline" && (() => {
+        const tasksWithDates = filteredTasks.filter((t) => t.due_date);
+        if (tasksWithDates.length === 0) return (
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px", textAlign: "center", color: SLATE }}>
+            No tasks with due dates to show on timeline.
+          </div>
+        );
+
+        const sorted = [...tasksWithDates].sort((a, b) => a.due_date!.localeCompare(b.due_date!));
+        const today = new Date();
+        const minDate = new Date(Math.min(today.getTime(), new Date(sorted[0].due_date! + "T00:00:00").getTime()));
+        minDate.setDate(minDate.getDate() - 2);
+        const maxDate = new Date(sorted[sorted.length - 1].due_date! + "T00:00:00");
+        maxDate.setDate(maxDate.getDate() + 5);
+        const range = maxDate.getTime() - minDate.getTime();
+
+        const toX = (dateStr: string) => {
+          const d = new Date(dateStr + "T00:00:00").getTime();
+          return 60 + ((d - minDate.getTime()) / range) * 680;
+        };
+        const todayX = 60 + ((today.getTime() - minDate.getTime()) / range) * 680;
+
+        const ROW_H = 28;
+        const svgH = Math.max(100, sorted.length * ROW_H + 50);
+
+        const tickDates: string[] = [];
+        const tickStep = Math.max(1, Math.round(range / 86400000 / 6));
+        const cur = new Date(minDate);
+        while (cur <= maxDate) {
+          tickDates.push(cur.toISOString().slice(0, 10));
+          cur.setDate(cur.getDate() + tickStep);
+        }
+
+        return (
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px", overflowX: "auto" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Due Date Timeline — {sorted.length} tasks</div>
+            <svg width="780" height={svgH} style={{ display: "block", minWidth: "780px" }}>
+              <line x1="60" y1="20" x2="740" y2="20" stroke="#e2e8f0" strokeWidth="1" />
+              {tickDates.map((d) => {
+                const x = toX(d);
+                return (
+                  <g key={d}>
+                    <line x1={x} y1="16" x2={x} y2={svgH - 10} stroke="#f1f5f9" strokeWidth="1" />
+                    <text x={x} y="12" textAnchor="middle" fontSize="11" fill="#94a3b8">
+                      {new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    </text>
+                  </g>
+                );
+              })}
+              <line x1={todayX} y1="16" x2={todayX} y2={svgH - 10} stroke="#dc2626" strokeWidth="1.5" strokeDasharray="4 3" />
+              <text x={todayX} y={svgH - 2} textAnchor="middle" fontSize="10" fill="#dc2626" fontWeight="700">Today</text>
+              {sorted.map((t, i) => {
+                const x = toX(t.due_date!);
+                const y = 36 + i * ROW_H;
+                const od = isOverdue(t);
+                const color = od ? "#dc2626" : t.status === "Waiting Reply" ? "#d97706" : t.priority === "High" || t.priority === "Urgent" ? "#f97316" : "#2563eb";
+                const label = t.description.length > 32 ? t.description.slice(0, 30) + "…" : t.description;
+                return (
+                  <g key={t.id} style={{ cursor: "pointer" }} onClick={() => { setTimeView("weekly"); setExpandedTaskId(t.id); setTimeout(() => document.getElementById(`task-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}>
+                    <circle cx={x} cy={y} r="5" fill={color} />
+                    <text x={x + 8} y={y + 4} fontSize="12" fill={NAVY} fontWeight="600">{label}</text>
+                    <text x="4" y={y + 4} fontSize="11" fill={SLATE}>{t.assigned_to?.split(" ")[0] || "?"}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        );
+      })()}
 
       {scopedTasks.length === 0 && (
         <p style={{ color: SLATE, fontSize: "16px" }}>No tasks yet.</p>

@@ -129,6 +129,10 @@ export default function MeetingsPage() {
   const [groupBy, setGroupBy] = useState<"date" | "department">("date");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
+  const [view, setView] = useState<"meetings" | "decisions">("meetings");
+  const [decisionSearch, setDecisionSearch] = useState("");
+  const [decisionDeptFilter, setDecisionDeptFilter] = useState("All");
+
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -492,6 +496,24 @@ export default function MeetingsPage() {
   if (expandedGroups.size === 0 && groupedMeetings.length > 0) {
     expandedGroups.add(groupedMeetings[0][0]);
   }
+
+  const allDecisions = meetings.flatMap((m) =>
+    (m.decisions || []).map((text) => ({
+      text,
+      meetingTitle: m.title,
+      meetingDate: m.meeting_date,
+      department: m.department || m.company || "General",
+      meetingId: m.id,
+    }))
+  );
+
+  const decisionDepts = Array.from(new Set(allDecisions.map((d) => d.department))).sort();
+  const lowerSearch = decisionSearch.toLowerCase();
+  const filteredDecisions = allDecisions.filter((d) => {
+    if (decisionDeptFilter !== "All" && d.department !== decisionDeptFilter) return false;
+    if (lowerSearch && !d.text.toLowerCase().includes(lowerSearch) && !d.meetingTitle.toLowerCase().includes(lowerSearch)) return false;
+    return true;
+  });
 
   if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
 
@@ -988,28 +1010,95 @@ export default function MeetingsPage() {
           );
         })()}
 
-        {/* Past meetings */}
+        {/* Past meetings / Decision Log */}
         {!showMinutesFlow && (
           <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <SectionTitle title="Past Meetings" />
-              <div style={{ display: "flex", gap: "4px" }}>
-                {(["date", "department"] as const).map((g) => (
-                  <button key={g} onClick={() => { setGroupBy(g); setExpandedGroups(new Set()); }} style={{
-                    padding: "4px 12px", fontSize: "13px", fontWeight: groupBy === g ? 700 : 500, borderRadius: "14px",
-                    border: `1px solid ${groupBy === g ? COLOURS.NAVY : COLOURS.BORDER}`,
-                    backgroundColor: groupBy === g ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
-                    color: groupBy === g ? "white" : COLOURS.SLATE, cursor: "pointer",
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "0", borderBottom: `2px solid ${COLOURS.BORDER}` }}>
+                {(["meetings", "decisions"] as const).map((v) => (
+                  <button key={v} onClick={() => setView(v)} style={{
+                    padding: "8px 16px", fontSize: "15px", fontWeight: view === v ? 700 : 500,
+                    color: view === v ? COLOURS.NAVY : COLOURS.SLATE, backgroundColor: "transparent",
+                    border: "none", borderBottom: view === v ? `3px solid ${COLOURS.NAVY}` : "3px solid transparent",
+                    cursor: "pointer", marginBottom: "-2px",
                   }}>
-                    {g === "date" ? "By Date" : "By Department"}
+                    {v === "meetings" ? "Past Meetings" : `Decision Log (${allDecisions.length})`}
                   </button>
                 ))}
               </div>
+              {view === "meetings" && (
+                <div style={{ display: "flex", gap: "4px" }}>
+                  {(["date", "department"] as const).map((g) => (
+                    <button key={g} onClick={() => { setGroupBy(g); setExpandedGroups(new Set()); }} style={{
+                      padding: "4px 12px", fontSize: "13px", fontWeight: groupBy === g ? 700 : 500, borderRadius: "14px",
+                      border: `1px solid ${groupBy === g ? COLOURS.NAVY : COLOURS.BORDER}`,
+                      backgroundColor: groupBy === g ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
+                      color: groupBy === g ? "white" : COLOURS.SLATE, cursor: "pointer",
+                    }}>
+                      {g === "date" ? "By Date" : "By Department"}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {meetings.length === 0 ? (
+            {view === "decisions" && (
+              <div>
+                <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+                  <input
+                    value={decisionSearch}
+                    onChange={(e) => setDecisionSearch(e.target.value)}
+                    placeholder="Search decisions..."
+                    style={{ ...inputStyle, flex: "1 1 200px", maxWidth: "320px", padding: "7px 10px" }}
+                  />
+                  <select
+                    value={decisionDeptFilter}
+                    onChange={(e) => setDecisionDeptFilter(e.target.value)}
+                    style={{ ...inputStyle, width: "auto", flex: "0 0 auto", padding: "7px 10px" }}
+                  >
+                    <option value="All">All Departments</option>
+                    {decisionDepts.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+
+                {filteredDecisions.length === 0 ? (
+                  <p style={{ color: COLOURS.SLATE, fontSize: "16px" }}>
+                    {allDecisions.length === 0 ? "No decisions recorded yet." : "No decisions match your filters."}
+                  </p>
+                ) : (
+                  <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", overflow: "hidden" }}>
+                    {filteredDecisions.map((d, i) => (
+                      <div key={`${d.meetingId}-${i}`} style={{
+                        padding: "10px 14px",
+                        borderBottom: i < filteredDecisions.length - 1 ? `1px solid ${COLOURS.LIGHT}` : "none",
+                        backgroundColor: "var(--bg-card, #ffffff)",
+                      }}>
+                        <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "3px" }}>
+                          {d.text}
+                        </div>
+                        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: "13px", color: COLOURS.SLATE }}>
+                          <span>{formatDateUK(d.meetingDate)}</span>
+                          <span style={{ fontWeight: 600 }}>{d.meetingTitle}</span>
+                          <span style={{
+                            padding: "1px 8px", borderRadius: "8px",
+                            backgroundColor: COLOURS.LIGHT, color: COLOURS.NAVY, fontWeight: 600,
+                          }}>{d.department}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: "8px", fontSize: "13px", color: COLOURS.SLATE }}>
+                  {filteredDecisions.length} decision{filteredDecisions.length !== 1 ? "s" : ""}
+                  {decisionSearch || decisionDeptFilter !== "All" ? ` (filtered from ${allDecisions.length} total)` : ""}
+                </div>
+              </div>
+            )}
+
+            {view === "meetings" && meetings.length === 0 ? (
               <p style={{ color: COLOURS.SLATE, fontSize: "16px" }}>No meetings recorded yet.</p>
-            ) : (
+            ) : view === "meetings" ? (
               groupedMeetings.map(([groupKey, groupMeetings]) => {
                 const isGroupOpen = expandedGroups.has(groupKey);
                 const groupLabel = groupBy === "date" ? formatMonthLabel(groupKey) : groupKey;
@@ -1148,7 +1237,7 @@ export default function MeetingsPage() {
                 </div>
                 );
               })
-            )}
+            ) : null}
           </>
         )}
       </main>
