@@ -10,7 +10,7 @@ import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import * as XLSX from "xlsx";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
-import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canEditFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type OpeningBalance = {
   id: string;
@@ -60,6 +60,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("Member");
   const [userCanEdit, setUserCanEdit] = useState(false);
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
 
   const [opening, setOpening] = useState<OpeningBalance | null>(null);
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
@@ -252,6 +253,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         if (p) overrides = p as PermOverrides;
         const ctx: UserCtx = { email: userData.user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
         setUserCanEdit(canEditFinance(ctx));
+        setUserIsAdmin(isAdminTier(ctx));
       }
     }
     const [obRes, planRes, posRes] = await Promise.all([
@@ -558,8 +560,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         />
       </div>
 
-      {/* ── ROW: INGESTION + PDF UPLOAD side by side (Admin/Executive only) ── */}
-      {canEditAll && (
+      {/* ── ROW: INGESTION + PDF UPLOAD side by side (Admin only) ── */}
+      {userIsAdmin && (
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
