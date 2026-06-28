@@ -54,13 +54,7 @@ type PortfolioStock = {
 };
 
 function fmtRs(n: number) {
-  const abs = Math.abs(n);
-  const formatted = abs >= 10000000
-    ? `${(abs / 10000000).toFixed(2)} Cr`
-    : abs >= 100000
-    ? `${(abs / 100000).toFixed(2)} L`
-    : abs.toLocaleString("en-PK", { maximumFractionDigits: 0 });
-  return `${n < 0 ? "-" : ""}Rs ${formatted}`;
+  return `${n < 0 ? "-" : ""}Rs ${Math.abs(n).toLocaleString("en-PK", { maximumFractionDigits: 0 })}`;
 }
 
 function fmtPrice(n: number) {
