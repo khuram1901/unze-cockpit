@@ -25,7 +25,7 @@ export default function TasksPageClient() {
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-        <PageHeader title="Tasks & Assignments" subtitle={canCreate ? "Create, assign, track, and close tasks" : "Update your assigned tasks and submit replies"} />
+        <PageHeader />
         {canCreate && (
           <button onClick={() => setShowForm(!showForm)} style={{
             backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",

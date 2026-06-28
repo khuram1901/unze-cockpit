@@ -1,5 +1,57 @@
 # Improvements Log
 
+## 2026-06-28 (Session 2)
+
+### Previous Items Status
+
+From 2026-06-28 (Session 1):
+- ✅ **Parallelize price fetcher** — Done. `route.ts` now uses batched `Promise.allSettled` with `BATCH = 5`.
+- ✅ **PERM_FUNC duplication** — Still resolved (only `SidebarLayout.tsx`).
+- 🔲 **Dark mode migration (~20 pages)** — Still outstanding. `executive/page.tsx` (21× `"white"`), `members/MembersManager.tsx` (17×), `meetings/page.tsx` (20×), `calendar/page.tsx` (11×), `investments/page.tsx` (5×). Fourth consecutive review flagging this.
+- 🔲 **Access Matrix accessibility** — Still outstanding (0 `aria-label`/`aria-pressed` in `AccessMatrix.tsx`). Fourth consecutive review.
+- 🔲 **Error/empty states on investments page** — Still outstanding. Queries silently return empty arrays on failure.
+
+### Current State Assessment
+
+Major UX session landed: CEO home page redesigned with strategic KPIs, quick-access cards, and collapsible tasks. PA page got a donut chart and greeting. Sidebar font sizes bumped 13→15px, icons 16→18px. Back button changed from `history.back()` to always navigate `/home`. Calendar page removed "Tasks Due This Week" section and added Google Calendar diagnostic banner. Google account consolidation from `unzegrouppk@gmail.com` to `khuram1901@gmail.com`. Investments page now shows "Prices last updated" timestamp.
+
+The app's usability improved noticeably, but a **font-size inconsistency gap** has opened: the sidebar was bumped to 15px, but the home page content still uses 11–14px heavily (30 instances of 11–12px), and the `PageHeader` "Home" button is still 13px. The body `font-size: 16px` in `globals.css` has no effect on inline-styled components (which is everything), so the user's readability concern is only partially addressed.
+
+### Design Inconsistencies & Issues Found
+
+1. **Font-size mismatch between sidebar and page content.** Sidebar nav items are now 15px, but the home page has 33× `14px`, 15× `13px`, 16× `11px`. The `PageHeader` "Home" button is 13px (`SharedUI.tsx:107`). CEO quick-access card descriptions are 12px. This creates a visible jump — the sidebar is comfortable, then content shrinks. Other pages are worse: `FinanceManager.tsx` has 22 instances of 11–12px, `MembersManager.tsx` has 18, `meetings/page.tsx` has 17.
+
+2. **`PageHeader` no longer renders title/subtitle — but still accepts them.** After the SidebarLayout header was added, `PageHeader` was reduced to just the "Home" button. But 20+ pages still pass `title` and `subtitle` props (which are destructured as `_title` and `_subtitle` and ignored). This is dead code that misleads contributors into thinking the component renders a heading.
+
+3. **CEO collapsible tasks header lacks keyboard accessibility.** `home/page.tsx:423` uses `onClick` on a plain `<div>` with `cursor: "pointer"` — no `role="button"`, no `tabIndex`, no `onKeyDown`. Keyboard users can't expand/collapse the tasks section. Same issue flagged for executive dashboard expandable sections in earlier reviews.
+
+4. **Google Calendar reconnect flow is fragile.** The "+ Add Account" button and error banner depend on `calendarAccounts` state populated by the freebusy API response. If the API request fails entirely (network error), the catch block sets `calendarError` but the reconnect banner shows a generic message with no button (the button is in the error banner, but `calendarAccounts` is empty so the green bar with "+ Add Account" doesn't render either). There's no standalone "Manage connected accounts" UI.
+
+5. **`PageHeader` "Home" button font (13px) is smaller than sidebar nav (15px) and should match the bumped font sizes.** The user specifically asked for 2–3px bigger across the entire app, but this component was missed.
+
+### Top 3 Improvements (Ranked by Value vs Effort)
+
+#### 1. Bump content font sizes app-wide to match sidebar (Quick Win — 30 min)
+**Files:** `SharedUI.tsx` (PageHeader, KPICard, table styles), `home/page.tsx`, `pa/page.tsx`
+**What:** Increase the `PageHeader` "Home" button from 13px to 15px. In `home/page.tsx`, bump the dominant 11px→13px, 12px→14px, 13px→15px. Apply the same +2px to `KPICard` value/label sizes in `SharedUI.tsx` (currently 21px/14px → 23px/16px). Bump `tableHeaderStyle`/`tableCellStyle` from 15–16px to 17–18px — these feed every table in the app.
+**Why:** The user explicitly said fonts are too small and needs 2–3px bigger. The sidebar was fixed but page content wasn't. This is the most impactful single change for readability, and the shared styles in `SharedUI.tsx` cascade to every page that uses table/KPI components.
+
+#### 2. Clean up `PageHeader` — remove dead title/subtitle params (Quick Win — 15 min)
+**Files:** `SharedUI.tsx` (definition), 20+ page files (call sites)
+**What:** Remove the `title` and `subtitle` parameters from `PageHeader` since they're unused (destructured as `_title`/`_subtitle`). Update all 20+ call sites to just `<PageHeader />` or `<PageHeader hideHome />`. Rename the component to `HomeButton` for clarity.
+**Why:** Dead props mislead contributors. Every new page copies the pattern and passes a title that renders nowhere. This is a mechanical find-and-replace, zero risk.
+
+#### 3. Dark mode migration — fifth consecutive flag (Larger Effort — 3-4 hrs)
+**Files:** ~20 inner pages (same list as prior reviews)
+**What:** Replace all hardcoded `"white"`, `"#f8fafc"`, `"#f1f5f9"`, `COLOURS.NAVY` backgrounds with CSS vars. Start with `SharedUI.tsx` table styles (they cascade to every page), then `executive/page.tsx` (21 whites), `meetings/page.tsx` (20), `MembersManager.tsx` (17).
+**Why:** The dark mode toggle works for the shell but breaks every inner page. This has been flagged in every review since 2026-06-26. Recommendation: either do the migration or remove the dark mode toggle — half-working dark mode is a worse experience than no dark mode at all.
+
+### Quick Win for Today
+
+**Bump the `PageHeader` "Home" button from 13px to 15px** and increase its icon from 14×14 to 16×16. In `SharedUI.tsx` line 107, change `fontSize: "13px"` → `fontSize: "15px"`, and line 116, change `width="14" height="14"` → `width="16" height="16"`. Two values, deploy. The most visible small font in the app (it appears on every inner page) immediately matches the sidebar's bumped sizing.
+
+---
+
 ## 2026-06-28
 
 ### Previous Items Status

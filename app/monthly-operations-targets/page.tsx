@@ -180,7 +180,7 @@ export default function MonthlyOperationsTargetsPage() {
   }));
 
   if (checking || loading) {
-    return <AuthWrapper><main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions…</p></main></AuthWrapper>;
+    return <AuthWrapper><main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions…</p></main></AuthWrapper>;
   }
 
   return (
@@ -188,10 +188,10 @@ export default function MonthlyOperationsTargetsPage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           {/* Header */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-            <PageHeader title="Monthly Operations Targets" subtitle="Set targets and track achievement per plant" />
+            <PageHeader />
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <input type="month" value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)}
-                style={{ padding: "6px 10px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "14px" }} />
+                style={{ padding: "6px 10px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "16px" }} />
               {canEdit && (
                 <button onClick={() => setShowForm(!showForm)} style={{
                   backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
@@ -204,13 +204,13 @@ export default function MonthlyOperationsTargetsPage() {
           </div>
 
           {message && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "white", fontSize: "15px", color: COLOURS.NAVY }}>{message}</div>
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>{message}</div>
           )}
 
           {/* Collapsible form */}
           {showForm && canEdit && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>Set Target — {formatMonthUK(targetMonth)}</div>
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "10px" }}>Set Target — {formatMonthUK(targetMonth)}</div>
               <form onSubmit={handleSubmit}>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
                   <label style={lbl}>Type <select style={inp} value={targetType} onChange={(e) => setTargetType(e.target.value as "production" | "dispatch")}><option value="production">Production</option><option value="dispatch">Dispatch</option></select></label>
@@ -226,8 +226,8 @@ export default function MonthlyOperationsTargetsPage() {
                   )}
                   <label style={lbl}>Notes <textarea style={{ ...inp, height: "50px" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Assumptions, shutdowns…" /></label>
                 </div>
-                {existingTarget && <div style={{ fontSize: "13px", color: "#d97706", marginTop: "4px" }}>Existing target found — saving will update it.</div>}
-                <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : existingTarget ? "Update Target" : "Save Target"}</button>
+                {existingTarget && <div style={{ fontSize: "15px", color: "#d97706", marginTop: "4px" }}>Existing target found — saving will update it.</div>}
+                <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : existingTarget ? "Update Target" : "Save Target"}</button>
               </form>
             </div>
           )}
@@ -246,10 +246,10 @@ export default function MonthlyOperationsTargetsPage() {
                 <span style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b" }}>{bannerOpen ? "▲" : "▼"}</span>
               </div>
               {bannerOpen && (
-                <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "white" }}>
+                <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "var(--bg-card, #ffffff)" }}>
                   {behindPlants.map((d) => (
-                    <div key={d.plant.id} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{d.plant.name}</span>
+                    <div key={d.plant.id} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{d.plant.name}</span>
                       <div style={{ display: "flex", gap: "12px", fontSize: "13px" }}>
                         {d.prodTarget > 0 && <span style={{ color: d.prodPct < 85 ? COLOURS.RED : COLOURS.GREEN, fontWeight: 700 }}>Prod: {d.prodPct}%</span>}
                         {d.dispTarget > 0 && <span style={{ color: d.dispPct < 85 ? COLOURS.RED : COLOURS.GREEN, fontWeight: 700 }}>Disp: {d.dispPct}%</span>}
@@ -263,8 +263,8 @@ export default function MonthlyOperationsTargetsPage() {
 
           {/* Achievement chart */}
           {chartData.length > 0 && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>Target vs Actual — {formatMonthUK(targetMonth)}</div>
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "8px" }}>Target vs Actual — {formatMonthUK(targetMonth)}</div>
               <ResponsiveContainer width="100%" height={Math.max(180, chartData.length * 50)}>
                 <BarChart data={chartData} layout="vertical" margin={{ left: 5, right: 10, top: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
@@ -284,22 +284,22 @@ export default function MonthlyOperationsTargetsPage() {
           {/* Progress bars per plant */}
           <SectionTitle title="Achievement by Plant" />
           {progressData.length === 0 ? (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", color: COLOURS.SLATE }}>No targets set for {formatMonthUK(targetMonth)}.</div>
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)" }}>No targets set for {formatMonthUK(targetMonth)}.</div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
               {progressData.map((d) => {
                 const prodColor = d.prodPct >= 95 ? COLOURS.GREEN : d.prodPct >= 85 ? "#d97706" : COLOURS.RED;
                 const dispColor = d.dispPct >= 95 ? COLOURS.GREEN : d.dispPct >= 85 ? "#d97706" : COLOURS.RED;
                 return (
-                  <div key={d.plant.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px", backgroundColor: "white" }}>
-                    <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>{d.plant.name}</div>
+                  <div key={d.plant.id} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "8px" }}>{d.plant.name}</div>
                     {d.prodTarget > 0 && (
                       <div style={{ marginBottom: "6px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "3px" }}>
-                          <span style={{ color: COLOURS.SLATE }}>Production</span>
+                          <span style={{ color: "var(--text-secondary, #64748b)" }}>Production</span>
                           <span style={{ fontWeight: 700, color: prodColor }}>{d.prodActual.toLocaleString()} / {d.prodTarget.toLocaleString()} ({d.prodPct}%)</span>
                         </div>
-                        <div style={{ height: "10px", backgroundColor: "#f1f5f9", borderRadius: "5px" }}>
+                        <div style={{ height: "10px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "5px" }}>
                           <div style={{ width: `${Math.min(d.prodPct, 100)}%`, height: "100%", backgroundColor: prodColor, borderRadius: "5px", transition: "width 0.3s" }} />
                         </div>
                       </div>
@@ -307,10 +307,10 @@ export default function MonthlyOperationsTargetsPage() {
                     {d.dispTarget > 0 && (
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "3px" }}>
-                          <span style={{ color: COLOURS.SLATE }}>Dispatch</span>
+                          <span style={{ color: "var(--text-secondary, #64748b)" }}>Dispatch</span>
                           <span style={{ fontWeight: 700, color: dispColor }}>{d.dispActual.toLocaleString()} / {d.dispTarget.toLocaleString()} ({d.dispPct}%)</span>
                         </div>
-                        <div style={{ height: "10px", backgroundColor: "#f1f5f9", borderRadius: "5px" }}>
+                        <div style={{ height: "10px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "5px" }}>
                           <div style={{ width: `${Math.min(d.dispPct, 100)}%`, height: "100%", backgroundColor: dispColor, borderRadius: "5px", transition: "width 0.3s" }} />
                         </div>
                       </div>
@@ -333,15 +333,15 @@ export default function MonthlyOperationsTargetsPage() {
 }
 
 function TargetsTable({ targets, actuals, mobile }: { targets: MonthlyTarget[]; actuals: Record<string, number>; mobile: boolean }) {
-  if (targets.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "15px", marginBottom: "8px" }}>No targets set.</p>;
+  if (targets.length === 0) return <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", marginBottom: "8px" }}>No targets set.</p>;
 
   return (
-    <div style={{ overflowX: "auto", marginBottom: "14px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white" }}>
+    <div style={{ overflowX: "auto", marginBottom: "14px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)" }}>
       <table style={{ borderCollapse: "collapse", width: "100%" }}>
         <thead>
-          <tr style={{ backgroundColor: "#f8fafc" }}>
+          <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
             {["Plant", "31ft", "36ft", "45ft", "Meters", "Target", "Actual", "%"].map((h) => (
-              <th key={h} style={{ textAlign: "left", borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "6px 10px", fontSize: "13px", color: COLOURS.SLATE, fontWeight: 700 }}>{h}</th>
+              <th key={h} style={{ textAlign: "left", borderBottom: "1px solid var(--border-color, #e2e8f0)", padding: "6px 10px", fontSize: "15px", color: "var(--text-secondary, #64748b)", fontWeight: 700 }}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -353,13 +353,13 @@ function TargetsTable({ targets, actuals, mobile }: { targets: MonthlyTarget[]; 
             const pctColor = pct >= 95 ? COLOURS.GREEN : pct >= 85 ? "#d97706" : COLOURS.RED;
             return (
               <tr key={t.id}>
-                <td style={{ borderBottom: `1px solid ${COLOURS.LIGHT}`, padding: "7px 10px", fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{t.plant_name}</td>
+                <td style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{t.plant_name}</td>
                 <td style={tdS}>{t.target_31 || 0}</td>
                 <td style={tdS}>{t.target_36 || 0}</td>
                 <td style={tdS}>{t.target_45 || 0}</td>
                 <td style={tdS}>{t.target_meter || 0}</td>
-                <td style={{ ...tdS, fontWeight: 700, color: COLOURS.NAVY }}>{total.toLocaleString()}</td>
-                <td style={{ ...tdS, fontWeight: 700, color: COLOURS.NAVY }}>{actual.toLocaleString()}</td>
+                <td style={{ ...tdS, fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{total.toLocaleString()}</td>
+                <td style={{ ...tdS, fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{actual.toLocaleString()}</td>
                 <td style={{ ...tdS, fontWeight: 700, color: pctColor }}>{total > 0 ? `${pct}%` : "—"}</td>
               </tr>
             );
@@ -370,6 +370,6 @@ function TargetsTable({ targets, actuals, mobile }: { targets: MonthlyTarget[]; 
   );
 }
 
-const tdS: React.CSSProperties = { borderBottom: `1px solid ${COLOURS.LIGHT}`, padding: "7px 10px", fontSize: "14px" };
-const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "3px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box" };
-const lbl: React.CSSProperties = { display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px" };
+const tdS: React.CSSProperties = { borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "16px" };
+const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "3px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box" };
+const lbl: React.CSSProperties = { display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "4px" };

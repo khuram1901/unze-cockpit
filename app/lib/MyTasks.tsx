@@ -75,7 +75,7 @@ export default function MyTasks() {
       <div style={{
         border: `1px solid ${COLOURS.BORDER}`,
         borderRadius: "8px",
-        backgroundColor: "white",
+        backgroundColor: "var(--bg-card, #ffffff)",
         overflow: "hidden",
         marginBottom: "14px",
       }}>

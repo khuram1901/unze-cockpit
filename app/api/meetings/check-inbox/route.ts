@@ -23,11 +23,11 @@ async function handleCheckInbox(isCron: boolean) {
     const { data: notifToken } = await supabase
       .from("google_oauth_tokens")
       .select("*")
-      .eq("user_email", "unzegrouppk@gmail.com")
+      .eq("user_email", "khuram1901@gmail.com")
       .single();
 
     if (!notifToken) {
-      return Response.json({ error: "Notification Gmail not connected. Connect unzegrouppk@gmail.com first." }, { status: 500 });
+      return Response.json({ error: "Notification Gmail not connected. Connect khuram1901@gmail.com first." }, { status: 500 });
     }
 
     const oauth2Client = new google.auth.OAuth2(

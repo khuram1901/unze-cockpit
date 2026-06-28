@@ -90,9 +90,9 @@ type Task = {
   time_spent_minutes: number | null;
 };
 
-const NAVY = "#1e293b";
-const SLATE = "#64748b";
-const BORDER = "#e2e8f0";
+const NAVY = "var(--text-primary, #1e293b)";
+const SLATE = "var(--text-secondary, #64748b)";
+const BORDER = "var(--border-color, #e2e8f0)";
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -406,22 +406,22 @@ export default function DashboardView() {
                 <div style={{ fontSize: "16px", fontWeight: 700, color: hasCritical ? "#991b1b" : "#92400e" }}>
                   Attention needed — {bannerItems.length} issue{bannerItems.length > 1 ? "s" : ""}
                 </div>
-                <div style={{ fontSize: "13px", color: hasCritical ? "#991b1b" : "#92400e", marginTop: "1px" }}>
+                <div style={{ fontSize: "15px", color: hasCritical ? "#991b1b" : "#92400e", marginTop: "1px" }}>
                   {bannerItems.join(" · ")}
                 </div>
               </div>
             </div>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: hasCritical ? "#991b1b" : "#92400e" }}>{bannerOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize: "16px", fontWeight: 700, color: hasCritical ? "#991b1b" : "#92400e" }}>{bannerOpen ? "▲" : "▼"}</span>
           </div>
 
           {bannerOpen && (
-            <div style={{ borderTop: `1px solid ${hasCritical ? "#fecaca" : "#fde68a"}`, backgroundColor: "white" }}>
+            <div style={{ borderTop: `1px solid ${hasCritical ? "#fecaca" : "#fde68a"}`, backgroundColor: "var(--bg-card, #ffffff)" }}>
               {/* Machines Down */}
               {downMachines.length > 0 && (
                 <>
-                  <div style={{ padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#dc2626", borderBottom: `1px solid #f1f5f9` }}>Machines Down ({downMachines.length})</div>
+                  <div style={{ padding: "8px 16px", fontSize: "15px", fontWeight: 700, color: "#dc2626", borderBottom: `1px solid var(--border-light, #f1f5f9)` }}>Machines Down ({downMachines.length})</div>
                   {machineIssues.filter((m) => m.issue_status === "Down").map((m) => (
-                    <div key={m.id} style={{ padding: "7px 16px 7px 48px", borderBottom: `1px solid #f1f5f9`, fontSize: "14px" }}>
+                    <div key={m.id} style={{ padding: "7px 16px 7px 48px", borderBottom: `1px solid var(--border-light, #f1f5f9)`, fontSize: "16px" }}>
                       <span style={{ fontWeight: 600, color: NAVY }}>{m.plant_name} — {m.machine_name}</span>
                       <span style={{ color: SLATE, marginLeft: "8px" }}>{m.issue_description || ""}</span>
                     </div>
@@ -431,11 +431,11 @@ export default function DashboardView() {
               {/* Missing Plants */}
               {missingPlants.length > 0 && (
                 <>
-                  <div style={{ padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#d97706", borderBottom: `1px solid #f1f5f9` }}>Plants Not Reported ({missingPlants.length})</div>
+                  <div style={{ padding: "8px 16px", fontSize: "15px", fontWeight: 700, color: "#d97706", borderBottom: `1px solid var(--border-light, #f1f5f9)` }}>Plants Not Reported ({missingPlants.length})</div>
                   {missingPlants.map((s) => (
-                    <div key={s.plant.id} style={{ padding: "7px 16px 7px 48px", borderBottom: `1px solid #f1f5f9`, fontSize: "14px", display: "flex", justifyContent: "space-between" }}>
+                    <div key={s.plant.id} style={{ padding: "7px 16px 7px 48px", borderBottom: `1px solid var(--border-light, #f1f5f9)`, fontSize: "16px", display: "flex", justifyContent: "space-between" }}>
                       <span style={{ fontWeight: 600, color: NAVY }}>{s.plant.name}</span>
-                      <span style={{ color: s.productionDaysMissing >= 3 || s.dispatchDaysMissing >= 3 ? "#dc2626" : "#d97706", fontWeight: 700, fontSize: "13px" }}>
+                      <span style={{ color: s.productionDaysMissing >= 3 || s.dispatchDaysMissing >= 3 ? "#dc2626" : "#d97706", fontWeight: 700, fontSize: "15px" }}>
                         {s.productionDaysMissing >= 3 || s.dispatchDaysMissing >= 3 ? "Escalated (3+ days)" : "Chase today"}
                       </span>
                     </div>
@@ -445,12 +445,12 @@ export default function DashboardView() {
               {/* Overdue Tasks */}
               {overdueTaskCount > 0 && (
                 <>
-                  <div style={{ padding: "8px 16px", fontSize: "13px", fontWeight: 700, color: "#dc2626", borderBottom: `1px solid #f1f5f9` }}>Overdue Tasks ({overdueTaskCount})</div>
+                  <div style={{ padding: "8px 16px", fontSize: "15px", fontWeight: 700, color: "#dc2626", borderBottom: `1px solid var(--border-light, #f1f5f9)` }}>Overdue Tasks ({overdueTaskCount})</div>
                   {openTasks.filter((t) => t.due_date && t.due_date < today).map((t) => (
-                    <a key={t.id} href={`/tasks?task=${t.id}`} style={{ textDecoration: "none", color: "inherit", display: "block", padding: "7px 16px 7px 48px", borderBottom: `1px solid #f1f5f9`, fontSize: "14px" }}>
+                    <a key={t.id} href={`/tasks?task=${t.id}`} style={{ textDecoration: "none", color: "inherit", display: "block", padding: "7px 16px 7px 48px", borderBottom: `1px solid var(--border-light, #f1f5f9)`, fontSize: "16px" }}>
                       <span style={{ fontWeight: 600, color: NAVY }}>{t.description}</span>
                       <span style={{ color: "#dc2626", marginLeft: "8px", fontWeight: 700 }}>Due: {formatDateUK(t.due_date)}</span>
-                      <span style={{ color: "#2563eb", marginLeft: "8px", fontSize: "12px" }}>Open →</span>
+                      <span style={{ color: "#2563eb", marginLeft: "8px", fontSize: "14px" }}>Open →</span>
                     </a>
                   ))}
                 </>
@@ -459,7 +459,7 @@ export default function DashboardView() {
           )}
         </div>
       ) : (
-        <div style={{ border: `1px solid ${BORDER}`, borderLeft: "4px solid #16a34a", borderRadius: "6px", padding: "12px 16px", backgroundColor: "white", fontSize: "16px", color: NAVY, fontWeight: 600, marginBottom: "14px" }}>
+        <div style={{ border: `1px solid ${BORDER}`, borderLeft: "4px solid #16a34a", borderRadius: "6px", padding: "12px 16px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "16px", color: NAVY, fontWeight: 600, marginBottom: "14px" }}>
           All clear — no machines down, all plants reported, no overdue tasks.
         </div>
       )}
@@ -478,7 +478,7 @@ export default function DashboardView() {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
         {/* Plant Comparison Chart */}
         {summaries.length > 0 && (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
             <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Plant Comparison — This Month</div>
             <ResponsiveContainer width="100%" height={Math.max(220, summaries.length * 55)}>
               <BarChart
@@ -505,9 +505,9 @@ export default function DashboardView() {
         )}
 
         {/* Breakage Rate Gauges */}
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
           <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
-            Breakage Rate by Plant <span style={{ fontSize: "13px", fontWeight: 400, color: SLATE }}>(limit: 1.5%)</span>
+            Breakage Rate by Plant <span style={{ fontSize: "15px", fontWeight: 400, color: SLATE }}>(limit: 1.5%)</span>
           </div>
           {summaries.map((s) => {
             const rate = s.breakageRate;
@@ -515,13 +515,13 @@ export default function DashboardView() {
             const width = s.breakageStatus === "none" ? 0 : Math.min(rate / 3 * 100, 100);
             return (
               <div key={s.plant.id} style={{ marginBottom: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px", marginBottom: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "16px", marginBottom: "4px" }}>
                   <span style={{ fontWeight: 600, color: NAVY }}>{s.plant.name.replace(" Plant", "")}</span>
                   <span style={{ fontWeight: 700, color }}>
                     {s.breakageStatus === "none" ? "No data" : `${rate.toFixed(2)}%`}
                   </span>
                 </div>
-                <div style={{ height: "10px", backgroundColor: "#f1f5f9", borderRadius: "5px", position: "relative" }}>
+                <div style={{ height: "10px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "5px", position: "relative" }}>
                   <div style={{ width: `${width}%`, height: "100%", backgroundColor: color, borderRadius: "5px", transition: "width 0.3s" }} />
                   <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: "2px", backgroundColor: "#dc2626", opacity: 0.4 }} title="1.5% limit" />
                 </div>
@@ -540,10 +540,10 @@ export default function DashboardView() {
           { key: "tasks" as const, label: `My Tasks (${openTasks.length})` },
         ]).map((tab) => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-            backgroundColor: activeTab === tab.key ? NAVY : "white",
+            backgroundColor: activeTab === tab.key ? NAVY : "var(--bg-card, #ffffff)",
             color: activeTab === tab.key ? "white" : NAVY,
             border: `1px solid ${activeTab === tab.key ? NAVY : BORDER}`,
-            borderRadius: "6px", padding: "7px 14px", fontSize: "14px", fontWeight: 600, cursor: "pointer",
+            borderRadius: "6px", padding: "7px 14px", fontSize: "16px", fontWeight: 600, cursor: "pointer",
           }}>{tab.label}</button>
         ))}
         <div style={{ flex: 1 }} />
@@ -556,13 +556,13 @@ export default function DashboardView() {
               return [s.plant.name, String(k.monthlyTarget), String(k.monthActual), `${k.monthAchievement}%`, String(k.quarterTarget), String(k.quarterActual), `${k.quarterAchievement}%`, statusLabel(k.status)];
             });
             downloadCSV(`${metric}-kpi-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-          }} style={{ backgroundColor: "white", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+          }} style={{ backgroundColor: "var(--bg-card, #ffffff)", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}>
             Export CSV
           </button>
         )}
       </div>
 
-      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
         {activeTab === "production" && <KPITable summaries={summaries} metric="production" />}
         {activeTab === "dispatch" && <KPITable summaries={summaries} metric="dispatch" />}
 
@@ -570,7 +570,7 @@ export default function DashboardView() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "collapse", width: "100%" }}>
               <thead>
-                <tr style={{ backgroundColor: "#f8fafc" }}>
+                <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                   <th style={th}>Plant</th>
                   <th style={th}>Month Produced</th>
                   <th style={th}>Breakage Rate</th>
@@ -606,7 +606,7 @@ export default function DashboardView() {
               {completedCount > 0 && (
                 <div style={{ padding: "8px 14px", borderBottom: `1px solid ${BORDER}`, textAlign: "right" }}>
                   <button onClick={() => setShowCompleted((v) => !v)}
-                    style={{ fontSize: "13px", fontWeight: 600, color: NAVY, backgroundColor: "white", border: `1px solid ${BORDER}`, borderRadius: "5px", padding: "4px 10px", cursor: "pointer" }}>
+                    style={{ fontSize: "14px", fontWeight: 600, color: NAVY, backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid ${BORDER}`, borderRadius: "5px", padding: "4px 10px", cursor: "pointer" }}>
                     {showCompleted ? "Hide completed" : `Show completed (${completedCount})`}
                   </button>
                 </div>
@@ -632,7 +632,7 @@ export default function DashboardView() {
       {/* Monthly Targets */}
       <div style={{ marginTop: "24px" }}>
         <SectionTitle title="Monthly Targets" />
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
           <MonthlyTargets />
         </div>
       </div>
@@ -648,7 +648,7 @@ function FragmentRow({
 }) {
   return (
     <>
-      <tr onClick={onToggle} style={{ cursor: "pointer", backgroundColor: open ? "#f8fafc" : "white" }}>
+      <tr onClick={onToggle} style={{ cursor: "pointer", backgroundColor: open ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)" }}>
         <td style={{ ...td, fontWeight: 600, color: NAVY, maxWidth: "420px" }}>{task.description}</td>
         <td style={td}>{task.priority || "—"}</td>
         <td style={td}>{formatDateUK(task.due_date)}</td>
@@ -660,7 +660,7 @@ function FragmentRow({
       </tr>
       {open && (
         <tr>
-          <td colSpan={4} style={{ ...td, backgroundColor: "#f8fafc", padding: "14px 16px" }}>
+          <td colSpan={4} style={{ ...td, backgroundColor: "var(--bg-card-hover, #f8fafc)", padding: "14px 16px" }}>
             <div style={{ fontSize: "17px", color: SLATE, marginBottom: "6px" }}>
               Type: <strong>{task.task_type || "Task"}</strong> &nbsp;|&nbsp;
               Assigned by: <strong>{task.assigned_by || "—"}</strong> &nbsp;|&nbsp;
@@ -698,7 +698,7 @@ function KPITable({ summaries, metric }: { summaries: PlantSummary[]; metric: "p
     <div style={{ overflowX: "auto", marginBottom: "24px" }}>
       <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
         <thead>
-          <tr style={{ backgroundColor: "#f8fafc" }}>
+          <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
             <th style={th}>Plant</th>
             <th style={th}>Monthly Target</th>
             <th style={th}>Month Actual</th>
@@ -722,7 +722,7 @@ function KPITable({ summaries, metric }: { summaries: PlantSummary[]; metric: "p
                 <td style={{ ...td, color, fontWeight: 700 }}>{k.monthlyTarget > 0 ? `${k.monthAchievement}%` : "—"}</td>
                 <td style={td}>{k.quarterTarget.toLocaleString()}</td>
                 <td style={td}>{k.quarterActual.toLocaleString()}</td>
-                <td style={{ ...td, color: k.monthlyTarget > 0 ? wkColor : "#64748b", fontWeight: 700 }}>{k.monthlyTarget > 0 ? `${k.quarterAchievement}%` : "—"}</td>
+                <td style={{ ...td, color: k.monthlyTarget > 0 ? wkColor : "var(--text-secondary, #64748b)", fontWeight: 700 }}>{k.monthlyTarget > 0 ? `${k.quarterAchievement}%` : "—"}</td>
                 <td style={{ ...td, color, fontWeight: 700 }}>{statusLabel(k.status)}</td>
               </tr>
             );
@@ -743,8 +743,8 @@ function SectionTitle({ title }: { title: string }) {
 
 function Card({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "10px 12px", backgroundColor: "white" }}>
-      <div style={{ color: SLATE, fontSize: "14px", marginBottom: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "10px 12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+      <div style={{ color: SLATE, fontSize: "15px", marginBottom: "3px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
       <div style={{ fontSize: "22px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
     </div>
   );
@@ -767,7 +767,7 @@ const th: React.CSSProperties = {
 };
 
 const td: React.CSSProperties = {
-  borderBottom: `1px solid #f1f5f9`,
+  borderBottom: `1px solid var(--border-light, #f1f5f9)`,
   padding: "8px 10px",
   fontSize: "16px",
   verticalAlign: "top",

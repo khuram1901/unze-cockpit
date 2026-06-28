@@ -255,7 +255,7 @@ export default function FinancePage() {
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-        <PageHeader title="Finance" subtitle="Cash position, daily banking, forecasting, and budgets" />
+        <PageHeader />
 
         {showPicker && (
           <>
@@ -277,7 +277,7 @@ export default function FinancePage() {
                     borderTop: `3px solid ${COLOURS.NAVY}`,
                     borderRadius: "8px",
                     padding: "16px",
-                    backgroundColor: "white",
+                    backgroundColor: "var(--bg-card, #ffffff)",
                     cursor: "pointer",
                     transition: "box-shadow 0.15s",
                   }}
@@ -287,7 +287,7 @@ export default function FinancePage() {
                   <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>
                     {c.name}
                   </div>
-                  <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>
+                  <div style={{ fontSize: "15px", color: COLOURS.SLATE }}>
                     View cash position, daily entries &amp; forecasts
                   </div>
                 </a>
@@ -297,8 +297,8 @@ export default function FinancePage() {
             {isAdmin && (
               <>
                 <SectionTitle title="Bulk Upload Cash Flow PDFs" />
-                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", maxWidth: "600px" }}>
-                  <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "10px" }}>
+                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", maxWidth: "600px" }}>
+                  <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "10px" }}>
                     Select multiple cash flow PDFs — system auto-detects which company each PDF belongs to (Imperial vs Unze Trading) and saves to the correct account.
                   </p>
                   <form onSubmit={handleBulkUpload}>
@@ -312,7 +312,7 @@ export default function FinancePage() {
                     </div>
                   </form>
                   {bulkMsg && (
-                    <div style={{ marginTop: "10px", fontSize: "14px", fontWeight: 600, color: bulkMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{bulkMsg}</div>
+                    <div style={{ marginTop: "10px", fontSize: "16px", fontWeight: 600, color: bulkMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{bulkMsg}</div>
                   )}
                 </div>
               </>
@@ -323,17 +323,17 @@ export default function FinancePage() {
               <div onClick={() => { setShowBudgets(!showBudgets); if (!showBudgets) loadBudgets(); }} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
                 border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px 16px",
-                backgroundColor: showBudgets ? COLOURS.NAVY : "white", maxWidth: "600px",
+                backgroundColor: showBudgets ? COLOURS.NAVY : "var(--bg-card, #ffffff)", maxWidth: "600px",
               }}>
                 <div>
                   <div style={{ fontSize: "16px", fontWeight: 700, color: showBudgets ? "white" : COLOURS.NAVY }}>Department Budgets</div>
-                  <div style={{ fontSize: "12px", color: showBudgets ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>Budgeted vs actual spending per department, per company</div>
+                  <div style={{ fontSize: "14px", color: showBudgets ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>Budgeted vs actual spending per department, per company</div>
                 </div>
                 <span style={{ color: showBudgets ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{showBudgets ? "▲" : "▼"}</span>
               </div>
 
               {showBudgets && (
-                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "white", padding: "14px", maxWidth: "600px" }}>
+                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "14px", maxWidth: "600px" }}>
                   {/* Company + Month selector */}
                   <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
                     <select value={budgetCompany} onChange={(e) => { setBudgetCompany(e.target.value); setBdDept(""); loadBudgets(e.target.value); }}
@@ -396,7 +396,7 @@ export default function FinancePage() {
                       importLabel="Import"
                     />
                     <button onClick={downloadBudgetTemplate} style={{
-                      backgroundColor: "white", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`,
+                      backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`,
                       borderRadius: "6px", padding: "6px 10px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
                     }} title="Download Excel template with instructions">Template</button>
                   </div>
@@ -407,7 +407,7 @@ export default function FinancePage() {
 
                   {/* Add form */}
                   {showBudgetForm && (
-                    <form onSubmit={handleAddBudget} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "12px", backgroundColor: "#f8fafc" }}>
+                    <form onSubmit={handleAddBudget} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "12px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "6px" }}>
                         <div><label style={lbl}>Department</label>
                           <select style={inp} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
@@ -446,16 +446,16 @@ export default function FinancePage() {
                   {/* Summary cards */}
                   {budgets.length > 0 && (
                     <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.BLUE}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "white" }}>
-                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Budgeted</div>
+                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.BLUE}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                        <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Budgeted</div>
                         <div style={{ fontSize: "15px", fontWeight: 800, color: COLOURS.BLUE }}>PKR {totalBudgeted.toLocaleString()}</div>
                       </div>
-                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${totalActual > totalBudgeted ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "white" }}>
-                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Actual</div>
+                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${totalActual > totalBudgeted ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                        <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Actual</div>
                         <div style={{ fontSize: "15px", fontWeight: 800, color: totalActual > totalBudgeted ? COLOURS.RED : COLOURS.GREEN }}>PKR {totalActual.toLocaleString()}</div>
                       </div>
-                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${variance >= 0 ? COLOURS.GREEN : COLOURS.RED}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "white" }}>
-                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Variance</div>
+                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${variance >= 0 ? COLOURS.GREEN : COLOURS.RED}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                        <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Variance</div>
                         <div style={{ fontSize: "15px", fontWeight: 800, color: variance >= 0 ? COLOURS.GREEN : COLOURS.RED }}>PKR {variance.toLocaleString()}</div>
                       </div>
                     </div>
@@ -468,7 +468,7 @@ export default function FinancePage() {
                     const over = dA > dB;
                     return (
                       <div key={deptName} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${over ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", overflow: "hidden", marginBottom: "8px" }}>
-                        <div style={{ padding: "6px 12px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ padding: "6px 12px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{deptName}</span>
                           <div style={{ fontSize: "11px", display: "flex", gap: "8px" }}>
                             <span style={{ color: COLOURS.SLATE }}>Budget: PKR {dB.toLocaleString()}</span>
@@ -476,7 +476,7 @@ export default function FinancePage() {
                           </div>
                         </div>
                         {items.map((b) => (
-                          <div key={b.id} style={{ padding: "5px 12px", borderBottom: `1px solid #f1f5f9`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
+                          <div key={b.id} style={{ padding: "5px 12px", borderBottom: `1px solid var(--border-light, #f1f5f9)`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{b.category}</span>
                               {b.notes && <span style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "4px" }}>({b.notes})</span>}
@@ -494,7 +494,7 @@ export default function FinancePage() {
                   })}
 
                   {budgets.length === 0 && (
-                    <div style={{ padding: "12px", color: COLOURS.SLATE, textAlign: "center", fontSize: "14px" }}>No budget entries for {companyShortName(budgetCompany)} — {budgetMonth}.</div>
+                    <div style={{ padding: "12px", color: COLOURS.SLATE, textAlign: "center", fontSize: "16px" }}>No budget entries for {companyShortName(budgetCompany)} — {budgetMonth}.</div>
                   )}
                 </div>
               )}

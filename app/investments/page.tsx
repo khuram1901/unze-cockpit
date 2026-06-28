@@ -101,6 +101,7 @@ export default function InvestmentsPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [updateResult, setUpdateResult] = useState<string | null>(null);
+  const [lastPriceUpdate, setLastPriceUpdate] = useState<string | null>(null);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -117,14 +118,16 @@ export default function InvestmentsPage() {
   const [formNotes, setFormNotes] = useState("");
 
   const load = useCallback(async () => {
-    const [hRes, pRes, histRes] = await Promise.all([
+    const [hRes, pRes, histRes, latestRes] = await Promise.all([
       supabase.from("holdings").select("*").order("ticker"),
       supabase.from("current_prices").select("*"),
       supabase.from("price_history").select("ticker, price, as_of_date").order("as_of_date", { ascending: true }),
+      supabase.from("price_history").select("created_at").order("created_at", { ascending: false }).limit(1).single(),
     ]);
     setHoldings(hRes.data || []);
     setCurrentPrices(pRes.data || []);
     setHistory(histRes.data || []);
+    setLastPriceUpdate(latestRes.data?.created_at ?? null);
     setLoading(false);
   }, []);
 
@@ -288,10 +291,10 @@ export default function InvestmentsPage() {
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
-        <PageHeader title="Investments" subtitle="PSX Stock Portfolio" />
+        <PageHeader />
 
         {loading ? (
-          <p style={{ color: SLATE }}>Loading portfolio...</p>
+          <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading portfolio...</p>
         ) : (
           <>
             {/* Portfolio Summary Cards */}
@@ -311,6 +314,13 @@ export default function InvestmentsPage() {
               <SummaryCard label="Stocks" value={String(stocks.length)} sub={priceDate ? `Prices: ${fmtDate(priceDate)}` : "No prices"} color={SLATE} />
             </div>
 
+            {/* Last updated */}
+            {lastPriceUpdate && (
+              <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginBottom: "12px", textAlign: "right" }}>
+                Prices last updated: {new Date(lastPriceUpdate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} at {new Date(lastPriceUpdate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+              </div>
+            )}
+
             {/* Alerts */}
             {losers.length > 0 && (
               <div style={{
@@ -318,11 +328,11 @@ export default function InvestmentsPage() {
                 borderRadius: "8px", backgroundColor: "#fef2f2",
                 padding: "10px 16px", marginBottom: "14px",
               }}>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b", marginBottom: "4px" }}>
+                <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b", marginBottom: "4px" }}>
                   {losers.length} stock{losers.length > 1 ? "s" : ""} down more than 5%
                 </div>
                 {losers.map((s) => (
-                  <div key={s.ticker} style={{ fontSize: "13px", color: "#991b1b", lineHeight: 1.8 }}>
+                  <div key={s.ticker} style={{ fontSize: "15px", color: "#991b1b", lineHeight: 1.8 }}>
                     <span style={{ fontWeight: 700 }}>{s.ticker}</span> ({s.company}) — {fmtPct(s.gainLossPct!)} ({fmtRs(s.gainLoss!)})
                   </div>
                 ))}
@@ -338,17 +348,17 @@ export default function InvestmentsPage() {
                 + Add Holding
               </button>
               {updateResult && (
-                <span style={{ fontSize: "13px", color: SLATE, alignSelf: "center" }}>{updateResult}</span>
+                <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", alignSelf: "center" }}>{updateResult}</span>
               )}
             </div>
 
             {/* Add/Edit Form */}
             {showAddForm && (
               <div style={{
-                border: `1px solid ${BORDER}`, borderRadius: "10px",
+                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px", marginBottom: "16px",
               }}>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "12px" }}>
                   {editingId ? "Edit Holding" : "Add New Holding"}
                 </div>
                 <form onSubmit={handleAddHolding} style={{
@@ -374,11 +384,11 @@ export default function InvestmentsPage() {
             {/* Manual Price Modal */}
             {manualPriceModal && (
               <div style={{
-                border: `1px solid ${BORDER}`, borderRadius: "10px",
+                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px", marginBottom: "16px",
                 display: "flex", gap: "10px", alignItems: "center",
               }}>
-                <span style={{ fontWeight: 700, color: NAVY }}>{manualPriceModal}:</span>
+                <span style={{ fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{manualPriceModal}:</span>
                 <input
                   type="number" step="0.01" placeholder="Price (Rs)"
                   value={manualPrice} onChange={(e) => setManualPrice(e.target.value)}
@@ -394,7 +404,7 @@ export default function InvestmentsPage() {
             <div style={{ overflowX: "auto", marginBottom: "20px" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "900px" }}>
                 <thead>
-                  <tr style={{ backgroundColor: "#f8fafc" }}>
+                  <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                     <Th>Ticker</Th>
                     <Th>Company</Th>
                     <Th align="right">Qty</Th>
@@ -410,11 +420,11 @@ export default function InvestmentsPage() {
                 </thead>
                 <tbody>
                   {stocks.map((s) => (
-                    <tr key={s.ticker} style={{ borderBottom: `1px solid #f1f5f9` }}
+                    <tr key={s.ticker} style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)" }}
                       onClick={() => setSelectedTicker(s.ticker)}
                     >
-                      <td style={{ ...td, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{s.ticker}</td>
-                      <td style={{ ...td, color: SLATE, fontSize: "13px" }}>{s.company}</td>
+                      <td style={{ ...td, fontWeight: 700, color: "var(--text-primary, #1e293b)", cursor: "pointer" }}>{s.ticker}</td>
+                      <td style={{ ...td, color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>{s.company}</td>
                       <td style={{ ...td, textAlign: "right" }}>{s.totalQty.toLocaleString()}</td>
                       <td style={{ ...td, textAlign: "right" }}>{fmtPrice(s.avgCost)}</td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 600 }}>
@@ -437,10 +447,10 @@ export default function InvestmentsPage() {
                           </span>
                         ) : "—"}
                       </td>
-                      <td style={{ ...td, textAlign: "right", color: SLATE }}>
+                      <td style={{ ...td, textAlign: "right", color: "var(--text-secondary, #64748b)" }}>
                         {s.targetPrice ? fmtPrice(s.targetPrice) : "—"}
                       </td>
-                      <td style={{ ...td, color: SLATE, fontSize: "12px" }}>
+                      <td style={{ ...td, color: "var(--text-secondary, #64748b)", fontSize: "14px" }}>
                         {s.priceDate ? fmtDate(s.priceDate) : "—"}
                         {s.priceSource ? ` (${s.priceSource})` : ""}
                       </td>
@@ -459,7 +469,7 @@ export default function InvestmentsPage() {
                           </>
                         )}
                         {s.lots.length > 1 && (
-                          <span style={{ fontSize: "11px", color: SLATE }}>{s.lots.length} lots</span>
+                          <span style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>{s.lots.length} lots</span>
                         )}
                       </td>
                     </tr>
@@ -493,20 +503,20 @@ export default function InvestmentsPage() {
             }}>
               {/* Price Chart */}
               <div style={{
-                border: `1px solid ${BORDER}`, borderRadius: "10px",
+                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>
+                  <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>
                     {chartTicker || "—"} Price History
                   </div>
                   <div style={{ display: "flex", gap: "4px" }}>
                     {(["1M", "3M", "6M", "ALL"] as const).map((r) => (
                       <button key={r} onClick={() => setChartRange(r)} style={{
                         padding: "2px 8px", fontSize: "12px", fontWeight: 600,
-                        border: `1px solid ${BORDER}`, borderRadius: "4px", cursor: "pointer",
+                        border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "4px", cursor: "pointer",
                         backgroundColor: chartRange === r ? NAVY : "transparent",
-                        color: chartRange === r ? "white" : SLATE,
+                        color: chartRange === r ? "white" : "var(--text-secondary, #64748b)",
                       }}>{r}</button>
                     ))}
                   </div>
@@ -515,9 +525,9 @@ export default function InvestmentsPage() {
                   {stocks.map((s) => (
                     <button key={s.ticker} onClick={() => setSelectedTicker(s.ticker)} style={{
                       padding: "2px 8px", fontSize: "11px", fontWeight: 600,
-                      border: `1px solid ${BORDER}`, borderRadius: "4px", cursor: "pointer",
+                      border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "4px", cursor: "pointer",
                       backgroundColor: chartTicker === s.ticker ? NAVY : "transparent",
-                      color: chartTicker === s.ticker ? "white" : SLATE,
+                      color: chartTicker === s.ticker ? "white" : "var(--text-secondary, #64748b)",
                     }}>{s.ticker}</button>
                   ))}
                 </div>
@@ -532,16 +542,16 @@ export default function InvestmentsPage() {
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p style={{ color: SLATE, fontSize: "13px", textAlign: "center", padding: "40px 0" }}>No price history for {chartTicker}</p>
+                  <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", textAlign: "center", padding: "40px 0" }}>No price history for {chartTicker}</p>
                 )}
               </div>
 
               {/* Gain/Loss Bar Chart */}
               <div style={{
-                border: `1px solid ${BORDER}`, borderRadius: "10px",
+                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px",
               }}>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "12px" }}>
                   Gain/Loss by Stock (%)
                 </div>
                 {glBarData.length > 0 ? (
@@ -557,7 +567,7 @@ export default function InvestmentsPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p style={{ color: SLATE, fontSize: "13px", textAlign: "center", padding: "40px 0" }}>No data</p>
+                  <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", textAlign: "center", padding: "40px 0" }}>No data</p>
                 )}
               </div>
             </div>
@@ -573,12 +583,12 @@ export default function InvestmentsPage() {
                 }}>
                   {winners.sort((a, b) => (b.gainLossPct ?? 0) - (a.gainLossPct ?? 0)).map((s) => (
                     <div key={s.ticker} style={{
-                      border: `1px solid ${BORDER}`, borderTop: `3px solid ${GREEN}`,
+                      border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${GREEN}`,
                       borderRadius: "8px", padding: "10px 12px",
                       backgroundColor: "var(--bg-card, #fff)",
                     }}>
-                      <div style={{ fontWeight: 700, color: NAVY, fontSize: "15px" }}>{s.ticker}</div>
-                      <div style={{ fontSize: "12px", color: SLATE }}>{s.company}</div>
+                      <div style={{ fontWeight: 700, color: "var(--text-primary, #1e293b)", fontSize: "15px" }}>{s.ticker}</div>
+                      <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{s.company}</div>
                       <div style={{ fontWeight: 700, color: GREEN, fontSize: "18px", marginTop: "4px" }}>
                         {fmtPct(s.gainLossPct!)}
                       </div>
@@ -598,13 +608,13 @@ export default function InvestmentsPage() {
 function SummaryCard({ label, value, color, sub }: { label: string; value: string; color: string; sub?: string }) {
   return (
     <div style={{
-      border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`,
+      border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${color}`,
       borderRadius: "8px", padding: "10px 14px",
       backgroundColor: "var(--bg-card, #fff)",
     }}>
-      <div style={{ color: SLATE, fontSize: "13px", marginBottom: "2px" }}>{label}</div>
+      <div style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", marginBottom: "2px" }}>{label}</div>
       <div style={{ fontSize: "20px", fontWeight: 800, color }}>{value}</div>
-      {sub && <div style={{ fontSize: "13px", color: SLATE, marginTop: "2px" }}>{sub}</div>}
+      {sub && <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>{sub}</div>}
     </div>
   );
 }
@@ -612,29 +622,29 @@ function SummaryCard({ label, value, color, sub }: { label: string; value: strin
 function Th({ children, align }: { children: React.ReactNode; align?: "left" | "right" }) {
   return (
     <th style={{
-      textAlign: align || "left", borderBottom: `1px solid ${BORDER}`,
-      padding: "6px 10px", fontSize: "12px", color: SLATE, fontWeight: 700,
+      textAlign: align || "left", borderBottom: "1px solid var(--border-color, #e2e8f0)",
+      padding: "6px 10px", fontSize: "14px", color: "var(--text-secondary, #64748b)", fontWeight: 700,
       whiteSpace: "nowrap",
     }}>{children}</th>
   );
 }
 
 const td: React.CSSProperties = {
-  padding: "7px 10px", fontSize: "13px",
+  padding: "7px 10px", fontSize: "15px",
 };
 
 const inputStyle: React.CSSProperties = {
-  padding: "8px 10px", border: `1px solid ${BORDER}`,
-  borderRadius: "6px", fontSize: "14px", boxSizing: "border-box",
+  padding: "8px 10px", border: "1px solid var(--border-color, #e2e8f0)",
+  borderRadius: "6px", fontSize: "16px", boxSizing: "border-box",
 };
 
 const btnStyle: React.CSSProperties = {
   backgroundColor: NAVY, color: "white", border: "none",
-  borderRadius: "6px", padding: "8px 16px", fontSize: "13px",
+  borderRadius: "6px", padding: "8px 16px", fontSize: "15px",
   fontWeight: 700, cursor: "pointer",
 };
 
 const miniBtn: React.CSSProperties = {
   background: "transparent", border: "none", cursor: "pointer",
-  fontSize: "13px", padding: "2px 4px",
+  fontSize: "15px", padding: "2px 4px",
 };

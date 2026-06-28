@@ -14,65 +14,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Use the notification Gmail account (unzegrouppk@gmail.com) for inbox checking
     const supabase = createServiceClient();
-    const { data: notifToken } = await supabase
-      .from("google_oauth_tokens")
-      .select("*")
-      .eq("user_email", "unzegrouppk@gmail.com")
-      .single();
-
-    if (!notifToken) {
-      return Response.json({ error: "Notification Gmail not connected" }, { status: 500 });
-    }
-
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      (process.env.GOOGLE_REDIRECT_URI || "").replace("/callback", "/callback-notifications")
-    );
-    oauth2Client.setCredentials({
-      access_token: safeDecrypt(notifToken.access_token),
-      refresh_token: safeDecrypt(notifToken.refresh_token),
-      expiry_date: notifToken.token_expiry ? new Date(notifToken.token_expiry).getTime() : undefined,
-    });
-
-    oauth2Client.on("tokens", async (newTokens) => {
-      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
-      if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
-      await supabase.from("google_oauth_tokens").update(updates).eq("id", notifToken.id);
-    });
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-
-    // Find unread emails with the cockpit-cash label
-    const labelsRes = await gmail.users.labels.list({ userId: "me" });
-    const allLabels = (labelsRes.data.labels || []).map((l) => l.name);
-    const cockpitLabel = labelsRes.data.labels?.find(
-      (l) => l.name?.toLowerCase().includes("cockpit")
-    );
-
-    if (!cockpitLabel?.id) {
-      return Response.json({
-        ok: false,
-        message: "No cockpit label found",
-        allLabels: allLabels.filter((l) => l).slice(0, 30),
-        processed: 0,
-      });
-    }
-
-    const messagesRes = await gmail.users.messages.list({
-      userId: "me",
-      labelIds: [cockpitLabel.id],
-      q: "newer_than:30d",
-      maxResults: 20,
-    });
-
-    const messageIds = messagesRes.data.messages || [];
-    if (messageIds.length === 0) {
-      return Response.json({ ok: true, message: "Label found but no emails in last 30 days", labelName: cockpitLabel.name, labelId: cockpitLabel.id, processed: 0 });
-    }
+    const TARGET_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 
     // Get existing dates for BOTH companies so we skip already-processed ones
     const { data: existingUtpl } = await supabase
@@ -86,7 +29,73 @@ export async function GET(request: NextRequest) {
     const existingDatesUtpl = new Set((existingUtpl || []).map((p) => p.position_date));
     const existingDatesIfpl = new Set((existingIfpl || []).map((p) => p.position_date));
 
-    const results: { messageId: string; status: string; date?: string }[] = [];
+    const results: { messageId: string; status: string; date?: string; account?: string }[] = [];
+    const accountSummaries: { email: string; status: string; processed: number }[] = [];
+
+    for (const targetEmail of TARGET_EMAILS) {
+    const { data: tokenRow } = await supabase
+      .from("google_oauth_tokens")
+      .select("*")
+      .eq("user_email", targetEmail)
+      .single();
+
+    if (!tokenRow) {
+      accountSummaries.push({ email: targetEmail, status: "not connected", processed: 0 });
+      continue;
+    }
+
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      (process.env.GOOGLE_REDIRECT_URI || "").replace("/callback", "/callback-notifications")
+    );
+    oauth2Client.setCredentials({
+      access_token: safeDecrypt(tokenRow.access_token),
+      refresh_token: safeDecrypt(tokenRow.refresh_token),
+      expiry_date: tokenRow.token_expiry ? new Date(tokenRow.token_expiry).getTime() : undefined,
+    });
+
+    oauth2Client.on("tokens", async (newTokens) => {
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
+      if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
+      await supabase.from("google_oauth_tokens").update(updates).eq("id", tokenRow.id);
+    });
+
+    let gmail;
+    try {
+      gmail = google.gmail({ version: "v1", auth: oauth2Client });
+    } catch (e) {
+      accountSummaries.push({ email: targetEmail, status: `auth error: ${e instanceof Error ? e.message : "unknown"}`, processed: 0 });
+      continue;
+    }
+
+    // Find emails with the cockpit-cash label
+    const labelsRes = await gmail.users.labels.list({ userId: "me" });
+    const allLabels = (labelsRes.data.labels || []).map((l) => l.name);
+    const cockpitLabel = labelsRes.data.labels?.find(
+      (l) => l.name?.toLowerCase().includes("cockpit")
+    );
+
+    if (!cockpitLabel?.id) {
+      accountSummaries.push({ email: targetEmail, status: `no cockpit label found (labels: ${allLabels.filter(Boolean).slice(0, 10).join(", ")})`, processed: 0 });
+      continue;
+    }
+
+    const messagesRes = await gmail.users.messages.list({
+      userId: "me",
+      labelIds: [cockpitLabel.id],
+      q: "newer_than:30d",
+      maxResults: 20,
+    });
+
+    const messageIds = messagesRes.data.messages || [];
+    if (messageIds.length === 0) {
+      accountSummaries.push({ email: targetEmail, status: "label found but no emails in last 30 days", processed: 0 });
+      continue;
+    }
+
+    let accountProcessed = 0;
 
     for (const msg of messageIds) {
       if (!msg.id) continue;
@@ -131,7 +140,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (pdfAttachments.length === 0) {
-        results.push({ messageId: msg.id, status: "skipped — no PDF attachments" });
+        results.push({ messageId: msg.id, status: "skipped — no PDF attachments", account: targetEmail });
         continue;
       }
 
@@ -141,17 +150,17 @@ export async function GET(request: NextRequest) {
           const cashFlow = await parseCashFlowPDF(pdfAttachments[0].data);
           const positionDate = cashFlow.date;
           if (!positionDate) {
-            results.push({ messageId: msg.id, status: "error — no date found in PDF" });
+            results.push({ messageId: msg.id, status: "error — no date found in PDF", account: targetEmail });
             continue;
           }
           if (cashFlow.openingBalanceTotal === 0 && cashFlow.receiptsTotal === 0 && cashFlow.paymentsTotal === 0 && cashFlow.closingBalanceUnzeTrading === 0) {
-            results.push({ messageId: msg.id, status: "skipped — all values zero", date: positionDate });
+            results.push({ messageId: msg.id, status: "skipped — all values zero", date: positionDate, account: targetEmail });
             continue;
           }
           const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
           const dateSet = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
           if (dateSet.has(positionDate)) {
-            results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate });
+            results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate, account: targetEmail });
             continue;
           }
           await supabase.from("daily_cash_position").upsert({
@@ -167,9 +176,9 @@ export async function GET(request: NextRequest) {
             uploaded_by: "gmail-auto",
           }, { onConflict: "company_id,position_date" });
           dateSet.add(positionDate);
-          results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (single PDF)`, date: positionDate });
+          results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (single PDF)`, date: positionDate, account: targetEmail });
         } catch (e) {
-          results.push({ messageId: msg.id, status: `error — ${e instanceof Error ? e.message : "parse failed"}` });
+          results.push({ messageId: msg.id, status: `error — ${e instanceof Error ? e.message : "parse failed"}`, account: targetEmail });
         }
         continue;
       }
@@ -196,17 +205,17 @@ export async function GET(request: NextRequest) {
           if (positionDate) {
             const ds = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
             if (ds.has(positionDate)) {
-              results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate });
+              results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate, account: targetEmail });
             } else {
               await saveToDatabase(positionDate, cashFlow, bankPosition, result, pdf1.filename, pdf2.filename);
               ds.add(positionDate);
-              results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate });
+              results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate, account: targetEmail });
             }
           } else {
-            results.push({ messageId: msg.id, status: "error — no date found in PDFs" });
+            results.push({ messageId: msg.id, status: "error — no date found in PDFs", account: targetEmail });
           }
         } catch (parseErr) {
-          results.push({ messageId: msg.id, status: `error — ${parseErr instanceof Error ? parseErr.message : "parse failed"}` });
+          results.push({ messageId: msg.id, status: `error — ${parseErr instanceof Error ? parseErr.message : "parse failed"}`, account: targetEmail });
         }
       } else {
         try {
@@ -218,17 +227,17 @@ export async function GET(request: NextRequest) {
           if (positionDate) {
             const ds = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
             if (ds.has(positionDate)) {
-              results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate });
+              results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate, account: targetEmail });
             } else {
               await saveToDatabase(positionDate, cashFlow, bankPosition, result, cashFlowPdf.filename, bankPositionPdf.filename);
               ds.add(positionDate);
-              results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate });
+              results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate, account: targetEmail });
             }
           } else {
-            results.push({ messageId: msg.id, status: "error — no date found in PDFs" });
+            results.push({ messageId: msg.id, status: "error — no date found in PDFs", account: targetEmail });
           }
         } catch (parseErr) {
-          results.push({ messageId: msg.id, status: `error — ${parseErr instanceof Error ? parseErr.message : "parse failed"}` });
+          results.push({ messageId: msg.id, status: `error — ${parseErr instanceof Error ? parseErr.message : "parse failed"}`, account: targetEmail });
         }
       }
 
@@ -238,9 +247,13 @@ export async function GET(request: NextRequest) {
         id: msg.id,
         requestBody: { removeLabelIds: ["UNREAD"] },
       });
+      accountProcessed++;
     }
 
-    return Response.json({ ok: true, processed: results.length, results });
+    accountSummaries.push({ email: targetEmail, status: "ok", processed: accountProcessed });
+    } // end for-each account
+
+    return Response.json({ ok: true, processed: results.length, results, accounts: accountSummaries });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Gmail check-inbox error:", message);

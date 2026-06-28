@@ -27,8 +27,8 @@ export default function DepartmentPage({ params }: { params: Promise<{ slug: str
     return (
       <AuthWrapper>
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-          <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#1e293b" }}>Department not found</h1>
-          <p style={{ color: "#64748b", fontSize: "16px" }}>No department configured for &ldquo;{slug}&rdquo;.</p>
+          <h1 style={{ fontSize: "26px", fontWeight: 800, color: "var(--text-primary, #1e293b)" }}>Department not found</h1>
+          <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "16px" }}>No department configured for &ldquo;{slug}&rdquo;.</p>
         </main>
       </AuthWrapper>
     );
@@ -43,7 +43,7 @@ export default function DepartmentPage({ params }: { params: Promise<{ slug: str
 
 function DepartmentGuarded({ slug, departmentName, config }: { slug: string; departmentName: string; config: ReturnType<typeof getDepartmentConfig> }) {
   const { checking } = useRequireDepartment(departmentName);
-  if (checking) return <p style={{ padding: "20px 24px", color: "#64748b" }}>Checking permissions...</p>;
+  if (checking) return <p style={{ padding: "20px 24px", color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p>;
   const CustomDashboard = CUSTOM_DASHBOARDS[slug];
   return CustomDashboard ? <CustomDashboard /> : <DepartmentDashboard config={config!} />;
 }

@@ -232,7 +232,7 @@ export default function ReceivablesPage() {
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-          <PageHeader title="Receivables Pipeline" subtitle="Track bills through collection stages" />
+          <PageHeader />
           {canEdit && (
             <button onClick={() => setShowForm(!showForm)} style={{
               backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
@@ -244,13 +244,13 @@ export default function ReceivablesPage() {
         </div>
 
         {message && (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "white", fontSize: "15px", color: COLOURS.NAVY }}>{message}</div>
+          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>{message}</div>
         )}
 
         {/* Add bill form */}
         {showForm && canEdit && (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>Add New Bill</div>
+          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "10px" }}>Add New Bill</div>
             <form onSubmit={addBill}>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr", gap: "8px" }}>
                 <div>
@@ -289,7 +289,7 @@ export default function ReceivablesPage() {
               </div>
               <button type="submit" disabled={saving} style={{
                 backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
-                padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer", marginTop: "8px",
+                padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px",
               }}>{saving ? "Saving..." : "Add Bill"}</button>
             </form>
           </div>
@@ -305,8 +305,8 @@ export default function ReceivablesPage() {
 
         {/* Bills in Progress — Customer Summary */}
         {!loading && customerRows.length > 0 && (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, marginBottom: "10px", color: COLOURS.NAVY }}>
+          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, marginBottom: "10px", color: "var(--text-primary, #1e293b)" }}>
               Bills in Progress: <span style={{ color: recRed > 0 ? COLOURS.RED : COLOURS.GREEN }}>{recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "8px", marginBottom: "12px" }}>
@@ -316,8 +316,8 @@ export default function ReceivablesPage() {
                 { label: "Due Soon", value: recAmber, color: "#d97706" },
                 { label: "Stuck", value: recRed, color: COLOURS.RED },
               ].map((c) => (
-                <div key={c.label} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${c.color}`, borderRadius: "6px", padding: "6px 10px" }}>
-                  <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{c.label}</div>
+                <div key={c.label} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${c.color}`, borderRadius: "6px", padding: "6px 10px" }}>
+                  <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>{c.label}</div>
                   <div style={{ fontSize: "16px", fontWeight: 800, color: c.color }}>PKR {c.value.toLocaleString()}</div>
                 </div>
               ))}
@@ -325,22 +325,22 @@ export default function ReceivablesPage() {
             <div style={{ overflowX: "auto" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "420px" }}>
                 <thead>
-                  <tr style={{ backgroundColor: "#f8fafc" }}>
+                  <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                     {["Customer", "On Time", "Due Soon", "Stuck", "Total", "Aging"].map((h) => (
-                      <th key={h} style={{ textAlign: "left", borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "6px 10px", fontSize: "13px", color: COLOURS.SLATE, fontWeight: 700 }}>{h}</th>
+                      <th key={h} style={{ textAlign: "left", borderBottom: "1px solid var(--border-color, #e2e8f0)", padding: "6px 10px", fontSize: "15px", color: "var(--text-secondary, #64748b)", fontWeight: 700 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {customerRows.map((r) => (
                     <tr key={r.customer}>
-                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{r.customer}</td>
-                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", color: COLOURS.GREEN }}>{r.greenAmount.toLocaleString()}</td>
-                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", color: "#d97706" }}>{r.amberAmount.toLocaleString()}</td>
-                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", color: COLOURS.RED, fontWeight: r.redAmount > 0 ? 700 : 400 }}>{r.redAmount.toLocaleString()}</td>
-                      <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "14px", fontWeight: 600 }}>{r.totalAmount.toLocaleString()}</td>
+                      <td style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{r.customer}</td>
+                      <td style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "16px", color: COLOURS.GREEN }}>{r.greenAmount.toLocaleString()}</td>
+                      <td style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "16px", color: "#d97706" }}>{r.amberAmount.toLocaleString()}</td>
+                      <td style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "16px", color: COLOURS.RED, fontWeight: r.redAmount > 0 ? 700 : 400 }}>{r.redAmount.toLocaleString()}</td>
+                      <td style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "16px", fontWeight: 600 }}>{r.totalAmount.toLocaleString()}</td>
                       {(() => { const bucket = customerAging.get(r.customer) || "0-30"; return (
-                        <td style={{ borderBottom: `1px solid #f1f5f9`, padding: "7px 10px", fontSize: "13px", fontWeight: 700, color: AGING_COLOURS[bucket] }}>{bucket === "90+" ? "90+ days" : `${bucket} days`}</td>
+                        <td style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "15px", fontWeight: 700, color: AGING_COLOURS[bucket] }}>{bucket === "90+" ? "90+ days" : `${bucket} days`}</td>
                       ); })()}
                     </tr>
                   ))}
@@ -352,8 +352,8 @@ export default function ReceivablesPage() {
 
         {/* Bill Aging Report */}
         {!loading && bills.length > 0 && (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, marginBottom: "10px", color: COLOURS.NAVY }}>Bill Aging Report</div>
+          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, marginBottom: "10px", color: "var(--text-primary, #1e293b)" }}>Bill Aging Report</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px" }}>
               {([
                 { label: "0-30 days", bucket: "0-30" as const },
@@ -361,8 +361,8 @@ export default function ReceivablesPage() {
                 { label: "61-90 days", bucket: "61-90" as const },
                 { label: "90+ days", bucket: "90+" as const },
               ] as const).map((c) => (
-                <div key={c.bucket} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${AGING_COLOURS[c.bucket]}`, borderRadius: "6px", padding: "8px 10px" }}>
-                  <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{c.label}</div>
+                <div key={c.bucket} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${AGING_COLOURS[c.bucket]}`, borderRadius: "6px", padding: "8px 10px" }}>
+                  <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>{c.label}</div>
                   <div style={{ fontSize: "18px", fontWeight: 800, color: AGING_COLOURS[c.bucket] }}>PKR {agingTotals[c.bucket].toLocaleString()}</div>
                 </div>
               ))}
@@ -371,7 +371,7 @@ export default function ReceivablesPage() {
         )}
 
         {loading ? (
-          <p style={{ color: COLOURS.SLATE }}>Loading receivables...</p>
+          <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading receivables...</p>
         ) : (
           <div style={{ display: "flex", gap: "12px", overflowX: "auto", paddingBottom: "12px" }}>
             {stages.map((stage) => {
@@ -380,16 +380,16 @@ export default function ReceivablesPage() {
               return (
                 <div key={stage.id} style={{
                   minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
-                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "#f8fafc",
+                  border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card-hover, #f8fafc)",
                 }}>
-                  <div style={{ padding: "10px 12px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: "white", borderRadius: "8px 8px 0 0" }}>
-                    <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{stage.stage_name}</div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{stageBills.length} bill{stageBills.length !== 1 ? "s" : ""} · Budget: {stage.working_day_budget} days</div>
+                  <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px 8px 0 0" }}>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{stage.stage_name}</div>
+                    <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{stageBills.length} bill{stageBills.length !== 1 ? "s" : ""} · Budget: {stage.working_day_budget} days</div>
                   </div>
 
                   <div style={{ padding: "8px", minHeight: "100px" }}>
                     {stageBills.length === 0 ? (
-                      <div style={{ padding: "12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>Empty</div>
+                      <div style={{ padding: "12px", textAlign: "center", color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>Empty</div>
                     ) : (
                       stageBills.map((bill) => {
                         const elapsed = workingDaysSince(bill.current_stage_entered_date);
@@ -399,18 +399,18 @@ export default function ReceivablesPage() {
                           <div key={bill.id} style={{
                             border: `1px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.BORDER}`,
                             borderLeft: `3px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.GREEN}`,
-                            borderRadius: "6px", padding: "8px 10px", backgroundColor: "white", marginBottom: "6px",
+                            borderRadius: "6px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "6px",
                           }}>
-                            <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{bill.utility}</div>
-                            <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                            <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{bill.utility}</div>
+                            <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
                               PKR {bill.amount.toLocaleString()} · {formatDateUK(bill.date_submitted)}
                             </div>
-                            <div style={{ fontSize: "11px", color: isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.SLATE, fontWeight: isStuck || isWarning ? 700 : 400, marginTop: "2px" }}>
+                            <div style={{ fontSize: "13px", color: isStuck ? COLOURS.RED : isWarning ? "#d97706" : "var(--text-secondary, #64748b)", fontWeight: isStuck || isWarning ? 700 : 400, marginTop: "2px" }}>
                               {elapsed}d in stage {isStuck ? "(STUCK)" : isWarning ? "(due soon)" : ""}
                             </div>
-                            {bill.invoice_ref && <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Inv: {bill.invoice_ref}</div>}
-                            {bill.ic_ref && <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>IC: {bill.ic_ref}</div>}
-                            {bill.grn_ref && <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>GRN: {bill.grn_ref}</div>}
+                            {bill.invoice_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>Inv: {bill.invoice_ref}</div>}
+                            {bill.ic_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>IC: {bill.ic_ref}</div>}
+                            {bill.grn_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>GRN: {bill.grn_ref}</div>}
 
                             {canEdit && (
                               <div style={{ display: "flex", gap: "4px", marginTop: "6px" }}>
@@ -437,12 +437,12 @@ export default function ReceivablesPage() {
 
             <div style={{
               minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
-              border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "#f0fdf4",
+              border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "#f0fdf4",
             }}>
-              <div style={{ padding: "10px 12px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: "white", borderRadius: "8px 8px 0 0" }}>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.GREEN }}>Collected</div>
+              <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px 8px 0 0" }}>
+                <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.GREEN }}>Collected</div>
               </div>
-              <div style={{ padding: "8px", textAlign: "center", color: COLOURS.GREEN, fontSize: "13px" }}>
+              <div style={{ padding: "8px", textAlign: "center", color: COLOURS.GREEN, fontSize: "15px" }}>
                 Bills move here when marked as collected
               </div>
             </div>
@@ -453,5 +453,5 @@ export default function ReceivablesPage() {
   );
 }
 
-const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "3px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box" };
-const lbl: React.CSSProperties = { display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px" };
+const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "3px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box" };
+const lbl: React.CSSProperties = { display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "4px" };

@@ -193,7 +193,7 @@ export default function TaskStatus({
 
   const controlStyle = {
     padding: "6px",
-    border: "1px solid #e2e8f0",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "6px",
     fontSize: "16px",
   };
@@ -202,7 +202,7 @@ export default function TaskStatus({
     width: "100%",
     maxWidth: "520px",
     padding: "8px",
-    border: "1px solid #e2e8f0",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "6px",
     fontSize: "16px",
     display: "block",
@@ -211,7 +211,7 @@ export default function TaskStatus({
   };
 
   return (
-    <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e2e8f0" }}>
+    <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--border-color, #e2e8f0)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         <span style={{ fontSize: "16px", fontWeight: "bold" }}>Update status:</span>
 
@@ -227,7 +227,7 @@ export default function TaskStatus({
         </select>
 
         {savedMessage && <span style={{ color: "green", fontSize: "16px" }}>{savedMessage}</span>}
-        {saving && <span style={{ color: "#64748b", fontSize: "16px" }}>Saving…</span>}
+        {saving && <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "16px" }}>Saving…</span>}
       </div>
 
       {/* Due-date editor: Admin / Executive only */}
@@ -266,13 +266,13 @@ export default function TaskStatus({
             Save date
           </button>
           {dateMessage && <span style={{ color: "green", fontSize: "16px" }}>{dateMessage}</span>}
-          {savingDate && <span style={{ color: "#64748b", fontSize: "16px" }}>Saving…</span>}
+          {savingDate && <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "16px" }}>Saving…</span>}
         </div>
       )}
 
       {/* Time tracking */}
       <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-        <span style={{ fontSize: "14px", fontWeight: "bold" }}>Time spent:</span>
+        <span style={{ fontSize: "16px", fontWeight: "bold" }}>Time spent:</span>
         <input
           type="number"
           min="0"
@@ -288,9 +288,9 @@ export default function TaskStatus({
           }}
           style={{ ...controlStyle, width: "80px" }}
         />
-        <span style={{ fontSize: "13px", color: "#64748b" }}>minutes</span>
+        <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>minutes</span>
         {(task.time_spent_minutes || 0) > 0 && (
-          <span style={{ fontSize: "13px", color: "#1e293b", fontWeight: 600 }}>
+          <span style={{ fontSize: "15px", color: "var(--text-primary, #1e293b)", fontWeight: 600 }}>
             ({Math.floor((task.time_spent_minutes || 0) / 60)}h {(task.time_spent_minutes || 0) % 60}m)
           </span>
         )}
@@ -307,7 +307,7 @@ export default function TaskStatus({
               border: "1px solid #2563eb",
               borderRadius: "6px",
               padding: "5px 14px",
-              fontSize: "13px",
+              fontSize: "15px",
               fontWeight: 600,
               cursor: "pointer",
             }}
@@ -322,8 +322,8 @@ export default function TaskStatus({
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               style={{
-                flex: 1, padding: "8px", border: "1px solid #e2e8f0",
-                borderRadius: "6px", fontSize: "14px", minHeight: "60px", resize: "vertical",
+                flex: 1, padding: "8px", border: "1px solid var(--border-color, #e2e8f0)",
+                borderRadius: "6px", fontSize: "16px", minHeight: "60px", resize: "vertical",
               }}
             />
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -332,7 +332,7 @@ export default function TaskStatus({
                 disabled={savingNote || !noteText.trim()}
                 style={{
                   backgroundColor: "#16a34a", color: "white", border: "none",
-                  borderRadius: "6px", padding: "6px 12px", fontSize: "13px",
+                  borderRadius: "6px", padding: "6px 12px", fontSize: "15px",
                   fontWeight: 700, cursor: savingNote || !noteText.trim() ? "not-allowed" : "pointer",
                   opacity: savingNote || !noteText.trim() ? 0.5 : 1,
                 }}
@@ -342,8 +342,8 @@ export default function TaskStatus({
               <button
                 onClick={() => { setShowNoteInput(false); setNoteText(""); }}
                 style={{
-                  backgroundColor: "transparent", color: "#64748b", border: "none",
-                  fontSize: "12px", cursor: "pointer", padding: "4px",
+                  backgroundColor: "transparent", color: "var(--text-secondary, #64748b)", border: "none",
+                  fontSize: "14px", cursor: "pointer", padding: "4px",
                 }}
               >
                 Cancel
@@ -356,7 +356,7 @@ export default function TaskStatus({
       {/* Reassign: Admin / Executive only */}
       {canEditDate && (
         <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "14px", fontWeight: "bold" }}>Reassign to:</span>
+          <span style={{ fontSize: "16px", fontWeight: "bold" }}>Reassign to:</span>
           <select
             style={controlStyle}
             defaultValue=""
@@ -456,7 +456,7 @@ export default function TaskStatus({
             onClick={() => saveStatus("Waiting Reply")}
             disabled={saving}
             style={{
-              backgroundColor: "white",
+              backgroundColor: "var(--bg-card, #ffffff)",
               color: "#dc2626",
               border: "1px solid #dc2626",
               borderRadius: "6px",

@@ -260,44 +260,44 @@ export default function ProfilePage() {
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-        <PageHeader title="My Profile" subtitle="Account security settings" />
+        <PageHeader />
 
         {message && (
           <div style={{
-            border: `1px solid ${COLOURS.BORDER}`,
+            border: "1px solid var(--border-color, #e2e8f0)",
             borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`,
             borderRadius: "6px",
             padding: "10px 14px",
             marginBottom: "14px",
-            backgroundColor: "white",
+            backgroundColor: "var(--bg-card, #ffffff)",
             fontSize: "16px",
-            color: COLOURS.NAVY,
+            color: "var(--text-primary, #1e293b)",
           }}>
             {message}
           </div>
         )}
 
         {loading ? (
-          <p style={{ color: COLOURS.SLATE }}>Loading...</p>
+          <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading...</p>
         ) : (
           <>
             <div style={{
-              border: `1px solid ${COLOURS.BORDER}`,
+              border: "1px solid var(--border-color, #e2e8f0)",
               borderRadius: "8px",
               padding: "16px",
-              backgroundColor: "white",
+              backgroundColor: "var(--bg-card, #ffffff)",
               marginBottom: "16px",
             }}>
-              <div style={{ fontSize: "16px", color: COLOURS.SLATE, marginBottom: "4px" }}>Email</div>
-              <div style={{ fontSize: "18px", fontWeight: 700, color: COLOURS.NAVY }}>{email}</div>
+              <div style={{ fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "4px" }}>Email</div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{email}</div>
             </div>
 
             <SectionTitle title="Two-Factor Authentication (2FA)" />
             <div style={{
-              border: `1px solid ${COLOURS.BORDER}`,
+              border: "1px solid var(--border-color, #e2e8f0)",
               borderRadius: "8px",
               padding: "16px",
-              backgroundColor: "white",
+              backgroundColor: "var(--bg-card, #ffffff)",
             }}>
               {mfaEnabled ? (
                 <>
@@ -305,13 +305,13 @@ export default function ProfilePage() {
                     <span style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: COLOURS.GREEN, display: "inline-block" }} />
                     <span style={{ fontSize: "17px", fontWeight: 700, color: COLOURS.GREEN }}>2FA is enabled</span>
                   </div>
-                  <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+                  <p style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
                     Your account is protected with TOTP authentication. You will be asked for a code from your authenticator app when signing in.
                   </p>
                   <button
                     onClick={disableMFA}
                     style={{
-                      backgroundColor: "white",
+                      backgroundColor: "var(--bg-card, #ffffff)",
                       color: COLOURS.RED,
                       border: `1px solid ${COLOURS.RED}`,
                       borderRadius: "6px",
@@ -330,7 +330,7 @@ export default function ProfilePage() {
                     <span style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: COLOURS.AMBER, display: "inline-block" }} />
                     <span style={{ fontSize: "17px", fontWeight: 700, color: COLOURS.AMBER }}>2FA is not enabled</span>
                   </div>
-                  <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+                  <p style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
                     Add an extra layer of security to your account. You will need an authenticator app like Google Authenticator or Authy.
                   </p>
                   <button
@@ -351,15 +351,15 @@ export default function ProfilePage() {
                 </>
               ) : (
                 <>
-                  <p style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>
+                  <p style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "12px" }}>
                     Step 1: Scan this QR code with your authenticator app
                   </p>
                   {qrCode && (
                     <div style={{ textAlign: "center", marginBottom: "16px" }}>
-                      <img src={qrCode} alt="2FA QR Code" style={{ maxWidth: "200px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "8px" }} />
+                      <img src={qrCode} alt="2FA QR Code" style={{ maxWidth: "200px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "8px" }} />
                     </div>
                   )}
-                  <p style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>
+                  <p style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "8px" }}>
                     Step 2: Enter the 6-digit code from your app
                   </p>
                   <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
@@ -371,7 +371,7 @@ export default function ProfilePage() {
                       maxLength={6}
                       style={{
                         padding: "10px 14px",
-                        border: `1px solid ${COLOURS.BORDER}`,
+                        border: "1px solid var(--border-color, #e2e8f0)",
                         borderRadius: "6px",
                         fontSize: "20px",
                         fontWeight: 700,
@@ -401,7 +401,7 @@ export default function ProfilePage() {
                   </div>
                   <button
                     onClick={() => { setEnrolling(false); setQrCode(null); setVerifyCode(""); }}
-                    style={{ marginTop: "12px", background: "transparent", border: "none", color: COLOURS.SLATE, fontSize: "15px", cursor: "pointer" }}
+                    style={{ marginTop: "12px", background: "transparent", border: "none", color: "var(--text-secondary, #64748b)", fontSize: "15px", cursor: "pointer" }}
                   >
                     Cancel
                   </button>
@@ -411,17 +411,17 @@ export default function ProfilePage() {
 
             <SectionTitle title="Change Password" />
             <div style={{
-              border: `1px solid ${COLOURS.BORDER}`,
+              border: "1px solid var(--border-color, #e2e8f0)",
               borderRadius: "8px",
               padding: "16px",
-              backgroundColor: "white",
+              backgroundColor: "var(--bg-card, #ffffff)",
             }}>
-              <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+              <p style={{ fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
                 Enter your current password and choose a new one. Minimum 6 characters.
               </p>
               <form onSubmit={changePassword}>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
-                  <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
+                  <label style={{ display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
                     Current Password
                     <input
                       type="password"
@@ -431,11 +431,11 @@ export default function ProfilePage() {
                       placeholder="Enter current password"
                       style={{
                         display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-                        border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+                        border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
                       }}
                     />
                   </label>
-                  <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
+                  <label style={{ display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
                     New Password
                     <input
                       type="password"
@@ -446,11 +446,11 @@ export default function ProfilePage() {
                       placeholder="Min 6 characters"
                       style={{
                         display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-                        border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+                        border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
                       }}
                     />
                   </label>
-                  <label style={{ display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
+                  <label style={{ display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
                     Confirm New Password
                     <input
                       type="password"
@@ -461,13 +461,13 @@ export default function ProfilePage() {
                       placeholder="Repeat new password"
                       style={{
                         display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-                        border: `1px solid ${newPw && confirmPw && newPw !== confirmPw ? COLOURS.RED : COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+                        border: `1px solid ${newPw && confirmPw && newPw !== confirmPw ? COLOURS.RED : "var(--border-color, #e2e8f0)"}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
                       }}
                     />
                   </label>
                 </div>
                 {newPw && confirmPw && newPw !== confirmPw && (
-                  <div style={{ fontSize: "13px", color: COLOURS.RED, marginBottom: "8px" }}>Passwords do not match</div>
+                  <div style={{ fontSize: "15px", color: COLOURS.RED, marginBottom: "8px" }}>Passwords do not match</div>
                 )}
                 <button
                   type="submit"
@@ -490,12 +490,12 @@ export default function ProfilePage() {
             </div>
             <SectionTitle title="Notification Preferences" />
             <div style={{
-              border: `1px solid ${COLOURS.BORDER}`,
+              border: "1px solid var(--border-color, #e2e8f0)",
               borderRadius: "8px",
               padding: "16px",
-              backgroundColor: "white",
+              backgroundColor: "var(--bg-card, #ffffff)",
             }}>
-              <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+              <p style={{ fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
                 Choose which notifications you receive. {userRole !== "Admin" ? "At least one must stay on." : "Admin can disable all."}
               </p>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
@@ -513,8 +513,8 @@ export default function ProfilePage() {
                   return (
                     <label key={pref.key} style={{
                       display: "flex", gap: "10px", alignItems: "flex-start", padding: "8px 10px",
-                      border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", cursor: canTurnOff || !isOn ? "pointer" : "not-allowed",
-                      backgroundColor: isOn ? "white" : "#f8fafc", opacity: canTurnOff || !isOn ? 1 : 0.6,
+                      border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", cursor: canTurnOff || !isOn ? "pointer" : "not-allowed",
+                      backgroundColor: isOn ? "var(--bg-card, #ffffff)" : "var(--bg-card-hover, #f8fafc)", opacity: canTurnOff || !isOn ? 1 : 0.6,
                     }}>
                       <input type="checkbox" checked={isOn} disabled={!canTurnOff && isOn}
                         onChange={async () => {
@@ -528,24 +528,24 @@ export default function ProfilePage() {
                         }}
                         style={{ marginTop: "2px", width: "16px", height: "16px" }} />
                       <div>
-                        <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{pref.label}</div>
-                        <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{pref.desc}</div>
+                        <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{pref.label}</div>
+                        <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{pref.desc}</div>
                       </div>
                     </label>
                   );
                 })}
               </div>
-              {savingNotif && <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "8px" }}>Saving...</div>}
+              {savingNotif && <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginTop: "8px" }}>Saving...</div>}
             </div>
 
             {pushSupported && (
               <>
                 <SectionTitle title="Push Notifications" />
                 <div style={{
-                  border: `1px solid ${COLOURS.BORDER}`,
+                  border: "1px solid var(--border-color, #e2e8f0)",
                   borderRadius: "8px",
                   padding: "16px",
-                  backgroundColor: "white",
+                  backgroundColor: "var(--bg-card, #ffffff)",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                     <span style={{
@@ -557,7 +557,7 @@ export default function ProfilePage() {
                       Push Notifications: {pushEnabled ? "Enabled" : "Disabled"}
                     </span>
                   </div>
-                  <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+                  <p style={{ fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
                     {pushEnabled
                       ? "You will receive push notifications on this device for tasks, escalations and other alerts."
                       : "Enable push notifications to receive instant alerts on this device, even when the browser is in the background."}
@@ -567,7 +567,7 @@ export default function ProfilePage() {
                       onClick={disablePush}
                       disabled={pushLoading}
                       style={{
-                        backgroundColor: "white",
+                        backgroundColor: "var(--bg-card, #ffffff)",
                         color: COLOURS.RED,
                         border: `1px solid ${COLOURS.RED}`,
                         borderRadius: "6px",

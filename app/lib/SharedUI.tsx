@@ -90,34 +90,26 @@ export function SectionTitle({ title }: { title: string }) {
   );
 }
 
-export function PageHeader({
-  title: _title,
-  subtitle: _subtitle,
-  hideHome,
-}: {
-  title: string;
-  subtitle?: string;
-  hideHome?: boolean;
-}) {
+export function PageHeader({ hideHome }: { hideHome?: boolean } = {}) {
   if (hideHome) return null;
   return (
     <div style={{ marginBottom: "8px" }}>
-      <button onClick={() => window.history.back()} style={{
+      <a href="/home" style={{
         display: "inline-flex", alignItems: "center", gap: "6px",
-        fontSize: "13px", fontWeight: 600, color: "var(--text-primary, #1e293b)", textDecoration: "none",
-        padding: "4px 10px 4px 6px",
+        fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)", textDecoration: "none",
+        padding: "5px 12px 5px 8px",
         borderRadius: "16px", backgroundColor: "var(--bg-card-hover, #f1f5f9)",
         border: "1px solid var(--border-color, #e2e8f0)", cursor: "pointer",
         transition: "background-color 0.15s",
       }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--border-color, #e2e8f0)"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "var(--bg-card-hover, #f1f5f9)"; }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "var(--border-color, #e2e8f0)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "var(--bg-card-hover, #f1f5f9)"; }}
       >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M10 12L6 8l4-4" />
         </svg>
-        Back
-      </button>
+        Home
+      </a>
     </div>
   );
 }
@@ -241,7 +233,7 @@ export function TrafficLight({
       <div>
         <div style={{ fontSize: "16px", fontWeight: 700, color: colour }}>{label}</div>
         {detail && (
-          <div style={{ fontSize: "14px", color: COLOURS.SLATE }}>{detail}</div>
+          <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{detail}</div>
         )}
       </div>
     </div>
@@ -253,23 +245,23 @@ export function TrafficLight({
 // ─────────────────────────────────────────────────────────────────
 export const tableHeaderStyle: React.CSSProperties = {
   textAlign: "left",
-  borderBottom: `1px solid ${COLOURS.BORDER}`,
+  borderBottom: "1px solid var(--border-color, #e2e8f0)",
   padding: "6px 10px",
   fontSize: "15px",
-  color: COLOURS.SLATE,
+  color: "var(--text-secondary, #64748b)",
   fontWeight: 700,
 };
 
 export const tableCellStyle: React.CSSProperties = {
-  borderBottom: `1px solid #f1f5f9`,
+  borderBottom: "1px solid var(--border-light, #f1f5f9)",
   padding: "7px 10px",
   fontSize: "16px",
+  color: "var(--text-primary, #1e293b)",
 };
 
 export const tableCellBoldStyle: React.CSSProperties = {
   ...tableCellStyle,
   fontWeight: 700,
-  color: COLOURS.NAVY,
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -279,7 +271,7 @@ export const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: "16px",
   fontWeight: 600,
-  color: COLOURS.NAVY,
+  color: "var(--text-primary, #1e293b)",
   marginBottom: "10px",
 };
 
@@ -288,10 +280,12 @@ export const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "8px 10px",
   marginTop: "3px",
-  border: `1px solid ${COLOURS.BORDER}`,
+  border: "1px solid var(--border-color, #e2e8f0)",
   borderRadius: "6px",
   fontSize: "17px",
   boxSizing: "border-box",
+  backgroundColor: "var(--bg-input, #ffffff)",
+  color: "var(--text-primary, #1e293b)",
 };
 
 export const primaryButtonStyle: React.CSSProperties = {

@@ -493,16 +493,13 @@ export default function MeetingsPage() {
     expandedGroups.add(groupedMeetings[0][0]);
   }
 
-  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "#64748b" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
 
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-          <PageHeader
-            title="Meeting Minutes"
-            subtitle="Paste, upload, or email minutes — AI extracts — Review — Approve — Send"
-          />
+          <PageHeader />
           <button onClick={() => setShowMinutesFlow(!showMinutesFlow)} style={{
             backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
             width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
@@ -516,7 +513,7 @@ export default function MeetingsPage() {
             border: `1px solid ${COLOURS.BORDER}`,
             borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`,
             borderRadius: "6px", padding: "10px 14px", marginBottom: "14px",
-            backgroundColor: "white", fontSize: "15px", color: COLOURS.NAVY,
+            backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: COLOURS.NAVY,
           }}>
             {message}
           </div>
@@ -540,27 +537,27 @@ export default function MeetingsPage() {
               <div key={p.id} style={{
                 border: `1px solid ${COLOURS.BORDER}`,
                 borderLeft: `4px solid #d97706`,
-                borderRadius: "8px", padding: "12px 14px", backgroundColor: "white", marginBottom: "8px",
+                borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "8px",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.NAVY }}>
                       {p.subject || "Untitled Minutes"}
                     </div>
-                    <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                    <div style={{ fontSize: "15px", color: COLOURS.SLATE, marginTop: "2px" }}>
                       From: {p.from_address || "Unknown"}{p.email_date ? ` · ${p.email_date}` : ""}
                     </div>
-                    <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                    <div style={{ fontSize: "16px", color: COLOURS.SLATE, marginTop: "4px" }}>
                       {p.raw_text.slice(0, 150)}{p.raw_text.length > 150 ? "..." : ""}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
                     <button onClick={() => handleReviewPending(p)} style={{
-                      ...primaryButtonStyle, padding: "6px 14px", fontSize: "14px",
+                      ...primaryButtonStyle, padding: "6px 14px", fontSize: "16px",
                     }}>Review</button>
                     <button onClick={() => handleDismissPending(p.id)} style={{
-                      ...primaryButtonStyle, padding: "6px 14px", fontSize: "14px",
-                      backgroundColor: "white", color: COLOURS.SLATE, border: `1px solid ${COLOURS.BORDER}`,
+                      ...primaryButtonStyle, padding: "6px 14px", fontSize: "16px",
+                      backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.SLATE, border: `1px solid ${COLOURS.BORDER}`,
                     }}>Dismiss</button>
                   </div>
                 </div>
@@ -571,7 +568,7 @@ export default function MeetingsPage() {
 
         {/* Step 1: Input */}
         {showMinutesFlow && step === "input" && (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "white", marginBottom: "16px" }}>
+          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "16px" }}>
             <SectionTitle title="Step 1: Add Minutes" />
 
             <div style={{ display: "flex", gap: "0", marginBottom: "16px", borderBottom: `2px solid ${COLOURS.BORDER}` }}>
@@ -625,7 +622,7 @@ export default function MeetingsPage() {
                   padding: "40px 20px",
                   border: `2px dashed ${dragging ? COLOURS.NAVY : COLOURS.BORDER}`,
                   borderRadius: "10px",
-                  backgroundColor: dragging ? "#f0f4ff" : "#fafbfc",
+                  backgroundColor: dragging ? "var(--bg-card-hover, #f0f4ff)" : "var(--bg-card-hover, #fafbfc)",
                   transition: "all 0.2s ease",
                   cursor: uploading ? "wait" : "pointer",
                 }}
@@ -655,7 +652,7 @@ export default function MeetingsPage() {
                     style={{ display: "none" }}
                   />
                 </label>
-                <p style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "14px" }}>
+                <p style={{ fontSize: "16px", color: COLOURS.SLATE, marginTop: "14px" }}>
                   Supported: PDF, Word (.docx), Plain text (.txt)
                 </p>
               </div>
@@ -663,12 +660,12 @@ export default function MeetingsPage() {
 
             {inputMethod === "email" && (
               <div style={{ padding: "8px 0" }}>
-                <div style={{ backgroundColor: "#f8fafc", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", marginBottom: "16px" }}>
+                <div style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", marginBottom: "16px" }}>
                   <p style={{ fontSize: "15px", color: COLOURS.NAVY, fontWeight: 700, marginBottom: "6px" }}>
                     How it works
                   </p>
                   <ol style={{ fontSize: "15px", color: COLOURS.SLATE, margin: 0, paddingLeft: "20px", lineHeight: 1.8 }}>
-                    <li>Forward your minutes email to <strong>unzegrouppk@gmail.com</strong></li>
+                    <li>Forward your minutes email to <strong>khuram1901@gmail.com</strong></li>
                     <li>In Gmail, create a label called <strong>minutes-of-meeting</strong> and set up a filter to auto-label these emails</li>
                     <li>Click the button below to check for new minutes</li>
                   </ol>
@@ -687,17 +684,17 @@ export default function MeetingsPage() {
                     {emailResults.map((email) => (
                       <div key={email.id} style={{
                         border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px 12px",
-                        marginBottom: "6px", backgroundColor: "white", cursor: "pointer",
+                        marginBottom: "6px", backgroundColor: "var(--bg-card, #ffffff)", cursor: "pointer",
                       }}
                         onClick={() => selectEmailMinutes(email.text)}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = COLOURS.NAVY; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = COLOURS.BORDER; }}
                       >
                         <div style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.NAVY }}>{email.subject}</div>
-                        <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                        <div style={{ fontSize: "16px", color: COLOURS.SLATE, marginTop: "2px" }}>
                           From: {email.from} · {email.date}
                         </div>
-                        <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                        <div style={{ fontSize: "16px", color: COLOURS.SLATE, marginTop: "4px" }}>
                           {email.text.slice(0, 150)}{email.text.length > 150 ? "..." : ""}
                         </div>
                       </div>
@@ -722,10 +719,10 @@ export default function MeetingsPage() {
           const addActionItem = () => {
             setExtracted({ ...extracted, action_items: [...extracted.action_items, { description: "", owner_name: "", priority: "Medium", due_date: "", department: "" }] });
           };
-          const smallField: React.CSSProperties = { ...inputStyle, fontSize: "14px", padding: "6px 8px" };
+          const smallField: React.CSSProperties = { ...inputStyle, fontSize: "16px", padding: "6px 8px" };
 
           return (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "white", marginBottom: "16px" }}>
+          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "16px" }}>
             <SectionTitle title="Step 2: Review & Approve" />
             <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "12px" }}>
               Review and edit everything below. Change task owners, descriptions, priorities — then approve.
@@ -821,14 +818,14 @@ export default function MeetingsPage() {
               <SectionTitle title={`Action Items (${extracted.action_items.length})`} />
               <button onClick={addActionItem} style={{
                 backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
-                padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer",
+                padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer",
               }}>
                 + Add Task
               </button>
             </div>
 
             {extracted.action_items.map((item, i) => (
-              <div key={i} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "12px", marginBottom: "8px", backgroundColor: "#f8fafc" }}>
+              <div key={i} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "12px", marginBottom: "8px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                 <div style={{ marginBottom: "8px" }}>
                   <input value={item.description} onChange={(e) => updateActionItem(i, { description: e.target.value })}
                     placeholder="Task description" style={{ ...inputStyle, fontWeight: 600 }} />
@@ -866,7 +863,7 @@ export default function MeetingsPage() {
                     </select>
                   </div>
                   <button onClick={() => removeActionItem(i)}
-                    style={{ backgroundColor: "white", border: `1px solid #dc2626`, color: "#dc2626", borderRadius: "6px", padding: "6px 10px", fontSize: "14px", cursor: "pointer", height: "fit-content" }}>
+                    style={{ backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid #dc2626`, color: "#dc2626", borderRadius: "6px", padding: "6px 10px", fontSize: "16px", cursor: "pointer", height: "fit-content" }}>
                     Remove
                   </button>
                 </div>
@@ -877,14 +874,14 @@ export default function MeetingsPage() {
               <label style={labelStyle}>External Attendee Emails (comma-separated, optional)</label>
               <input value={externalEmails} onChange={(e) => setExternalEmails(e.target.value)}
                 placeholder="e.g. john@external.com, jane@supplier.com" style={inputStyle} />
-              <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "-6px" }}>
+              <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginTop: "-6px" }}>
                 These people will receive the minutes email but no tasks will be created for them.
               </p>
             </div>
 
             <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
               <button onClick={() => { setStep("input"); setMessage(""); }}
-                style={{ ...primaryButtonStyle, backgroundColor: "white", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, flex: 1 }}>
+                style={{ ...primaryButtonStyle, backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, flex: 1 }}>
                 Back
               </button>
               <button onClick={handleApprove} disabled={saving}
@@ -918,7 +915,7 @@ export default function MeetingsPage() {
           const deselectAll = () => setSelectedRecipients(new Set());
 
           return (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "white", marginBottom: "16px" }}>
+          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "16px" }}>
             <SectionTitle title="Step 3: Send Minutes" />
             <p style={{ fontSize: "15px", color: COLOURS.NAVY, marginBottom: "12px" }}>
               Meeting saved and tasks created. Select who should receive the minutes email.
@@ -928,20 +925,20 @@ export default function MeetingsPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <label style={labelStyle}>Recipients ({selectedRecipients.size} selected)</label>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={selectAll} style={{ fontSize: "13px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Select All</button>
-                  <button onClick={deselectAll} style={{ fontSize: "13px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Deselect All</button>
+                  <button onClick={selectAll} style={{ fontSize: "15px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Select All</button>
+                  <button onClick={deselectAll} style={{ fontSize: "15px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Deselect All</button>
                 </div>
               </div>
 
               {extracted.attendees.map((a) => {
                 const match = bestMatch(a, memberEmails);
                 if (!match?.email) return (
-                  <div key={a} style={{ padding: "4px 0", fontSize: "14px", color: COLOURS.SLATE }}>
+                  <div key={a} style={{ padding: "4px 0", fontSize: "16px", color: COLOURS.SLATE }}>
                     {a} <span style={{ fontSize: "12px", color: "#d97706" }}>(no email match)</span>
                   </div>
                 );
                 return (
-                  <label key={a} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                  <label key={a} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "16px", color: COLOURS.NAVY, cursor: "pointer" }}>
                     <input type="checkbox" checked={selectedRecipients.has(match.email)}
                       onChange={() => toggleRecipient(match.email)} style={{ width: "16px", height: "16px" }} />
                     <span style={{ fontWeight: 600 }}>{a}</span>
@@ -951,7 +948,7 @@ export default function MeetingsPage() {
               })}
 
               {externalEmails.trim() && externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).map((ext) => (
-                <label key={ext} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                <label key={ext} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "16px", color: COLOURS.NAVY, cursor: "pointer" }}>
                   <input type="checkbox" checked={selectedRecipients.has(ext)}
                     onChange={() => toggleRecipient(ext)} style={{ width: "16px", height: "16px" }} />
                   <span style={{ fontWeight: 600 }}>{ext}</span>
@@ -971,7 +968,7 @@ export default function MeetingsPage() {
                       }
                     }
                   }}
-                  style={{ ...inputStyle, flex: "1 1 200px", maxWidth: "280px", fontSize: "14px", padding: "6px 8px" }}
+                  style={{ ...inputStyle, flex: "1 1 200px", maxWidth: "280px", fontSize: "16px", padding: "6px 8px" }}
                 />
                 <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Press Enter to add</span>
               </div>
@@ -983,7 +980,7 @@ export default function MeetingsPage() {
                 {sending ? "Sending..." : `Send to ${selectedRecipients.size} Recipient${selectedRecipients.size !== 1 ? "s" : ""}`}
               </button>
               <button onClick={resetAll}
-                style={{ ...primaryButtonStyle, backgroundColor: "white", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, flex: 1 }}>
+                style={{ ...primaryButtonStyle, backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, flex: 1 }}>
                 Done
               </button>
             </div>
@@ -1001,7 +998,7 @@ export default function MeetingsPage() {
                   <button key={g} onClick={() => { setGroupBy(g); setExpandedGroups(new Set()); }} style={{
                     padding: "4px 12px", fontSize: "13px", fontWeight: groupBy === g ? 700 : 500, borderRadius: "14px",
                     border: `1px solid ${groupBy === g ? COLOURS.NAVY : COLOURS.BORDER}`,
-                    backgroundColor: groupBy === g ? COLOURS.NAVY : "white",
+                    backgroundColor: groupBy === g ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
                     color: groupBy === g ? "white" : COLOURS.SLATE, cursor: "pointer",
                   }}>
                     {g === "date" ? "By Date" : "By Department"}
@@ -1021,25 +1018,25 @@ export default function MeetingsPage() {
 
                 return (
                 <div key={groupKey} style={{
-                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "10px", backgroundColor: "white",
+                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "10px", backgroundColor: "var(--bg-card, #ffffff)",
                   overflow: "hidden", marginBottom: "10px",
                 }}>
                   <div onClick={() => toggleGroup(groupKey)} style={{
                     padding: "12px 16px", cursor: "pointer",
                     display: "flex", justifyContent: "space-between", alignItems: "center",
-                    backgroundColor: isGroupOpen ? COLOURS.NAVY : "white",
+                    backgroundColor: isGroupOpen ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
                     borderBottom: isGroupOpen ? `1px solid ${COLOURS.BORDER}` : "none",
                   }}>
                     <div>
                       <div style={{ fontSize: "16px", fontWeight: 700, color: isGroupOpen ? "white" : COLOURS.NAVY }}>
                         {groupLabel}
                       </div>
-                      <div style={{ fontSize: "12px", color: isGroupOpen ? "rgba(255,255,255,0.7)" : COLOURS.SLATE, marginTop: "1px" }}>
+                      <div style={{ fontSize: "14px", color: isGroupOpen ? "rgba(255,255,255,0.7)" : COLOURS.SLATE, marginTop: "1px" }}>
                         {groupMeetings.length} meeting{groupMeetings.length !== 1 ? "s" : ""}
                         {groupOpen > 0 && <span style={{ color: isGroupOpen ? "#fbbf24" : "#d97706", fontWeight: 700 }}> · {groupOpen} open task{groupOpen !== 1 ? "s" : ""}</span>}
                       </div>
                     </div>
-                    <span style={{ color: isGroupOpen ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{isGroupOpen ? "▲" : "▼"}</span>
+                    <span style={{ color: isGroupOpen ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{isGroupOpen ? "▲" : "▼"}</span>
                   </div>
 
                   {isGroupOpen && groupMeetings.map((m) => {
@@ -1049,39 +1046,39 @@ export default function MeetingsPage() {
                     const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
 
                     return (
-                      <div key={m.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "6px" }}>
+                      <div key={m.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "6px" }}>
                         <div onClick={() => setExpandedId(isOpen ? null : m.id)} style={{
                           padding: "10px 14px", cursor: "pointer",
                           display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                          backgroundColor: isOpen ? "#f8fafc" : "white",
+                          backgroundColor: isOpen ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                         }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                              <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, minWidth: "80px" }}>{formatDateUK(m.meeting_date)}</span>
+                              <span style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.SLATE, minWidth: "80px" }}>{formatDateUK(m.meeting_date)}</span>
                               <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{m.title}</span>
                             </div>
                             {mTasks.length > 0 && (
-                              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                              <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "2px" }}>
                                 {completedTasks}/{mTasks.length} tasks done
                                 {openTaskCount > 0 && <span style={{ color: "#d97706", fontWeight: 700 }}> · {openTaskCount} open</span>}
                               </div>
                             )}
                           </div>
-                          <span style={{ color: COLOURS.SLATE, fontSize: "13px", flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
+                          <span style={{ color: COLOURS.SLATE, fontSize: "15px", flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
                         </div>
 
                         {isOpen && (
                           <div style={{ padding: "14px", borderTop: `1px solid ${COLOURS.BORDER}` }}>
                             {m.executive_summary && (
                               <div style={{ marginBottom: "12px" }}>
-                                <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Summary</div>
-                                <div style={{ fontSize: "14px", color: COLOURS.SLATE, lineHeight: 1.6 }}>{m.executive_summary}</div>
+                                <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Summary</div>
+                                <div style={{ fontSize: "16px", color: COLOURS.SLATE, lineHeight: 1.6 }}>{m.executive_summary}</div>
                               </div>
                             )}
 
                             {m.attendees && m.attendees.length > 0 && (
                               <div style={{ marginBottom: "12px" }}>
-                                <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Attendees</div>
+                                <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Attendees</div>
                                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                                   {m.attendees.map((a, i) => (
                                     <span key={i} style={{ fontSize: "12px", padding: "2px 8px", backgroundColor: COLOURS.LIGHT, borderRadius: "10px", color: COLOURS.NAVY }}>{a}</span>
@@ -1093,32 +1090,32 @@ export default function MeetingsPage() {
                             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
                               {m.decisions && m.decisions.length > 0 && (
                                 <div>
-                                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.GREEN, marginBottom: "4px" }}>Decisions ({m.decisions.length})</div>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.GREEN, marginBottom: "4px" }}>Decisions ({m.decisions.length})</div>
                                   {m.decisions.map((d, i) => (
-                                    <div key={i} style={{ fontSize: "13px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {d}</div>
+                                    <div key={i} style={{ fontSize: "15px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {d}</div>
                                   ))}
                                 </div>
                               )}
                               {m.risks && m.risks.length > 0 && (
                                 <div>
-                                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED, marginBottom: "4px" }}>Risks ({m.risks.length})</div>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.RED, marginBottom: "4px" }}>Risks ({m.risks.length})</div>
                                   {m.risks.map((r, i) => (
-                                    <div key={i} style={{ fontSize: "13px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {r}</div>
+                                    <div key={i} style={{ fontSize: "15px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {r}</div>
                                   ))}
                                 </div>
                               )}
                               {m.opportunities && m.opportunities.length > 0 && (
                                 <div>
-                                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.BLUE, marginBottom: "4px" }}>Opportunities ({m.opportunities.length})</div>
+                                  <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.BLUE, marginBottom: "4px" }}>Opportunities ({m.opportunities.length})</div>
                                   {m.opportunities.map((o, i) => (
-                                    <div key={i} style={{ fontSize: "13px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {o}</div>
+                                    <div key={i} style={{ fontSize: "15px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {o}</div>
                                   ))}
                                 </div>
                               )}
                             </div>
 
                             <div>
-                              <div style={{ fontSize: "13px", fontWeight: 700, color: "#d97706", marginBottom: "6px" }}>
+                              <div style={{ fontSize: "15px", fontWeight: 700, color: "#d97706", marginBottom: "6px" }}>
                                 Action Items ({mTasks.length})
                               </div>
                               {mTasks.length > 0 ? (
@@ -1130,8 +1127,8 @@ export default function MeetingsPage() {
                                       textDecoration: "none", color: "inherit",
                                     }}>
                                       <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
-                                        <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                                        <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
+                                        <div style={{ fontSize: "14px", color: COLOURS.SLATE }}>
                                           {t.assigned_to || "Unassigned"}{t.due_date ? ` · Due: ${formatDateUK(t.due_date)}` : ""}
                                         </div>
                                       </div>
@@ -1140,7 +1137,7 @@ export default function MeetingsPage() {
                                   ))}
                                 </div>
                               ) : (
-                                <div style={{ fontSize: "14px", color: COLOURS.SLATE }}>No action items recorded.</div>
+                                <div style={{ fontSize: "16px", color: COLOURS.SLATE }}>No action items recorded.</div>
                               )}
                             </div>
                           </div>

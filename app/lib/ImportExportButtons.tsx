@@ -137,8 +137,8 @@ export default function ImportExportButtons({ onExport, onImport, templateHeader
 }
 
 const iconBtn: React.CSSProperties = {
-  backgroundColor: "white",
-  color: COLOURS.NAVY,
+  backgroundColor: "var(--bg-card, #ffffff)",
+  color: "var(--text-primary, #1e293b)",
   border: `1px solid ${COLOURS.BORDER}`,
   borderRadius: "6px",
   padding: "6px 8px",

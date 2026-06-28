@@ -205,7 +205,7 @@ export default function HomePage() {
             </span>
             {ctx?.role && (
               <span style={{
-                fontSize: "11px", fontWeight: 700, padding: "2px 10px", borderRadius: "10px",
+                fontSize: "13px", fontWeight: 700, padding: "2px 10px", borderRadius: "10px",
                 backgroundColor: "var(--border-light)", color: "var(--text-secondary)",
               }}>
                 {displayRole(ctx.role, ctx.email)}
@@ -213,7 +213,7 @@ export default function HomePage() {
             )}
           </div>
         )}
-        <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: "0 0 20px" }}>
+        <p style={{ color: "var(--text-secondary)", fontSize: "16px", margin: "0 0 20px" }}>
           {dateStr}
         </p>
 
@@ -230,10 +230,10 @@ export default function HomePage() {
               }}>
                 <span style={{ fontSize: "18px" }}>⚠</span>
                 <div>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
                     {myOverdueTasks.length} overdue task{myOverdueTasks.length > 1 ? "s" : ""} assigned to you
                   </div>
-                  <div style={{ fontSize: "12px", color: "#991b1b", marginTop: "1px" }}>
+                  <div style={{ fontSize: "14px", color: "#991b1b", marginTop: "1px" }}>
                     {myOverdueTasks.slice(0, 3).map((t) => t.description.slice(0, 35)).join(" · ")}
                   </div>
                 </div>
@@ -271,13 +271,13 @@ export default function HomePage() {
                     <span style={{ fontSize: "15px" }}>📋</span>
                     <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Today&apos;s Tasks</span>
                   </div>
-                  <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                  <span style={{ fontSize: "14px", color: "var(--text-muted)" }}>
                     {completedToday}/{todayTasks.length + completedToday} done
                   </span>
                 </div>
 
                 {todayTasks.length === 0 ? (
-                  <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--text-muted)", fontSize: "14px" }}>
+                  <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--text-muted)", fontSize: "16px" }}>
                     No tasks due today or this week. You&apos;re all clear!
                   </div>
                 ) : (
@@ -300,14 +300,14 @@ export default function HomePage() {
                         backgroundColor: STATUS_DOT[task.status] || COLOURS.SLATE,
                       }} />
                       <span style={{
-                        flex: 1, fontSize: "13px", color: "var(--text-primary)",
+                        flex: 1, fontSize: "15px", color: "var(--text-primary)",
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}>
                         {task.description}
                       </span>
                       {task.project && (
                         <span style={{
-                          fontSize: "11px", color: "var(--text-muted)",
+                          fontSize: "13px", color: "var(--text-muted)",
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                           maxWidth: "120px",
                         }}>
@@ -315,12 +315,12 @@ export default function HomePage() {
                         </span>
                       )}
                       {task.due_date && task.due_date < todayStr && (
-                        <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.RED, whiteSpace: "nowrap" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.RED, whiteSpace: "nowrap" }}>
                           due {task.due_date.slice(5)}
                         </span>
                       )}
                       <span style={{
-                        fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap",
+                        fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap",
                         color: STATUS_DOT[task.status] || COLOURS.SLATE,
                       }}>
                         {task.status}
@@ -330,7 +330,7 @@ export default function HomePage() {
                 )}
 
                 <div style={{
-                  padding: "10px 18px", fontSize: "12px", color: "var(--text-muted)",
+                  padding: "10px 18px", fontSize: "14px", color: "var(--text-muted)",
                   borderTop: "1px solid var(--border-light)",
                 }}>
                   Tasks you scheduled for today, plus anything overdue or due this week.
@@ -348,8 +348,8 @@ export default function HomePage() {
                       padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
                       display: "flex", alignItems: "center", gap: "8px",
                     }}>
-                      <span style={{ fontSize: "14px" }}>📊</span>
-                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>My Task Status</span>
+                      <span style={{ fontSize: "16px" }}>📊</span>
+                      <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>My Task Status</span>
                     </div>
                     <div style={{ padding: "12px 16px" }}>
                       <ResponsiveContainer width="100%" height={130}>
@@ -362,7 +362,7 @@ export default function HomePage() {
                       </ResponsiveContainer>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
                         {donutData.map((d) => (
-                          <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: "var(--text-secondary)" }}>
+                          <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: "var(--text-secondary)" }}>
                             <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                           </div>
                         ))}
@@ -380,8 +380,8 @@ export default function HomePage() {
                       padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
                       display: "flex", alignItems: "center", gap: "8px",
                     }}>
-                      <span style={{ fontSize: "14px" }}>📅</span>
-                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Due This Week ({myDueThisWeek.length})</span>
+                      <span style={{ fontSize: "16px" }}>📅</span>
+                      <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Due This Week ({myDueThisWeek.length})</span>
                     </div>
                     <div>
                       {myDueThisWeek.slice(0, 5).map((t) => {
@@ -393,10 +393,10 @@ export default function HomePage() {
                             padding: "8px 16px", borderBottom: "1px solid var(--border-light)",
                             textDecoration: "none", color: "inherit",
                           }}>
-                            <span style={{ flex: 1, fontSize: "13px", color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                            <span style={{ flex: 1, fontSize: "15px", color: "var(--text-primary)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                               {t.description}
                             </span>
-                            <span style={{ fontSize: "12px", fontWeight: 700, color: urgency, flexShrink: 0, marginLeft: "8px" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 700, color: urgency, flexShrink: 0, marginLeft: "8px" }}>
                               {d === 0 ? "Today" : d === 1 ? "Tomorrow" : `${d}d`}
                             </span>
                           </a>
@@ -414,20 +414,20 @@ export default function HomePage() {
                     padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
                     display: "flex", alignItems: "center", gap: "8px",
                   }}>
-                    <span style={{ fontSize: "14px" }}>🗓️</span>
-                    <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Meetings</span>
+                    <span style={{ fontSize: "16px" }}>🗓️</span>
+                    <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Meetings</span>
                   </div>
                   <div style={{ padding: "12px 16px" }}>
                     {meetings.length === 0 ? (
-                      <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>No upcoming meetings scheduled.</p>
+                      <p style={{ fontSize: "15px", color: "var(--text-muted)", margin: 0 }}>No upcoming meetings scheduled.</p>
                     ) : (
                       meetings.map((m) => (
                         <a key={m.id} href="/meetings" style={{
                           display: "flex", justifyContent: "space-between", alignItems: "center",
                           padding: "6px 0", textDecoration: "none", color: "inherit",
                         }}>
-                          <span style={{ fontSize: "13px", color: "var(--text-primary)" }}>{m.title}</span>
-                          <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{m.meeting_date}</span>
+                          <span style={{ fontSize: "15px", color: "var(--text-primary)" }}>{m.title}</span>
+                          <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{m.meeting_date}</span>
                         </a>
                       ))
                     )}
@@ -443,15 +443,15 @@ export default function HomePage() {
                       padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
                       display: "flex", alignItems: "center", gap: "8px",
                     }}>
-                      <span style={{ fontSize: "14px" }}>👥</span>
-                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Team Workload</span>
-                      <span style={{ fontSize: "11px", color: "var(--text-muted)", marginLeft: "auto" }}>open tasks per person</span>
+                      <span style={{ fontSize: "16px" }}>👥</span>
+                      <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Team Workload</span>
+                      <span style={{ fontSize: "13px", color: "var(--text-muted)", marginLeft: "auto" }}>open tasks per person</span>
                     </div>
                     <div style={{ padding: "12px 16px" }}>
                       {workload.map((w) => (
                         <div key={w.name} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
                           <span style={{
-                            fontSize: "12px", color: "var(--text-primary)", width: "90px",
+                            fontSize: "14px", color: "var(--text-primary)", width: "90px",
                             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0,
                           }}>
                             {w.name}
@@ -466,7 +466,7 @@ export default function HomePage() {
                               transition: "width 0.3s ease",
                             }} />
                           </div>
-                          <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", width: "20px", textAlign: "right" }}>
+                          <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", width: "20px", textAlign: "right" }}>
                             {w.count}
                           </span>
                         </div>
@@ -482,13 +482,13 @@ export default function HomePage() {
                       padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
                       display: "flex", alignItems: "center", gap: "8px",
                     }}>
-                      <span style={{ fontSize: "14px" }}>📊</span>
-                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>My Progress This Month</span>
+                      <span style={{ fontSize: "16px" }}>📊</span>
+                      <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>My Progress This Month</span>
                     </div>
                     <div style={{ padding: "16px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
                         <span style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-primary)" }}>{myCompletedMonth}</span>
-                        <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>of {myTotalMonth} tasks</span>
+                        <span style={{ fontSize: "15px", color: "var(--text-secondary)" }}>of {myTotalMonth} tasks</span>
                       </div>
                       <div style={{
                         height: "10px", backgroundColor: "var(--border-light)", borderRadius: "5px", overflow: "hidden", marginBottom: "8px",
@@ -500,7 +500,7 @@ export default function HomePage() {
                           transition: "width 0.3s ease",
                         }} />
                       </div>
-                      <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                      <div style={{ fontSize: "14px", color: "var(--text-muted)" }}>
                         {progressPct}% completed {myOpenTasks.length > 0 ? `· ${myOpenTasks.length} still open` : ""}
                       </div>
                     </div>
@@ -516,8 +516,8 @@ export default function HomePage() {
                       padding: "12px 16px", borderBottom: "1px solid var(--border-color)",
                       display: "flex", alignItems: "center", gap: "8px",
                     }}>
-                      <span style={{ fontSize: "14px" }}>⚠️</span>
-                      <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Needs Attention</span>
+                      <span style={{ fontSize: "16px" }}>⚠️</span>
+                      <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Needs Attention</span>
                     </div>
                     <div style={{ padding: "8px 16px" }}>
                       {attention.map((a, i) => (
@@ -526,8 +526,8 @@ export default function HomePage() {
                           textDecoration: "none", color: "inherit",
                           borderBottom: i < attention.length - 1 ? "1px solid var(--border-light)" : "none",
                         }}>
-                          <div style={{ fontSize: "13px", color: "var(--text-primary)", fontWeight: 500 }}>{a.label}</div>
-                          <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>{a.detail}</div>
+                          <div style={{ fontSize: "15px", color: "var(--text-primary)", fontWeight: 500 }}>{a.label}</div>
+                          <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>{a.detail}</div>
                         </a>
                       ))}
                     </div>
@@ -545,8 +545,8 @@ export default function HomePage() {
                   padding: "12px 18px", borderBottom: "1px solid var(--border-color)",
                   display: "flex", alignItems: "center", gap: "8px",
                 }}>
-                  <span style={{ fontSize: "14px" }}>📤</span>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Tasks I Assigned ({assignedByMe.length} open)</span>
+                  <span style={{ fontSize: "16px" }}>📤</span>
+                  <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Tasks I Assigned ({assignedByMe.length} open)</span>
                 </div>
                 {assignedByMe.slice(0, 10).map((t) => (
                   <a key={t.id} href="/tasks" style={{
@@ -559,15 +559,15 @@ export default function HomePage() {
                     onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
                   >
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {t.description}
                       </div>
-                      <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                      <div style={{ fontSize: "14px", color: "var(--text-secondary)" }}>
                         {t.assigned_to || "Unassigned"}{t.due_date && ` · Due: ${formatDateUK(t.due_date)}`}
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: "5px", alignItems: "center", flexShrink: 0 }}>
-                      {isOverdue(t) && <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.RED }}>{daysOverdue(t)}d late</span>}
+                      {isOverdue(t) && <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED }}>{daysOverdue(t)}d late</span>}
                       <StatusBadge status={t.status} />
                     </div>
                   </a>
@@ -584,8 +584,8 @@ export default function HomePage() {
                   padding: "12px 18px", borderBottom: "1px solid var(--border-color)",
                   display: "flex", alignItems: "center", gap: "8px",
                 }}>
-                  <span style={{ fontSize: "14px" }}>🕐</span>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Recent Activity</span>
+                  <span style={{ fontSize: "16px" }}>🕐</span>
+                  <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Recent Activity</span>
                 </div>
                 {recentActivity.map((a) => (
                   <div key={a.id} style={{
@@ -593,16 +593,16 @@ export default function HomePage() {
                     display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>
+                      <div style={{ fontSize: "15px", color: "var(--text-primary)" }}>
                         <span style={{
-                          fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "6px", marginRight: "6px",
+                          fontSize: "13px", fontWeight: 700, padding: "1px 6px", borderRadius: "6px", marginRight: "6px",
                           backgroundColor: a.action === "Created" ? "#dcfce7" : a.action.startsWith("Updated") ? "#fef3c7" : "#fee2e2",
                           color: a.action === "Created" ? "#16a34a" : a.action.startsWith("Updated") ? "#d97706" : "#dc2626",
                         }}>{a.action}</span>
                         {a.table_name}{a.details && ` — ${a.details.slice(0, 60)}`}
                       </div>
                     </div>
-                    <div style={{ fontSize: "12px", color: "var(--text-secondary)", whiteSpace: "nowrap", flexShrink: 0 }}>
+                    <div style={{ fontSize: "14px", color: "var(--text-secondary)", whiteSpace: "nowrap", flexShrink: 0 }}>
                       {formatDateUK(a.created_at.slice(0, 10))}
                     </div>
                   </div>
@@ -615,7 +615,7 @@ export default function HomePage() {
               backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
               borderLeft: "4px solid var(--text-primary)",
               borderRadius: "8px", padding: isMobile ? "10px 12px" : "12px 18px",
-              fontSize: isMobile ? "12px" : "14px", color: "var(--text-primary)",
+              fontSize: isMobile ? "14px" : "16px", color: "var(--text-primary)",
               lineHeight: 1.7, fontStyle: "italic", fontWeight: 600,
             }}>
               &ldquo;Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.&rdquo;
@@ -640,7 +640,7 @@ function KPICard({ icon, value, label, alert }: { icon: string; value: number; l
       }}>
         {value}
       </div>
-      <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "4px" }}>{label}</div>
+      <div style={{ fontSize: "15px", color: "var(--text-secondary)", marginTop: "4px" }}>{label}</div>
     </div>
   );
 }

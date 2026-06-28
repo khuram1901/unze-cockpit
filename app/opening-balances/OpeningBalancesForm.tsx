@@ -117,7 +117,7 @@ export default function OpeningBalancesForm() {
             border: `1px solid ${BORDER}`,
             borderRadius: "8px",
             padding: "16px",
-            backgroundColor: "white",
+            backgroundColor: "var(--bg-card, #ffffff)",
             marginBottom: "12px",
           }}
         >
@@ -160,7 +160,7 @@ export default function OpeningBalancesForm() {
                 borderTop: `3px solid #16a34a`,
                 borderRadius: "8px",
                 padding: "16px",
-                backgroundColor: "white",
+                backgroundColor: "var(--bg-card, #ffffff)",
                 marginBottom: "12px",
               }}
             >
@@ -188,7 +188,7 @@ export default function OpeningBalancesForm() {
                 borderTop: `3px solid #d97706`,
                 borderRadius: "8px",
                 padding: "16px",
-                backgroundColor: "white",
+                backgroundColor: "var(--bg-card, #ffffff)",
                 marginBottom: "16px",
               }}
             >

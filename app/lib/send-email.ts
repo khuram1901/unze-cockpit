@@ -97,12 +97,12 @@ export async function sendNotificationEmail({
   whatsAppMessage?: string;
 }) {
   try {
-    // Use the notification-specific Gmail account (unzegrouppk@gmail.com)
+    // Use the notification-specific Gmail account (khuram1901@gmail.com)
     const supabaseForTokens = createServiceClient();
     const { data: notifToken } = await supabaseForTokens
       .from("google_oauth_tokens")
       .select("*")
-      .eq("user_email", "unzegrouppk@gmail.com")
+      .eq("user_email", "khuram1901@gmail.com")
       .single();
 
     if (!notifToken) {
@@ -129,7 +129,7 @@ export async function sendNotificationEmail({
     });
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    const fromEmail = "unzegrouppk@gmail.com";
+    const fromEmail = "khuram1901@gmail.com";
 
     const html = buildEmailHtml({ heading, body, linkUrl, linkLabel, whatsAppPhone, whatsAppMessage });
     const raw = buildRawEmail(to, fromEmail, subject, html);

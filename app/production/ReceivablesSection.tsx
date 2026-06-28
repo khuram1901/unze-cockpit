@@ -28,9 +28,9 @@ type Receivable = {
   notes: string | null;
 };
 
-const NAVY = "#1e293b";
-const SLATE = "#64748b";
-const BORDER = "#e2e8f0";
+const NAVY = "var(--text-primary, #1e293b)";
+const SLATE = "var(--text-secondary, #64748b)";
+const BORDER = "var(--border-color, #e2e8f0)";
 
 // Per-plant customer list. First entry is the default.
 // Plants not listed here fall back to using the plant name itself.
@@ -81,7 +81,7 @@ const sectionStyle = {
   borderRadius: "8px",
   padding: "14px",
   marginBottom: "14px",
-  backgroundColor: "white",
+  backgroundColor: "var(--bg-card, #ffffff)",
 };
 
 const hint = { fontSize: "16px", color: SLATE, marginBottom: "10px" };
@@ -243,7 +243,7 @@ export default function ReceivablesSection({
   };
 
   const td: React.CSSProperties = {
-    borderBottom: `1px solid #f1f5f9`,
+    borderBottom: "1px solid var(--border-light, #f1f5f9)",
     padding: "6px 8px",
     fontSize: "16px",
     verticalAlign: "middle",

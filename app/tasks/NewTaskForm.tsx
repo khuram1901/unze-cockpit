@@ -200,10 +200,10 @@ export default function NewTaskForm() {
       onSubmit={handleSubmit}
       style={{
         padding: "14px",
-        backgroundColor: "white",
+        backgroundColor: "var(--bg-card, #ffffff)",
       }}
     >
-      <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", marginBottom: "12px" }}>
+      <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "12px" }}>
         New Task
       </h2>
 

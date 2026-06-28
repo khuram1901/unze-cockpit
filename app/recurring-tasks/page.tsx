@@ -98,7 +98,7 @@ export default function RecurringTasksPage() {
     <AuthWrapper>
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-            <PageHeader title="Recurring Tasks" subtitle="Auto-create tasks on a schedule — daily, weekly, or monthly" />
+            <PageHeader />
             <button onClick={() => setShowForm(!showForm)} style={{
               backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
               width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
@@ -108,8 +108,8 @@ export default function RecurringTasksPage() {
           </div>
 
           {showForm && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>New Recurring Task</div>
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "10px" }}>New Recurring Task</div>
               <form onSubmit={handleAdd}>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: "8px" }}>
                   <label style={lbl}>Task Description <input style={inp} value={desc} onChange={(e) => setDesc(e.target.value)} required placeholder="e.g. Submit weekly production report" /></label>
@@ -121,21 +121,21 @@ export default function RecurringTasksPage() {
                   <label style={lbl}>Due after (days) <input type="number" min="1" style={inp} value={dueDays} onChange={(e) => setDueDays(e.target.value)} /></label>
                   <label style={lbl}>Department/Project <input style={inp} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Optional" /></label>
                 </div>
-                <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving..." : "Create Template"}</button>
+                <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving..." : "Create Template"}</button>
               </form>
             </div>
           )}
 
-          {loading ? <p style={{ color: COLOURS.SLATE }}>Loading...</p> : templates.length === 0 ? (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", color: COLOURS.SLATE, textAlign: "center" }}>No recurring tasks set up yet.</div>
+          {loading ? <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading...</p> : templates.length === 0 ? (
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)", textAlign: "center" }}>No recurring tasks set up yet.</div>
           ) : (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
               {templates.map((t) => (
-                <div key={t.id} style={{ padding: "10px 14px", borderBottom: `1px solid ${COLOURS.LIGHT}`, opacity: t.active ? 1 : 0.5 }}>
+                <div key={t.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--border-light, #f1f5f9)", opacity: t.active ? 1 : 0.5 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
-                      <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                      <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{t.description}</div>
+                      <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
                         {t.assigned_to || "Unassigned"} · {t.frequency}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : t.frequency === "monthly" ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
                         {t.last_created_at && ` · Last: ${t.last_created_at.slice(0, 10)}`}
                       </div>
@@ -144,7 +144,7 @@ export default function RecurringTasksPage() {
                       <button onClick={() => toggleActive(t.id, t.active)} style={{ backgroundColor: t.active ? "#d97706" : COLOURS.GREEN, color: "white", border: "none", borderRadius: "5px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
                         {t.active ? "Pause" : "Resume"}
                       </button>
-                      <button onClick={() => deleteTemplate(t.id)} style={{ backgroundColor: "white", color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, borderRadius: "5px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>Delete</button>
+                      <button onClick={() => deleteTemplate(t.id)} style={{ backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, borderRadius: "5px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>Delete</button>
                     </div>
                   </div>
                 </div>
@@ -156,5 +156,5 @@ export default function RecurringTasksPage() {
   );
 }
 
-const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "3px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box" };
-const lbl: React.CSSProperties = { display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px" };
+const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "3px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box" };
+const lbl: React.CSSProperties = { display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "4px" };

@@ -5,7 +5,7 @@ import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, SectionTitle, PageHeader } from "../lib/SharedUI";
+import { COLOURS, SectionTitle } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import * as XLSX from "xlsx";
@@ -492,7 +492,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           border: `1px solid ${BORDER}`,
           borderLeft: `4px solid ${msg.startsWith("Error") ? RED : GREEN}`,
           borderRadius: "6px", padding: "10px 14px", marginBottom: "14px",
-          backgroundColor: "white", fontSize: "15px", color: NAVY,
+          backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: NAVY,
         }}>
           {msg}
         </div>
@@ -561,13 +561,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       {/* ── ROW: INGESTION + PDF UPLOAD side by side (Admin/Executive only) ── */}
       {canEditAll && (
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "white", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <SectionTitle title="Automatic Ingestion" />
-            <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>
               Gmail: {gmailConnected ? <span style={{ color: GREEN }}>Connected</span> : <span style={{ color: SLATE }}>Not connected</span>}
             </div>
-            <div style={{ fontSize: "14px", color: SLATE, marginBottom: "10px" }}>
+            <div style={{ fontSize: "16px", color: SLATE, marginBottom: "10px" }}>
               {gmailConnected ? "Daily statements ingested automatically from your cockpit-cash Gmail label." : "Connect Gmail to auto-ingest daily cash statements. Label: 'cockpit-cash'."}
             </div>
           </div>
@@ -577,12 +577,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         </div>
 
         {/* Add Daily Position — Manual or Upload */}
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "white" }}>
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)" }}>
           <SectionTitle title="Add Daily Position" />
           <div style={{ display: "flex", gap: "0", marginBottom: "12px", borderBottom: `2px solid ${BORDER}` }}>
             {([{ key: "upload", label: "Upload PDF" }, { key: "manual", label: "Manual Entry" }] as const).map((tab) => (
               <button key={tab.key} onClick={() => setDailyEntryTab(tab.key)} style={{
-                padding: "8px 16px", fontSize: "14px", fontWeight: dailyEntryTab === tab.key ? 700 : 500,
+                padding: "8px 16px", fontSize: "16px", fontWeight: dailyEntryTab === tab.key ? 700 : 500,
                 color: dailyEntryTab === tab.key ? NAVY : SLATE, backgroundColor: "transparent", border: "none",
                 borderBottom: dailyEntryTab === tab.key ? `3px solid ${NAVY}` : "3px solid transparent",
                 cursor: "pointer", marginBottom: "-2px",
@@ -592,7 +592,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
           {dailyEntryTab === "upload" && (
             <>
-              <p style={{ fontSize: "13px", color: SLATE, marginBottom: "8px" }}>Upload Cash Flow + Bank Position PDFs. System extracts, reconciles, and saves.</p>
+              <p style={{ fontSize: "15px", color: SLATE, marginBottom: "8px" }}>Upload Cash Flow + Bank Position PDFs. System extracts, reconciles, and saves.</p>
               <form onSubmit={handlePDFUpload}>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
                   <label style={{ ...labelStyle, fontSize: "13px" }}>Cash Flow PDF
@@ -639,7 +639,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
           {dailyEntryTab === "manual" && (
             <>
-              <p style={{ fontSize: "13px", color: SLATE, marginBottom: "8px" }}>Enter today's figures from the accountant's statement.</p>
+              <p style={{ fontSize: "15px", color: SLATE, marginBottom: "8px" }}>Enter today's figures from the accountant's statement.</p>
               <form onSubmit={saveDailyPosition}>
                 <label style={{ ...labelStyle, fontSize: "13px" }}>Date
                   <input type="date" value={dpDate} onChange={(e) => setDpDate(e.target.value)} style={inputStyle} required />
@@ -671,7 +671,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
       {/* ── FORECAST + DEPARTMENT BUDGETS side by side ── */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px", alignItems: "start" }}>
-      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "white" }}>
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)" }}>
         <SectionTitle title="Cash Flow Forecast" />
         <div style={{ display: "flex", gap: "0", marginBottom: "10px", borderBottom: `2px solid ${BORDER}` }}>
           {([{ key: false, label: "Upload Excel" }, { key: true, label: "Manual Entry" }] as const).map((tab) => (
@@ -735,7 +735,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       </div>
 
       {/* RIGHT — Department Budgets */}
-      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "white" }}>
+      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)" }}>
         <SectionTitle title="Department Budgets" />
         {(() => {
           const validDepts = COMPANY_DEPTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
@@ -787,7 +787,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             </div>
 
             {showBudgetForm && (
-              <form onSubmit={handleAddBudget} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "8px", marginBottom: "10px", backgroundColor: "#f8fafc" }}>
+              <form onSubmit={handleAddBudget} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "8px", marginBottom: "10px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "4px", alignItems: "end" }}>
                   <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Department</label>
                     <select style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
@@ -823,7 +823,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               const over = dA > dB;
               return (
                 <div key={deptName} style={{ border: `1px solid ${BORDER}`, borderTop: `2px solid ${over ? RED : GREEN}`, borderRadius: "5px", overflow: "hidden", marginBottom: "6px" }}>
-                  <div style={{ padding: "4px 10px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ padding: "4px 10px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: "12px", fontWeight: 700, color: NAVY }}>{deptName}</span>
                     <span style={{ fontSize: "10px", fontWeight: 700, color: over ? RED : GREEN }}>PKR {dA.toLocaleString()} / {dB.toLocaleString()}</span>
                   </div>
@@ -859,13 +859,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           gap: "14px",
           marginBottom: "14px",
         }}>
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
               Cash Balance — Last 30 Days
             </div>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={[...positions].reverse().map((p) => ({ date: p.position_date.slice(5), closing: p.closing_balance, net: p.closing_after_post_dated }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light, #f1f5f9)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
                 <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
                 <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
@@ -876,13 +876,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             </ResponsiveContainer>
           </div>
 
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-            <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
               Daily Receipts vs Payments
             </div>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={[...positions].reverse().map((p) => ({ date: p.position_date.slice(5), receipts: p.total_receipts, payments: p.total_payments }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light, #f1f5f9)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
                 <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
                 <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
@@ -904,7 +904,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             const headers = ["Date", "Opening", "Receipts", "Payments", "Closing", "Post-dated", "Net"];
             const rows = positions.map((p) => [formatDateUK(p.position_date), String(p.opening_balance), String(p.total_receipts), String(p.total_payments), String(p.closing_balance), String(p.post_dated_total), String(p.closing_after_post_dated)]);
             downloadCSV(`cash-positions-${companyName.replace(/ /g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-          }} style={{ backgroundColor: "white", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+          }} style={{ backgroundColor: "var(--bg-card, #ffffff)", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "15px", fontWeight: 600, cursor: "pointer" }}>
             Export CSV
           </button>
         )}
@@ -914,19 +914,19 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           border: `1px solid ${BORDER}`,
           borderRadius: "8px",
           padding: "14px",
-          backgroundColor: "white",
+          backgroundColor: "var(--bg-card, #ffffff)",
           marginBottom: "16px",
         }}
       >
         {positions.length === 0 ? (
-          <p style={{ fontSize: "14px", color: SLATE }}>
+          <p style={{ fontSize: "16px", color: SLATE }}>
             No daily positions recorded yet.
           </p>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "collapse", width: "100%" }}>
               <thead>
-                <tr style={{ backgroundColor: "#f8fafc" }}>
+                <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                   <th style={th}>Date</th>
                   <th style={th}>Opening</th>
                   <th style={th}>Receipts</th>
@@ -990,7 +990,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       {/* ── MODALS ── */}
       {openModal === "opening" && (
         <Modal title="Opening Balance" onClose={() => setOpenModal(null)}>
-          <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
+          <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
             Set the starting cash balance. The system counts forward from here.
           </p>
           <form onSubmit={saveOpeningBalance}>
@@ -1034,7 +1034,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
       {openModal === "plan" && (
         <Modal title="Monthly Cash Plan" onClose={() => setOpenModal(null)}>
-          <p style={{ fontSize: "14px", color: SLATE, marginBottom: "12px" }}>
+          <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
             Set expected receivables and payouts for the month. Used to calculate cash health on the Executive dashboard.
           </p>
           <form onSubmit={saveMonthlyPlan}>
@@ -1109,7 +1109,7 @@ function SummaryCard({
         borderTop: `3px solid ${color}`,
         borderRadius: "7px",
         padding: "10px 12px",
-        backgroundColor: "white",
+        backgroundColor: "var(--bg-card, #ffffff)",
         position: "relative",
       }}
     >
@@ -1133,7 +1133,7 @@ function SummaryCard({
             border: `1px solid ${BORDER}`,
             borderRadius: "5px",
             padding: "2px 8px",
-            fontSize: "14px",
+            fontSize: "16px",
             fontWeight: 600,
             color: SLATE,
             cursor: "pointer",
@@ -1172,7 +1172,7 @@ function Modal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundColor: "white",
+          backgroundColor: "var(--bg-card, #ffffff)",
           borderRadius: "10px",
           padding: "20px",
           maxWidth: "420px",
@@ -1192,7 +1192,7 @@ function Modal({
             borderBottom: `1px solid ${BORDER}`,
           }}
         >
-          <h2 style={{ fontSize: "14px", fontWeight: 700, color: NAVY, margin: 0 }}>
+          <h2 style={{ fontSize: "16px", fontWeight: 700, color: NAVY, margin: 0 }}>
             {title}
           </h2>
           <button
@@ -1219,7 +1219,7 @@ function Modal({
 
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: 600,
   color: NAVY,
   marginBottom: "8px",
@@ -1249,7 +1249,7 @@ const btnStyle: React.CSSProperties = {
 };
 
 const cancelBtnStyle: React.CSSProperties = {
-  backgroundColor: "white",
+  backgroundColor: "var(--bg-card, #ffffff)",
   color: NAVY,
   border: `1px solid ${BORDER}`,
   borderRadius: "6px",
@@ -1264,7 +1264,7 @@ const th: React.CSSProperties = {
   textAlign: "left",
   borderBottom: `1px solid ${BORDER}`,
   padding: "6px 10px",
-  fontSize: "14px",
+  fontSize: "16px",
   color: SLATE,
   fontWeight: 700,
 };

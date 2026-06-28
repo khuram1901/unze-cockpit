@@ -140,16 +140,16 @@ export default function AuditLogPage() {
 
   function LogRow({ log }: { log: LogEntry }) {
     return (
-      <div style={{ padding: "8px 14px", borderBottom: `1px solid ${COLOURS.LIGHT}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+      <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--border-light, #f1f5f9)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: "14px", color: COLOURS.NAVY, display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+          <div style={{ fontSize: "16px", color: "var(--text-primary, #1e293b)", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <span style={{ fontWeight: 600 }}>{log.user_name || log.user_email}</span>
             <ActionBadge action={log.action} />
-            <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.BLUE }}>{getDept(log.table_name)}</span>
+            <span style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.BLUE }}>{getDept(log.table_name)}</span>
           </div>
-          {log.details && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{log.details}</div>}
+          {log.details && <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{log.details}</div>}
         </div>
-        <div style={{ fontSize: "12px", color: COLOURS.SLATE, whiteSpace: "nowrap", flexShrink: 0 }}>
+        <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", whiteSpace: "nowrap", flexShrink: 0 }}>
           {formatDateTimeUK(log.created_at)}
         </div>
       </div>
@@ -161,7 +161,7 @@ export default function AuditLogPage() {
   return (
     <AuthWrapper>
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-          <PageHeader title="Audit Log" subtitle="Who did what and when — system activity trail" />
+          <PageHeader />
 
           {/* KPI Row */}
           {!loading && (
@@ -178,8 +178,8 @@ export default function AuditLogPage() {
           {!loading && filtered.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
               {actionDonut.length > 0 && (
-                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>By Action</div>
+                <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "6px" }}>By Action</div>
                   <ResponsiveContainer width="100%" height={150}>
                     <PieChart>
                       <Pie data={actionDonut} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
@@ -190,7 +190,7 @@ export default function AuditLogPage() {
                   </ResponsiveContainer>
                   <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
                     {actionDonut.map((d) => (
-                      <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.SLATE }}>
+                      <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>
                         <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                       </div>
                     ))}
@@ -198,8 +198,8 @@ export default function AuditLogPage() {
                 </div>
               )}
               {deptDonut.length > 0 && (
-                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>By Department</div>
+                <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "6px" }}>By Department</div>
                   <ResponsiveContainer width="100%" height={150}>
                     <PieChart>
                       <Pie data={deptDonut} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
@@ -210,7 +210,7 @@ export default function AuditLogPage() {
                   </ResponsiveContainer>
                   <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
                     {deptDonut.map((d) => (
-                      <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.SLATE }}>
+                      <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>
                         <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                       </div>
                     ))}
@@ -223,14 +223,14 @@ export default function AuditLogPage() {
           {/* Search + Group toggle */}
           <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center" }}>
             <input type="text" placeholder="Search..." value={filter} onChange={(e) => setFilter(e.target.value)}
-              style={{ flex: "1 1 200px", maxWidth: "300px", padding: "7px 12px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "14px", boxSizing: "border-box" }} />
+              style={{ flex: "1 1 200px", maxWidth: "300px", padding: "7px 12px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "16px", boxSizing: "border-box" }} />
             <div style={{ display: "flex", gap: "3px" }}>
               {(["time", "department", "person"] as const).map((g) => (
                 <button key={g} onClick={() => setGroupBy(g)} style={{
-                  backgroundColor: groupBy === g ? COLOURS.NAVY : "white",
-                  color: groupBy === g ? "white" : COLOURS.NAVY,
-                  border: `1px solid ${groupBy === g ? COLOURS.NAVY : COLOURS.BORDER}`,
-                  borderRadius: "5px", padding: "5px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                  backgroundColor: groupBy === g ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
+                  color: groupBy === g ? "white" : "var(--text-primary, #1e293b)",
+                  border: `1px solid ${groupBy === g ? COLOURS.NAVY : "var(--border-color, #e2e8f0)"}`,
+                  borderRadius: "5px", padding: "5px 12px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
                   textTransform: "capitalize",
                 }}>{g}</button>
               ))}
@@ -238,24 +238,24 @@ export default function AuditLogPage() {
           </div>
 
           {/* Log entries */}
-          {loading ? <p style={{ color: COLOURS.SLATE }}>Loading...</p> : filtered.length === 0 ? (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", color: COLOURS.SLATE, textAlign: "center" }}>No log entries found.</div>
+          {loading ? <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading...</p> : filtered.length === 0 ? (
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)", textAlign: "center" }}>No log entries found.</div>
           ) : groupBy === "time" ? (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
               {filtered.slice(0, 200).map((log) => <LogRow key={log.id} log={log} />)}
-              {filtered.length > 200 && <div style={{ padding: "10px 14px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>Showing 200 of {filtered.length}</div>}
+              {filtered.length > 200 && <div style={{ padding: "10px 14px", textAlign: "center", color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>Showing 200 of {filtered.length}</div>}
             </div>
           ) : groupBy === "department" ? (
             deptNames.map((dept) => {
               const entries = deptGroups.get(dept)!;
               return (
-                <div key={dept} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "10px" }}>
-                  <div style={{ padding: "8px 14px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{dept}</span>
-                    <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>{entries.length} entries</span>
+                <div key={dept} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "10px" }}>
+                  <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: "1px solid var(--border-color, #e2e8f0)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{dept}</span>
+                    <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>{entries.length} entries</span>
                   </div>
                   {entries.slice(0, 20).map((log) => <LogRow key={log.id} log={log} />)}
-                  {entries.length > 20 && <div style={{ padding: "8px 14px", textAlign: "center", color: COLOURS.SLATE, fontSize: "12px" }}>+{entries.length - 20} more</div>}
+                  {entries.length > 20 && <div style={{ padding: "8px 14px", textAlign: "center", color: "var(--text-secondary, #64748b)", fontSize: "14px" }}>+{entries.length - 20} more</div>}
                 </div>
               );
             })
@@ -263,13 +263,13 @@ export default function AuditLogPage() {
             personNames.map((person) => {
               const entries = personGroups.get(person)!;
               return (
-                <div key={person} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "10px" }}>
-                  <div style={{ padding: "8px 14px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{person}</span>
-                    <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>{entries.length} actions</span>
+                <div key={person} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "10px" }}>
+                  <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: "1px solid var(--border-color, #e2e8f0)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{person}</span>
+                    <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>{entries.length} actions</span>
                   </div>
                   {entries.slice(0, 20).map((log) => <LogRow key={log.id} log={log} />)}
-                  {entries.length > 20 && <div style={{ padding: "8px 14px", textAlign: "center", color: COLOURS.SLATE, fontSize: "12px" }}>+{entries.length - 20} more</div>}
+                  {entries.length > 20 && <div style={{ padding: "8px 14px", textAlign: "center", color: "var(--text-secondary, #64748b)", fontSize: "14px" }}>+{entries.length - 20} more</div>}
                 </div>
               );
             })

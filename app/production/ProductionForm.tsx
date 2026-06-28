@@ -311,23 +311,23 @@ export default function ProductionForm() {
   // ---- Styles ----
   const inputStyle = {
     display: "block", width: "100%", padding: "7px 9px",
-    marginTop: "3px", marginBottom: "10px", border: "1px solid #e2e8f0",
+    marginTop: "3px", marginBottom: "10px", border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "6px", fontSize: "17px",
   };
   const sectionStyle = {
-    border: "1px solid #e2e8f0", borderRadius: "8px",
-    padding: "14px", marginBottom: "14px", backgroundColor: "white",
+    border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px",
+    padding: "14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)",
   };
-  const hint = { fontSize: "16px", color: "#64748b", marginBottom: "10px" };
-  const h3 = { fontSize: "17px", fontWeight: 700 as const, color: "#1e293b", marginBottom: "4px" };
+  const hint = { fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "10px" };
+  const h3 = { fontSize: "17px", fontWeight: 700 as const, color: "var(--text-primary, #1e293b)", marginBottom: "4px" };
 
   const submitBtn = (section: string): React.CSSProperties => ({
-    backgroundColor: "#1e293b", color: "white", border: "none", borderRadius: "6px",
+    backgroundColor: "var(--text-primary, #1e293b)", color: "white", border: "none", borderRadius: "6px",
     padding: "7px 14px", fontSize: "16px", cursor: "pointer", fontWeight: 700,
     opacity: savingSection === section ? 0.7 : 1,
   });
   const nothingBtn: React.CSSProperties = {
-    backgroundColor: "white", color: "#64748b", border: "1px solid #e2e8f0", borderRadius: "6px",
+    backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px",
     padding: "7px 12px", fontSize: "16px", cursor: "pointer", fontWeight: 600,
   };
   const btnRow: React.CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" };
@@ -354,7 +354,7 @@ export default function ProductionForm() {
     );
   }
 
-  if (loadingPlants) return <p style={{ color: "#64748b" }}>Loading your plant…</p>;
+  if (loadingPlants) return <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading your plant…</p>;
 
   if (noAccess) {
     return (
@@ -373,12 +373,12 @@ export default function ProductionForm() {
       <div style={{ ...sectionStyle, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "16px" }}>
         {plants.length === 1 ? (
           <div>
-            <div style={{ fontSize: "15px", color: "#64748b", marginBottom: "2px" }}>Plant</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "#1e293b" }}>{plants[0].name}</div>
+            <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "2px" }}>Plant</div>
+            <div style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{plants[0].name}</div>
           </div>
         ) : (
           <div style={{ minWidth: "150px" }}>
-            <div style={{ fontSize: "15px", color: "#64748b", marginBottom: "2px" }}>Plant</div>
+            <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "2px" }}>Plant</div>
             <select
               style={{ ...inputStyle, marginBottom: 0, width: "auto", minWidth: "150px" }}
               value={plantId}
@@ -391,7 +391,7 @@ export default function ProductionForm() {
           </div>
         )}
         <div>
-          <div style={{ fontSize: "15px", color: "#64748b", marginBottom: "2px" }}>Date</div>
+          <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "2px" }}>Date</div>
           <input
             type="date"
             style={{ ...inputStyle, marginBottom: 0, width: "auto" }}
@@ -411,13 +411,13 @@ export default function ProductionForm() {
         const allDone = hasProd && hasDisp;
         return (
           <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasProd ? "#16a34a" : "#e2e8f0"}`, backgroundColor: hasProd ? "#dcfce7" : "white", color: hasProd ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasProd ? "#16a34a" : "var(--border-color, #e2e8f0)"}`, backgroundColor: hasProd ? "#dcfce7" : "var(--bg-card, #ffffff)", color: hasProd ? "#16a34a" : "var(--text-secondary, #64748b)", fontWeight: 600 }}>
               {hasProd ? "✓" : "○"} Production
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasDisp ? "#16a34a" : "#e2e8f0"}`, backgroundColor: hasDisp ? "#dcfce7" : "white", color: hasDisp ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasDisp ? "#16a34a" : "var(--border-color, #e2e8f0)"}`, backgroundColor: hasDisp ? "#dcfce7" : "var(--bg-card, #ffffff)", color: hasDisp ? "#16a34a" : "var(--text-secondary, #64748b)", fontWeight: 600 }}>
               {hasDisp ? "✓" : "○"} Dispatch
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasBrk ? "#16a34a" : "#e2e8f0"}`, backgroundColor: hasBrk ? "#dcfce7" : "white", color: hasBrk ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasBrk ? "#16a34a" : "var(--border-color, #e2e8f0)"}`, backgroundColor: hasBrk ? "#dcfce7" : "var(--bg-card, #ffffff)", color: hasBrk ? "#16a34a" : "var(--text-secondary, #64748b)", fontWeight: 600 }}>
               {hasBrk ? "✓" : "○"} Breakage
             </div>
             {allDone ? (
@@ -568,14 +568,14 @@ export default function ProductionForm() {
       {plantId && pastEntries.length > 0 && (
         <div style={{ marginTop: "20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: 0, paddingLeft: "9px", borderLeft: "3px solid #1e293b" }}>
+            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary, #1e293b)", margin: 0, paddingLeft: "9px", borderLeft: "3px solid var(--text-primary, #1e293b)" }}>
               My Past Entries (Last 14 Days)
             </h2>
             <button
               onClick={() => setShowHistory(!showHistory)}
               style={{
-                backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: "6px",
-                padding: "6px 14px", fontSize: "15px", fontWeight: 600, color: "#1e293b", cursor: "pointer",
+                backgroundColor: "var(--bg-card, #ffffff)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px",
+                padding: "6px 14px", fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)", cursor: "pointer",
               }}
             >
               {showHistory ? "Hide" : `Show (${pastEntries.length})`}
@@ -583,11 +583,11 @@ export default function ProductionForm() {
           </div>
 
           {showHistory && (
-            <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "500px" }}>
                   <thead>
-                    <tr style={{ backgroundColor: "#f8fafc" }}>
+                    <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                       <th style={histTh}>Date</th>
                       <th style={histTh}>Type</th>
                       <th style={histTh}>31</th>
@@ -613,7 +613,7 @@ export default function ProductionForm() {
                           <td style={histTd}>{e.qty_36 || 0}</td>
                           <td style={histTd}>{e.qty_45 || 0}</td>
                           {selectedPlant?.type === "meter" && <td style={histTd}>{e.qty_meter || 0}</td>}
-                          <td style={{ ...histTd, fontWeight: 700, color: "#1e293b" }}>{total}</td>
+                          <td style={{ ...histTd, fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{total}</td>
                         </tr>
                       );
                     })}
@@ -629,9 +629,9 @@ export default function ProductionForm() {
 }
 
 const histTh: React.CSSProperties = {
-  textAlign: "left", borderBottom: "1px solid #e2e8f0", padding: "6px 10px",
-  fontSize: "14px", color: "#64748b", fontWeight: 700,
+  textAlign: "left", borderBottom: "1px solid var(--border-color, #e2e8f0)", padding: "6px 10px",
+  fontSize: "16px", color: "var(--text-secondary, #64748b)", fontWeight: 700,
 };
 const histTd: React.CSSProperties = {
-  borderBottom: "1px solid #f1f5f9", padding: "7px 10px", fontSize: "15px",
+  borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "15px",
 };

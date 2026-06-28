@@ -78,16 +78,16 @@ function roleBg(r: string, email?: string | null) {
 
 const inp: React.CSSProperties = {
   width: "100%", padding: "6px 8px", border: `1px solid ${COLOURS.BORDER}`,
-  borderRadius: "5px", fontSize: "14px", boxSizing: "border-box",
+  borderRadius: "5px", fontSize: "16px", boxSizing: "border-box",
 };
 const lbl: React.CSSProperties = {
-  display: "block", fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "3px",
+  display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "3px",
 };
 const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
-  backgroundColor: solid ? c : "white",
+  backgroundColor: solid ? c : "var(--bg-card, #ffffff)",
   border: solid ? "none" : `1px solid ${c}`,
   color: solid ? "white" : c,
-  borderRadius: "5px", padding: "4px 10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+  borderRadius: "5px", padding: "4px 10px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
 });
 
 export default function MembersManager() {
@@ -336,7 +336,7 @@ export default function MembersManager() {
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-        <PageHeader title="Members" subtitle="Manage team members, roles, and access" />
+        <PageHeader />
         {isAdmin && (
           <button onClick={() => setShowAddForm(!showAddForm)} style={{
             backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
@@ -355,8 +355,8 @@ export default function MembersManager() {
           { label: "Managers", value: counts.manager, color: COLOURS.GREEN },
           { label: "Members", value: counts.member, color: COLOURS.SLATE },
         ].map((c) => (
-          <div key={c.label} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${c.color}`, borderRadius: "7px", padding: "6px 14px", backgroundColor: "white", minWidth: "80px" }}>
-            <div style={{ color: COLOURS.SLATE, fontSize: "12px" }}>{c.label}</div>
+          <div key={c.label} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${c.color}`, borderRadius: "7px", padding: "6px 14px", backgroundColor: "var(--bg-card, #ffffff)", minWidth: "80px" }}>
+            <div style={{ color: COLOURS.SLATE, fontSize: "14px" }}>{c.label}</div>
             <div style={{ fontSize: "18px", fontWeight: 800, color: c.color }}>{c.value}</div>
           </div>
         ))}
@@ -420,7 +420,7 @@ export default function MembersManager() {
       {isAdmin && showAddForm && (
         <form onSubmit={addMember} style={{
           border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`,
-          borderRadius: "8px", padding: "14px", marginBottom: "14px", backgroundColor: "white",
+          borderRadius: "8px", padding: "14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)",
         }}>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1.5fr 0.8fr", gap: "8px" }}>
             <div><label style={lbl}>First Name</label><input style={inp} value={firstName} onChange={(e) => setFirstName(e.target.value)} required /></div>
@@ -516,14 +516,14 @@ export default function MembersManager() {
       )}
 
       {/* ── Members table ─────────────────────────────── */}
-      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
+      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
         {/* Header */}
         <div style={{
           display: "grid",
           gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
           gap: "8px", padding: "8px 12px",
           backgroundColor: COLOURS.LIGHT, borderBottom: `1px solid ${COLOURS.BORDER}`,
-          fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.5px",
+          fontSize: "14px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.5px",
         }}>
           <div>Name</div>
           {!isMobile && <div>Dept / BU</div>}
@@ -549,7 +549,7 @@ export default function MembersManager() {
                   gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
                   gap: "8px", padding: "10px 12px", alignItems: "center",
                   cursor: isAdmin ? "pointer" : "default",
-                  backgroundColor: isEditing ? "#f8fafc" : "white",
+                  backgroundColor: isEditing ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                 }}
               >
                 {/* Name + email */}
@@ -558,12 +558,12 @@ export default function MembersManager() {
                     {dn}
                     {m.is_hod && <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.AMBER, marginLeft: "5px" }}>HOD</span>}
                   </div>
-                  <div style={{ fontSize: "13px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email || "—"}</div>
+                  <div style={{ fontSize: "15px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email || "—"}</div>
                 </div>
 
                 {/* Dept / BU (desktop) */}
                 {!isMobile && (
-                  <div style={{ fontSize: "13px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: "15px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {showsDept ? (m.department || "—") : "All"}
                     {showsDept && m.business_unit && <span style={{ color: "#94a3b8" }}> · {m.business_unit}</span>}
                   </div>
@@ -571,14 +571,14 @@ export default function MembersManager() {
 
                 {/* Company */}
                 {!isMobile && (
-                  <div style={{ fontSize: "13px", color: COLOURS.NAVY, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: "15px", color: COLOURS.NAVY, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {m.company || <span style={{ color: COLOURS.SLATE }}>—</span>}
                   </div>
                 )}
 
                 {/* Role badge */}
                 <span style={{
-                  fontSize: "12px", fontWeight: 700, padding: "2px 8px", borderRadius: "8px",
+                  fontSize: "14px", fontWeight: 700, padding: "2px 8px", borderRadius: "8px",
                   color: "white", backgroundColor: roleBg(m.role, m.email), width: "fit-content",
                   justifySelf: isMobile ? "end" : "start",
                 }}>{m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role}</span>
@@ -586,7 +586,7 @@ export default function MembersManager() {
 
               {/* ── Mobile sub-row ────────────────────── */}
               {isMobile && !isEditing && (
-                <div style={{ padding: "0 12px 8px", fontSize: "12px", color: COLOURS.SLATE }}>
+                <div style={{ padding: "0 12px 8px", fontSize: "14px", color: COLOURS.SLATE }}>
                   {m.company || "No company"} · {showsDept ? `${m.department || "—"}` : "All depts"}
                 </div>
               )}
@@ -608,7 +608,7 @@ export default function MembersManager() {
                   </div>
 
                   {/* Plants + Notifications in one row */}
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "6px", fontSize: "12px" }}>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "6px", fontSize: "14px" }}>
                     {showsDept && plants.length > 0 && (
                       <>
                         <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Plants:</span>
@@ -671,7 +671,7 @@ export default function MembersManager() {
         })}
 
         {filtered.length === 0 && (
-          <div style={{ padding: "20px 12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "14px" }}>No members found.</div>
+          <div style={{ padding: "20px 12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "16px" }}>No members found.</div>
         )}
       </div>
 
@@ -684,20 +684,20 @@ export default function MembersManager() {
           <div onClick={() => setShowDeptOwners(!showDeptOwners)} style={{
             display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
             border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px 16px",
-            backgroundColor: showDeptOwners ? COLOURS.NAVY : "white",
+            backgroundColor: showDeptOwners ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
           }}>
             <div>
               <div style={{ fontSize: "16px", fontWeight: 700, color: showDeptOwners ? "white" : COLOURS.NAVY }}>Department Ownership</div>
-              <div style={{ fontSize: "12px", color: showDeptOwners ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
+              <div style={{ fontSize: "14px", color: showDeptOwners ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
                 Primary, backup, and escalation owners
                 {(() => { const v = departments.filter((d) => !d.primary_owner_member_id).length; return v > 0 ? ` · ${v} vacant` : ""; })()}
               </div>
             </div>
-            <span style={{ color: showDeptOwners ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{showDeptOwners ? "▲" : "▼"}</span>
+            <span style={{ color: showDeptOwners ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{showDeptOwners ? "▲" : "▼"}</span>
           </div>
 
           {showDeptOwners && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "white", padding: "12px" }}>
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "12px" }}>
               {departments.map((dept) => (
                 <div key={dept.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px 12px", marginBottom: "8px" }}>
                   <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px", paddingBottom: "6px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
@@ -743,20 +743,20 @@ export default function MembersManager() {
           <div onClick={() => setShowReassign(!showReassign)} style={{
             display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
             border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px 16px",
-            backgroundColor: showReassign ? COLOURS.NAVY : "white",
+            backgroundColor: showReassign ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
           }}>
             <div>
               <div style={{ fontSize: "16px", fontWeight: 700, color: showReassign ? "white" : COLOURS.NAVY }}>Reassign Open Tasks</div>
-              <div style={{ fontSize: "12px", color: showReassign ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
+              <div style={{ fontSize: "14px", color: showReassign ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
                 Transfer tasks when a member leaves or changes role
               </div>
             </div>
-            <span style={{ color: showReassign ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{showReassign ? "▲" : "▼"}</span>
+            <span style={{ color: showReassign ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{showReassign ? "▲" : "▼"}</span>
           </div>
 
           {showReassign && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "white", padding: "14px" }}>
-              <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "10px" }}>
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "14px" }}>
+              <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "10px" }}>
                 Moves Not Started, In Progress, and Waiting Reply tasks only. Completed tasks stay with the original owner.
               </p>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "10px", maxWidth: "500px" }}>
@@ -778,13 +778,13 @@ export default function MembersManager() {
               {fromMemberId && (() => {
                 const fm = members.find((m) => m.id === fromMemberId);
                 const count = fm ? openTaskCounts.get(fm.name || "") || 0 : 0;
-                return <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "8px" }}>{fm?.name} has <strong>{count}</strong> open task(s).</p>;
+                return <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "8px" }}>{fm?.name} has <strong>{count}</strong> open task(s).</p>;
               })()}
-              <button onClick={reassignOpenTasks} disabled={reassigning} style={{ ...smallBtn(COLOURS.RED, true), fontSize: "13px", padding: "6px 14px" }}>
+              <button onClick={reassignOpenTasks} disabled={reassigning} style={{ ...smallBtn(COLOURS.RED, true), fontSize: "15px", padding: "6px 14px" }}>
                 {reassigning ? "Reassigning..." : "Move Open Tasks"}
               </button>
               {reassignMsg && (
-                <p style={{ marginTop: "8px", fontSize: "13px", fontWeight: 600, color: reassignMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{reassignMsg}</p>
+                <p style={{ marginTop: "8px", fontSize: "15px", fontWeight: 600, color: reassignMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{reassignMsg}</p>
               )}
             </div>
           )}
@@ -796,7 +796,7 @@ export default function MembersManager() {
 
 const inpC: React.CSSProperties = {
   width: "100%", padding: "4px 6px", border: `1px solid ${COLOURS.BORDER}`,
-  borderRadius: "4px", fontSize: "13px", boxSizing: "border-box",
+  borderRadius: "4px", fontSize: "15px", boxSizing: "border-box",
 };
 const lblC: React.CSSProperties = {
   display: "block", fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "1px",

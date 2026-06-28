@@ -217,7 +217,7 @@ export default function SidebarLayout({
             priority
           />
           {!collapsed && (
-            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-sidebar-active)", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-sidebar-active)", whiteSpace: "nowrap" }}>
               Unze Group
             </span>
           )}
@@ -241,13 +241,13 @@ export default function SidebarLayout({
           {!collapsed && (
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{
-                fontSize: "13px", fontWeight: 600, color: "var(--text-sidebar-active)",
+                fontSize: "15px", fontWeight: 600, color: "var(--text-sidebar-active)",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
                 {userName}
               </div>
               <div style={{
-                fontSize: "11px", color: "var(--text-sidebar)",
+                fontSize: "13px", color: "var(--text-sidebar)",
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
                 {userRole}
@@ -273,7 +273,7 @@ export default function SidebarLayout({
               <div key={groupName} style={{ marginBottom: "4px" }}>
                 {!collapsed && (
                   <div style={{
-                    fontSize: "10px", fontWeight: 700, color: "var(--text-muted)",
+                    fontSize: "11px", fontWeight: 700, color: "var(--text-muted)",
                     textTransform: "uppercase", letterSpacing: "1px",
                     padding: "12px 10px 4px",
                   }}>
@@ -309,14 +309,14 @@ export default function SidebarLayout({
               padding: collapsed ? "8px" : "8px 10px",
               borderRadius: "8px", border: "none",
               backgroundColor: "transparent", color: "var(--text-sidebar)",
-              cursor: "pointer", fontSize: "13px", fontWeight: 500,
+              cursor: "pointer", fontSize: "15px", fontWeight: 500,
               width: "100%", transition: "background-color 0.15s",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
             title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
           >
-            <span style={{ fontSize: "16px" }}>{theme === "light" ? "🌙" : "☀️"}</span>
+            <span style={{ fontSize: "18px" }}>{theme === "light" ? "🌙" : "☀️"}</span>
             {!collapsed && <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>}
           </button>
 
@@ -330,14 +330,14 @@ export default function SidebarLayout({
                 padding: collapsed ? "8px" : "8px 10px",
                 borderRadius: "8px", border: "none",
                 backgroundColor: "transparent", color: "var(--text-sidebar)",
-                cursor: "pointer", fontSize: "13px", fontWeight: 500,
+                cursor: "pointer", fontSize: "15px", fontWeight: 500,
                 width: "100%", transition: "background-color 0.15s",
               }}
               onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
               title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              <span style={{ fontSize: "16px" }}>{collapsed ? "»" : "«"}</span>
+              <span style={{ fontSize: "18px" }}>{collapsed ? "»" : "«"}</span>
               {!collapsed && <span>Collapse</span>}
             </button>
           )}
@@ -351,14 +351,14 @@ export default function SidebarLayout({
               padding: collapsed ? "8px" : "8px 10px",
               borderRadius: "8px", border: "none",
               backgroundColor: "transparent", color: "#f87171",
-              cursor: "pointer", fontSize: "13px", fontWeight: 500,
+              cursor: "pointer", fontSize: "15px", fontWeight: 500,
               width: "100%", transition: "background-color 0.15s",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "rgba(248,113,113,0.1)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
             title="Sign out"
           >
-            <span style={{ fontSize: "16px" }}>🚪</span>
+            <span style={{ fontSize: "18px" }}>🚪</span>
             {!collapsed && <span>Sign Out</span>}
           </button>
         </div>
@@ -378,7 +378,7 @@ export default function SidebarLayout({
           borderRadius: "8px",
           backgroundColor: active ? "var(--sidebar-active-bg)" : "transparent",
           color: active ? "var(--text-sidebar-active)" : "var(--text-sidebar)",
-          textDecoration: "none", fontSize: "13px", fontWeight: active ? 600 : 400,
+          textDecoration: "none", fontSize: "15px", fontWeight: active ? 600 : 400,
           transition: "all 0.15s", marginBottom: "1px",
           position: "relative",
         }}
@@ -393,7 +393,7 @@ export default function SidebarLayout({
             backgroundColor: COLOURS.BLUE,
           }} />
         )}
-        <span style={{ fontSize: "16px", flexShrink: 0, width: "20px", textAlign: "center" }}>
+        <span style={{ fontSize: "18px", flexShrink: 0, width: "22px", textAlign: "center" }}>
           {item.icon}
         </span>
         {!isCollapsed && (
@@ -487,7 +487,7 @@ export default function SidebarLayout({
               </h1>
               {pageSubtitle && (
                 <p style={{
-                  fontSize: "13px", color: "var(--text-secondary)",
+                  fontSize: "15px", color: "var(--text-secondary)",
                   margin: "2px 0 0", lineHeight: 1.3,
                 }}>
                   {pageSubtitle}

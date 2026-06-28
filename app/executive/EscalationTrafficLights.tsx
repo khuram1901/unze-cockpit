@@ -10,9 +10,9 @@ type Escalation = {
   sourceLabel: string;
 };
 
-const NAVY = "#1e293b";
-const SLATE = "#64748b";
-const BORDER = "#e2e8f0";
+const NAVY = "var(--text-primary, #1e293b)";
+const SLATE = "var(--text-secondary, #64748b)";
+const BORDER = "var(--border-color, #e2e8f0)";
 
 const METRICS: Escalation["metric"][] = ["Production", "Dispatch", "Breakage"];
 
@@ -37,7 +37,7 @@ export default function EscalationTrafficLights({
           borderLeft: "4px solid #16a34a",
           borderRadius: "6px",
           padding: "10px 14px",
-          backgroundColor: "white",
+          backgroundColor: "var(--bg-card, #ffffff)",
           fontSize: "17px",
           color: NAVY,
           marginBottom: "14px",
@@ -72,7 +72,7 @@ export default function EscalationTrafficLights({
                 border: `1px solid ${BORDER}`,
                 borderTop: `3px solid ${isRed ? "#dc2626" : "#16a34a"}`,
                 borderRadius: "7px",
-                backgroundColor: isActive ? "#f8fafc" : "white",
+                backgroundColor: isActive ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                 cursor: count === 0 ? "default" : "pointer",
                 textAlign: "left",
                 opacity: count === 0 ? 0.6 : 1,
@@ -109,7 +109,7 @@ export default function EscalationTrafficLights({
           style={{
             border: `1px solid ${BORDER}`,
             borderRadius: "8px",
-            backgroundColor: "white",
+            backgroundColor: "var(--bg-card, #ffffff)",
             marginTop: "8px",
             overflow: "hidden",
           }}
@@ -117,7 +117,7 @@ export default function EscalationTrafficLights({
           <div
             style={{
               padding: "8px 12px",
-              backgroundColor: "#f8fafc",
+              backgroundColor: "var(--bg-card-hover, #f8fafc)",
               borderBottom: `1px solid ${BORDER}`,
               fontSize: "16px",
               fontWeight: 700,

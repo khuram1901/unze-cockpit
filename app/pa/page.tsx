@@ -11,12 +11,12 @@ import { logAction } from "../lib/audit-log";
 import {
   COLOURS,
   SectionTitle,
-  PageHeader,
   StatusBadge,
   PriorityBadge,
 } from "../lib/SharedUI";
 import { whatsappLink, taskChaseMessage } from "../lib/whatsapp";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 
 type Task = {
   id: string;
@@ -263,7 +263,7 @@ export default function PADashboardPage() {
     loadData();
   }
 
-  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "#64748b" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
 
   const openTasks = tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const completedTasks = tasks.filter((t) => t.status === "Completed");
@@ -300,7 +300,7 @@ export default function PADashboardPage() {
     const isExpanded = expandedTask === task.id;
     const od = daysOverdue(task);
     return (
-      <div style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: isOverdue(task) ? "#fef2f2" : "white" }}>
+      <div style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: isOverdue(task) ? "#fef2f2" : "var(--bg-card, #ffffff)" }}>
         <div style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px" }}>
           {bulkAction && (
             <input type="checkbox" checked={selectedTasks.has(task.id)} onChange={() => toggleSelect(task.id)}
@@ -308,8 +308,8 @@ export default function PADashboardPage() {
           )}
           <div onClick={() => setExpandedTask(isExpanded ? null : task.id)} style={{ flex: 1, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
-            <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
+            <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
               <span>{task.assigned_to || "Unassigned"}</span>
               {task.due_date && (
                 <span style={{ color: isOverdue(task) ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue(task) ? 700 : 400 }}>
@@ -320,12 +320,12 @@ export default function PADashboardPage() {
               <StatusBadge status={task.status} />
             </div>
           </div>
-          <span style={{ color: COLOURS.SLATE, fontSize: "13px", flexShrink: 0 }}>{isExpanded ? "▼" : "▶"}</span>
+          <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", flexShrink: 0 }}>{isExpanded ? "▼" : "▶"}</span>
           </div>
         </div>
 
         {isExpanded && (
-          <div style={{ padding: "8px 14px 12px", backgroundColor: "#f8fafc", borderTop: `1px solid ${COLOURS.BORDER}` }}>
+          <div style={{ padding: "8px 14px 12px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderTop: `1px solid ${COLOURS.BORDER}` }}>
             {task.reply_text && (
               <div style={{ marginBottom: "8px", padding: "8px 10px", backgroundColor: "#dcfce7", border: `1px solid ${COLOURS.GREEN}`, borderRadius: "6px", fontSize: "13px", color: "#166534" }}>
                 <strong>Reply:</strong> {task.reply_text}
@@ -364,7 +364,7 @@ export default function PADashboardPage() {
                 <button onClick={() => setQuickNote(null)} style={actionBtn(COLOURS.SLATE)}>Cancel</button>
               </div>
             ) : (
-              task.notes && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "6px", padding: "6px 8px", backgroundColor: "#f1f5f9", borderRadius: "4px", whiteSpace: "pre-line" }}>{task.notes}</div>
+              task.notes && <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginBottom: "6px", padding: "6px 8px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "4px", whiteSpace: "pre-line" }}>{task.notes}</div>
             )}
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
               <button onClick={() => chaseTask(task)} style={actionBtn("#2563eb")} title="Send chase email notification">Chase</button>
@@ -384,9 +384,9 @@ export default function PADashboardPage() {
                 await supabase.from("tasks").delete().eq("id", task.id);
                 showMsg("Task deleted.");
                 loadData();
-              }} style={{ ...actionBtn("#dc2626"), backgroundColor: "white", color: "#dc2626", border: "1px solid #dc2626" }} title="Delete this task">Delete</button>
+              }} style={{ ...actionBtn("#dc2626"), backgroundColor: "var(--bg-card, #ffffff)", color: "#dc2626", border: "1px solid #dc2626" }} title="Delete this task">Delete</button>
             </div>
-            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "6px" }}>
+            <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)", marginTop: "6px" }}>
               By: {task.assigned_by || "—"} · Dept: {task.assigned_to_department || "—"} · Project: {task.project || "—"}
             </div>
           </div>
@@ -395,28 +395,60 @@ export default function PADashboardPage() {
     );
   }
 
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const now = new Date();
+  const dateStr = `${dayNames[now.getDay()]}, ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+  function greetByTime() {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  }
+
+  const donutData = [
+    { name: "Overdue", value: overdueTasks.length, color: COLOURS.RED },
+    { name: "Waiting Reply", value: waitingReply.length, color: "#d97706" },
+    { name: "In Progress", value: inProgress.length, color: COLOURS.BLUE },
+    { name: "Not Started", value: notStarted.length, color: COLOURS.SLATE },
+  ].filter((d) => d.value > 0);
+
+  const completedThisMonth = completedTasks.filter((t) => {
+    const m = new Date().toISOString().slice(0, 7);
+    return t.created_at && t.created_at.slice(0, 7) === m;
+  }).length;
+
   return (
     <AuthWrapper>
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-            <PageHeader title="PA Command Centre" subtitle="Chase, close, reassign, allocate — full task control" />
-            <button onClick={() => setShowNewTask(!showNewTask)} style={{
-              backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
-              padding: "10px 18px", fontSize: "15px", fontWeight: 700, cursor: "pointer",
-            }}>
-              {showNewTask ? "Cancel" : "+ Assign Task"}
-            </button>
-          </div>
+
+          {/* ── Greeting ── */}
+          {!loading && currentUserName && (
+            <div style={{ marginBottom: "4px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: isMobile ? "18px" : "22px", fontWeight: 800, color: "var(--text-primary)" }}>
+                {greetByTime()}, {currentUserName.split(" ")[0]}
+              </span>
+              <span style={{
+                fontSize: "11px", fontWeight: 700, padding: "2px 10px", borderRadius: "10px",
+                backgroundColor: "var(--border-light)", color: "var(--text-secondary)",
+              }}>
+                PA Command Centre
+              </span>
+            </div>
+          )}
+          <p style={{ color: "var(--text-secondary)", fontSize: "14px", margin: "0 0 20px" }}>
+            {dateStr}
+          </p>
 
           {message && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "white", fontSize: "15px", color: COLOURS.NAVY }}>
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>
               {message}
             </div>
           )}
 
           {/* ── New task form ── */}
           {showNewTask && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
               <SectionTitle title="Assign a New Task" />
               <form onSubmit={createNewTask}>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
@@ -445,21 +477,81 @@ export default function PADashboardPage() {
           )}
 
           {loading ? (
-            <p style={{ color: COLOURS.SLATE }}>Loading...</p>
+            <PASkeleton isMobile={isMobile} />
           ) : (
             <>
-              {/* ═══ KPI CARDS — actionable numbers at a glance ═══ */}
+              {/* ═══ KPI CARDS + DONUT — two-column overview ═══ */}
               <div style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(6, 1fr)",
-                gap: "10px", marginBottom: "14px",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr minmax(200px, 280px)",
+                gap: "16px", marginBottom: "20px",
               }}>
-                <KPICard value={overdueTasks.length} label="Overdue" color={overdueTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
-                <KPICard value={waitingReply.length} label="Waiting Reply" color={waitingReply.length > 0 ? "#d97706" : COLOURS.GREEN} />
-                <KPICard value={escalations.length} label="Escalations" color={escalations.length > 0 ? "#d97706" : COLOURS.GREEN} />
-                <KPICard value={upcomingTasks.length} label="Due This Week" color="#2563eb" />
-                <KPICard value={openTasks.length} label="Open Tasks" color={COLOURS.NAVY} />
-                <KPICard value={meetingRequests.length} label="To Approve" color={meetingRequests.length > 0 ? "#2563eb" : COLOURS.GREEN} />
+                {/* Left: KPI grid */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: "10px",
+                }}>
+                  <KPICard value={overdueTasks.length} label="Overdue" color={overdueTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
+                  <KPICard value={waitingReply.length} label="Waiting Reply" color={waitingReply.length > 0 ? "#d97706" : COLOURS.GREEN} />
+                  <KPICard value={escalations.length} label="Escalations" color={escalations.length > 0 ? "#d97706" : COLOURS.GREEN} />
+                  <KPICard value={upcomingTasks.length} label="Due This Week" color="#2563eb" />
+                  <KPICard value={openTasks.length} label="Open Tasks" color={COLOURS.NAVY} />
+                  <KPICard value={meetingRequests.length} label="To Approve" color={meetingRequests.length > 0 ? "#2563eb" : COLOURS.GREEN} />
+                </div>
+
+                {/* Right: Donut + quick stats */}
+                <div style={{
+                  backgroundColor: "var(--bg-card, white)", border: "1px solid var(--border-color, #e2e8f0)",
+                  borderRadius: "12px", overflow: "hidden",
+                }}>
+                  <div style={{
+                    padding: "12px 16px", borderBottom: "1px solid var(--border-color, #e2e8f0)",
+                    display: "flex", alignItems: "center", gap: "8px",
+                  }}>
+                    <span style={{ fontSize: "14px" }}>📊</span>
+                    <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>Task Breakdown</span>
+                  </div>
+                  <div style={{ padding: "12px 16px" }}>
+                    {donutData.length > 0 ? (
+                      <>
+                        <ResponsiveContainer width="100%" height={120}>
+                          <PieChart>
+                            <Pie data={donutData} cx="50%" cy="50%" innerRadius={30} outerRadius={48} dataKey="value" paddingAngle={2}>
+                              {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                            </Pie>
+                            <Tooltip formatter={(value, name) => [`${value} task${Number(value) > 1 ? "s" : ""}`, name]} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap", marginTop: "4px" }}>
+                          {donutData.map((d) => (
+                            <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: "var(--text-secondary, #64748b)" }}>
+                              <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ textAlign: "center", padding: "20px 0", color: COLOURS.GREEN, fontSize: "14px", fontWeight: 600 }}>
+                        All tasks completed!
+                      </div>
+                    )}
+                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid var(--border-color, #e2e8f0)", display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-secondary, #64748b)" }}>
+                      <span>Completed this month</span>
+                      <span style={{ fontWeight: 700, color: COLOURS.GREEN }}>{completedThisMonth}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Assign Task button ── */}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "14px" }}>
+                <button onClick={() => setShowNewTask(!showNewTask)} style={{
+                  backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
+                  padding: "10px 18px", fontSize: "15px", fontWeight: 700, cursor: "pointer",
+                }}>
+                  {showNewTask ? "Cancel" : "+ Assign Task"}
+                </button>
               </div>
 
               {/* ═══ ACTION BANNER — overdue/waiting/escalations/approvals ═══ */}
@@ -515,10 +607,10 @@ export default function PADashboardPage() {
                       {meetingRequests.length > 0 && (
                         <BannerSection title={`Meetings to Approve (${meetingRequests.length})`} color="#2563eb">
                           {meetingRequests.map((r) => (
-                            <div key={r.id} style={{ padding: "8px 16px 8px 48px", borderBottom: `1px solid #f1f5f9`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div key={r.id} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                               <div>
-                                <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{r.meeting_title}</div>
-                                <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{r.requested_by_name || "—"} · {formatDateUK(r.requested_date)}</div>
+                                <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{r.meeting_title}</div>
+                                <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{r.requested_by_name || "—"} · {formatDateUK(r.requested_date)}</div>
                               </div>
                               <button onClick={() => approveMeeting(r.id)} style={actionBtn(COLOURS.GREEN)}>Approve</button>
                             </div>
@@ -529,7 +621,7 @@ export default function PADashboardPage() {
                   )}
                 </div>
               ) : (
-                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "12px 16px", backgroundColor: "white", fontSize: "16px", color: COLOURS.NAVY, fontWeight: 600, marginBottom: "14px" }}>
+                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "12px 16px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "16px", color: "var(--text-primary, #1e293b)", fontWeight: 600, marginBottom: "14px" }}>
                   All clear — nothing needs your attention right now.
                 </div>
               )}
@@ -537,8 +629,8 @@ export default function PADashboardPage() {
               {/* ═══ TASK MANAGEMENT ═══ */}
               {/* Bulk action bar */}
               {bulkAction && selectedTasks.size > 0 && (
-                <div style={{ display: "flex", gap: "6px", alignItems: "center", padding: "10px 14px", backgroundColor: "#f8fafc", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{selectedTasks.size} selected</span>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center", padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{selectedTasks.size} selected</span>
                   <button onClick={bulkComplete} style={actionBtn(COLOURS.GREEN)} title="Complete all selected">Complete All</button>
                   <select onChange={(e) => { if (e.target.value) bulkReassign(e.target.value); e.target.value = ""; }}
                     style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}>
@@ -557,25 +649,25 @@ export default function PADashboardPage() {
                   { key: "all" as const, label: `All Open (${openTasks.length})` },
                 ]).map((tab) => (
                   <button key={tab.key} onClick={() => { setActiveTab(tab.key); setViewPerson(null); }} style={{
-                    backgroundColor: activeTab === tab.key ? COLOURS.NAVY : "white",
-                    color: activeTab === tab.key ? "white" : COLOURS.NAVY,
+                    backgroundColor: activeTab === tab.key ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
+                    color: activeTab === tab.key ? "white" : "var(--text-primary, #1e293b)",
                     border: `1px solid ${activeTab === tab.key ? COLOURS.NAVY : COLOURS.BORDER}`,
                     borderRadius: "6px", padding: "7px 14px", fontSize: "14px", fontWeight: 600, cursor: "pointer",
                   }}>{tab.label}</button>
                 ))}
                 <div style={{ flex: 1 }} />
                 <button onClick={() => { setBulkAction(!bulkAction); setSelectedTasks(new Set()); }} style={{
-                  backgroundColor: bulkAction ? "#d97706" : "white", color: bulkAction ? "white" : COLOURS.NAVY,
+                  backgroundColor: bulkAction ? "#d97706" : "var(--bg-card, #ffffff)", color: bulkAction ? "white" : "var(--text-primary, #1e293b)",
                   border: `1px solid ${bulkAction ? "#d97706" : COLOURS.BORDER}`,
                   borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
                 }} title="Select multiple tasks for bulk actions">{bulkAction ? "Cancel Select" : "Bulk Select"}</button>
               </div>
 
               {/* Tab content */}
-              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
                 {activeTab === "upcoming" && (
                   upcomingTasks.length === 0 ? (
-                    <div style={{ padding: "16px", color: COLOURS.SLATE, textAlign: "center" }}>No tasks due in the next 7 days.</div>
+                    <div style={{ padding: "16px", color: "var(--text-secondary, #64748b)", textAlign: "center" }}>No tasks due in the next 7 days.</div>
                   ) : (
                     <div style={{ maxHeight: "500px", overflowY: "auto" }}>
                       {upcomingTasks.map((t) => {
@@ -584,8 +676,8 @@ export default function PADashboardPage() {
                         return (
                           <div key={t.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "9px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.description}</div>
-                              <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{t.assigned_to || "Unassigned"}</div>
+                              <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.description}</div>
+                              <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{t.assigned_to || "Unassigned"}</div>
                             </div>
                             <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
                               <span style={{ fontSize: "13px", fontWeight: 700, color: urgency }}>
@@ -607,14 +699,14 @@ export default function PADashboardPage() {
                       <div key={p.name} onClick={() => setViewPerson(p.name)}
                         style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "9px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
                         <div>
-                          <span style={{ fontWeight: 600, fontSize: "14px", color: COLOURS.NAVY }}>{p.name}</span>
-                          <span style={{ color: COLOURS.SLATE, fontSize: "13px", marginLeft: "6px" }}>({p.total} tasks)</span>
+                          <span style={{ fontWeight: 600, fontSize: "16px", color: "var(--text-primary, #1e293b)" }}>{p.name}</span>
+                          <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", marginLeft: "6px" }}>({p.total} tasks)</span>
                         </div>
                         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                           {p.overdue > 0 && <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.RED }}>{p.overdue} overdue</span>}
                           {p.waiting > 0 && <span style={{ fontSize: "12px", fontWeight: 700, color: "#d97706" }}>{p.waiting} waiting</span>}
                           {p.overdue === 0 && p.waiting === 0 && <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.GREEN, display: "inline-block" }} />}
-                          <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>▶</span>
+                          <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>▶</span>
                         </div>
                       </div>
                     ))}
@@ -623,9 +715,9 @@ export default function PADashboardPage() {
 
                 {activeTab === "people" && viewPerson && viewTasks && (
                   <>
-                    <div style={{ padding: "10px 14px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{viewPerson} — {viewTasks.length} tasks</span>
-                      <button onClick={() => setViewPerson(null)} style={{ background: "transparent", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", padding: "4px 10px", fontSize: "13px", color: COLOURS.SLATE, cursor: "pointer" }}>← Back</button>
+                    <div style={{ padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{viewPerson} — {viewTasks.length} tasks</span>
+                      <button onClick={() => setViewPerson(null)} style={{ background: "transparent", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", padding: "4px 10px", fontSize: "15px", color: "var(--text-secondary, #64748b)", cursor: "pointer" }}>← Back</button>
                     </div>
                     <div style={{ maxHeight: "500px", overflowY: "auto" }}>
                       {viewTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a)).map((t) => <TaskCard key={t.id} task={t} />)}
@@ -660,11 +752,42 @@ export default function PADashboardPage() {
 function KPICard({ value, label, color }: { value: number; label: string; color: string }) {
   return (
     <div style={{
-      border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${color}`,
-      borderRadius: "8px", padding: "12px 14px", backgroundColor: "white",
+      border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${color}`,
+      borderRadius: "12px", padding: "14px 16px", backgroundColor: "var(--bg-card, white)",
     }}>
-      <div style={{ fontSize: "24px", fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+      <div style={{ fontSize: "26px", fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginTop: "6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+    </div>
+  );
+}
+
+function PASkeleton({ isMobile }: { isMobile: boolean }) {
+  const pulse: React.CSSProperties = {
+    borderRadius: "6px",
+    background: "linear-gradient(90deg, var(--border-color, #e2e8f0) 25%, var(--border-light, #f1f5f9) 50%, var(--border-color, #e2e8f0) 75%)",
+    backgroundSize: "200% 100%",
+    animation: "shimmer 1.5s ease-in-out infinite",
+  };
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr minmax(200px, 280px)", gap: "16px", marginBottom: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} style={{ backgroundColor: "var(--bg-card, white)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px", padding: "14px 16px" }}>
+              <div style={{ ...pulse, width: "40px", height: "26px" }} />
+              <div style={{ ...pulse, width: "70px", height: "12px", marginTop: "8px" }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ backgroundColor: "var(--bg-card, white)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px", padding: "16px" }}>
+          <div style={{ ...pulse, width: "100px", height: "14px", marginBottom: "12px" }} />
+          <div style={{ ...pulse, width: "100%", height: "120px", borderRadius: "50%" }} />
+        </div>
+      </div>
+      <div style={{ backgroundColor: "var(--bg-card, white)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px", padding: "16px" }}>
+        <div style={{ ...pulse, width: "120px", height: "14px", marginBottom: "12px" }} />
+        {[1, 2, 3, 4, 5].map((i) => <div key={i} style={{ ...pulse, width: "100%", height: "14px", marginBottom: "10px" }} />)}
+      </div>
     </div>
   );
 }
@@ -672,21 +795,21 @@ function KPICard({ value, label, color }: { value: number; label: string; color:
 function BannerSection({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ padding: "8px 16px", fontSize: "13px", fontWeight: 700, color, borderBottom: `1px solid #f1f5f9` }}>{title}</div>
-      <div style={{ backgroundColor: "white" }}>{children}</div>
+      <div style={{ padding: "8px 16px", fontSize: "15px", fontWeight: 700, color, borderBottom: "1px solid var(--border-light, #f1f5f9)" }}>{title}</div>
+      <div style={{ backgroundColor: "var(--bg-card, #ffffff)" }}>{children}</div>
     </div>
   );
 }
 
 function BannerItem({ href, primary, secondary, badge }: { href: string; primary: string; secondary: string; badge?: string | null }) {
   return (
-    <a href={href} style={{ textDecoration: "none", color: "inherit", display: "block", borderBottom: `1px solid #f1f5f9` }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "#f8fafc"; }}
+    <a href={href} style={{ textDecoration: "none", color: "inherit", display: "block", borderBottom: "1px solid var(--border-light, #f1f5f9)" }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "var(--bg-card-hover, #f8fafc)"; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "transparent"; }}>
       <div style={{ padding: "7px 16px 7px 48px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{primary}</div>
-          <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{secondary}</div>
+          <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{primary}</div>
+          <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{secondary}</div>
         </div>
         <div style={{ display: "flex", gap: "4px", alignItems: "center", flexShrink: 0 }}>
           {badge && <PriorityBadge priority={badge} />}
@@ -703,14 +826,16 @@ const actionBtn = (color: string): React.CSSProperties => ({
 });
 
 const controlStyle: React.CSSProperties = {
-  padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px",
+  padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px",
+  backgroundColor: "var(--bg-input, #ffffff)", color: "var(--text-primary, #1e293b)",
 };
 
 const labelStyle: React.CSSProperties = {
-  display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "6px",
+  display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "6px",
 };
 
 const inputStyle: React.CSSProperties = {
   display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
   border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+  backgroundColor: "var(--bg-input, #ffffff)", color: "var(--text-primary, #1e293b)",
 };

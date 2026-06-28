@@ -36,9 +36,9 @@ type Task = {
   created_at: string | null;
 };
 
-const NAVY = "#1e293b";
-const SLATE = "#64748b";
-const BORDER = "#e2e8f0";
+const NAVY = "var(--text-primary, #1e293b)";
+const SLATE = "var(--text-secondary, #64748b)";
+const BORDER = "var(--border-color, #e2e8f0)";
 
 function statusColor(status: string) {
   switch (status) {
@@ -237,10 +237,10 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     return (
       <div id={`task-${task.id}`} style={{ borderBottom: `1px solid ${BORDER}` }}>
         <div onClick={() => setExpandedTaskId(isOpen ? null : task.id)}
-          style={{ padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", backgroundColor: overdue ? "#fef2f2" : isOpen ? "#f8fafc" : "white" }}>
+          style={{ padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", backgroundColor: overdue ? "#fef2f2" : isOpen ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
-            <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ fontSize: "16px", fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
+            <div style={{ fontSize: "14px", color: SLATE, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
               <span>{task.assigned_to || "Unassigned"}</span>
               {task.due_date && (
                 <span style={{ color: overdue ? "#dc2626" : SLATE, fontWeight: overdue ? 700 : 400 }}>
@@ -258,24 +258,24 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               </span>
             </div>
           </div>
-          <span style={{ color: SLATE, fontSize: "13px", flexShrink: 0 }}>{isOpen ? "▼" : "▶"}</span>
+          <span style={{ color: SLATE, fontSize: "15px", flexShrink: 0 }}>{isOpen ? "▼" : "▶"}</span>
         </div>
 
         {isOpen && (
-          <div style={{ padding: "10px 14px", backgroundColor: "#f8fafc", borderTop: `1px solid ${BORDER}` }}>
-            <div style={{ fontSize: "13px", color: SLATE, marginBottom: "6px" }}>
+          <div style={{ padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderTop: `1px solid ${BORDER}` }}>
+            <div style={{ fontSize: "15px", color: SLATE, marginBottom: "6px" }}>
               Type: <strong>{task.task_type || "Task"}</strong> · Assigned by: <strong>{task.assigned_by || "—"}</strong> · Date: {formatDateUK(task.assigned_date)} · Project: {task.project || "—"}
               {task.meeting_id && (
                 <span> · <a href={`/my-minutes?meeting=${task.meeting_id}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>View Minutes →</a></span>
               )}
             </div>
-            {task.notes && <div style={{ fontSize: "13px", color: SLATE, marginBottom: "6px" }}>Notes: {task.notes}</div>}
+            {task.notes && <div style={{ fontSize: "15px", color: SLATE, marginBottom: "6px" }}>Notes: {task.notes}</div>}
             {task.reply_text && (
-              <div style={{ padding: "8px 10px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", borderRadius: "6px", color: "#166534", fontSize: "13px", marginBottom: "8px" }}>
+              <div style={{ padding: "8px 10px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", borderRadius: "6px", color: "#166534", fontSize: "15px", marginBottom: "8px" }}>
                 <strong>Explanation:</strong> {task.reply_text}
                 {task.corrective_action && <div style={{ marginTop: "4px" }}><strong>Corrective action:</strong> {task.corrective_action}</div>}
                 {task.recovery_date && <div style={{ marginTop: "4px" }}><strong>Expected recovery:</strong> {formatDateUK(task.recovery_date)}</div>}
-                <div style={{ marginTop: "4px", fontSize: "12px" }}>By {task.reply_by || "unknown"} {task.reply_at ? `on ${formatDateUK(task.reply_at)}` : ""}</div>
+                <div style={{ marginTop: "4px", fontSize: "14px" }}>By {task.reply_by || "unknown"} {task.reply_at ? `on ${formatDateUK(task.reply_at)}` : ""}</div>
               </div>
             )}
             <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} canReview={canReview ?? isPrivileged} canEditDueDate={canReview ?? isPrivileged} />
@@ -285,7 +285,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   <a href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
                     target="_blank" rel="noopener noreferrer" style={{
                       backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "5px",
-                      padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer", textDecoration: "none",
+                      padding: "4px 12px", fontSize: "14px", fontWeight: 700, cursor: "pointer", textDecoration: "none",
                     }} title="Send WhatsApp reminder to assignee">
                     WhatsApp
                   </a>
@@ -297,8 +297,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                     loadTasks();
                   }}
                   style={{
-                    backgroundColor: "white", color: "#dc2626", border: "1px solid #dc2626",
-                    borderRadius: "5px", padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                    backgroundColor: "var(--bg-card, #ffffff)", color: "#dc2626", border: "1px solid #dc2626",
+                    borderRadius: "5px", padding: "4px 12px", fontSize: "14px", fontWeight: 700, cursor: "pointer",
                   }}
                   title="Permanently delete this task"
                 >
@@ -330,26 +330,26 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>
                   {overdueTasks.length} overdue task{overdueTasks.length > 1 ? "s" : ""} need attention
                 </div>
-                <div style={{ fontSize: "13px", color: "#991b1b", marginTop: "1px" }}>
+                <div style={{ fontSize: "15px", color: "#991b1b", marginTop: "1px" }}>
                   {overdueTasks.slice(0, 3).map((t) => `${t.assigned_to || "Unassigned"}: ${t.description.slice(0, 30)}${t.description.length > 30 ? "…" : ""}`).join(" · ")}
                   {overdueTasks.length > 3 && ` · +${overdueTasks.length - 3} more`}
                 </div>
               </div>
             </div>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b" }}>{bannerOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b" }}>{bannerOpen ? "▲" : "▼"}</span>
           </div>
           {bannerOpen && (
-            <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "white" }}>
+            <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "var(--bg-card, #ffffff)" }}>
               {overdueTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a)).map((t) => (
                 <div key={t.id} onClick={() => { setExpandedTaskId(t.id); setBannerOpen(false); setTimeout(() => document.getElementById(`task-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}
-                  style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                  style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#fef2f2"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "white"; }}>
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "var(--bg-card, #ffffff)"; }}>
                   <div>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY }}>{t.description}</div>
-                    <div style={{ fontSize: "12px", color: SLATE }}>{t.assigned_to || "Unassigned"}</div>
+                    <div style={{ fontSize: "16px", fontWeight: 600, color: NAVY }}>{t.description}</div>
+                    <div style={{ fontSize: "14px", color: SLATE }}>{t.assigned_to || "Unassigned"}</div>
                   </div>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#dc2626", flexShrink: 0 }}>{daysOverdue(t)}d late</span>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: "#dc2626", flexShrink: 0 }}>{daysOverdue(t)}d late</span>
                 </div>
               ))}
             </div>
@@ -430,10 +430,10 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap" }}>
         {(["weekly", "monthly", "quarterly"] as const).map((v) => (
           <button key={v} onClick={() => setTimeView(v)} style={{
-            backgroundColor: timeView === v ? NAVY : "white",
+            backgroundColor: timeView === v ? NAVY : "var(--bg-card, #ffffff)",
             color: timeView === v ? "white" : NAVY,
             border: `1px solid ${timeView === v ? NAVY : BORDER}`,
-            borderRadius: "6px", padding: "7px 16px", fontSize: "14px", fontWeight: 600, cursor: "pointer",
+            borderRadius: "6px", padding: "7px 16px", fontSize: "16px", fontWeight: 600, cursor: "pointer",
             textTransform: "capitalize",
           }}>{v}</button>
         ))}
@@ -441,25 +441,25 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         {/* Filters */}
         {(["all", "overdue", "waiting"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} style={{
-            backgroundColor: filter === f ? (f === "overdue" ? "#dc2626" : f === "waiting" ? "#d97706" : NAVY) : "white",
+            backgroundColor: filter === f ? (f === "overdue" ? "#dc2626" : f === "waiting" ? "#d97706" : NAVY) : "var(--bg-card, #ffffff)",
             color: filter === f ? "white" : NAVY,
             border: `1px solid ${filter === f ? "transparent" : BORDER}`,
-            borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+            borderRadius: "6px", padding: "6px 12px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
           }}>{f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueTasks.length})` : `Waiting (${waitingReply.length})`}</button>
         ))}
       </div>
 
       {/* ═══ WEEKLY VIEW ═══ */}
       {timeView === "weekly" && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
           {weekOrder.filter((g) => weekGroups.has(g)).map((group) => {
             const groupTasks = (filter === "overdue" ? weekGroups.get(group)!.filter(isOverdue) : filter === "waiting" ? weekGroups.get(group)!.filter((t) => t.status === "Waiting Reply") : weekGroups.get(group)!);
             if (groupTasks.length === 0) return null;
             return (
               <div key={group}>
-                <div style={{ padding: "8px 14px", backgroundColor: "#f8fafc", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: weekGroupColor(group) }}>{group}</span>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: SLATE }}>{groupTasks.length} task{groupTasks.length > 1 ? "s" : ""}</span>
+                <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "16px", fontWeight: 700, color: weekGroupColor(group) }}>{group}</span>
+                  <span style={{ fontSize: "15px", fontWeight: 600, color: SLATE }}>{groupTasks.length} task{groupTasks.length > 1 ? "s" : ""}</span>
                 </div>
                 {groupTasks.map((t) => <TaskRow key={t.id} task={t} />)}
               </div>
@@ -475,7 +475,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {timeView === "monthly" && (
         <>
           {monthlyData.length > 0 && (
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
               <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Tasks Created vs Completed — Last 6 Months</div>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={monthlyData}>
@@ -490,7 +490,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               </ResponsiveContainer>
             </div>
           )}
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
             {filteredTasks.length === 0 ? (
               <div style={{ padding: "16px", textAlign: "center", color: SLATE }}>No tasks match this filter.</div>
             ) : (
@@ -504,7 +504,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {timeView === "quarterly" && (
         <>
           {quarterlyData.length > 0 && (
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
               <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Quarterly Overview</div>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={quarterlyData}>
@@ -524,9 +524,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           {/* Quarterly summary cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginBottom: "14px" }}>
             {quarterlyData.map((q) => (
-              <div key={q.quarter} style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px", backgroundColor: "white" }}>
+              <div key={q.quarter} style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
                 <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>{q.quarter}</div>
-                <div style={{ display: "flex", gap: "12px", fontSize: "14px" }}>
+                <div style={{ display: "flex", gap: "12px", fontSize: "16px" }}>
                   <span style={{ color: "#dc2626", fontWeight: 700 }}>{q.overdue} overdue</span>
                   <span style={{ color: "#2563eb", fontWeight: 700 }}>{q.active} active</span>
                   <span style={{ color: "#16a34a", fontWeight: 700 }}>{q.completed} done</span>
@@ -535,7 +535,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             ))}
           </div>
 
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden", marginBottom: "14px" }}>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
             {filteredTasks.length === 0 ? (
               <div style={{ padding: "16px", textAlign: "center", color: SLATE }}>No tasks match this filter.</div>
             ) : (
@@ -554,8 +554,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
 function MiniCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "white" }}>
-      <div style={{ color: SLATE, fontSize: "13px", marginBottom: "1px" }}>{label}</div>
+    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+      <div style={{ color: SLATE, fontSize: "15px", marginBottom: "1px" }}>{label}</div>
       <div style={{ fontSize: "20px", fontWeight: 800, color }}>{value}</div>
     </div>
   );

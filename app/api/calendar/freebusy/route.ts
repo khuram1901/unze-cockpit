@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
     const timeMin = `${dateParam}T00:00:00+05:00`;
     const timeMax = `${endDate}T23:59:59+05:00`;
 
-    // Fetch ALL connected Google accounts
     const supabase = createServiceClient();
     const { data: tokens } = await supabase
       .from("google_oauth_tokens")
@@ -25,10 +24,11 @@ export async function GET(request: NextRequest) {
       .order("created_at");
 
     if (!tokens || tokens.length === 0) {
-      return Response.json({ busy: [], dateRange: { from: dateParam, to: endDate } });
+      return Response.json({ busy: [], accounts: 0, dateRange: { from: dateParam, to: endDate }, debug: "no_tokens" });
     }
 
-    const allBusy: { start: string; end: string }[] = [];
+    const allBusy: { start: string; end: string; title?: string; account?: string }[] = [];
+    const accountResults: { email: string; status: string; busyCount: number; error?: string }[] = [];
 
     for (const tokenRow of tokens) {
       try {
@@ -37,38 +37,71 @@ export async function GET(request: NextRequest) {
           process.env.GOOGLE_CLIENT_SECRET,
           process.env.GOOGLE_REDIRECT_URI
         );
+
+        const accessToken = safeDecrypt(tokenRow.access_token);
+        const refreshToken = safeDecrypt(tokenRow.refresh_token);
+
         oauth2Client.setCredentials({
-          access_token: safeDecrypt(tokenRow.access_token),
-          refresh_token: safeDecrypt(tokenRow.refresh_token),
+          access_token: accessToken,
+          refresh_token: refreshToken,
           expiry_date: tokenRow.token_expiry ? new Date(tokenRow.token_expiry).getTime() : undefined,
         });
 
-        // Auto-refresh tokens
         oauth2Client.on("tokens", async (newTokens) => {
           const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
           if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
+          if (newTokens.refresh_token) updates.refresh_token = encrypt(newTokens.refresh_token);
           if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
           await supabase.from("google_oauth_tokens").update(updates).eq("id", tokenRow.id);
         });
 
         const calendar = google.calendar({ version: "v3", auth: oauth2Client });
-        const res = await calendar.freebusy.query({
-          requestBody: { timeMin, timeMax, items: [{ id: "primary" }] },
-        });
 
-        const busy = res.data.calendars?.primary?.busy || [];
-        for (const b of busy) {
-          if (b.start && b.end) allBusy.push({ start: b.start, end: b.end });
+        const calendarList = await calendar.calendarList.list();
+        const calendarIds = (calendarList.data.items || [])
+          .filter((c) => !c.deleted && c.accessRole !== "freeBusyReader")
+          .map((c) => c.id || "primary");
+
+        let eventCount = 0;
+        for (const calId of calendarIds) {
+          try {
+            const eventsRes = await calendar.events.list({
+              calendarId: calId,
+              timeMin,
+              timeMax,
+              singleEvents: true,
+              orderBy: "startTime",
+              maxResults: 250,
+            });
+
+            for (const ev of eventsRes.data.items || []) {
+              const start = ev.start?.dateTime || ev.start?.date;
+              const end = ev.end?.dateTime || ev.end?.date;
+              if (start && end) {
+                allBusy.push({ start, end, title: ev.summary || "Busy", account: tokenRow.user_email });
+                eventCount++;
+              }
+            }
+          } catch {
+            // skip calendars we can't read
+          }
         }
-      } catch {
-        // Skip failed accounts silently — other accounts still contribute
+
+        accountResults.push({
+          email: tokenRow.user_email,
+          status: "ok",
+          busyCount: eventCount,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        accountResults.push({ email: tokenRow.user_email, status: "failed", busyCount: 0, error: msg });
       }
     }
 
-    // Return only start/end times — NO event details (privacy rule)
     return Response.json({
       busy: allBusy,
       accounts: tokens.length,
+      accountResults,
       dateRange: { from: dateParam, to: endDate },
     });
   } catch (err) {

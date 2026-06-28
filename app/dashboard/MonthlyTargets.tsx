@@ -15,9 +15,9 @@ type MonthlyTarget = {
   submitted_by: string | null; notes: string | null;
 };
 
-const NAVY = COLOURS.NAVY;
-const SLATE = COLOURS.SLATE;
-const BORDER = COLOURS.BORDER;
+const NAVY = "var(--text-primary, #1e293b)";
+const SLATE = "var(--text-secondary, #64748b)";
+const BORDER = "var(--border-color, #e2e8f0)";
 
 function currentMonth() { return new Date().toISOString().slice(0, 7); }
 function formatMonthUK(m: string) { const [y, mo] = m.split("-"); return `${mo}/${y}`; }
@@ -141,19 +141,19 @@ export default function MonthlyTargets() {
     <div>
       <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "10px", flexWrap: "wrap" }}>
         <input type="month" value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)}
-          style={{ padding: "5px 8px", border: `1px solid ${BORDER}`, borderRadius: "5px", fontSize: "13px" }} />
+          style={{ padding: "5px 8px", border: `1px solid ${BORDER}`, borderRadius: "5px", fontSize: "15px" }} />
         {canEdit && (
           <button onClick={() => setShowForm(!showForm)} style={{
             backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px",
-            padding: "5px 12px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+            padding: "5px 12px", fontSize: "15px", fontWeight: 700, cursor: "pointer",
           }}>{showForm ? "Cancel" : "+ Set Target"}</button>
         )}
       </div>
 
-      {message && <div style={{ fontSize: "13px", fontWeight: 600, color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, marginBottom: "8px" }}>{message}</div>}
+      {message && <div style={{ fontSize: "15px", fontWeight: 600, color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, marginBottom: "8px" }}>{message}</div>}
 
       {showForm && canEdit && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "10px", backgroundColor: "#f8fafc" }}>
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "10px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
           <form onSubmit={handleSubmit}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "6px" }}>
               <div><label style={lbl}>Type</label><select style={inp} value={targetType} onChange={(e) => setTargetType(e.target.value as "production" | "dispatch")}><option value="production">Production</option><option value="dispatch">Dispatch</option></select></div>
@@ -168,15 +168,15 @@ export default function MonthlyTargets() {
                 <div><label style={lbl}>Meters</label><input type="number" min="0" style={inp} value={targetMeter} onChange={(e) => setTargetMeter(e.target.value)} placeholder="0" /></div>
               )}
             </div>
-            {existingTarget && <div style={{ fontSize: "12px", color: "#d97706", marginTop: "4px" }}>Existing target found — saving will update it.</div>}
-            <button type="submit" disabled={saving} style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px", padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", marginTop: "6px" }}>{saving ? "Saving..." : existingTarget ? "Update" : "Save"}</button>
+            {existingTarget && <div style={{ fontSize: "14px", color: "#d97706", marginTop: "4px" }}>Existing target found — saving will update it.</div>}
+            <button type="submit" disabled={saving} style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px", padding: "6px 14px", fontSize: "15px", fontWeight: 700, cursor: "pointer", marginTop: "6px" }}>{saving ? "Saving..." : existingTarget ? "Update" : "Save"}</button>
           </form>
         </div>
       )}
 
       {chartData.length > 0 && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", backgroundColor: "white", marginBottom: "10px" }}>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>Target vs Actual — {formatMonthUK(targetMonth)}</div>
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "10px" }}>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>Target vs Actual — {formatMonthUK(targetMonth)}</div>
           <ResponsiveContainer width="100%" height={Math.max(140, chartData.length * 40)}>
             <BarChart data={chartData} layout="vertical" margin={{ left: 5, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
@@ -199,26 +199,26 @@ export default function MonthlyTargets() {
             const prodColor = d.prodPct >= 95 ? COLOURS.GREEN : d.prodPct >= 85 ? "#d97706" : COLOURS.RED;
             const dispColor = d.dispPct >= 95 ? COLOURS.GREEN : d.dispPct >= 85 ? "#d97706" : COLOURS.RED;
             return (
-              <div key={d.plant.id} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", backgroundColor: "white" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>{d.plant.name}</div>
+              <div key={d.plant.id} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>{d.plant.name}</div>
                 {d.prodTarget > 0 && (
                   <div style={{ marginBottom: "4px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "2px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "2px" }}>
                       <span style={{ color: SLATE }}>Production</span>
                       <span style={{ fontWeight: 700, color: prodColor }}>{d.prodActual.toLocaleString()} / {d.prodTarget.toLocaleString()} ({d.prodPct}%)</span>
                     </div>
-                    <div style={{ height: "8px", backgroundColor: "#f1f5f9", borderRadius: "4px" }}>
+                    <div style={{ height: "8px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "4px" }}>
                       <div style={{ width: `${Math.min(d.prodPct, 100)}%`, height: "100%", backgroundColor: prodColor, borderRadius: "4px" }} />
                     </div>
                   </div>
                 )}
                 {d.dispTarget > 0 && (
                   <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "2px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "2px" }}>
                       <span style={{ color: SLATE }}>Dispatch</span>
                       <span style={{ fontWeight: 700, color: dispColor }}>{d.dispActual.toLocaleString()} / {d.dispTarget.toLocaleString()} ({d.dispPct}%)</span>
                     </div>
-                    <div style={{ height: "8px", backgroundColor: "#f1f5f9", borderRadius: "4px" }}>
+                    <div style={{ height: "8px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "4px" }}>
                       <div style={{ width: `${Math.min(d.dispPct, 100)}%`, height: "100%", backgroundColor: dispColor, borderRadius: "4px" }} />
                     </div>
                   </div>
@@ -228,11 +228,11 @@ export default function MonthlyTargets() {
           })}
         </div>
       ) : (
-        <div style={{ fontSize: "13px", color: SLATE }}>No targets set for {formatMonthUK(targetMonth)}.</div>
+        <div style={{ fontSize: "15px", color: SLATE }}>No targets set for {formatMonthUK(targetMonth)}.</div>
       )}
     </div>
   );
 }
 
-const inp: React.CSSProperties = { display: "block", width: "100%", padding: "5px 8px", marginTop: "2px", border: `1px solid ${BORDER}`, borderRadius: "5px", fontSize: "13px", boxSizing: "border-box" };
-const lbl: React.CSSProperties = { display: "block", fontSize: "11px", fontWeight: 600, color: SLATE };
+const inp: React.CSSProperties = { display: "block", width: "100%", padding: "5px 8px", marginTop: "2px", border: `1px solid ${BORDER}`, borderRadius: "5px", fontSize: "15px", boxSizing: "border-box" };
+const lbl: React.CSSProperties = { display: "block", fontSize: "13px", fontWeight: 600, color: SLATE };

@@ -21,7 +21,7 @@ export default function RootPage() {
 
   return (
     <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f4f6f9" }}>
-      <p style={{ color: "#64748b", fontSize: "16px" }}>Loading...</p>
+      <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "16px" }}>Loading...</p>
     </main>
   );
 }

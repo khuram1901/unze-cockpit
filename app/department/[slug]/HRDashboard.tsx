@@ -30,10 +30,10 @@ function daysSince(dateStr: string | null): number {
 
 const inp: React.CSSProperties = {
   display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+  border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
 };
 const lbl: React.CSSProperties = {
-  display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px",
+  display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "4px",
 };
 
 export default function HRDashboard() {
@@ -103,10 +103,10 @@ export default function HRDashboard() {
 
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-      <PageHeader title="Human Resources" subtitle="Recruitment pipeline and position tracking" />
+      <PageHeader />
 
       {message && (
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "white", fontSize: "15px", color: COLOURS.NAVY }}>{message}</div>
+        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>{message}</div>
       )}
 
       {/* Alert Banner */}
@@ -123,14 +123,14 @@ export default function HRDashboard() {
             <span style={{ fontSize: "14px", fontWeight: 700, color: "#991b1b" }}>{bannerOpen ? "▲" : "▼"}</span>
           </div>
           {bannerOpen && (
-            <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "white" }}>
+            <div style={{ borderTop: "1px solid #fecaca", backgroundColor: "var(--bg-card, #ffffff)" }}>
               {longOpen.map((i) => (
-                <div key={i.id} onClick={() => { setExpandedId(i.id); setBannerOpen(false); }} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div key={i.id} onClick={() => { setExpandedId(i.id); setBannerOpen(false); }} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{i.position_title}</div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{i.department || "—"} · Opened: {formatDateUK(i.date_opened)}</div>
+                    <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{i.position_title}</div>
+                    <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{i.department || "—"} · Opened: {formatDateUK(i.date_opened)}</div>
                   </div>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#dc2626" }}>{daysSince(i.date_opened)}d open</span>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: "#dc2626" }}>{daysSince(i.date_opened)}d open</span>
                 </div>
               ))}
             </div>
@@ -148,8 +148,8 @@ export default function HRDashboard() {
             <CountCard label="Total" value={items.length} color={COLOURS.BLUE} />
           </div>
           {donutData.length > 0 && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>Recruitment Pipeline</div>
+            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "6px" }}>Recruitment Pipeline</div>
               <ResponsiveContainer width="100%" height={160}>
                 <PieChart>
                   <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
@@ -160,7 +160,7 @@ export default function HRDashboard() {
               </ResponsiveContainer>
               <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
                 {donutData.map((d) => (
-                  <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: COLOURS.SLATE }}>
+                  <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
                     <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                   </div>
                 ))}
@@ -173,11 +173,11 @@ export default function HRDashboard() {
       {/* Add button + form */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <SectionTitle title="Positions" />
-        <button onClick={() => setShowForm(!showForm)} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>{showForm ? "Cancel" : "+ Add"}</button>
+        <button onClick={() => setShowForm(!showForm)} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer" }}>{showForm ? "Cancel" : "+ Add"}</button>
       </div>
 
       {showForm && (
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", marginBottom: "14px" }}>
+        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
           <form onSubmit={handleAdd}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
               <label style={lbl}>Position Title <input style={inp} value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Finance Manager" /></label>
@@ -185,45 +185,45 @@ export default function HRDashboard() {
               <label style={lbl}>Date Opened <input type="date" style={inp} value={dateOpened} onChange={(e) => setDateOpened(e.target.value)} required /></label>
               <label style={{ ...lbl, gridColumn: isMobile ? undefined : "1 / -1" }}>Notes <textarea style={{ ...inp, height: "50px" }} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
             </div>
-            <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "14px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Save"}</button>
+            <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Save"}</button>
           </form>
         </div>
       )}
 
       {/* Records */}
       {loading ? (
-        <p style={{ color: COLOURS.SLATE }}>Loading…</p>
+        <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading…</p>
       ) : items.length === 0 ? (
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "white", color: COLOURS.SLATE }}>No positions yet.</div>
+        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)" }}>No positions yet.</div>
       ) : (
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "white", overflow: "hidden" }}>
+        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
           {items.map((item) => {
             const isOpen = expandedId === item.id;
             const days = daysSince(item.date_opened);
             const isLong = days > 60 && item.status !== "Filled" && item.status !== "Cancelled";
             return (
-              <div key={item.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+              <div key={item.id} style={{ borderBottom: "1px solid var(--border-color, #e2e8f0)" }}>
                 <div onClick={() => setExpandedId(isOpen ? null : item.id)} style={{
                   padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                  backgroundColor: isLong ? "#fef2f2" : isOpen ? "#f8fafc" : "white",
+                  backgroundColor: isLong ? "#fef2f2" : isOpen ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{item.position_title}</div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                    <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{item.position_title}</div>
+                    <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>
                       {item.department || "—"} · Opened: {formatDateUK(item.date_opened)} · {days}d
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
                     <StatusBadge status={item.status} />
-                    <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>{isOpen ? "▼" : "▶"}</span>
+                    <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>{isOpen ? "▼" : "▶"}</span>
                   </div>
                 </div>
                 {isOpen && (
-                  <div style={{ padding: "10px 14px", backgroundColor: "#f8fafc", borderTop: `1px solid ${COLOURS.BORDER}` }}>
-                    {item.notes && <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "8px" }}>Notes: {item.notes}</div>}
+                  <div style={{ padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderTop: "1px solid var(--border-color, #e2e8f0)" }}>
+                    {item.notes && <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "8px" }}>Notes: {item.notes}</div>}
                     <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>Status:</span>
-                      <select value={item.status} onChange={(e) => updateStatus(item.id, e.target.value)} style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}>
+                      <span style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>Status:</span>
+                      <select value={item.status} onChange={(e) => updateStatus(item.id, e.target.value)} style={{ padding: "5px 8px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px" }}>
                         {STATUSES.map((s) => <option key={s}>{s}</option>)}
                       </select>
                     </div>

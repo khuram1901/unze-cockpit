@@ -203,35 +203,35 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
       <div onClick={() => setOpen(!open)} style={{
         display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
         border: `1px solid ${COLOURS.BORDER}`, borderRadius: open ? "8px 8px 0 0" : "8px", padding: "14px 18px",
-        backgroundColor: open ? COLOURS.NAVY : "white",
+        backgroundColor: open ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
         transition: "background-color 0.2s",
       }}>
         <div>
           <div style={{ fontSize: "17px", fontWeight: 700, color: open ? "white" : COLOURS.NAVY }}>Access Control Matrix</div>
-          <div style={{ fontSize: "12px", color: open ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
+          <div style={{ fontSize: "14px", color: open ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
             Toggle individual permissions per team member
           </div>
         </div>
-        <span style={{ color: open ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{open ? "▲" : "▼"}</span>
+        <span style={{ color: open ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{open ? "▲" : "▼"}</span>
       </div>
 
       {open && (
         <div style={{
           border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px",
-          backgroundColor: "white",
+          backgroundColor: "var(--bg-card, #ffffff)",
         }}>
           {!loaded ? (
             <div style={{ padding: "40px", textAlign: "center", color: COLOURS.SLATE }}>Loading permissions...</div>
           ) : (
             <>
               {/* Legend */}
-              <div style={{ padding: "8px 12px", display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "12px", color: COLOURS.SLATE, borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
+              <div style={{ padding: "8px 12px", display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "14px", color: COLOURS.SLATE, borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
                 <span style={{ fontWeight: 700 }}>Legend:</span>
                 <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
                   <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: COLOURS.GREEN, display: "inline-block" }} /> On
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                  <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: "#e2e8f0", border: "1px solid #cbd5e1", display: "inline-block" }} /> Off
+                  <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: "var(--border-color, #e2e8f0)", border: "1px solid #cbd5e1", display: "inline-block" }} /> Off
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
                   <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: COLOURS.GREEN, opacity: 0.35, display: "inline-block" }} /> Default
@@ -264,11 +264,11 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                     <tr>
                       <th style={{
                         ...stickyTh, left: 0, zIndex: 14, width: isMobile ? 110 : 140,
-                        backgroundColor: "#f1f5f9", borderBottom: "none",
+                        backgroundColor: "var(--border-light, #f1f5f9)", borderBottom: "none",
                       }} />
                       <th style={{
                         ...stickyTh, left: isMobile ? 110 : 140, zIndex: 14, width: 46,
-                        backgroundColor: "#f1f5f9", borderBottom: "none",
+                        backgroundColor: "var(--border-light, #f1f5f9)", borderBottom: "none",
                       }} />
                       {GROUPS.map((g) => {
                         const cols = PERM_COLUMNS.filter((c) => c.group === g);
@@ -282,7 +282,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                             fontSize: "11px",
                             fontWeight: 700,
                             letterSpacing: "0.3px",
-                            borderLeft: "2px solid white",
+                            borderLeft: "2px solid var(--bg-card, #ffffff)",
                             borderBottom: "none",
                           }}>{g}</th>
                         );
@@ -292,13 +292,13 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                     <tr>
                       <th style={{
                         ...stickyTh, top: 28, left: 0, zIndex: 14, width: isMobile ? 110 : 140,
-                        backgroundColor: "#f1f5f9", textAlign: "left",
-                        fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY,
+                        backgroundColor: "var(--border-light, #f1f5f9)", textAlign: "left",
+                        fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY,
                       }}>Member</th>
                       <th style={{
                         ...stickyTh, top: 28, left: isMobile ? 110 : 140, zIndex: 14, width: 46,
-                        backgroundColor: "#f1f5f9", textAlign: "center",
-                        fontSize: "11px", fontWeight: 700, color: COLOURS.NAVY,
+                        backgroundColor: "var(--border-light, #f1f5f9)", textAlign: "center",
+                        fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY,
                       }}>Role</th>
                       {PERM_COLUMNS.map((col, i) => {
                         const isGroupStart = i === 0 || PERM_COLUMNS[i - 1].group !== col.group;
@@ -308,10 +308,10 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                             padding: "5px 1px",
                             textAlign: "center",
                             cursor: "help",
-                            fontSize: "11px",
+                            fontSize: "13px",
                             fontWeight: 600,
                             color: COLOURS.SLATE,
-                            backgroundColor: "#f1f5f9",
+                            backgroundColor: "var(--border-light, #f1f5f9)",
                             borderBottom: `2px solid ${COLOURS.BORDER}`,
                             borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined,
                             whiteSpace: "nowrap",
@@ -330,19 +330,19 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                       const overrides = perms[m.id] || null;
 
                       return (
-                        <tr key={m.id} style={{ backgroundColor: locked ? "#fafafa" : "white" }}>
+                        <tr key={m.id} style={{ backgroundColor: locked ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)" }}>
                           <td style={{
                             ...stickyTd, left: 0, zIndex: 3,
-                            backgroundColor: locked ? "#fafafa" : "white",
+                            backgroundColor: locked ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                             borderRight: `1px solid ${COLOURS.BORDER}`,
                             borderBottom: `1px solid ${COLOURS.BORDER}`,
                             padding: "4px 6px",
                           }}>
-                            <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(m)}</div>
+                            <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "14px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(m)}</div>
                           </td>
                           <td style={{
                             ...stickyTd, left: isMobile ? 110 : 140, zIndex: 3,
-                            backgroundColor: locked ? "#fafafa" : "white",
+                            backgroundColor: locked ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                             borderRight: `1px solid ${COLOURS.BORDER}`,
                             borderBottom: `1px solid ${COLOURS.BORDER}`,
                             textAlign: "center", padding: "4px 2px",
@@ -376,7 +376,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                                     style={{
                                       fontSize: "9px", padding: "1px 2px", borderRadius: 3,
                                       border: `1px solid ${COLOURS.BORDER}`, cursor: canToggle ? "pointer" : "not-allowed",
-                                      backgroundColor: hasOverride ? "#dbeafe" : "white",
+                                      backgroundColor: hasOverride ? "#dbeafe" : "var(--bg-card, #ffffff)",
                                       opacity: isLoading ? 0.5 : 1,
                                       width: "100%", maxWidth: 44,
                                     }}
@@ -397,7 +397,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                                     width: 18, height: 18, margin: "0 auto",
                                     borderRadius: 4,
                                     border: "2px solid #111827",
-                                    backgroundColor: on ? COLOURS.GREEN : "#e2e8f0",
+                                    backgroundColor: on ? COLOURS.GREEN : "var(--border-color, #e2e8f0)",
                                     display: "flex", alignItems: "center", justifyContent: "center",
                                   }} title="Locked — Admin/CEO permissions cannot be changed">
                                     {on && <span style={{ color: "white", fontSize: 11, fontWeight: 700 }}>✓</span>}
@@ -419,7 +419,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                                       width: 18, height: 18, padding: 0, margin: "0 auto",
                                       borderRadius: 4, cursor: canToggle ? "pointer" : "not-allowed",
                                       border: hasOverride ? "2px solid #3b82f6" : "1px solid #cbd5e1",
-                                      backgroundColor: on ? COLOURS.GREEN : "#e2e8f0",
+                                      backgroundColor: on ? COLOURS.GREEN : "var(--border-color, #e2e8f0)",
                                       opacity: isLoading ? 0.3 : hasOverride ? 1 : 0.55,
                                       display: "flex", alignItems: "center", justifyContent: "center",
                                       transition: "all 0.15s",
