@@ -12,6 +12,7 @@ import { isPA, isPrivileged, canCreateAssignments } from "../lib/permissions";
 import { displayRole } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
+import { COMPANIES } from "../lib/constants";
 
 type TaskRow = { id: string; description: string; status: string; due_date: string | null; assigned_to: string | null; assigned_to_email: string | null; assigned_by: string | null; project: string | null; priority: string | null; updated_at: string | null };
 type MeetingRow = { id: string; title: string; meeting_date: string };
@@ -78,6 +79,7 @@ export default function HomePage() {
 
   type ManagerBriefingItem = { label: string; value: string; rag: "GREEN" | "AMBER" | "RED" };
   const [managerBriefing, setManagerBriefing] = useState<ManagerBriefingItem[]>([]);
+  const [managerBriefingTitle, setManagerBriefingTitle] = useState("");
 
   async function quickAction(taskId: string, action: "complete" | "chase", task: TaskRow) {
     if (action === "complete") {
@@ -107,7 +109,7 @@ export default function HomePage() {
       const email = user?.email || "";
       let fullName = email;
 
-      const { data: memberData } = await supabase.from("members").select("first_name, last_name, name, role, department").eq("email", email).maybeSingle();
+      const { data: memberData } = await supabase.from("members").select("first_name, last_name, name, role, department, company").eq("email", email).maybeSingle();
       if (memberData) {
         fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim() || memberData.name || email;
         setUserName(fullName);
@@ -286,43 +288,63 @@ export default function HomePage() {
         items.push({ label: "Ops tasks", value: `${deptOpen} open${deptOverdue > 0 ? `, ${deptOverdue} overdue` : ""}`, rag: deptOverdue === 0 ? "GREEN" : deptOverdue <= 3 ? "AMBER" : "RED" });
 
         setManagerBriefing(items);
+        setManagerBriefingTitle("Operations Briefing");
       }
 
       if (userRole === "Manager" && userDept === "Finance") {
         const items: ManagerBriefingItem[] = [];
 
-        const [cashPosRes, recOpenRes, recStagesRes, budgetRes, deptTasksRes] = await Promise.all([
-          supabase.from("daily_cash_position").select("closing_balance, total_receipts, total_payments, position_date").order("position_date", { ascending: false }).limit(7),
+        const userCompany = memberData?.company || "";
+        const matchedCompany = COMPANIES.find((c) => c.name === userCompany || userCompany.startsWith(c.name.split(" ")[0]));
+        const companyIds = matchedCompany ? [matchedCompany.id] : COMPANIES.map((c) => c.id);
+        const companyLabel = matchedCompany ? matchedCompany.shortCode : "All";
+
+        const [recOpenRes, recStagesRes, deptTasksRes] = await Promise.all([
           supabase.from("receivables").select("id, amount, date_submitted, current_stage_order, current_stage_entered_date, status").neq("status", "Collected"),
           supabase.from("receivable_stages").select("stage_order, stage_name, working_day_budget"),
-          supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("budget_month", today.slice(0, 7)),
           supabase.from("tasks").select("id, status, due_date").eq("assigned_to_department", "Finance").not("status", "in", '("Completed","Cancelled")'),
         ]);
 
-        const cashRows = cashPosRes.data || [];
-        if (cashRows.length === 0) {
-          items.push({ label: "Cash position", value: "No data entered", rag: "RED" });
-        } else {
-          const latest = cashRows[0];
-          const latestDate = latest.position_date;
-          const daysSinceEntry = Math.floor((Date.now() - new Date(latestDate + "T00:00:00").getTime()) / 86400000);
-          if (daysSinceEntry > 1) {
-            items.push({ label: "Cash position stale", value: `Last entry ${daysSinceEntry} days ago (${latestDate})`, rag: daysSinceEntry > 3 ? "RED" : "AMBER" });
+        for (const cId of companyIds) {
+          const comp = COMPANIES.find((c) => c.id === cId);
+          const tag = comp?.shortCode || "?";
+
+          const [cashPosRes, budgetRes] = await Promise.all([
+            supabase.from("daily_cash_position").select("closing_balance, total_receipts, total_payments, position_date").eq("company_id", cId).order("position_date", { ascending: false }).limit(7),
+            supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("company_id", cId).eq("budget_month", today.slice(0, 7)),
+          ]);
+
+          const cashRows = cashPosRes.data || [];
+          if (cashRows.length === 0) {
+            items.push({ label: `${tag} cash position`, value: "No data entered", rag: "RED" });
           } else {
-            items.push({ label: "Cash position", value: `PKR ${(latest.closing_balance || 0).toLocaleString()}`, rag: "GREEN" });
-          }
-
-          if (cashRows.length >= 3) {
-            const declining = cashRows[0].closing_balance < cashRows[1].closing_balance && cashRows[1].closing_balance < cashRows[2].closing_balance;
-            if (declining) {
-              items.push({ label: "Cash trend", value: "Declining 3 days straight", rag: "RED" });
+            const latest = cashRows[0];
+            const latestDate = latest.position_date;
+            const daysSinceEntry = Math.floor((Date.now() - new Date(latestDate + "T00:00:00").getTime()) / 86400000);
+            if (daysSinceEntry > 1) {
+              items.push({ label: `${tag} cash stale`, value: `Last entry ${daysSinceEntry} days ago (${latestDate})`, rag: daysSinceEntry > 3 ? "RED" : "AMBER" });
+            } else {
+              items.push({ label: `${tag} cash position`, value: `PKR ${(latest.closing_balance || 0).toLocaleString()}`, rag: "GREEN" });
             }
+
+            if (cashRows.length >= 3) {
+              const declining = cashRows[0].closing_balance < cashRows[1].closing_balance && cashRows[1].closing_balance < cashRows[2].closing_balance;
+              if (declining) {
+                items.push({ label: `${tag} cash trend`, value: "Declining 3 days straight", rag: "RED" });
+              }
+            }
+
+            const weekReceipts = cashRows.reduce((s, r) => s + (r.total_receipts || 0), 0);
+            const weekPayments = cashRows.reduce((s, r) => s + (r.total_payments || 0), 0);
+            const netFlow = weekReceipts - weekPayments;
+            items.push({ label: `${tag} net flow (7d)`, value: `PKR ${netFlow.toLocaleString()} (in: ${weekReceipts.toLocaleString()}, out: ${weekPayments.toLocaleString()})`, rag: netFlow >= 0 ? "GREEN" : "RED" });
           }
 
-          const weekReceipts = cashRows.reduce((s, r) => s + (r.total_receipts || 0), 0);
-          const weekPayments = cashRows.reduce((s, r) => s + (r.total_payments || 0), 0);
-          const netFlow = weekReceipts - weekPayments;
-          items.push({ label: "Net flow (7 days)", value: `PKR ${netFlow.toLocaleString()} (in: ${weekReceipts.toLocaleString()}, out: ${weekPayments.toLocaleString()})`, rag: netFlow >= 0 ? "GREEN" : "RED" });
+          const budgets = budgetRes.data || [];
+          if (budgets.length > 0) {
+            const totalBudget = budgets.reduce((s, r) => s + (r.budgeted_amount || 0), 0);
+            items.push({ label: `${tag} monthly budget`, value: `PKR ${totalBudget.toLocaleString()} across ${budgets.length} categories`, rag: "GREEN" });
+          }
         }
 
         const openRec = recOpenRes.data || [];
@@ -345,17 +367,12 @@ export default function HomePage() {
           items.push({ label: "Receivable stages", value: "All within deadline", rag: "GREEN" });
         }
 
-        const budgets = budgetRes.data || [];
-        if (budgets.length > 0) {
-          const totalBudget = budgets.reduce((s, r) => s + (r.budgeted_amount || 0), 0);
-          items.push({ label: "Monthly budget set", value: `PKR ${totalBudget.toLocaleString()} across ${budgets.length} categories`, rag: "GREEN" });
-        }
-
         const finOverdue = (deptTasksRes.data || []).filter((t) => t.due_date && t.due_date < today).length;
         const finOpen = (deptTasksRes.data || []).length;
         items.push({ label: "Finance tasks", value: `${finOpen} open${finOverdue > 0 ? `, ${finOverdue} overdue` : ""}`, rag: finOverdue === 0 ? "GREEN" : finOverdue <= 3 ? "AMBER" : "RED" });
 
         setManagerBriefing(items);
+        setManagerBriefingTitle(`Finance Briefing${companyLabel !== "All" ? ` · ${companyLabel}` : ""}`);
       }
 
       setLoading(false);
@@ -476,9 +493,9 @@ export default function HomePage() {
                   padding: "12px 18px", borderBottom: "1px solid var(--border-color)",
                   display: "flex", alignItems: "center", gap: "8px",
                 }}>
-                  <span style={{ fontSize: "15px" }}>{ctx?.department === "Finance" ? "💰" : "🏭"}</span>
+                  <span style={{ fontSize: "15px" }}>{managerBriefingTitle.startsWith("Finance") ? "💰" : "🏭"}</span>
                   <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
-                    {ctx?.department === "Finance" ? "Finance" : "Operations"} Briefing
+                    {managerBriefingTitle}
                   </span>
                   <span style={{
                     marginLeft: "auto", fontSize: "12px", fontWeight: 600, padding: "2px 8px",
