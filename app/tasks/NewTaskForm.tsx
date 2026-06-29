@@ -236,7 +236,7 @@ export default function NewTaskForm() {
           required
         >
           <option value="">-- Select department / area --</option>
-          <option value="General">General / Executive</option>
+          <option value="Executive Office">Executive Office</option>
           {PROJECT_AREAS.map((area) => (
             <option key={area}>{area}</option>
           ))}

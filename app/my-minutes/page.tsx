@@ -187,8 +187,8 @@ function MyMinutesPage() {
       <h1>${meeting.title}</h1>
       <div class="meta">
         ${formatDateUK(meeting.meeting_date)}
-        ${meeting.department && meeting.department !== "General" ? ` · ${meeting.department}` : ""}
-        ${meeting.company && meeting.company !== "General" ? ` · ${meeting.company}` : ""}
+        ${meeting.department ? ` · ${meeting.department}` : ""}
+        ${meeting.company ? ` · ${meeting.company}` : ""}
       </div>
       ${meeting.attendees?.length ? `<h2>Attendees</h2><div>${meeting.attendees.map((a) => `<span class="badge">${a}</span>`).join(" ")}</div>` : ""}
       ${meeting.executive_summary ? `<h2>Executive Summary</h2><div class="summary">${meeting.executive_summary}</div>` : ""}
@@ -310,10 +310,10 @@ function MyMinutesPage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                         <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{meeting.title}</span>
-                        {meeting.department && meeting.department !== "General" && (
+                        {meeting.department && (
                           <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: "var(--border-light, #f1f5f9)", color: "var(--text-primary, #1e293b)", fontWeight: 600 }}>{meeting.department}</span>
                         )}
-                        {meeting.company && meeting.company !== "General" && (
+                        {meeting.company && (
                           <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: "#dbeafe", color: "#1e40af", fontWeight: 600 }}>{meeting.company}</span>
                         )}
                       </div>

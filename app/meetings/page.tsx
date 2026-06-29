@@ -328,8 +328,8 @@ export default function MeetingsPage() {
         risks: extracted.risks,
         opportunities: extracted.opportunities,
         attendees: extracted.attendees,
-        department: extracted.department || "General",
-        company: extracted.company || "General",
+        department: extracted.department || "Executive Office",
+        company: extracted.company || "Executive Office",
         raw_transcript: transcript,
         created_by: currentUserEmail,
       })
@@ -474,8 +474,8 @@ export default function MeetingsPage() {
       <h1>${m.title}</h1>
       <div class="meta">
         ${formatDateUK(m.meeting_date)}
-        ${m.department && m.department !== "General" ? ` · ${m.department}` : ""}
-        ${m.company && m.company !== "General" ? ` · ${m.company}` : ""}
+        ${m.department ? ` · ${m.department}` : ""}
+        ${m.company ? ` · ${m.company}` : ""}
       </div>
       ${m.attendees?.length ? `<h2>Attendees</h2><div>${m.attendees.map((a) => `<span class="badge">${a}</span>`).join(" ")}</div>` : ""}
       ${m.executive_summary ? `<h2>Executive Summary</h2><div class="summary">${m.executive_summary}</div>` : ""}
@@ -516,7 +516,7 @@ export default function MeetingsPage() {
     if (groupBy === "department") {
       const groups = new Map<string, Meeting[]>();
       for (const m of meetings) {
-        const dept = m.department || m.company || "General";
+        const dept = m.department || m.company || "Executive Office";
         if (!groups.has(dept)) groups.set(dept, []);
         groups.get(dept)!.push(m);
       }
@@ -549,7 +549,7 @@ export default function MeetingsPage() {
       text,
       meetingTitle: m.title,
       meetingDate: m.meeting_date,
-      department: m.department || m.company || "General",
+      department: m.department || m.company || "Executive Office",
       meetingId: m.id,
     }))
   );
@@ -811,7 +811,7 @@ export default function MeetingsPage() {
               <div>
                 <label style={labelStyle}>Company</label>
                 <select value={extracted.company} onChange={(e) => setExtracted({ ...extracted, company: e.target.value })} style={inputStyle}>
-                  {["General", "Unze Trading", "Imperial Footwear", "Haute Dolci", "Barahn", "K&K Jhang"].map((c) => (
+                  {["Executive Office", "Unze Trading", "Imperial Footwear", "Haute Dolci", "Barahn", "K&K Jhang"].map((c) => (
                     <option key={c}>{c}</option>
                   ))}
                 </select>
@@ -819,7 +819,7 @@ export default function MeetingsPage() {
               <div>
                 <label style={labelStyle}>Department</label>
                 <select value={extracted.department} onChange={(e) => setExtracted({ ...extracted, department: e.target.value })} style={inputStyle}>
-                  {["General", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
+                  {["Executive Office", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
                     <option key={d}>{d}</option>
                   ))}
                 </select>
@@ -1208,10 +1208,10 @@ export default function MeetingsPage() {
                             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                               <span style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.SLATE, minWidth: "80px" }}>{formatDateUK(m.meeting_date)}</span>
                               <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{m.title}</span>
-                              {m.department && m.department !== "General" && (
+                              {m.department && (
                                 <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: COLOURS.LIGHT, color: COLOURS.NAVY, fontWeight: 600 }}>{m.department}</span>
                               )}
-                              {m.company && m.company !== "General" && (
+                              {m.company && (
                                 <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: "#dbeafe", color: "#1e40af", fontWeight: 600 }}>{m.company}</span>
                               )}
                             </div>

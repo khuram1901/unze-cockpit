@@ -10,8 +10,8 @@ const EXTRACTION_SCHEMA = {
   properties: {
     meeting_title: { type: "string" as const },
     meeting_date: { type: "string" as const, description: "DD/MM/YYYY format" },
-    company: { type: "string" as const, description: "Which company this meeting relates to, e.g. Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or General if cross-company" },
-    department: { type: "string" as const, description: "Which department this meeting relates to, or General if cross-department" },
+    company: { type: "string" as const, description: "Which company this meeting relates to, e.g. Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or Executive Office if cross-company" },
+    department: { type: "string" as const, description: "Which department this meeting relates to, or Executive Office if cross-department" },
     attendees: { type: "array" as const, items: { type: "string" as const } },
     executive_summary: { type: "string" as const, description: "3-5 sentences" },
     decisions: { type: "array" as const, items: { type: "string" as const } },
@@ -72,8 +72,8 @@ export async function POST(request: NextRequest) {
 
 RULES:
 - Use DD/MM/YYYY for dates.
-- Identify which company this meeting relates to: Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or "General" if cross-company.
-- Identify which department: Unze Trading Ops, Finance, HR, Audit, Taxation, Admin, or "General" if cross-department.
+- Identify which company this meeting relates to: Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or "Executive Office" if cross-company.
+- Identify which department: Unze Trading Ops, Finance, HR, Audit, Taxation, Admin, or "Executive Office" if cross-department.
 - For action items: assign tasks ONLY to Managers or Executives from the team list — NEVER to the meeting chair/owner (the person who called/led the meeting). The chair delegates; they don't take tasks unless explicitly stated.
 - Match owner names exactly to the team member list when possible.
 - If a task mentions a department but no specific person, assign it to the Manager or Head of Department for that area from the team list.${memberContext}
