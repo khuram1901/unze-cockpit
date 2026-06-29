@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK, todayISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
@@ -152,7 +152,7 @@ export default function PADashboardPage() {
 
   async function chaseTask(task: Task) {
     if (task.assigned_to_email) {
-      fetch("/api/notifications/send", {
+      authFetch("/api/notifications/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "task_assigned", taskId: task.id, recipientEmail: task.assigned_to_email }),
@@ -249,7 +249,7 @@ export default function PADashboardPage() {
     logAction("Created", "tasks", `PA assigned: ${newDesc} → ${newAssignTo}`);
 
     if (assignedMember?.email && newTask?.id) {
-      fetch("/api/notifications/send", {
+      authFetch("/api/notifications/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "task_assigned", taskId: newTask.id, recipientEmail: assignedMember.email }),

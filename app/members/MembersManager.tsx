@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase, loadMyPermissions } from "../lib/supabase";
+import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
@@ -192,7 +192,7 @@ export default function MembersManager() {
     setSaving(false);
     if (error) { alert("Error: " + error.message); return; }
     logAction("Created", "members", `Added ${firstName} ${lastName} (${email}) as ${role}`);
-    fetch("/api/members/invite", { method: "POST", headers: { "Content-Type": "application/json" },
+    authFetch("/api/members/invite", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email.trim(), firstName, lastName, role }) }).catch(() => {});
     setFirstName(""); setLastName(""); setEmail(""); setRole("Member");
     setDepartment(""); setBusinessUnit(""); setCompany(""); setShowAddForm(false);
@@ -213,7 +213,7 @@ export default function MembersManager() {
     if (newPw.length < 6) { alert("Password must be at least 6 characters."); return; }
     setSavingPw(true);
     try {
-      const res = await fetch("/api/auth/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, password: newPw }) });
+      const res = await authFetch("/api/auth/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, password: newPw }) });
       const d = await res.json();
       if (!res.ok) { alert("Error: " + (d.error || "Failed")); }
       else { alert(`Password set for ${nm}.`); logAction("Updated", "members", `Set password for ${nm}`); setSettingPwFor(null); setNewPw(""); }

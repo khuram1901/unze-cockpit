@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase, loadMyPermissions } from "../lib/supabase";
+import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { COMPANIES, getCompanyByName } from "../lib/constants";
 import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
@@ -192,7 +192,7 @@ export default function FinancePage() {
     const fd = new FormData();
     for (let i = 0; i < files.length; i++) fd.append("files", files[i]);
     try {
-      const res = await fetch("/api/finance/bulk-upload", { method: "POST", body: fd });
+      const res = await authFetch("/api/finance/bulk-upload", { method: "POST", body: fd });
       const data = await res.json();
       if (data.ok) {
         const details = (data.results || []).map((r: { filename: string; status: string; date?: string; company?: string }) =>

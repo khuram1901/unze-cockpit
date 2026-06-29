@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase, loadMyPermissions } from "../lib/supabase";
+import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../lib/SharedUI";
@@ -191,7 +191,7 @@ function MyMinutesPage() {
     if (task) {
       await supabase.from("meeting_tasks").insert({ meeting_id: meetingId, task_id: task.id });
       if (member?.email) {
-        fetch("/api/notifications/send", {
+        authFetch("/api/notifications/send", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ type: "task_assigned", taskId: task.id, recipientEmail: member.email }),
         }).catch(() => {});

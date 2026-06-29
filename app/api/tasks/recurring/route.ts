@@ -3,7 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorised" }, { status: 401 });
   }
 
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ type: "task_assigned", recipientEmail: tmpl.assigned_to_email }),
           });
-        } catch {}
+        } catch (e) { console.error("Failed to notify", tmpl.assigned_to_email, e); }
       }
 
       created++;

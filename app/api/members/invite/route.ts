@@ -1,10 +1,14 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { sendNotificationEmail } from "../../../lib/send-email";
+import { requireAuth } from "../../../lib/api-auth";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://unze-cockpit.vercel.app";
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   try {
     const { email, firstName, lastName, role } = await request.json();
 

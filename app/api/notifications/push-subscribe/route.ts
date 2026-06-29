@@ -1,8 +1,12 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { rateLimitByIP, rateLimitResponse } from "../../../lib/rate-limit";
+import { requireAuth } from "../../../lib/api-auth";
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   const rl = rateLimitByIP(request, 10, 60000);
   if (!rl.allowed) return rateLimitResponse();
 
@@ -39,6 +43,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   const rl = rateLimitByIP(request, 10, 60000);
   if (!rl.allowed) return rateLimitResponse();
 

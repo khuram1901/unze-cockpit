@@ -2,8 +2,12 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { parseCashFlowForecast } from "../../../lib/excel-parsers/cash-flow-forecast-parser";
 import { UTPL_COMPANY_ID } from "../../../lib/constants";
+import { requireAuth } from "../../../lib/api-auth";
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;

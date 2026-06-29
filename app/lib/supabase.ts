@@ -5,6 +5,20 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
+export async function authHeaders(): Promise<Record<string, string>> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) return {};
+  return { Authorization: `Bearer ${session.access_token}` };
+}
+
+export async function authFetch(url: string, init?: RequestInit): Promise<Response> {
+  const ah = await authHeaders();
+  return fetch(url, {
+    ...init,
+    headers: { ...ah, ...init?.headers },
+  });
+}
+
 export async function loadMyPermissions(token?: string): Promise<Record<string, unknown> | null> {
   try {
     let accessToken = token;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import { logAction } from "../lib/audit-log";
 
@@ -162,7 +162,7 @@ export default function NewTaskForm() {
 
     // Send notification to assignee
     if (assignedToEmail && newTask?.id) {
-      fetch("/api/notifications/send", {
+      authFetch("/api/notifications/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "task_assigned", taskId: newTask.id, recipientEmail: assignedToEmail }),

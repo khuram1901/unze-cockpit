@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createServiceClient } from "../../../lib/supabase-server";
+import { requireAuth } from "../../../lib/api-auth";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
 
@@ -37,6 +38,9 @@ const EXTRACTION_SCHEMA = {
 };
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   try {
     const body = await request.json();
     const { transcript, memberNames, memberDetails } = body;

@@ -4,6 +4,10 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { safeDecrypt, encrypt } from "../../../lib/crypto";
 
 export async function GET(request: NextRequest) {
+  const { requireAuth } = await import("../../../lib/api-auth");
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   const dateParam = request.nextUrl.searchParams.get("date");
   if (!dateParam) {
     return Response.json({ error: "date parameter required (YYYY-MM-DD)" }, { status: 400 });

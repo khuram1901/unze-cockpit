@@ -7,13 +7,19 @@ import * as mammoth from "mammoth";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorised" }, { status: 401 });
   }
   return handleCheckInbox(true);
 }
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader) return Response.json({ error: "Unauthorised" }, { status: 401 });
+  const { createClient } = await import("@supabase/supabase-js");
+  const userClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, { global: { headers: { Authorization: authHeader } } });
+  const { data: { user } } = await userClient.auth.getUser();
+  if (!user?.email) return Response.json({ error: "Unauthorised" }, { status: 401 });
   return handleCheckInbox(false);
 }
 

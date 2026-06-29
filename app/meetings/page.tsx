@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
@@ -190,7 +190,7 @@ export default function MeetingsPage() {
     setMessage("");
 
     try {
-      const res = await fetch("/api/meetings/extract", {
+      const res = await authFetch("/api/meetings/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript, memberNames, memberDetails }),
@@ -215,7 +215,7 @@ export default function MeetingsPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/meetings/parse-file", { method: "POST", body: formData });
+      const res = await authFetch("/api/meetings/parse-file", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) {
         setMessage("Error: " + (data.error || "File parsing failed"));
@@ -252,7 +252,7 @@ export default function MeetingsPage() {
     setEmailResults([]);
 
     try {
-      const res = await fetch("/api/meetings/check-inbox", { method: "POST" });
+      const res = await authFetch("/api/meetings/check-inbox", { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         setMessage("Error: " + (data.error || "Inbox check failed"));
@@ -360,7 +360,7 @@ export default function MeetingsPage() {
         });
 
         if (memberMatch?.email) {
-          fetch("/api/notifications/send", {
+          authFetch("/api/notifications/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ type: "task_assigned", taskId: task.id, recipientEmail: memberMatch.email }),
@@ -421,7 +421,7 @@ export default function MeetingsPage() {
     }
 
     try {
-      const res = await fetch("/api/meetings/send-minutes", {
+      const res = await authFetch("/api/meetings/send-minutes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

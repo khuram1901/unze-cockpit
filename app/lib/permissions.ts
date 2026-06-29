@@ -224,7 +224,7 @@ const DEPT_PERM_KEY: Record<string, string> = {
   "Unze Trading Ops": "can_view_dept_ops",
   HR: "can_view_dept_hr",
   Tax: "can_view_dept_tax",
-  Legal: "can_view_dept_tax",
+  Legal: "can_view_dept_legal",
   Audit: "can_view_dept_audit",
   Admin: "can_view_dept_admin",
   IT: "can_view_dept_it",

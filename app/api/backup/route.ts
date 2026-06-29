@@ -18,13 +18,15 @@ const TABLES = [
   "audit_plan_items", "audit_findings",
   "recruitment_positions", "performance_evaluations", "hr_strategy_goals",
   "legal_notices", "admin_categories", "admin_spend",
-  "meetings", "meeting_tasks", "monthly_budgets", "quarterly_forecasts",
+  "meetings", "meeting_tasks", "meeting_attendees", "monthly_budgets", "quarterly_forecasts",
   "audit_log", "notification_log",
+  "department_budgets", "member_permissions", "recurring_tasks",
+  "holdings", "price_history", "pending_minutes", "push_subscriptions",
 ];
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return Response.json({ error: "Unauthorised" }, { status: 401 });
   }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase, loadMyPermissions } from "../lib/supabase";
+import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import {
   COLOURS,
@@ -146,7 +146,7 @@ export default function CalendarPage() {
     setBusyLoading(true);
     setCalendarError(null);
     try {
-      const res = await fetch(`/api/calendar/freebusy?date=${date}`);
+      const res = await authFetch(`/api/calendar/freebusy?date=${date}`);
       if (res.ok) {
         const data = await res.json();
         setBusySlots(data.busy || []);

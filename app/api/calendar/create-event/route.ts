@@ -1,8 +1,12 @@
 import { NextRequest } from "next/server";
 import { getAuthenticatedClient } from "../../../lib/google-client";
 import { google } from "googleapis";
+import { requireAuth } from "../../../lib/api-auth";
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   try {
     const body = await request.json();
     const { title, description, date, startTime, endTime, attendeeEmails } = body;

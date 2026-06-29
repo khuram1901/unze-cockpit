@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase, loadMyPermissions } from "../lib/supabase";
+import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
@@ -131,7 +131,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       formData.append("file", forecastFile);
       formData.append("uploadedBy", "manual");
       formData.append("companyId", companyId);
-      const res = await fetch("/api/finance/upload-forecast", {
+      const res = await authFetch("/api/finance/upload-forecast", {
         method: "POST",
         body: formData,
       });
@@ -211,7 +211,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       formData.append("uploadedBy", "manual");
       formData.append("companyId", companyId);
 
-      const res = await fetch("/api/finance/parse-cash-flow", {
+      const res = await authFetch("/api/finance/parse-cash-flow", {
         method: "POST",
         body: formData,
       });
@@ -330,7 +330,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     loadData();
 
     // Check Google connection status via server-side route (avoids RLS)
-    fetch("/api/google/status")
+    authFetch("/api/google/status")
       .then((r) => r.json())
       .then((data) => { if (data.connected) setGmailConnected(true); })
       .catch(() => {});

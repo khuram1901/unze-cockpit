@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMobile } from "../lib/useMobile";
@@ -86,7 +86,7 @@ export default function ResetPasswordPage() {
     } else {
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.email) {
-        fetch("/api/notifications/password-changed", {
+        authFetch("/api/notifications/password-changed", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: user.email }),

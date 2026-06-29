@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, PageHeader, SectionTitle, displayRole } from "../lib/SharedUI";
@@ -113,7 +113,7 @@ export default function ProfilePage() {
         applicationServerKey: vapidKey,
       });
 
-      const res = await fetch("/api/notifications/push-subscribe", {
+      const res = await authFetch("/api/notifications/push-subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, subscription: sub.toJSON() }),
@@ -143,7 +143,7 @@ export default function ProfilePage() {
       const sub = await reg.pushManager.getSubscription();
       if (sub) await sub.unsubscribe();
 
-      await fetch("/api/notifications/push-subscribe", {
+      await authFetch("/api/notifications/push-subscribe", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
 import { sendNotificationEmail } from "../../../lib/send-email";
+import { requireAuth } from "../../../lib/api-auth";
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   try {
     const { meetingTitle, meetingDate, executiveSummary, decisions, actionItems, attendeeEmails } = await request.json();
 

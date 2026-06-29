@@ -4,8 +4,12 @@ import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
 import { reconcile } from "../../../lib/pdf-parsers/reconcile";
 import { UTPL_COMPANY_ID } from "../../../lib/constants";
+import { requireAuth } from "../../../lib/api-auth";
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   try {
     const formData = await request.formData();
     const cashFlowFile = formData.get("cashFlow") as File | null;

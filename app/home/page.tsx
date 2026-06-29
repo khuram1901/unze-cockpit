@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, authFetch } from "../lib/supabase";
 import { COLOURS, StatusBadge, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR, FreshnessBadge } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
@@ -88,7 +88,7 @@ export default function HomePage() {
       setAssignedByMe((prev) => prev.filter((t) => t.id !== taskId));
       setToast("Task marked complete");
     } else if (action === "chase" && task.assigned_to_email) {
-      await fetch("/api/notifications/send", {
+      await authFetch("/api/notifications/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "task_chase", taskId, recipientEmail: task.assigned_to_email }),
