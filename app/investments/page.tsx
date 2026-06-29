@@ -291,12 +291,21 @@ export default function InvestmentsPage() {
 
         {loading ? (
           <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading portfolio...</p>
+        ) : stocks.length === 0 && !showAddForm ? (
+          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px", padding: "40px 20px", backgroundColor: "var(--bg-card, #ffffff)", textAlign: "center" }}>
+            <div style={{ fontSize: "40px", marginBottom: "12px" }}>📊</div>
+            <div style={{ fontSize: "18px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>No Holdings Yet</div>
+            <div style={{ fontSize: "15px", color: SLATE, marginBottom: "16px" }}>Add your first stock holding to start tracking your portfolio.</div>
+            <button onClick={() => { resetForm(); setShowAddForm(true); }} style={{ backgroundColor: GREEN, color: "white", border: "none", borderRadius: "8px", padding: "10px 24px", fontSize: "16px", fontWeight: 700, cursor: "pointer" }}>
+              + Add First Holding
+            </button>
+          </div>
         ) : (
           <>
             {/* Portfolio Summary Cards */}
             <div style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+              gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(100px, 1fr))",
               gap: "12px", marginBottom: "16px",
             }}>
               <SummaryCard label="Total Invested" value={fmtRs(totalCost)} color={NAVY} />

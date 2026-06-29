@@ -173,6 +173,7 @@ export default function DashboardView() {
   const [loading, setLoading] = useState(true);
   const [bannerOpen, setBannerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"production" | "dispatch" | "breakage" | "tasks">("production");
+  const [dailyTrend, setDailyTrend] = useState<{ date: string; produced: number; target: number }[]>([]);
 
   async function loadAll() {
     const currentMonth = getMonthFromDate(today);
@@ -350,6 +351,25 @@ export default function DashboardView() {
     });
 
     setSummaries(result);
+
+    // Build 30-day production trend
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const cutoffStr = thirtyDaysAgo.toISOString().slice(0, 10);
+    const dailyMap = new Map<string, number>();
+    for (const r of production) {
+      if (r.entry_date >= cutoffStr) {
+        const d = r.entry_date;
+        dailyMap.set(d, (dailyMap.get(d) || 0) + (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0));
+      }
+    }
+    const totalMonthlyTarget = prodTargets.reduce((s, t) => s + targetTotal(t), 0);
+    const dailyTarget = totalMonthlyTarget > 0 ? Math.round(totalMonthlyTarget / 26) : 0;
+    const trendArr = Array.from(dailyMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, produced]) => ({ date: date.slice(5), produced, target: dailyTarget }));
+    setDailyTrend(trendArr);
+
     setLoading(false);
   }
 
@@ -561,6 +581,23 @@ export default function DashboardView() {
           </button>
         )}
       </div>
+
+      {activeTab === "production" && dailyTrend.length > 0 && (
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "14px", marginBottom: "14px" }}>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>30-Day Production Trend</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={dailyTrend} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={isMobile ? 4 : 2} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip formatter={(v) => Number(v).toLocaleString()} />
+              <Bar dataKey="produced" fill="#2563eb" radius={[2, 2, 0, 0]} name="Produced" />
+              <Bar dataKey="target" fill="#e2e8f0" radius={[2, 2, 0, 0]} name="Daily Target" />
+              <Legend />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
         {activeTab === "production" && <KPITable summaries={summaries} metric="production" />}

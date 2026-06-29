@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, CountCard, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, SkeletonRows, inputStyle, labelStyle } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { canEditReceivables, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -238,7 +238,7 @@ export default function ReceivablesPage() {
               backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
               width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+              boxShadow: SHADOWS.MODAL,
             }} title="Add bill">{showForm ? "×" : "+"}</button>
           )}
         </div>
@@ -296,7 +296,7 @@ export default function ReceivablesPage() {
         )}
 
         {!loading && (
-          <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
             <CountCard label="Total Bills" value={bills.length} color={COLOURS.BLUE} />
             <CountCard label="Total Amount" value={Math.round(totalAmount)} color={COLOURS.NAVY} />
             <CountCard label="Stuck" value={stuckBills.length} color={stuckBills.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
@@ -516,5 +516,5 @@ export default function ReceivablesPage() {
   );
 }
 
-const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "3px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box" };
-const lbl: React.CSSProperties = { display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "4px" };
+const inp: React.CSSProperties = { ...inputStyle, fontSize: "15px" };
+const lbl: React.CSSProperties = { ...labelStyle, marginBottom: "4px" };

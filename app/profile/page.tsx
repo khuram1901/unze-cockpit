@@ -283,6 +283,22 @@ export default function ProfilePage() {
           <SkeletonRows count={3} height="56px" />
         ) : (
           <>
+            {/* Jump links */}
+            <div style={{ display: "flex", gap: "6px", marginBottom: "14px", flexWrap: "wrap" }}>
+              {[
+                { id: "2fa", label: "2FA" },
+                { id: "password", label: "Password" },
+                { id: "notifications", label: "Notifications" },
+                ...(pushSupported ? [{ id: "push", label: "Push" }] : []),
+              ].map((s) => (
+                <a key={s.id} href={`#${s.id}`} style={{
+                  padding: "6px 14px", borderRadius: "6px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
+                  border: `1px solid ${COLOURS.BORDER}`, backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.NAVY,
+                  textDecoration: "none",
+                }}>{s.label}</a>
+              ))}
+            </div>
+
             <div style={{
               border: "1px solid var(--border-color, #e2e8f0)",
               borderRadius: "8px",
@@ -294,7 +310,7 @@ export default function ProfilePage() {
               <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{email}</div>
             </div>
 
-            <SectionTitle title="Two-Factor Authentication (2FA)" />
+            <div id="2fa"><SectionTitle title="Two-Factor Authentication (2FA)" /></div>
             <div style={{
               border: "1px solid var(--border-color, #e2e8f0)",
               borderRadius: "8px",
@@ -411,7 +427,7 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <SectionTitle title="Change Password" />
+            <div id="password"><SectionTitle title="Change Password" /></div>
             <div style={{
               border: "1px solid var(--border-color, #e2e8f0)",
               borderRadius: "8px",
@@ -490,7 +506,7 @@ export default function ProfilePage() {
                 </button>
               </form>
             </div>
-            <SectionTitle title="Notification Preferences" />
+            <div id="notifications"><SectionTitle title="Notification Preferences" /></div>
             <div style={{
               border: "1px solid var(--border-color, #e2e8f0)",
               borderRadius: "8px",
@@ -542,7 +558,7 @@ export default function ProfilePage() {
 
             {pushSupported && (
               <>
-                <SectionTitle title="Push Notifications" />
+                <div id="push"><SectionTitle title="Push Notifications" /></div>
                 <div style={{
                   border: "1px solid var(--border-color, #e2e8f0)",
                   borderRadius: "8px",

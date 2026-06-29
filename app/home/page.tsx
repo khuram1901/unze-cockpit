@@ -771,7 +771,7 @@ export default function HomePage() {
                           padding: "6px 0", textDecoration: "none", color: "inherit",
                         }}>
                           <span style={{ fontSize: "15px", color: "var(--text-primary)" }}>{m.title}</span>
-                          <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{m.meeting_date}</span>
+                          <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{formatDateUK(m.meeting_date)}</span>
                         </a>
                       ))
                     )}

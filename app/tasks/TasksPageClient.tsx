@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { COLOURS, PageHeader } from "../lib/SharedUI";
+import { COLOURS, SHADOWS, PageHeader } from "../lib/SharedUI";
 import { useUserCtx } from "../lib/useUserCtx";
 import {
   canCreateAssignments as checkCanCreate,
@@ -31,7 +31,7 @@ export default function TasksPageClient() {
             backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
             width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+            boxShadow: SHADOWS.MODAL,
           }} title="Create task">{showForm ? "×" : "+"}</button>
         )}
       </div>

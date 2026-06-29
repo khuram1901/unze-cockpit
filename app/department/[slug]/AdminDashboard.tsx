@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useConfirm } from "../../lib/SharedUI";
+import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useConfirm } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { canReviewTasks, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
@@ -182,7 +182,7 @@ export default function AdminDashboard() {
           backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
           width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+          boxShadow: SHADOWS.MODAL,
         }} title="Add task">{showForm ? "×" : "+"}</button>
       </div>
 

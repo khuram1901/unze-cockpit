@@ -141,7 +141,7 @@ export default function HRDashboard() {
       {/* KPI + Donut */}
       {!loading && (
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px" }}>
             <CountCard label="Open Positions" value={open.length} color="#d97706" />
             <CountCard label="Filled" value={filled} color={COLOURS.GREEN} />
             <CountCard label="Open 60+ Days" value={longOpen.length} color={COLOURS.RED} />

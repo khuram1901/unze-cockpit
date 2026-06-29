@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, useConfirm, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, SHADOWS, PageHeader, SectionTitle, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 
 type Template = {
@@ -105,7 +105,7 @@ export default function RecurringTasksPage() {
               backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
               width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+              boxShadow: SHADOWS.MODAL,
             }} title="Add recurring task">{showForm ? "×" : "+"}</button>
           </div>
 

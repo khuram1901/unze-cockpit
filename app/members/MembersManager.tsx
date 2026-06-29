@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, SHADOWS, PageHeader, SectionTitle, inputStyle, labelStyle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import AccessMatrix from "./AccessMatrix";
@@ -76,13 +76,8 @@ function roleBg(r: string, email?: string | null) {
   return r === "Admin" ? "#111827" : r === "Executive" ? COLOURS.PURPLE : r === "Manager" ? COLOURS.GREEN : COLOURS.SLATE;
 }
 
-const inp: React.CSSProperties = {
-  width: "100%", padding: "6px 8px", border: `1px solid ${COLOURS.BORDER}`,
-  borderRadius: "5px", fontSize: "16px", boxSizing: "border-box",
-};
-const lbl: React.CSSProperties = {
-  display: "block", fontSize: "14px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "3px",
-};
+const inp: React.CSSProperties = { ...inputStyle, padding: "6px 8px", fontSize: "16px" };
+const lbl: React.CSSProperties = { ...labelStyle, fontSize: "14px", marginBottom: "3px" };
 const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
   backgroundColor: solid ? c : "var(--bg-card, #ffffff)",
   border: solid ? "none" : `1px solid ${c}`,
@@ -344,7 +339,7 @@ export default function MembersManager() {
             backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
             width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+            boxShadow: SHADOWS.MODAL,
           }} title="Add member">{showAddForm ? "×" : "+"}</button>
         )}
       </div>

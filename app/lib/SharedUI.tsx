@@ -20,7 +20,7 @@ export const COLOURS = {
 };
 
 export const RADII = { CARD: "12px", BUTTON: "8px", BADGE: "6px", PILL: "16px" };
-export const SHADOWS = { CARD: "0 1px 3px rgba(15,23,42,0.06)", ELEVATED: "0 4px 12px rgba(15,23,42,0.08)", DROPDOWN: "0 8px 30px rgba(15,23,42,0.12)" };
+export const SHADOWS = { CARD: "0 1px 3px rgba(15,23,42,0.06)", ELEVATED: "0 4px 12px rgba(15,23,42,0.08)", DROPDOWN: "0 8px 30px rgba(15,23,42,0.12)", MODAL: "0 2px 6px rgba(0,0,0,0.15)", HOVER: "0 2px 8px rgba(0,0,0,0.1)" };
 
 export function displayRole(role: string, email?: string | null): string {
   if (email === "k.saleem@unzegroup.com") return "CEO";

@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, PageHeader, SectionTitle, CountCard, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../lib/SharedUI";
+import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../lib/SharedUI";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { canEditOperationsTargets, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -197,7 +197,7 @@ export default function MonthlyOperationsTargetsPage() {
                   backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
                   width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                  boxShadow: SHADOWS.MODAL,
                 }} title="Set target">{showForm ? "×" : "+"}</button>
               )}
             </div>

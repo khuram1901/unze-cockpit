@@ -452,7 +452,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       )}
 
       {/* ═══ TIME VIEW TOGGLE ═══ */}
-      <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--bg-page, #f8fafc)", paddingTop: "4px", paddingBottom: "4px" }}>
         {(["weekly", "monthly", "quarterly", "timeline"] as const).map((v) => (
           <button key={v} onClick={() => setTimeView(v)} style={{
             backgroundColor: timeView === v ? NAVY : "var(--bg-card, #ffffff)",
@@ -463,7 +463,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           }}>{v}</button>
         ))}
         <div style={{ flex: 1 }} />
-        {/* Filters */}
         {(["all", "overdue", "waiting"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} style={{
             backgroundColor: filter === f ? (f === "overdue" ? "#dc2626" : f === "waiting" ? "#d97706" : NAVY) : "var(--bg-card, #ffffff)",

@@ -9,6 +9,7 @@ import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import {
   COLOURS,
+  SHADOWS,
   SectionTitle,
   PageHeader,
   PriorityBadge,
@@ -529,7 +530,7 @@ export default function MeetingsPage() {
             backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
             width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+            boxShadow: SHADOWS.MODAL,
           }} title="Add minutes">{showMinutesFlow ? "×" : "+"}</button>
         </div>
 
@@ -546,7 +547,7 @@ export default function MeetingsPage() {
 
         {/* Summary strip */}
         {!showMinutesFlow && (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "8px", marginBottom: "14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
             <CountCard label="Pending Review" value={pendingMinutes.length} color={pendingMinutes.length > 0 ? "#d97706" : COLOURS.SLATE} />
             <CountCard label="This Month" value={thisMonthMeetings.length} color={COLOURS.NAVY} />
             <CountCard label="Open Tasks" value={openTasks.length} color={openTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN} />

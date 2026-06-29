@@ -221,7 +221,7 @@ export default function AuditLogPage() {
           )}
 
           {/* Search + Group toggle */}
-          <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center", position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--bg-page, #f8fafc)", paddingTop: "4px", paddingBottom: "4px" }}>
             <input type="text" placeholder="Search..." value={filter} onChange={(e) => setFilter(e.target.value)}
               style={{ flex: "1 1 200px", maxWidth: "300px", padding: "7px 12px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "16px", boxSizing: "border-box" }} />
             <div style={{ display: "flex", gap: "3px" }}>

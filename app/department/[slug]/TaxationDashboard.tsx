@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
+import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { downloadCSV } from "../../lib/exportUtils";
@@ -317,7 +317,7 @@ export default function TaxationDashboard() {
           backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
           width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+          boxShadow: SHADOWS.MODAL,
         }} title="Add notice">{showForm ? "×" : "+"}</button>
       </div>
 

@@ -6,6 +6,7 @@ import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import {
   COLOURS,
+  SHADOWS,
   SectionTitle,
   PageHeader,
   StatusBadge,
@@ -284,7 +285,7 @@ export default function CalendarPage() {
             backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
             width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+            boxShadow: SHADOWS.MODAL,
           }} title="Request meeting">{showForm ? "×" : "+"}</button>
         </div>
 

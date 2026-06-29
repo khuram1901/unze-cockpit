@@ -1354,6 +1354,47 @@ export default function ExecutiveDashboardPage() {
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginTop: "8px", alignItems: "start" }}>
               {/* LEFT COLUMN */}
               <div>
+                {showFinance && companyFinance.length === 2 && (() => {
+                  const [a, b] = companyFinance;
+                  const latestA = a.cashPositions[0];
+                  const latestB = b.cashPositions[0];
+                  const metrics = [
+                    { label: "Cash Balance", a: latestA?.closing_balance ?? 0, b: latestB?.closing_balance ?? 0 },
+                    { label: "Today Receipts", a: latestA?.total_receipts ?? 0, b: latestB?.total_receipts ?? 0 },
+                    { label: "Today Payments", a: latestA?.total_payments ?? 0, b: latestB?.total_payments ?? 0 },
+                  ];
+                  const maxVal = Math.max(...metrics.map((m) => Math.max(Math.abs(m.a), Math.abs(m.b))), 1);
+                  return (
+                    <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "14px", marginBottom: "14px" }}>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Company Comparison</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb" }}>{a.companyName.split(" ")[0]}</span>
+                        <span style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a" }}>{b.companyName.split(" ")[0]}</span>
+                      </div>
+                      {metrics.map((m) => {
+                        const pctA = maxVal > 0 ? (Math.abs(m.a) / maxVal) * 100 : 0;
+                        const pctB = maxVal > 0 ? (Math.abs(m.b) / maxVal) * 100 : 0;
+                        return (
+                          <div key={m.label} style={{ marginBottom: "8px" }}>
+                            <div style={{ fontSize: "12px", color: SLATE, textAlign: "center", marginBottom: "2px" }}>{m.label}</div>
+                            <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                              <span style={{ fontSize: "12px", color: "#2563eb", width: "70px", textAlign: "right" }}>{fmtMoney(m.a)}</span>
+                              <div style={{ flex: 1, display: "flex", height: "14px", gap: "2px" }}>
+                                <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+                                  <div style={{ width: `${pctA}%`, backgroundColor: "#2563eb", borderRadius: "3px 0 0 3px", minWidth: pctA > 0 ? "2px" : 0 }} />
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ width: `${pctB}%`, backgroundColor: "#16a34a", borderRadius: "0 3px 3px 0", minWidth: pctB > 0 ? "2px" : 0 }} />
+                                </div>
+                              </div>
+                              <span style={{ fontSize: "12px", color: "#16a34a", width: "70px" }}>{fmtMoney(m.b)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 {showFinance && companyFinance.map((cfd) => (
                   <CompanyFinancePanel key={cfd.companyId} data={cfd} />
                 ))}
