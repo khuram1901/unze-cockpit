@@ -17,6 +17,11 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "Excel file is required." }, { status: 400 });
     }
 
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+    if (file.size > MAX_FILE_SIZE) {
+      return Response.json({ error: "File exceeds 10 MB limit." }, { status: 413 });
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = parseCashFlowForecast(buffer);
 

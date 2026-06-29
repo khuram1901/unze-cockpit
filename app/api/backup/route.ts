@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
 
     // Upload the backup
     const { Readable } = await import("stream");
-    await drive.files.create({
+    const uploaded = await drive.files.create({
       requestBody: {
         name: filename,
         parents: [folderId],
@@ -100,7 +100,17 @@ export async function GET(request: NextRequest) {
         mimeType: "application/json",
         body: Readable.from(backupBuffer),
       },
+      fields: "id, size",
     });
+
+    if (!uploaded.data.id) {
+      return Response.json({ error: "Backup upload failed — no file ID returned" }, { status: 500 });
+    }
+
+    const uploadedSize = Number(uploaded.data.size || 0);
+    if (uploadedSize > 0 && Math.abs(uploadedSize - backupBuffer.length) > 1024) {
+      console.error(`Backup size mismatch: local=${backupBuffer.length} remote=${uploadedSize}`);
+    }
 
     // Clean up old backups (keep only MAX_BACKUPS)
     const existingFiles = await drive.files.list({

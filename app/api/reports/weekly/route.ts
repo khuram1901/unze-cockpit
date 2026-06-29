@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const month = now.toISOString().slice(0, 7);
 
     // Tasks
-    const { data: allTasks } = await supabase.from("tasks").select("*");
+    const { data: allTasks } = await supabase.from("tasks").select("id, status, due_date, updated_at, created_at, assigned_to, assigned_to_email, description, source_type");
     const tasks = allTasks || [];
     const openTasks = tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
     const overdue = openTasks.filter((t) => t.due_date && t.due_date < today);
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     const escalations = openTasks.filter((t) => t.source_type === "kpi_escalation" || t.source_type === "receivable_escalation");
 
     // Machine issues
-    const { data: machines } = await supabase.from("machine_issues").select("*").neq("issue_status", "Resolved");
+    const { data: machines } = await supabase.from("machine_issues").select("id, issue_status").neq("issue_status", "Resolved");
     const machineDown = (machines || []).filter((m) => m.issue_status === "Down");
 
     // Receivables

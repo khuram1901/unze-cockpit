@@ -16,6 +16,13 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "No PDF files provided." }, { status: 400 });
     }
 
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        return Response.json({ error: `File "${file.name}" exceeds 10 MB limit.` }, { status: 413 });
+      }
+    }
+
     const supabase = createServiceClient();
     const results: { filename: string; status: string; date?: string; company?: string }[] = [];
 

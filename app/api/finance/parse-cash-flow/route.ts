@@ -23,6 +23,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB per file
+    if (cashFlowFile.size > MAX_FILE_SIZE || bankPositionFile.size > MAX_FILE_SIZE) {
+      return Response.json({ error: "Each file must be under 10 MB." }, { status: 413 });
+    }
+
     const cashFlowBuffer = Buffer.from(await cashFlowFile.arrayBuffer());
     const bankPositionBuffer = Buffer.from(await bankPositionFile.arrayBuffer());
 

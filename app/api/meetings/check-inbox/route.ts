@@ -216,12 +216,12 @@ async function handleCheckInbox(isCron: boolean) {
       notifyEmails.add("pa.ceo@unze.co.uk");
 
       for (const recipientEmail of notifyEmails) {
-        await supabase.from("notifications").insert({
-          user_email: recipientEmail,
-          type: "pending_minutes",
-          title: `${newPendingCount} new meeting minutes awaiting review`,
-          body: `${newPendingCount} new minutes email${newPendingCount > 1 ? "s have" : " has"} been received. Review and approve on the Meetings page.`,
-          link: "/meetings",
+        await supabase.from("notification_log").insert({
+          recipient_email: recipientEmail,
+          channel: "in_app",
+          subject: `${newPendingCount} new meeting minutes awaiting review`,
+          body_preview: `${newPendingCount} new minutes email${newPendingCount > 1 ? "s have" : " has"} been received. Review and approve on the Meetings page.`,
+          trigger_type: "pending_minutes",
         });
       }
     }
