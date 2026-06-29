@@ -18,6 +18,8 @@ type Meeting = {
   risks: string[] | null;
   opportunities: string[] | null;
   attendees: string[] | null;
+  department: string | null;
+  company: string | null;
   created_at: string;
 };
 
@@ -165,6 +167,44 @@ function MyMinutesPage() {
     setLoading(false);
   }
 
+  function downloadMinutesPDF(meeting: Meeting, mTasks: Task[]) {
+    const html = `
+      <html><head><title>${meeting.title}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 30px; color: #1e293b; max-width: 800px; margin: 0 auto; }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        .meta { font-size: 13px; color: #64748b; margin-bottom: 16px; }
+        h2 { font-size: 15px; margin: 16px 0 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+        .summary { font-size: 14px; line-height: 1.6; color: #475569; }
+        .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 8px; background: #f1f5f9; margin-right: 4px; }
+        ul { padding-left: 20px; margin: 4px 0; }
+        li { font-size: 14px; margin-bottom: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+        th { background: #f8fafc; font-weight: 700; }
+        @media print { body { padding: 10px; } }
+      </style></head><body>
+      <h1>${meeting.title}</h1>
+      <div class="meta">
+        ${formatDateUK(meeting.meeting_date)}
+        ${meeting.department && meeting.department !== "General" ? ` · ${meeting.department}` : ""}
+        ${meeting.company && meeting.company !== "General" ? ` · ${meeting.company}` : ""}
+      </div>
+      ${meeting.attendees?.length ? `<h2>Attendees</h2><div>${meeting.attendees.map((a) => `<span class="badge">${a}</span>`).join(" ")}</div>` : ""}
+      ${meeting.executive_summary ? `<h2>Executive Summary</h2><div class="summary">${meeting.executive_summary}</div>` : ""}
+      ${meeting.decisions?.length ? `<h2>Decisions</h2><ul>${meeting.decisions.map((d) => `<li>${d}</li>`).join("")}</ul>` : ""}
+      ${meeting.risks?.length ? `<h2>Risks</h2><ul>${meeting.risks.map((r) => `<li>${r}</li>`).join("")}</ul>` : ""}
+      ${meeting.opportunities?.length ? `<h2>Opportunities</h2><ul>${meeting.opportunities.map((o) => `<li>${o}</li>`).join("")}</ul>` : ""}
+      ${mTasks.length ? `<h2>Action Items (${mTasks.length})</h2>
+        <table><tr><th>Task</th><th>Owner</th><th>Due</th><th>Priority</th><th>Status</th></tr>
+        ${mTasks.map((t) => `<tr><td>${t.description}</td><td>${t.assigned_to || "—"}</td><td>${t.due_date ? formatDateUK(t.due_date) : "—"}</td><td>${t.priority || "Normal"}</td><td>${t.status}</td></tr>`).join("")}
+        </table>` : ""}
+      <div style="margin-top:20px;font-size:11px;color:#94a3b8;text-align:center">Generated from PulseDesk · ${new Date().toLocaleDateString("en-GB")}</div>
+      </body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); w.print(); }
+  }
+
   function getTasksForMeeting(meetingId: string): Task[] {
     const taskIds = meetingTasks.filter((mt) => mt.meeting_id === meetingId).map((mt) => mt.task_id);
     const fromLink = tasks.filter((t) => taskIds.includes(t.id));
@@ -268,7 +308,15 @@ function MyMinutesPage() {
                     backgroundColor: isOpen ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{meeting.title}</div>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{meeting.title}</span>
+                        {meeting.department && meeting.department !== "General" && (
+                          <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: "var(--border-light, #f1f5f9)", color: "var(--text-primary, #1e293b)", fontWeight: 600 }}>{meeting.department}</span>
+                        )}
+                        {meeting.company && meeting.company !== "General" && (
+                          <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: "#dbeafe", color: "#1e40af", fontWeight: 600 }}>{meeting.company}</span>
+                        )}
+                      </div>
                       <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>
                         {formatDateUK(meeting.meeting_date)}
                         {meeting.attendees && <span> · {meeting.attendees.length} attendee{meeting.attendees.length > 1 ? "s" : ""}</span>}
@@ -281,7 +329,17 @@ function MyMinutesPage() {
 
                   {/* Expanded content */}
                   {isOpen && (
-                    <div style={{ padding: "14px", borderTop: "1px solid var(--border-color, #e2e8f0)" }}>
+                    <div style={{ padding: "14px", borderTop: "1px solid var(--border-color, #e2e8f0)", ...(!isAdmin ? { userSelect: "none", WebkitUserSelect: "none" } as React.CSSProperties : {}) }}
+                      onCopy={!isAdmin ? (e) => e.preventDefault() : undefined}>
+                      {isAdmin && (
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px" }}>
+                          <button onClick={() => downloadMinutesPDF(meeting, mTasks)} style={{
+                            backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
+                            padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                            display: "flex", alignItems: "center", gap: "6px",
+                          }}>PDF Download</button>
+                        </div>
+                      )}
                       {/* Executive Summary */}
                       {meeting.executive_summary && (
                         <div style={{ marginBottom: "12px" }}>

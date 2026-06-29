@@ -454,6 +454,44 @@ export default function MeetingsPage() {
     setSending(false);
   }
 
+  function downloadMinutesPDF(m: Meeting, mTasks: MeetingTask[]) {
+    const html = `
+      <html><head><title>${m.title}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 30px; color: #1e293b; max-width: 800px; margin: 0 auto; }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        .meta { font-size: 13px; color: #64748b; margin-bottom: 16px; }
+        h2 { font-size: 15px; margin: 16px 0 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+        .summary { font-size: 14px; line-height: 1.6; color: #475569; }
+        .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 8px; background: #f1f5f9; margin-right: 4px; }
+        ul { padding-left: 20px; margin: 4px 0; }
+        li { font-size: 14px; margin-bottom: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { border: 1px solid #e2e8f0; padding: 6px 10px; text-align: left; }
+        th { background: #f8fafc; font-weight: 700; }
+        @media print { body { padding: 10px; } }
+      </style></head><body>
+      <h1>${m.title}</h1>
+      <div class="meta">
+        ${formatDateUK(m.meeting_date)}
+        ${m.department && m.department !== "General" ? ` · ${m.department}` : ""}
+        ${m.company && m.company !== "General" ? ` · ${m.company}` : ""}
+      </div>
+      ${m.attendees?.length ? `<h2>Attendees</h2><div>${m.attendees.map((a) => `<span class="badge">${a}</span>`).join(" ")}</div>` : ""}
+      ${m.executive_summary ? `<h2>Executive Summary</h2><div class="summary">${m.executive_summary}</div>` : ""}
+      ${m.decisions?.length ? `<h2>Decisions</h2><ul>${m.decisions.map((d) => `<li>${d}</li>`).join("")}</ul>` : ""}
+      ${m.risks?.length ? `<h2>Risks</h2><ul>${m.risks.map((r) => `<li>${r}</li>`).join("")}</ul>` : ""}
+      ${m.opportunities?.length ? `<h2>Opportunities</h2><ul>${m.opportunities.map((o) => `<li>${o}</li>`).join("")}</ul>` : ""}
+      ${mTasks.length ? `<h2>Action Items (${mTasks.length})</h2>
+        <table><tr><th>Task</th><th>Owner</th><th>Due</th><th>Priority</th><th>Status</th></tr>
+        ${mTasks.map((t) => `<tr><td>${t.description}</td><td>${t.assigned_to || "—"}</td><td>${t.due_date ? formatDateUK(t.due_date) : "—"}</td><td>${t.priority || "Normal"}</td><td>${t.status}</td></tr>`).join("")}
+        </table>` : ""}
+      <div style="margin-top:20px;font-size:11px;color:#94a3b8;text-align:center">Generated from PulseDesk · ${new Date().toLocaleDateString("en-GB")}</div>
+      </body></html>`;
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); w.print(); }
+  }
+
   function resetAll() {
     setExtracted(null);
     setTranscript("");
@@ -1170,6 +1208,12 @@ export default function MeetingsPage() {
                             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                               <span style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.SLATE, minWidth: "80px" }}>{formatDateUK(m.meeting_date)}</span>
                               <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{m.title}</span>
+                              {m.department && m.department !== "General" && (
+                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: COLOURS.LIGHT, color: COLOURS.NAVY, fontWeight: 600 }}>{m.department}</span>
+                              )}
+                              {m.company && m.company !== "General" && (
+                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: "#dbeafe", color: "#1e40af", fontWeight: 600 }}>{m.company}</span>
+                              )}
                             </div>
                             {mTasks.length > 0 && (
                               <div style={{ marginTop: "4px", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1188,6 +1232,12 @@ export default function MeetingsPage() {
 
                         {isOpen && (
                           <div style={{ padding: "14px", borderTop: `1px solid ${COLOURS.BORDER}` }}>
+                            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px" }}>
+                              <button onClick={() => downloadMinutesPDF(m, mTasks)} style={{
+                                backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
+                                padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                              }}>PDF Download</button>
+                            </div>
                             {m.executive_summary && (
                               <div style={{ marginBottom: "12px" }}>
                                 <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Summary</div>
