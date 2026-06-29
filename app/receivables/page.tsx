@@ -303,6 +303,89 @@ export default function ReceivablesPage() {
           </div>
         )}
 
+        {/* KANBAN STAGE BOARD — primary working view, must stay at top */}
+        {loading ? (
+          <SkeletonRows count={4} height="60px" />
+        ) : (
+          <>
+            <SectionTitle title="Stage Board" />
+            <div style={{ display: "flex", gap: "12px", overflowX: "auto", paddingBottom: "12px", marginBottom: "14px" }}>
+              {stages.map((stage) => {
+                const stageBills = bills.filter((b) => b.current_stage_order === stage.stage_order);
+                const nextStage = stages.find((s) => s.stage_order > stage.stage_order);
+                return (
+                  <div key={stage.id} style={{
+                    minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
+                    border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card-hover, #f8fafc)",
+                  }}>
+                    <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px 8px 0 0" }}>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{stage.stage_name}</div>
+                      <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{stageBills.length} bill{stageBills.length !== 1 ? "s" : ""} · Budget: {stage.working_day_budget} days</div>
+                    </div>
+
+                    <div style={{ padding: "8px", minHeight: "100px" }}>
+                      {stageBills.length === 0 ? (
+                        <div style={{ padding: "12px", textAlign: "center", color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>Empty</div>
+                      ) : (
+                        stageBills.map((bill) => {
+                          const elapsed = workingDaysSince(bill.current_stage_entered_date);
+                          const isStuck = elapsed >= stage.working_day_budget;
+                          const isWarning = elapsed >= stage.working_day_budget - 1 && !isStuck;
+                          return (
+                            <div key={bill.id} style={{
+                              border: `1px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.BORDER}`,
+                              borderLeft: `3px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.GREEN}`,
+                              borderRadius: "6px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "6px",
+                            }}>
+                              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{bill.utility}</div>
+                              <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
+                                PKR {bill.amount.toLocaleString()} · {formatDateUK(bill.date_submitted)}
+                              </div>
+                              <div style={{ fontSize: "13px", color: isStuck ? COLOURS.RED : isWarning ? "#d97706" : "var(--text-secondary, #64748b)", fontWeight: isStuck || isWarning ? 700 : 400, marginTop: "2px" }}>
+                                {elapsed}d in stage {isStuck ? "(STUCK)" : isWarning ? "(due soon)" : ""}
+                              </div>
+                              {bill.invoice_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>Inv: {bill.invoice_ref}</div>}
+                              {bill.ic_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>IC: {bill.ic_ref}</div>}
+                              {bill.grn_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>GRN: {bill.grn_ref}</div>}
+
+                              {canEdit && (
+                                <div style={{ display: "flex", gap: "4px", marginTop: "6px" }}>
+                                  {nextStage && (
+                                    <button onClick={() => moveToStage(bill.id, nextStage.stage_order)} style={{
+                                      backgroundColor: COLOURS.BLUE, color: "white", border: "none", borderRadius: "4px",
+                                      padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                                    }} title={`Move to ${nextStage.stage_name}`}>Next</button>
+                                  )}
+                                  <button onClick={() => markCollected(bill.id)} style={{
+                                    backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "4px",
+                                    padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                                  }}>Collected</button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div style={{
+                minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
+                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "#f0fdf4",
+              }}>
+                <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px 8px 0 0" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.GREEN }}>Collected</div>
+                </div>
+                <div style={{ padding: "8px", textAlign: "center", color: COLOURS.GREEN, fontSize: "15px" }}>
+                  Bills move here when marked as collected
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Pipeline Stage Summary Bar */}
         {!loading && stages.length > 0 && bills.length > 0 && (
           <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
@@ -429,85 +512,6 @@ export default function ReceivablesPage() {
                   <div style={{ fontSize: "18px", fontWeight: 800, color: AGING_COLOURS[c.bucket] }}>PKR {agingTotals[c.bucket].toLocaleString()}</div>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {loading ? (
-          <SkeletonRows count={4} height="60px" />
-        ) : (
-          <div style={{ display: "flex", gap: "12px", overflowX: "auto", paddingBottom: "12px" }}>
-            {stages.map((stage) => {
-              const stageBills = bills.filter((b) => b.current_stage_order === stage.stage_order);
-              const nextStage = stages.find((s) => s.stage_order > stage.stage_order);
-              return (
-                <div key={stage.id} style={{
-                  minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
-                  border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card-hover, #f8fafc)",
-                }}>
-                  <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px 8px 0 0" }}>
-                    <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{stage.stage_name}</div>
-                    <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{stageBills.length} bill{stageBills.length !== 1 ? "s" : ""} · Budget: {stage.working_day_budget} days</div>
-                  </div>
-
-                  <div style={{ padding: "8px", minHeight: "100px" }}>
-                    {stageBills.length === 0 ? (
-                      <div style={{ padding: "12px", textAlign: "center", color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>Empty</div>
-                    ) : (
-                      stageBills.map((bill) => {
-                        const elapsed = workingDaysSince(bill.current_stage_entered_date);
-                        const isStuck = elapsed >= stage.working_day_budget;
-                        const isWarning = elapsed >= stage.working_day_budget - 1 && !isStuck;
-                        return (
-                          <div key={bill.id} style={{
-                            border: `1px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.BORDER}`,
-                            borderLeft: `3px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.GREEN}`,
-                            borderRadius: "6px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "6px",
-                          }}>
-                            <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{bill.utility}</div>
-                            <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
-                              PKR {bill.amount.toLocaleString()} · {formatDateUK(bill.date_submitted)}
-                            </div>
-                            <div style={{ fontSize: "13px", color: isStuck ? COLOURS.RED : isWarning ? "#d97706" : "var(--text-secondary, #64748b)", fontWeight: isStuck || isWarning ? 700 : 400, marginTop: "2px" }}>
-                              {elapsed}d in stage {isStuck ? "(STUCK)" : isWarning ? "(due soon)" : ""}
-                            </div>
-                            {bill.invoice_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>Inv: {bill.invoice_ref}</div>}
-                            {bill.ic_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>IC: {bill.ic_ref}</div>}
-                            {bill.grn_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>GRN: {bill.grn_ref}</div>}
-
-                            {canEdit && (
-                              <div style={{ display: "flex", gap: "4px", marginTop: "6px" }}>
-                                {nextStage && (
-                                  <button onClick={() => moveToStage(bill.id, nextStage.stage_order)} style={{
-                                    backgroundColor: COLOURS.BLUE, color: "white", border: "none", borderRadius: "4px",
-                                    padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
-                                  }} title={`Move to ${nextStage.stage_name}`}>Next</button>
-                                )}
-                                <button onClick={() => markCollected(bill.id)} style={{
-                                  backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "4px",
-                                  padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
-                                }}>Collected</button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            <div style={{
-              minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
-              border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "#f0fdf4",
-            }}>
-              <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px 8px 0 0" }}>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.GREEN }}>Collected</div>
-              </div>
-              <div style={{ padding: "8px", textAlign: "center", color: COLOURS.GREEN, fontSize: "15px" }}>
-                Bills move here when marked as collected
-              </div>
             </div>
           </div>
         )}
