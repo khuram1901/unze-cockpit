@@ -56,11 +56,15 @@ export async function GET(request: NextRequest) {
       expiry_date: tokenRow.token_expiry ? new Date(tokenRow.token_expiry).getTime() : undefined,
     });
 
+    const tokenReadAt = tokenRow.updated_at;
     oauth2Client.on("tokens", async (newTokens) => {
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
       if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
-      await supabase.from("google_oauth_tokens").update(updates).eq("id", tokenRow.id);
+      // Optimistic lock: only update if another cron hasn't refreshed since we read
+      let query = supabase.from("google_oauth_tokens").update(updates).eq("id", tokenRow.id);
+      if (tokenReadAt) query = query.eq("updated_at", tokenReadAt);
+      await query;
     });
 
     let gmail;

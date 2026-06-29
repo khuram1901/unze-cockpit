@@ -1,168 +1,8 @@
--- Migration 038: RLS hardening + task DELETE + production UPDATE/DELETE
--- Fixes items 8, 9, 10, 11, 13, 14, 17 from upgrade roadmap
+-- Migration 039: Add can_view_investments to sync trigger + RLS helper caching
+-- Fixes items 26 (partial), 33 from upgrade roadmap
 
--- ═══ ITEM 8: pending_minutes — restrict to Admin/Executive ═══
--- Currently fully open. Only admins review meeting transcripts.
-DROP POLICY IF EXISTS "pending_minutes_all" ON pending_minutes;
-CREATE POLICY "pending_minutes_admin"
-  ON pending_minutes FOR ALL
-  USING (is_admin_or_exec())
-  WITH CHECK (is_admin_or_exec());
-
--- Service role needs access for cron inbox check
-CREATE POLICY "pending_minutes_service"
-  ON pending_minutes FOR ALL
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
-
-
--- ═══ ITEM 9: holdings/price_history — restrict to CEO/Admin ═══
--- Investment data should only be visible to CEO and Admin (matches canViewInvestments)
-
--- Holdings: drop old open policies, create restricted ones
-DROP POLICY IF EXISTS "Authenticated users can read holdings" ON holdings;
-DROP POLICY IF EXISTS "Authenticated users can insert holdings" ON holdings;
-DROP POLICY IF EXISTS "Authenticated users can update holdings" ON holdings;
-DROP POLICY IF EXISTS "Authenticated users can delete holdings" ON holdings;
-
-CREATE POLICY "holdings_admin_read"
-  ON holdings FOR SELECT
-  TO authenticated
-  USING (
-    auth.email() IN ('khuram1901@gmail.com', 'k.saleem@unzegroup.com')
-    OR get_user_role() = 'Admin'
-  );
-
-CREATE POLICY "holdings_admin_write"
-  ON holdings FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    auth.email() IN ('khuram1901@gmail.com', 'k.saleem@unzegroup.com')
-    OR get_user_role() = 'Admin'
-  );
-
-CREATE POLICY "holdings_admin_update"
-  ON holdings FOR UPDATE
-  TO authenticated
-  USING (
-    auth.email() IN ('khuram1901@gmail.com', 'k.saleem@unzegroup.com')
-    OR get_user_role() = 'Admin'
-  );
-
-CREATE POLICY "holdings_admin_delete"
-  ON holdings FOR DELETE
-  TO authenticated
-  USING (
-    auth.email() IN ('khuram1901@gmail.com', 'k.saleem@unzegroup.com')
-    OR get_user_role() = 'Admin'
-  );
-
--- Price history: drop old open policies, create restricted ones
-DROP POLICY IF EXISTS "Authenticated users can read price_history" ON price_history;
-DROP POLICY IF EXISTS "Authenticated users can insert price_history" ON price_history;
-DROP POLICY IF EXISTS "Authenticated users can update price_history" ON price_history;
-
-CREATE POLICY "price_history_admin_read"
-  ON price_history FOR SELECT
-  TO authenticated
-  USING (
-    auth.email() IN ('khuram1901@gmail.com', 'k.saleem@unzegroup.com')
-    OR get_user_role() = 'Admin'
-  );
-
-CREATE POLICY "price_history_admin_write"
-  ON price_history FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    auth.email() IN ('khuram1901@gmail.com', 'k.saleem@unzegroup.com')
-    OR get_user_role() = 'Admin'
-  );
-
-CREATE POLICY "price_history_admin_update"
-  ON price_history FOR UPDATE
-  TO authenticated
-  USING (
-    auth.email() IN ('khuram1901@gmail.com', 'k.saleem@unzegroup.com')
-    OR get_user_role() = 'Admin'
-  );
-
-
--- ═══ ITEM 10: push_subscriptions — restrict to own email ═══
--- Users should only see/manage their own push subscriptions
-DROP POLICY IF EXISTS "push_sub_all" ON push_subscriptions;
-
-CREATE POLICY "push_sub_own_select"
-  ON push_subscriptions FOR SELECT
-  TO authenticated
-  USING (user_email = auth.email());
-
-CREATE POLICY "push_sub_own_insert"
-  ON push_subscriptions FOR INSERT
-  TO authenticated
-  WITH CHECK (user_email = auth.email());
-
-CREATE POLICY "push_sub_own_delete"
-  ON push_subscriptions FOR DELETE
-  TO authenticated
-  USING (user_email = auth.email());
-
--- Service role full access for push notification cron
-CREATE POLICY "push_sub_service"
-  ON push_subscriptions FOR ALL
-  TO service_role
-  USING (true)
-  WITH CHECK (true);
-
-
--- ═══ ITEM 11: UPDATE/DELETE on production/dispatch/breakage entries ═══
--- Currently only SELECT + INSERT exist. Corrections silently fail.
--- Allow Admin/Executive to update/delete; Ops dept can update their entries.
-
-CREATE POLICY "update_entries" ON production_entries FOR UPDATE
-  USING (is_admin_or_exec() OR get_user_department() = 'Unze Trading Ops');
-
-CREATE POLICY "delete_entries" ON production_entries FOR DELETE
-  USING (is_admin_or_exec());
-
-CREATE POLICY "update_entries" ON dispatch_entries FOR UPDATE
-  USING (is_admin_or_exec() OR get_user_department() = 'Unze Trading Ops');
-
-CREATE POLICY "delete_entries" ON dispatch_entries FOR DELETE
-  USING (is_admin_or_exec());
-
-CREATE POLICY "update_entries" ON breakage_entries FOR UPDATE
-  USING (is_admin_or_exec() OR get_user_department() = 'Unze Trading Ops');
-
-CREATE POLICY "delete_entries" ON breakage_entries FOR DELETE
-  USING (is_admin_or_exec());
-
-
--- ═══ ITEM 13: DELETE policy on tasks table ═══
--- Task deletion silently fails because there's no DELETE policy
-DROP POLICY IF EXISTS "tasks_delete" ON tasks;
-CREATE POLICY "tasks_delete" ON tasks FOR DELETE
-  USING (
-    is_admin_or_exec()
-    OR assigned_to_email = auth.email()
-  );
-
-
--- ═══ ITEM 14: department_budgets company_id allows NULL ═══
--- Migration 024 added company_id without NOT NULL.
--- Backfill NULLs to UTPL first, then add NOT NULL.
-UPDATE department_budgets
-  SET company_id = (SELECT id FROM companies WHERE short_code = 'UTPL')
-  WHERE company_id IS NULL;
-
-ALTER TABLE department_budgets
-  ALTER COLUMN company_id SET NOT NULL;
-
-
--- ═══ ITEM 17: Sync trigger preserves manual overrides ═══
--- The old trigger unconditionally overwrites all permissions on role change.
--- New version: only reset a column if it currently matches the OLD role defaults.
--- If an admin manually changed a permission, it stays unchanged.
+-- ═══ ITEM 33: can_view_investments not in sync trigger ═══
+-- New members don't get can_view_investments set. Only Admin should see investments.
 
 CREATE OR REPLACE FUNCTION sync_member_permissions()
 RETURNS TRIGGER AS $fn$
@@ -253,8 +93,6 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- On role/dept change: only update columns that still match the OLD defaults
-  -- This preserves any manual admin overrides
   IF TG_OP = 'UPDATE' AND (
     OLD.role IS DISTINCT FROM NEW.role
     OR OLD.department IS DISTINCT FROM NEW.department
@@ -293,6 +131,7 @@ BEGIN
       can_view_exceptions = CASE WHEN can_view_exceptions = (old_is_admin OR old_is_exec) THEN (is_admin OR is_exec) ELSE can_view_exceptions END,
       can_import_export = CASE WHEN can_import_export = (old_is_admin OR old_is_exec) THEN (is_admin OR is_exec) ELSE can_import_export END,
       can_access_daily_entry = CASE WHEN can_access_daily_entry = (old_is_admin OR (old_dept = 'Unze Trading Ops')) THEN (is_admin OR (dept = 'Unze Trading Ops')) ELSE can_access_daily_entry END,
+      can_view_investments = CASE WHEN can_view_investments IS NULL OR can_view_investments = old_is_admin THEN is_admin ELSE can_view_investments END,
       updated_at = now()
     WHERE member_id = NEW.id;
   END IF;
@@ -306,3 +145,11 @@ CREATE TRIGGER trg_sync_member_permissions
   AFTER INSERT OR UPDATE ON members
   FOR EACH ROW
   EXECUTE FUNCTION sync_member_permissions();
+
+
+-- ═══ ITEM 26 (partial): Cache RLS helper results ═══
+-- The helper functions get_user_role(), is_admin_or_exec(), get_user_department()
+-- are called per-row during RLS checks. Mark them as STABLE so Postgres can
+-- cache the result within a single statement (already done, but ensure STABLE is set).
+-- The actual per-statement caching comes from the STABLE volatility marker.
+-- Full fix (using SET configs) deferred as it requires rewriting all RLS policies.

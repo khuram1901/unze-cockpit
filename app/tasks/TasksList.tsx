@@ -276,7 +276,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   <a href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
                     target="_blank" rel="noopener noreferrer" style={{
                       backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "5px",
-                      padding: "4px 12px", fontSize: "14px", fontWeight: 700, cursor: "pointer", textDecoration: "none",
+                      padding: "6px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer", textDecoration: "none", minHeight: "36px",
                     }} title="Send WhatsApp reminder to assignee">
                     WhatsApp
                   </a>
@@ -289,7 +289,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   }}
                   style={{
                     backgroundColor: "var(--bg-card, #ffffff)", color: "#dc2626", border: "1px solid #dc2626",
-                    borderRadius: "5px", padding: "4px 12px", fontSize: "14px", fontWeight: 700, cursor: "pointer",
+                    borderRadius: "5px", padding: "6px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer", minHeight: "36px",
                   }}
                   title="Permanently delete this task"
                 >

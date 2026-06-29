@@ -30,14 +30,25 @@ export async function POST(request: NextRequest) {
     }
 
     const serviceClient = createServiceClient();
-    const { data: listData } = await serviceClient.auth.admin.listUsers({ perPage: 1000 });
-    const authUser = listData?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
 
-    if (!authUser) {
+    // Find user by paginating through auth users (handles >1000 users)
+    let authUserId: string | null = null;
+    const normalised = email.toLowerCase();
+    let page = 1;
+    while (!authUserId) {
+      const { data } = await serviceClient.auth.admin.listUsers({ page, perPage: 500 });
+      if (!data?.users?.length) break;
+      const found = data.users.find((u) => u.email?.toLowerCase() === normalised);
+      if (found) { authUserId = found.id; break; }
+      if (data.users.length < 500) break;
+      page++;
+    }
+
+    if (!authUserId) {
       return Response.json({ error: "User not found." }, { status: 404 });
     }
 
-    const { error } = await serviceClient.auth.admin.updateUserById(authUser.id, { password: newPassword });
+    const { error } = await serviceClient.auth.admin.updateUserById(authUserId, { password: newPassword });
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });

@@ -21,15 +21,21 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient();
     const normalised = email.trim().toLowerCase();
 
-    // Find the auth user
-    const { data: listData, error: listErr } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-
-    if (listErr) {
-      console.error("listUsers failed:", listErr.message);
-      return Response.json({ error: "Failed to look up user: " + listErr.message }, { status: 500 });
+    // Find the auth user by paginating (handles >1000 users)
+    let authUser: { id: string } | null = null;
+    let page = 1;
+    while (!authUser) {
+      const { data: listData, error: listErr } = await supabase.auth.admin.listUsers({ page, perPage: 500 });
+      if (listErr) {
+        console.error("listUsers failed:", listErr.message);
+        return Response.json({ error: "Failed to look up user: " + listErr.message }, { status: 500 });
+      }
+      if (!listData?.users?.length) break;
+      const found = listData.users.find((u) => u.email?.toLowerCase() === normalised);
+      if (found) { authUser = found; break; }
+      if (listData.users.length < 500) break;
+      page++;
     }
-
-    const authUser = listData?.users?.find((u) => u.email?.toLowerCase() === normalised);
 
     if (!authUser) {
       // Create the auth account with the desired password

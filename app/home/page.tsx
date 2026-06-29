@@ -859,7 +859,7 @@ export default function HomePage() {
                       <button
                         title="Mark complete"
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); quickAction(t.id, "complete", t); }}
-                        style={{ background: "none", border: `1px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "2px 8px", fontSize: "12px", fontWeight: 700, color: COLOURS.GREEN, cursor: "pointer", marginLeft: "4px" }}
+                        style={{ background: "none", border: `1px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 700, color: COLOURS.GREEN, cursor: "pointer", marginLeft: "4px", minHeight: "36px", minWidth: "44px" }}
                       >
                         Done
                       </button>
@@ -867,7 +867,7 @@ export default function HomePage() {
                         <button
                           title="Send chase email"
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); quickAction(t.id, "chase", t); }}
-                          style={{ background: "none", border: `1px solid ${COLOURS.AMBER}`, borderRadius: "6px", padding: "2px 8px", fontSize: "12px", fontWeight: 700, color: COLOURS.AMBER, cursor: "pointer" }}
+                          style={{ background: "none", border: `1px solid ${COLOURS.AMBER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 700, color: COLOURS.AMBER, cursor: "pointer", minHeight: "36px", minWidth: "44px" }}
                         >
                           Chase
                         </button>

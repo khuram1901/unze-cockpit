@@ -4,7 +4,8 @@ import { sendNotificationEmail } from "../../../lib/send-email";
 
 const UTPL = "15884c2d-48a4-4d43-be90-0ef6e130790c";
 const IFPL = "77921705-8a15-4406-847a-b234f84b5ec3";
-const RECIPIENTS = ["k.saleem@unzegroup.com", "khuram1901@gmail.com", "pa.ceo@unze.co.uk"];
+// Fallback if DB query fails
+const FALLBACK_RECIPIENTS = ["k.saleem@unzegroup.com", "khuram1901@gmail.com", "pa.ceo@unze.co.uk"];
 
 function fmtPKR(n: number) { return "PKR " + Math.round(n).toLocaleString(); }
 function fmtDate(d: string) { const [y, m, day] = d.split("-"); return `${day}/${m}/${y}`; }
@@ -125,9 +126,16 @@ export async function GET(request: NextRequest) {
   html += `<p style="margin:4px 0">Tasks waiting reply: <strong>${waiting.length}</strong></p>`;
   html += `<p style="margin:4px 0">Yesterday's production: <strong>${yesterdayProd.toLocaleString()} units</strong></p>`;
 
-  // Send to all recipients
+  // Send to Admin + Executive members (dynamic, no code change needed when adding admins)
+  const { data: admins } = await supabase
+    .from("members")
+    .select("email, first_name, name")
+    .in("role", ["Admin", "Executive"]);
+  const recipients = (admins || []).map((a) => a.email).filter(Boolean);
+  if (recipients.length === 0) recipients.push(...FALLBACK_RECIPIENTS);
+
   let sent = 0;
-  for (const recipient of RECIPIENTS) {
+  for (const recipient of recipients) {
     try {
       await sendNotificationEmail({
         to: recipient,

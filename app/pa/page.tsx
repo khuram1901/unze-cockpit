@@ -172,12 +172,11 @@ export default function PADashboardPage() {
   async function bulkComplete() {
     if (selectedTasks.size === 0) return;
     if (!confirm(`Mark ${selectedTasks.size} task${selectedTasks.size > 1 ? "s" : ""} as Completed?`)) return;
-    for (const id of selectedTasks) {
-      await supabase.from("tasks").update({ status: "Completed", updated_at: new Date().toISOString() }).eq("id", id);
-    }
-    logAction("Updated", "tasks", `Bulk completed ${selectedTasks.size} tasks`);
+    const ids = Array.from(selectedTasks);
+    await supabase.from("tasks").update({ status: "Completed", updated_at: new Date().toISOString() }).in("id", ids);
+    logAction("Updated", "tasks", `Bulk completed ${ids.length} tasks`);
     setSelectedTasks(new Set());
-    showMsg(`${selectedTasks.size} tasks completed.`);
+    showMsg(`${ids.length} tasks completed.`);
     loadData();
   }
 
