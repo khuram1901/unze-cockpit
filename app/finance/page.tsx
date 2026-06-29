@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { COMPANIES, getCompanyByName } from "../lib/constants";
-import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { logAction } from "../lib/audit-log";
@@ -120,6 +120,8 @@ export default function FinancePage() {
   const router = useRouter();
   const isMobile = useMobile();
   const { checking } = useRequireCapability("finance");
+  const toast = useToast();
+  const dlg = useConfirm();
   const [loading, setLoading] = useState(true);
   const [showPicker, setShowPicker] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -199,7 +201,7 @@ export default function FinancePage() {
           `${(r.company || "?").padEnd(10)} ${r.date || "?"} ${r.status} — ${r.filename}`
         ).join("\n");
         setBulkMsg(`Done: ${data.saved} saved, ${data.errors} errors out of ${data.total} files.`);
-        if (data.results) alert("Upload Results:\n\n" + details);
+        if (data.results) toast.show("Upload: " + details, "success");
         input.value = "";
       } else {
         setBulkMsg("Error: " + (data.error || "Upload failed"));
@@ -228,7 +230,7 @@ export default function FinancePage() {
   }
 
   async function deleteBudgetEntry(id: string) {
-    if (!confirm("Delete this budget entry?")) return;
+    if (!await dlg.confirm("Delete this budget entry?", true)) return;
     await supabase.from("department_budgets").delete().eq("id", id);
     loadBudgets();
   }
@@ -256,6 +258,8 @@ export default function FinancePage() {
 
   return (
     <AuthWrapper>
+      {toast.element}
+      {dlg.element}
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader />
 
@@ -376,11 +380,11 @@ export default function FinancePage() {
                         }
 
                         if (errors.length > 0) {
-                          alert(`Upload rejected — please fix and re-upload:\n\n${errors.slice(0, 15).join("\n")}${errors.length > 15 ? `\n\n...and ${errors.length - 15} more errors` : ""}`);
+                          toast.show(`Upload rejected — ${errors.slice(0, 5).join("; ")}${errors.length > 5 ? ` ...and ${errors.length - 5} more` : ""}`, "error");
                           return;
                         }
 
-                        if (validRows.length === 0) { alert("No valid data rows found in the file."); return; }
+                        if (validRows.length === 0) { toast.show("No valid data rows found in the file.", "error"); return; }
 
                         for (const r of validRows) {
                           await supabase.from("department_budgets").upsert({

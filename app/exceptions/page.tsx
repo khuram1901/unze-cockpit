@@ -13,6 +13,7 @@ import {
   tableHeaderStyle as th,
   tableCellStyle as td,
   tableCellBoldStyle as tdBold,
+  useToast,
 } from "../lib/SharedUI";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
@@ -59,6 +60,7 @@ function sourceLabel(s: string | null): string {
 export default function ExceptionsPage() {
   const { checking } = useRequireCapability("exceptions");
   const isMobile = useMobile();
+  const toast = useToast();
   const [escalations, setEscalations] = useState<EscalationTask[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -70,7 +72,7 @@ export default function ExceptionsPage() {
       .in("source_type", ESCALATION_SOURCES)
       .order("created_at", { ascending: false });
     if (error) {
-      alert("Error loading exceptions: " + error.message);
+      toast.show("Error loading exceptions: " + error.message, "error");
     } else {
       setEscalations(data || []);
     }
@@ -92,6 +94,7 @@ export default function ExceptionsPage() {
 
   return (
     <AuthWrapper>
+      {toast.element}
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader />
 

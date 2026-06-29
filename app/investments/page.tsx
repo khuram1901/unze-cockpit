@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase } from "../lib/supabase";
-import { COLOURS, SectionTitle, PageHeader } from "../lib/SharedUI";
+import { COLOURS, SectionTitle, PageHeader, useConfirm } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import {
@@ -88,6 +88,7 @@ function ragColor(pct: number | null) {
 export default function InvestmentsPage() {
   const { checking } = useRequireCapability("investments");
   const isMobile = useMobile();
+  const dlg = useConfirm();
 
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [currentPrices, setCurrentPrices] = useState<PriceRow[]>([]);
@@ -225,7 +226,7 @@ export default function InvestmentsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this holding?")) return;
+    if (!await dlg.confirm("Delete this holding?", true)) return;
     await supabase.from("holdings").delete().eq("id", id);
     await load();
   }
@@ -284,6 +285,7 @@ export default function InvestmentsPage() {
 
   return (
     <AuthWrapper>
+      {dlg.element}
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
         <PageHeader />
 

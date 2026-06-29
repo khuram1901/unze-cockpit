@@ -13,6 +13,7 @@ import {
   SectionTitle,
   StatusBadge,
   PriorityBadge,
+  useConfirm,
 } from "../lib/SharedUI";
 import { whatsappLink, taskChaseMessage } from "../lib/whatsapp";
 import { useRequireCapability } from "../lib/useRouteGuard";
@@ -100,6 +101,7 @@ export default function PADashboardPage() {
   const [bulkAction, setBulkAction] = useState(false);
   const [quickNote, setQuickNote] = useState<{ taskId: string; text: string } | null>(null);
   const [savingNote, setSavingNote] = useState(false);
+  const dlg = useConfirm();
 
   // New task form
   const [showNewTask, setShowNewTask] = useState(false);
@@ -171,7 +173,7 @@ export default function PADashboardPage() {
 
   async function bulkComplete() {
     if (selectedTasks.size === 0) return;
-    if (!confirm(`Mark ${selectedTasks.size} task${selectedTasks.size > 1 ? "s" : ""} as Completed?`)) return;
+    if (!await dlg.confirm(`Mark ${selectedTasks.size} task${selectedTasks.size > 1 ? "s" : ""} as Completed?`)) return;
     const ids = Array.from(selectedTasks);
     await supabase.from("tasks").update({ status: "Completed", updated_at: new Date().toISOString() }).in("id", ids);
     logAction("Updated", "tasks", `Bulk completed ${ids.length} tasks`);
@@ -379,7 +381,7 @@ export default function PADashboardPage() {
               <button onClick={() => closeTask(task.id)} style={actionBtn(COLOURS.GREEN)} title="Mark as completed">Complete</button>
               <button onClick={() => setQuickNote({ taskId: task.id, text: "" })} style={actionBtn("#7c3aed")} title="Add a note to this task">Note</button>
               <button onClick={async () => {
-                if (!confirm(`Delete "${task.description}"? This cannot be undone.`)) return;
+                if (!await dlg.confirm(`Delete "${task.description}"? This cannot be undone.`, true)) return;
                 await supabase.from("tasks").delete().eq("id", task.id);
                 showMsg("Task deleted.");
                 loadData();
@@ -419,6 +421,7 @@ export default function PADashboardPage() {
 
   return (
     <AuthWrapper>
+        {dlg.element}
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
 
           {/* ── Greeting ── */}

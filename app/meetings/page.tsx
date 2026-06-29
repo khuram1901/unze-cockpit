@@ -17,6 +17,7 @@ import {
   primaryButtonStyle,
   labelStyle,
   inputStyle,
+  useConfirm,
 } from "../lib/SharedUI";
 
 type ExtractedMinutes = {
@@ -99,6 +100,7 @@ function bestMatch(name: string, members: { name: string; email: string }[]): { 
 export default function MeetingsPage() {
   const { checking } = useRequireCapability("meetings_admin");
   const isMobile = useMobile();
+  const dlg = useConfirm();
   const [transcript, setTranscript] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState<ExtractedMinutes | null>(null);
@@ -290,7 +292,7 @@ export default function MeetingsPage() {
   }
 
   async function handleDismissPending(pendingId: string) {
-    if (!confirm("Dismiss this minute? It won't appear in the pending list again.")) return;
+    if (!await dlg.confirm("Dismiss this minute? It won't appear in the pending list again.")) return;
     await supabase
       .from("pending_minutes")
       .update({ status: "dismissed", reviewed_by: currentUserEmail, reviewed_at: new Date().toISOString() })
@@ -519,6 +521,7 @@ export default function MeetingsPage() {
 
   return (
     <AuthWrapper>
+      {dlg.element}
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
           <PageHeader />

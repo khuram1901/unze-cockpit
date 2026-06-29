@@ -5,7 +5,7 @@ import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, SectionTitle } from "../lib/SharedUI";
+import { COLOURS, SectionTitle, useToast, useConfirm } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import * as XLSX from "xlsx";
@@ -57,6 +57,8 @@ function fmt(n: number) {
 
 export default function FinanceManager({ companyId, companyName }: { companyId: string; companyName: string }) {
   const isMobile = useMobile();
+  const toast = useToast();
+  const dlg = useConfirm();
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>("Member");
   const [userCanEdit, setUserCanEdit] = useState(false);
@@ -321,7 +323,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   }
 
   async function deleteBudgetEntry(id: string) {
-    if (!confirm("Delete this budget entry?")) return;
+    if (!await dlg.confirm("Delete this budget entry?", true)) return;
     await supabase.from("department_budgets").delete().eq("id", id);
     loadBudgets();
   }
@@ -431,8 +433,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     if (prevDay) {
       const diffDays = (new Date(dpDate).getTime() - new Date(prevDay.position_date).getTime()) / (1000 * 60 * 60 * 24);
       if (diffDays <= 1 && Math.abs(Number(dpOpening) - prevDay.closing_balance) > 0.01 && Math.abs(Math.abs(Number(dpOpening)) - Math.abs(prevDay.closing_balance)) > 0.01) {
-        const proceed = confirm(
-          `Warning: Opening balance (${fmt(Number(dpOpening))}) does not match previous day's closing balance (${fmt(prevDay.closing_balance)} on ${formatDateUK(prevDay.position_date)}).\n\nSave anyway?`
+        const proceed = await dlg.confirm(
+          `Warning: Opening balance (${fmt(Number(dpOpening))}) does not match previous day's closing (${fmt(prevDay.closing_balance)} on ${formatDateUK(prevDay.position_date)}). Save anyway?`
         );
         if (!proceed) return;
       }
@@ -489,6 +491,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
   return (
     <div>
+      {toast.element}
+      {dlg.element}
       {msg && (
         <div style={{
           border: `1px solid ${BORDER}`,
@@ -772,8 +776,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                     if (!cat || !validCats.includes(cat)) { errors.push("Row " + line + ": Invalid category: " + (cat || "(empty)")); continue; }
                     valid.push({ dept, cat, budgeted: Number(row["Budgeted"]) || 0, actual: Number(row["Actual"]) || 0, notes: row["Notes"]?.trim() || "" });
                   }
-                  if (errors.length > 0) { alert(`Upload rejected:\n\n${errors.slice(0, 15).join("\n")}`); return; }
-                  if (valid.length === 0) { alert("No valid rows."); return; }
+                  if (errors.length > 0) { toast.show(`Upload rejected: ${errors.slice(0, 5).join("; ")}${errors.length > 5 ? ` ...and ${errors.length - 5} more` : ""}`, "error"); return; }
+                  if (valid.length === 0) { toast.show("No valid rows.", "error"); return; }
                   for (const r of valid) {
                     await supabase.from("department_budgets").upsert({
                       company_id: companyId, department: r.dept, budget_month: budgetMonth, category: r.cat,

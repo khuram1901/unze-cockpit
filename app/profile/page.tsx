@@ -5,10 +5,11 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, PageHeader, SectionTitle, displayRole } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, displayRole, useConfirm } from "../lib/SharedUI";
 
 export default function ProfilePage() {
   const isMobile = useMobile();
+  const dlg = useConfirm();
   const [email, setEmail] = useState("");
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -210,7 +211,7 @@ export default function ProfilePage() {
 
   async function disableMFA() {
     if (!factorId) return;
-    if (!confirm("Are you sure you want to disable 2FA? Your account will be less secure.")) return;
+    if (!await dlg.confirm("Are you sure you want to disable 2FA? Your account will be less secure.", true)) return;
 
     const { error } = await supabase.auth.mfa.unenroll({ factorId });
     if (error) {
@@ -259,6 +260,7 @@ export default function ProfilePage() {
 
   return (
     <AuthWrapper>
+      {dlg.element}
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader />
 

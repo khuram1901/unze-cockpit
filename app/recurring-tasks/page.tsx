@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, useConfirm } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 
 type Template = {
@@ -32,6 +32,7 @@ const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
 export default function RecurringTasksPage() {
   const { checking } = useRequireCapability("recurring_tasks");
   const isMobile = useMobile();
+  const dlg = useConfirm();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +88,7 @@ export default function RecurringTasksPage() {
   }
 
   async function deleteTemplate(id: string) {
-    if (!confirm("Delete this recurring task template?")) return;
+    if (!await dlg.confirm("Delete this recurring task template?", true)) return;
     await supabase.from("recurring_tasks").delete().eq("id", id);
     loadData();
   }
@@ -96,6 +97,7 @@ export default function RecurringTasksPage() {
 
   return (
     <AuthWrapper>
+        {dlg.element}
         <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
             <PageHeader />

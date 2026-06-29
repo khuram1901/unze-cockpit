@@ -360,3 +360,126 @@ export const primaryButtonStyle: React.CSSProperties = {
   fontWeight: 700,
   cursor: "pointer",
 };
+
+// ─────────────────────────────────────────────────────────────────
+// Toast notification (replaces alert())
+// ─────────────────────────────────────────────────────────────────
+type ToastType = "success" | "error" | "info";
+
+const TOAST_COLORS: Record<ToastType, { bg: string; border: string; text: string; icon: string }> = {
+  success: { bg: "#f0fdf4", border: "#bbf7d0", text: "#166534", icon: "✓" },
+  error: { bg: "#fef2f2", border: "#fecaca", text: "#991b1b", icon: "✗" },
+  info: { bg: "#eff6ff", border: "#bfdbfe", text: "#1e40af", icon: "ℹ" },
+};
+
+export function Toast({ message, type = "info", onClose }: { message: string; type?: ToastType; onClose: () => void }) {
+  const c = TOAST_COLORS[type];
+  React.useEffect(() => { const t = setTimeout(onClose, type === "error" ? 6000 : 4000); return () => clearTimeout(t); }, [onClose, type]);
+  return (
+    <div style={{
+      position: "fixed", bottom: "24px", right: "24px", zIndex: 9999,
+      backgroundColor: c.bg, border: `1px solid ${c.border}`, borderRadius: "10px",
+      padding: "12px 20px", maxWidth: "420px", boxShadow: "0 8px 30px rgba(15,23,42,0.12)",
+      display: "flex", alignItems: "center", gap: "10px", animation: "loginFadeIn 0.2s ease-out",
+    }}>
+      <span style={{ fontSize: "16px", fontWeight: 700, color: c.text }}>{c.icon}</span>
+      <span style={{ fontSize: "14px", color: c.text, lineHeight: 1.4, flex: 1, whiteSpace: "pre-wrap" }}>{message}</span>
+      <button onClick={onClose} style={{ background: "none", border: "none", color: c.text, cursor: "pointer", fontSize: "18px", padding: "0 2px", opacity: 0.6 }}>&times;</button>
+    </div>
+  );
+}
+
+export function useToast() {
+  const [toast, setToast] = React.useState<{ message: string; type: ToastType } | null>(null);
+  const show = React.useCallback((message: string, type: ToastType = "info") => setToast({ message, type }), []);
+  const element = toast ? <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /> : null;
+  return { show, element };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Confirm dialog (replaces confirm())
+// ─────────────────────────────────────────────────────────────────
+export function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = "Confirm", danger = false }: {
+  message: string; onConfirm: () => void; onCancel: () => void; confirmLabel?: string; danger?: boolean;
+}) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)",
+      display: "flex", alignItems: "center", justifyContent: "center", padding: "16px",
+    }} onClick={onCancel}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "14px", padding: "28px",
+        maxWidth: "420px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)",
+      }}>
+        <p style={{ fontSize: "15px", color: "var(--text-primary, #1e293b)", lineHeight: 1.5, margin: "0 0 20px", whiteSpace: "pre-wrap" }}>{message}</p>
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          <button onClick={onCancel} style={{
+            padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 600,
+            border: `1px solid ${COLOURS.BORDER}`, backgroundColor: "var(--bg-card, #fff)", color: COLOURS.NAVY, cursor: "pointer",
+          }}>Cancel</button>
+          <button onClick={onConfirm} style={{
+            padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 600,
+            border: "none", backgroundColor: danger ? COLOURS.RED : COLOURS.NAVY, color: "white", cursor: "pointer",
+          }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function useConfirm() {
+  const [state, setState] = React.useState<{ message: string; resolve: (v: boolean) => void; danger?: boolean } | null>(null);
+  const confirm = React.useCallback((message: string, danger = false) => new Promise<boolean>((resolve) => setState({ message, resolve, danger })), []);
+  const element = state ? (
+    <ConfirmDialog message={state.message} danger={state.danger}
+      onConfirm={() => { state.resolve(true); setState(null); }}
+      onCancel={() => { state.resolve(false); setState(null); }}
+      confirmLabel={state.danger ? "Delete" : "Confirm"}
+    />
+  ) : null;
+  return { confirm, element };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Error banner (replaces silent fetch failures)
+// ─────────────────────────────────────────────────────────────────
+export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div style={{
+      backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px",
+      padding: "12px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px",
+    }}>
+      <span style={{ fontSize: "14px", color: "#991b1b", flex: 1 }}>{message}</span>
+      {onRetry && (
+        <button onClick={onRetry} style={{
+          padding: "6px 14px", borderRadius: "6px", fontSize: "13px", fontWeight: 600,
+          border: "1px solid #fecaca", backgroundColor: "#fff", color: "#991b1b", cursor: "pointer",
+        }}>Retry</button>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Loading skeleton (replaces bare "Loading..." text)
+// ─────────────────────────────────────────────────────────────────
+export function SkeletonCard({ width = "100%", height = "80px" }: { width?: string; height?: string }) {
+  return (
+    <div style={{
+      width, height, borderRadius: "12px",
+      background: "linear-gradient(90deg, var(--bg-card, #f1f5f9) 25%, var(--bg-card-hover, #e8ecf1) 50%, var(--bg-card, #f1f5f9) 75%)",
+      backgroundSize: "200% 100%",
+      animation: "shimmer 1.5s infinite linear",
+    }} />
+  );
+}
+
+export function SkeletonRows({ count = 4, height = "48px" }: { count?: number; height?: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <SkeletonCard key={i} height={height} />
+      ))}
+    </div>
+  );
+}

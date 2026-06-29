@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { downloadCSV } from "../../lib/exportUtils";
@@ -47,6 +47,7 @@ const lbl: React.CSSProperties = {
 };
 
 export default function TaxationDashboard() {
+  const toast = useToast();
   const isMobile = useMobile();
   const [items, setItems] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +116,7 @@ export default function TaxationDashboard() {
 
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      {toast.element}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
         <PageHeader />
       </div>
@@ -285,7 +287,7 @@ export default function TaxationDashboard() {
               validRows.push(row);
             });
             if (errors.length > 0) {
-              alert(`Import validation failed:\n\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`);
+              toast.show(`Import validation failed: ${errors.slice(0, 5).join("; ")}${errors.length > 5 ? ` ...and ${errors.length - 5} more` : ""}`, "error");
               return;
             }
             let count = 0;
@@ -303,7 +305,7 @@ export default function TaxationDashboard() {
               });
               count++;
             }
-            alert(`Successfully imported ${count} notice${count !== 1 ? "s" : ""}.`);
+            toast.show(`Successfully imported ${count} notice${count !== 1 ? "s" : ""}.`, "success");
             loadData();
           }}
           templateHeaders={["Title", "Company", "Type", "Recorded By", "Consultant", "Hearing Date", "Exposure (PKR)", "Received", "Our Action", "Notes"]}

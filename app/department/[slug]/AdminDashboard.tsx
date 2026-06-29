@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useConfirm } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { canReviewTasks, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
@@ -60,6 +60,7 @@ const lbl: React.CSSProperties = {
 
 export default function AdminDashboard() {
   const isMobile = useMobile();
+  const dlg = useConfirm();
   const [items, setItems] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -173,6 +174,7 @@ export default function AdminDashboard() {
 
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      {dlg.element}
       {/* Header with + button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
         <PageHeader />
@@ -415,7 +417,7 @@ export default function AdminDashboard() {
                             <>
                               <div style={{ flex: 1 }} />
                               <button onClick={async () => {
-                                if (!confirm(`Delete "${task.description}"? This cannot be undone.`)) return;
+                                if (!await dlg.confirm(`Delete "${task.description}"? This cannot be undone.`, true)) return;
                                 await supabase.from("tasks").delete().eq("id", task.id);
                                 loadData();
                               }} style={{ backgroundColor: "var(--bg-card, #ffffff)", color: "#dc2626", border: "1px solid #dc2626", borderRadius: "5px", padding: "4px 10px", fontSize: "14px", fontWeight: 700, cursor: "pointer" }} title="Delete this task">Delete</button>

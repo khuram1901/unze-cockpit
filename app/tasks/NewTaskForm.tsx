@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import { logAction } from "../lib/audit-log";
+import { useToast } from "../lib/SharedUI";
 
 type Member = {
   id: string;
@@ -52,6 +53,7 @@ function todayDate() {
 
 export default function NewTaskForm() {
   const router = useRouter();
+  const toast = useToast();
   const today = todayDate();
 
   const [members, setMembers] = useState<Member[]>([]);
@@ -123,7 +125,7 @@ export default function NewTaskForm() {
     e.preventDefault();
 
     if (assignedDate > today) {
-      alert("Assigned date cannot be in the future.");
+      toast.show("Assigned date cannot be in the future.", "error");
       return;
     }
 
@@ -154,7 +156,7 @@ export default function NewTaskForm() {
     setSaving(false);
 
     if (error) {
-      alert("Error saving task: " + error.message);
+      toast.show("Error saving task: " + error.message, "error");
       return;
     }
 
@@ -196,7 +198,7 @@ export default function NewTaskForm() {
   const selectedOwner = departmentOwners.find((d) => d.department_name === project);
 
   return (
-        <form
+        <>{toast.element}<form
       onSubmit={handleSubmit}
       style={{
         padding: "14px",
@@ -381,6 +383,6 @@ export default function NewTaskForm() {
       >
         {saving ? "Saving..." : "Create Task"}
       </button>
-    </form>
+    </form></>
   );
 }

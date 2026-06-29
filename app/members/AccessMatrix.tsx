@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
-import { COLOURS } from "../lib/SharedUI";
+import { COLOURS, useToast } from "../lib/SharedUI";
 import {
   CEO_EMAIL, ADMIN_EMAIL, PA_EMAIL, PROTECTED_EMAILS,
   isAdminTier, type UserCtx,
@@ -150,6 +150,7 @@ function roleBadgeColor(m: MatrixMember): string {
 }
 
 export default function AccessMatrix({ members, isMobile }: { members: MatrixMember[]; isMobile: boolean }) {
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [perms, setPerms] = useState<Record<string, PermRow>>({});
   const [saving, setSaving] = useState<string | null>(null);
@@ -180,11 +181,11 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
       const { error } = await supabase.from("member_permissions")
         .update({ [col.key]: newValue, updated_at: new Date().toISOString() })
         .eq("member_id", memberId);
-      if (error) { alert("Error: " + error.message); setSaving(null); return; }
+      if (error) { toast.show("Error: " + error.message, "error"); setSaving(null); return; }
     } else {
       const { error } = await supabase.from("member_permissions")
         .insert({ member_id: memberId, [col.key]: newValue });
-      if (error) { alert("Error: " + error.message); setSaving(null); return; }
+      if (error) { toast.show("Error: " + error.message, "error"); setSaving(null); return; }
     }
     setPerms((prev) => ({
       ...prev,
@@ -200,6 +201,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
 
   return (
     <div style={{ marginTop: "12px" }}>
+      {toast.element}
       <div onClick={() => setOpen(!open)} style={{
         display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
         border: `1px solid ${COLOURS.BORDER}`, borderRadius: open ? "8px 8px 0 0" : "8px", padding: "14px 18px",

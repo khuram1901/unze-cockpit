@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
+import { useToast } from "../lib/SharedUI";
 
 type Task = {
   id: string;
@@ -42,6 +43,7 @@ export default function TaskStatus({
   canReview?: boolean;
   canEditDueDate?: boolean;
 }) {
+  const toast = useToast();
   const [status, setStatus] = useState(task.status);
   const [memberNames, setMemberNames] = useState<{ name: string; email: string | null; department: string | null; phone_e164: string | null }[]>([]);
   const [replyText, setReplyText] = useState(task.reply_text || "");
@@ -86,7 +88,7 @@ export default function TaskStatus({
     setSaving(false);
 
     if (error) {
-      alert("Error updating status: " + error.message);
+      toast.show("Error updating status: " + error.message, "error");
       return;
     }
 
@@ -112,7 +114,7 @@ export default function TaskStatus({
     setSavingDate(false);
 
     if (error) {
-      alert("Error updating due date: " + error.message);
+      toast.show("Error updating due date: " + error.message, "error");
       return;
     }
 
@@ -124,11 +126,11 @@ export default function TaskStatus({
 
   async function submitExplanation() {
     if (!replyText.trim()) {
-      alert("Please write an explanation before submitting.");
+      toast.show("Please write an explanation before submitting.", "error");
       return;
     }
     if (!correctiveAction.trim()) {
-      alert("Please enter corrective action.");
+      toast.show("Please enter corrective action.", "error");
       return;
     }
 
@@ -153,7 +155,7 @@ export default function TaskStatus({
     setSaving(false);
 
     if (error) {
-      alert("Error saving explanation: " + error.message);
+      toast.show("Error saving explanation: " + error.message, "error");
       return;
     }
 
@@ -181,7 +183,7 @@ export default function TaskStatus({
 
     setSavingNote(false);
     if (error) {
-      alert("Error saving note: " + error.message);
+      toast.show("Error saving note: " + error.message, "error");
       return;
     }
 
@@ -212,6 +214,7 @@ export default function TaskStatus({
 
   return (
     <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--border-color, #e2e8f0)" }}>
+      {toast.element}
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         <span style={{ fontSize: "16px", fontWeight: "bold" }}>Update status:</span>
 

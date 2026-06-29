@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { COLOURS } from "./SharedUI";
+import { COLOURS, useToast } from "./SharedUI";
 
 type Props = {
   onExport: () => void;
@@ -55,6 +55,7 @@ function generateTemplate(headers: string[], filename: string, rows?: string[][]
 export default function ImportExportButtons({ onExport, onImport, templateHeaders, templateFilename, templateRows, importLabel, exportLabel }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const toast = useToast();
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -78,12 +79,12 @@ export default function ImportExportButtons({ onExport, onImport, templateHeader
         rows = parseCSV(text);
       }
       if (rows.length === 0) {
-        alert("No data rows found. Make sure the first row is headers.");
+        toast.show("No data rows found. Make sure the first row is headers.", "error");
       } else {
         onImport(rows);
       }
     } catch {
-      alert("Failed to read the file.");
+      toast.show("Failed to read the file.", "error");
     }
     setImporting(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -91,6 +92,7 @@ export default function ImportExportButtons({ onExport, onImport, templateHeader
 
   return (
     <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+      {toast.element}
       {/* Export button */}
       <div style={{ position: "relative" }} className="tooltip-wrap">
         <button

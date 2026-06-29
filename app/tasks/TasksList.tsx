@@ -9,7 +9,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Cart
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
-import { statusColor, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../lib/SharedUI";
+import { statusColor, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, useConfirm } from "../lib/SharedUI";
 
 type Task = {
   id: string;
@@ -77,6 +77,8 @@ function getQuarterLabel(dateStr: string): string {
 export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean }) {
   const searchParams = useSearchParams();
   const taskIdFromUrl = searchParams.get("task");
+  const toast = useToast();
+  const dlg = useConfirm();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -283,7 +285,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 )}
                 <button
                   onClick={async () => {
-                    if (!confirm(`Delete task "${task.description}"? This cannot be undone.`)) return;
+                    if (!await dlg.confirm(`Delete task "${task.description}"? This cannot be undone.`, true)) return;
                     await supabase.from("tasks").delete().eq("id", task.id);
                     loadTasks();
                   }}
@@ -305,6 +307,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
   return (
     <div>
+      {toast.element}
+      {dlg.element}
       {/* ═══ OVERDUE BANNER ═══ */}
       {overdueTasks.length > 0 && (
         <div style={WARNING_BANNER_STYLE}>
@@ -374,7 +378,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 validRows.push(row);
               });
               if (errors.length > 0) {
-                alert(`Import validation failed:\n\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`);
+                toast.show(`Import validation failed:\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`, "error");
                 return;
               }
               const { data: allMembers } = await supabase.from("members").select("name, first_name, last_name, email, department, business_unit");
@@ -403,7 +407,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 });
                 count++;
               }
-              alert(`Successfully imported ${count} task${count !== 1 ? "s" : ""}.`);
+              toast.show(`Successfully imported ${count} task${count !== 1 ? "s" : ""}.`, "success");
               loadTasks();
             }}
             templateHeaders={["Description", "Assigned To", "Assigned By", "Assigned Date", "Due Date", "Priority", "Department / Area", "Starting Status", "Notes"]}

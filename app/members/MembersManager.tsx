@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, PageHeader, SectionTitle } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import AccessMatrix from "./AccessMatrix";
@@ -92,6 +92,8 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
 
 export default function MembersManager() {
   const isMobile = useMobile();
+  const toast = useToast();
+  const dialog = useConfirm();
   const [members, setMembers] = useState<Member[]>([]);
   const [myRole, setMyRole] = useState("Member");
   const [myEmail, setMyEmail] = useState("");
@@ -180,7 +182,7 @@ export default function MembersManager() {
 
   async function addMember(e: React.FormEvent) {
     e.preventDefault();
-    if (!isValidEmail(email)) { alert("A valid email address is required."); return; }
+    if (!isValidEmail(email)) { toast.show("A valid email address is required.", "error"); return; }
     setSaving(true);
     const { error } = await supabase.from("members").insert({
       first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}`.trim(),
@@ -190,10 +192,11 @@ export default function MembersManager() {
       company: company || null,
     });
     setSaving(false);
-    if (error) { alert("Error: " + error.message); return; }
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
     logAction("Created", "members", `Added ${firstName} ${lastName} (${email}) as ${role}`);
     authFetch("/api/members/invite", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email.trim(), firstName, lastName, role }) }).catch(() => {});
+    toast.show(`${firstName} ${lastName} added as ${role}.`, "success");
     setFirstName(""); setLastName(""); setEmail(""); setRole("Member");
     setDepartment(""); setBusinessUnit(""); setCompany(""); setShowAddForm(false);
     loadData();
@@ -203,42 +206,39 @@ export default function MembersManager() {
     setResettingPw(em);
     try {
       await fetch("/api/auth/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
-      alert(`Password reset email sent to ${nm}.`);
+      toast.show(`Password reset email sent to ${nm}.`, "success");
       logAction("Updated", "members", `Sent password reset to ${nm} (${em})`);
-    } catch { alert("Failed to send reset email."); }
+    } catch { toast.show("Failed to send reset email.", "error"); }
     setResettingPw("");
   }
 
   async function setPwDirectly(em: string, nm: string) {
-    if (newPw.length < 6) { alert("Password must be at least 6 characters."); return; }
+    if (newPw.length < 6) { toast.show("Password must be at least 6 characters.", "error"); return; }
     setSavingPw(true);
     try {
       const res = await authFetch("/api/auth/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, password: newPw }) });
       const d = await res.json();
-      if (!res.ok) { alert("Error: " + (d.error || "Failed")); }
-      else { alert(`Password set for ${nm}.`); logAction("Updated", "members", `Set password for ${nm}`); setSettingPwFor(null); setNewPw(""); }
-    } catch { alert("Failed to set password."); }
+      if (!res.ok) { toast.show("Error: " + (d.error || "Failed"), "error"); }
+      else { toast.show(`Password set for ${nm}.`, "success"); logAction("Updated", "members", `Set password for ${nm}`); setSettingPwFor(null); setNewPw(""); }
+    } catch { toast.show("Failed to set password.", "error"); }
     setSavingPw(false);
   }
 
   async function updateMember(id: string, updates: Partial<Member>) {
-    if (updates.email !== undefined && !isValidEmail(updates.email || "")) { alert("Valid email required."); loadData(); return; }
+    if (updates.email !== undefined && !isValidEmail(updates.email || "")) { toast.show("Valid email required.", "error"); loadData(); return; }
     const member = members.find((m) => m.id === id);
     const target: UserCtx = { email: member?.email, role: member?.role };
-    // Locked accounts (Admin/CEO/PA) — role and email immutable except by an admin-tier user on others
     if (member?.email && LOCKED_EMAILS.includes(member.email.toLowerCase()) && member.email.toLowerCase() !== myEmail.toLowerCase()) {
-      if (!isAdminTier(me)) { alert("You cannot edit this protected account."); loadData(); return; }
+      if (!isAdminTier(me)) { toast.show("You cannot edit this protected account.", "error"); loadData(); return; }
     }
     if (member?.email && PROTECTED_EMAILS.includes(member.email)) {
-      if (updates.role !== undefined && updates.role !== "Admin") { alert("This account must remain Admin."); loadData(); return; }
-      if (updates.email !== undefined) { alert("This account's email cannot be changed."); loadData(); return; }
+      if (updates.role !== undefined && updates.role !== "Admin") { toast.show("This account must remain Admin.", "error"); loadData(); return; }
+      if (updates.email !== undefined) { toast.show("This account's email cannot be changed.", "error"); loadData(); return; }
     }
-    // PA's own role is locked; PA may only assign Manager/Member to others
     if (updates.role !== undefined && !myAssignableRoles.includes(updates.role)) {
-      alert(`You are not allowed to set the role "${updates.role}".`); loadData(); return;
+      toast.show(`You are not allowed to set the role "${updates.role}".`, "error"); loadData(); return;
     }
-    if (!canEditMember(me, target)) { alert("You do not have permission to edit this member."); loadData(); return; }
-    // Department and business unit are preserved for all roles
+    if (!canEditMember(me, target)) { toast.show("You do not have permission to edit this member.", "error"); loadData(); return; }
     if (updates.department !== undefined) {
       const valid = businessUnitsFor(updates.department);
       if (member?.business_unit && !valid.includes(member.business_unit)) updates = { ...updates, business_unit: null };
@@ -249,7 +249,7 @@ export default function MembersManager() {
       ...updates, ...(updates.email !== undefined ? { email: (updates.email || "").trim() } : {}),
       name: `${fn} ${ln}`.trim() || member?.name || null,
     }).eq("id", id);
-    if (error) { alert("Error: " + error.message); return; }
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
     logAction("Updated", "members", `Updated ${Object.keys(updates).join(", ")}`, id);
     loadData();
   }
@@ -257,10 +257,10 @@ export default function MembersManager() {
   async function deleteMember(id: string, nm: string) {
     const m = members.find((x) => x.id === id);
     const target: UserCtx = { email: m?.email, role: m?.role };
-    if (!canDeleteMember(me, target)) { alert("You do not have permission to remove this member."); return; }
-    if (!confirm(`Remove ${nm}?`)) return;
+    if (!canDeleteMember(me, target)) { toast.show("You do not have permission to remove this member.", "error"); return; }
+    if (!await dialog.confirm(`Remove ${nm}?`, true)) return;
     const { error } = await supabase.from("members").delete().eq("id", id);
-    if (error) { alert("Error: " + error.message); return; }
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
     logAction("Deleted", "members", `Removed ${nm}`, id);
     loadData();
   }
@@ -280,7 +280,7 @@ export default function MembersManager() {
     setDepartments((prev) => prev.map((d) => d.id === deptId ? { ...d, [`${prefix}_member_id`]: memberId || null } : d));
     const dept = departments.find((d) => d.id === deptId);
     const { error } = await supabase.from("department_owners").update(updates).eq("id", deptId);
-    if (error) { alert(error.message); return; }
+    if (error) { toast.show(error.message, "error"); return; }
     logAction("Updated", "department_owners", `Set ${field} owner for ${dept?.department_name || deptId}`, deptId);
   }
 
@@ -294,7 +294,7 @@ export default function MembersManager() {
     const fromM = members.find((m) => m.id === fromMemberId);
     const toM = members.find((m) => m.id === toMemberId);
     if (!fromM || !toM) return;
-    if (!confirm(`Move all open tasks from ${fromM.name} to ${toM.name}?\n\nNot Started, In Progress and Waiting Reply tasks only.`)) return;
+    if (!await dialog.confirm(`Move all open tasks from ${fromM.name} to ${toM.name}?\n\nNot Started, In Progress and Waiting Reply tasks only.`)) return;
     setReassigning(true);
     const OPEN_STATUSES = ["Not Started", "In Progress", "Waiting Reply"];
     const { data: tasksToMove } = await supabase.from("tasks").select("id").eq("assigned_to", fromM.name).in("status", OPEN_STATUSES);
@@ -335,6 +335,8 @@ export default function MembersManager() {
 
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
+      {toast.element}
+      {dialog.element}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
         <PageHeader />
         {isAdmin && (
@@ -388,7 +390,7 @@ export default function MembersManager() {
                 validRows.push(row);
               });
               if (errors.length > 0) {
-                alert(`Import validation failed:\n\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`);
+                toast.show(`Import validation failed:\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`, "error");
                 return;
               }
               let count = 0;
@@ -405,7 +407,7 @@ export default function MembersManager() {
                 });
                 count++;
               }
-              alert(`Successfully imported ${count} member${count !== 1 ? "s" : ""}.`);
+              toast.show(`Successfully imported ${count} member${count !== 1 ? "s" : ""}.`, "success");
               loadData();
             }}
             templateHeaders={["First Name", "Last Name", "Email", "Role", "Department", "Business Unit", "Company"]}
