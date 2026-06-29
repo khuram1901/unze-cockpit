@@ -93,7 +93,7 @@ export function canViewReceivables(u: UserCtx) {
 export function canEditReceivables(u: UserCtx) {
   const o = ov(u, "can_edit_receivables");
   if (o !== null) return o;
-  return canViewReceivables(u);
+  return u.department === "Unze Trading Ops";
 }
 
 // ── Executive dashboard ───────────────────────────────────────────

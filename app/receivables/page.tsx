@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
@@ -26,10 +26,12 @@ type Receivable = {
   status: string;
   notes: string | null;
   bill_type: string;
+  received_date: string | null;
 };
 
 const BILL_TYPES = ["Normal", "Sales Tax", "Retention"] as const;
 const IC_GRN_STAGE = 2;
+const OPS_HOD_EMAIL = "nadeem.khan@unze.co.uk";
 function skipsICGRN(billType: string) {
   return billType === "Sales Tax" || billType === "Retention";
 }
@@ -67,12 +69,16 @@ export default function ReceivablesPage() {
   const { checking } = useRequireCapability("receivables");
   const [stages, setStages] = useState<Stage[]>([]);
   const [bills, setBills] = useState<Receivable[]>([]);
+  const [collectedBills, setCollectedBills] = useState<Receivable[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [canEdit, setCanEdit] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [showCollected, setShowCollected] = useState(false);
+  const [dragBillId, setDragBillId] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<number | null>(null);
 
   const [plantId, setPlantId] = useState("");
   const [customer, setCustomer] = useState("");
@@ -102,13 +108,15 @@ export default function ReceivablesPage() {
       }
     }
 
-    const [stagesRes, billsRes, plantsRes] = await Promise.all([
+    const [stagesRes, billsRes, collectedRes, plantsRes] = await Promise.all([
       supabase.from("receivable_stages").select("*").order("stage_order"),
       supabase.from("receivables").select("*").neq("status", "Collected").order("date_submitted"),
+      supabase.from("receivables").select("*").eq("status", "Collected").order("received_date", { ascending: false }).limit(100),
       supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
     ]);
     setStages(stagesRes.data || []);
     setBills(billsRes.data || []);
+    setCollectedBills(collectedRes.data || []);
     setPlants(plantsRes.data || []);
     setLoading(false);
   }
@@ -119,13 +127,27 @@ export default function ReceivablesPage() {
     return stages.find((s) => s.stage_order > currentOrder && !(s.stage_order === IC_GRN_STAGE && skipsICGRN(bill.bill_type)));
   }
 
+  function prevStageFor(bill: Receivable, currentOrder: number): Stage | undefined {
+    const eligible = stages.filter((s) => s.stage_order < currentOrder && !(s.stage_order === IC_GRN_STAGE && skipsICGRN(bill.bill_type)));
+    return eligible.length > 0 ? eligible[eligible.length - 1] : undefined;
+  }
+
+  function canDropOnStage(bill: Receivable, targetOrder: number): boolean {
+    if (targetOrder === bill.current_stage_order) return false;
+    if (targetOrder === IC_GRN_STAGE && skipsICGRN(bill.bill_type)) return false;
+    return true;
+  }
+
   async function moveToStage(billId: string, newOrder: number) {
     if (!canEdit) return;
+    const bill = bills.find((b) => b.id === billId);
+    const stageName = stages.find((s) => s.stage_order === newOrder)?.stage_name || `Stage ${newOrder}`;
+    const direction = bill && newOrder < bill.current_stage_order ? "Sent back" : "Advanced";
     await supabase.from("receivables").update({
       current_stage_order: newOrder,
       current_stage_entered_date: new Date().toISOString().slice(0, 10),
     }).eq("id", billId);
-    logAction("Updated", "receivables", `Moved to stage ${newOrder}`, billId);
+    logAction("Updated", "receivables", `${direction} to ${stageName}`, billId);
     loadData();
   }
 
@@ -164,6 +186,53 @@ export default function ReceivablesPage() {
     setTimeout(() => setMessage(""), 3000);
     setInvoiceRef(""); setIcRef(""); setGrnRef(""); setAmount(""); setBillType("Normal");
     loadData();
+  }
+
+  // Drag and drop handlers
+  function onDragStart(e: React.DragEvent, billId: string) {
+    if (!canEdit) { e.preventDefault(); return; }
+    e.dataTransfer.setData("text/plain", billId);
+    e.dataTransfer.effectAllowed = "move";
+    setDragBillId(billId);
+  }
+
+  function onDragOver(e: React.DragEvent, stageOrder: number) {
+    if (!canEdit || !dragBillId) return;
+    const bill = bills.find((b) => b.id === dragBillId);
+    if (!bill || !canDropOnStage(bill, stageOrder)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverStage(stageOrder);
+  }
+
+  function onDragLeave() {
+    setDragOverStage(null);
+  }
+
+  function onDrop(e: React.DragEvent, stageOrder: number) {
+    e.preventDefault();
+    const billId = e.dataTransfer.getData("text/plain");
+    if (!billId || !canEdit) return;
+    const bill = bills.find((b) => b.id === billId);
+    if (!bill || !canDropOnStage(bill, stageOrder)) return;
+    moveToStage(billId, stageOrder);
+    setDragBillId(null);
+    setDragOverStage(null);
+  }
+
+  function onDragEnd() {
+    setDragBillId(null);
+    setDragOverStage(null);
+  }
+
+  // Drop on Collected column
+  function onDropCollected(e: React.DragEvent) {
+    e.preventDefault();
+    const billId = e.dataTransfer.getData("text/plain");
+    if (!billId || !canEdit) return;
+    markCollected(billId);
+    setDragBillId(null);
+    setDragOverStage(null);
   }
 
   const totalAmount = bills.reduce((s, b) => s + b.amount, 0);
@@ -237,6 +306,21 @@ export default function ReceivablesPage() {
       else result.set(cust, "0-30");
     }
     return result;
+  })();
+
+  // Collected bills grouped by plant
+  const collectedByPlant = (() => {
+    const map = new Map<string, { plant: string; count: number; total: number; bills: Receivable[] }>();
+    for (const bill of collectedBills) {
+      const plant = plants.find((p) => p.id === bill.plant_id);
+      const key = plant?.name || "Unknown";
+      if (!map.has(key)) map.set(key, { plant: key, count: 0, total: 0, bills: [] });
+      const row = map.get(key)!;
+      row.count++;
+      row.total += Number(bill.amount) || 0;
+      row.bills.push(bill);
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
   })();
 
   if (checking) return null;
@@ -323,6 +407,7 @@ export default function ReceivablesPage() {
             <CountCard label="Total Bills" value={bills.length} color={COLOURS.BLUE} />
             <CountCard label="Total Amount" value={Math.round(totalAmount)} color={COLOURS.NAVY} />
             <CountCard label="Stuck" value={stuckBills.length} color={stuckBills.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
+            <CountCard label="Collected" value={collectedBills.length} color={COLOURS.GREEN} />
           </div>
         )}
 
@@ -332,20 +417,31 @@ export default function ReceivablesPage() {
         ) : (
           <>
             <SectionTitle title="Stage Board" />
+            {canEdit && !isMobile && <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginBottom: "6px" }}>Drag bills between stages to move them forward or back</div>}
             <div style={{ display: "flex", gap: "12px", overflowX: "auto", paddingBottom: "12px", marginBottom: "14px" }}>
               {stages.map((stage) => {
                 const stageBills = bills.filter((b) => b.current_stage_order === stage.stage_order);
+                const isDragTarget = dragOverStage === stage.stage_order;
                 return (
-                  <div key={stage.id} style={{
-                    minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
-                    border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card-hover, #f8fafc)",
-                  }}>
-                    <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px 8px 0 0" }}>
+                  <div
+                    key={stage.id}
+                    onDragOver={(e) => onDragOver(e, stage.stage_order)}
+                    onDragLeave={onDragLeave}
+                    onDrop={(e) => onDrop(e, stage.stage_order)}
+                    style={{
+                      minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
+                      border: `2px solid ${isDragTarget ? COLOURS.BLUE : "var(--border-color, #e2e8f0)"}`,
+                      borderRadius: "8px",
+                      backgroundColor: isDragTarget ? "rgba(59, 130, 246, 0.05)" : "var(--bg-card-hover, #f8fafc)",
+                      transition: "border-color 0.15s, background-color 0.15s",
+                    }}
+                  >
+                    <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "6px 6px 0 0" }}>
                       <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>
                         {stage.stage_name}
-                        {stage.stage_order === IC_GRN_STAGE && <span style={{ fontSize: "11px", fontWeight: 400, color: "var(--text-secondary, #64748b)", marginLeft: "6px" }}>(skipped for Sales Tax / Retention)</span>}
+                        {stage.stage_order === IC_GRN_STAGE && <span style={{ fontSize: "11px", fontWeight: 400, color: "var(--text-secondary, #64748b)", marginLeft: "6px" }}>(skip: Tax/Ret.)</span>}
                       </div>
-                      <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{stageBills.length} bill{stageBills.length !== 1 ? "s" : ""} · Budget: {stage.working_day_budget} days</div>
+                      <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{stageBills.length} bill{stageBills.length !== 1 ? "s" : ""} · {stage.working_day_budget > 0 ? `${stage.working_day_budget}d budget` : "Start"}</div>
                     </div>
 
                     <div style={{ padding: "8px", minHeight: "100px" }}>
@@ -357,12 +453,23 @@ export default function ReceivablesPage() {
                           const isStuck = stage.working_day_budget > 0 && elapsed >= stage.working_day_budget;
                           const isWarning = stage.working_day_budget > 0 && elapsed >= stage.working_day_budget - 1 && !isStuck;
                           const next = nextStageFor(bill, stage.stage_order);
+                          const prev = prevStageFor(bill, stage.stage_order);
+                          const isDragging = dragBillId === bill.id;
                           return (
-                            <div key={bill.id} style={{
-                              border: `1px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.BORDER}`,
-                              borderLeft: `3px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.GREEN}`,
-                              borderRadius: "6px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "6px",
-                            }}>
+                            <div
+                              key={bill.id}
+                              draggable={canEdit}
+                              onDragStart={(e) => onDragStart(e, bill.id)}
+                              onDragEnd={onDragEnd}
+                              style={{
+                                border: `1px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.BORDER}`,
+                                borderLeft: `3px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.GREEN}`,
+                                borderRadius: "6px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "6px",
+                                cursor: canEdit ? "grab" : "default",
+                                opacity: isDragging ? 0.5 : 1,
+                                transition: "opacity 0.15s",
+                              }}
+                            >
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                 <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{bill.utility}</div>
                                 {bill.bill_type !== "Normal" && (
@@ -380,7 +487,13 @@ export default function ReceivablesPage() {
                               {bill.grn_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>GRN: {bill.grn_ref}</div>}
 
                               {canEdit && (
-                                <div style={{ display: "flex", gap: "4px", marginTop: "6px" }}>
+                                <div style={{ display: "flex", gap: "4px", marginTop: "6px", flexWrap: "wrap" }}>
+                                  {prev && (
+                                    <button onClick={() => moveToStage(bill.id, prev.stage_order)} style={{
+                                      backgroundColor: "#94a3b8", color: "white", border: "none", borderRadius: "4px",
+                                      padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                                    }} title={`Send back to ${prev.stage_name}`}>Back</button>
+                                  )}
                                   {next && (
                                     <button onClick={() => moveToStage(bill.id, next.stage_order)} style={{
                                       backgroundColor: COLOURS.BLUE, color: "white", border: "none", borderRadius: "4px",
@@ -402,19 +515,65 @@ export default function ReceivablesPage() {
                 );
               })}
 
-              <div style={{
-                minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
-                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "#f0fdf4",
-              }}>
-                <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px 8px 0 0" }}>
+              {/* Collected column — drop target */}
+              <div
+                onDragOver={(e) => { if (canEdit && dragBillId) { e.preventDefault(); setDragOverStage(-1); } }}
+                onDragLeave={onDragLeave}
+                onDrop={onDropCollected}
+                style={{
+                  minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
+                  border: `2px solid ${dragOverStage === -1 ? COLOURS.GREEN : "var(--border-color, #e2e8f0)"}`,
+                  borderRadius: "8px",
+                  backgroundColor: dragOverStage === -1 ? "rgba(34, 197, 94, 0.05)" : "#f0fdf4",
+                  transition: "border-color 0.15s, background-color 0.15s",
+                }}
+              >
+                <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "6px 6px 0 0" }}>
                   <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.GREEN }}>Collected</div>
+                  <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{collectedBills.length} total</div>
                 </div>
-                <div style={{ padding: "8px", textAlign: "center", color: COLOURS.GREEN, fontSize: "15px" }}>
-                  Bills move here when marked as collected
+                <div style={{ padding: "8px", textAlign: "center", color: COLOURS.GREEN, fontSize: "14px" }}>
+                  {canEdit ? "Drop here or click Collected" : "Cheque received — bill complete"}
                 </div>
               </div>
             </div>
           </>
+        )}
+
+        {/* Collected Bills by Plant */}
+        {!loading && collectedBills.length > 0 && (
+          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showCollected ? "10px" : "0" }}>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>
+                Collected Bills by Plant
+              </div>
+              <button onClick={() => setShowCollected(!showCollected)} style={{
+                background: "none", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "4px",
+                padding: "3px 10px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                color: "var(--text-secondary, #64748b)",
+              }}>{showCollected ? "Hide" : "Show"}</button>
+            </div>
+            {showCollected && (
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px" }}>
+                {collectedByPlant.map((group) => (
+                  <div key={group.plant} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "10px" }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "4px" }}>{group.plant}</div>
+                    <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginBottom: "8px" }}>
+                      {group.count} bill{group.count !== 1 ? "s" : ""} · PKR {group.total.toLocaleString()}
+                    </div>
+                    {group.bills.slice(0, 5).map((bill) => (
+                      <div key={bill.id} style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)", padding: "3px 0", borderBottom: "1px solid var(--border-light, #f1f5f9)" }}>
+                        <span style={{ fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{bill.utility}</span> · PKR {bill.amount.toLocaleString()} · {bill.received_date ? formatDateUK(bill.received_date) : "—"}
+                      </div>
+                    ))}
+                    {group.bills.length > 5 && (
+                      <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginTop: "4px" }}>+{group.bills.length - 5} more</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Pipeline Stage Summary Bar */}
@@ -428,9 +587,10 @@ export default function ReceivablesPage() {
                 const pct = (count / bills.length) * 100;
                 const stuckInStage = bills.filter((b) => {
                   if (b.current_stage_order !== stage.stage_order) return false;
+                  if (stage.working_day_budget <= 0) return false;
                   return workingDaysSince(b.current_stage_entered_date) >= stage.working_day_budget;
                 }).length;
-                const bg = stuckInStage > 0 ? COLOURS.RED : stuckInStage === 0 && count > 0 ? COLOURS.GREEN : COLOURS.BLUE;
+                const bg = stuckInStage > 0 ? COLOURS.RED : count > 0 ? COLOURS.GREEN : COLOURS.BLUE;
                 return (
                   <div key={stage.id} title={`${stage.stage_name}: ${count} bill${count !== 1 ? "s" : ""}${stuckInStage > 0 ? ` (${stuckInStage} stuck)` : ""}`} style={{
                     width: `${Math.max(pct, 8)}%`, backgroundColor: bg, display: "flex", alignItems: "center", justifyContent: "center",
@@ -465,14 +625,14 @@ export default function ReceivablesPage() {
                 const avgDays = stageBills.length > 0
                   ? Math.round(stageBills.reduce((s, b) => s + workingDaysSince(b.current_stage_entered_date), 0) / stageBills.length)
                   : 0;
-                const overBudget = avgDays > stage.working_day_budget;
-                const nearBudget = avgDays >= stage.working_day_budget - 1 && !overBudget;
+                const overBudget = stage.working_day_budget > 0 && avgDays > stage.working_day_budget;
+                const nearBudget = stage.working_day_budget > 0 && avgDays >= stage.working_day_budget - 1 && !overBudget;
                 const color = overBudget ? COLOURS.RED : nearBudget ? "#d97706" : COLOURS.GREEN;
                 return (
                   <div key={stage.id} style={{ textAlign: "center" }}>
                     <div style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)", marginBottom: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stage.stage_name}</div>
                     <div style={{ fontSize: "18px", fontWeight: 800, color }}>{avgDays}d</div>
-                    <div style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)" }}>/ {stage.working_day_budget}d budget</div>
+                    <div style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)" }}>{stage.working_day_budget > 0 ? `/ ${stage.working_day_budget}d budget` : "Start"}</div>
                   </div>
                 );
               })}
