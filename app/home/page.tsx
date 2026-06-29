@@ -81,6 +81,7 @@ export default function HomePage() {
   const [managerBriefing, setManagerBriefing] = useState<ManagerBriefingItem[]>([]);
   const [managerBriefingTitle, setManagerBriefingTitle] = useState("");
   const [cronHealth, setCronHealth] = useState<{ name: string; hoursAgo: number | null; status: string }[]>([]);
+  const [briefingOpen, setBriefingOpen] = useState(false);
 
   async function quickAction(taskId: string, action: "complete" | "chase", task: TaskRow) {
     if (action === "complete") {
@@ -500,22 +501,26 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* ── Manager Briefing (Ops / Finance) ── */}
+            {/* ── Manager Briefing (Ops / Finance) — collapsible ── */}
             {managerBriefing.length > 0 && (
               <div style={{
                 backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
                 borderRadius: "8px", overflow: "hidden", marginBottom: "16px",
               }}>
-                <div style={{
-                  padding: "12px 18px", borderBottom: "1px solid var(--border-color)",
-                  display: "flex", alignItems: "center", gap: "8px",
-                }}>
+                <div
+                  onClick={() => setBriefingOpen(!briefingOpen)}
+                  style={{
+                    padding: "12px 18px",
+                    display: "flex", alignItems: "center", gap: "8px",
+                    cursor: "pointer",
+                  }}
+                >
                   <span style={{ fontSize: "15px" }}>{managerBriefingTitle.startsWith("Finance") ? "💰" : "🏭"}</span>
                   <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
                     {managerBriefingTitle}
                   </span>
                   <span style={{
-                    marginLeft: "auto", fontSize: "12px", fontWeight: 600, padding: "2px 8px",
+                    fontSize: "12px", fontWeight: 600, padding: "2px 8px",
                     borderRadius: "8px", color: "white",
                     backgroundColor: managerBriefing.some((i) => i.rag === "RED") ? COLOURS.RED : managerBriefing.some((i) => i.rag === "AMBER") ? COLOURS.AMBER : COLOURS.GREEN,
                   }}>
@@ -523,10 +528,14 @@ export default function HomePage() {
                       ? `${managerBriefing.filter((i) => i.rag === "RED").length} alert${managerBriefing.filter((i) => i.rag === "RED").length > 1 ? "s" : ""}`
                       : managerBriefing.some((i) => i.rag === "AMBER") ? "Needs attention" : "All clear"}
                   </span>
+                  <span style={{ marginLeft: "auto", fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                    {briefingOpen ? "▲ Hide" : "▼ Show"}
+                  </span>
                 </div>
-                {managerBriefing.map((item, i) => (
+                {briefingOpen && managerBriefing.map((item, i) => (
                   <div key={i} style={{
                     padding: "10px 18px",
+                    borderTop: i === 0 ? "1px solid var(--border-color)" : "none",
                     borderBottom: i < managerBriefing.length - 1 ? "1px solid var(--border-light)" : "none",
                     display: "flex", alignItems: "center", gap: "10px",
                   }}>

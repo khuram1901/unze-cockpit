@@ -93,24 +93,20 @@ export default function AuthWrapper({
     }
   }, [loading, email]);
 
-  // Load notification counts
+  // Load notification counts — always scoped to the logged-in user's own tasks
   async function loadNotifications() {
     if (!email || !member) return;
     const todayStr = new Date().toISOString().slice(0, 10);
     const role = member.role;
-    const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || email;
     const isAdmin = userCtx ? canSeeAllTasks(userCtx) : (role === "Admin" || role === "Executive");
 
-    let query = supabase.from("tasks").select("id, status, due_date, assigned_to_email, assigned_to");
-    if (!isAdmin) {
-      query = query.eq("assigned_to_email", email);
-    }
-
-    const { data: tasks } = await query;
+    const { data: tasks } = await supabase
+      .from("tasks")
+      .select("id, status, due_date, assigned_to_email, assigned_to")
+      .eq("assigned_to_email", email);
     if (!tasks) return;
 
-    const myTasks = isAdmin ? tasks : tasks.filter((t) => t.assigned_to_email === email || t.assigned_to === userName);
-    const open = myTasks.filter((t: Record<string, unknown>) => t.status !== "Completed" && t.status !== "Cancelled");
+    const open = tasks.filter((t: Record<string, unknown>) => t.status !== "Completed" && t.status !== "Cancelled");
     const overdue = open.filter((t: Record<string, unknown>) => t.due_date && (t.due_date as string) < todayStr);
     const waiting = open.filter((t: Record<string, unknown>) => t.status === "Waiting Reply");
 
