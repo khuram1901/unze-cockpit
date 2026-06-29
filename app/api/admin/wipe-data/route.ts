@@ -26,7 +26,6 @@ const TABLES_TO_WIPE = [
   "scrap_processed_entries",
   "machine_issues",
   "receivables",
-  "receivable_stages",
   "holdings",
   "price_history",
   "legal_notices",

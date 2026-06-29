@@ -25,7 +25,14 @@ type Receivable = {
   current_stage_entered_date: string;
   status: string;
   notes: string | null;
+  bill_type: string;
 };
+
+const BILL_TYPES = ["Normal", "Sales Tax", "Retention"] as const;
+const IC_GRN_STAGE = 2;
+function skipsICGRN(billType: string) {
+  return billType === "Sales Tax" || billType === "Retention";
+}
 type Plant = { id: string; name: string; type: string };
 
 
@@ -74,6 +81,7 @@ export default function ReceivablesPage() {
   const [grnRef, setGrnRef] = useState("");
   const [amount, setAmount] = useState("");
   const [dateSubmitted, setDateSubmitted] = useState(new Date().toISOString().slice(0, 10));
+  const [billType, setBillType] = useState<string>("Normal");
 
   const selectedPlant = plants.find((p) => p.id === plantId);
   const customers = selectedPlant ? customersForPlant(selectedPlant.name) : [];
@@ -107,6 +115,10 @@ export default function ReceivablesPage() {
 
   useEffect(() => { loadData(); }, []);
 
+  function nextStageFor(bill: Receivable, currentOrder: number): Stage | undefined {
+    return stages.find((s) => s.stage_order > currentOrder && !(s.stage_order === IC_GRN_STAGE && skipsICGRN(bill.bill_type)));
+  }
+
   async function moveToStage(billId: string, newOrder: number) {
     if (!canEdit) return;
     await supabase.from("receivables").update({
@@ -135,28 +147,29 @@ export default function ReceivablesPage() {
       utility: customer || customers[0] || selectedPlant?.name || "",
       plant_id: plantId,
       invoice_ref: invoiceRef || null,
-      ic_ref: icRef || null,
-      grn_ref: grnRef || null,
+      ic_ref: skipsICGRN(billType) ? null : (icRef || null),
+      grn_ref: skipsICGRN(billType) ? null : (grnRef || null),
       amount: Number(amount),
       currency: "PKR",
       date_submitted: dateSubmitted,
       current_stage_order: 1,
       current_stage_entered_date: dateSubmitted,
       status: "In Progress",
+      bill_type: billType,
     });
     setSaving(false);
     if (error) { setMessage("Error: " + error.message); return; }
-    logAction("Created", "receivables", `Bill: ${customer || selectedPlant?.name} PKR ${amount}`);
+    logAction("Created", "receivables", `Bill (${billType}): ${customer || selectedPlant?.name} PKR ${amount}`);
     setMessage("Bill added.");
     setTimeout(() => setMessage(""), 3000);
-    setInvoiceRef(""); setIcRef(""); setGrnRef(""); setAmount("");
+    setInvoiceRef(""); setIcRef(""); setGrnRef(""); setAmount(""); setBillType("Normal");
     loadData();
   }
 
   const totalAmount = bills.reduce((s, b) => s + b.amount, 0);
   const stuckBills = bills.filter((b) => {
     const stage = stages.find((s) => s.stage_order === b.current_stage_order);
-    if (!stage) return false;
+    if (!stage || stage.working_day_budget <= 0) return false;
     return workingDaysSince(b.current_stage_entered_date) >= stage.working_day_budget;
   });
 
@@ -267,6 +280,12 @@ export default function ReceivablesPage() {
                   </select>
                 </div>
                 <div>
+                  <label style={lbl}>Bill Type</label>
+                  <select style={inp} value={billType} onChange={(e) => setBillType(e.target.value)}>
+                    {BILL_TYPES.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label style={lbl}>Amount (PKR)</label>
                   <input type="number" style={inp} value={amount} onChange={(e) => setAmount(e.target.value)} required placeholder="0" />
                 </div>
@@ -278,14 +297,18 @@ export default function ReceivablesPage() {
                   <label style={lbl}>Invoice Ref</label>
                   <input style={inp} value={invoiceRef} onChange={(e) => setInvoiceRef(e.target.value)} placeholder="Optional" />
                 </div>
-                <div>
-                  <label style={lbl}>IC Ref</label>
-                  <input style={inp} value={icRef} onChange={(e) => setIcRef(e.target.value)} placeholder="Optional" />
-                </div>
-                <div>
-                  <label style={lbl}>GRN Ref</label>
-                  <input style={inp} value={grnRef} onChange={(e) => setGrnRef(e.target.value)} placeholder="Optional" />
-                </div>
+                {!skipsICGRN(billType) && (
+                  <div>
+                    <label style={lbl}>IC Ref</label>
+                    <input style={inp} value={icRef} onChange={(e) => setIcRef(e.target.value)} placeholder="Optional" />
+                  </div>
+                )}
+                {!skipsICGRN(billType) && (
+                  <div>
+                    <label style={lbl}>GRN Ref</label>
+                    <input style={inp} value={grnRef} onChange={(e) => setGrnRef(e.target.value)} placeholder="Optional" />
+                  </div>
+                )}
               </div>
               <button type="submit" disabled={saving} style={{
                 backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
@@ -312,14 +335,16 @@ export default function ReceivablesPage() {
             <div style={{ display: "flex", gap: "12px", overflowX: "auto", paddingBottom: "12px", marginBottom: "14px" }}>
               {stages.map((stage) => {
                 const stageBills = bills.filter((b) => b.current_stage_order === stage.stage_order);
-                const nextStage = stages.find((s) => s.stage_order > stage.stage_order);
                 return (
                   <div key={stage.id} style={{
                     minWidth: isMobile ? "260px" : "240px", maxWidth: "280px", flex: "0 0 auto",
                     border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card-hover, #f8fafc)",
                   }}>
                     <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px 8px 0 0" }}>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{stage.stage_name}</div>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>
+                        {stage.stage_name}
+                        {stage.stage_order === IC_GRN_STAGE && <span style={{ fontSize: "11px", fontWeight: 400, color: "var(--text-secondary, #64748b)", marginLeft: "6px" }}>(skipped for Sales Tax / Retention)</span>}
+                      </div>
                       <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{stageBills.length} bill{stageBills.length !== 1 ? "s" : ""} · Budget: {stage.working_day_budget} days</div>
                     </div>
 
@@ -329,15 +354,21 @@ export default function ReceivablesPage() {
                       ) : (
                         stageBills.map((bill) => {
                           const elapsed = workingDaysSince(bill.current_stage_entered_date);
-                          const isStuck = elapsed >= stage.working_day_budget;
-                          const isWarning = elapsed >= stage.working_day_budget - 1 && !isStuck;
+                          const isStuck = stage.working_day_budget > 0 && elapsed >= stage.working_day_budget;
+                          const isWarning = stage.working_day_budget > 0 && elapsed >= stage.working_day_budget - 1 && !isStuck;
+                          const next = nextStageFor(bill, stage.stage_order);
                           return (
                             <div key={bill.id} style={{
                               border: `1px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.BORDER}`,
                               borderLeft: `3px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.GREEN}`,
                               borderRadius: "6px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "6px",
                             }}>
-                              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{bill.utility}</div>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{bill.utility}</div>
+                                {bill.bill_type !== "Normal" && (
+                                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 5px", borderRadius: "4px", backgroundColor: bill.bill_type === "Sales Tax" ? "#dbeafe" : "#fef3c7", color: bill.bill_type === "Sales Tax" ? COLOURS.BLUE : "#92400e" }}>{bill.bill_type}</span>
+                                )}
+                              </div>
                               <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
                                 PKR {bill.amount.toLocaleString()} · {formatDateUK(bill.date_submitted)}
                               </div>
@@ -350,11 +381,11 @@ export default function ReceivablesPage() {
 
                               {canEdit && (
                                 <div style={{ display: "flex", gap: "4px", marginTop: "6px" }}>
-                                  {nextStage && (
-                                    <button onClick={() => moveToStage(bill.id, nextStage.stage_order)} style={{
+                                  {next && (
+                                    <button onClick={() => moveToStage(bill.id, next.stage_order)} style={{
                                       backgroundColor: COLOURS.BLUE, color: "white", border: "none", borderRadius: "4px",
                                       padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
-                                    }} title={`Move to ${nextStage.stage_name}`}>Next</button>
+                                    }} title={`Move to ${next.stage_name}`}>Next</button>
                                   )}
                                   <button onClick={() => markCollected(bill.id)} style={{
                                     backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "4px",

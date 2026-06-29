@@ -365,7 +365,7 @@ export default function HomePage() {
         let overdueRec = 0;
         for (const bill of openRec) {
           const stage = stages.find((s) => s.stage_order === bill.current_stage_order);
-          if (stage && bill.current_stage_entered_date) {
+          if (stage && stage.working_day_budget > 0 && bill.current_stage_entered_date) {
             const entered = new Date(bill.current_stage_entered_date + "T00:00:00");
             const daysInStage = Math.floor((Date.now() - entered.getTime()) / 86400000);
             if (daysInStage > stage.working_day_budget) overdueRec++;
