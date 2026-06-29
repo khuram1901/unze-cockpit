@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import AccessMatrix from "./AccessMatrix";
@@ -313,7 +313,7 @@ export default function MembersManager() {
 
   if (loading) return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
-      <p style={{ color: COLOURS.SLATE }}>Loading...</p>
+      <SkeletonRows count={4} height="48px" />
     </main>
   );
 

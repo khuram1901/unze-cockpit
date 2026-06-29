@@ -9,7 +9,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Cart
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
-import { statusColor, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, useConfirm } from "../lib/SharedUI";
+import { statusColor, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, useConfirm, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
 
 type Task = {
   id: string;
@@ -134,8 +134,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     }
   }, [taskIdFromUrl, tasks]);
 
-  if (loading) return <p style={{ color: SLATE }}>Loading tasks…</p>;
-  if (errorMsg) return <p style={{ color: "#dc2626" }}>Error: {errorMsg}</p>;
+  if (loading) return <SkeletonRows count={5} height="48px" />;
+  if (errorMsg) return <ErrorBanner message={errorMsg} onRetry={loadTasks} />;
 
   const scopedTasks = tasks;
 

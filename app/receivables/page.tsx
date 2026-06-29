@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, CountCard } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, CountCard, SkeletonRows } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { canEditReceivables, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -371,7 +371,7 @@ export default function ReceivablesPage() {
         )}
 
         {loading ? (
-          <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading receivables...</p>
+          <SkeletonRows count={4} height="60px" />
         ) : (
           <div style={{ display: "flex", gap: "12px", overflowX: "auto", paddingBottom: "12px" }}>
             {stages.map((stage) => {

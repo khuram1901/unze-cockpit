@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "./lib/supabase";
+import { SkeletonRows } from "./lib/SharedUI";
 
 export default function RootPage() {
   const router = useRouter();
@@ -20,8 +21,10 @@ export default function RootPage() {
   }, [router]);
 
   return (
-    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f4f6f9" }}>
-      <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "16px" }}>Loading...</p>
+    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f4f6f9", padding: "20px" }}>
+      <div style={{ width: "100%", maxWidth: "400px" }}>
+        <SkeletonRows count={3} height="40px" />
+      </div>
     </main>
   );
 }

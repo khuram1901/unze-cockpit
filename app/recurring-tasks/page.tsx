@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, useConfirm } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 
 type Template = {
@@ -128,7 +128,7 @@ export default function RecurringTasksPage() {
             </div>
           )}
 
-          {loading ? <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading...</p> : templates.length === 0 ? (
+          {loading ? <SkeletonRows count={3} height="48px" /> : templates.length === 0 ? (
             <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)", textAlign: "center" }}>No recurring tasks set up yet.</div>
           ) : (
             <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>

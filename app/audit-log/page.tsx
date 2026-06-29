@@ -6,7 +6,7 @@ import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { formatDateTimeUK, formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, CountCard } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, CountCard, SkeletonRows } from "../lib/SharedUI";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 
 type LogEntry = {
@@ -238,7 +238,7 @@ export default function AuditLogPage() {
           </div>
 
           {/* Log entries */}
-          {loading ? <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading...</p> : filtered.length === 0 ? (
+          {loading ? <SkeletonRows count={5} height="40px" /> : filtered.length === 0 ? (
             <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)", textAlign: "center" }}>No log entries found.</div>
           ) : groupBy === "time" ? (
             <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { COMPANIES, getCompanyByName } from "../lib/constants";
-import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { logAction } from "../lib/audit-log";
@@ -250,7 +250,7 @@ export default function FinancePage() {
     return (
       <AuthWrapper>
         <main style={{ padding: "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-          <p style={{ color: COLOURS.SLATE }}>Loading...</p>
+          <SkeletonRows count={3} height="60px" />
         </main>
       </AuthWrapper>
     );

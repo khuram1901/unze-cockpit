@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, PageHeader, SectionTitle, displayRole, useConfirm } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, displayRole, useConfirm, SkeletonRows } from "../lib/SharedUI";
 
 export default function ProfilePage() {
   const isMobile = useMobile();
@@ -280,7 +280,7 @@ export default function ProfilePage() {
         )}
 
         {loading ? (
-          <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading...</p>
+          <SkeletonRows count={3} height="56px" />
         ) : (
           <>
             <div style={{
