@@ -10,6 +10,7 @@ import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
 import { statusColor, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, useConfirm, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
+import { canDeleteTask, canEditTask, isTaskProtected } from "../lib/permissions";
 
 type Task = {
   id: string;
@@ -22,6 +23,7 @@ type Task = {
   assigned_to: string | null;
   assigned_to_email: string | null;
   assigned_by: string | null;
+  assigned_by_email: string | null;
   status: string;
   stuck_reason: string | null;
   notes: string | null;
@@ -35,6 +37,7 @@ type Task = {
   meeting_id: string | null;
   time_spent_minutes: number | null;
   created_at: string | null;
+  assigned_to_department: string | null;
 };
 
 const NAVY = "var(--text-primary, #1e293b)";
@@ -85,10 +88,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [errorMsg, setErrorMsg] = useState("");
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(taskIdFromUrl);
-  const [timeView, setTimeView] = useState<"weekly" | "monthly" | "quarterly" | "timeline">("weekly");
+  const [timeView, setTimeView] = useState<"department" | "weekly" | "monthly" | "quarterly" | "timeline">("department");
   const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "person">("all");
   const [bannerOpen, setBannerOpen] = useState(false);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
+  const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
 
   const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "Executive");
 
@@ -215,22 +219,31 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     .map(([name, d]) => ({ name, ...d }))
     .sort((a, b) => b.overdue - a.overdue || b.total - a.total);
 
-  // ── Task Aging Histogram ──
-  const agingBuckets = [
-    { label: "0-3d", min: 0, max: 3, color: "#16a34a" },
-    { label: "4-7d", min: 4, max: 7, color: "#2563eb" },
-    { label: "8-14d", min: 8, max: 14, color: "#d97706" },
-    { label: "15-30d", min: 15, max: 30, color: "#ea580c" },
-    { label: "30+d", min: 31, max: Infinity, color: "#dc2626" },
-  ];
-  const agingData = agingBuckets.map((b) => {
-    const count = allOpen.filter((t) => {
-      const age = t.created_at ? Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000) : 0;
-      return age >= b.min && age <= b.max;
-    }).length;
-    return { ...b, count };
-  });
-  const maxAging = Math.max(...agingData.map((d) => d.count), 1);
+  // ── Department grouping ──
+  type DeptStats = { dept: string; tasks: Task[]; open: number; overdue: number; waiting: number; stuck: number; completed: number };
+  const deptMap = new Map<string, DeptStats>();
+  for (const t of scopedTasks) {
+    const dept = t.assigned_to_department || t.project || "Unassigned";
+    if (!deptMap.has(dept)) deptMap.set(dept, { dept, tasks: [], open: 0, overdue: 0, waiting: 0, stuck: 0, completed: 0 });
+    const d = deptMap.get(dept)!;
+    d.tasks.push(t);
+    if (t.status === "Completed" || t.status === "Cancelled") { if (t.status === "Completed") d.completed++; }
+    else {
+      d.open++;
+      if (isOverdue(t)) d.overdue++;
+      if (t.status === "Waiting Reply") d.waiting++;
+      if (t.stuck_reason) d.stuck++;
+    }
+  }
+  const departments = Array.from(deptMap.values()).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
+
+  function toggleDept(dept: string) {
+    setCollapsedDepts((prev) => {
+      const next = new Set(prev);
+      if (next.has(dept)) next.delete(dept); else next.add(dept);
+      return next;
+    });
+  }
 
   // ── Filtered task list ──
   let filteredTasks = allOpen;
@@ -252,6 +265,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <div style={{ fontSize: "16px", fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
             <div style={{ fontSize: "14px", color: SLATE, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
               <span>{task.assigned_to || "Unassigned"}</span>
+              {task.assigned_to_department && timeView !== "department" && (
+                <span style={{ fontSize: "11px", fontWeight: 600, padding: "1px 6px", borderRadius: "6px", color: NAVY, backgroundColor: "#e2e8f0" }}>
+                  {task.assigned_to_department}
+                </span>
+              )}
               {task.due_date && (
                 <span style={{ color: overdue ? "#dc2626" : SLATE, fontWeight: overdue ? 700 : 400 }}>
                   {formatDateUK(task.due_date)}{od > 0 && ` (${od}d late)`}
@@ -288,34 +306,51 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 <div style={{ marginTop: "4px", fontSize: "14px" }}>By {task.reply_by || "unknown"} {task.reply_at ? `on ${formatDateUK(task.reply_at)}` : ""}</div>
               </div>
             )}
-            <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} canReview={canReview ?? isPrivileged} canEditDueDate={canReview ?? isPrivileged} />
-            {(canDelete ?? isPrivileged) && (
-              <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-                {task.assigned_to && memberPhones[task.assigned_to] && (
-                  <a href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
-                    target="_blank" rel="noopener noreferrer" style={{
-                      backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "5px",
-                      padding: "6px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer", textDecoration: "none", minHeight: "36px",
-                    }} title="Send WhatsApp reminder to assignee">
-                    WhatsApp
-                  </a>
-                )}
-                <button
-                  onClick={async () => {
-                    if (!await dlg.confirm(`Delete task "${task.description}"? This cannot be undone.`, true)) return;
-                    await supabase.from("tasks").delete().eq("id", task.id);
-                    loadTasks();
-                  }}
-                  style={{
-                    backgroundColor: "var(--bg-card, #ffffff)", color: "#dc2626", border: "1px solid #dc2626",
-                    borderRadius: "5px", padding: "6px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer", minHeight: "36px",
-                  }}
-                  title="Permanently delete this task"
-                >
-                  Delete Task
-                </button>
-              </div>
-            )}
+            {(() => {
+              const userCtx = { email: myEmail, role: currentRole };
+              const taskEditable = canEditTask(userCtx, task.assigned_by_email);
+              const taskDeletable = canDeleteTask(userCtx, task.assigned_by_email);
+              const protected_ = isTaskProtected(task.assigned_by_email);
+              return (
+                <>
+                  {protected_ && !isPrivileged && (
+                    <div style={{ fontSize: "13px", color: "#d97706", fontWeight: 600, marginBottom: "6px", padding: "4px 8px", backgroundColor: "#fffbeb", borderRadius: "4px", border: "1px solid #fde68a" }}>
+                      Assigned by {task.assigned_by || "management"} — you can update status and add notes but cannot edit or delete this task.
+                    </div>
+                  )}
+                  <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} canReview={canReview ?? isPrivileged} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
+                  {((canDelete ?? isPrivileged) || taskDeletable) && (
+                    <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                      {task.assigned_to && memberPhones[task.assigned_to] && (
+                        <a href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
+                          target="_blank" rel="noopener noreferrer" style={{
+                            backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "5px",
+                            padding: "6px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer", textDecoration: "none", minHeight: "36px",
+                          }} title="Send WhatsApp reminder to assignee">
+                          WhatsApp
+                        </a>
+                      )}
+                      {taskDeletable && (
+                        <button
+                          onClick={async () => {
+                            if (!await dlg.confirm(`Delete task "${task.description}"? This cannot be undone.`, true)) return;
+                            await supabase.from("tasks").delete().eq("id", task.id);
+                            loadTasks();
+                          }}
+                          style={{
+                            backgroundColor: "var(--bg-card, #ffffff)", color: "#dc2626", border: "1px solid #dc2626",
+                            borderRadius: "5px", padding: "6px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer", minHeight: "36px",
+                          }}
+                          title="Permanently delete this task"
+                        >
+                          Delete Task
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -420,6 +455,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   notes: row["Notes"]?.trim() || null,
                   task_type: "Task",
                   assigned_by: row["Assigned By"].trim(),
+                  assigned_by_email: myEmail,
                   assigned_date: row["Assigned Date"]?.trim() || new Date().toISOString().slice(0, 10),
                 });
                 count++;
@@ -435,25 +471,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         )}
       </div>
 
-      {/* ═══ TASK AGING ═══ */}
-      {allOpen.length > 0 && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Task Age Distribution</div>
-          <div style={{ display: "flex", gap: "6px", alignItems: "flex-end", height: "60px" }}>
-            {agingData.map((d) => (
-              <div key={d.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
-                <span style={{ fontSize: "12px", fontWeight: 700, color: d.color }}>{d.count}</span>
-                <div style={{ width: "100%", height: `${Math.max((d.count / maxAging) * 44, 2)}px`, backgroundColor: d.color, borderRadius: "3px 3px 0 0" }} />
-                <span style={{ fontSize: "11px", color: SLATE }}>{d.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ═══ TIME VIEW TOGGLE ═══ */}
       <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--bg-page, #f8fafc)", paddingTop: "4px", paddingBottom: "4px" }}>
-        {(["weekly", "monthly", "quarterly", "timeline"] as const).map((v) => (
+        {(["department", "weekly", "monthly", "quarterly", "timeline"] as const).map((v) => (
           <button key={v} onClick={() => setTimeView(v)} style={{
             backgroundColor: timeView === v ? NAVY : "var(--bg-card, #ffffff)",
             color: timeView === v ? "white" : NAVY,
@@ -472,6 +492,81 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           }}>{f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueTasks.length})` : `Waiting (${waitingReply.length})`}</button>
         ))}
       </div>
+
+      {/* ═══ DEPARTMENT VIEW ═══ */}
+      {timeView === "department" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "14px" }}>
+          {departments.length === 0 ? (
+            <div style={{ padding: "16px", textAlign: "center", color: SLATE, border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)" }}>No tasks to show.</div>
+          ) : departments.map((d) => {
+            const isCollapsed = collapsedDepts.has(d.dept);
+            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+            const hasIssues = d.overdue > 0 || d.stuck > 0;
+
+            const personBreakdown = new Map<string, { name: string; total: number; overdue: number; waiting: number }>();
+            for (const t of deptFiltered) {
+              const p = t.assigned_to || "Unassigned";
+              if (!personBreakdown.has(p)) personBreakdown.set(p, { name: p, total: 0, overdue: 0, waiting: 0 });
+              const pb = personBreakdown.get(p)!;
+              pb.total++;
+              if (isOverdue(t)) pb.overdue++;
+              if (t.status === "Waiting Reply") pb.waiting++;
+            }
+            const persons = Array.from(personBreakdown.values()).sort((a, b) => b.overdue - a.overdue || b.total - a.total);
+
+            if (deptFiltered.length === 0 && filter !== "all") return null;
+
+            return (
+              <div key={d.dept} style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", borderLeft: hasIssues ? "4px solid #dc2626" : `4px solid #16a34a` }}>
+                {/* Department header */}
+                <div onClick={() => toggleDept(d.dept)} style={{
+                  padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
+                  backgroundColor: hasIssues ? "#fef2f2" : "var(--bg-card-hover, #f8fafc)",
+                }}>
+                  <div>
+                    <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>{d.dept}</div>
+                    <div style={{ display: "flex", gap: "12px", marginTop: "4px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "14px", color: "#2563eb", fontWeight: 600 }}>{d.open} open</span>
+                      {d.overdue > 0 && <span style={{ fontSize: "14px", color: "#dc2626", fontWeight: 700 }}>{d.overdue} overdue</span>}
+                      {d.waiting > 0 && <span style={{ fontSize: "14px", color: "#d97706", fontWeight: 600 }}>{d.waiting} waiting</span>}
+                      {d.stuck > 0 && <span style={{ fontSize: "14px", color: "#ea580c", fontWeight: 600 }}>{d.stuck} stuck</span>}
+                      <span style={{ fontSize: "14px", color: "#16a34a", fontWeight: 600 }}>{d.completed} done</span>
+                    </div>
+                  </div>
+                  <span style={{ color: SLATE, fontSize: "15px", flexShrink: 0 }}>{isCollapsed ? "▶" : "▼"}</span>
+                </div>
+
+                {/* Person breakdown bar */}
+                {!isCollapsed && persons.length > 0 && (
+                  <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderTop: `1px solid ${BORDER}`, display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    {persons.map((p) => (
+                      <div key={p.name} style={{
+                        padding: "4px 10px", borderRadius: "6px", fontSize: "13px", fontWeight: 600,
+                        backgroundColor: p.overdue > 0 ? "#fef2f2" : "var(--bg-card, #ffffff)",
+                        border: `1px solid ${p.overdue > 0 ? "#fecaca" : BORDER}`,
+                        color: p.overdue > 0 ? "#dc2626" : NAVY,
+                      }}>
+                        {p.name.split(" ")[0]} — {p.total}{p.overdue > 0 && ` (${p.overdue} late)`}{p.waiting > 0 && ` (${p.waiting} wait)`}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Tasks list */}
+                {!isCollapsed && (
+                  <div style={{ borderTop: `1px solid ${BORDER}` }}>
+                    {deptFiltered.length === 0 ? (
+                      <div style={{ padding: "12px 14px", textAlign: "center", color: SLATE, fontSize: "15px" }}>No matching tasks.</div>
+                    ) : (
+                      deptFiltered.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} />)
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ═══ WEEKLY VIEW ═══ */}
       {timeView === "weekly" && (
@@ -649,9 +744,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
 function MiniCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-      <div style={{ color: SLATE, fontSize: "15px", marginBottom: "1px" }}>{label}</div>
-      <div style={{ fontSize: "20px", fontWeight: 800, color }}>{value}</div>
+    <div style={{ border: `1px solid ${BORDER}`, borderTop: `2px solid ${color}`, borderRadius: "6px", padding: "5px 8px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+      <div style={{ color: SLATE, fontSize: "12px" }}>{label}</div>
+      <div style={{ fontSize: "17px", fontWeight: 800, color }}>{value}</div>
     </div>
   );
 }

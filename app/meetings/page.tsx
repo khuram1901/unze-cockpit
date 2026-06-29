@@ -338,6 +338,7 @@ export default function MeetingsPage() {
     for (const item of extracted.action_items) {
       const memberMatch = bestMatch(item.owner_name, memberEmails);
 
+      const { data: userData } = await supabase.auth.getUser();
       const { data: task } = await supabase
         .from("tasks")
         .insert({
@@ -345,6 +346,7 @@ export default function MeetingsPage() {
           assigned_to: item.owner_name,
           assigned_to_email: memberMatch?.email || null,
           assigned_by: "Meeting Minutes",
+          assigned_by_email: userData.user?.email || null,
           assigned_date: isoDate,
           due_date: item.due_date || null,
           priority: item.priority,
@@ -518,12 +520,12 @@ export default function MeetingsPage() {
     return true;
   });
 
-  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
 
   return (
     <AuthWrapper>
       {dlg.element}
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
           <PageHeader />
           <button onClick={() => setShowMinutesFlow(!showMinutesFlow)} style={{

@@ -124,6 +124,10 @@ export default function NewTaskForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    if (!dueDate) {
+      toast.show("Due date is required — every task must have a deadline.", "error");
+      return;
+    }
     if (assignedDate > today) {
       toast.show("Assigned date cannot be in the future.", "error");
       return;
@@ -142,7 +146,8 @@ export default function NewTaskForm() {
       project,
       priority,
       status,
-      due_date: dueDate || null,
+      due_date: dueDate,
+      assigned_by_email: assignedByEmail || null,
       assigned_date: assignedDate || null,
       assigned_to: assignedTo,
       assigned_to_email: assignedToEmail,

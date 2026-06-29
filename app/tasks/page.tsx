@@ -8,7 +8,7 @@ export default function TasksPage() {
   const isMobile = useMobile();
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "14px 18px", maxWidth: "100%", minWidth: 0 }}>
         <TasksPageClient />
       </main>
     </AuthWrapper>

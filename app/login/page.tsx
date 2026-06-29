@@ -128,7 +128,7 @@ export default function LoginPage() {
         {isMobile && (
           <div style={{
             background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
-            padding: "20px 24px",
+            padding: "14px 18px",
             display: "flex",
             alignItems: "center",
             gap: "14px",

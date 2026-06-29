@@ -170,17 +170,17 @@ export function CountCard({
     <div
       style={{
         border: "1px solid var(--border-color, #e2e8f0)",
-        borderTop: `3px solid ${color}`,
-        borderRadius: "8px",
-        padding: "8px 10px",
+        borderTop: `2px solid ${color}`,
+        borderRadius: "6px",
+        padding: "6px 8px",
         backgroundColor: "var(--bg-card, #ffffff)",
       }}
     >
       <div
         style={{
           color: "var(--text-secondary, #64748b)",
-          fontSize: "15px",
-          marginBottom: "2px",
+          fontSize: "12px",
+          marginBottom: "1px",
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
@@ -188,11 +188,11 @@ export function CountCard({
       >
         {label}
       </div>
-      <div style={{ fontSize: "21px", fontWeight: 800, color }}>
+      <div style={{ fontSize: "17px", fontWeight: 800, color }}>
         {typeof value === "number" ? value.toLocaleString() : value}
       </div>
       {sub && (
-        <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>
+        <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginTop: "1px" }}>
           {sub}
         </div>
       )}

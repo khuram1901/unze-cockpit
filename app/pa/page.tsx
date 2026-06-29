@@ -233,11 +233,13 @@ export default function PADashboardPage() {
 
     const assignedMember = members.find((m) => memberName(m) === newAssignTo);
 
+    const { data: userData } = await supabase.auth.getUser();
     const { data: newTask } = await supabase.from("tasks").insert({
       description: newDesc,
       assigned_to: newAssignTo,
       assigned_to_email: assignedMember?.email || null,
       assigned_by: currentUserName || "PA",
+      assigned_by_email: userData.user?.email || null,
       assigned_date: todayISO(),
       due_date: newDueDate || null,
       priority: newPriority,
@@ -264,7 +266,7 @@ export default function PADashboardPage() {
     loadData();
   }
 
-  if (checking) return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
 
   const openTasks = tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const completedTasks = tasks.filter((t) => t.status === "Completed");
@@ -422,7 +424,7 @@ export default function PADashboardPage() {
   return (
     <AuthWrapper>
         {dlg.element}
-        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
 
           {/* ── Greeting ── */}
           {!loading && currentUserName && (

@@ -249,7 +249,7 @@ export default function FinancePage() {
   if (loading) {
     return (
       <AuthWrapper>
-        <main style={{ padding: "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+        <main style={{ padding: "14px 18px", maxWidth: "100%", minWidth: 0 }}>
           <SkeletonRows count={3} height="60px" />
         </main>
       </AuthWrapper>
@@ -260,7 +260,7 @@ export default function FinancePage() {
     <AuthWrapper>
       {toast.element}
       {dlg.element}
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <PageHeader />
 
         {showPicker && (

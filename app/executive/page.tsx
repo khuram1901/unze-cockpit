@@ -394,6 +394,7 @@ export default function ExecutiveDashboardPage() {
       assigned_to: owner.primary_owner_name,
       assigned_to_email: owner.primary_owner_email,
       assigned_by: "System",
+      assigned_by_email: "khuram1901@gmail.com",
       notes: `Auto-created by the executive escalation engine. ${esc.detail}`,
       reply_required: true,
       assigned_to_department: "Unze Trading Ops",
@@ -429,6 +430,7 @@ export default function ExecutiveDashboardPage() {
       assigned_to: owner.primary_owner_name,
       assigned_to_email: owner.primary_owner_email,
       assigned_by: "System",
+      assigned_by_email: "khuram1901@gmail.com",
       notes: `Auto-created by the receivables escalation engine. Bill for ${bill.utility} has exceeded its budgeted working days at stage "${stageName}".`,
       reply_required: true,
       assigned_to_department: "Unze Trading Ops",
@@ -465,6 +467,7 @@ export default function ExecutiveDashboardPage() {
       assigned_to: financeOwner.primary_owner_name,
       assigned_to_email: financeOwner.primary_owner_email,
       assigned_by: "System",
+      assigned_by_email: "khuram1901@gmail.com",
       notes: `Auto-created by the executive cash escalation engine. ${detail}`,
       reply_required: true,
       assigned_to_department: "Finance",
@@ -994,7 +997,7 @@ export default function ExecutiveDashboardPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "14px 18px", maxWidth: "100%", minWidth: 0 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
             <p style={{ color: SLATE, fontSize: "15px", marginTop: "2px", maxWidth: "640px" }}>

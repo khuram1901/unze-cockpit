@@ -426,12 +426,12 @@ export default function HomePage() {
   const progressPct = myTotalMonth > 0 ? Math.round((myCompletedMonth / myTotalMonth) * 100) : 0;
 
   if (!ctxLoading && ctx && isPA(ctx)) {
-    return <AuthWrapper><main style={{ padding: "20px 24px" }}><p style={{ color: "var(--text-secondary)" }}>Redirecting...</p></main></AuthWrapper>;
+    return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary)" }}>Redirecting...</p></main></AuthWrapper>;
   }
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
 
         {!allLoading && userName && (
           <div style={{ marginBottom: "4px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -588,7 +588,7 @@ export default function HomePage() {
             <div style={{
               display: "grid",
               gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
-              gap: "14px", marginBottom: "24px",
+              gap: "8px", marginBottom: "14px",
             }}>
               <KPICard icon="📋" value={kpis.tasksDueToday} label="Tasks due today" sparkline={sparklines.dueByDay} />
               <KPICard icon="📂" value={myOpenTasks.length} label="My open tasks" />
@@ -600,7 +600,7 @@ export default function HomePage() {
             <div style={{
               display: "grid",
               gridTemplateColumns: isMobile ? "1fr" : "1fr minmax(280px, 340px)",
-              gap: "20px", marginBottom: "24px",
+              gap: "14px", marginBottom: "14px",
             }}>
               {/* Left — Today's Tasks */}
               <div style={{
@@ -1001,16 +1001,18 @@ function KPICard({ icon, value, label, alert, sparkline }: { icon: string; value
   return (
     <div style={{
       backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
-      borderRadius: "12px", padding: "16px 18px",
+      borderRadius: "8px", padding: "10px 12px",
     }}>
-      <div style={{ fontSize: "20px", marginBottom: "8px", opacity: 0.8 }}>{icon}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+        <span style={{ fontSize: "15px", opacity: 0.8 }}>{icon}</span>
+        <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{label}</span>
+      </div>
       <div style={{
-        fontSize: "28px", fontWeight: 800, lineHeight: 1,
+        fontSize: "22px", fontWeight: 800, lineHeight: 1,
         color: alert ? COLOURS.RED : "var(--text-primary)",
       }}>
         {value}
       </div>
-      <div style={{ fontSize: "15px", color: "var(--text-secondary)", marginTop: "4px" }}>{label}</div>
       {sparkline && sparkline.length > 1 && <MiniSparkline data={sparkline} color={alert ? COLOURS.RED : COLOURS.BLUE} />}
     </div>
   );

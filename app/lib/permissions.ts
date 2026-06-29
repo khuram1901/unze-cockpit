@@ -268,3 +268,21 @@ export function canViewInvestments(u: UserCtx) {
 export function canEditOperationsTargets(u: UserCtx) {
   return isPrivileged(u);
 }
+
+// ── Task ownership ──────────────────────────────────────────────
+const PROTECTED_CREATOR_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, PA_EMAIL];
+
+export function isTaskProtected(assignedByEmail: string | null | undefined): boolean {
+  if (!assignedByEmail) return false;
+  return PROTECTED_CREATOR_EMAILS.includes(assignedByEmail.toLowerCase());
+}
+
+export function canEditTask(u: UserCtx, assignedByEmail: string | null | undefined): boolean {
+  if (isAdminTier(u) || isPA(u)) return true;
+  return !isTaskProtected(assignedByEmail);
+}
+
+export function canDeleteTask(u: UserCtx, assignedByEmail: string | null | undefined): boolean {
+  if (isAdminTier(u) || isPA(u)) return true;
+  return !isTaskProtected(assignedByEmail);
+}

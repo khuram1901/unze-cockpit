@@ -261,7 +261,7 @@ export default function ProfilePage() {
   return (
     <AuthWrapper>
       {dlg.element}
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <PageHeader />
 
         {message && (

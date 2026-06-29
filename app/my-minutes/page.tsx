@@ -174,12 +174,15 @@ function MyMinutesPage() {
     if (!newTaskDesc.trim() || !newTaskOwner) return;
     setSavingNewTask(true);
     const member = allMembers.find((m) => m.name === newTaskOwner);
+    const { data: userData } = await supabase.auth.getUser();
+    const creatorEmail = userData.user?.email || null;
     const { data: task } = await supabase.from("tasks").insert({
       description: newTaskDesc.trim(),
       assigned_to: newTaskOwner,
       assigned_to_email: member?.email || null,
       assigned_to_department: member?.department || null,
       assigned_by: "Meeting Minutes",
+      assigned_by_email: creatorEmail,
       assigned_date: new Date().toISOString().slice(0, 10),
       due_date: newTaskDue || null,
       priority: newTaskPriority,
@@ -207,7 +210,7 @@ function MyMinutesPage() {
   if (!loading && meetings.length === 0 && !isAdmin) {
     return (
       <AuthWrapper>
-        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
           <PageHeader />
           <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderLeft: `4px solid ${COLOURS.AMBER}`, borderRadius: "6px", padding: "12px 16px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>
             No meeting minutes found. You will see minutes here once you are added as an attendee to a meeting.
@@ -219,7 +222,7 @@ function MyMinutesPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <PageHeader />
 
         {!loading && (

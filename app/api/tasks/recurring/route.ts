@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
         assigned_to_email: tmpl.assigned_to_email,
         assigned_to_department: tmpl.assigned_to_department,
         assigned_by: tmpl.assigned_by || "Recurring Task",
+        assigned_by_email: "khuram1901@gmail.com",
         assigned_date: today,
         due_date: dueDateStr,
         priority: tmpl.priority || "Normal",

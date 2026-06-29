@@ -42,6 +42,7 @@ export default function TaskStatus({
   onChanged: () => void;
   canReview?: boolean;
   canEditDueDate?: boolean;
+  canEditTask?: boolean;
 }) {
   const toast = useToast();
   const [status, setStatus] = useState(task.status);

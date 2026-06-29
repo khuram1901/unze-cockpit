@@ -105,10 +105,12 @@ export default function AdminDashboard() {
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
+    const { data: userData } = await supabase.auth.getUser();
     const { error } = await supabase.from("tasks").insert({
       description: desc, project: project || null, assigned_to: assignedTo || null,
       due_date: dueDate || null, priority, status: "Not Started",
       assigned_to_department: "Admin", assigned_by: "Department Dashboard",
+      assigned_by_email: userData.user?.email || null,
       assigned_date: today,
     });
     setSaving(false);

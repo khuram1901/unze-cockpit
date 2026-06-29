@@ -450,6 +450,7 @@ export default function SidebarLayout({
       {/* ── Main content ── */}
       <div style={{
         flex: 1,
+        minWidth: 0,
         marginLeft: isMobile ? 0 : `${sidebarW}px`,
         transition: "margin-left 0.2s ease",
         display: "flex", flexDirection: "column", minHeight: "100vh",
@@ -630,8 +631,8 @@ export default function SidebarLayout({
         {/* Page content */}
         <div style={{
           flex: 1,
-          maxWidth: "100%",
-          overflowX: "hidden",
+          minWidth: 0,
+          overflowX: "auto",
         }}>
           {children}
         </div>
