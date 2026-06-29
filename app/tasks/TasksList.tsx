@@ -215,6 +215,23 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     .map(([name, d]) => ({ name, ...d }))
     .sort((a, b) => b.overdue - a.overdue || b.total - a.total);
 
+  // ── Task Aging Histogram ──
+  const agingBuckets = [
+    { label: "0-3d", min: 0, max: 3, color: "#16a34a" },
+    { label: "4-7d", min: 4, max: 7, color: "#2563eb" },
+    { label: "8-14d", min: 8, max: 14, color: "#d97706" },
+    { label: "15-30d", min: 15, max: 30, color: "#ea580c" },
+    { label: "30+d", min: 31, max: Infinity, color: "#dc2626" },
+  ];
+  const agingData = agingBuckets.map((b) => {
+    const count = allOpen.filter((t) => {
+      const age = t.created_at ? Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000) : 0;
+      return age >= b.min && age <= b.max;
+    }).length;
+    return { ...b, count };
+  });
+  const maxAging = Math.max(...agingData.map((d) => d.count), 1);
+
   // ── Filtered task list ──
   let filteredTasks = allOpen;
   if (filter === "overdue") filteredTasks = overdueTasks;
@@ -417,6 +434,22 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           />
         )}
       </div>
+
+      {/* ═══ TASK AGING ═══ */}
+      {allOpen.length > 0 && (
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Task Age Distribution</div>
+          <div style={{ display: "flex", gap: "6px", alignItems: "flex-end", height: "60px" }}>
+            {agingData.map((d) => (
+              <div key={d.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: d.color }}>{d.count}</span>
+                <div style={{ width: "100%", height: `${Math.max((d.count / maxAging) * 44, 2)}px`, backgroundColor: d.color, borderRadius: "3px 3px 0 0" }} />
+                <span style={{ fontSize: "11px", color: SLATE }}>{d.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ═══ TIME VIEW TOGGLE ═══ */}
       <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap" }}>

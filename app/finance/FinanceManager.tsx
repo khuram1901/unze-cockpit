@@ -829,9 +829,14 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               const over = dA > dB;
               return (
                 <div key={deptName} style={{ border: `1px solid ${BORDER}`, borderTop: `2px solid ${over ? RED : GREEN}`, borderRadius: "5px", overflow: "hidden", marginBottom: "6px" }}>
-                  <div style={{ padding: "4px 10px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: NAVY }}>{deptName}</span>
-                    <span style={{ fontSize: "10px", fontWeight: 700, color: over ? RED : GREEN }}>PKR {dA.toLocaleString()} / {dB.toLocaleString()}</span>
+                  <div style={{ padding: "4px 10px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${BORDER}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: NAVY }}>{deptName}</span>
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: over ? RED : GREEN }}>PKR {dA.toLocaleString()} / {dB.toLocaleString()} ({dB > 0 ? Math.round((dA / dB) * 100) : 0}%)</span>
+                    </div>
+                    <div style={{ height: "4px", backgroundColor: "#e2e8f0", borderRadius: "2px", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.min((dA / Math.max(dB, 1)) * 100, 100)}%`, backgroundColor: over ? RED : (dA / Math.max(dB, 1)) > 0.8 ? "#d97706" : GREEN, borderRadius: "2px", transition: "width 0.3s" }} />
+                    </div>
                   </div>
                   {items.map((b) => (
                     <div key={b.id} style={{ padding: "3px 10px", borderBottom: `1px solid ${COLOURS.LIGHT}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "4px" }}>

@@ -1150,9 +1150,14 @@ export default function MeetingsPage() {
                               <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{m.title}</span>
                             </div>
                             {mTasks.length > 0 && (
-                              <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                                {completedTasks}/{mTasks.length} tasks done
-                                {openTaskCount > 0 && <span style={{ color: "#d97706", fontWeight: 700 }}> · {openTaskCount} open</span>}
+                              <div style={{ marginTop: "4px", display: "flex", alignItems: "center", gap: "8px" }}>
+                                <div style={{ flex: 1, maxWidth: "120px", height: "6px", backgroundColor: "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${(completedTasks / mTasks.length) * 100}%`, backgroundColor: completedTasks === mTasks.length ? COLOURS.GREEN : openTaskCount > 0 ? "#d97706" : COLOURS.BLUE, borderRadius: "3px", transition: "width 0.3s" }} />
+                                </div>
+                                <span style={{ fontSize: "13px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>
+                                  {completedTasks}/{mTasks.length}
+                                  {openTaskCount > 0 && <span style={{ color: "#d97706", fontWeight: 700 }}> · {openTaskCount} open</span>}
+                                </span>
                               </div>
                             )}
                           </div>

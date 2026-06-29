@@ -338,6 +338,15 @@ export default function HomePage() {
             const weekPayments = cashRows.reduce((s, r) => s + (r.total_payments || 0), 0);
             const netFlow = weekReceipts - weekPayments;
             items.push({ label: `${tag} net flow (7d)`, value: `PKR ${netFlow.toLocaleString()} (in: ${weekReceipts.toLocaleString()}, out: ${weekPayments.toLocaleString()})`, rag: netFlow >= 0 ? "GREEN" : "RED" });
+
+            if (netFlow < 0 && cashRows.length >= 3) {
+              const dailyBurn = Math.abs(netFlow) / cashRows.length;
+              const currentBalance = cashRows[0].closing_balance || 0;
+              const runwayDays = dailyBurn > 0 ? Math.floor(currentBalance / dailyBurn) : Infinity;
+              if (runwayDays < 30) {
+                items.push({ label: `${tag} runway`, value: `${runwayDays} days at current burn rate`, rag: runwayDays < 14 ? "RED" : "AMBER" });
+              }
+            }
           }
 
           const budgets = budgetRes.data || [];

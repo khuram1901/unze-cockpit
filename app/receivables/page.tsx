@@ -303,6 +303,44 @@ export default function ReceivablesPage() {
           </div>
         )}
 
+        {/* Pipeline Stage Summary Bar */}
+        {!loading && stages.length > 0 && bills.length > 0 && (
+          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "8px", color: "var(--text-primary, #1e293b)" }}>Pipeline Stages</div>
+            <div style={{ display: "flex", borderRadius: "6px", overflow: "hidden", height: "28px" }}>
+              {stages.map((stage) => {
+                const count = bills.filter((b) => b.current_stage_order === stage.stage_order).length;
+                if (count === 0) return null;
+                const pct = (count / bills.length) * 100;
+                const stuckInStage = bills.filter((b) => {
+                  if (b.current_stage_order !== stage.stage_order) return false;
+                  return workingDaysSince(b.current_stage_entered_date) >= stage.working_day_budget;
+                }).length;
+                const bg = stuckInStage > 0 ? COLOURS.RED : stuckInStage === 0 && count > 0 ? COLOURS.GREEN : COLOURS.BLUE;
+                return (
+                  <div key={stage.id} title={`${stage.stage_name}: ${count} bill${count !== 1 ? "s" : ""}${stuckInStage > 0 ? ` (${stuckInStage} stuck)` : ""}`} style={{
+                    width: `${Math.max(pct, 8)}%`, backgroundColor: bg, display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "12px", fontWeight: 700, color: "#fff", whiteSpace: "nowrap", padding: "0 4px",
+                    borderRight: "1px solid rgba(255,255,255,0.3)",
+                  }}>
+                    {count}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: "12px", marginTop: "6px", flexWrap: "wrap" }}>
+              {stages.map((stage) => {
+                const count = bills.filter((b) => b.current_stage_order === stage.stage_order).length;
+                return (
+                  <span key={stage.id} style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)" }}>
+                    {stage.stage_name}: <strong>{count}</strong>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Bills in Progress — Customer Summary */}
         {!loading && customerRows.length > 0 && (
           <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
