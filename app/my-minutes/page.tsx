@@ -97,7 +97,7 @@ function MyMinutesPage() {
       const { data } = await supabase.from("meetings").select("*").order("meeting_date", { ascending: false });
       meetingsData = data || [];
     } else {
-      // Everyone else: only see meetings they attended
+      // Everyone else: see meetings they attended OR have tasks assigned from
       const { data: attendeeLinks } = await supabase
         .from("meeting_attendees")
         .select("meeting_id")
@@ -114,6 +114,16 @@ function MyMinutesPage() {
             meetingIds.add(m.id);
           }
         }
+      }
+
+      // Include meetings where user has assigned tasks (so "View Minutes" link works)
+      const { data: taskMeetings } = await supabase
+        .from("tasks")
+        .select("meeting_id")
+        .eq("assigned_to_email", email)
+        .not("meeting_id", "is", null);
+      for (const t of taskMeetings || []) {
+        if (t.meeting_id) meetingIds.add(t.meeting_id);
       }
 
       if (meetingIds.size > 0) {

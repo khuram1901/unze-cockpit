@@ -303,6 +303,14 @@ export default function MeetingsPage() {
 
   async function handleApprove() {
     if (!extracted) return;
+
+    const missingDue = extracted.action_items.filter((a) => !a.due_date);
+    const missingDesc = extracted.action_items.filter((a) => !a.description.trim());
+    const missingOwner = extracted.action_items.filter((a) => !a.owner_name);
+    if (missingDesc.length > 0) { setMessage(`Error: ${missingDesc.length} action item${missingDesc.length > 1 ? "s" : ""} missing a description.`); return; }
+    if (missingOwner.length > 0) { setMessage(`Error: ${missingOwner.length} action item${missingOwner.length > 1 ? "s" : ""} missing an owner.`); return; }
+    if (missingDue.length > 0) { setMessage(`Error: ${missingDue.length} action item${missingDue.length > 1 ? "s" : ""} missing a due date. Every task must have a deadline.`); return; }
+
     setSaving(true);
 
     const dateParts = extracted.meeting_date.split("/");
@@ -396,18 +404,14 @@ export default function MeetingsPage() {
     }
 
     logAction("Created", "meetings", `${extracted.meeting_title} - ${tasksCreated} tasks created`, meeting.id);
-    setMessage(`Approved: meeting saved and ${tasksCreated} task${tasksCreated !== 1 ? "s" : ""} created.`);
+    setMessage(`Approved: meeting saved and ${tasksCreated} task${tasksCreated !== 1 ? "s" : ""} created. Company attendees will see these minutes in the app.`);
     setSaving(false);
 
-    const allRecipients = new Set<string>();
-    for (const attendee of extracted.attendees) {
-      const match = bestMatch(attendee, memberEmails);
-      if (match?.email) allRecipients.add(match.email);
-    }
+    const externalOnly = new Set<string>();
     if (externalEmails.trim()) {
-      externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).forEach((e) => allRecipients.add(e));
+      externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).forEach((e) => externalOnly.add(e));
     }
-    setSelectedRecipients(allRecipients);
+    setSelectedRecipients(externalOnly);
 
     setStep("approved");
     loadData();
@@ -856,12 +860,13 @@ export default function MeetingsPage() {
               <div key={i} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "12px", marginBottom: "8px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                 <div style={{ marginBottom: "8px" }}>
                   <input value={item.description} onChange={(e) => updateActionItem(i, { description: e.target.value })}
-                    placeholder="Task description" style={{ ...inputStyle, fontWeight: 600 }} />
+                    placeholder="Task description *" required style={{ ...inputStyle, fontWeight: 600, borderColor: !item.description.trim() ? COLOURS.RED : undefined }} />
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
                   <div>
-                    <label style={{ ...labelStyle, fontSize: "12px" }}>Owner</label>
-                    <select value={item.owner_name} onChange={(e) => updateActionItem(i, { owner_name: e.target.value })} style={smallField}>
+                    <label style={{ ...labelStyle, fontSize: "12px", color: !item.owner_name ? COLOURS.RED : undefined }}>Owner *</label>
+                    <select value={item.owner_name} onChange={(e) => updateActionItem(i, { owner_name: e.target.value })}
+                      style={{ ...smallField, borderColor: !item.owner_name ? COLOURS.RED : undefined }}>
                       <option value="">Select owner</option>
                       {memberDetails.filter((m) => m.role === "Manager" || m.role === "Executive" || m.role === "Admin").map((m) => (
                         <option key={m.name} value={m.name}>{m.name} ({m.role})</option>
@@ -878,8 +883,9 @@ export default function MeetingsPage() {
                     </select>
                   </div>
                   <div>
-                    <label style={{ ...labelStyle, fontSize: "12px" }}>Due Date</label>
-                    <input type="date" value={item.due_date || ""} onChange={(e) => updateActionItem(i, { due_date: e.target.value })} style={smallField} />
+                    <label style={{ ...labelStyle, fontSize: "12px", color: !item.due_date ? COLOURS.RED : undefined }}>Due Date *</label>
+                    <input type="date" value={item.due_date || ""} onChange={(e) => updateActionItem(i, { due_date: e.target.value })} required
+                      style={{ ...smallField, borderColor: !item.due_date ? COLOURS.RED : undefined }} />
                   </div>
                   <div>
                     <label style={{ ...labelStyle, fontSize: "12px" }}>Department</label>
@@ -944,49 +950,60 @@ export default function MeetingsPage() {
 
           return (
           <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "16px" }}>
-            <SectionTitle title="Step 3: Send Minutes" />
-            <p style={{ fontSize: "15px", color: COLOURS.NAVY, marginBottom: "12px" }}>
-              Meeting saved and tasks created. Select who should receive the minutes email.
-            </p>
+            <SectionTitle title="Step 3: Notify Attendees" />
+
+            <div style={{
+              border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`,
+              borderRadius: "6px", padding: "10px 14px", marginBottom: "14px",
+              backgroundColor: "var(--bg-card-hover, #f0fdf4)", fontSize: "14px", color: COLOURS.NAVY,
+            }}>
+              Company attendees will see these minutes in <strong>My Minutes</strong> within the app. Only check people below if you also want to send an email copy (typically for external attendees who don't have app access).
+            </div>
 
             <div style={{ marginBottom: "12px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                <label style={labelStyle}>Recipients ({selectedRecipients.size} selected)</label>
+                <label style={labelStyle}>Email Recipients ({selectedRecipients.size} selected)</label>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={selectAll} style={{ fontSize: "15px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Select All</button>
-                  <button onClick={deselectAll} style={{ fontSize: "15px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Deselect All</button>
+                  <button onClick={selectAll} style={{ fontSize: "14px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Select All</button>
+                  <button onClick={deselectAll} style={{ fontSize: "14px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Deselect All</button>
                 </div>
               </div>
 
+              <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px", marginTop: "6px" }}>Company Attendees (view in app — tick to also email)</div>
               {extracted.attendees.map((a) => {
                 const match = bestMatch(a, memberEmails);
                 if (!match?.email) return (
-                  <div key={a} style={{ padding: "4px 0", fontSize: "16px", color: COLOURS.SLATE }}>
+                  <div key={a} style={{ padding: "4px 0", fontSize: "14px", color: COLOURS.SLATE }}>
                     {a} <span style={{ fontSize: "12px", color: "#d97706" }}>(no email match)</span>
                   </div>
                 );
                 return (
-                  <label key={a} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "16px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                  <label key={a} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
                     <input type="checkbox" checked={selectedRecipients.has(match.email)}
                       onChange={() => toggleRecipient(match.email)} style={{ width: "16px", height: "16px" }} />
                     <span style={{ fontWeight: 600 }}>{a}</span>
-                    <span style={{ color: COLOURS.SLATE }}>{match.email}</span>
+                    <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>{match.email}</span>
                   </label>
                 );
               })}
 
-              {externalEmails.trim() && externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).map((ext) => (
-                <label key={ext} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "16px", color: COLOURS.NAVY, cursor: "pointer" }}>
-                  <input type="checkbox" checked={selectedRecipients.has(ext)}
-                    onChange={() => toggleRecipient(ext)} style={{ width: "16px", height: "16px" }} />
-                  <span style={{ fontWeight: 600 }}>{ext}</span>
-                  <span style={{ fontSize: "12px", color: COLOURS.BLUE }}>(external)</span>
-                </label>
-              ))}
+              {externalEmails.trim() && (
+                <>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px", marginTop: "10px" }}>External Attendees (email only)</div>
+                  {externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).map((ext) => (
+                    <label key={ext} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                      <input type="checkbox" checked={selectedRecipients.has(ext)}
+                        onChange={() => toggleRecipient(ext)} style={{ width: "16px", height: "16px" }} />
+                      <span style={{ fontWeight: 600 }}>{ext}</span>
+                      <span style={{ fontSize: "12px", color: COLOURS.BLUE }}>(external)</span>
+                    </label>
+                  ))}
+                </>
+              )}
 
               <div style={{ marginTop: "8px", display: "flex", gap: "6px", alignItems: "center" }}>
                 <input
-                  type="email" placeholder="Add another email..."
+                  type="email" placeholder="Add external email..."
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       const val = (e.target as HTMLInputElement).value.trim();
@@ -996,20 +1013,22 @@ export default function MeetingsPage() {
                       }
                     }
                   }}
-                  style={{ ...inputStyle, flex: "1 1 200px", maxWidth: "280px", fontSize: "16px", padding: "6px 8px" }}
+                  style={{ ...inputStyle, flex: "1 1 200px", maxWidth: "280px", fontSize: "14px", padding: "6px 8px" }}
                 />
                 <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Press Enter to add</span>
               </div>
             </div>
 
             <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={handleSendMinutes} disabled={sending || selectedRecipients.size === 0}
-                style={{ ...primaryButtonStyle, flex: 2, opacity: sending || selectedRecipients.size === 0 ? 0.5 : 1 }}>
-                {sending ? "Sending..." : `Send to ${selectedRecipients.size} Recipient${selectedRecipients.size !== 1 ? "s" : ""}`}
-              </button>
+              {selectedRecipients.size > 0 ? (
+                <button onClick={handleSendMinutes} disabled={sending}
+                  style={{ ...primaryButtonStyle, flex: 2, opacity: sending ? 0.5 : 1 }}>
+                  {sending ? "Sending..." : `Email to ${selectedRecipients.size} Recipient${selectedRecipients.size !== 1 ? "s" : ""}`}
+                </button>
+              ) : null}
               <button onClick={resetAll}
-                style={{ ...primaryButtonStyle, backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, flex: 1 }}>
-                Done
+                style={{ ...primaryButtonStyle, backgroundColor: selectedRecipients.size === 0 ? COLOURS.GREEN : "var(--bg-card, #ffffff)", color: selectedRecipients.size === 0 ? "white" : COLOURS.NAVY, border: selectedRecipients.size === 0 ? "none" : `1px solid ${COLOURS.BORDER}`, flex: selectedRecipients.size === 0 ? 2 : 1 }}>
+                {selectedRecipients.size === 0 ? "Done — Attendees Notified in App" : "Skip Email & Done"}
               </button>
             </div>
           </div>
