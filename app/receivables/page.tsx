@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
@@ -79,6 +79,30 @@ export default function ReceivablesPage() {
   const [showCollected, setShowCollected] = useState(false);
   const [dragBillId, setDragBillId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+    window.addEventListener("resize", checkScroll);
+    return () => window.removeEventListener("resize", checkScroll);
+  }, [checkScroll, bills, stages]);
+
+  function scrollBoard(dir: "left" | "right") {
+    const el = scrollRef.current;
+    if (!el) return;
+    const amount = isMobile ? 270 : 260;
+    el.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
+    setTimeout(checkScroll, 350);
+  }
 
   const [plantId, setPlantId] = useState("");
   const [customer, setCustomer] = useState("");
@@ -327,7 +351,7 @@ export default function ReceivablesPage() {
 
   return (
     <AuthWrapper>
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
           <PageHeader />
           {canEdit && (
@@ -416,9 +440,31 @@ export default function ReceivablesPage() {
           <SkeletonRows count={4} height="60px" />
         ) : (
           <>
-            <SectionTitle title="Stage Board" />
-            {canEdit && !isMobile && <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginBottom: "6px" }}>Drag bills between stages to move them forward or back</div>}
-            <div style={{ display: "flex", gap: "12px", overflowX: "auto", paddingBottom: "12px", marginBottom: "14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+              <SectionTitle title="Stage Board" />
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                {canEdit && !isMobile && <span style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginRight: "8px" }}>Drag to move</span>}
+                <button onClick={() => scrollBoard("left")} disabled={!canScrollLeft} style={{
+                  width: "32px", height: "32px", borderRadius: "50%", border: `1px solid ${COLOURS.BORDER}`,
+                  backgroundColor: canScrollLeft ? "var(--bg-card, #ffffff)" : "var(--bg-card-hover, #f8fafc)",
+                  color: canScrollLeft ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #64748b)",
+                  fontSize: "16px", cursor: canScrollLeft ? "pointer" : "default",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>&#8249;</button>
+                <button onClick={() => scrollBoard("right")} disabled={!canScrollRight} style={{
+                  width: "32px", height: "32px", borderRadius: "50%", border: `1px solid ${COLOURS.BORDER}`,
+                  backgroundColor: canScrollRight ? "var(--bg-card, #ffffff)" : "var(--bg-card-hover, #f8fafc)",
+                  color: canScrollRight ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #64748b)",
+                  fontSize: "16px", cursor: canScrollRight ? "pointer" : "default",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>&#8250;</button>
+              </div>
+            </div>
+            <div ref={scrollRef} onScroll={checkScroll} style={{
+              display: "flex", gap: "12px", overflowX: "auto", paddingBottom: "12px", marginBottom: "14px",
+              WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory",
+              scrollbarWidth: "thin",
+            }}>
               {stages.map((stage) => {
                 const stageBills = bills.filter((b) => b.current_stage_order === stage.stage_order);
                 const isDragTarget = dragOverStage === stage.stage_order;
@@ -434,6 +480,7 @@ export default function ReceivablesPage() {
                       borderRadius: "8px",
                       backgroundColor: isDragTarget ? "rgba(59, 130, 246, 0.05)" : "var(--bg-card-hover, #f8fafc)",
                       transition: "border-color 0.15s, background-color 0.15s",
+                      scrollSnapAlign: "start",
                     }}
                   >
                     <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "6px 6px 0 0" }}>
@@ -526,6 +573,7 @@ export default function ReceivablesPage() {
                   borderRadius: "8px",
                   backgroundColor: dragOverStage === -1 ? "rgba(34, 197, 94, 0.05)" : "#f0fdf4",
                   transition: "border-color 0.15s, background-color 0.15s",
+                  scrollSnapAlign: "start",
                 }}
               >
                 <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border-color, #e2e8f0)", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "6px 6px 0 0" }}>
