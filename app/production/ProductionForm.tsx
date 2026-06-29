@@ -27,6 +27,7 @@ const REASONS = [
 const MACHINE_STATUSES = ["Down", "Partially Working", "Resolved"];
 
 type PastEntry = {
+  id: string;
   entry_date: string;
   qty_31: number;
   qty_36: number;
@@ -34,6 +35,8 @@ type PastEntry = {
   qty_meter: number;
   type: "Production" | "Dispatch" | "Breakage";
 };
+
+const OPS_HOD_EMAIL = "nadeem.khan@unze.co.uk";
 
 export default function ProductionForm() {
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -79,6 +82,8 @@ export default function ProductionForm() {
   const [machineActionTaken, setMachineActionTaken] = useState("");
 
   const [notes, setNotes] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userIsAdmin, setUserIsAdmin] = useState(false);
 
   // Per-section saving + message state
   const [savingSection, setSavingSection] = useState("");
@@ -104,6 +109,8 @@ export default function ProductionForm() {
         .single();
 
       const role = me?.role || "Member";
+      setUserEmail(email);
+      setUserIsAdmin(role === "Admin");
 
       let overrides: PermOverrides | null = null;
       const p = await loadMyPermissions();
@@ -143,32 +150,37 @@ export default function ProductionForm() {
     load();
   }, []);
 
-  useEffect(() => {
+  async function loadHistory() {
     if (!plantId) { setPastEntries([]); return; }
-    async function loadHistory() {
-      const fourteenAgo = new Date();
-      fourteenAgo.setDate(fourteenAgo.getDate() - 14);
-      const since = fourteenAgo.toISOString().slice(0, 10);
+    const fourteenAgo = new Date();
+    fourteenAgo.setDate(fourteenAgo.getDate() - 14);
+    const since = fourteenAgo.toISOString().slice(0, 10);
 
-      const [prodRes, dispRes, brkRes] = await Promise.all([
-        supabase.from("production_entries").select("entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
-        supabase.from("dispatch_entries").select("entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
-        supabase.from("breakage_entries").select("entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
-      ]);
+    const [prodRes, dispRes, brkRes] = await Promise.all([
+      supabase.from("production_entries").select("id, entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
+      supabase.from("dispatch_entries").select("id, entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
+      supabase.from("breakage_entries").select("id, entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
+    ]);
 
-      const entries: PastEntry[] = [
-        ...(prodRes.data || []).map((r) => ({ ...r, type: "Production" as const })),
-        ...(dispRes.data || []).map((r) => ({ ...r, type: "Dispatch" as const })),
-        ...(brkRes.data || []).map((r) => ({ ...r, type: "Breakage" as const })),
-      ];
-      entries.sort((a, b) => b.entry_date.localeCompare(a.entry_date) || a.type.localeCompare(b.type));
-      setPastEntries(entries);
-    }
-    loadHistory();
-  }, [plantId]);
+    const entries: PastEntry[] = [
+      ...(prodRes.data || []).map((r) => ({ ...r, type: "Production" as const })),
+      ...(dispRes.data || []).map((r) => ({ ...r, type: "Dispatch" as const })),
+      ...(brkRes.data || []).map((r) => ({ ...r, type: "Breakage" as const })),
+    ];
+    entries.sort((a, b) => b.entry_date.localeCompare(a.entry_date) || a.type.localeCompare(b.type));
+    setPastEntries(entries);
+  }
+
+  useEffect(() => { loadHistory(); }, [plantId, entryDate]);
 
   const selectedPlant = plants.find((p) => p.id === plantId);
   const isMeter = selectedPlant?.type === "meter";
+
+  function hasEntryFor(type: "Production" | "Dispatch" | "Breakage") {
+    return pastEntries.some((e) => e.entry_date === entryDate && e.type === type);
+  }
+
+  const canDelete = userEmail === OPS_HOD_EMAIL || userIsAdmin;
 
   async function currentEmail() {
     const { data: userData } = await supabase.auth.getUser();
@@ -179,9 +191,22 @@ export default function ProductionForm() {
     setSectionMsg({ section, text, ok });
   }
 
+  async function deleteEntry(entry: PastEntry) {
+    const table = entry.type === "Production" ? "production_entries" : entry.type === "Dispatch" ? "dispatch_entries" : "breakage_entries";
+    const { error } = await supabase.from(table).delete().eq("id", entry.id);
+    if (error) { showMsg("history", "Error deleting: " + error.message, false); return; }
+    logAction("Deleted", table, `Deleted ${entry.type} entry for ${entry.entry_date}`);
+    showMsg("history", `${entry.type} entry for ${formatDateUK(entry.entry_date)} deleted.`, true);
+    loadHistory();
+  }
+
   // ---- Production ----
   async function submitProduction(nothing = false) {
     if (!plantId) return;
+    if (hasEntryFor("Production")) {
+      showMsg("production", "Production already entered for this plant and date. Delete the existing entry first to re-enter.", false);
+      return;
+    }
     if (!nothing && !prod31 && !prod36 && !prod45 && !prodMeter) {
       showMsg("production", "Enter a number, or use 'Nothing to report'.", false);
       return;
@@ -201,12 +226,16 @@ export default function ProductionForm() {
     setSavingSection("");
     if (error) { showMsg("production", "Error: " + error.message, false); return; }
     logAction("Created", "production_entries", `Production entry for ${entryDate}`); showMsg("production", nothing ? "Logged: nothing to report ✓" : "Production saved ✓", true);
-    setProd31(""); setProd36(""); setProd45(""); setProdMeter("");
+    setProd31(""); setProd36(""); setProd45(""); setProdMeter(""); loadHistory();
   }
 
   // ---- Dispatch ----
   async function submitDispatch(nothing = false) {
     if (!plantId) return;
+    if (hasEntryFor("Dispatch")) {
+      showMsg("dispatch", "Dispatch already entered for this plant and date. Delete the existing entry first to re-enter.", false);
+      return;
+    }
     if (!nothing && !disp31 && !disp36 && !disp45 && !dispMeter) {
       showMsg("dispatch", "Enter a number, or use 'Nothing to report'.", false);
       return;
@@ -226,12 +255,16 @@ export default function ProductionForm() {
     setSavingSection("");
     if (error) { showMsg("dispatch", "Error: " + error.message, false); return; }
     logAction("Created", "dispatch_entries", `Dispatch entry for ${entryDate}`); showMsg("dispatch", nothing ? "Logged: nothing to report ✓" : "Dispatch saved ✓", true);
-    setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter("");
+    setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter(""); loadHistory();
   }
 
   // ---- Breakage ----
   async function submitBreakage(nothing = false) {
     if (!plantId) return;
+    if (hasEntryFor("Breakage")) {
+      showMsg("breakage", "Breakage already entered for this plant and date. Delete the existing entry first to re-enter.", false);
+      return;
+    }
     if (!nothing && !brk31 && !brk36 && !brk45) {
       showMsg("breakage", "Enter a number, or use 'Nothing to report'.", false);
       return;
@@ -255,7 +288,7 @@ export default function ProductionForm() {
     if (error) { showMsg("breakage", "Error: " + error.message, false); return; }
     logAction("Created", "breakage_entries", `Breakage entry for ${entryDate}`); showMsg("breakage", nothing ? "Logged: nothing to report ✓" : "Breakage saved ✓", true);
     setBrk31(""); setBrk36(""); setBrk45("");
-    setReason31(""); setReason36(""); setReason45(""); setReasonOther("");
+    setReason31(""); setReason36(""); setReason45(""); setReasonOther(""); loadHistory();
   }
 
   // ---- Scrap ----
@@ -582,6 +615,11 @@ export default function ProductionForm() {
             </button>
           </div>
 
+          {sectionMsg?.section === "history" && (
+            <div style={{ padding: "8px 12px", marginBottom: "8px", borderRadius: "6px", fontSize: "14px", fontWeight: 600, backgroundColor: sectionMsg.ok ? "#dcfce7" : "#fef2f2", color: sectionMsg.ok ? "#16a34a" : "#dc2626" }}>
+              {sectionMsg.text}
+            </div>
+          )}
           {showHistory && (
             <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
               <div style={{ overflowX: "auto" }}>
@@ -595,6 +633,7 @@ export default function ProductionForm() {
                       <th style={histTh}>45</th>
                       {selectedPlant?.type === "meter" && <th style={histTh}>Meter</th>}
                       <th style={histTh}>Total</th>
+                      {canDelete && <th style={histTh}></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -614,6 +653,14 @@ export default function ProductionForm() {
                           <td style={histTd}>{e.qty_45 || 0}</td>
                           {selectedPlant?.type === "meter" && <td style={histTd}>{e.qty_meter || 0}</td>}
                           <td style={{ ...histTd, fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{total}</td>
+                          {canDelete && (
+                            <td style={histTd}>
+                              <button onClick={() => deleteEntry(e)} style={{
+                                backgroundColor: "transparent", border: "1px solid #dc2626", color: "#dc2626",
+                                borderRadius: "4px", padding: "2px 8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                              }}>×</button>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
