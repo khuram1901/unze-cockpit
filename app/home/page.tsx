@@ -80,6 +80,7 @@ export default function HomePage() {
   type ManagerBriefingItem = { label: string; value: string; rag: "GREEN" | "AMBER" | "RED" };
   const [managerBriefing, setManagerBriefing] = useState<ManagerBriefingItem[]>([]);
   const [managerBriefingTitle, setManagerBriefingTitle] = useState("");
+  const [cronHealth, setCronHealth] = useState<{ name: string; hoursAgo: number | null; status: string }[]>([]);
 
   async function quickAction(taskId: string, action: "complete" | "chase", task: TaskRow) {
     if (action === "complete") {
@@ -384,6 +385,13 @@ export default function HomePage() {
         setManagerBriefingTitle(`Finance Briefing${companyLabel !== "All" ? ` · ${companyLabel}` : ""}`);
       }
 
+      if (userRole === "Admin") {
+        authFetch("/api/admin/cron-health")
+          .then((r) => r.json())
+          .then((d) => { if (d.checks) setCronHealth(d.checks); })
+          .catch(() => {});
+      }
+
       setLoading(false);
     }
 
@@ -533,6 +541,46 @@ export default function HomePage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* ── Cron Health (Admin only) ── */}
+            {cronHealth.length > 0 && (
+              <div style={{
+                backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                borderRadius: "8px", overflow: "hidden", marginBottom: "16px",
+              }}>
+                <div style={{
+                  padding: "10px 18px", borderBottom: "1px solid var(--border-color)",
+                  display: "flex", alignItems: "center", gap: "8px",
+                }}>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Integration Health</span>
+                  <span style={{
+                    marginLeft: "auto", fontSize: "12px", fontWeight: 600, padding: "2px 8px",
+                    borderRadius: "8px", color: "white",
+                    backgroundColor: cronHealth.some((c) => c.status === "error") ? COLOURS.RED : cronHealth.some((c) => c.status === "warning") ? COLOURS.AMBER : COLOURS.GREEN,
+                  }}>
+                    {cronHealth.filter((c) => c.status === "error").length > 0
+                      ? `${cronHealth.filter((c) => c.status === "error").length} failing`
+                      : cronHealth.some((c) => c.status === "warning") ? "Delayed" : "All healthy"}
+                  </span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "1px", backgroundColor: "var(--border-light, #f1f5f9)" }}>
+                  {cronHealth.map((c) => (
+                    <div key={c.name} style={{ padding: "8px 14px", backgroundColor: "var(--bg-card)" }}>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "2px" }}>{c.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{
+                          width: "8px", height: "8px", borderRadius: "50%",
+                          backgroundColor: c.status === "healthy" ? COLOURS.GREEN : c.status === "warning" ? COLOURS.AMBER : c.status === "error" ? COLOURS.RED : COLOURS.SLATE,
+                        }} />
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                          {c.hoursAgo === null ? "Never" : c.hoursAgo < 1 ? "< 1h ago" : `${c.hoursAgo}h ago`}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

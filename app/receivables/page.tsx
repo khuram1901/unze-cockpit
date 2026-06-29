@@ -341,6 +341,31 @@ export default function ReceivablesPage() {
           </div>
         )}
 
+        {/* Collection Velocity — avg days per stage vs budget */}
+        {!loading && stages.length > 0 && bills.length > 0 && (
+          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, marginBottom: "8px", color: "var(--text-primary, #1e293b)" }}>Collection Velocity (avg days in stage)</div>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${stages.length}, 1fr)`, gap: "6px" }}>
+              {stages.map((stage) => {
+                const stageBills = bills.filter((b) => b.current_stage_order === stage.stage_order);
+                const avgDays = stageBills.length > 0
+                  ? Math.round(stageBills.reduce((s, b) => s + workingDaysSince(b.current_stage_entered_date), 0) / stageBills.length)
+                  : 0;
+                const overBudget = avgDays > stage.working_day_budget;
+                const nearBudget = avgDays >= stage.working_day_budget - 1 && !overBudget;
+                const color = overBudget ? COLOURS.RED : nearBudget ? "#d97706" : COLOURS.GREEN;
+                return (
+                  <div key={stage.id} style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)", marginBottom: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{stage.stage_name}</div>
+                    <div style={{ fontSize: "18px", fontWeight: 800, color }}>{avgDays}d</div>
+                    <div style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)" }}>/ {stage.working_day_budget}d budget</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Bills in Progress — Customer Summary */}
         {!loading && customerRows.length > 0 && (
           <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>

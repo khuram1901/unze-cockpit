@@ -566,37 +566,60 @@ export default function DashboardView() {
         {activeTab === "production" && <KPITable summaries={summaries} metric="production" />}
         {activeTab === "dispatch" && <KPITable summaries={summaries} metric="dispatch" />}
 
-        {activeTab === "breakage" && (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%" }}>
-              <thead>
-                <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
-                  <th style={th}>Plant</th>
-                  <th style={th}>Month Produced</th>
-                  <th style={th}>Breakage Rate</th>
-                  <th style={th}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summaries.map((s) => {
-                  const color = statusColor(s.breakageStatus);
-                  return (
-                    <tr key={s.plant.id}>
-                      <td style={tdBold}>{s.plant.name}</td>
-                      <td style={td}>{s.production.monthActual.toLocaleString()}</td>
-                      <td style={{ ...td, color, fontWeight: 700 }}>
-                        {s.breakageStatus === "none" ? "—" : `${s.breakageRate.toFixed(2)}%`}
-                      </td>
-                      <td style={{ ...td, color, fontWeight: 700 }}>
-                        {s.breakageStatus === "none" ? "No Production" : statusLabel(s.breakageStatus)}
-                      </td>
+        {activeTab === "breakage" && (() => {
+          const sorted = [...summaries].filter((s) => s.breakageStatus !== "none").sort((a, b) => b.breakageRate - a.breakageRate);
+          const maxRate = Math.max(...sorted.map((s) => s.breakageRate), 1);
+          return (
+            <div>
+              {sorted.length > 0 && (
+                <div style={{ padding: "12px 14px", borderBottom: `1px solid ${BORDER}` }}>
+                  <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Breakage by Plant (Pareto)</div>
+                  {sorted.map((s) => {
+                    const color = statusColor(s.breakageStatus);
+                    return (
+                      <div key={s.plant.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY, width: "100px", flexShrink: 0 }}>{s.plant.name}</span>
+                        <div style={{ flex: 1, height: "18px", backgroundColor: "#f1f5f9", borderRadius: "4px", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${(s.breakageRate / maxRate) * 100}%`, backgroundColor: color, borderRadius: "4px", transition: "width 0.3s" }} />
+                        </div>
+                        <span style={{ fontSize: "13px", fontWeight: 700, color, width: "50px", textAlign: "right" }}>{s.breakageRate.toFixed(1)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                      <th style={th}>Plant</th>
+                      <th style={th}>Month Produced</th>
+                      <th style={th}>Breakage Rate</th>
+                      <th style={th}>Status</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  </thead>
+                  <tbody>
+                    {summaries.map((s) => {
+                      const color = statusColor(s.breakageStatus);
+                      return (
+                        <tr key={s.plant.id}>
+                          <td style={tdBold}>{s.plant.name}</td>
+                          <td style={td}>{s.production.monthActual.toLocaleString()}</td>
+                          <td style={{ ...td, color, fontWeight: 700 }}>
+                            {s.breakageStatus === "none" ? "—" : `${s.breakageRate.toFixed(2)}%`}
+                          </td>
+                          <td style={{ ...td, color, fontWeight: 700 }}>
+                            {s.breakageStatus === "none" ? "No Production" : statusLabel(s.breakageStatus)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
 
         {activeTab === "tasks" && (
           myTasks.length === 0 ? (
