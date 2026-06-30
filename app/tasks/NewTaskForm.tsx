@@ -51,7 +51,7 @@ function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function NewTaskForm() {
+export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = {}) {
   const router = useRouter();
   const toast = useToast();
   const today = todayDate();
@@ -186,6 +186,7 @@ export default function NewTaskForm() {
     setNotes("");
 
     router.refresh();
+    onCreated?.();
   }
 
   const inputStyle = {

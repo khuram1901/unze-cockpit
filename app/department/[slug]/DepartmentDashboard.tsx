@@ -14,7 +14,8 @@ import {
 } from "../../lib/SharedUI";
 import { DepartmentConfig } from "../../lib/department-config";
 import { logAction } from "../../lib/audit-log";
-import { canSeeAllTasks, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { canSeeAllTasks, canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import NewTaskForm from "../../tasks/NewTaskForm";
 
 type UserTask = {
   id: string;
@@ -29,6 +30,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [myTasks, setMyTasks] = useState<UserTask[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
@@ -62,6 +64,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
         const p = await loadMyPermissions();
         if (p) overrides = p as PermOverrides;
         const ctx: UserCtx = { email: user.email, role: member.role, department: member.department, company: member.company, overrides };
+        setUserCtx(ctx);
         if (!canSeeAllTasks(ctx)) {
           const userName = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || user.email;
           const { data: tasks } = await supabase
@@ -92,14 +95,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
     e.preventDefault();
     setSaving(true);
 
-    const record: Record<string, unknown> = {};
-    if (config.table === "tasks") {
-      record.assigned_to_department = config.departmentName;
-      record.assigned_by = "Department Dashboard";
-      record.assigned_date = new Date().toISOString().slice(0, 10);
-    } else {
-      record.company_id = UTPL_COMPANY_ID;
-    }
+    const record: Record<string, unknown> = { company_id: UTPL_COMPANY_ID };
 
     for (const field of config.formFields) {
       const val = formData[field.key] || "";
@@ -221,26 +217,40 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
       )}
 
       {/* Add Record Button + Form */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <SectionTitle title="Records" />
-        <button
-          onClick={() => setShowForm(!showForm)}
-          style={{
-            backgroundColor: COLOURS.NAVY,
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            padding: "8px 16px",
-            fontSize: "15px",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          {showForm ? "Cancel" : "+ Add"}
-        </button>
-      </div>
+      {(config.table !== "tasks" || (userCtx && canCreateAssignments(userCtx))) && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <SectionTitle title={config.table === "tasks" ? "Tasks" : "Records"} />
+          <button
+            onClick={() => setShowForm(!showForm)}
+            style={{
+              backgroundColor: COLOURS.NAVY,
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              padding: "8px 16px",
+              fontSize: "15px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {showForm ? "Cancel" : "+ Add"}
+          </button>
+        </div>
+      )}
 
-      {showForm && (
+      {showForm && config.table === "tasks" && (
+        <div style={{
+          border: "1px solid var(--border-color, #e2e8f0)",
+          borderTop: `3px solid ${COLOURS.NAVY}`,
+          borderRadius: "8px",
+          marginBottom: "14px",
+          overflow: "hidden",
+        }}>
+          <NewTaskForm onCreated={() => { setShowForm(false); loadData(); }} />
+        </div>
+      )}
+
+      {showForm && config.table !== "tasks" && (
         <div style={{
           border: "1px solid var(--border-color, #e2e8f0)",
           borderRadius: "8px",
