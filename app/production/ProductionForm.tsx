@@ -623,36 +623,55 @@ export default function ProductionForm() {
           {showHistory && (
             <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
               <div style={{ overflowX: "auto" }}>
-                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "500px" }}>
+                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "640px" }}>
                   <thead>
                     <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                      <th style={histTh}>Plant</th>
                       <th style={histTh}>Date</th>
                       <th style={histTh}>Type</th>
-                      <th style={histTh}>31</th>
-                      <th style={histTh}>36</th>
-                      <th style={histTh}>45</th>
-                      {selectedPlant?.type === "meter" && <th style={histTh}>Meter</th>}
-                      <th style={histTh}>Total</th>
+                      <th style={{ ...histTh, textAlign: "center" }} colSpan={selectedPlant?.type === "meter" ? 4 : 3}>Pole size (qty)</th>
+                      <th style={{ ...histTh, textAlign: "right" }}>Total</th>
                       {canDelete && <th style={histTh}></th>}
+                    </tr>
+                    <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                      <th style={histThSub}></th>
+                      <th style={histThSub}></th>
+                      <th style={histThSub}></th>
+                      <th style={{ ...histThSub, textAlign: "center" }}>31&apos;</th>
+                      <th style={{ ...histThSub, textAlign: "center" }}>36&apos;</th>
+                      <th style={{ ...histThSub, textAlign: "center" }}>45&apos;</th>
+                      {selectedPlant?.type === "meter" && <th style={{ ...histThSub, textAlign: "center" }}>Meter</th>}
+                      <th style={histThSub}></th>
+                      {canDelete && <th style={histThSub}></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {pastEntries.map((e, i) => {
                       const total = (e.qty_31 || 0) + (e.qty_36 || 0) + (e.qty_45 || 0) + (e.qty_meter || 0);
                       const typeColor = e.type === "Production" ? "#16a34a" : e.type === "Dispatch" ? "#059669" : "#dc2626";
+                      const isToday = e.entry_date === new Date().toISOString().slice(0, 10);
                       return (
-                        <tr key={`${e.entry_date}-${e.type}-${i}`}>
-                          <td style={histTd}>{formatDateUK(e.entry_date)}</td>
+                        <tr
+                          key={`${e.entry_date}-${e.type}-${i}`}
+                          style={{ backgroundColor: i % 2 === 1 ? "var(--bg-card-hover, #f8fafc)" : "transparent" }}
+                        >
+                          <td style={{ ...histTd, fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{selectedPlant?.name || "—"}</td>
+                          <td style={histTd}>
+                            {formatDateUK(e.entry_date)}
+                            {isToday && <span style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 700, color: "#2563eb" }}>Today</span>}
+                          </td>
                           <td style={histTd}>
                             <span style={{ fontSize: "13px", fontWeight: 700, color: "white", backgroundColor: typeColor, padding: "2px 8px", borderRadius: "8px" }}>
                               {e.type}
                             </span>
                           </td>
-                          <td style={histTd}>{e.qty_31 || 0}</td>
-                          <td style={histTd}>{e.qty_36 || 0}</td>
-                          <td style={histTd}>{e.qty_45 || 0}</td>
-                          {selectedPlant?.type === "meter" && <td style={histTd}>{e.qty_meter || 0}</td>}
-                          <td style={{ ...histTd, fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{total}</td>
+                          <td style={{ ...histTd, textAlign: "center", color: e.qty_31 ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #94a3b8)" }}>{e.qty_31 || "–"}</td>
+                          <td style={{ ...histTd, textAlign: "center", color: e.qty_36 ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #94a3b8)" }}>{e.qty_36 || "–"}</td>
+                          <td style={{ ...histTd, textAlign: "center", color: e.qty_45 ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #94a3b8)" }}>{e.qty_45 || "–"}</td>
+                          {selectedPlant?.type === "meter" && (
+                            <td style={{ ...histTd, textAlign: "center", color: e.qty_meter ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #94a3b8)" }}>{e.qty_meter || "–"}</td>
+                          )}
+                          <td style={{ ...histTd, fontWeight: 700, color: "var(--text-primary, #1e293b)", textAlign: "right" }}>{total}</td>
                           {canDelete && (
                             <td style={histTd}>
                               <button onClick={() => deleteEntry(e)} style={{
@@ -676,8 +695,12 @@ export default function ProductionForm() {
 }
 
 const histTh: React.CSSProperties = {
-  textAlign: "left", borderBottom: "1px solid var(--border-color, #e2e8f0)", padding: "6px 10px",
+  textAlign: "left", borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "6px 10px 2px",
   fontSize: "16px", color: "var(--text-secondary, #64748b)", fontWeight: 700,
+};
+const histThSub: React.CSSProperties = {
+  textAlign: "left", borderBottom: "1px solid var(--border-color, #e2e8f0)", padding: "0 10px 6px",
+  fontSize: "12px", color: "var(--text-secondary, #94a3b8)", fontWeight: 600,
 };
 const histTd: React.CSSProperties = {
   borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "15px",
