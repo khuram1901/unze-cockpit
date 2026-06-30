@@ -18,6 +18,7 @@ import {
   canViewDepartment, canManageMembers, canAddMembers,
   canViewAuditLog, canViewExceptions, canImportExport,
   canAccessDailyEntry, canViewPADashboard, canViewInvestments,
+  isMainAdmin,
   type UserCtx,
 } from "./permissions";
 
@@ -55,6 +56,7 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   if (card.permKey.startsWith("_")) return true;
   const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
   if (isPACtx && card.permKey === "can_view_pa_dashboard") return false;
+  if (isMainAdmin(ctx) && (card.permKey === "can_view_executive_dashboard" || card.permKey === "can_view_pa_dashboard")) return false;
   if (card.permKey === "can_view_finance_utpl") {
     if (!canViewFinance(ctx)) return false;
     const scope = financeCompanies(ctx);
