@@ -107,7 +107,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       .order("created_at", { ascending: false });
 
     if (!isPrivileged && email) {
-      query = query.eq("assigned_to_email", email);
+      query = query.or(`assigned_to_email.eq.${email},assigned_by_email.eq.${email}`);
     }
 
     const { data, error } = await query;
