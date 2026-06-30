@@ -121,7 +121,7 @@ export function canSeeAllTasks(u: UserCtx) {
 export function canCreateAssignments(u: UserCtx) {
   const o = ov(u, "can_create_tasks");
   if (o !== null) return o;
-  return isPrivileged(u);
+  return isPrivileged(u) || (u.role === "Manager" && u.department === "Unze Trading Ops");
 }
 
 export function canReviewTasks(u: UserCtx) {
