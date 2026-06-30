@@ -2290,7 +2290,7 @@ function ExecutiveDashboardBody({
         <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" href="/tasks" muted={completedThisMonth.length === 0} caption="Nothing completed yet this month" />
       </div>
 
-      {/* ── CHARTS ROW ── */}
+      {/* ── CHARTS ROW (exactly 2 items so the grid never wraps to a half-empty row) ── */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
         {dailyOpsData.length > 1 && (
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
@@ -2371,65 +2371,66 @@ function ExecutiveDashboardBody({
             </div>
           );
         })()}
-
-        {(() => {
-          const waterfallData: { company: string; opening: number; receipts: number; payments: number; postDated: number; closing: number }[] = [];
-          for (const cfd of companyFinance) {
-            const latest = cfd.cashPositions[0];
-            if (!latest) continue;
-            waterfallData.push({
-              company: cfd.companyName, opening: latest.opening_balance, receipts: latest.total_receipts,
-              payments: latest.total_payments, postDated: latest.post_dated_total, closing: latest.closing_balance,
-            });
-          }
-          if (waterfallData.length === 0) return null;
-          return (
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginTop: isMobile ? 0 : "0" }}>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>Cash Flow Waterfall — Latest Day</div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${waterfallData.length}, 1fr)`, gap: "16px" }}>
-                {waterfallData.map((w) => {
-                  const maxVal = Math.max(Math.abs(w.opening), Math.abs(w.receipts), Math.abs(w.payments), Math.abs(w.postDated), Math.abs(w.closing), 1);
-                  const barHeight = (v: number) => Math.max(4, (Math.abs(v) / maxVal) * 80);
-                  const items = [
-                    { label: "Opening", value: w.opening, color: COLOURS.BLUE },
-                    { label: "Receipts", value: w.receipts, color: COLOURS.GREEN },
-                    { label: "Payments", value: -w.payments, color: COLOURS.RED },
-                    { label: "Post-dated", value: -w.postDated, color: COLOURS.AMBER },
-                    { label: "Closing", value: w.closing, color: COLOURS.NAVY },
-                  ];
-                  return (
-                    <div key={w.company}>
-                      <div style={{
-                        fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "10px",
-                        lineHeight: 1.25, minHeight: "35px", display: "flex", alignItems: "flex-end",
-                      }}>{w.company}</div>
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "118px" }}>
-                        {items.map((item) => (
-                          <div key={item.label} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <div style={{
-                              fontSize: "10px", fontWeight: 600, color: item.color, marginBottom: "4px",
-                              textAlign: "center", lineHeight: 1.2, height: "26px",
-                              display: "flex", alignItems: "flex-end", justifyContent: "center",
-                              wordBreak: "break-word", width: "100%",
-                            }}>
-                              {item.value >= 0 ? "" : "−"}{fmtMoney(Math.abs(item.value))}
-                            </div>
-                            <div style={{ width: "100%", maxWidth: "40px", height: `${barHeight(item.value)}px`, backgroundColor: item.color, borderRadius: "4px 4px 0 0", opacity: 0.8 }} />
-                            <div style={{ fontSize: "10px", color: SLATE, marginTop: "4px", textAlign: "center" }}>{item.label}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
       </div>
 
+      {/* ── CASH FLOW WATERFALL (full-width, separate row so the 2-col charts grid above never wraps) ── */}
+      {(() => {
+        const waterfallData: { company: string; opening: number; receipts: number; payments: number; postDated: number; closing: number }[] = [];
+        for (const cfd of companyFinance) {
+          const latest = cfd.cashPositions[0];
+          if (!latest) continue;
+          waterfallData.push({
+            company: cfd.companyName, opening: latest.opening_balance, receipts: latest.total_receipts,
+            payments: latest.total_payments, postDated: latest.post_dated_total, closing: latest.closing_balance,
+          });
+        }
+        if (waterfallData.length === 0) return null;
+        return (
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>Cash Flow Waterfall — Latest Day</div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${waterfallData.length}, 1fr)`, gap: "16px" }}>
+              {waterfallData.map((w) => {
+                const maxVal = Math.max(Math.abs(w.opening), Math.abs(w.receipts), Math.abs(w.payments), Math.abs(w.postDated), Math.abs(w.closing), 1);
+                const barHeight = (v: number) => Math.max(4, (Math.abs(v) / maxVal) * 80);
+                const items = [
+                  { label: "Opening", value: w.opening, color: COLOURS.BLUE },
+                  { label: "Receipts", value: w.receipts, color: COLOURS.GREEN },
+                  { label: "Payments", value: -w.payments, color: COLOURS.RED },
+                  { label: "Post-dated", value: -w.postDated, color: COLOURS.AMBER },
+                  { label: "Closing", value: w.closing, color: COLOURS.NAVY },
+                ];
+                return (
+                  <div key={w.company}>
+                    <div style={{
+                      fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "10px",
+                      lineHeight: 1.25, minHeight: "35px", display: "flex", alignItems: "flex-end",
+                    }}>{w.company}</div>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "118px" }}>
+                      {items.map((item) => (
+                        <div key={item.label} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          <div style={{
+                            fontSize: "10px", fontWeight: 600, color: item.color, marginBottom: "4px",
+                            textAlign: "center", lineHeight: 1.2, height: "26px",
+                            display: "flex", alignItems: "flex-end", justifyContent: "center",
+                            wordBreak: "break-word", width: "100%",
+                          }}>
+                            {item.value >= 0 ? "" : "−"}{fmtMoney(Math.abs(item.value))}
+                          </div>
+                          <div style={{ width: "100%", maxWidth: "40px", height: `${barHeight(item.value)}px`, backgroundColor: item.color, borderRadius: "4px 4px 0 0", opacity: 0.8 }} />
+                          <div style={{ fontSize: "10px", color: SLATE, marginTop: "4px", textAlign: "center" }}>{item.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Two continuous columns: left = Finance, right = Receivables + Investments + Department Scorecard ── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginTop: "8px", alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", alignItems: "start" }}>
         {/* LEFT COLUMN */}
         <div>
           {showFinance && companyFinance.length === 2 && (() => {
