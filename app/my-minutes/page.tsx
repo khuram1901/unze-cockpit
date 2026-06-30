@@ -221,7 +221,7 @@ function MyMinutesPage() {
     : meetings;
 
   async function addTaskToMeeting(meetingId: string) {
-    if (!newTaskDesc.trim() || !newTaskOwner) return;
+    if (!newTaskDesc.trim() || !newTaskOwner || !newTaskDue) return;
     setSavingNewTask(true);
     const member = allMembers.find((m) => m.name === newTaskOwner);
     const { data: userData } = await supabase.auth.getUser();
@@ -413,15 +413,15 @@ function MyMinutesPage() {
                                 <option value="">Assign to...</option>
                                 {allMembers.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
                               </select>
-                              <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)}
-                                style={{ padding: "6px 8px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "5px", fontSize: "15px" }} />
+                              <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} required
+                                style={{ padding: "6px 8px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "5px", fontSize: "15px", borderColor: !newTaskDue ? COLOURS.RED : undefined }} />
                               <select value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value)}
                                 style={{ padding: "6px 8px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "5px", fontSize: "15px" }}>
                                 <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
                               </select>
                             </div>
-                            <button onClick={() => addTaskToMeeting(meeting.id)} disabled={savingNewTask || !newTaskDesc.trim() || !newTaskOwner}
-                              style={{ backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "5px", padding: "6px 14px", fontSize: "15px", fontWeight: 700, cursor: "pointer", opacity: savingNewTask || !newTaskDesc.trim() || !newTaskOwner ? 0.5 : 1 }}>
+                            <button onClick={() => addTaskToMeeting(meeting.id)} disabled={savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue}
+                              style={{ backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "5px", padding: "6px 14px", fontSize: "15px", fontWeight: 700, cursor: "pointer", opacity: savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue ? 0.5 : 1 }}>
                               {savingNewTask ? "Adding..." : "Add Task"}
                             </button>
                           </div>

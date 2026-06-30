@@ -228,7 +228,7 @@ export default function PADashboardPage() {
 
   async function createNewTask(e: React.FormEvent) {
     e.preventDefault();
-    if (!newDesc.trim() || !newAssignTo) return;
+    if (!newDesc.trim() || !newAssignTo || !newDueDate) return;
     setSavingTask(true);
 
     const assignedMember = members.find((m) => memberName(m) === newAssignTo);
@@ -463,7 +463,7 @@ export default function PADashboardPage() {
                       {members.map((m) => { const n = memberName(m); return <option key={n} value={n}>{n}</option>; })}
                     </select>
                   </label>
-                  <label style={labelStyle}>Due Date <input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} style={inputStyle} /></label>
+                  <label style={labelStyle}>Due Date <input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} required style={inputStyle} /></label>
                   <label style={labelStyle}>Priority
                     <select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} style={inputStyle}>
                       {PRIORITIES.map((p) => <option key={p}>{p}</option>)}

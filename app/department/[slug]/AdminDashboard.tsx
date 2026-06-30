@@ -6,7 +6,7 @@ import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useConfirm } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
-import { canReviewTasks, canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { canReviewTasks, canCreateAssignments, canDeleteTask, isTaskProtected, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import NewTaskForm from "../../tasks/NewTaskForm";
 
@@ -20,6 +20,7 @@ type Task = {
   status: string;
   notes: string | null;
   created_at: string;
+  assigned_by_email: string | null;
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -363,7 +364,7 @@ export default function AdminDashboard() {
                           }} style={{ padding: "5px 8px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px" }}>
                             <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
                           </select>
-                          {canDelete && (
+                          {canDelete && userCtx && canDeleteTask(userCtx, task.assigned_by_email) && (
                             <>
                               <div style={{ flex: 1 }} />
                               <button onClick={async () => {
@@ -372,6 +373,9 @@ export default function AdminDashboard() {
                                 loadData();
                               }} style={{ backgroundColor: "var(--bg-card, #ffffff)", color: "#dc2626", border: "1px solid #dc2626", borderRadius: "5px", padding: "4px 10px", fontSize: "14px", fontWeight: 700, cursor: "pointer" }} title="Delete this task">Delete</button>
                             </>
+                          )}
+                          {canDelete && userCtx && !canDeleteTask(userCtx, task.assigned_by_email) && isTaskProtected(task.assigned_by_email) && (
+                            <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>Protected task — cannot be deleted</span>
                           )}
                         </div>
                       </div>
