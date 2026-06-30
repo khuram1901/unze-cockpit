@@ -61,9 +61,13 @@ export async function GET(request: NextRequest) {
 
         const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 
+        // Only the account's own scheduling calendars — exclude Holidays,
+        // Birthdays, and other auto-subscribed calendars Google adds to every
+        // account, which have accessRole "reader" and aren't real meetings.
         const calendarList = await calendar.calendarList.list();
         const calendarIds = (calendarList.data.items || [])
-          .filter((c) => !c.deleted && c.accessRole !== "freeBusyReader")
+          .filter((c) => !c.deleted && (c.accessRole === "owner" || c.accessRole === "writer"))
+          .filter((c) => !(c.id || "").includes("#holiday@") && !(c.id || "").includes("#contacts@") && !(c.id || "").includes("#weeknum@"))
           .map((c) => c.id || "primary");
 
         let eventCount = 0;
@@ -79,8 +83,13 @@ export async function GET(request: NextRequest) {
             });
 
             for (const ev of eventsRes.data.items || []) {
-              const start = ev.start?.dateTime || ev.start?.date;
-              const end = ev.end?.dateTime || ev.end?.date;
+              if (ev.status === "cancelled") continue;
+              if (ev.eventType === "birthday" || ev.eventType === "workingLocation") continue;
+              if (ev.transparency === "transparent") continue; // marked "Free" on Google Calendar
+              // All-day events come back as bare dates (no time/offset); anchor
+              // them to Pakistan time so they don't shift relative to UTC.
+              const start = ev.start?.dateTime || (ev.start?.date ? `${ev.start.date}T00:00:00+05:00` : undefined);
+              const end = ev.end?.dateTime || (ev.end?.date ? `${ev.end.date}T00:00:00+05:00` : undefined);
               if (start && end) {
                 allBusy.push({ start, end, title: ev.summary || "Busy", account: tokenRow.user_email });
                 eventCount++;
