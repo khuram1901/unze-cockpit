@@ -6,8 +6,9 @@ import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useConfirm } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
-import { canReviewTasks, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { canReviewTasks, canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
+import NewTaskForm from "../../tasks/NewTaskForm";
 
 type Task = {
   id: string;
@@ -23,7 +24,6 @@ type Task = {
 
 const today = new Date().toISOString().slice(0, 10);
 const STATUSES = ["Not Started", "In Progress", "Waiting Reply", "Completed", "Cancelled"];
-const COMPANIES = ["Unze Trading PVT Limited", "Imperial Footwear PVT Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang"];
 const PRIORITY_ORDER: Record<string, number> = { Urgent: 0, High: 1, Medium: 2, Normal: 2, Low: 3 };
 
 function isOverdue(t: Task) {
@@ -50,34 +50,17 @@ function sortByPriority(a: Task, b: Task): number {
   return daysOverdue(b) - daysOverdue(a);
 }
 
-const inp: React.CSSProperties = {
-  display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-  border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
-};
-const lbl: React.CSSProperties = {
-  display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "4px",
-};
-
 export default function AdminDashboard() {
   const isMobile = useMobile();
   const dlg = useConfirm();
   const [items, setItems] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string>("Member");
+  const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [canDelete, setCanDelete] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
-
-  const [desc, setDesc] = useState("");
-  const [project, setProject] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [priority, setPriority] = useState("Normal");
-  const [notes, setNotes] = useState("");
 
   async function loadData() {
     setLoading(true);
@@ -85,11 +68,11 @@ export default function AdminDashboard() {
     if (userData.user?.email) {
       const { data: memberData } = await supabase.from("members").select("id, role, department, company").eq("email", userData.user.email).maybeSingle();
       if (memberData) {
-        setUserRole(memberData.role);
         let overrides: PermOverrides | null = null;
         const p = await loadMyPermissions();
         if (p) overrides = p as PermOverrides;
         const ctx: UserCtx = { email: userData.user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
+        setUserCtx(ctx);
         setCanDelete(canReviewTasks(ctx));
       }
     }
@@ -99,28 +82,6 @@ export default function AdminDashboard() {
   }
 
   useEffect(() => { loadData(); }, []);
-
-  function showMsg(text: string) { setMessage(text); setTimeout(() => setMessage(""), 4000); }
-
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    const { data: userData } = await supabase.auth.getUser();
-    const { error } = await supabase.from("tasks").insert({
-      description: desc, project: project || null, assigned_to: assignedTo || null,
-      due_date: dueDate || null, priority, status: "Not Started",
-      assigned_to_department: "Admin", assigned_by: "Department Dashboard",
-      assigned_by_email: userData.user?.email || null,
-      assigned_date: today,
-    });
-    setSaving(false);
-    if (error) { showMsg("Error: " + error.message); return; }
-    logAction("Created", "tasks", desc);
-    showMsg("Task added.");
-    setDesc(""); setProject(""); setAssignedTo(""); setDueDate(""); setPriority("Normal"); setNotes("");
-    setShowForm(false);
-    loadData();
-  }
 
   async function updateStatus(id: string, newStatus: string) {
     await supabase.from("tasks").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", id);
@@ -180,36 +141,23 @@ export default function AdminDashboard() {
       {/* Header with + button */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
         <PageHeader />
-        <button onClick={() => setShowForm(!showForm)} style={{
-          backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
-          width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          boxShadow: SHADOWS.MODAL,
-        }} title="Add task">{showForm ? "×" : "+"}</button>
+        {userCtx && canCreateAssignments(userCtx) && (
+          <button onClick={() => setShowForm(!showForm)} style={{
+            backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
+            width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            boxShadow: SHADOWS.MODAL,
+          }} title="Issue task">{showForm ? "×" : "+"}</button>
+        )}
       </div>
-
-      {message && (
-        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>{message}</div>
-      )}
 
       {/* Collapsible add form */}
       {showForm && (
         <div style={{
           border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`,
-          borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px",
+          borderRadius: "8px", marginBottom: "14px", overflow: "hidden",
         }}>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "10px" }}>New Task</div>
-          <form onSubmit={handleAdd}>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
-              <label style={lbl}>Task <input style={inp} value={desc} onChange={(e) => setDesc(e.target.value)} required placeholder="e.g. Collect office rent receipt" /></label>
-              <label style={lbl}>Company <select style={inp} value={project} onChange={(e) => setProject(e.target.value)} required><option value="">Select</option>{COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></label>
-              <label style={lbl}>Assigned To <input style={inp} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} required placeholder="Person name" /></label>
-              <label style={lbl}>Due Date <input type="date" style={inp} value={dueDate} onChange={(e) => setDueDate(e.target.value)} required /></label>
-              <label style={lbl}>Priority <select style={inp} value={priority} onChange={(e) => setPriority(e.target.value)}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></label>
-              <label style={lbl}>Notes <textarea style={{ ...inp, height: "50px" }} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
-            </div>
-            <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Add Task"}</button>
-          </form>
+          <NewTaskForm onCreated={() => { setShowForm(false); loadData(); }} />
         </div>
       )}
 
