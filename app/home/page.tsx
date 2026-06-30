@@ -2480,7 +2480,7 @@ function ExecutiveDashboardBody({
 
         {/* RIGHT COLUMN */}
         <div>
-          <SectionTitle title="Receivables — Bills in Progress" />
+          <SectionTitle title="Receivables — Bills in Progress" style={{ marginTop: 0 }} />
           {receivableRows.length === 0 ? (
             <p style={{ color: SLATE, fontSize: "17px" }}>No receivable bills in progress.</p>
           ) : (

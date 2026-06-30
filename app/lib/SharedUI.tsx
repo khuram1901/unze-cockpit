@@ -76,7 +76,7 @@ export function priorityColor(priority: string | null): string {
 // ─────────────────────────────────────────────────────────────────
 // Reusable layout components
 // ─────────────────────────────────────────────────────────────────
-export function SectionTitle({ title }: { title: string }) {
+export function SectionTitle({ title, style }: { title: string; style?: React.CSSProperties }) {
   return (
     <h2
       style={{
@@ -86,6 +86,7 @@ export function SectionTitle({ title }: { title: string }) {
         margin: "20px 0 10px",
         paddingLeft: "9px",
         borderLeft: "3px solid var(--text-primary, #1e293b)",
+        ...style,
       }}
     >
       {title}
