@@ -648,12 +648,15 @@ export default function ProductionForm() {
                   <tbody>
                     {pastEntries.map((e, i) => {
                       const total = (e.qty_31 || 0) + (e.qty_36 || 0) + (e.qty_45 || 0) + (e.qty_meter || 0);
-                      const typeColor = e.type === "Production" ? "#16a34a" : e.type === "Dispatch" ? "#059669" : "#dc2626";
+                      const typeColor = e.type === "Production" ? "#16a34a" : e.type === "Dispatch" ? "#2563eb" : "#dc2626";
                       const isToday = e.entry_date === new Date().toISOString().slice(0, 10);
                       return (
                         <tr
                           key={`${e.entry_date}-${e.type}-${i}`}
-                          style={{ backgroundColor: i % 2 === 1 ? "var(--bg-card-hover, #f8fafc)" : "transparent" }}
+                          style={{
+                            backgroundColor: i % 2 === 1 ? "var(--bg-card-hover, #f8fafc)" : "transparent",
+                            borderLeft: `3px solid ${typeColor}`,
+                          }}
                         >
                           <td style={{ ...histTd, fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{selectedPlant?.name || "—"}</td>
                           <td style={histTd}>
