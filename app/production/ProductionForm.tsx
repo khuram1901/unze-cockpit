@@ -224,7 +224,12 @@ export default function ProductionForm() {
       entered_by: enteredBy, notes,
     });
     setSavingSection("");
-    if (error) { showMsg("production", "Error: " + error.message, false); return; }
+    if (error) {
+      const dup = error.code === "23505";
+      showMsg("production", dup ? "Production already entered for this plant and date. Delete the existing entry first to re-enter." : "Error: " + error.message, false);
+      if (dup) loadHistory();
+      return;
+    }
     logAction("Created", "production_entries", `Production entry for ${entryDate}`); showMsg("production", nothing ? "Logged: nothing to report ✓" : "Production saved ✓", true);
     setProd31(""); setProd36(""); setProd45(""); setProdMeter(""); loadHistory();
   }
@@ -253,7 +258,12 @@ export default function ProductionForm() {
       entered_by: enteredBy, notes,
     });
     setSavingSection("");
-    if (error) { showMsg("dispatch", "Error: " + error.message, false); return; }
+    if (error) {
+      const dup = error.code === "23505";
+      showMsg("dispatch", dup ? "Dispatch already entered for this plant and date. Delete the existing entry first to re-enter." : "Error: " + error.message, false);
+      if (dup) loadHistory();
+      return;
+    }
     logAction("Created", "dispatch_entries", `Dispatch entry for ${entryDate}`); showMsg("dispatch", nothing ? "Logged: nothing to report ✓" : "Dispatch saved ✓", true);
     setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter(""); loadHistory();
   }
@@ -285,7 +295,12 @@ export default function ProductionForm() {
       entered_by: enteredBy,
     });
     setSavingSection("");
-    if (error) { showMsg("breakage", "Error: " + error.message, false); return; }
+    if (error) {
+      const dup = error.code === "23505";
+      showMsg("breakage", dup ? "Breakage already entered for this plant and date. Delete the existing entry first to re-enter." : "Error: " + error.message, false);
+      if (dup) loadHistory();
+      return;
+    }
     logAction("Created", "breakage_entries", `Breakage entry for ${entryDate}`); showMsg("breakage", nothing ? "Logged: nothing to report ✓" : "Breakage saved ✓", true);
     setBrk31(""); setBrk36(""); setBrk45("");
     setReason31(""); setReason36(""); setReason45(""); setReasonOther(""); loadHistory();

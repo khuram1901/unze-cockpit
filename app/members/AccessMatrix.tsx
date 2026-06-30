@@ -51,6 +51,7 @@ const PERM_COLUMNS = [
   { key: "can_view_exceptions", label: "Exc", group: "Admin", tip: "View escalation/exception alerts" },
   { key: "can_import_export", label: "I/O", group: "Admin", tip: "Import/export member data via CSV" },
   { key: "can_access_daily_entry", label: "Entry", group: "Prod.", tip: "Log daily production, dispatch, breakage" },
+  { key: "can_edit_operations_targets", label: "Target", group: "Prod.", tip: "Set monthly production/dispatch targets" },
   { key: "can_view_investments", label: "Inv", group: "Finance", tip: "View and manage PSX stock portfolio" },
 ] as const;
 
@@ -113,6 +114,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_exceptions": return admin || exec;
     case "can_import_export": return admin || exec;
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
+    case "can_edit_operations_targets": return admin || exec || (manager && dept === "Unze Trading Ops");
     case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
     default: return false;
   }

@@ -266,7 +266,9 @@ export function canViewInvestments(u: UserCtx) {
 
 // ── Operations targets editing ───────────────────────────────────
 export function canEditOperationsTargets(u: UserCtx) {
-  return isPrivileged(u);
+  const o = ov(u, "can_edit_operations_targets");
+  if (o !== null) return o;
+  return isPrivileged(u) || (u.role === "Manager" && u.department === "Unze Trading Ops");
 }
 
 // ── Task ownership ──────────────────────────────────────────────
