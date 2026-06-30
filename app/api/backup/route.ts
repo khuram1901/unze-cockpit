@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     const { data: token } = await supabase
       .from("google_oauth_tokens")
       .select("*")
-      .eq("user_email", "k.saleem@unzegroup.com")
+      .eq("user_email", "khuram1901@gmail.com")
       .single();
 
     if (!token) {
