@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
 import { google } from "googleapis";
+import zlib from "zlib";
 import { createServiceClient } from "../../lib/supabase-server";
-import { safeDecrypt } from "../../lib/crypto";
+import { safeDecrypt, encrypt } from "../../lib/crypto";
 
-const BACKUP_FOLDER_NAME = "cockpit-backups";
-const MAX_BACKUPS = 35;
+const BACKUP_RECIPIENT = "khuram1901@gmail.com";
 
 const TABLES = [
   "companies", "members", "member_plants", "plants",
@@ -23,6 +23,33 @@ const TABLES = [
   "department_budgets", "member_permissions", "recurring_tasks",
   "holdings", "price_history", "pending_minutes", "push_subscriptions",
 ];
+
+function buildBackupEmail(to: string, from: string, subject: string, bodyText: string, attachment: { filename: string; mimeType: string; data: Buffer }): string {
+  const boundary = "boundary_" + Date.now();
+  const raw = [
+    `From: Unze Group Dashboard (No Reply) <${from}>`,
+    `To: ${to}`,
+    `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: text/plain; charset=utf-8`,
+    ``,
+    bodyText,
+    ``,
+    `--${boundary}`,
+    `Content-Type: ${attachment.mimeType}; name="${attachment.filename}"`,
+    `Content-Disposition: attachment; filename="${attachment.filename}"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    attachment.data.toString("base64"),
+    ``,
+    `--${boundary}--`,
+  ].join("\r\n");
+
+  return Buffer.from(raw).toString("base64url");
+}
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -43,13 +70,13 @@ export async function GET(request: NextRequest) {
 
     const backupJson = JSON.stringify(backup, null, 2);
     const backupBuffer = Buffer.from(backupJson);
-    const filename = `cockpit-backup-${today}.json`;
+    const gzipped = zlib.gzipSync(backupBuffer);
+    const filename = `cockpit-backup-${today}.json.gz`;
 
-    // Get Google Drive auth from the notification account
     const { data: token } = await supabase
       .from("google_oauth_tokens")
       .select("*")
-      .eq("user_email", "khuram1901@gmail.com")
+      .eq("user_email", BACKUP_RECIPIENT)
       .single();
 
     if (!token) {
@@ -67,70 +94,30 @@ export async function GET(request: NextRequest) {
       expiry_date: token.token_expiry ? new Date(token.token_expiry).getTime() : undefined,
     });
 
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
-
-    // Find or create the backup folder
-    const folderSearch = await drive.files.list({
-      q: `name='${BACKUP_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: "files(id, name)",
+    oauth2Client.on("tokens", async (newTokens) => {
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
+      if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
+      await supabase.from("google_oauth_tokens").update(updates).eq("id", token.id);
     });
 
-    let folderId: string;
-    if (folderSearch.data.files && folderSearch.data.files.length > 0) {
-      folderId = folderSearch.data.files[0].id!;
-    } else {
-      const folder = await drive.files.create({
-        requestBody: {
-          name: BACKUP_FOLDER_NAME,
-          mimeType: "application/vnd.google-apps.folder",
-        },
-        fields: "id",
-      });
-      folderId = folder.data.id!;
-    }
-
-    // Upload the backup
-    const { Readable } = await import("stream");
-    const uploaded = await drive.files.create({
-      requestBody: {
-        name: filename,
-        parents: [folderId],
-      },
-      media: {
-        mimeType: "application/json",
-        body: Readable.from(backupBuffer),
-      },
-      fields: "id, size",
-    });
-
-    if (!uploaded.data.id) {
-      return Response.json({ error: "Backup upload failed — no file ID returned" }, { status: 500 });
-    }
-
-    const uploadedSize = Number(uploaded.data.size || 0);
-    if (uploadedSize > 0 && Math.abs(uploadedSize - backupBuffer.length) > 1024) {
-      console.error(`Backup size mismatch: local=${backupBuffer.length} remote=${uploadedSize}`);
-    }
-
-    // Clean up old backups (keep only MAX_BACKUPS)
-    const existingFiles = await drive.files.list({
-      q: `'${folderId}' in parents and name contains 'cockpit-backup-' and trashed=false`,
-      fields: "files(id, name, createdTime)",
-      orderBy: "createdTime desc",
-    });
-
-    const files = existingFiles.data.files || [];
-    if (files.length > MAX_BACKUPS) {
-      const toDelete = files.slice(MAX_BACKUPS);
-      for (const file of toDelete) {
-        if (file.id) {
-          await drive.files.delete({ fileId: file.id });
-        }
-      }
-    }
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
     const tableCount = Object.keys(backup).length;
     const rowCount = Object.values(backup).reduce((s, rows) => s + rows.length, 0);
+
+    const raw = buildBackupEmail(
+      BACKUP_RECIPIENT,
+      BACKUP_RECIPIENT,
+      `Unze Cockpit Backup — ${today}`,
+      `Nightly database backup attached.\n\nTables: ${tableCount}\nTotal rows: ${rowCount}\nUncompressed size: ${Math.round(backupBuffer.length / 1024)} KB\nCompressed size: ${Math.round(gzipped.length / 1024)} KB`,
+      { filename, mimeType: "application/gzip", data: gzipped }
+    );
+
+    await gmail.users.messages.send({
+      userId: "me",
+      requestBody: { raw },
+    });
 
     return Response.json({
       ok: true,
@@ -138,7 +125,8 @@ export async function GET(request: NextRequest) {
       tables: tableCount,
       totalRows: rowCount,
       sizeKB: Math.round(backupBuffer.length / 1024),
-      oldBackupsDeleted: Math.max(0, files.length - MAX_BACKUPS),
+      compressedKB: Math.round(gzipped.length / 1024),
+      emailedTo: BACKUP_RECIPIENT,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
