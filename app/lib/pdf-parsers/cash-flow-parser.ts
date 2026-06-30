@@ -139,6 +139,10 @@ export async function parseCashFlowPDF(buffer: Buffer): Promise<CashFlowParsed> 
   const date = extractDate(text);
   const company = detectCompany(text);
 
+  if (company === "unknown") {
+    throw new Error(`Could not determine company (Unze Trading vs Imperial Footwear) from PDF contents — refusing to guess (${date || "no date"})`);
+  }
+
   const result = company === "imperial" ? parseImperial(text, date) : parseUnzeTrading(text, date);
 
   if (result.openingBalanceTotal === 0 && result.receiptsTotal === 0 && result.paymentsTotal === 0 && result.closingBalanceUnzeTrading === 0) {

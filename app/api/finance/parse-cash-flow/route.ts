@@ -3,7 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
 import { reconcile } from "../../../lib/pdf-parsers/reconcile";
-import { UTPL_COMPANY_ID } from "../../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, getCompanyById } from "../../../lib/constants";
 import { requireAuth } from "../../../lib/api-auth";
 
 export async function POST(request: NextRequest) {
@@ -33,6 +33,18 @@ export async function POST(request: NextRequest) {
 
     const cashFlow = await parseCashFlowPDF(cashFlowBuffer);
     const bankPosition = await parseBankPositionPDF(bankPositionBuffer);
+
+    const detectedCompanyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
+    if (detectedCompanyId !== companyId) {
+      const expected = getCompanyById(companyId)?.name || companyId;
+      const detected = getCompanyById(detectedCompanyId)?.name || detectedCompanyId;
+      return Response.json(
+        {
+          error: `Company mismatch: this PDF was detected as "${detected}" but you're uploading to "${expected}". Upload it from the correct company tab.`,
+        },
+        { status: 400 }
+      );
+    }
 
     const result = reconcile(cashFlow, bankPosition);
     const positionDate = cashFlow.date || bankPosition.date;
