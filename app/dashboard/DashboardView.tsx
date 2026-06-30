@@ -488,9 +488,9 @@ export default function DashboardView() {
       {/* ═══ SUMMARY CARDS ═══ */}
       <div style={squareGrid}>
         <Card label="Produced Today" value={totalProducedToday} color="#16a34a" />
-        <Card label="Dispatched Today" value={totalDispatchedToday} color="#059669" />
+        <Card label="Dispatched Today" value={totalDispatchedToday} color="#2563eb" />
         <Card label="Broken Today" value={totalBrokenToday} color="#dc2626" />
-        <Card label="Good Stock" value={totalClosingGoodStock} color="#2563eb" />
+        <Card label="Good Stock" value={totalClosingGoodStock} color="#7c3aed" />
         <Card label="Broken Stock" value={totalClosingBrokenStock} color="#dc2626" />
         <Card label="Machine Issues" value={machineIssues.length} color={machineIssues.length > 0 ? "#dc2626" : "#16a34a"} />
       </div>
@@ -519,7 +519,7 @@ export default function DashboardView() {
                 <Legend iconType="square" wrapperStyle={{ fontSize: "14px" }} />
                 <Bar dataKey="Target" fill="#cbd5e1" name="Target (grey)" radius={[0, 4, 4, 0]} />
                 <Bar dataKey="Produced" fill="#16a34a" name="Produced (green)" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="Dispatched" fill="#059669" name="Dispatched (teal)" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Dispatched" fill="#2563eb" name="Dispatched (blue)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -592,7 +592,7 @@ export default function DashboardView() {
               <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={isMobile ? 4 : 2} />
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip formatter={(v) => Number(v).toLocaleString()} />
-              <Bar dataKey="produced" fill="#2563eb" radius={[2, 2, 0, 0]} name="Produced" />
+              <Bar dataKey="produced" fill="#16a34a" radius={[2, 2, 0, 0]} name="Produced" />
               <Bar dataKey="target" fill="#e2e8f0" radius={[2, 2, 0, 0]} name="Daily Target" />
               <Legend />
             </BarChart>
