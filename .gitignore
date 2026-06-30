@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/worktrees/
+
+# local database backups (contain sensitive data, never commit)
+/backups/
