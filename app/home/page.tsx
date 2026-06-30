@@ -2150,15 +2150,16 @@ function ExecutiveDashboardBody({
         }}>
           {/* Segmented severity bar — proportional width per category, top 6 named categories first */}
           {attentionRows.length > 0 && (
-            <div style={{ display: "flex", height: "5px", width: "100%" }}>
+            <div style={{ display: "flex", height: "5px", width: "100%", gap: "2px" }}>
               {attentionRows.map((row) => (
                 <div
                   key={`seg-${row.id}`}
                   title={`${row.label}: ${row.count}`}
                   style={{
                     flex: Math.max(row.count, 1),
-                    minWidth: "3px",
+                    minWidth: "4px",
                     backgroundColor: row.color,
+                    borderRadius: "2px",
                   }}
                 />
               ))}
@@ -2301,14 +2302,14 @@ function ExecutiveDashboardBody({
       <div style={{
         display: "grid",
         gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(130px, 1fr))",
-        gap: "8px", marginBottom: "14px",
+        gap: "14px", marginBottom: "14px",
       }}>
         <Card title="Produced" value={produced} color="#16a34a" href="/dashboard" muted={produced === 0} caption="No data submitted yet today" />
         <Card title="Dispatched" value={dispatched} color="#059669" href="/dashboard" muted={dispatched === 0} caption="No data submitted yet today" />
         <Card title="Broken" value={broken} color="#dc2626" href="/dashboard" muted={broken === 0} caption="No data submitted yet today" />
-        <Card title="Machine Issues" value={machineIssues.length} color={machineIssues.length > 0 ? "#dc2626" : "#16a34a"} href="/dashboard" />
+        <Card title="Machine Issues" value={machineIssues.length} color="#dc2626" href="/dashboard" muted={machineIssues.length === 0} caption="No issues reported" />
         <Card title="Broken Stock" value={closingBrokenStock} color="#dc2626" href="/dashboard" muted={closingBrokenStock === 0} />
-        <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" href="/tasks" />
+        <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" href="/tasks" muted={completedThisMonth.length === 0} caption="Nothing completed yet this month" />
       </div>
 
       {/* ── CHARTS ROW ── */}
@@ -2347,6 +2348,34 @@ function ExecutiveDashboardBody({
           }
           const cashData = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
           if (cashData.length === 0) return null;
+          const fmt = (v: number) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : `${v}`;
+
+          if (cashData.length < 3) {
+            return (
+              <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>Monthly Receipts vs Payments</div>
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "14px", height: "220px" }}>
+                  {cashData.map((m) => (
+                    <div key={m.month}>
+                      <div style={{ fontSize: "13px", color: SLATE, marginBottom: "6px", fontWeight: 600 }}>{m.month}</div>
+                      <div style={{ display: "flex", gap: "16px" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: "11px", color: SLATE }}>Receipts</div>
+                          <div style={{ fontSize: "20px", fontWeight: 800, color: "#16a34a" }}>PKR {fmt(m.receipts)}</div>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: "11px", color: SLATE }}>Payments</div>
+                          <div style={{ fontSize: "20px", fontWeight: 800, color: "#dc2626" }}>PKR {fmt(m.payments)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: "12px", color: SLATE, fontStyle: "italic" }}>Chart appears once 3+ months of data are available.</div>
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
               <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Monthly Receipts vs Payments</div>
@@ -2354,7 +2383,7 @@ function ExecutiveDashboardBody({
                 <LineChart data={cashData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize: 12, fill: SLATE }} />
-                  <YAxis tick={{ fontSize: 12, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+                  <YAxis tick={{ fontSize: 12, fill: SLATE }} tickFormatter={fmt} />
                   <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
                   <Legend iconType="plainline" wrapperStyle={{ fontSize: "13px" }} />
                   <Line type="monotone" dataKey="receipts" stroke="#16a34a" strokeWidth={2} dot={{ r: 4 }} name="Receipts (green)" />
@@ -2627,7 +2656,7 @@ function ExecutiveDashboardBody({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{d.title}</div>
                   </div>
-                  <span style={{ fontSize: "13px", color: SLATE, flexShrink: 0, fontWeight: hasPerf ? 700 : 400 }}>
+                  <span style={{ fontSize: "13px", color: SLATE, flexShrink: 0, fontWeight: hasPerf ? 700 : 400, width: "150px", textAlign: "right" }}>
                     {hasPerf
                       ? <>
                           <span style={{ color: d.perf!.red > 0 ? "#dc2626" : SLATE }}>{d.perf!.red} overdue</span>
