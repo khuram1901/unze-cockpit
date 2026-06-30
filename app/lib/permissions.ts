@@ -262,6 +262,12 @@ export function canAccessDailyEntry(u: UserCtx) {
 export function canViewInvestments(u: UserCtx) {
   const o = ov(u, "can_view_investments");
   if (o !== null) return o;
+  return isCEO(u) || isMainAdmin(u) || isPA(u);
+}
+
+export function canEditInvestments(u: UserCtx) {
+  const o = ov(u, "can_edit_investments");
+  if (o !== null) return o;
   return isCEO(u) || isMainAdmin(u);
 }
 

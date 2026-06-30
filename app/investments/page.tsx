@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { COLOURS, SectionTitle, PageHeader, useConfirm } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import { canEditInvestments, type UserCtx, type PermOverrides } from "../lib/permissions";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid, Cell,
@@ -90,6 +91,7 @@ export default function InvestmentsPage() {
   const isMobile = useMobile();
   const dlg = useConfirm();
 
+  const [canEdit, setCanEdit] = useState(false);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [currentPrices, setCurrentPrices] = useState<PriceRow[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -126,7 +128,21 @@ export default function InvestmentsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { if (!checking) load(); }, [checking, load]);
+  useEffect(() => {
+    if (checking) return;
+    load();
+    (async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      const email = userData.user?.email;
+      if (!email) return;
+      const { data: memberData } = await supabase.from("members").select("role, department, company").eq("email", email).single();
+      let overrides: PermOverrides | null = null;
+      const p = await loadMyPermissions();
+      if (p) overrides = p as PermOverrides;
+      const ctx: UserCtx = { email, role: memberData?.role ?? null, department: memberData?.department ?? null, company: memberData?.company ?? null, overrides };
+      setCanEdit(canEditInvestments(ctx));
+    })();
+  }, [checking, load]);
 
   const stocks: PortfolioStock[] = (() => {
     const map = new Map<string, PortfolioStock>();
@@ -176,6 +192,7 @@ export default function InvestmentsPage() {
   const winners = stocks.filter((s) => s.gainLossPct !== null && s.gainLossPct > 20);
 
   async function handleRefreshPrices() {
+    if (!canEdit) return;
     setUpdating(true);
     setUpdateResult(null);
     try {
@@ -193,6 +210,7 @@ export default function InvestmentsPage() {
   }
 
   async function handleManualPrice(ticker: string) {
+    if (!canEdit) return;
     const price = parseFloat(manualPrice);
     if (isNaN(price) || price <= 0) return;
     const today = new Date().toISOString().slice(0, 10);
@@ -207,6 +225,7 @@ export default function InvestmentsPage() {
 
   async function handleAddHolding(e: React.FormEvent) {
     e.preventDefault();
+    if (!canEdit) return;
     const payload = {
       ticker: formTicker.toUpperCase().trim(),
       company_name: formCompany.trim() || null,
@@ -226,6 +245,7 @@ export default function InvestmentsPage() {
   }
 
   async function handleDelete(id: string) {
+    if (!canEdit) return;
     if (!await dlg.confirm("Delete this holding?", true)) return;
     await supabase.from("holdings").delete().eq("id", id);
     await load();
@@ -295,10 +315,14 @@ export default function InvestmentsPage() {
           <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px", padding: "40px 20px", backgroundColor: "var(--bg-card, #ffffff)", textAlign: "center" }}>
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>📊</div>
             <div style={{ fontSize: "18px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>No Holdings Yet</div>
-            <div style={{ fontSize: "15px", color: SLATE, marginBottom: "16px" }}>Add your first stock holding to start tracking your portfolio.</div>
-            <button onClick={() => { resetForm(); setShowAddForm(true); }} style={{ backgroundColor: GREEN, color: "white", border: "none", borderRadius: "8px", padding: "10px 24px", fontSize: "16px", fontWeight: 700, cursor: "pointer" }}>
-              + Add First Holding
-            </button>
+            <div style={{ fontSize: "15px", color: SLATE, marginBottom: "16px" }}>
+              {canEdit ? "Add your first stock holding to start tracking your portfolio." : "No holdings have been added yet."}
+            </div>
+            {canEdit && (
+              <button onClick={() => { resetForm(); setShowAddForm(true); }} style={{ backgroundColor: GREEN, color: "white", border: "none", borderRadius: "8px", padding: "10px 24px", fontSize: "16px", fontWeight: 700, cursor: "pointer" }}>
+                + Add First Holding
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -345,20 +369,22 @@ export default function InvestmentsPage() {
             )}
 
             {/* Actions */}
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
-              <button onClick={handleRefreshPrices} disabled={updating} style={btnStyle}>
-                {updating ? "Updating..." : "Refresh Prices from PSX"}
-              </button>
-              <button onClick={() => { resetForm(); setShowAddForm(true); }} style={{ ...btnStyle, backgroundColor: GREEN }}>
-                + Add Holding
-              </button>
-              {updateResult && (
-                <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", alignSelf: "center" }}>{updateResult}</span>
-              )}
-            </div>
+            {canEdit && (
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
+                <button onClick={handleRefreshPrices} disabled={updating} style={btnStyle}>
+                  {updating ? "Updating..." : "Refresh Prices from PSX"}
+                </button>
+                <button onClick={() => { resetForm(); setShowAddForm(true); }} style={{ ...btnStyle, backgroundColor: GREEN }}>
+                  + Add Holding
+                </button>
+                {updateResult && (
+                  <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", alignSelf: "center" }}>{updateResult}</span>
+                )}
+              </div>
+            )}
 
             {/* Add/Edit Form */}
-            {showAddForm && (
+            {canEdit && showAddForm && (
               <div style={{
                 border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px", marginBottom: "16px",
@@ -387,7 +413,7 @@ export default function InvestmentsPage() {
             )}
 
             {/* Manual Price Modal */}
-            {manualPriceModal && (
+            {canEdit && manualPriceModal && (
               <div style={{
                 border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px", marginBottom: "16px",
@@ -420,7 +446,7 @@ export default function InvestmentsPage() {
                     <Th align="right">%</Th>
                     <Th align="right">Target</Th>
                     <Th>Updated</Th>
-                    <Th>Actions</Th>
+                    {canEdit && <Th>Actions</Th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -459,24 +485,26 @@ export default function InvestmentsPage() {
                         {s.priceDate ? fmtDate(s.priceDate) : "—"}
                         {s.priceSource ? ` (${s.priceSource})` : ""}
                       </td>
-                      <td style={{ ...td, whiteSpace: "nowrap" }}>
-                        <button onClick={(e) => { e.stopPropagation(); setManualPriceModal(s.ticker); }} style={miniBtn} title="Set price">
-                          Rs
-                        </button>
-                        {s.lots.length === 1 && (
-                          <>
-                            <button onClick={(e) => { e.stopPropagation(); startEdit(s.lots[0]); }} style={miniBtn} title="Edit">
-                              ✏️
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); handleDelete(s.lots[0].id); }} style={{ ...miniBtn, color: RED }} title="Delete">
-                              🗑️
-                            </button>
-                          </>
-                        )}
-                        {s.lots.length > 1 && (
-                          <span style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>{s.lots.length} lots</span>
-                        )}
-                      </td>
+                      {canEdit && (
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                          <button onClick={(e) => { e.stopPropagation(); setManualPriceModal(s.ticker); }} style={miniBtn} title="Set price">
+                            Rs
+                          </button>
+                          {s.lots.length === 1 && (
+                            <>
+                              <button onClick={(e) => { e.stopPropagation(); startEdit(s.lots[0]); }} style={miniBtn} title="Edit">
+                                ✏️
+                              </button>
+                              <button onClick={(e) => { e.stopPropagation(); handleDelete(s.lots[0].id); }} style={{ ...miniBtn, color: RED }} title="Delete">
+                                🗑️
+                              </button>
+                            </>
+                          )}
+                          {s.lots.length > 1 && (
+                            <span style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>{s.lots.length} lots</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -494,7 +522,7 @@ export default function InvestmentsPage() {
                         {fmtPct(totalGLPct)}
                       </span>
                     </td>
-                    <td style={td} colSpan={3}></td>
+                    <td style={td} colSpan={canEdit ? 3 : 2}></td>
                   </tr>
                 </tfoot>
               </table>

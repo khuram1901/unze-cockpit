@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { canEditInvestments, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -54,6 +55,11 @@ export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   const isCron = authHeader === `Bearer ${CRON_SECRET}`;
 
+  const sb = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+
   if (!isCron) {
     if (!authHeader) return NextResponse.json({ error: "No auth" }, { status: 401 });
     const userClient = createClient(
@@ -63,12 +69,24 @@ export async function GET(req: Request) {
     );
     const { data: { user } } = await userClient.auth.getUser();
     if (!user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+    const { data: member } = await sb
+      .from("members").select("id, role, department, company").eq("email", user.email).maybeSingle();
+    let overrides: PermOverrides | null = null;
+    if (member) {
+      const { data: perms } = await sb
+        .from("member_permissions").select("*").eq("member_id", member.id).maybeSingle();
+      overrides = (perms as PermOverrides) || null;
+    }
+    const ctx: UserCtx = {
+      email: user.email,
+      role: member?.role ?? null,
+      department: member?.department ?? null,
+      company: member?.company ?? null,
+      overrides,
+    };
+    if (!canEditInvestments(ctx)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { data: holdings } = await sb
     .from("holdings")

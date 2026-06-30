@@ -52,7 +52,8 @@ const PERM_COLUMNS = [
   { key: "can_import_export", label: "I/O", group: "Admin", tip: "Import/export member data via CSV" },
   { key: "can_access_daily_entry", label: "Entry", group: "Prod.", tip: "Log daily production, dispatch, breakage" },
   { key: "can_edit_operations_targets", label: "Target", group: "Prod.", tip: "Set monthly production/dispatch targets" },
-  { key: "can_view_investments", label: "Inv", group: "Finance", tip: "View and manage PSX stock portfolio" },
+  { key: "can_view_investments", label: "Inv View", group: "Finance", tip: "View the PSX stock portfolio" },
+  { key: "can_edit_investments", label: "Inv Edit", group: "Finance", tip: "Add/edit/delete holdings and refresh prices" },
 ] as const;
 
 type ColDef = (typeof PERM_COLUMNS)[number];
@@ -115,7 +116,8 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_import_export": return admin || exec;
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
     case "can_edit_operations_targets": return admin || exec || lc(m.email) === OPS_HOD_EMAIL;
-    case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
+    case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com" || exec;
+    case "can_edit_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
     default: return false;
   }
 }
