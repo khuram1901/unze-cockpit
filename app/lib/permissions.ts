@@ -21,6 +21,7 @@
 export const CEO_EMAIL = "k.saleem@unzegroup.com";
 export const ADMIN_EMAIL = "khuram1901@gmail.com";
 export const PA_EMAIL = "pa.ceo@unze.co.uk";
+export const OPS_HOD_EMAIL = "nadeem.khan@unze.co.uk";
 
 export const LOCKED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, PA_EMAIL];
 export const PROTECTED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL];
@@ -268,7 +269,7 @@ export function canViewInvestments(u: UserCtx) {
 export function canEditOperationsTargets(u: UserCtx) {
   const o = ov(u, "can_edit_operations_targets");
   if (o !== null) return o;
-  return isPrivileged(u) || (u.role === "Manager" && u.department === "Unze Trading Ops");
+  return isPrivileged(u) || lc(u.email) === OPS_HOD_EMAIL;
 }
 
 // ── Task ownership ──────────────────────────────────────────────

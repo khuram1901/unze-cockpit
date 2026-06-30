@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK } from "../lib/dateUtils";
-import { canAccessDailyEntry, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canAccessDailyEntry, OPS_HOD_EMAIL, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Plant = {
   id: string;
@@ -35,8 +35,6 @@ type PastEntry = {
   qty_meter: number;
   type: "Production" | "Dispatch" | "Breakage";
 };
-
-const OPS_HOD_EMAIL = "nadeem.khan@unze.co.uk";
 
 export default function ProductionForm() {
   const [plants, setPlants] = useState<Plant[]>([]);

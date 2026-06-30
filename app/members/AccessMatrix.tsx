@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { COLOURS, useToast } from "../lib/SharedUI";
 import {
-  CEO_EMAIL, ADMIN_EMAIL, PA_EMAIL, PROTECTED_EMAILS,
+  CEO_EMAIL, ADMIN_EMAIL, PA_EMAIL, PROTECTED_EMAILS, OPS_HOD_EMAIL,
   isAdminTier, type UserCtx,
 } from "../lib/permissions";
 
@@ -114,7 +114,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_exceptions": return admin || exec;
     case "can_import_export": return admin || exec;
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
-    case "can_edit_operations_targets": return admin || exec || (manager && dept === "Unze Trading Ops");
+    case "can_edit_operations_targets": return admin || exec || lc(m.email) === OPS_HOD_EMAIL;
     case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
     default: return false;
   }
