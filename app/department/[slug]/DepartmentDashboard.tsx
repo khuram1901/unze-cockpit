@@ -40,6 +40,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
 
   async function loadData() {
     setLoading(true);
+    setMyTasks([]);
     let query = supabase
       .from(config.table)
       .select("*")
