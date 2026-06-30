@@ -257,21 +257,21 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                   tableLayout: "fixed",
                 }}>
                   <colgroup>
-                    <col style={{ width: isMobile ? 110 : 140 }} />
-                    <col style={{ width: 46 }} />
+                    <col style={{ width: isMobile ? 130 : 160 }} />
+                    <col style={{ width: 56 }} />
                     {PERM_COLUMNS.map((col) => (
-                      <col key={col.key} style={{ width: col.key === "finance_company_scope" ? 50 : 30 }} />
+                      <col key={col.key} style={{ width: col.key === "finance_company_scope" ? 64 : Math.max(52, col.label.length * 9 + 18) }} />
                     ))}
                   </colgroup>
                   <thead>
                     {/* Group header row */}
                     <tr>
                       <th style={{
-                        ...stickyTh, left: 0, zIndex: 14, width: isMobile ? 110 : 140,
+                        ...stickyTh, left: 0, zIndex: 14, width: isMobile ? 130 : 160,
                         backgroundColor: "var(--border-light, #f1f5f9)", borderBottom: "none",
                       }} />
                       <th style={{
-                        ...stickyTh, left: isMobile ? 110 : 140, zIndex: 14, width: 46,
+                        ...stickyTh, left: isMobile ? 130 : 160, zIndex: 14, width: 56,
                         backgroundColor: "var(--border-light, #f1f5f9)", borderBottom: "none",
                       }} />
                       {GROUPS.map((g) => {
@@ -295,12 +295,12 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                     {/* Column header row */}
                     <tr>
                       <th style={{
-                        ...stickyTh, top: 28, left: 0, zIndex: 14, width: isMobile ? 110 : 140,
+                        ...stickyTh, top: 28, left: 0, zIndex: 14, width: isMobile ? 130 : 160,
                         backgroundColor: "var(--border-light, #f1f5f9)", textAlign: "left",
                         fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY,
                       }}>Member</th>
                       <th style={{
-                        ...stickyTh, top: 28, left: isMobile ? 110 : 140, zIndex: 14, width: 46,
+                        ...stickyTh, top: 28, left: isMobile ? 130 : 160, zIndex: 14, width: 56,
                         backgroundColor: "var(--border-light, #f1f5f9)", textAlign: "center",
                         fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY,
                       }}>Role</th>
@@ -309,17 +309,17 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                         return (
                           <th key={col.key} title={col.tip} style={{
                             position: "sticky", top: 28, zIndex: 10,
-                            padding: "5px 1px",
+                            padding: "6px 4px",
                             textAlign: "center",
                             cursor: "help",
-                            fontSize: "13px",
-                            fontWeight: 600,
+                            fontSize: "12px",
+                            fontWeight: 700,
                             color: COLOURS.SLATE,
                             backgroundColor: "var(--border-light, #f1f5f9)",
                             borderBottom: `2px solid ${COLOURS.BORDER}`,
                             borderLeft: isGroupStart ? `2px solid ${COLOURS.BORDER}` : undefined,
                             whiteSpace: "nowrap",
-                            overflow: "hidden",
+                            overflow: "visible",
                           }}>
                             {col.label}
                           </th>
@@ -345,7 +345,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                             <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "14px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fullName(m)}</div>
                           </td>
                           <td style={{
-                            ...stickyTd, left: isMobile ? 110 : 140, zIndex: 3,
+                            ...stickyTd, left: isMobile ? 130 : 160, zIndex: 3,
                             backgroundColor: locked ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                             borderRight: `1px solid ${COLOURS.BORDER}`,
                             borderBottom: `1px solid ${COLOURS.BORDER}`,
@@ -378,11 +378,11 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                                     onChange={(e) => togglePerm(m.id, col, e.target.value)}
                                     disabled={!canToggle || isLoading}
                                     style={{
-                                      fontSize: "9px", padding: "1px 2px", borderRadius: 3,
+                                      fontSize: "11px", padding: "2px 3px", borderRadius: 3,
                                       border: `1px solid ${COLOURS.BORDER}`, cursor: canToggle ? "pointer" : "not-allowed",
                                       backgroundColor: hasOverride ? "#dbeafe" : "var(--bg-card, #ffffff)",
                                       opacity: isLoading ? 0.5 : 1,
-                                      width: "100%", maxWidth: 44,
+                                      width: "100%", maxWidth: 56,
                                     }}
                                   >
                                     {(col as unknown as { options: readonly string[] }).options.map((o: string) => (
