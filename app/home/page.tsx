@@ -2055,6 +2055,14 @@ function ExecutiveDashboardBody({
   if (!scorecardRows.some((r) => r.title.toLowerCase() === "legal")) {
     scorecardRows.push({ slug: "legal", title: "Legal", status: "GREEN", owner: "Not yet built", detail: "Dashboard pending", perf: null, hasConfig: false });
   }
+  /* RED departments surface first so the worst problems are seen without scrolling; Legal (no dashboard yet) always pinned last. */
+  const statusRank: Record<"RED" | "AMBER" | "GREEN", number> = { RED: 0, AMBER: 1, GREEN: 2 };
+  scorecardRows.sort((a, b) => {
+    const aLegal = a.title === "Legal" && a.owner === "Not yet built";
+    const bLegal = b.title === "Legal" && b.owner === "Not yet built";
+    if (aLegal !== bLegal) return aLegal ? 1 : -1;
+    return statusRank[a.status] - statusRank[b.status];
+  });
 
   const cashAlerts: { title: string; value: number; color: string }[] = [];
   if (showFinance) {
@@ -2068,14 +2076,7 @@ function ExecutiveDashboardBody({
   }
   const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0 || taxUrgent.length > 0;
 
-  const criticalItems: string[] = [];
-  if (overdueTasks.length > 0) criticalItems.push(`${overdueTasks.length} overdue task${overdueTasks.length > 1 ? "s" : ""}`);
-  if (downMachines.length > 0) criticalItems.push(`${downMachines.length} machine${downMachines.length > 1 ? "s" : ""} down`);
-  if (escalations.length > 0) criticalItems.push(`${escalations.length} escalation${escalations.length > 1 ? "s" : ""}`);
-  if (waitingReplies.length > 0) criticalItems.push(`${waitingReplies.length} waiting repl${waitingReplies.length > 1 ? "ies" : "y"}`);
-  if (missingPlants.length > 0) criticalItems.push(`${missingPlants.length} plant${missingPlants.length > 1 ? "s" : ""} not reported`);
-  if (taxUrgent.length > 0) criticalItems.push(`${taxUrgent.length} tax item${taxUrgent.length > 1 ? "s" : ""} urgent`);
-  const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0 || taxOverdue.length > 0;
+  const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0 || taxOverdue.length > 0 || cashAlerts.length > 0;
 
   type AttentionItem = { key: string; primary: string; secondary: string; badge?: string | null; taskId?: string; machineId?: string; actionType?: "complete" | "reply" | "resolve" };
   type AttentionRow = { id: string; label: string; count: number; color: string; items: AttentionItem[] };
@@ -2147,22 +2148,53 @@ function ExecutiveDashboardBody({
           overflow: "hidden",
           marginBottom: "14px",
         }}>
+          {/* Segmented severity bar — proportional width per category, top 6 named categories first */}
+          {attentionRows.length > 0 && (
+            <div style={{ display: "flex", height: "5px", width: "100%" }}>
+              {attentionRows.map((row) => (
+                <div
+                  key={`seg-${row.id}`}
+                  title={`${row.label}: ${row.count}`}
+                  style={{
+                    flex: Math.max(row.count, 1),
+                    minWidth: "3px",
+                    backgroundColor: row.color,
+                  }}
+                />
+              ))}
+            </div>
+          )}
           <div
             onClick={() => setBannerOpen(!bannerOpen)}
             style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
               <span style={{ fontSize: "20px", flexShrink: 0 }}>⚠</span>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: "16px", fontWeight: 700, color: hasCritical ? "#991b1b" : "#92400e" }}>
                   Action needed today — {totalAttentionCount} item{totalAttentionCount > 1 ? "s" : ""}
                 </div>
-                <div style={{ fontSize: "16px", color: hasCritical ? "#991b1b" : "#92400e", marginTop: "2px" }}>
-                  {criticalItems.join(" · ")}
-                </div>
+                {!bannerOpen && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "5px" }}>
+                    {attentionRows.slice(0, 3).map((row) => (
+                      <span key={`chip-${row.id}`} style={{
+                        display: "inline-flex", alignItems: "center", gap: "5px",
+                        fontSize: "13px", fontWeight: 600, color: "white",
+                        backgroundColor: row.color, borderRadius: "10px", padding: "2px 9px",
+                      }}>
+                        {row.count} {row.label}
+                      </span>
+                    ))}
+                    {attentionRows.length > 3 && (
+                      <span style={{ fontSize: "13px", color: hasCritical ? "#991b1b" : "#92400e", fontWeight: 600, alignSelf: "center" }}>
+                        +{attentionRows.length - 3} more
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-            <span style={{ fontSize: "16px", color: hasCritical ? "#991b1b" : "#92400e", fontWeight: 700 }}>{bannerOpen ? "▲ Hide" : "▼ Show"}</span>
+            <span style={{ fontSize: "16px", color: hasCritical ? "#991b1b" : "#92400e", fontWeight: 700, flexShrink: 0 }}>{bannerOpen ? "▲ Hide" : "▼ Show"}</span>
           </div>
           {bannerOpen && (
             <div style={{ borderTop: `1px solid ${hasCritical ? "#fecaca" : "#fde68a"}` }}>
@@ -2248,17 +2280,34 @@ function ExecutiveDashboardBody({
 
       {/* ── SECTION 2: OPERATIONS STATUS ── */}
       <SectionTitle title="Operations Status — Today" />
+      {/* Hero tile: Good Stock is the one number that's always meaningful (a running inventory level, not a daily flow that can legitimately be zero) */}
+      <a href="/dashboard" style={{ textDecoration: "none", display: "block", marginBottom: "10px" }}>
+        <div style={{
+          border: `1px solid ${BORDER}`, borderLeft: "4px solid #2563eb", borderRadius: "8px",
+          padding: "16px 20px", backgroundColor: "var(--bg-card, #ffffff)",
+          cursor: "pointer", transition: "box-shadow 0.15s",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
+        >
+          <div>
+            <div style={{ color: SLATE, fontSize: "15px", marginBottom: "2px" }}>Good Stock — Closing Inventory</div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#2563eb", lineHeight: 1.1 }}>{closingGoodStock.toLocaleString()}</div>
+          </div>
+          <span style={{ fontSize: "14px", color: "#2563eb", fontWeight: 600 }}>View dashboard →</span>
+        </div>
+      </a>
       <div style={{
         display: "grid",
         gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(130px, 1fr))",
         gap: "8px", marginBottom: "14px",
       }}>
-        <Card title="Produced" value={produced} color="#16a34a" href="/dashboard" />
-        <Card title="Dispatched" value={dispatched} color="#059669" href="/dashboard" />
-        <Card title="Broken" value={broken} color="#dc2626" href="/dashboard" />
+        <Card title="Produced" value={produced} color="#16a34a" href="/dashboard" muted={produced === 0} caption="No data submitted yet today" />
+        <Card title="Dispatched" value={dispatched} color="#059669" href="/dashboard" muted={dispatched === 0} caption="No data submitted yet today" />
+        <Card title="Broken" value={broken} color="#dc2626" href="/dashboard" muted={broken === 0} caption="No data submitted yet today" />
         <Card title="Machine Issues" value={machineIssues.length} color={machineIssues.length > 0 ? "#dc2626" : "#16a34a"} href="/dashboard" />
-        <Card title="Good Stock" value={closingGoodStock} color="#2563eb" href="/dashboard" />
-        <Card title="Broken Stock" value={closingBrokenStock} color="#dc2626" href="/dashboard" />
+        <Card title="Broken Stock" value={closingBrokenStock} color="#dc2626" href="/dashboard" muted={closingBrokenStock === 0} />
         <Card title="Completed (Month)" value={completedThisMonth.length} color="#16a34a" href="/tasks" />
       </div>
 
@@ -2271,7 +2320,11 @@ function ExecutiveDashboardBody({
               <LineChart data={dailyOpsData.map((d) => ({ ...d, date: d.date.slice(5) }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="date" tick={{ fontSize: 12, fill: SLATE }} />
-                <YAxis tick={{ fontSize: 12, fill: SLATE }} />
+                <YAxis
+                  tick={{ fontSize: 12, fill: SLATE }}
+                  domain={[0, (max: number) => Math.ceil(max * 1.15)]}
+                  tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}K` : `${v}`}
+                />
                 <Tooltip />
                 <Legend iconType="plainline" wrapperStyle={{ fontSize: "13px" }} />
                 <Line type="monotone" dataKey="produced" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} name="Produced (solid green)" />
@@ -2340,10 +2393,15 @@ function ExecutiveDashboardBody({
                   return (
                     <div key={w.company}>
                       <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "10px" }}>{w.company}</div>
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "100px" }}>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "118px" }}>
                         {items.map((item) => (
-                          <div key={item.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                            <div style={{ fontSize: "11px", fontWeight: 600, color: item.color, marginBottom: "4px", whiteSpace: "nowrap" }}>
+                          <div key={item.label} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                            <div style={{
+                              fontSize: "10px", fontWeight: 600, color: item.color, marginBottom: "4px",
+                              textAlign: "center", lineHeight: 1.2, height: "26px",
+                              display: "flex", alignItems: "flex-end", justifyContent: "center",
+                              wordBreak: "break-word", width: "100%",
+                            }}>
                               {item.value >= 0 ? "" : "−"}{fmtMoney(Math.abs(item.value))}
                             </div>
                             <div style={{ width: "100%", maxWidth: "40px", height: `${barHeight(item.value)}px`, backgroundColor: item.color, borderRadius: "4px 4px 0 0", opacity: 0.8 }} />
@@ -2554,6 +2612,7 @@ function ExecutiveDashboardBody({
             {scorecardRows.map((d, i) => {
               const statusColor = d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626";
               const isLegalStub = d.title === "Legal" && d.owner === "Not yet built";
+              const hasPerf = !!d.perf && d.perf.total > 0;
               const inner = (
                 <div style={{
                   display: "flex", alignItems: "center", gap: "10px",
@@ -2567,17 +2626,20 @@ function ExecutiveDashboardBody({
                   }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{d.title}</div>
-                    <div style={{ fontSize: "13px", color: SLATE }}>{d.owner}</div>
                   </div>
-                  {d.perf && d.perf.total > 0 && (
-                    <div style={{ display: "flex", gap: "8px", fontSize: "13px", fontWeight: 700, flexShrink: 0 }}>
-                      {d.perf.red > 0 && <span style={{ color: "#dc2626" }}>{d.perf.red} overdue</span>}
-                      {d.perf.amber > 0 && <span style={{ color: "#d97706" }}>{d.perf.amber} active</span>}
-                      {d.perf.green > 0 && <span style={{ color: "#16a34a" }}>{d.perf.green} done</span>}
-                    </div>
-                  )}
-                  <span style={{ fontSize: "13px", color: SLATE, flexShrink: 0 }}>{d.detail}</span>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: statusColor, flexShrink: 0, minWidth: "50px", textAlign: "right" }}>{d.status}</span>
+                  <span style={{ fontSize: "13px", color: SLATE, flexShrink: 0, fontWeight: hasPerf ? 700 : 400 }}>
+                    {hasPerf
+                      ? <>
+                          <span style={{ color: d.perf!.red > 0 ? "#dc2626" : SLATE }}>{d.perf!.red} overdue</span>
+                          {" / "}
+                          <span style={{ color: d.perf!.amber > 0 ? "#d97706" : SLATE }}>{d.perf!.amber} active</span>
+                        </>
+                      : d.detail}
+                  </span>
+                  <span style={{
+                    fontSize: "12px", fontWeight: 700, color: statusColor, flexShrink: 0, minWidth: "54px", textAlign: "center",
+                    padding: "2px 8px", borderRadius: "10px", backgroundColor: `${statusColor}1a`,
+                  }}>{d.status}</span>
                 </div>
               );
               return isLegalStub ? (
@@ -2652,15 +2714,18 @@ const tdBold: React.CSSProperties = {
 
 /* ───────────────────────── Small shared components ───────────────────────── */
 
-function Card({ title, value, color, onClick, href }: { title: string; value: number; color: string; onClick?: () => void; href?: string }) {
+function Card({ title, value, color, onClick, href, muted, caption }: { title: string; value: number; color: string; onClick?: () => void; href?: string; muted?: boolean; caption?: string }) {
   const isClickable = !!(onClick || href);
+  const isZero = value === 0;
+  const effectiveMuted = !!muted;
+  const displayColor = effectiveMuted ? SLATE : color;
   const content = (
     <div style={{
       border: `1px solid ${BORDER}`,
-      borderTop: `3px solid ${color}`,
+      borderTop: effectiveMuted ? `3px solid ${BORDER}` : `3px solid ${color}`,
       borderRadius: "7px",
       padding: "8px 10px",
-      backgroundColor: "var(--bg-card, #ffffff)",
+      backgroundColor: effectiveMuted ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
       cursor: isClickable ? "pointer" : "default",
       transition: "box-shadow 0.15s",
     }}
@@ -2671,7 +2736,10 @@ function Card({ title, value, color, onClick, href }: { title: string; value: nu
       <div style={{ color: SLATE, fontSize: "15px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {title} {isClickable && <span style={{ fontSize: "12px" }}>→</span>}
       </div>
-      <div style={{ fontSize: "19px", fontWeight: 800, color }}>{value.toLocaleString()}</div>
+      <div style={{ fontSize: "19px", fontWeight: 800, color: displayColor }}>{value.toLocaleString()}</div>
+      {caption && isZero && (
+        <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px", fontStyle: "italic" }}>{caption}</div>
+      )}
     </div>
   );
 
@@ -2782,6 +2850,8 @@ function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRow
   return (
     <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "12px" }}>
       <div style={{ padding: "14px" }}>
+        <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Task Load by Department — click a bar to see people</div>
+        <div style={{ minHeight: "180px" }}>
         <ResponsiveContainer width="100%" height={Math.max(180, departmentRows.length * 38)}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 0, bottom: 0 }} onClick={(state: unknown) => { const s = state as { activePayload?: { payload?: { fullName?: string } }[] }; const fn = s?.activePayload?.[0]?.payload?.fullName; if (fn) setSelectedDept(selectedDept === fn ? null : fn); }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
@@ -2794,6 +2864,7 @@ function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRow
             <Bar dataKey="Completed" stackId="a" fill="#16a34a" radius={[0, 4, 4, 0]} cursor="pointer" name="Completed (green)" />
           </BarChart>
         </ResponsiveContainer>
+        </div>
       </div>
 
       {selectedDept && selectedPeople.length > 0 && (
@@ -2866,8 +2937,6 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
   const payPct = expPay > 0 ? (actualPaymentsMTD / expPay) * 100 : 100;
   const payStatus: RAGStatus = payPct <= 105 ? "GREEN" : payPct <= 115 ? "AMBER" : "RED";
 
-  const staleDays = latest ? Math.floor((Date.now() - new Date(latest.position_date + "T00:00:00").getTime()) / 86400000) : 999;
-
   const inflows = data.forecast.filter((f) => f.flow_type === "inflow");
   const outflows = data.forecast.filter((f) => f.flow_type === "outflow");
   const forecastTotalIn = inflows.reduce((s, f) => s + f.budgeted_amount, 0);
@@ -2890,10 +2959,19 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
   const [showDetail, setShowDetail] = useState<string | null>(null);
   const toggleDetail = (key: string) => setShowDetail(showDetail === key ? null : key);
 
-  const summaryCard = (label: string, value: string, sub: string, color: string) => (
-    <div style={{ borderRadius: "8px", padding: "10px 12px", backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}` }}>
-      <div style={{ fontSize: "15px", color: SLATE, marginBottom: "2px" }}>{label}</div>
-      <div style={{ fontSize: "18px", fontWeight: 800, color }}>{value}</div>
+  const summaryCard = (label: string, value: string, sub: string, color: string, opts?: { primary?: boolean; freshnessDate?: string | null }) => (
+    <div style={{
+      borderRadius: "8px",
+      padding: opts?.primary ? "14px 16px" : "10px 12px",
+      backgroundColor: "var(--bg-card, #ffffff)",
+      border: `1px solid ${BORDER}`,
+      borderTop: `3px solid ${color}`,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
+        <div style={{ fontSize: "15px", color: SLATE }}>{label}</div>
+        {opts?.freshnessDate !== undefined && <FreshnessBadge date={opts.freshnessDate} />}
+      </div>
+      <div style={{ fontSize: opts?.primary ? "24px" : "18px", fontWeight: 800, color }}>{value}</div>
       <div style={{ fontSize: "14px", color: SLATE, marginTop: "2px" }}>{sub}</div>
     </div>
   );
@@ -2919,8 +2997,9 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
             {summaryCard(
               "Cash Available",
               latest ? `PKR ${fmtMoney(latest.closing_after_post_dated)}` : "—",
-              latest ? `Updated ${formatDateUK(latest.position_date)}${staleDays > 1 ? " (STALE)" : ""}` : "No data",
-              !latest ? "#2563eb" : latest.closing_after_post_dated < 0 ? "#dc2626" : "#16a34a"
+              latest ? `Updated ${formatDateUK(latest.position_date)}` : "No data",
+              !latest ? "#2563eb" : latest.closing_after_post_dated < 0 ? "#dc2626" : "#16a34a",
+              { primary: true, freshnessDate: latest ? latest.position_date : null }
             )}
             {summaryCard(
               "Money In (MTD)",
