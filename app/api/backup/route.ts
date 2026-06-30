@@ -3,26 +3,11 @@ import { google } from "googleapis";
 import zlib from "zlib";
 import { createServiceClient } from "../../lib/supabase-server";
 import { safeDecrypt, encrypt } from "../../lib/crypto";
+import { BACKUP_TABLES } from "../../lib/backup-tables";
 
 const BACKUP_RECIPIENT = "khuram1901@gmail.com";
-
-const TABLES = [
-  "companies", "members", "member_plants", "plants",
-  "department_owners", "tasks", "meeting_requests",
-  "production_entries", "dispatch_entries", "breakage_entries",
-  "scrap_processed_entries", "machine_issues",
-  "opening_balances", "broken_opening_balances",
-  "monthly_production_targets", "monthly_dispatch_targets",
-  "daily_cash_position", "monthly_cash_plan", "cash_opening_balance",
-  "bank_position_snapshots", "receivables", "receivable_stages",
-  "audit_plan_items", "audit_findings",
-  "recruitment_positions", "performance_evaluations", "hr_strategy_goals",
-  "legal_notices", "admin_categories", "admin_spend",
-  "meetings", "meeting_tasks", "meeting_attendees", "monthly_budgets", "quarterly_forecasts",
-  "audit_log", "notification_log",
-  "department_budgets", "member_permissions", "recurring_tasks",
-  "holdings", "price_history", "pending_minutes", "push_subscriptions",
-];
+const BACKUPS_BUCKET = "backups";
+const TABLES = BACKUP_TABLES;
 
 function buildBackupEmail(to: string, from: string, subject: string, bodyText: string, attachment: { filename: string; mimeType: string; data: Buffer }): string {
   const boundary = "boundary_" + Date.now();
@@ -73,6 +58,16 @@ export async function GET(request: NextRequest) {
     const gzipped = zlib.gzipSync(backupBuffer);
     const filename = `cockpit-backup-${today}.json.gz`;
 
+    // Write to Storage first so a backup copy exists independently of the
+    // Gmail account / email delivery below — two unrelated failure points.
+    const { error: storageError } = await supabase.storage
+      .from(BACKUPS_BUCKET)
+      .upload(filename, gzipped, { contentType: "application/gzip", upsert: true });
+
+    if (storageError) {
+      console.error("Backup storage upload failed:", storageError.message);
+    }
+
     const { data: token } = await supabase
       .from("google_oauth_tokens")
       .select("*")
@@ -80,7 +75,10 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (!token) {
-      return Response.json({ error: "Google account not connected" }, { status: 500 });
+      return Response.json({
+        error: "Google account not connected",
+        storageBackup: storageError ? "failed" : "saved",
+      }, { status: 500 });
     }
 
     const oauth2Client = new google.auth.OAuth2(
@@ -127,6 +125,7 @@ export async function GET(request: NextRequest) {
       sizeKB: Math.round(backupBuffer.length / 1024),
       compressedKB: Math.round(gzipped.length / 1024),
       emailedTo: BACKUP_RECIPIENT,
+      storageBackup: storageError ? `failed — ${storageError.message}` : "saved",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

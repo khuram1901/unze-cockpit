@@ -3,6 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID } from "../../../lib/constants";
 import { requireAuth } from "../../../lib/api-auth";
+import { archiveSourceDocument } from "../../../lib/document-archive";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -35,6 +36,18 @@ export async function POST(request: NextRequest) {
       try {
         const buffer = Buffer.from(await file.arrayBuffer());
         const parsedResults = await parseCashFlowPDF(buffer);
+
+        const archiveCompanyId = parsedResults[0]?.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
+        await archiveSourceDocument({
+          supabase,
+          buffer,
+          filename: file.name,
+          docType: "cash_flow",
+          companyId: archiveCompanyId,
+          positionDate: parsedResults[0]?.date || null,
+          source: "manual",
+          uploadedBy: "bulk-upload",
+        });
 
         for (const parsed of parsedResults) {
           const label = parsedResults.length > 1 ? `${file.name} (${parsed.date})` : file.name;

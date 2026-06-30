@@ -73,4 +73,5 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_exceptions", title: "Exceptions", subtitle: "Exception management and alerts", href: "/exceptions", icon: "🚨", group: "Settings" },
   { permKey: "can_view_audit_log", title: "Audit Log", subtitle: "System activity trail", href: "/audit-log", icon: "📋", group: "Settings" },
   { permKey: "_profile", title: "My Profile", subtitle: "Your account and preferences", href: "/profile", icon: "👤", group: "Settings" },
+  { permKey: "_admin_settings", title: "Data & Backups", subtitle: "Source documents, backups, restore", href: "/admin", icon: "🗄️", group: "Settings" },
 ];

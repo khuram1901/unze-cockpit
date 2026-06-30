@@ -53,6 +53,7 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
 
 function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   const perms = ctx.overrides as Record<string, boolean | string | null> | null;
+  if (card.permKey === "_admin_settings") return isMainAdmin(ctx);
   if (card.permKey.startsWith("_")) return true;
   const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
   if (isPACtx && card.permKey === "can_view_pa_dashboard") return false;

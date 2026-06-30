@@ -8,14 +8,14 @@ import {
   canViewOperations, canSeeAllMinutes, canSeeAllTasks, canManageRecurringTasks,
   canManageMembers, canViewAuditLog, canViewExceptions, canImportExport,
   canAccessDailyEntry, canViewPADashboard, canViewInvestments,
-  isPrivileged, isAdminTier,
+  isPrivileged, isAdminTier, isMainAdmin,
   type UserCtx, type PermOverrides,
 } from "./permissions";
 
 type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
   | "audit_log" | "exceptions" | "import_export" | "daily_entry"
-  | "pa_dashboard" | "investments";
+  | "pa_dashboard" | "investments" | "system_backups";
 
 const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   finance: canViewFinance,
@@ -32,6 +32,7 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   daily_entry: canAccessDailyEntry,
   pa_dashboard: canViewPADashboard,
   investments: canViewInvestments,
+  system_backups: isMainAdmin,
 };
 
 async function loadUserCtx(email: string): Promise<UserCtx> {

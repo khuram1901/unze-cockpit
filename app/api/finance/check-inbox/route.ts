@@ -2,11 +2,12 @@ import { NextRequest } from "next/server";
 import { google } from "googleapis";
 import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
-import { reconcile } from "../../../lib/pdf-parsers/reconcile";
+import { reconcile, matchBankPositionToCashFlow } from "../../../lib/pdf-parsers/reconcile";
 
 import { createServiceClient } from "../../../lib/supabase-server";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID } from "../../../lib/constants";
 import { safeDecrypt, encrypt } from "../../../lib/crypto";
+import { archiveSourceDocument } from "../../../lib/document-archive";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -206,24 +207,41 @@ export async function GET(request: NextRequest) {
         if (group.cashFlow && group.bankPosition) {
           try {
             const cashFlowResults = await parseCashFlowPDF(group.cashFlow.data);
-            const bankPosition = await parseBankPositionPDF(group.bankPosition.data);
+            const bankPositionResults = await parseBankPositionPDF(group.bankPosition.data);
 
-            if (cashFlowResults.length > 1) {
-              results.push({ messageId: msg.id, status: `error — cash flow PDF contains ${cashFlowResults.length} days (${cashFlowResults.map((r) => r.date).join(", ")}) but bank position PDF parsing only supports one day — pair not saved (${key})`, account: targetEmail });
-              continue;
-            }
-            const cashFlow = cashFlowResults[0];
+            const pairCompanyId = cashFlowResults[0]?.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
+            await Promise.all([
+              archiveSourceDocument({
+                supabase, buffer: group.cashFlow.data, filename: group.cashFlow.filename,
+                docType: "cash_flow", companyId: pairCompanyId, positionDate: cashFlowResults[0]?.date || groupDate,
+                source: "gmail-auto",
+              }),
+              archiveSourceDocument({
+                supabase, buffer: group.bankPosition.data, filename: group.bankPosition.filename,
+                docType: "bank_position", companyId: pairCompanyId, positionDate: bankPositionResults[0]?.date || groupDate,
+                source: "gmail-auto",
+              }),
+            ]);
 
-            const result = reconcile(cashFlow, bankPosition);
-            const positionDate = cashFlow.date || bankPosition.date || groupDate;
-            const ds = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
+            for (const cashFlow of cashFlowResults) {
+              const positionDate = cashFlow.date || groupDate;
+              const bankPosition = matchBankPositionToCashFlow(cashFlow, bankPositionResults) || (cashFlowResults.length === 1 ? bankPositionResults[0] : undefined);
 
-            if (ds.has(positionDate)) {
-              results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate, account: targetEmail });
-            } else {
-              await saveToDatabase(positionDate, cashFlow, bankPosition, result, group.cashFlow.filename, group.bankPosition.filename);
-              ds.add(positionDate);
-              results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate, account: targetEmail });
+              if (!bankPosition) {
+                results.push({ messageId: msg.id, status: `error — no matching bank position day found for cash flow date ${positionDate} (bank position has: ${bankPositionResults.map((b) => b.date).join(", ")}) — not saved (${key})`, account: targetEmail });
+                continue;
+              }
+
+              const result = reconcile(cashFlow, bankPosition);
+              const ds = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
+
+              if (ds.has(positionDate)) {
+                results.push({ messageId: msg.id, status: "skipped — already exists", date: positionDate, account: targetEmail });
+              } else {
+                await saveToDatabase(positionDate, cashFlow, bankPosition, result, group.cashFlow.filename, group.bankPosition.filename);
+                ds.add(positionDate);
+                results.push({ messageId: msg.id, status: result.matches ? "saved — balanced" : "saved — NOT balanced", date: positionDate, account: targetEmail });
+              }
             }
           } catch (parseErr) {
             results.push({ messageId: msg.id, status: `error — ${parseErr instanceof Error ? parseErr.message : "parse failed"} (${key})`, account: targetEmail });
@@ -235,6 +253,14 @@ export async function GET(request: NextRequest) {
         if (group.cashFlow) {
           try {
             const cashFlowResults = await parseCashFlowPDF(group.cashFlow.data);
+
+            await archiveSourceDocument({
+              supabase, buffer: group.cashFlow.data, filename: group.cashFlow.filename,
+              docType: "cash_flow",
+              companyId: cashFlowResults[0]?.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID,
+              positionDate: cashFlowResults[0]?.date || groupDate,
+              source: "gmail-auto",
+            });
 
             for (const cashFlow of cashFlowResults) {
               const positionDate = cashFlow.date || groupDate;
@@ -271,6 +297,15 @@ export async function GET(request: NextRequest) {
         if (pdfAttachments.length === 1) {
           try {
             const cashFlowResults = await parseCashFlowPDF(pdfAttachments[0].data);
+
+            await archiveSourceDocument({
+              supabase, buffer: pdfAttachments[0].data, filename: pdfAttachments[0].filename,
+              docType: "cash_flow",
+              companyId: cashFlowResults[0]?.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID,
+              positionDate: cashFlowResults[0]?.date || null,
+              source: "gmail-auto",
+            });
+
             for (const cashFlow of cashFlowResults) {
               const positionDate = cashFlow.date;
               if (!positionDate) continue;
@@ -296,14 +331,32 @@ export async function GET(request: NextRequest) {
         } else {
           try {
             const cashFlowResults = await parseCashFlowPDF(pdfAttachments[0].data);
-            const bankPosition = await parseBankPositionPDF(pdfAttachments[1].data);
+            const bankPositionResults = await parseBankPositionPDF(pdfAttachments[1].data);
 
-            if (cashFlowResults.length > 1) {
-              results.push({ messageId: msg.id, status: `error — cash flow PDF contains ${cashFlowResults.length} days (${cashFlowResults.map((r) => r.date).join(", ")}) but bank position PDF parsing only supports one day — pair not saved`, account: targetEmail });
-            } else {
-              const cashFlow = cashFlowResults[0];
+            const fallbackCompanyId = cashFlowResults[0]?.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
+            await Promise.all([
+              archiveSourceDocument({
+                supabase, buffer: pdfAttachments[0].data, filename: pdfAttachments[0].filename,
+                docType: "cash_flow", companyId: fallbackCompanyId, positionDate: cashFlowResults[0]?.date || null,
+                source: "gmail-auto",
+              }),
+              archiveSourceDocument({
+                supabase, buffer: pdfAttachments[1].data, filename: pdfAttachments[1].filename,
+                docType: "bank_position", companyId: fallbackCompanyId, positionDate: bankPositionResults[0]?.date || null,
+                source: "gmail-auto",
+              }),
+            ]);
+
+            for (const cashFlow of cashFlowResults) {
+              const bankPosition = matchBankPositionToCashFlow(cashFlow, bankPositionResults) || (cashFlowResults.length === 1 ? bankPositionResults[0] : undefined);
+              const positionDate = cashFlow.date || bankPosition?.date;
+
+              if (!bankPosition) {
+                results.push({ messageId: msg.id, status: `error — no matching bank position day found for cash flow date ${positionDate || "unknown"} (bank position has: ${bankPositionResults.map((b) => b.date).join(", ")}) — not saved`, account: targetEmail });
+                continue;
+              }
+
               const result = reconcile(cashFlow, bankPosition);
-              const positionDate = cashFlow.date || bankPosition.date;
               if (positionDate) {
                 const ds = cashFlow.company === "imperial" ? existingDatesIfpl : existingDatesUtpl;
                 if (!ds.has(positionDate)) {
@@ -344,7 +397,7 @@ export async function GET(request: NextRequest) {
 async function saveToDatabase(
   positionDate: string,
   cashFlow: Awaited<ReturnType<typeof parseCashFlowPDF>>[number],
-  bankPosition: Awaited<ReturnType<typeof parseBankPositionPDF>>,
+  bankPosition: Awaited<ReturnType<typeof parseBankPositionPDF>>[number],
   result: ReturnType<typeof reconcile>,
   cashFlowFilename: string,
   bankPositionFilename: string

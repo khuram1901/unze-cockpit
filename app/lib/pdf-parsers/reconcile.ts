@@ -28,3 +28,38 @@ export function reconcile(
     diff: matches ? 0 : absDiff,
   };
 }
+
+function addDays(date: string, days: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Imperial's bank position PDF labels each block with the *reporting* date,
+// which is one calendar day after the cash-flow day whose closing balance it
+// carries (e.g. cash flow "29/06 Today Closing Balance" appears under bank
+// position's "30/06" total). A literal date match can coincidentally collide
+// with an unrelated day in a different PDF, so prefer matching by balance
+// value (unambiguous ground truth) before falling back to the +1 day
+// convention, then a literal same-date match as a last resort.
+export function matchBankPositionToCashFlow(
+  cashFlow: CashFlowParsed,
+  bankPositions: BankPositionParsed[]
+): BankPositionParsed | undefined {
+  if (bankPositions.length === 1 && !cashFlow.date && !bankPositions[0].date) return bankPositions[0];
+  if (!cashFlow.date) return undefined;
+
+  const byValue = bankPositions.find(
+    (b) => Math.abs(b.totalAvailableBalance - cashFlow.closingBalanceUnzeTrading) < 0.01
+  );
+  if (byValue) return byValue;
+
+  const nextDay = addDays(cashFlow.date, 1);
+  const offsetMatch = bankPositions.find((b) => b.date === nextDay);
+  if (offsetMatch) return offsetMatch;
+
+  const exact = bankPositions.find((b) => b.date === cashFlow.date);
+  if (exact) return exact;
+
+  return undefined;
+}

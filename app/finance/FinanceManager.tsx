@@ -195,6 +195,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     date?: string;
     reconciliation?: { matches: boolean; cashFlowClosing: number; bankPositionTotal: number; diff: number };
     cashFlow?: Record<string, number>;
+    days?: { date: string; reconciliation: { matches: boolean; cashFlowClosing: number; bankPositionTotal: number; diff: number } }[];
     error?: string;
   } | null>(null);
 
@@ -227,11 +228,18 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           date: data.date,
           reconciliation: data.reconciliation,
           cashFlow: data.cashFlow,
+          days: data.days,
         });
-        showMsg(data.reconciliation?.matches
-          ? "Statements parsed and balanced. Saved."
-          : "Statements parsed but NOT balanced — please review."
-        );
+        const dayCount = data.days?.length || 1;
+        if (dayCount > 1) {
+          const balancedCount = data.days.filter((d: { reconciliation: { matches: boolean } }) => d.reconciliation.matches).length;
+          showMsg(`Saved ${dayCount} days (${balancedCount} balanced, ${dayCount - balancedCount} not balanced).`);
+        } else {
+          showMsg(data.reconciliation?.matches
+            ? "Statements parsed and balanced. Saved."
+            : "Statements parsed but NOT balanced — please review."
+          );
+        }
         setCashFlowFile(null);
         setBankPositionFile(null);
         loadData();
@@ -617,11 +625,24 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 <div style={{ marginTop: "10px", padding: "8px 12px", borderRadius: "6px", border: `1px solid ${BORDER}`, borderLeft: `4px solid ${uploadResult.reconciliation?.matches ? GREEN : RED}`, backgroundColor: "#fafbfc", fontSize: "13px" }}>
                   {uploadResult.success ? (
                     <>
-                      <div style={{ fontWeight: 700, color: NAVY, marginBottom: "4px" }}>{uploadResult.reconciliation?.matches ? "Balanced — statements match" : "Mismatch — NOT balanced"}</div>
-                      <div style={{ color: SLATE }}>
-                        Date: {uploadResult.date} | CF Closing: {uploadResult.reconciliation?.cashFlowClosing?.toLocaleString()} | Bank: {uploadResult.reconciliation?.bankPositionTotal?.toLocaleString()}
-                        {!uploadResult.reconciliation?.matches && <span style={{ color: RED, fontWeight: 700 }}> | Diff: {uploadResult.reconciliation?.diff?.toLocaleString()}</span>}
-                      </div>
+                      {(uploadResult.days?.length || 1) > 1 ? (
+                        <>
+                          <div style={{ fontWeight: 700, color: NAVY, marginBottom: "4px" }}>Saved {uploadResult.days!.length} days</div>
+                          {uploadResult.days!.map((d) => (
+                            <div key={d.date} style={{ color: d.reconciliation.matches ? SLATE : RED, fontWeight: d.reconciliation.matches ? 400 : 700 }}>
+                              {d.date}: {d.reconciliation.matches ? "balanced" : `NOT balanced (diff: ${d.reconciliation.diff.toLocaleString()})`} — CF {d.reconciliation.cashFlowClosing.toLocaleString()} | Bank {d.reconciliation.bankPositionTotal.toLocaleString()}
+                            </div>
+                          ))}
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontWeight: 700, color: NAVY, marginBottom: "4px" }}>{uploadResult.reconciliation?.matches ? "Balanced — statements match" : "Mismatch — NOT balanced"}</div>
+                          <div style={{ color: SLATE }}>
+                            Date: {uploadResult.date} | CF Closing: {uploadResult.reconciliation?.cashFlowClosing?.toLocaleString()} | Bank: {uploadResult.reconciliation?.bankPositionTotal?.toLocaleString()}
+                            {!uploadResult.reconciliation?.matches && <span style={{ color: RED, fontWeight: 700 }}> | Diff: {uploadResult.reconciliation?.diff?.toLocaleString()}</span>}
+                          </div>
+                        </>
+                      )}
                       {(() => {
                         if (!uploadResult.cashFlow || !uploadResult.date) return null;
                         const prevDay = positions.find((p) => p.position_date < uploadResult.date!);

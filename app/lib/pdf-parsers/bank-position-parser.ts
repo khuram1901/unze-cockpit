@@ -6,13 +6,16 @@ export type BankPositionParsed = {
   totalAvailableBalance: number;
   postDatedCHQsTotal: number;
   postDatedCurrency: string;
+  company: "unze" | "imperial";
   rawText: string;
 };
 
 function parseAmount(text: string): number {
-  const cleaned = text.replace(/,/g, "").replace(/\s/g, "");
+  const isNegative = text.includes("(") && text.includes(")");
+  const cleaned = text.replace(/[(),\s]/g, "");
   const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : num;
+  if (isNaN(num)) return 0;
+  return isNegative ? -num : num;
 }
 
 function extractDate(text: string): string | null {
@@ -28,12 +31,15 @@ function detectCurrency(text: string): string {
   return "PKR";
 }
 
-export async function parseBankPositionPDF(buffer: Buffer): Promise<BankPositionParsed> {
-  const text = await extractTextFromPDF(buffer);
+function detectCompany(text: string): "unze" | "imperial" {
+  const lower = text.toLowerCase();
+  if (lower.includes("imperial")) return "imperial";
+  return "unze";
+}
 
-  // The bank position PDF lists bank names followed by their balance values
-  // The "Available Balance" section has the final balances in order
-  // Extract from the Available Balance section
+function parseUnzeBankPosition(text: string): BankPositionParsed {
+  // The bank position PDF lists bank names followed by their balance values.
+  // The "Available Balance" section has the final balances in order.
   const availableIdx = text.indexOf("Available Balance");
   const totalIdx = text.indexOf("Total Available Balance");
 
@@ -42,11 +48,9 @@ export async function parseBankPositionPDF(buffer: Buffer): Promise<BankPosition
     balanceBlock = text.slice(availableIdx + 17, totalIdx);
   }
 
-  // Extract numbers from the balance block
   const numbers = balanceBlock.match(/[\d,]+(?:\.\d+)?/g) || [];
   const balances = numbers.map((n) => parseAmount(n));
 
-  // Map to bank columns in order
   const bankKeys = [
     "cash_at_office",
     "js_bank_unze_trading",
@@ -69,23 +73,14 @@ export async function parseBankPositionPDF(buffer: Buffer): Promise<BankPosition
     banks[bankKeys[i]] = i < balances.length ? balances[i] : 0;
   }
 
-  // Total Available Balance
   const totalMatch = text.match(/Total Available Balance\s*([\d,]+(?:\.\d+)?)/i);
   const totalAvailableBalance = totalMatch ? parseAmount(totalMatch[1]) : 0;
 
-  // Post Dated CHQs
   const pdMatch = text.match(/Post Dated CHQ['']?s?\s*[£$€]?\s*([\d,]+(?:\.\d+)?)/i);
   const postDatedCHQsTotal = pdMatch ? parseAmount(pdMatch[1]) : 0;
 
-  // Detect currency near post-dated
   const pdIdx = text.toLowerCase().indexOf("post dated");
   const pdSection = pdIdx >= 0 ? text.slice(pdIdx, pdIdx + 50) : "";
-
-  const anyBankBalance = Object.values(banks).some((v) => v !== 0);
-  if (totalAvailableBalance === 0 && !anyBankBalance) {
-    const date = extractDate(text);
-    throw new Error(`Bank position PDF parsed but all balances are zero — likely unreadable or unsupported format (${date || "no date"})`);
-  }
 
   return {
     date: extractDate(text),
@@ -93,6 +88,63 @@ export async function parseBankPositionPDF(buffer: Buffer): Promise<BankPosition
     totalAvailableBalance,
     postDatedCHQsTotal,
     postDatedCurrency: detectCurrency(pdSection),
+    company: "unze",
     rawText: text,
   };
+}
+
+// Imperial bank position blocks start with a "DD/MM/YYYY" line and run until the
+// next date line (or end of text). Per-bank columns aren't reliably attributable
+// from extracted text (labels and values don't line up 1:1), so only the
+// Total Available Balance is parsed for Imperial — that's the figure used for
+// reconciliation against the cash-flow closing balance.
+const IMPERIAL_BLOCK_SPLIT = /(?=^\d{2}\/\d{2}\/\d{4}$)/m;
+
+function parseImperialBlock(block: string): BankPositionParsed {
+  const totalMatch = block.match(/Total Available Balance[\s\S]{0,20}?\(?(-?[\d,]+(?:\.\d+)?)\)?/i);
+  let totalAvailableBalance = totalMatch ? parseAmount(totalMatch[1]) : 0;
+  if (totalMatch) {
+    const idx = block.indexOf(totalMatch[0]);
+    const chunk = block.slice(idx, idx + totalMatch[0].length + 5);
+    if (chunk.includes("(") && chunk.includes(")")) totalAvailableBalance = -Math.abs(totalAvailableBalance);
+  }
+
+  return {
+    date: extractDate(block),
+    banks: {},
+    totalAvailableBalance,
+    postDatedCHQsTotal: 0,
+    postDatedCurrency: "PKR",
+    company: "imperial",
+    rawText: block,
+  };
+}
+
+function checkNotZero(result: BankPositionParsed): void {
+  if (result.totalAvailableBalance === 0) {
+    throw new Error(`Bank position PDF parsed but all balances are zero — likely unreadable or unsupported format (${result.date || "no date"})`);
+  }
+}
+
+export async function parseBankPositionPDF(buffer: Buffer): Promise<BankPositionParsed[]> {
+  const text = await extractTextFromPDF(buffer);
+  const company = detectCompany(text);
+
+  if (company === "unze") {
+    const result = parseUnzeBankPosition(text);
+    checkNotZero(result);
+    return [result];
+  }
+
+  const blocks = text.split(IMPERIAL_BLOCK_SPLIT).filter((b) => /Total Available Balance/.test(b));
+  if (blocks.length === 0) {
+    const date = extractDate(text);
+    throw new Error(`Could not find any "Total Available Balance" blocks in this Imperial bank position PDF (${date || "no date"})`);
+  }
+
+  return blocks.map((block) => {
+    const result = parseImperialBlock(block);
+    checkNotZero(result);
+    return result;
+  });
 }
