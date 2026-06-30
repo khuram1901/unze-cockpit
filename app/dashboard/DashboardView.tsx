@@ -358,12 +358,13 @@ export default function DashboardView() {
     const cutoffStr = thirtyDaysAgo.toISOString().slice(0, 10);
     const dailyMap = new Map<string, number>();
     for (const r of production) {
+      if (!plantIdSet.has(r.plant_id)) continue;
       if (r.entry_date >= cutoffStr) {
         const d = r.entry_date;
         dailyMap.set(d, (dailyMap.get(d) || 0) + (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0));
       }
     }
-    const totalMonthlyTarget = prodTargets.reduce((s, t) => s + targetTotal(t), 0);
+    const totalMonthlyTarget = prodTargets.filter((t) => plantIdSet.has(t.plant_id)).reduce((s, t) => s + targetTotal(t), 0);
     const dailyTarget = totalMonthlyTarget > 0 ? Math.round(totalMonthlyTarget / 26) : 0;
     const trendArr = Array.from(dailyMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
