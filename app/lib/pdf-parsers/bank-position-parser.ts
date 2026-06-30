@@ -81,6 +81,12 @@ export async function parseBankPositionPDF(buffer: Buffer): Promise<BankPosition
   const pdIdx = text.toLowerCase().indexOf("post dated");
   const pdSection = pdIdx >= 0 ? text.slice(pdIdx, pdIdx + 50) : "";
 
+  const anyBankBalance = Object.values(banks).some((v) => v !== 0);
+  if (totalAvailableBalance === 0 && !anyBankBalance) {
+    const date = extractDate(text);
+    throw new Error(`Bank position PDF parsed but all balances are zero — likely unreadable or unsupported format (${date || "no date"})`);
+  }
+
   return {
     date: extractDate(text),
     banks,
