@@ -33,6 +33,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
   const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showTaskForm, setShowTaskForm] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -216,10 +217,44 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
         </>
       )}
 
-      {/* Add Record Button + Form */}
-      {(config.table !== "tasks" || (userCtx && canCreateAssignments(userCtx))) && (
+      {/* Issue Task — available on every department dashboard, regardless of its primary table */}
+      {userCtx && canCreateAssignments(userCtx) && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-          <SectionTitle title={config.table === "tasks" ? "Tasks" : "Records"} />
+          <SectionTitle title="Tasks" />
+          <button
+            onClick={() => setShowTaskForm(!showTaskForm)}
+            style={{
+              backgroundColor: COLOURS.NAVY,
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              padding: "8px 16px",
+              fontSize: "15px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {showTaskForm ? "Cancel" : "+ Issue Task"}
+          </button>
+        </div>
+      )}
+
+      {showTaskForm && (
+        <div style={{
+          border: "1px solid var(--border-color, #e2e8f0)",
+          borderTop: `3px solid ${COLOURS.NAVY}`,
+          borderRadius: "8px",
+          marginBottom: "14px",
+          overflow: "hidden",
+        }}>
+          <NewTaskForm onCreated={() => { setShowTaskForm(false); loadData(); }} />
+        </div>
+      )}
+
+      {/* Add Record Button + Form — for the department's own primary table */}
+      {config.table !== "tasks" && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <SectionTitle title="Records" />
           <button
             onClick={() => setShowForm(!showForm)}
             style={{
@@ -235,18 +270,6 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
           >
             {showForm ? "Cancel" : "+ Add"}
           </button>
-        </div>
-      )}
-
-      {showForm && config.table === "tasks" && (
-        <div style={{
-          border: "1px solid var(--border-color, #e2e8f0)",
-          borderTop: `3px solid ${COLOURS.NAVY}`,
-          borderRadius: "8px",
-          marginBottom: "14px",
-          overflow: "hidden",
-        }}>
-          <NewTaskForm onCreated={() => { setShowForm(false); loadData(); }} />
         </div>
       )}
 

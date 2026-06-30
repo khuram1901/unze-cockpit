@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabase";
+import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
+import { canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { downloadCSV } from "../../lib/exportUtils";
 import ImportExportButtons from "../../lib/ImportExportButtons";
+import NewTaskForm from "../../tasks/NewTaskForm";
 
 type Notice = {
   id: string;
@@ -52,6 +54,8 @@ export default function TaxationDashboard() {
   const [items, setItems] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -63,6 +67,18 @@ export default function TaxationDashboard() {
     setLoading(true);
     const { data } = await supabase.from("legal_notices").select("*").eq("company_id", UTPL_COMPANY_ID).order("created_at", { ascending: false });
     setItems(data || []);
+
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData.user?.email) {
+      const { data: memberData } = await supabase.from("members").select("role, department, company").eq("email", userData.user.email).maybeSingle();
+      if (memberData) {
+        let overrides: PermOverrides | null = null;
+        const p = await loadMyPermissions();
+        if (p) overrides = p as PermOverrides;
+        setUserCtx({ email: userData.user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides });
+      }
+    }
+
     setLoading(false);
   }
 
@@ -338,6 +354,24 @@ export default function TaxationDashboard() {
             </div>
             <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Add Notice"}</button>
           </form>
+        </div>
+      )}
+
+      {/* Issue Task — independent of the legal notices above */}
+      {userCtx && canCreateAssignments(userCtx) && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+          <button
+            onClick={() => setShowTaskForm(!showTaskForm)}
+            style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "15px", fontWeight: 700, cursor: "pointer" }}
+          >
+            {showTaskForm ? "Cancel" : "+ Issue Task"}
+          </button>
+        </div>
+      )}
+
+      {showTaskForm && (
+        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", marginBottom: "14px", overflow: "hidden" }}>
+          <NewTaskForm onCreated={() => { setShowTaskForm(false); loadData(); }} />
         </div>
       )}
 
