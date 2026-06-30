@@ -31,8 +31,18 @@ export async function POST(request: NextRequest) {
     const cashFlowBuffer = Buffer.from(await cashFlowFile.arrayBuffer());
     const bankPositionBuffer = Buffer.from(await bankPositionFile.arrayBuffer());
 
-    const cashFlow = await parseCashFlowPDF(cashFlowBuffer);
+    const cashFlowResults = await parseCashFlowPDF(cashFlowBuffer);
     const bankPosition = await parseBankPositionPDF(bankPositionBuffer);
+
+    if (cashFlowResults.length > 1) {
+      return Response.json(
+        {
+          error: `This Cash Flow PDF contains ${cashFlowResults.length} days of data (${cashFlowResults.map((r) => r.date).join(", ")}). Multi-day PDFs aren't supported on this upload form yet — use bulk upload instead, or split the PDF.`,
+        },
+        { status: 400 }
+      );
+    }
+    const cashFlow = cashFlowResults[0];
 
     const detectedCompanyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
     if (detectedCompanyId !== companyId) {

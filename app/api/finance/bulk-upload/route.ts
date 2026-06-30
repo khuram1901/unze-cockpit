@@ -34,40 +34,39 @@ export async function POST(request: NextRequest) {
 
       try {
         const buffer = Buffer.from(await file.arrayBuffer());
-        const parsed = await parseCashFlowPDF(buffer);
+        const parsedResults = await parseCashFlowPDF(buffer);
 
-        if (!parsed.date) {
-          results.push({ filename: file.name, status: "error — no date found" });
-          continue;
-        }
+        for (const parsed of parsedResults) {
+          const label = parsedResults.length > 1 ? `${file.name} (${parsed.date})` : file.name;
 
-        if (parsed.openingBalanceTotal === 0 && parsed.receiptsTotal === 0 && parsed.paymentsTotal === 0 && parsed.closingBalanceUnzeTrading === 0) {
-          results.push({ filename: file.name, status: "skipped — all values zero", date: parsed.date, company: parsed.company });
-          continue;
-        }
+          if (!parsed.date) {
+            results.push({ filename: label, status: "error — no date found" });
+            continue;
+          }
 
-        const companyId = parsed.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
+          const companyId = parsed.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
 
-        const { error } = await supabase.from("daily_cash_position").upsert(
-          {
-            company_id: companyId,
-            position_date: parsed.date,
-            opening_balance: parsed.openingBalanceTotal,
-            total_receipts: parsed.receiptsTotal,
-            total_payments: parsed.paymentsTotal,
-            closing_balance: parsed.closingBalanceUnzeTrading,
-            post_dated_total: parsed.loanPostDatedCHQs,
-            closing_after_post_dated: parsed.closingAfterLoanPostDated,
-            raw_pdf_filename: file.name,
-            uploaded_by: "bulk-upload",
-          },
-          { onConflict: "company_id,position_date" }
-        );
+          const { error } = await supabase.from("daily_cash_position").upsert(
+            {
+              company_id: companyId,
+              position_date: parsed.date,
+              opening_balance: parsed.openingBalanceTotal,
+              total_receipts: parsed.receiptsTotal,
+              total_payments: parsed.paymentsTotal,
+              closing_balance: parsed.closingBalanceUnzeTrading,
+              post_dated_total: parsed.loanPostDatedCHQs,
+              closing_after_post_dated: parsed.closingAfterLoanPostDated,
+              raw_pdf_filename: file.name,
+              uploaded_by: "bulk-upload",
+            },
+            { onConflict: "company_id,position_date" }
+          );
 
-        if (error) {
-          results.push({ filename: file.name, status: "error — " + error.message, date: parsed.date, company: parsed.company });
-        } else {
-          results.push({ filename: file.name, status: "saved", date: parsed.date, company: parsed.company });
+          if (error) {
+            results.push({ filename: label, status: "error — " + error.message, date: parsed.date, company: parsed.company });
+          } else {
+            results.push({ filename: label, status: "saved", date: parsed.date, company: parsed.company });
+          }
         }
       } catch (e) {
         results.push({ filename: file.name, status: "error — " + (e instanceof Error ? e.message : "parse failed") });

@@ -134,22 +134,50 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
   };
 }
 
-export async function parseCashFlowPDF(buffer: Buffer): Promise<CashFlowParsed> {
-  const text = await extractTextFromPDF(buffer);
-  const date = extractDate(text);
-  const company = detectCompany(text);
-
-  if (company === "unknown") {
-    throw new Error(`Could not determine company (Unze Trading vs Imperial Footwear) from PDF contents — refusing to guess (${date || "no date"})`);
-  }
-
-  const result = company === "imperial" ? parseImperial(text, date) : parseUnzeTrading(text, date);
-
+function checkNotMostlyZero(result: CashFlowParsed, date: string | null, company: string): void {
   const criticalFields = [result.openingBalanceTotal, result.receiptsTotal, result.paymentsTotal, result.closingBalanceUnzeTrading];
   const zeroCount = criticalFields.filter((v) => v === 0).length;
   if (zeroCount >= 3) {
     throw new Error(`PDF parsed but most values are zero — likely unreadable or unsupported format (${date || "no date"}, ${company})`);
   }
+}
 
-  return result;
+// Imperial PDFs are sometimes batched with multiple days in one file. Each day's
+// block starts with its "DD/MM/YYYY" line immediately followed by "Today Opening Balance".
+const IMPERIAL_BLOCK_SPLIT = /(?=\d{2}\/\d{2}\/\d{4}\s*\nToday Opening Balance)/;
+
+export async function parseCashFlowPDF(buffer: Buffer): Promise<CashFlowParsed[]> {
+  const text = await extractTextFromPDF(buffer);
+  const company = detectCompany(text);
+
+  if (company === "unknown") {
+    const date = extractDate(text);
+    throw new Error(`Could not determine company (Unze Trading vs Imperial Footwear) from PDF contents — refusing to guess (${date || "no date"})`);
+  }
+
+  if (company === "unze") {
+    const closingMatches = text.match(/Closing Balance Unze Trading/gi) || [];
+    if (closingMatches.length > 1) {
+      throw new Error(`This Unze Trading PDF appears to contain more than one day's data (${closingMatches.length} "Closing Balance" sections found) — multi-day Unze PDFs are not supported, please split and upload one day at a time`);
+    }
+    const date = extractDate(text);
+    const result = parseUnzeTrading(text, date);
+    checkNotMostlyZero(result, date, company);
+    return [result];
+  }
+
+  const blocks = text.split(IMPERIAL_BLOCK_SPLIT).filter((b) => /Today Opening Balance/.test(b));
+  if (blocks.length === 0) {
+    const date = extractDate(text);
+    throw new Error(`Could not find any "Today Opening Balance" blocks in this Imperial PDF (${date || "no date"})`);
+  }
+
+  const results = blocks.map((block) => {
+    const date = extractDate(block);
+    const result = parseImperial(block, date);
+    checkNotMostlyZero(result, date, company);
+    return result;
+  });
+
+  return results;
 }
