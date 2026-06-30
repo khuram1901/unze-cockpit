@@ -2118,11 +2118,48 @@ function ExecutiveDashboardBody({
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
-        <p style={{ color: SLATE, fontSize: "15px", margin: 0, maxWidth: "640px" }}>
-          Exceptions surface automatically. If nothing needs your attention, everything is on track.
-        </p>
-        <div style={{ backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "8px 12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "stretch", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+        {hasAttention ? (
+          <div
+            onClick={() => setBannerOpen(!bannerOpen)}
+            style={{
+              flex: 1, minWidth: "260px", cursor: "pointer",
+              border: `1px solid ${hasCritical ? "#fecaca" : "#fde68a"}`,
+              borderLeft: `4px solid ${hasCritical ? "#dc2626" : "#d97706"}`,
+              borderRadius: "8px",
+              backgroundColor: hasCritical ? "#fef2f2" : "#fffbeb",
+              padding: "9px 14px",
+              display: "flex", alignItems: "center", gap: "10px",
+            }}
+          >
+            <span style={{ fontSize: "17px", flexShrink: 0 }}>⚠</span>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: hasCritical ? "#991b1b" : "#92400e", flexShrink: 0 }}>
+              {totalAttentionCount} item{totalAttentionCount > 1 ? "s" : ""} need attention
+            </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", flex: 1, minWidth: 0 }}>
+              {attentionRows.slice(0, 3).map((row) => (
+                <span key={`chip-${row.id}`} style={{
+                  display: "inline-flex", alignItems: "center", gap: "4px",
+                  fontSize: "12px", fontWeight: 600, color: "white",
+                  backgroundColor: row.color, borderRadius: "9px", padding: "1px 8px",
+                }}>
+                  {row.count} {row.label}
+                </span>
+              ))}
+              {attentionRows.length > 3 && (
+                <span style={{ fontSize: "12px", color: hasCritical ? "#991b1b" : "#92400e", fontWeight: 600, alignSelf: "center" }}>
+                  +{attentionRows.length - 3} more
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: "13px", color: hasCritical ? "#991b1b" : "#92400e", fontWeight: 700, flexShrink: 0 }}>{bannerOpen ? "▲ Hide" : "▼ Show"}</span>
+          </div>
+        ) : (
+          <p style={{ color: SLATE, fontSize: "15px", margin: 0, maxWidth: "640px" }}>
+            Exceptions surface automatically. If nothing needs your attention, everything is on track.
+          </p>
+        )}
+        <div style={{ backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "8px 12px", flexShrink: 0 }}>
           <label style={{ fontWeight: 700, display: "block", marginBottom: "3px", fontSize: "15px", color: SLATE }}>View date</label>
           <input
             type="date"
@@ -2138,8 +2175,8 @@ function ExecutiveDashboardBody({
         </div>
       </div>
 
-      {/* ── SECTION 1: NEEDS YOUR ATTENTION ── */}
-      {hasAttention ? (
+      {/* ── SECTION 1: NEEDS YOUR ATTENTION (expanded detail) ── */}
+      {hasAttention && bannerOpen ? (
         <div style={{
           border: `1px solid ${hasCritical ? "#fecaca" : BORDER}`,
           borderLeft: `4px solid ${hasCritical ? "#dc2626" : "#d97706"}`,
@@ -2148,58 +2185,8 @@ function ExecutiveDashboardBody({
           overflow: "hidden",
           marginBottom: "14px",
         }}>
-          {/* Segmented severity bar — proportional width per category, top 6 named categories first */}
-          {attentionRows.length > 0 && (
-            <div style={{ display: "flex", height: "5px", width: "100%", gap: "2px" }}>
-              {attentionRows.map((row) => (
-                <div
-                  key={`seg-${row.id}`}
-                  title={`${row.label}: ${row.count}`}
-                  style={{
-                    flex: Math.max(row.count, 1),
-                    minWidth: "4px",
-                    backgroundColor: row.color,
-                    borderRadius: "2px",
-                  }}
-                />
-              ))}
-            </div>
-          )}
-          <div
-            onClick={() => setBannerOpen(!bannerOpen)}
-            style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
-              <span style={{ fontSize: "20px", flexShrink: 0 }}>⚠</span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: hasCritical ? "#991b1b" : "#92400e" }}>
-                  Action needed today — {totalAttentionCount} item{totalAttentionCount > 1 ? "s" : ""}
-                </div>
-                {!bannerOpen && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "5px" }}>
-                    {attentionRows.slice(0, 3).map((row) => (
-                      <span key={`chip-${row.id}`} style={{
-                        display: "inline-flex", alignItems: "center", gap: "5px",
-                        fontSize: "13px", fontWeight: 600, color: "white",
-                        backgroundColor: row.color, borderRadius: "10px", padding: "2px 9px",
-                      }}>
-                        {row.count} {row.label}
-                      </span>
-                    ))}
-                    {attentionRows.length > 3 && (
-                      <span style={{ fontSize: "13px", color: hasCritical ? "#991b1b" : "#92400e", fontWeight: 600, alignSelf: "center" }}>
-                        +{attentionRows.length - 3} more
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            <span style={{ fontSize: "16px", color: hasCritical ? "#991b1b" : "#92400e", fontWeight: 700, flexShrink: 0 }}>{bannerOpen ? "▲ Hide" : "▼ Show"}</span>
-          </div>
-          {bannerOpen && (
-            <div style={{ borderTop: `1px solid ${hasCritical ? "#fecaca" : "#fde68a"}` }}>
-              {attentionRows.map((row) => {
+          <div>
+            {attentionRows.map((row) => {
                 const isOpen = expandedCard === row.id;
                 return (
                   <div key={row.id}>
@@ -2266,18 +2253,9 @@ function ExecutiveDashboardBody({
                   </div>
                 );
               })}
-            </div>
-          )}
+          </div>
         </div>
-      ) : (
-        <div style={{
-          border: `1px solid ${BORDER}`, borderLeft: "4px solid #16a34a", borderRadius: "6px",
-          padding: "12px 16px", backgroundColor: "var(--bg-card, #ffffff)",
-          fontSize: "16px", color: NAVY, fontWeight: 600, marginBottom: "14px",
-        }}>
-          All clear — no items require your attention right now.
-        </div>
-      )}
+      ) : null}
 
       {/* ── SECTION 2: OPERATIONS STATUS ── */}
       <SectionTitle title="Operations Status — Today" />
@@ -2421,7 +2399,10 @@ function ExecutiveDashboardBody({
                   ];
                   return (
                     <div key={w.company}>
-                      <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "10px" }}>{w.company}</div>
+                      <div style={{
+                        fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "10px",
+                        lineHeight: 1.25, minHeight: "35px", display: "flex", alignItems: "flex-end",
+                      }}>{w.company}</div>
                       <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "118px" }}>
                         {items.map((item) => (
                           <div key={item.label} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
