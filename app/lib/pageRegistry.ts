@@ -63,7 +63,6 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_manage_recurring_tasks", title: "Recurring Tasks", subtitle: "Manage recurring task templates", href: "/recurring-tasks", icon: "🔁", group: "Tasks & Meetings" },
 
   // ── Departments ──
-  { permKey: "can_view_dept_ops", title: "Operations Dept", subtitle: "Unze Trading Ops department", href: "/department/ops", icon: "🏗️", group: "Departments" },
   { permKey: "can_view_dept_hr", title: "HR", subtitle: "Human resources dashboard", href: "/department/hr", icon: "🧑‍💼", group: "Departments" },
   { permKey: "can_view_dept_tax", title: "Taxation", subtitle: "Tax notices and compliance", href: "/department/taxation", icon: "🧾", group: "Departments" },
   { permKey: "can_view_dept_audit", title: "Audit", subtitle: "Internal audit tracking", href: "/department/audit", icon: "🔎", group: "Departments", badgeKey: "audit" },
