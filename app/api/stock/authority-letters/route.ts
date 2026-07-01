@@ -36,15 +36,63 @@ export async function GET(request: NextRequest) {
   const contractorId = searchParams.get("contractorId");
   const letterNumber = searchParams.get("letterNumber");
 
-  // Lookup by letter number (plant member dispatch flow)
+  // Lookup by letter number (plant member dispatch flow) — returns single letter with remaining balances
   if (letterNumber) {
-    const { data, error } = await supabase
+    const plantId = searchParams.get("plantId");
+    let q = supabase
       .from("authority_letters")
-      .select("*, purchase_orders(po_number, customer_name, plant_id, plant_name), contractors(name)")
-      .ilike("letter_number", letterNumber.trim())
-      .limit(5);
+      .select("*, purchase_orders(id, po_number, customer_name, plant_id), contractors(id, name)")
+      .ilike("letter_number", letterNumber.trim());
+    if (plantId) {
+      // Filter via the linked PO's plant_id
+      q = q.eq("purchase_orders.plant_id", plantId);
+    }
+    const { data, error } = await q.limit(1).maybeSingle();
     if (error) return Response.json({ error: error.message }, { status: 500 });
-    return Response.json({ letters: data || [] });
+    if (!data) return Response.json({ letter: null });
+
+    // Compute dispatched so far (opening + all dispatch_records)
+    const { data: records } = await supabase
+      .from("dispatch_records")
+      .select("qty_31, qty_36, qty_45, qty_meter")
+      .eq("authority_letter_id", data.id);
+    const dispatched = (records || []).reduce(
+      (acc, r) => ({
+        qty_31: acc.qty_31 + (r.qty_31 || 0),
+        qty_36: acc.qty_36 + (r.qty_36 || 0),
+        qty_45: acc.qty_45 + (r.qty_45 || 0),
+        qty_meter: acc.qty_meter + (r.qty_meter || 0),
+      }),
+      {
+        qty_31: data.opening_dispatched_31 || 0,
+        qty_36: data.opening_dispatched_36 || 0,
+        qty_45: data.opening_dispatched_45 || 0,
+        qty_meter: data.opening_dispatched_meter || 0,
+      }
+    );
+
+    const po = data.purchase_orders as { id: string; po_number: string; customer_name: string } | null;
+    const contractor = data.contractors as { id: string; name: string } | null;
+
+    return Response.json({
+      letter: {
+        id: data.id,
+        letter_number: data.letter_number,
+        po_id: po?.id || data.po_id,
+        contractor_id: contractor?.id || data.contractor_id,
+        po_number: po?.po_number || "",
+        customer_name: po?.customer_name || "",
+        contractor_name: contractor?.name || "",
+        qty_31: data.qty_31 || 0,
+        qty_36: data.qty_36 || 0,
+        qty_45: data.qty_45 || 0,
+        qty_meter: data.qty_meter || 0,
+        remaining_31: Math.max(0, (data.qty_31 || 0) - dispatched.qty_31),
+        remaining_36: Math.max(0, (data.qty_36 || 0) - dispatched.qty_36),
+        remaining_45: Math.max(0, (data.qty_45 || 0) - dispatched.qty_45),
+        remaining_meter: Math.max(0, (data.qty_meter || 0) - dispatched.qty_meter),
+      },
+    });
   }
 
   let query = supabase

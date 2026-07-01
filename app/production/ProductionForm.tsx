@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK } from "../lib/dateUtils";
@@ -11,6 +11,27 @@ type Plant = {
   name: string;
   type: string;
   active: boolean;
+};
+
+type PO = {
+  id: string;
+  customer_name: string;
+  po_number: string;
+  po_label: string | null;
+  ordered_31: number; ordered_36: number; ordered_45: number; ordered_meter: number;
+  is_system_unallocated: boolean;
+};
+
+type LetterLookup = {
+  id: string;
+  letter_number: string;
+  po_id: string;
+  contractor_id: string;
+  po_number: string;
+  customer_name: string;
+  contractor_name: string;
+  qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
+  remaining_31: number; remaining_36: number; remaining_45: number; remaining_meter: number;
 };
 
 const REASONS = [
@@ -36,6 +57,11 @@ type PastEntry = {
   type: "Production" | "Dispatch" | "Breakage";
 };
 
+async function authedFetch(url: string, opts: RequestInit = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  return fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}`, "Content-Type": "application/json" } });
+}
+
 export default function ProductionForm() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [plantId, setPlantId] = useState("");
@@ -52,11 +78,23 @@ export default function ProductionForm() {
   const [prod45, setProd45] = useState("");
   const [prodMeter, setProdMeter] = useState("");
 
-  // Dispatch
+  // PO allocation for production
+  const [plantPOs, setPlantPOs] = useState<PO[]>([]);
+  const [selectedPOId, setSelectedPOId] = useState("");
+  const [loadingPOs, setLoadingPOs] = useState(false);
+
+  // Dispatch — authority letter mode
+  const [letterNumber, setLetterNumber] = useState("");
+  const [lookingUpLetter, setLookingUpLetter] = useState(false);
+  const [letterLookup, setLetterLookup] = useState<LetterLookup | null>(null);
+  const [letterError, setLetterError] = useState("");
   const [disp31, setDisp31] = useState("");
   const [disp36, setDisp36] = useState("");
   const [disp45, setDisp45] = useState("");
   const [dispMeter, setDispMeter] = useState("");
+  const [releasedBy, setReleasedBy] = useState("");
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const letterLookupTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Breakage
   const [brk31, setBrk31] = useState("");
@@ -148,6 +186,28 @@ export default function ProductionForm() {
     load();
   }, []);
 
+  // Load POs for the selected plant
+  useEffect(() => {
+    async function loadPOs() {
+      if (!plantId) { setPlantPOs([]); setSelectedPOId(""); return; }
+      setLoadingPOs(true);
+      try {
+        const res = await authedFetch(`/api/stock/purchase-orders?plantId=${plantId}`);
+        const json = await res.json();
+        const list: PO[] = json.purchaseOrders || [];
+        setPlantPOs(list);
+        // Default to system unallocated PO
+        const unallocated = list.find((p) => p.is_system_unallocated);
+        setSelectedPOId(unallocated?.id || (list[0]?.id || ""));
+      } catch {
+        setPlantPOs([]);
+      } finally {
+        setLoadingPOs(false);
+      }
+    }
+    loadPOs();
+  }, [plantId]);
+
   async function loadHistory() {
     if (!plantId) { setPastEntries([]); return; }
     const fourteenAgo = new Date();
@@ -170,6 +230,36 @@ export default function ProductionForm() {
   }
 
   useEffect(() => { loadHistory(); }, [plantId, entryDate]);
+
+  // Debounced authority letter lookup
+  useEffect(() => {
+    if (letterLookupTimeout.current) clearTimeout(letterLookupTimeout.current);
+    if (!letterNumber.trim() || !plantId) {
+      setLetterLookup(null); setLetterError("");
+      return;
+    }
+    letterLookupTimeout.current = setTimeout(() => lookupLetter(letterNumber.trim()), 600);
+    return () => { if (letterLookupTimeout.current) clearTimeout(letterLookupTimeout.current); };
+  }, [letterNumber, plantId]);
+
+  async function lookupLetter(num: string) {
+    setLookingUpLetter(true);
+    setLetterLookup(null);
+    setLetterError("");
+    try {
+      const res = await authedFetch(`/api/stock/authority-letters?letterNumber=${encodeURIComponent(num)}&plantId=${plantId}`);
+      const json = await res.json();
+      if (json.error || !json.letter) {
+        setLetterError("Letter not found. Check the number and try again.");
+      } else {
+        setLetterLookup(json.letter);
+      }
+    } catch {
+      setLetterError("Could not look up letter. Check your connection.");
+    } finally {
+      setLookingUpLetter(false);
+    }
+  }
 
   const selectedPlant = plants.find((p) => p.id === plantId);
   const isMeter = selectedPlant?.type === "meter";
@@ -211,59 +301,136 @@ export default function ProductionForm() {
     }
     setSavingSection("production");
     const enteredBy = await currentEmail();
-    const { error } = await supabase.from("production_entries").insert({
+
+    const qty31 = nothing ? 0 : Number(prod31) || 0;
+    const qty36 = nothing ? 0 : Number(prod36) || 0;
+    const qty45 = nothing ? 0 : Number(prod45) || 0;
+    const qtyMeter = nothing ? 0 : Number(prodMeter) || 0;
+
+    const { data: entryData, error } = await supabase.from("production_entries").insert({
       plant_id: plantId, plant_name: selectedPlant?.name || "",
       entry_date: entryDate,
-      qty_31: nothing ? 0 : Number(prod31) || 0,
-      qty_36: nothing ? 0 : Number(prod36) || 0,
-      qty_45: nothing ? 0 : Number(prod45) || 0,
-      qty_meter: nothing ? 0 : Number(prodMeter) || 0,
+      qty_31: qty31, qty_36: qty36, qty_45: qty45, qty_meter: qtyMeter,
       nothing_to_report: nothing,
       entered_by: enteredBy, notes,
-    });
-    setSavingSection("");
+    }).select("id").single();
+
     if (error) {
+      setSavingSection("");
       const dup = error.code === "23505";
       showMsg("production", dup ? "Production already entered for this plant and date. Delete the existing entry first to re-enter." : "Error: " + error.message, false);
       if (dup) loadHistory();
       return;
     }
-    logAction("Created", "production_entries", `Production entry for ${entryDate}`); showMsg("production", nothing ? "Logged: nothing to report ✓" : "Production saved ✓", true);
-    setProd31(""); setProd36(""); setProd45(""); setProdMeter(""); loadHistory();
+
+    // Submit PO allocation if a PO is selected and there are quantities
+    if (!nothing && entryData?.id && selectedPOId && (qty31 + qty36 + qty45 + qtyMeter > 0)) {
+      const allocRes = await authedFetch("/api/stock/production-allocations", {
+        method: "POST",
+        body: JSON.stringify({
+          entry_id: entryData.id,
+          allocations: [{
+            po_id: selectedPOId,
+            qty_31: qty31, qty_36: qty36, qty_45: qty45, qty_meter: qtyMeter,
+          }],
+        }),
+      });
+      const allocJson = await allocRes.json();
+      if (allocJson.error) {
+        setSavingSection("");
+        showMsg("production", `Production saved but PO allocation failed: ${allocJson.error}`, false);
+        setProd31(""); setProd36(""); setProd45(""); setProdMeter("");
+        logAction("Created", "production_entries", `Production entry for ${entryDate}`);
+        loadHistory();
+        return;
+      }
+    }
+
+    setSavingSection("");
+    logAction("Created", "production_entries", `Production entry for ${entryDate}`);
+    showMsg("production", nothing ? "Logged: nothing to report ✓" : "Production saved ✓", true);
+    setProd31(""); setProd36(""); setProd45(""); setProdMeter("");
+    loadHistory();
   }
 
-  // ---- Dispatch ----
+  // ---- Dispatch (authority letter mode) ----
   async function submitDispatch(nothing = false) {
     if (!plantId) return;
     if (hasEntryFor("Dispatch")) {
       showMsg("dispatch", "Dispatch already entered for this plant and date. Delete the existing entry first to re-enter.", false);
       return;
     }
-    if (!nothing && !disp31 && !disp36 && !disp45 && !dispMeter) {
-      showMsg("dispatch", "Enter a number, or use 'Nothing to report'.", false);
+
+    const qty31 = nothing ? 0 : Number(disp31) || 0;
+    const qty36 = nothing ? 0 : Number(disp36) || 0;
+    const qty45 = nothing ? 0 : Number(disp45) || 0;
+    const qtyMeter = nothing ? 0 : Number(dispMeter) || 0;
+
+    if (!nothing && qty31 + qty36 + qty45 + qtyMeter === 0) {
+      showMsg("dispatch", "Enter a quantity, or use 'Nothing to report'.", false);
       return;
     }
+    if (!nothing && !letterLookup) {
+      showMsg("dispatch", "Find an authority letter first by entering the letter number.", false);
+      return;
+    }
+    if (!nothing && !releasedBy.trim()) {
+      showMsg("dispatch", "Enter the name of who released/approved the dispatch.", false);
+      return;
+    }
+
     setSavingSection("dispatch");
     const enteredBy = await currentEmail();
-    const { error } = await supabase.from("dispatch_entries").insert({
+
+    // Save to dispatch_entries (legacy — keeps existing dashboard working)
+    const { error: dispError } = await supabase.from("dispatch_entries").insert({
       plant_id: plantId, plant_name: selectedPlant?.name || "",
       entry_date: entryDate,
-      qty_31: nothing ? 0 : Number(disp31) || 0,
-      qty_36: nothing ? 0 : Number(disp36) || 0,
-      qty_45: nothing ? 0 : Number(disp45) || 0,
-      qty_meter: nothing ? 0 : Number(dispMeter) || 0,
+      qty_31: qty31, qty_36: qty36, qty_45: qty45, qty_meter: qtyMeter,
       nothing_to_report: nothing,
       entered_by: enteredBy, notes,
     });
-    setSavingSection("");
-    if (error) {
-      const dup = error.code === "23505";
-      showMsg("dispatch", dup ? "Dispatch already entered for this plant and date. Delete the existing entry first to re-enter." : "Error: " + error.message, false);
+
+    if (dispError) {
+      setSavingSection("");
+      const dup = dispError.code === "23505";
+      showMsg("dispatch", dup ? "Dispatch already entered for this plant and date." : "Error: " + dispError.message, false);
       if (dup) loadHistory();
       return;
     }
-    logAction("Created", "dispatch_entries", `Dispatch entry for ${entryDate}`); showMsg("dispatch", nothing ? "Logged: nothing to report ✓" : "Dispatch saved ✓", true);
-    setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter(""); loadHistory();
+
+    // Save to dispatch_records (stock system) if not "nothing"
+    if (!nothing && letterLookup) {
+      const recRes = await authedFetch("/api/stock/dispatch-records", {
+        method: "POST",
+        body: JSON.stringify({
+          authority_letter_id: letterLookup.id,
+          dispatch_date: entryDate,
+          qty_31: qty31, qty_36: qty36, qty_45: qty45, qty_meter: qtyMeter,
+          released_by: releasedBy.trim(),
+          vehicle_number: vehicleNumber.trim() || null,
+          notes: notes || null,
+        }),
+      });
+      const recJson = await recRes.json();
+      if (recJson.error) {
+        setSavingSection("");
+        showMsg("dispatch", `Dispatch saved to daily log but stock record failed: ${recJson.error}`, false);
+        setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter("");
+        setLetterNumber(""); setLetterLookup(null); setReleasedBy(""); setVehicleNumber("");
+        logAction("Created", "dispatch_entries", `Dispatch entry for ${entryDate}`);
+        loadHistory();
+        return;
+      }
+    }
+
+    setSavingSection("");
+    logAction("Created", "dispatch_entries", `Dispatch entry for ${entryDate}`);
+    showMsg("dispatch", nothing ? "Logged: nothing to report ✓" : "Dispatch saved ✓", true);
+    setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter("");
+    setLetterNumber(""); setLetterLookup(null); setLetterError("");
+    setReleasedBy(""); setVehicleNumber("");
+    loadHistory();
   }
 
   // ---- Breakage ----
@@ -413,6 +580,10 @@ export default function ProductionForm() {
     );
   }
 
+  const systemPO = plantPOs.find((p) => p.is_system_unallocated);
+  const customerPOs = plantPOs.filter((p) => !p.is_system_unallocated);
+  const dispatchHasQty = Number(disp31) + Number(disp36) + Number(disp45) + Number(dispMeter) > 0;
+
   return (
     <div>
       {/* Plant & date */}
@@ -492,7 +663,60 @@ export default function ProductionForm() {
             ) : (
               <label>Single-phase meters produced<input type="number" min="0" style={inputStyle} value={prodMeter} onChange={(e) => setProdMeter(e.target.value)} placeholder="0" /></label>
             )}
-            <div style={btnRow}>
+
+            {/* PO allocation */}
+            {plantPOs.length > 0 && (
+              <div style={{ marginTop: "10px" }}>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-secondary, #64748b)", marginBottom: "6px" }}>
+                  Which PO is this production for?
+                </div>
+                {loadingPOs ? (
+                  <p style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>Loading POs…</p>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {customerPOs.map((po) => (
+                      <button
+                        key={po.id}
+                        type="button"
+                        onClick={() => setSelectedPOId(po.id)}
+                        style={{
+                          textAlign: "left", padding: "10px 12px", borderRadius: "8px", cursor: "pointer",
+                          border: `2px solid ${selectedPOId === po.id ? "#2563eb" : "var(--border-color, #e2e8f0)"}`,
+                          backgroundColor: selectedPOId === po.id ? "#eff6ff" : "var(--bg-card, #fff)",
+                          transition: "all 0.1s",
+                        }}
+                      >
+                        <div style={{ fontSize: "14px", fontWeight: 700, color: selectedPOId === po.id ? "#1d4ed8" : "var(--text-primary, #1e293b)" }}>
+                          {po.customer_name} — PO #{po.po_number}
+                        </div>
+                        {po.po_label && (
+                          <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>{po.po_label}</div>
+                        )}
+                      </button>
+                    ))}
+                    {systemPO && (
+                      <button
+                        key={systemPO.id}
+                        type="button"
+                        onClick={() => setSelectedPOId(systemPO.id)}
+                        style={{
+                          textAlign: "left", padding: "8px 12px", borderRadius: "8px", cursor: "pointer",
+                          border: `2px solid ${selectedPOId === systemPO.id ? "#d97706" : "var(--border-color, #e2e8f0)"}`,
+                          backgroundColor: selectedPOId === systemPO.id ? "#fffbeb" : "var(--bg-card, #fff)",
+                          transition: "all 0.1s",
+                        }}
+                      >
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: selectedPOId === systemPO.id ? "#92400e" : "var(--text-secondary, #64748b)" }}>
+                          Unallocated (Unze stock)
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ ...btnRow, marginTop: "12px" }}>
               <button type="button" onClick={() => submitProduction(false)} disabled={savingSection === "production"} style={submitBtn("production")}>
                 {savingSection === "production" ? "Saving…" : "Submit Production"}
               </button>
@@ -534,16 +758,80 @@ export default function ProductionForm() {
         {plantId && (
           <div style={sectionStyle}>
             <h3 style={h3}>Dispatch today</h3>
-            <p style={hint}>Good poles sent out. Required daily.</p>
-            {!isMeter ? (
-              <>
-                <label>31 ft dispatched<input type="number" min="0" style={inputStyle} value={disp31} onChange={(e) => setDisp31(e.target.value)} placeholder="0" /></label>
-                <label>36 ft dispatched<input type="number" min="0" style={inputStyle} value={disp36} onChange={(e) => setDisp36(e.target.value)} placeholder="0" /></label>
-                <label>45 ft dispatched<input type="number" min="0" style={inputStyle} value={disp45} onChange={(e) => setDisp45(e.target.value)} placeholder="0" /></label>
-              </>
-            ) : (
-              <label>Single-phase meters dispatched<input type="number" min="0" style={inputStyle} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
+            <p style={hint}>Enter the authority letter number to look up the contractor and remaining balance.</p>
+
+            {/* Letter number lookup */}
+            <label style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>
+              Authority letter number
+              <input
+                type="text"
+                style={inputStyle}
+                value={letterNumber}
+                onChange={(e) => { setLetterNumber(e.target.value); setLetterLookup(null); setLetterError(""); }}
+                placeholder="e.g. MEPCO-LT-2291"
+              />
+            </label>
+
+            {lookingUpLetter && <p style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginBottom: "8px" }}>Looking up letter…</p>}
+            {letterError && <p style={{ fontSize: "14px", color: "#dc2626", marginBottom: "8px", fontWeight: 600 }}>{letterError}</p>}
+
+            {letterLookup && (
+              <div style={{ border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 12px", backgroundColor: "#f0fdf4", marginBottom: "10px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#15803d", marginBottom: "4px" }}>Letter found ✓</div>
+                <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
+                  {letterLookup.customer_name} — PO #{letterLookup.po_number}
+                </div>
+                <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>
+                  Contractor: {letterLookup.contractor_name}
+                </div>
+                <div style={{ marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  {[
+                    { size: "31ft", authorized: letterLookup.qty_31, remaining: letterLookup.remaining_31 },
+                    { size: "36ft", authorized: letterLookup.qty_36, remaining: letterLookup.remaining_36 },
+                    { size: "45ft", authorized: letterLookup.qty_45, remaining: letterLookup.remaining_45 },
+                    { size: "Mtr", authorized: letterLookup.qty_meter, remaining: letterLookup.remaining_meter },
+                  ].filter((s) => s.authorized > 0).map((s) => (
+                    <div key={s.size} style={{ padding: "4px 10px", borderRadius: "6px", backgroundColor: s.remaining > 0 ? "#dcfce7" : "#fef2f2", border: `1px solid ${s.remaining > 0 ? "#86efac" : "#fecaca"}` }}>
+                      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-secondary, #64748b)" }}>{s.size}</div>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: s.remaining > 0 ? "#15803d" : "#dc2626" }}>
+                        {s.remaining} left
+                      </div>
+                      <div style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)" }}>of {s.authorized}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
+
+            {/* Qty fields — show when letter found OR when entering "nothing" */}
+            {(letterLookup || !letterNumber) && (
+              <>
+                {!isMeter ? (
+                  <>
+                    <label>31 ft dispatched<input type="number" min="0" style={inputStyle} value={disp31} onChange={(e) => setDisp31(e.target.value)} placeholder="0" /></label>
+                    <label>36 ft dispatched<input type="number" min="0" style={inputStyle} value={disp36} onChange={(e) => setDisp36(e.target.value)} placeholder="0" /></label>
+                    <label>45 ft dispatched<input type="number" min="0" style={inputStyle} value={disp45} onChange={(e) => setDisp45(e.target.value)} placeholder="0" /></label>
+                  </>
+                ) : (
+                  <label>Single-phase meters dispatched<input type="number" min="0" style={inputStyle} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
+                )}
+              </>
+            )}
+
+            {/* Released by + vehicle — show when dispatch qty entered */}
+            {letterLookup && dispatchHasQty && (
+              <>
+                <label style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>
+                  Released by *
+                  <input type="text" style={inputStyle} value={releasedBy} onChange={(e) => setReleasedBy(e.target.value)} placeholder="Name of person who released from store" />
+                </label>
+                <label style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>
+                  Vehicle number (optional)
+                  <input type="text" style={inputStyle} value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} placeholder="e.g. ABX-123" />
+                </label>
+              </>
+            )}
+
             <div style={btnRow}>
               <button type="button" onClick={() => submitDispatch(false)} disabled={savingSection === "dispatch"} style={submitBtn("dispatch")}>
                 {savingSection === "dispatch" ? "Saving…" : "Submit Dispatch"}
