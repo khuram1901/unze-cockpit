@@ -53,6 +53,7 @@ export const PAGE_REGISTRY: PageCard[] = [
   // ── Production / Operations ──
   { permKey: "can_access_daily_entry", title: "Daily Entry", subtitle: "Log daily production and dispatch", href: "/production", icon: "📊", group: "Operations" },
   { permKey: "can_view_stock", title: "Stock", subtitle: "Customer POs, authority letters, dispatch balances", href: "/stock", icon: "🏭", group: "Operations" },
+  { permKey: "can_manage_stock", title: "Manage POs", subtitle: "Create POs, contractors, authority letters", href: "/stock/manage", icon: "📋", group: "Operations" },
 
   // ── Tasks & Meetings ──
   { permKey: "_tasks", title: "Tasks", subtitle: "View and manage tasks", href: "/tasks", icon: "🎯", group: "Tasks & Meetings", badgeKey: "tasks" },

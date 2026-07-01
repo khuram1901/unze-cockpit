@@ -18,6 +18,7 @@ import {
   canViewDepartment, canManageMembers, canAddMembers,
   canViewAuditLog, canViewExceptions, canImportExport,
   canAccessDailyEntry, canViewPADashboard, canViewInvestments,
+  canViewStock, canManageStock,
   isMainAdmin, isCEO,
   type UserCtx,
 } from "./permissions";
@@ -49,6 +50,8 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_import_export: canImportExport,
   can_access_daily_entry: canAccessDailyEntry,
   can_view_investments: canViewInvestments,
+  can_view_stock: canViewStock,
+  can_manage_stock: canManageStock,
 };
 
 function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
