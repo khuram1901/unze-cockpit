@@ -111,6 +111,18 @@ export function canViewOperations(u: UserCtx) {
   return isAdminTier(u) || u.department === "Unze Trading Ops";
 }
 
+export function canViewStock(u: UserCtx) {
+  const o = ov(u, "can_view_stock");
+  if (o !== null) return o;
+  return isAdminTier(u) || u.department === "Unze Trading Ops";
+}
+
+export function canManageStock(u: UserCtx) {
+  const o = ov(u, "can_manage_stock");
+  if (o !== null) return o;
+  return isAdminTier(u) || (u.role === "Manager" && u.department === "Unze Trading Ops");
+}
+
 // ── Tasks & meetings ──────────────────────────────────────────────
 export function canSeeAllTasks(u: UserCtx) {
   const o = ov(u, "can_see_all_tasks");

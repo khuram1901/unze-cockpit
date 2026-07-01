@@ -1,0 +1,126 @@
+import { NextRequest } from "next/server";
+import { createServiceClient } from "../../../lib/supabase-server";
+import { requireAuth } from "../../../lib/api-auth";
+
+function canManage(role: string, department: string | null) {
+  return role === "Admin" || role === "Executive" ||
+    (role === "Manager" && department === "Unze Trading Ops");
+}
+
+// Returns the total qty already issued in letters for a PO (per size)
+async function getPoLetterTotals(supabase: ReturnType<typeof import("../../../lib/supabase-server").createServiceClient>, poId: string, excludeId?: string) {
+  let query = supabase
+    .from("authority_letters")
+    .select("qty_31, qty_36, qty_45, qty_meter")
+    .eq("po_id", poId);
+  if (excludeId) query = query.neq("id", excludeId);
+  const { data } = await query;
+  return (data || []).reduce(
+    (acc, r) => ({
+      qty_31: acc.qty_31 + (r.qty_31 || 0),
+      qty_36: acc.qty_36 + (r.qty_36 || 0),
+      qty_45: acc.qty_45 + (r.qty_45 || 0),
+      qty_meter: acc.qty_meter + (r.qty_meter || 0),
+    }),
+    { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 }
+  );
+}
+
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  const { searchParams } = new URL(request.url);
+  const poId = searchParams.get("poId");
+  const contractorId = searchParams.get("contractorId");
+  const letterNumber = searchParams.get("letterNumber");
+
+  // Lookup by letter number (plant member dispatch flow)
+  if (letterNumber) {
+    const { data, error } = await supabase
+      .from("authority_letters")
+      .select("*, purchase_orders(po_number, customer_name, plant_id, plant_name), contractors(name)")
+      .ilike("letter_number", letterNumber.trim())
+      .limit(5);
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ letters: data || [] });
+  }
+
+  let query = supabase
+    .from("authority_letters")
+    .select("*, contractors(name)")
+    .order("created_at", { ascending: false });
+
+  if (poId) query = query.eq("po_id", poId);
+  if (contractorId) query = query.eq("contractor_id", contractorId);
+
+  const { data, error } = await query;
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ letters: data || [] });
+}
+
+export async function POST(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  const { data: member } = await supabase
+    .from("members").select("role, department").eq("email", auth.email).single();
+
+  if (!member || !canManage(member.role, member.department)) {
+    return Response.json({ error: "Ops Manager or Admin required" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const {
+    po_id, contractor_id, letter_number, issue_date, issued_by,
+    qty_31 = 0, qty_36 = 0, qty_45 = 0, qty_meter = 0,
+    opening_dispatched_31 = 0, opening_dispatched_36 = 0,
+    opening_dispatched_45 = 0, opening_dispatched_meter = 0,
+    notes,
+  } = body;
+
+  if (!po_id || !contractor_id || !letter_number || !issue_date || !issued_by) {
+    return Response.json({ error: "po_id, contractor_id, letter_number, issue_date, issued_by are required" }, { status: 400 });
+  }
+
+  // Validate: sum of all letters for this PO must not exceed PO ordered qty
+  const { data: po } = await supabase
+    .from("purchase_orders")
+    .select("ordered_31, ordered_36, ordered_45, ordered_meter")
+    .eq("id", po_id).single();
+
+  if (po) {
+    const existing = await getPoLetterTotals(supabase, po_id);
+    const overflows = [
+      { size: "31ft", issued: existing.qty_31 + qty_31, ordered: po.ordered_31 },
+      { size: "36ft", issued: existing.qty_36 + qty_36, ordered: po.ordered_36 },
+      { size: "45ft", issued: existing.qty_45 + qty_45, ordered: po.ordered_45 },
+      { size: "meter", issued: existing.qty_meter + qty_meter, ordered: po.ordered_meter },
+    ].filter((s) => s.ordered > 0 && s.issued > s.ordered);
+
+    if (overflows.length > 0) {
+      const detail = overflows.map((s) => `${s.size}: authorized ${s.issued} of ${s.ordered} ordered`).join(", ");
+      return Response.json({ error: `Authority letters would exceed PO ordered qty — ${detail}` }, { status: 400 });
+    }
+  }
+
+  // Ensure contractor is linked to this PO
+  await supabase.from("po_contractors")
+    .upsert({ po_id, contractor_id }, { onConflict: "po_id,contractor_id" });
+
+  const { data, error } = await supabase
+    .from("authority_letters")
+    .insert({
+      po_id, contractor_id, letter_number, issue_date, issued_by,
+      qty_31, qty_36, qty_45, qty_meter,
+      opening_dispatched_31, opening_dispatched_36,
+      opening_dispatched_45, opening_dispatched_meter,
+      notes: notes || null, created_by: auth.email,
+    })
+    .select().single();
+
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ letter: data }, { status: 201 });
+}
