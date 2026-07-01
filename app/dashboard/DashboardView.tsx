@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import TaskStatus from "../tasks/TaskStatus";
 import { formatDateUK } from "../lib/dateUtils";
@@ -90,6 +90,29 @@ type Task = {
   time_spent_minutes: number | null;
 };
 
+type StockLetter = {
+  id: string; letter_number: string; contractor_name: string;
+  qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
+  remaining_31: number; remaining_36: number; remaining_45: number; remaining_meter: number;
+};
+type StockContractor = {
+  contractor_id: string; contractor_name: string;
+  letters: StockLetter[];
+};
+type StockPO = {
+  po: {
+    id: string; customer_name: string; po_number: string; po_label: string;
+    ordered_31: number; ordered_36: number; ordered_45: number; ordered_meter: number;
+    status: string; is_system_unallocated: boolean;
+  };
+  produced_31: number; produced_36: number; produced_45: number; produced_meter: number;
+  dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
+  in_stock_31: number; in_stock_36: number; in_stock_45: number; in_stock_meter: number;
+  fulfillment_pct: number;
+  contractors: StockContractor[];
+};
+type PlantStock = { plant_id: string; plant_name: string; items: StockPO[] };
+
 const NAVY = "var(--text-primary, #1e293b)";
 const SLATE = "var(--text-secondary, #64748b)";
 const BORDER = "var(--border-color, #e2e8f0)";
@@ -174,6 +197,12 @@ export default function DashboardView() {
   const [bannerOpen, setBannerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"production" | "dispatch" | "breakage" | "tasks">("production");
   const [dailyTrend, setDailyTrend] = useState<{ date: string; produced: number; target: number }[]>([]);
+
+  // Stock by PO
+  const [plantStocks, setPlantStocks] = useState<PlantStock[]>([]);
+  const [stockLoading, setStockLoading] = useState(true);
+  const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
+  const [showClosedPOs, setShowClosedPOs] = useState(false);
 
   async function loadAll() {
     const currentMonth = getMonthFromDate(today);
@@ -378,6 +407,31 @@ export default function DashboardView() {
     loadAll();
   }, []);
 
+  const loadStock = useCallback(async () => {
+    setStockLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const { data: plants } = await supabase.from("plants").select("id, name").eq("active", true).order("name");
+      const results: PlantStock[] = [];
+      await Promise.all((plants || []).map(async (plant) => {
+        const res = await fetch(`/api/stock/summary?plantId=${plant.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = await res.json();
+        if (json.items?.length) {
+          results.push({ plant_id: plant.id, plant_name: plant.name, items: json.items });
+        }
+      }));
+      results.sort((a, b) => a.plant_name.localeCompare(b.plant_name));
+      setPlantStocks(results);
+    } finally {
+      setStockLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadStock(); }, [loadStock]);
+
   if (loading) return <p style={{ color: SLATE }}>Loading dashboard…</p>;
 
   const totalProducedToday = summaries.reduce((s, x) => s + total(x.todayProduced), 0);
@@ -550,6 +604,143 @@ export default function DashboardView() {
             );
           })}
         </div>
+      </div>
+
+      {/* ═══ ZONE 2b: STOCK BY CUSTOMER PO ═══ */}
+      <div style={{ marginBottom: "14px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+          <div style={{ paddingLeft: "9px", borderLeft: `3px solid ${NAVY}` }}>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY }}>Stock by Customer PO</div>
+            <div style={{ fontSize: "13px", color: SLATE }}>Produced · Dispatched · In Stock · Fulfillment</div>
+          </div>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <button onClick={() => setShowClosedPOs(v => !v)} style={{ fontSize: "12px", fontWeight: 600, padding: "4px 12px", borderRadius: "6px", border: `1px solid ${BORDER}`, backgroundColor: "var(--bg-card,#fff)", color: SLATE, cursor: "pointer" }}>
+              {showClosedPOs ? "Hide Closed" : "Show Closed"}
+            </button>
+            <a href="/stock" style={{ fontSize: "12px", fontWeight: 600, padding: "4px 12px", borderRadius: "6px", border: `1px solid ${BORDER}`, backgroundColor: "var(--bg-card,#fff)", color: NAVY, cursor: "pointer", textDecoration: "none" }}>
+              Full View →
+            </a>
+          </div>
+        </div>
+
+        {stockLoading ? (
+          <div style={{ padding: "14px", color: SLATE, fontSize: "14px" }}>Loading stock data…</div>
+        ) : plantStocks.length === 0 ? (
+          <div style={{ padding: "14px", color: SLATE, fontSize: "14px", border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card,#fff)" }}>
+            No stock data yet. <a href="/stock/manage" style={{ color: NAVY, fontWeight: 600 }}>Add the first PO →</a>
+          </div>
+        ) : plantStocks.map((ps) => {
+          const visibleItems = ps.items.filter(i =>
+            !i.po.is_system_unallocated && (showClosedPOs || i.po.status === "Active")
+          );
+          if (visibleItems.length === 0) return null;
+          return (
+            <div key={ps.plant_id} style={{ marginBottom: "10px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: SLATE, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>{ps.plant_name}</div>
+              {visibleItems.map((item) => {
+                const ordered = item.po.ordered_31 + item.po.ordered_36 + item.po.ordered_45 + item.po.ordered_meter;
+                const produced = item.produced_31 + item.produced_36 + item.produced_45 + item.produced_meter;
+                const dispatched = item.dispatched_31 + item.dispatched_36 + item.dispatched_45 + item.dispatched_meter;
+                const inStock = item.in_stock_31 + item.in_stock_36 + item.in_stock_45 + item.in_stock_meter;
+                const pct = item.fulfillment_pct;
+                const isClosed = item.po.status === "Closed";
+                const isExpanded = expandedPOs.has(item.po.id);
+                const pctColor = pct >= 90 ? "#16a34a" : pct >= 60 ? "#d97706" : "#dc2626";
+
+                // Letter balance warnings — any letter with < 10% remaining
+                const allLetters = item.contractors.flatMap(c => c.letters);
+                const nearlyExhausted = allLetters.filter(l => {
+                  const auth = l.qty_31 + l.qty_36 + l.qty_45 + l.qty_meter;
+                  const rem = l.remaining_31 + l.remaining_36 + l.remaining_45 + l.remaining_meter;
+                  return auth > 0 && rem / auth < 0.1;
+                });
+
+                return (
+                  <div key={item.po.id} style={{ border: `1px solid ${BORDER}`, borderLeft: `4px solid ${isClosed ? "#94a3b8" : NAVY}`, borderRadius: "8px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "6px", opacity: isClosed ? 0.65 : 1 }}>
+                    {/* PO header row */}
+                    <div
+                      onClick={() => setExpandedPOs(prev => { const s = new Set(prev); s.has(item.po.id) ? s.delete(item.po.id) : s.add(item.po.id); return s; })}
+                      style={{ padding: "10px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>
+                          {item.po.customer_name}
+                          <span style={{ fontWeight: 400, color: SLATE, marginLeft: "6px" }}>PO #{item.po.po_number}</span>
+                          {item.po.po_label && <span style={{ fontSize: "11px", marginLeft: "6px", padding: "1px 7px", borderRadius: "10px", backgroundColor: "#eff6ff", color: "#2563eb", fontWeight: 600 }}>{item.po.po_label}</span>}
+                          {isClosed && <span style={{ fontSize: "11px", marginLeft: "6px", padding: "1px 7px", borderRadius: "10px", backgroundColor: "#f1f5f9", color: SLATE, fontWeight: 700 }}>CLOSED</span>}
+                        </div>
+                        {ordered > 0 && (
+                          <div style={{ marginTop: "5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <div style={{ flex: 1, height: "6px", borderRadius: "3px", backgroundColor: "#e2e8f0", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, backgroundColor: pctColor, borderRadius: "3px", transition: "width 0.3s" }} />
+                            </div>
+                            <span style={{ fontSize: "12px", fontWeight: 700, color: pctColor, whiteSpace: "nowrap" }}>{pct.toFixed(0)}%</span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Stats strip */}
+                      <div style={{ display: "flex", gap: "14px", flexShrink: 0 }}>
+                        {[
+                          { label: "Ordered", value: ordered, color: SLATE },
+                          { label: "Produced", value: produced, color: "#2563eb" },
+                          { label: "Dispatched", value: dispatched, color: "#7c3aed" },
+                          { label: "In Stock", value: inStock, color: inStock > 0 ? "#16a34a" : SLATE },
+                        ].map(s => (
+                          <div key={s.label} style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: "11px", color: SLATE, fontWeight: 600 }}>{s.label}</div>
+                            <div style={{ fontSize: "15px", fontWeight: 800, color: s.color }}>{s.value.toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: "16px", color: SLATE }}>{isExpanded ? "▲" : "▼"}</div>
+                    </div>
+
+                    {/* Letter warnings */}
+                    {nearlyExhausted.length > 0 && (
+                      <div style={{ padding: "4px 14px 8px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                        {nearlyExhausted.map(l => (
+                          <span key={l.id} style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", backgroundColor: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }}>
+                            ⚠ Letter {l.letter_number} nearly exhausted
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Expanded: contractors + letters */}
+                    {isExpanded && (
+                      <div style={{ borderTop: `1px solid ${BORDER}`, padding: "10px 14px" }}>
+                        {item.contractors.length === 0 ? (
+                          <div style={{ fontSize: "13px", color: SLATE }}>No authority letters issued yet.</div>
+                        ) : item.contractors.map(c => (
+                          <div key={c.contractor_id} style={{ marginBottom: "10px" }}>
+                            <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>{c.contractor_name}</div>
+                            {c.letters.map(l => {
+                              const auth = l.qty_31 + l.qty_36 + l.qty_45 + l.qty_meter;
+                              const rem = l.remaining_31 + l.remaining_36 + l.remaining_45 + l.remaining_meter;
+                              const collected = auth - rem;
+                              const remPct = auth > 0 ? (rem / auth) * 100 : 0;
+                              const remColor = remPct > 30 ? "#16a34a" : remPct > 10 ? "#d97706" : "#dc2626";
+                              return (
+                                <div key={l.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "5px 0", borderBottom: `1px solid var(--border-light,#f1f5f9)`, flexWrap: "wrap" }}>
+                                  <div style={{ fontSize: "12px", fontWeight: 600, color: SLATE, minWidth: "110px" }}>Letter {l.letter_number}</div>
+                                  <div style={{ flex: 1, height: "5px", borderRadius: "3px", backgroundColor: "#e2e8f0", minWidth: "60px" }}>
+                                    <div style={{ height: "100%", width: `${Math.min(100, 100 - remPct)}%`, backgroundColor: "#7c3aed", borderRadius: "3px" }} />
+                                  </div>
+                                  <div style={{ fontSize: "12px", color: SLATE, whiteSpace: "nowrap" }}>{collected} of {auth} collected</div>
+                                  <div style={{ fontSize: "12px", fontWeight: 700, color: remColor, whiteSpace: "nowrap" }}>{rem} left</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
 
       {/* ═══ ZONE 3: TABBED DETAIL ═══ */}
