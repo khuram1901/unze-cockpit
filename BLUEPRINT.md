@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 02/07/2026.
+> **This is the source of truth.** Read before touching any code. Last updated: 03/07/2026.
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -988,8 +988,10 @@ Gmail-ingested raw minutes awaiting admin review.
 **Constraint:** UNIQUE(ticker, as_of_date).
 
 #### Views
-- `current_prices` — latest price per ticker (DISTINCT ON)
+- `current_prices` — latest price per ticker (DISTINCT ON). Used by `/investments` page only.
 - `portfolio_summary` — joins holdings with current_prices for P&L view
+
+**Important:** The CEO home page (`/home`) does NOT use `current_prices` when the date selector is in the past. Instead it queries `price_history` with `.lte("as_of_date", dateToView)` and picks the most recent price per ticker in JS — this ensures historical date views show the correct portfolio value for that day.
 
 ---
 
@@ -1216,6 +1218,13 @@ Calendar/meeting request tracking (referenced in code).
     - **Ops Manager**: today's production RAG, MTD production RAG, dispatch ratio, breakage, machines, overdue ops tasks
     - **Finance Manager**: per-company cash position freshness, cash trend, net flow, outstanding receivables, overdue stages, finance tasks
   - Notification bell badges update in real-time via Supabase channels
+- **Date selector (CEO/Admin):** Allows viewing the dashboard as of any date up to 90 days back. All data sections respect the selected date:
+  - Production/dispatch/breakage entries: filtered `<= selectedDate`
+  - Investment portfolio: uses `price_history` filtered `<= selectedDate` (latest price per ticker on or before that day) — **not** `current_prices` view
+  - Cash positions: filtered `<= selectedDate` (most recent 30 entries up to that date)
+  - Cash plan and budget month: derived from `selectedDate.slice(0,7)` (not today)
+- **Performance (sessionStorage cache):** `loadExecutiveData` caches the full payload for 2 minutes per date key (`exec_home_YYYY-MM-DD`). Cache is busted on any Supabase Realtime change. Cache not served if `payload.investmentData` is falsy (prevents stale null from hiding the investment section).
+- **Global search (AuthWrapper):** Tasks/members/meetings fetched once per session into `searchCacheRef` (useRef). Subsequent searches filter in memory — no DB queries after first load.
 
 #### `/my-dashboard`
 - **File:** `app/my-dashboard/page.tsx`

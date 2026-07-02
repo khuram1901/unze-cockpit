@@ -4,6 +4,27 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-03 — Historical date selector: investments, cash, and date format enforcement
+
+**What changed:**
+
+- **Investment portfolio now respects selected date** — when changing the date on the CEO home page, the portfolio value shown is calculated using the price recorded in `price_history` on or before that date (most recent price available). Previously it always showed today's value regardless of the date selected.
+- **Cash positions now respect selected date** — `daily_cash_position` now filtered `<= selectedDate` so the finance section shows the cash balance as it stood on the selected day.
+- **Cash plan and budget month** now derived from `selectedDate` (not today) — plan context matches the month being viewed.
+- **DD/MM/YYYY date format enforced globally** — fixed 6 locations where raw `YYYY-MM-DD` database strings were rendered directly (attention items, investment price date, search results meeting dates, and two email API routes). Rule added permanently to `CLAUDE.md` and `dateUtils.ts`.
+
+**Performance improvements (from previous session):**
+- `app/home/page.tsx`: sessionStorage cache (2-min TTL, per date key), 90-day floor on unbounded ops queries, explicit column lists, parallelised dept health checks
+- `app/dashboard/DashboardView.tsx`: 90-day floor, explicit column lists, task limit 200
+- `app/executive/page.tsx`: same 90-day floor + column trims
+- `app/pa/page.tsx`: explicit column lists, meeting query trimmed
+- `app/lib/AuthWrapper.tsx`: global search cache — fetch once per session, filter in memory
+- `supabase/053_performance_indexes.sql`: 13 DB indexes applied (entry_date, status, assigned_to_email, company_id, position_date, etc.)
+
+**Database changes:** Migration 053 (performance indexes) — applied manually.
+
+---
+
 ## 2026-07-02 (session 2) — Bug fixes: edit permissions, receivables, Gmail inbox
 
 **Bugs fixed:**
