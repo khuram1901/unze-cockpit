@@ -4,6 +4,15 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-03 (session continued) — Data retention + UX tidying
+
+**What changed:**
+- **90-day window anchored to selected date** (`home/page.tsx`, `executive/page.tsx`) — when viewing a past date, the ops entry query window now extends 90 days before *that date*, not before today. Means you can view any date in history without the production/dispatch context being cut off.
+- **Daily entry PO dropdown** (`production/ProductionForm.tsx`) — replaced stacked PO selection buttons with a compact `<select>` dropdown. Tidier, especially when multiple POs exist.
+- All data is retained indefinitely in the database. No automatic deletion anywhere.
+
+---
+
 ## 2026-07-03 — Historical date selector: investments, cash, and date format enforcement
 
 **What changed:**
