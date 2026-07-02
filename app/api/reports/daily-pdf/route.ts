@@ -5,7 +5,7 @@ import { sendNotificationEmail } from "../../../lib/send-email";
 const UTPL = "15884c2d-48a4-4d43-be90-0ef6e130790c";
 const IFPL = "77921705-8a15-4406-847a-b234f84b5ec3";
 // Fallback if DB query fails
-const FALLBACK_RECIPIENTS = ["k.saleem@unzegroup.com", "khuram1901@gmail.com", "pa.ceo@unze.co.uk"];
+const FALLBACK_RECIPIENTS = ["k.saleem@unzegroup.com", "pa.ceo@unze.co.uk"];
 
 function fmtPKR(n: number) { return "PKR " + Math.round(n).toLocaleString(); }
 function fmtDate(d: string) { const [y, m, day] = d.split("-"); return `${day}/${m}/${y}`; }

@@ -735,7 +735,7 @@ export default function MeetingsPage() {
                     How it works
                   </p>
                   <ol style={{ fontSize: "15px", color: COLOURS.SLATE, margin: 0, paddingLeft: "20px", lineHeight: 1.8 }}>
-                    <li>Forward your minutes email to <strong>khuram1901@gmail.com</strong></li>
+                    <li>Forward your minutes email to <strong>k.saleem@unzegroup.com</strong></li>
                     <li>In Gmail, create a label called <strong>minutes-of-meeting</strong> and set up a filter to auto-label these emails</li>
                     <li>Click the button below to check for new minutes</li>
                   </ol>

@@ -425,7 +425,7 @@ export default function CalendarPage() {
               )}
             </div>
             <div style={{ fontSize: "12px", color: "#b91c1c", marginTop: "8px", paddingLeft: "28px" }}>
-              Sign in with the Google account whose calendar you want to mirror (e.g. khuram1901@gmail.com).
+              Sign in with k.saleem@unzegroup.com to reconnect your calendar.
             </div>
           </div>
         )}

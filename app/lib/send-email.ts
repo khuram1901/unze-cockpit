@@ -97,23 +97,24 @@ export async function sendNotificationEmail({
   whatsAppMessage?: string;
 }) {
   try {
-    // Use the notification-specific Gmail account (khuram1901@gmail.com)
+    // Use whichever Google account is connected — pick the most recently updated token
     const supabaseForTokens = createServiceClient();
     const { data: notifToken } = await supabaseForTokens
       .from("google_oauth_tokens")
       .select("*")
-      .eq("user_email", "khuram1901@gmail.com")
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .single();
 
     if (!notifToken) {
-      console.error("Notification Gmail not connected. Connect via /api/google/auth-notifications");
-      return { success: false, error: "Notification Gmail not connected" };
+      console.error("No Google account connected. Connect via Finance → Connect Google Account.");
+      return { success: false, error: "No Google account connected" };
     }
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      (process.env.GOOGLE_REDIRECT_URI || "").replace("/callback", "/callback-notifications")
+      process.env.GOOGLE_REDIRECT_URI
     );
     oauth2Client.setCredentials({
       access_token: safeDecrypt(notifToken.access_token),
@@ -129,7 +130,7 @@ export async function sendNotificationEmail({
     });
 
     const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    const fromEmail = "khuram1901@gmail.com";
+    const fromEmail = notifToken.user_email;
 
     const html = buildEmailHtml({ heading, body, linkUrl, linkLabel, whatsAppPhone, whatsAppMessage });
     const raw = buildRawEmail(to, fromEmail, subject, html);

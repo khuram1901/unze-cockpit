@@ -5,7 +5,7 @@ import { createServiceClient } from "../../lib/supabase-server";
 import { safeDecrypt, encrypt } from "../../lib/crypto";
 import { BACKUP_TABLES } from "../../lib/backup-tables";
 
-const BACKUP_RECIPIENT = "khuram1901@gmail.com";
+const BACKUP_RECIPIENT = "k.saleem@unzegroup.com";
 const BACKUPS_BUCKET = "backups";
 const TABLES = BACKUP_TABLES;
 

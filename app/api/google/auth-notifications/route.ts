@@ -14,7 +14,7 @@ export async function GET() {
     scope: scopes.join(" "),
     access_type: "offline",
     prompt: "consent",
-    login_hint: "khuram1901@gmail.com",
+    login_hint: "k.saleem@unzegroup.com",
   });
 
   const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
