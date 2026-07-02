@@ -4,6 +4,13 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-03 (session continued 2) — DD/MM/YYYY date pickers fixed globally
+
+**Root cause identified and fixed:**
+- All `<input type="date">` fields were showing MM/DD/YYYY because the root HTML element had `lang="en"` (American English). Changed to `lang="en-GB"` in `app/layout.tsx`. One line, fixes every date picker across the entire app — tasks, receivables, finance, stock, production, meetings, calendar, investments.
+
+---
+
 ## 2026-07-03 (session continued) — Data retention + UX tidying
 
 **What changed:**
