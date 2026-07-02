@@ -4,6 +4,23 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-02 (session 2) — Bug fixes: edit permissions, receivables, Gmail inbox
+
+**Bugs fixed:**
+- Ops Managers (Asif, Usman, Yahya) couldn't delete production/dispatch/breakage entries — `canDelete` was hardcoded to Nadeem only; `ProductionForm` also wasn't fetching `department` so `canAccessDailyEntry` always failed for ops managers
+- `canEditReceivables` was missing `isAdminTier` — CEO/Admin couldn't edit or delete receivables
+- Finance inbox scanner was still trying `khuram1901@gmail.com` (token deleted) causing silent failures every run
+
+**New:**
+- Inline Edit + Delete on every receivables bill card — Edit button opens form to amend customer, amount, dates, refs, bill type, notes; Delete with confirmation prompt
+- `/api/finance/setup-gmail-filter` — one-shot route to create `cockpit-cash` Gmail label + filter on k.saleem@unzegroup.com automatically
+- Gmail filter auto-labels incoming emails with "Cash Flow", "Bank Position", or "cash sheet" in subject + attachment
+
+**Database changes:**
+- Migration 051: expand DELETE RLS on production_entries/dispatch_entries/breakage_entries from Nadeem-only to `is_ops_manager()` (all 4 Ops Managers)
+
+---
+
 ## 2026-07-02 — Features 1-2, 7-9, Google OAuth fix, edit permissions
 
 **Features built:**
