@@ -38,8 +38,17 @@ function buildBackupEmail(to: string, from: string, subject: string, bodyText: s
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return Response.json({ error: "Unauthorised" }, { status: 401 });
+  const isCron = process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+  if (!isCron) {
+    const { requireAuth } = await import("../../lib/api-auth");
+    const { isAdminTier } = await import("../../lib/permissions");
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const supabaseCheck = createServiceClient();
+    const { data: member } = await supabaseCheck.from("members").select("role, department").eq("email", auth.email).maybeSingle();
+    if (!member || !isAdminTier({ email: auth.email, role: member.role, department: member.department ?? null, overrides: null })) {
+      return Response.json({ error: "Unauthorised" }, { status: 401 });
+    }
   }
 
   try {
