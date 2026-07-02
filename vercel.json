@@ -5,6 +5,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/finance/check-drive",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/meetings/check-inbox",
       "schedule": "*/10 * * * *"
     },
