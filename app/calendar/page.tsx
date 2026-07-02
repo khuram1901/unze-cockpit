@@ -439,14 +439,6 @@ export default function CalendarPage() {
               <span style={{ fontSize: "14px" }}>✓</span>
               Showing calendar for {calendarAccounts.map((a) => a.email).join(", ")} · {busySlots.length} event{busySlots.length !== 1 ? "s" : ""} this week
             </div>
-            {isAdmin && (
-              <a href="/api/google/auth" style={{
-                color: "#166534", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap",
-                border: "1px solid #86efac", borderRadius: "6px", padding: "4px 12px", fontSize: "12px",
-              }}>
-                + Add Account
-              </a>
-            )}
           </div>
         )}
 
