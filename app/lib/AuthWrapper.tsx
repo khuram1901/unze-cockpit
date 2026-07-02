@@ -178,7 +178,7 @@ export default function AuthWrapper({
 
     for (const mt of meetings) {
       if (mt.title?.toLowerCase().includes(lower)) {
-        results.push({ type: "Meeting", label: mt.title, sub: mt.meeting_date, href: `/my-minutes?meeting=${mt.id}` });
+        results.push({ type: "Meeting", label: mt.title, sub: mt.meeting_date ? mt.meeting_date.split("-").reverse().join("/") : "—", href: `/my-minutes?meeting=${mt.id}` });
       }
       if (results.length >= 15) break;
     }

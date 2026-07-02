@@ -1136,7 +1136,7 @@ export default function HomePage() {
 
       const att: AttentionItem[] = [];
       for (const t of overdue) {
-        att.push({ label: t.description, detail: `overdue${t.due_date ? " / due " + t.due_date : ""} · ${t.assigned_to || "Unassigned"}`, href: "/tasks" });
+        att.push({ label: t.description, detail: `overdue${t.due_date ? " / due " + formatDateUK(t.due_date) : ""} · ${t.assigned_to || "Unassigned"}`, href: "/tasks" });
         if (att.length >= 5) break;
       }
       const blocked = taskRows.filter((t) => t.status === "Waiting Reply");
@@ -2662,7 +2662,7 @@ function ExecutiveDashboardBody({
                   )}
                   {investmentData.priceDate && (
                     <div style={{ fontSize: "13px", color: SLATE, marginTop: "6px" }}>
-                      {investmentData.stockCount} stocks · Prices as of {investmentData.priceDate} · Click to view portfolio →
+                      {investmentData.stockCount} stocks · Prices as of {formatDateUK(investmentData.priceDate)} · Click to view portfolio →
                     </div>
                   )}
                 </div>

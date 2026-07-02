@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
             ${task.description}
           </p>
           <p><strong>Priority:</strong> ${task.priority || "Normal"}<br>
-          <strong>Due:</strong> ${task.due_date || "No due date"}<br>
+          <strong>Due:</strong> ${task.due_date ? task.due_date.split("-").reverse().join("/") : "No due date"}<br>
           <strong>Assigned by:</strong> ${task.assigned_by || "System"}</p>
         `,
         linkUrl: `${APP_URL}/tasks`,

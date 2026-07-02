@@ -1539,7 +1539,7 @@ export default function ExecutiveDashboardPage() {
                         )}
                         {investmentData.priceDate && (
                           <div style={{ fontSize: "13px", color: SLATE, marginTop: "6px" }}>
-                            {investmentData.stockCount} stocks · Prices as of {investmentData.priceDate} · Click to view portfolio →
+                            {investmentData.stockCount} stocks · Prices as of {formatDateUK(investmentData.priceDate)} · Click to view portfolio →
                           </div>
                         )}
                       </div>

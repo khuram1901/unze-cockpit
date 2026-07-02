@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     const actionsHtml = actionItems && actionItems.length > 0
       ? `<p><strong>Action Items:</strong></p><ul>${actionItems.map((a: { description: string; owner_name: string; due_date?: string; priority: string }) =>
-          `<li><strong>${a.description}</strong> - ${a.owner_name}${a.due_date ? ` (due ${a.due_date})` : ""} [${a.priority}]</li>`
+          `<li><strong>${a.description}</strong> - ${a.owner_name}${a.due_date ? ` (due ${a.due_date.split("-").reverse().join("/")})` : ""} [${a.priority}]</li>`
         ).join("")}</ul>`
       : "";
 

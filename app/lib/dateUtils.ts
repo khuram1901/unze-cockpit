@@ -1,6 +1,9 @@
 // Shared date utilities for the entire app.
-// All displayed dates MUST use DD/MM/YYYY (UK format) per PRD.
-// All files should import from here — no more local copies of these functions.
+// RULE: Every date displayed to the user MUST go through formatDateUK (DD/MM/YYYY).
+// NEVER render a raw YYYY-MM-DD database string directly in JSX or email HTML.
+// NEVER use new Date().toLocaleDateString() without "en-GB" locale.
+// For API routes / email HTML where import isn't available, use: d.split("-").reverse().join("/")
+// All files should import from here — no local copies of these functions.
 
 export function formatDateUK(dateString: string | null): string {
   if (!dateString) return "—";

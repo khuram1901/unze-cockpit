@@ -38,7 +38,12 @@ Full context lives in:
 
 ## Non-negotiable rules
 
-1. **All displayed dates: DD/MM/YYYY.** Always via `formatDateUK` from `lib/dateUtils.ts`. Never local copies.
+1. **All displayed dates: DD/MM/YYYY — no exceptions.**
+   - In `.tsx` files: always `formatDateUK(dateString)` from `lib/dateUtils.ts`. Never render a raw `YYYY-MM-DD` string from the database directly in JSX.
+   - In API routes / email HTML (where imports aren't available): use `d.split("-").reverse().join("/")`.
+   - Never use `new Date().toLocaleDateString()` without the `"en-GB"` locale.
+   - Never write a local copy of this logic — always import from `lib/dateUtils.ts`.
+   - When adding any new feature that shows a date: ask "did I wrap this in formatDateUK?" before finishing.
 2. **Design system in `lib/SharedUI.tsx` only.** Colours: NAVY `#1e293b`, SLATE `#64748b`, BORDER `#e2e8f0`, GREEN `#16a34a`, AMBER `#d97706`, RED `#dc2626`. Never introduce new colours without asking.
 3. **Inline styles, not Tailwind classes.** The codebase is intentionally inline-styled.
 4. **British English** in user-facing copy ("colours" not "colors").
