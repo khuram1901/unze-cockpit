@@ -8,7 +8,7 @@ import { useMobile } from "../lib/useMobile";
 import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, SkeletonRows, inputStyle, labelStyle } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
-import { canEditReceivables, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canEditReceivables, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Stage = { id: string; stage_order: number; stage_name: string; working_day_budget: number };
 type Receivable = {
@@ -73,6 +73,7 @@ export default function ReceivablesPage() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [loading, setLoading] = useState(true);
   const [canEdit, setCanEdit] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -135,6 +136,7 @@ export default function ReceivablesPage() {
         if (p) overrides = p as PermOverrides;
         const ctx: UserCtx = { email, role: member.role, department: member.department, company: member.company, overrides };
         setCanEdit(canEditReceivables(ctx));
+        setIsAdmin(isAdminTier(ctx));
       }
     }
 
@@ -152,6 +154,13 @@ export default function ReceivablesPage() {
   }
 
   useEffect(() => { loadData(); }, []);
+
+  // Admin/CEO can edit any bill at any stage; everyone else only at stage 1
+  function canEditBill(bill: Receivable): boolean {
+    if (!canEdit) return false;
+    if (isAdmin) return true;
+    return bill.current_stage_order === 1;
+  }
 
   function nextStageFor(bill: Receivable, currentOrder: number): Stage | undefined {
     return stages.find((s) => s.stage_order > currentOrder && !(s.stage_order === IC_GRN_STAGE && skipsICGRN(bill.bill_type)));
@@ -626,7 +635,7 @@ export default function ReceivablesPage() {
                                       {bill.bill_type !== "Normal" && (
                                         <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 5px", borderRadius: "4px", backgroundColor: bill.bill_type === "Sales Tax" ? "#dbeafe" : "#fef3c7", color: bill.bill_type === "Sales Tax" ? COLOURS.BLUE : "#92400e" }}>{bill.bill_type}</span>
                                       )}
-                                      {canEdit && (
+                                      {canEditBill(bill) && (
                                         <button onClick={() => startEdit(bill)} style={{ background: "none", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "4px", padding: "1px 7px", fontSize: "11px", fontWeight: 600, cursor: "pointer", color: COLOURS.SLATE }}>Edit</button>
                                       )}
                                     </div>
