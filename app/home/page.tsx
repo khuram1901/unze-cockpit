@@ -605,7 +605,9 @@ export default function HomePage() {
     const selectedMonth = getMonthFromDate(dateToView);
     const selectedMonthStart = getMonthStartFromDate(dateToView);
     const selectedMonthEnd = getMonthEndFromDate(dateToView);
-    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // 90-day window anchored to the selected date, not today — so historical date views
+    // always fetch a full window of context around the chosen date.
+    const ninetyDaysAgo = new Date(new Date(dateToView).getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
     const ENTRY_COLS = "plant_id, entry_date, qty_31, qty_36, qty_45, qty_meter";
     const [
