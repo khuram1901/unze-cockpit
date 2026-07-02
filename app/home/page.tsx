@@ -558,7 +558,34 @@ export default function HomePage() {
   async function loadExecutiveData(dateToView: string) {
     setExecLoading(true);
 
+    const cacheKey = `exec_home_${dateToView}`;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const { ts, payload } = JSON.parse(cached);
+        if (Date.now() - ts < 2 * 60 * 1000) {
+          setSummaries(payload.summaries);
+          setMachineIssues(payload.machineIssues);
+          setTasks(payload.tasks);
+          setEscalations(payload.escalations);
+          setCompanyFinance(payload.companyFinance);
+          setReceivableRows(payload.receivableRows);
+          setRecAgingTotals(payload.recAgingTotals);
+          setRecAgingByCustomer(payload.recAgingByCustomer);
+          setShowFinance(payload.showFinance);
+          setDeptHealth(payload.deptHealth);
+          setInvestmentData(payload.investmentData);
+          setDailyOpsData(payload.dailyOpsData);
+          setExecLoading(false);
+          return;
+        }
+      } catch {
+        sessionStorage.removeItem(cacheKey);
+      }
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
+    let showFinanceForUser = false;
     if (user?.email) {
       const { data: memberData } = await supabase
         .from("members")
@@ -570,34 +597,37 @@ export default function HomePage() {
         const p = await loadMyPermissions();
         if (p) overrides = p as PermOverrides;
         const userCtx: UserCtx = { email: user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
-        setShowFinance(canViewFinance(userCtx));
+        showFinanceForUser = canViewFinance(userCtx);
+        setShowFinance(showFinanceForUser);
       }
     }
 
     const selectedMonth = getMonthFromDate(dateToView);
     const selectedMonthStart = getMonthStartFromDate(dateToView);
     const selectedMonthEnd = getMonthEndFromDate(dateToView);
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+    const ENTRY_COLS = "plant_id, entry_date, qty_31, qty_36, qty_45, qty_meter";
     const [
       plantsRes, openRes, brokenOpenRes, prodRes, dispRes, brkRes, scrapRes,
       machineIssuesRes, tasksRes, ownerRes, monthlyProductionTargetsRes,
       monthlyDispatchTargetsRes, monthlyProductionRes, monthlyDispatchRes, monthlyBreakageRes,
     ] = await Promise.all([
       supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
-      supabase.from("opening_balances").select("*"),
-      supabase.from("broken_opening_balances").select("*"),
-      supabase.from("production_entries").select("*").lte("entry_date", dateToView),
-      supabase.from("dispatch_entries").select("*").lte("entry_date", dateToView),
-      supabase.from("breakage_entries").select("*").lte("entry_date", dateToView),
-      supabase.from("scrap_processed_entries").select("*").lte("entry_date", dateToView),
-      supabase.from("machine_issues").select("*").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
-      supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(500),
+      supabase.from("opening_balances").select("plant_id, bal_31, bal_36, bal_45, bal_meter, created_at"),
+      supabase.from("broken_opening_balances").select("plant_id, bal_31, bal_36, bal_45, bal_meter, created_at"),
+      supabase.from("production_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
+      supabase.from("dispatch_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
+      supabase.from("breakage_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
+      supabase.from("scrap_processed_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
+      supabase.from("machine_issues").select("id, plant_name, machine_name, issue_status, expected_resolution, issue_description, action_taken, created_at").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
+      supabase.from("tasks").select("id, description, project, priority, due_date, assigned_to, assigned_by, assigned_date, status, task_type, reply_required, reply_text, assigned_to_department, assigned_to_business_unit, created_at, updated_at, source_type, source_record_id, source_label, exception_type, explanation_required").order("created_at", { ascending: false }).limit(200),
       supabase.from("department_owners").select("department_name, primary_owner_name, primary_owner_email").eq("department_name", "Unze Trading Ops").single(),
-      supabase.from("monthly_production_targets").select("*").eq("target_month", selectedMonth),
-      supabase.from("monthly_dispatch_targets").select("*").eq("target_month", selectedMonth),
-      supabase.from("production_entries").select("*").gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
-      supabase.from("dispatch_entries").select("*").gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
-      supabase.from("breakage_entries").select("*").gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
+      supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
+      supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
+      supabase.from("production_entries").select(ENTRY_COLS).gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
+      supabase.from("dispatch_entries").select(ENTRY_COLS).gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
+      supabase.from("breakage_entries").select(ENTRY_COLS).gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
     ]);
 
     const plants: Plant[] = plantsRes.data || [];
@@ -724,7 +754,8 @@ export default function HomePage() {
       row[bucket] += amt;
       row.total += amt;
     }
-    setRecAgingByCustomer(Array.from(custAgingMap.values()).sort((a, b) => b.total - a.total));
+    const recAgingByCust = Array.from(custAgingMap.values()).sort((a, b) => b.total - a.total);
+    setRecAgingByCustomer(recAgingByCust);
 
     for (const bill of bills) {
       if (billRagStatus(bill) === "red") {
@@ -919,20 +950,21 @@ export default function HomePage() {
       if (!opsMap.has(d)) opsMap.set(d, { date: d, produced: 0, dispatched: 0, broken: 0 });
       opsMap.get(d)!.broken += (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0) + (r.qty_meter || 0);
     }
-    setDailyOpsData(Array.from(opsMap.values()).sort((a, b) => a.date.localeCompare(b.date)));
+    const computedDailyOpsData = Array.from(opsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    setDailyOpsData(computedDailyOpsData);
 
-    const [deptOwnersRes] = await Promise.all([
+    const [deptOwnersRes, ...deptDataResults] = await Promise.all([
       supabase.from("department_owners").select("department_name, primary_owner_name").eq("active", true),
+      ...DEPARTMENT_CONFIGS.map((cfg) =>
+        supabase.from(cfg.table).select("*").eq("company_id", UTPL_COMPANY_ID)
+      ),
     ]);
     const ownerMap = new Map((deptOwnersRes.data || []).map((o: { department_name: string; primary_owner_name: string | null }) => [o.department_name, o.primary_owner_name || "—"]));
 
     const healthResults: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[] = [];
-    for (const deptConfig of DEPARTMENT_CONFIGS) {
-      const { data: deptData } = await supabase
-        .from(deptConfig.table)
-        .select("*")
-        .eq("company_id", UTPL_COMPANY_ID);
-      const deptRows = (deptData || []) as Record<string, unknown>[];
+    for (let i = 0; i < DEPARTMENT_CONFIGS.length; i++) {
+      const deptConfig = DEPARTMENT_CONFIGS[i];
+      const deptRows = (deptDataResults[i].data || []) as Record<string, unknown>[];
       const status = getDepartmentHealthStatus(deptRows, deptConfig);
       const openCount = deptRows.filter((r) => {
         const s = (r.status as string) || "";
@@ -954,6 +986,7 @@ export default function HomePage() {
     ]);
     const hRows = holdingsRes.data || [];
     const pRows = pricesRes.data || [];
+    let computedInvestmentData: InvestmentSummary | null = null;
     if (hRows.length > 0) {
       const priceMap = new Map(pRows.map((p: { ticker: string; price: number; as_of_date: string }) => [p.ticker, p]));
       const stockMap = new Map<string, { ticker: string; company: string; totalQty: number; totalCost: number; currentPrice: number | null }>();
@@ -977,7 +1010,7 @@ export default function HomePage() {
           if (pct < -5) invLosers.push({ ticker: s.ticker, company: s.company, pct });
         }
       }
-      setInvestmentData({
+      computedInvestmentData = {
         totalCost: tCost,
         totalValue: tValue,
         gainLoss: tValue - tCost,
@@ -985,7 +1018,30 @@ export default function HomePage() {
         stockCount: stockMap.size,
         losers: invLosers.sort((a, b) => a.pct - b.pct),
         priceDate: pRows[0]?.as_of_date || null,
-      });
+      };
+      setInvestmentData(computedInvestmentData);
+    }
+
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify({
+        ts: Date.now(),
+        payload: {
+          summaries: result,
+          machineIssues: activeMachineIssues,
+          tasks: taskData,
+          escalations: foundEscalations,
+          companyFinance: allCompanyFinance,
+          receivableRows: recRows,
+          recAgingTotals: aging,
+          recAgingByCustomer: recAgingByCust,
+          showFinance: showFinanceForUser,
+          deptHealth: healthResults,
+          investmentData: computedInvestmentData,
+          dailyOpsData: computedDailyOpsData,
+        },
+      }));
+    } catch {
+      // sessionStorage full — skip cache
     }
 
     setExecLoading(false);
@@ -996,16 +1052,16 @@ export default function HomePage() {
     loadExecutiveData(selectedDate);
     const channel = supabase
       .channel("ceo-dashboard-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "production_entries" }, () => loadExecutiveData(selectedDate))
-      .on("postgres_changes", { event: "*", schema: "public", table: "dispatch_entries" }, () => loadExecutiveData(selectedDate))
-      .on("postgres_changes", { event: "*", schema: "public", table: "breakage_entries" }, () => loadExecutiveData(selectedDate))
-      .on("postgres_changes", { event: "*", schema: "public", table: "machine_issues" }, () => loadExecutiveData(selectedDate))
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => loadExecutiveData(selectedDate))
-      .on("postgres_changes", { event: "*", schema: "public", table: "monthly_production_targets" }, () => loadExecutiveData(selectedDate))
-      .on("postgres_changes", { event: "*", schema: "public", table: "monthly_dispatch_targets" }, () => loadExecutiveData(selectedDate))
-      .on("postgres_changes", { event: "*", schema: "public", table: "monthly_cash_plan" }, () => loadExecutiveData(selectedDate))
-      .on("postgres_changes", { event: "*", schema: "public", table: "daily_cash_position" }, () => loadExecutiveData(selectedDate))
-      .on("postgres_changes", { event: "*", schema: "public", table: "receivables" }, () => loadExecutiveData(selectedDate))
+      .on("postgres_changes", { event: "*", schema: "public", table: "production_entries" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "dispatch_entries" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "breakage_entries" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "machine_issues" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "monthly_production_targets" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "monthly_dispatch_targets" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "monthly_cash_plan" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "daily_cash_position" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "receivables" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
