@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
@@ -190,65 +190,43 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   }
 
   // PDF upload state
-  const [cashFlowFile, setCashFlowFile] = useState<File | null>(null);
-  const [bankPositionFile, setBankPositionFile] = useState<File | null>(null);
+  const [dropFiles, setDropFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{
-    success: boolean;
-    date?: string;
-    reconciliation?: { matches: boolean; cashFlowClosing: number; bankPositionTotal: number; diff: number };
-    cashFlow?: Record<string, number>;
-    days?: { date: string; reconciliation: { matches: boolean; cashFlowClosing: number; bankPositionTotal: number; diff: number } }[];
-    error?: string;
-  } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadResults, setUploadResults] = useState<{ filename: string; status: string; date?: string }[]>([]);
+  const dropInputRef = useRef<HTMLInputElement>(null);
+
+  const onDropFiles = useCallback((incoming: FileList | File[]) => {
+    const pdfs = Array.from(incoming).filter((f) => f.name.toLowerCase().endsWith(".pdf"));
+    if (!pdfs.length) return;
+    setDropFiles((prev) => {
+      const existing = new Set(prev.map((f) => f.name));
+      return [...prev, ...pdfs.filter((f) => !existing.has(f.name))];
+    });
+    setUploadResults([]);
+  }, []);
 
   async function handlePDFUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (!cashFlowFile || !bankPositionFile) {
-      showMsg("Error: Please select both PDF files.");
-      return;
-    }
+    if (!dropFiles.length) return;
     setUploading(true);
-    setUploadResult(null);
+    setUploadResults([]);
     try {
       const formData = new FormData();
-      formData.append("cashFlow", cashFlowFile);
-      formData.append("bankPosition", bankPositionFile);
-      formData.append("uploadedBy", "manual");
-      formData.append("companyId", companyId);
-
-      const res = await authFetch("/api/finance/parse-cash-flow", {
-        method: "POST",
-        body: formData,
-      });
+      for (const f of dropFiles) formData.append("files", f);
+      const res = await authFetch("/api/finance/upload-pdfs", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) {
-        setUploadResult({ success: false, error: data.error || "Upload failed" });
         showMsg("Error: " + (data.error || "Upload failed"));
       } else {
-        setUploadResult({
-          success: true,
-          date: data.date,
-          reconciliation: data.reconciliation,
-          cashFlow: data.cashFlow,
-          days: data.days,
-        });
-        const dayCount = data.days?.length || 1;
-        if (dayCount > 1) {
-          const balancedCount = data.days.filter((d: { reconciliation: { matches: boolean } }) => d.reconciliation.matches).length;
-          showMsg(`Saved ${dayCount} days (${balancedCount} balanced, ${dayCount - balancedCount} not balanced).`);
-        } else {
-          showMsg(data.reconciliation?.matches
-            ? "Statements parsed and balanced. Saved."
-            : "Statements parsed but NOT balanced — please review."
-          );
-        }
-        setCashFlowFile(null);
-        setBankPositionFile(null);
+        setUploadResults(data.results || []);
+        const saved = (data.results || []).filter((r: { status: string }) => r.status.startsWith("saved")).length;
+        const errors = (data.results || []).filter((r: { status: string }) => r.status.startsWith("error")).length;
+        showMsg(errors > 0 ? `${saved} saved, ${errors} failed — check results below.` : `${saved} file${saved !== 1 ? "s" : ""} saved successfully.`);
+        setDropFiles([]);
         loadData();
       }
     } catch {
-      setUploadResult({ success: false, error: "Network error" });
       showMsg("Error: Network error during upload.");
     }
     setUploading(false);
@@ -609,61 +587,59 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
           {dailyEntryTab === "upload" && (
             <>
-              <p style={{ fontSize: "15px", color: SLATE, marginBottom: "8px" }}>Upload Cash Flow + Bank Position PDFs. System extracts, reconciles, and saves.</p>
-              <form onSubmit={handlePDFUpload}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
-                  <label style={{ ...labelStyle, fontSize: "13px" }}>Cash Flow PDF
-                    <input type="file" accept=".pdf" onChange={(e) => setCashFlowFile(e.target.files?.[0] || null)} style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} />
-                  </label>
-                  <label style={{ ...labelStyle, fontSize: "13px" }}>Bank Position PDF
-                    <input type="file" accept=".pdf" onChange={(e) => setBankPositionFile(e.target.files?.[0] || null)} style={{ ...inputStyle, padding: "5px 6px", fontSize: "13px" }} />
-                  </label>
-                </div>
-                <button type="submit" disabled={uploading || !cashFlowFile || !bankPositionFile}
-                  style={{ ...btnStyle, fontSize: "14px", padding: "6px 14px", opacity: uploading || !cashFlowFile || !bankPositionFile ? 0.5 : 1 }}>
-                  {uploading ? "Parsing..." : "Upload & Parse"}
-                </button>
-              </form>
-              {uploadResult && (
-                <div style={{ marginTop: "10px", padding: "8px 12px", borderRadius: "6px", border: `1px solid ${BORDER}`, borderLeft: `4px solid ${uploadResult.reconciliation?.matches ? GREEN : RED}`, backgroundColor: "#fafbfc", fontSize: "13px" }}>
-                  {uploadResult.success ? (
-                    <>
-                      {(uploadResult.days?.length || 1) > 1 ? (
-                        <>
-                          <div style={{ fontWeight: 700, color: NAVY, marginBottom: "4px" }}>Saved {uploadResult.days!.length} days</div>
-                          {uploadResult.days!.map((d) => (
-                            <div key={d.date} style={{ color: d.reconciliation.matches ? SLATE : RED, fontWeight: d.reconciliation.matches ? 400 : 700 }}>
-                              {d.date}: {d.reconciliation.matches ? "balanced" : `NOT balanced (diff: ${d.reconciliation.diff.toLocaleString()})`} — CF {d.reconciliation.cashFlowClosing.toLocaleString()} | Bank {d.reconciliation.bankPositionTotal.toLocaleString()}
-                            </div>
-                          ))}
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontWeight: 700, color: NAVY, marginBottom: "4px" }}>{uploadResult.reconciliation?.matches ? "Balanced — statements match" : "Mismatch — NOT balanced"}</div>
-                          <div style={{ color: SLATE }}>
-                            Date: {uploadResult.date} | CF Closing: {uploadResult.reconciliation?.cashFlowClosing?.toLocaleString()} | Bank: {uploadResult.reconciliation?.bankPositionTotal?.toLocaleString()}
-                            {!uploadResult.reconciliation?.matches && <span style={{ color: RED, fontWeight: 700 }}> | Diff: {uploadResult.reconciliation?.diff?.toLocaleString()}</span>}
-                          </div>
-                        </>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setDragOver(false); onDropFiles(e.dataTransfer.files); }}
+                onClick={() => dropInputRef.current?.click()}
+                style={{
+                  border: `2px dashed ${dragOver ? NAVY : BORDER}`,
+                  borderRadius: "8px", padding: "20px 16px", textAlign: "center",
+                  backgroundColor: dragOver ? "#f0f4ff" : "var(--bg-page,#f8fafc)",
+                  cursor: "pointer", transition: "all 0.15s", marginBottom: "10px",
+                }}
+              >
+                <div style={{ fontSize: "24px", marginBottom: "4px" }}>📄</div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>Drop PDFs here or click to browse</div>
+                <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>Cash flow + bank position — any number of files</div>
+                <input ref={dropInputRef} type="file" accept=".pdf" multiple style={{ display: "none" }}
+                  onChange={(e) => e.target.files && onDropFiles(e.target.files)} />
+              </div>
+
+              {dropFiles.length > 0 && (
+                <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", marginBottom: "10px", overflow: "hidden" }}>
+                  {dropFiles.map((f, i) => (
+                    <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: i < dropFiles.length - 1 ? `1px solid ${BORDER}` : "none", fontSize: "13px", color: NAVY }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{f.name}</span>
+                      {!uploading && (
+                        <button onClick={() => setDropFiles((p) => p.filter((x) => x.name !== f.name))}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: SLATE, fontSize: "16px", marginLeft: "8px", lineHeight: 1 }}>×</button>
                       )}
-                      {(() => {
-                        if (!uploadResult.cashFlow || !uploadResult.date) return null;
-                        const prevDay = positions.find((p) => p.position_date < uploadResult.date!);
-                        if (!prevDay) return null;
-                        const diffDays = (new Date(uploadResult.date!).getTime() - new Date(prevDay.position_date).getTime()) / (1000 * 60 * 60 * 24);
-                        if (diffDays > 1) return null;
-                        const opening = (uploadResult.cashFlow as Record<string, number>).openingBalance;
-                        if (opening && Math.abs(opening - prevDay.closing_balance) > 0.01 && Math.abs(Math.abs(opening) - Math.abs(prevDay.closing_balance)) > 0.01) {
-                          return <div style={{ color: RED, fontWeight: 700, marginTop: "4px", fontSize: "12px" }}>Opening ({opening.toLocaleString()}) does not match previous closing ({prevDay.closing_balance.toLocaleString()})</div>;
-                        }
-                        return null;
-                      })()}
-                    </>
-                  ) : (
-                    <div style={{ color: RED, fontWeight: 600 }}>{uploadResult.error}</div>
-                  )}
+                    </div>
+                  ))}
                 </div>
               )}
+
+              {uploadResults.length > 0 && (
+                <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", marginBottom: "10px", overflow: "hidden" }}>
+                  {uploadResults.map((r, i) => {
+                    const ok = r.status.startsWith("saved");
+                    return (
+                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: i < uploadResults.length - 1 ? `1px solid ${BORDER}` : "none", fontSize: "13px" }}>
+                        <span style={{ color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{r.filename}</span>
+                        <span style={{ color: ok ? GREEN : RED, fontWeight: 700, marginLeft: "8px", whiteSpace: "nowrap" }}>{ok ? "Saved" : "Error"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <form onSubmit={handlePDFUpload}>
+                <button type="submit" disabled={uploading || dropFiles.length === 0}
+                  style={{ ...btnStyle, fontSize: "14px", padding: "6px 14px", opacity: uploading || dropFiles.length === 0 ? 0.5 : 1 }}>
+                  {uploading ? "Processing..." : `Upload ${dropFiles.length || ""} file${dropFiles.length !== 1 ? "s" : ""}`}
+                </button>
+              </form>
             </>
           )}
 
