@@ -78,6 +78,12 @@ export default function ReceivablesPage() {
   const [message, setMessage] = useState("");
   const [showCollected, setShowCollected] = useState(false);
   const [dragBillId, setDragBillId] = useState<string | null>(null);
+
+  // Edit/delete state
+  const [editBillId, setEditBillId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ utility: "", amount: "", date_submitted: "", invoice_ref: "", ic_ref: "", grn_ref: "", notes: "", bill_type: "Normal" });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -209,6 +215,51 @@ export default function ReceivablesPage() {
     setMessage("Bill added.");
     setTimeout(() => setMessage(""), 3000);
     setInvoiceRef(""); setIcRef(""); setGrnRef(""); setAmount(""); setBillType("Normal");
+    loadData();
+  }
+
+  function startEdit(bill: Receivable) {
+    setEditBillId(bill.id);
+    setEditForm({
+      utility: bill.utility,
+      amount: String(bill.amount),
+      date_submitted: bill.date_submitted,
+      invoice_ref: bill.invoice_ref || "",
+      ic_ref: bill.ic_ref || "",
+      grn_ref: bill.grn_ref || "",
+      notes: bill.notes || "",
+      bill_type: bill.bill_type || "Normal",
+    });
+  }
+
+  async function saveEdit() {
+    if (!editBillId) return;
+    setSavingEdit(true);
+    const { error } = await supabase.from("receivables").update({
+      utility: editForm.utility,
+      amount: Number(editForm.amount),
+      date_submitted: editForm.date_submitted,
+      invoice_ref: editForm.invoice_ref || null,
+      ic_ref: skipsICGRN(editForm.bill_type) ? null : (editForm.ic_ref || null),
+      grn_ref: skipsICGRN(editForm.bill_type) ? null : (editForm.grn_ref || null),
+      notes: editForm.notes || null,
+      bill_type: editForm.bill_type,
+      updated_at: new Date().toISOString(),
+    }).eq("id", editBillId);
+    setSavingEdit(false);
+    if (error) { setMessage("Error: " + error.message); return; }
+    logAction("Updated", "receivables", `Edited bill details`, editBillId);
+    setEditBillId(null);
+    loadData();
+  }
+
+  async function deleteBill(billId: string) {
+    if (!canEdit) return;
+    setDeletingId(billId);
+    const { error } = await supabase.from("receivables").delete().eq("id", billId);
+    setDeletingId(null);
+    if (error) { setMessage("Error: " + error.message); return; }
+    logAction("Deleted", "receivables", "Bill deleted", billId);
     loadData();
   }
 
@@ -502,56 +553,106 @@ export default function ReceivablesPage() {
                           const next = nextStageFor(bill, stage.stage_order);
                           const prev = prevStageFor(bill, stage.stage_order);
                           const isDragging = dragBillId === bill.id;
+                          const isEditing = editBillId === bill.id;
                           return (
                             <div
                               key={bill.id}
-                              draggable={canEdit}
+                              draggable={canEdit && !isEditing}
                               onDragStart={(e) => onDragStart(e, bill.id)}
                               onDragEnd={onDragEnd}
                               style={{
                                 border: `1px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.BORDER}`,
                                 borderLeft: `3px solid ${isStuck ? COLOURS.RED : isWarning ? "#d97706" : COLOURS.GREEN}`,
                                 borderRadius: "6px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "6px",
-                                cursor: canEdit ? "grab" : "default",
+                                cursor: canEdit && !isEditing ? "grab" : "default",
                                 opacity: isDragging ? 0.5 : 1,
                                 transition: "opacity 0.15s",
                               }}
                             >
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{bill.utility}</div>
-                                {bill.bill_type !== "Normal" && (
-                                  <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 5px", borderRadius: "4px", backgroundColor: bill.bill_type === "Sales Tax" ? "#dbeafe" : "#fef3c7", color: bill.bill_type === "Sales Tax" ? COLOURS.BLUE : "#92400e" }}>{bill.bill_type}</span>
-                                )}
-                              </div>
-                              <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
-                                PKR {bill.amount.toLocaleString()} · {formatDateUK(bill.date_submitted)}
-                              </div>
-                              <div style={{ fontSize: "13px", color: isStuck ? COLOURS.RED : isWarning ? "#d97706" : "var(--text-secondary, #64748b)", fontWeight: isStuck || isWarning ? 700 : 400, marginTop: "2px" }}>
-                                {elapsed}d in stage {isStuck ? "(STUCK)" : isWarning ? "(due soon)" : ""}
-                              </div>
-                              {bill.invoice_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>Inv: {bill.invoice_ref}</div>}
-                              {bill.ic_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>IC: {bill.ic_ref}</div>}
-                              {bill.grn_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>GRN: {bill.grn_ref}</div>}
-
-                              {canEdit && (
-                                <div style={{ display: "flex", gap: "4px", marginTop: "6px", flexWrap: "wrap" }}>
-                                  {prev && (
-                                    <button onClick={() => moveToStage(bill.id, prev.stage_order)} style={{
-                                      backgroundColor: "#94a3b8", color: "white", border: "none", borderRadius: "4px",
-                                      padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
-                                    }} title={`Send back to ${prev.stage_name}`}>Back</button>
-                                  )}
-                                  {next && (
-                                    <button onClick={() => moveToStage(bill.id, next.stage_order)} style={{
-                                      backgroundColor: COLOURS.BLUE, color: "white", border: "none", borderRadius: "4px",
-                                      padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
-                                    }} title={`Move to ${next.stage_name}`}>Next</button>
-                                  )}
-                                  <button onClick={() => markCollected(bill.id)} style={{
-                                    backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "4px",
-                                    padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
-                                  }}>Collected</button>
+                              {isEditing ? (
+                                <div>
+                                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>Edit Bill</div>
+                                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                                    <div style={{ gridColumn: "1 / -1" }}>
+                                      <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>Customer</label>
+                                      <input value={editForm.utility} onChange={(e) => setEditForm({ ...editForm, utility: e.target.value })} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>Amount (PKR)</label>
+                                      <input type="number" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>Date Submitted</label>
+                                      <input type="date" value={editForm.date_submitted} onChange={(e) => setEditForm({ ...editForm, date_submitted: e.target.value })} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box" }} />
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>Bill Type</label>
+                                      <select value={editForm.bill_type} onChange={(e) => setEditForm({ ...editForm, bill_type: e.target.value })} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box" }}>
+                                        {BILL_TYPES.map((t) => <option key={t}>{t}</option>)}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>Invoice Ref</label>
+                                      <input value={editForm.invoice_ref} onChange={(e) => setEditForm({ ...editForm, invoice_ref: e.target.value })} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box" }} placeholder="Optional" />
+                                    </div>
+                                    {!skipsICGRN(editForm.bill_type) && (
+                                      <div>
+                                        <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>IC Ref</label>
+                                        <input value={editForm.ic_ref} onChange={(e) => setEditForm({ ...editForm, ic_ref: e.target.value })} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box" }} placeholder="Optional" />
+                                      </div>
+                                    )}
+                                    {!skipsICGRN(editForm.bill_type) && (
+                                      <div>
+                                        <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>GRN Ref</label>
+                                        <input value={editForm.grn_ref} onChange={(e) => setEditForm({ ...editForm, grn_ref: e.target.value })} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box" }} placeholder="Optional" />
+                                      </div>
+                                    )}
+                                    <div style={{ gridColumn: "1 / -1" }}>
+                                      <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>Notes</label>
+                                      <textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={2} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box", resize: "vertical" }} placeholder="Optional" />
+                                    </div>
+                                  </div>
+                                  <div style={{ display: "flex", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
+                                    <button onClick={saveEdit} disabled={savingEdit} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "4px", padding: "5px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer", opacity: savingEdit ? 0.6 : 1 }}>{savingEdit ? "Saving…" : "Save"}</button>
+                                    <button onClick={() => setEditBillId(null)} style={{ backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, border: `1px solid ${COLOURS.BORDER}`, borderRadius: "4px", padding: "5px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                                    <button onClick={() => { if (confirm("Delete this bill? This cannot be undone.")) deleteBill(bill.id); }} disabled={deletingId === bill.id} style={{ backgroundColor: COLOURS.RED, color: "white", border: "none", borderRadius: "4px", padding: "5px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer", marginLeft: "auto", opacity: deletingId === bill.id ? 0.6 : 1 }}>{deletingId === bill.id ? "Deleting…" : "Delete"}</button>
+                                  </div>
                                 </div>
+                              ) : (
+                                <>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{bill.utility}</div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                      {bill.bill_type !== "Normal" && (
+                                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 5px", borderRadius: "4px", backgroundColor: bill.bill_type === "Sales Tax" ? "#dbeafe" : "#fef3c7", color: bill.bill_type === "Sales Tax" ? COLOURS.BLUE : "#92400e" }}>{bill.bill_type}</span>
+                                      )}
+                                      {canEdit && (
+                                        <button onClick={() => startEdit(bill)} style={{ background: "none", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "4px", padding: "1px 7px", fontSize: "11px", fontWeight: 600, cursor: "pointer", color: COLOURS.SLATE }}>Edit</button>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
+                                    PKR {bill.amount.toLocaleString()} · {formatDateUK(bill.date_submitted)}
+                                  </div>
+                                  <div style={{ fontSize: "13px", color: isStuck ? COLOURS.RED : isWarning ? "#d97706" : "var(--text-secondary, #64748b)", fontWeight: isStuck || isWarning ? 700 : 400, marginTop: "2px" }}>
+                                    {elapsed}d in stage {isStuck ? "(STUCK)" : isWarning ? "(due soon)" : ""}
+                                  </div>
+                                  {bill.invoice_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>Inv: {bill.invoice_ref}</div>}
+                                  {bill.ic_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>IC: {bill.ic_ref}</div>}
+                                  {bill.grn_ref && <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>GRN: {bill.grn_ref}</div>}
+                                  {bill.notes && <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", fontStyle: "italic", marginTop: "2px" }}>{bill.notes}</div>}
+                                  {canEdit && (
+                                    <div style={{ display: "flex", gap: "4px", marginTop: "6px", flexWrap: "wrap" }}>
+                                      {prev && (
+                                        <button onClick={() => moveToStage(bill.id, prev.stage_order)} style={{ backgroundColor: "#94a3b8", color: "white", border: "none", borderRadius: "4px", padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }} title={`Send back to ${prev.stage_name}`}>Back</button>
+                                      )}
+                                      {next && (
+                                        <button onClick={() => moveToStage(bill.id, next.stage_order)} style={{ backgroundColor: COLOURS.BLUE, color: "white", border: "none", borderRadius: "4px", padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }} title={`Move to ${next.stage_name}`}>Next</button>
+                                      )}
+                                      <button onClick={() => markCollected(bill.id)} style={{ backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: "4px", padding: "3px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Collected</button>
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </div>
                           );
