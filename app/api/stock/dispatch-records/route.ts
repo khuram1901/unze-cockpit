@@ -248,3 +248,79 @@ export async function POST(request: NextRequest) {
 
   return Response.json({ dispatch: data }, { status: 201 });
 }
+
+export async function PATCH(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  const body = await request.json().catch(() => ({}));
+  const { id, dispatch_date, qty_31, qty_36, qty_45, qty_meter, released_by, vehicle_number, notes } = body;
+
+  if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+
+  // Fetch the dispatch record to get its letter
+  const { data: record } = await supabase
+    .from("dispatch_records")
+    .select("authority_letter_id, qty_31, qty_36, qty_45, qty_meter")
+    .eq("id", id).single();
+
+  if (!record) return Response.json({ error: "Dispatch record not found" }, { status: 404 });
+
+  // Re-validate cap: other dispatches on this letter + new quantities must not exceed letter qty
+  const { data: letter } = await supabase
+    .from("authority_letters")
+    .select("qty_31, qty_36, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_45, opening_dispatched_meter")
+    .eq("id", record.authority_letter_id).single();
+
+  if (letter) {
+    const { data: others } = await supabase
+      .from("dispatch_records")
+      .select("qty_31, qty_36, qty_45, qty_meter")
+      .eq("authority_letter_id", record.authority_letter_id)
+      .neq("id", id);
+
+    const otherTotal = (others || []).reduce(
+      (acc, r) => ({ qty_31: acc.qty_31 + (r.qty_31 || 0), qty_36: acc.qty_36 + (r.qty_36 || 0), qty_45: acc.qty_45 + (r.qty_45 || 0), qty_meter: acc.qty_meter + (r.qty_meter || 0) }),
+      { qty_31: letter.opening_dispatched_31 || 0, qty_36: letter.opening_dispatched_36 || 0, qty_45: letter.opening_dispatched_45 || 0, qty_meter: letter.opening_dispatched_meter || 0 }
+    );
+
+    const newQty = {
+      qty_31: qty_31 !== undefined ? qty_31 : record.qty_31,
+      qty_36: qty_36 !== undefined ? qty_36 : record.qty_36,
+      qty_45: qty_45 !== undefined ? qty_45 : record.qty_45,
+      qty_meter: qty_meter !== undefined ? qty_meter : record.qty_meter,
+    };
+
+    const overflows = [
+      { size: "31ft", total: otherTotal.qty_31 + newQty.qty_31, limit: letter.qty_31 },
+      { size: "36ft", total: otherTotal.qty_36 + newQty.qty_36, limit: letter.qty_36 },
+      { size: "45ft", total: otherTotal.qty_45 + newQty.qty_45, limit: letter.qty_45 },
+      { size: "meter", total: otherTotal.qty_meter + newQty.qty_meter, limit: letter.qty_meter },
+    ].filter((s) => s.limit > 0 && s.total > s.limit);
+
+    if (overflows.length > 0) {
+      const detail = overflows.map((s) => {
+        const remaining = s.limit - otherTotal[`qty_${s.size === "31ft" ? "31" : s.size === "36ft" ? "36" : s.size === "45ft" ? "45" : "meter"}` as keyof typeof otherTotal];
+        return `${s.size}: only ${remaining} remaining on this letter`;
+      }).join(", ");
+      return Response.json({ error: `Dispatch blocked — ${detail}` }, { status: 400 });
+    }
+  }
+
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (dispatch_date !== undefined) updates.dispatch_date = dispatch_date;
+  if (qty_31 !== undefined) updates.qty_31 = qty_31;
+  if (qty_36 !== undefined) updates.qty_36 = qty_36;
+  if (qty_45 !== undefined) updates.qty_45 = qty_45;
+  if (qty_meter !== undefined) updates.qty_meter = qty_meter;
+  if (released_by !== undefined) updates.released_by = released_by;
+  if (vehicle_number !== undefined) updates.vehicle_number = vehicle_number || null;
+  if (notes !== undefined) updates.notes = notes || null;
+
+  const { data, error } = await supabase
+    .from("dispatch_records").update(updates).eq("id", id).select().single();
+
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ dispatch: data });
+}

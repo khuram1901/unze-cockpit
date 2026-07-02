@@ -18,6 +18,19 @@ type PO = {
   opening_produced_31: number; opening_produced_36: number; opening_produced_45: number; opening_produced_meter: number;
 };
 type Contractor = { id: string; name: string; cnic_or_id: string | null; contact_phone: string | null; contact_address: string | null };
+type AuthorityLetter = {
+  id: string; po_id: string; contractor_id: string; letter_number: string;
+  issue_date: string; issued_by: string; expiry_date: string | null;
+  qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
+  opening_dispatched_31: number; opening_dispatched_36: number; opening_dispatched_45: number; opening_dispatched_meter: number;
+  notes: string | null;
+  contractors?: { name: string } | null;
+};
+type DispatchRecord = {
+  id: string; authority_letter_id: string; dispatch_date: string;
+  qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
+  released_by: string; vehicle_number: string | null; notes: string | null;
+};
 type ContractorPerf = {
   contractor_id: string;
   contractor_name: string;
@@ -89,6 +102,27 @@ export default function StockManagePage() {
   const [showContractorForm, setShowContractorForm] = useState(false);
   const [contractorForm, setContractorForm] = useState(emptyContractor);
   const [savingContractor, setSavingContractor] = useState(false);
+
+  // Letters list (for a selected PO)
+  const [viewLettersPOId, setViewLettersPOId] = useState<string | null>(null);
+  const [letters, setLetters] = useState<AuthorityLetter[]>([]);
+  const [lettersLoading, setLettersLoading] = useState(false);
+  // Edit letter
+  const [editLetterId, setEditLetterId] = useState<string | null>(null);
+  const [editLetterForm, setEditLetterForm] = useState(emptyLetter);
+  const [savingEditLetter, setSavingEditLetter] = useState(false);
+  // Edit contractor
+  const [editContractorId, setEditContractorId] = useState<string | null>(null);
+  const [editContractorForm, setEditContractorForm] = useState(emptyContractor);
+  const [savingEditContractor, setSavingEditContractor] = useState(false);
+  // Dispatch records for a letter
+  const [viewDispatchLetterId, setViewDispatchLetterId] = useState<string | null>(null);
+  const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
+  const [dispatchesLoading, setDispatchesLoading] = useState(false);
+  // Edit dispatch
+  const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
+  const [editDispatchForm, setEditDispatchForm] = useState({ dispatch_date: "", qty_31: "", qty_36: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
+  const [savingEditDispatch, setSavingEditDispatch] = useState(false);
 
   // Contractor performance
   const [performance, setPerformance] = useState<ContractorPerf[]>([]);
@@ -210,6 +244,134 @@ export default function StockManagePage() {
     loadContractors();
   }
 
+  async function loadLetters(poId: string) {
+    setLettersLoading(true);
+    const res = await authedFetch(`/api/stock/authority-letters?poId=${poId}`);
+    const json = await res.json();
+    setLetters(json.letters || []);
+    setLettersLoading(false);
+  }
+
+  function startEditLetter(l: AuthorityLetter) {
+    setEditLetterId(l.id);
+    setEditLetterForm({
+      contractor_id: l.contractor_id,
+      letter_number: l.letter_number,
+      issue_date: l.issue_date,
+      issued_by: l.issued_by,
+      expiry_date: l.expiry_date || "",
+      qty_31: String(l.qty_31 || ""),
+      qty_36: String(l.qty_36 || ""),
+      qty_45: String(l.qty_45 || ""),
+      qty_meter: String(l.qty_meter || ""),
+      opening_dispatched_31: String(l.opening_dispatched_31 || "0"),
+      opening_dispatched_36: String(l.opening_dispatched_36 || "0"),
+      opening_dispatched_45: String(l.opening_dispatched_45 || "0"),
+      opening_dispatched_meter: String(l.opening_dispatched_meter || "0"),
+      notes: l.notes || "",
+    });
+  }
+
+  async function saveEditLetter() {
+    if (!editLetterId) return;
+    setSavingEditLetter(true);
+    const res = await authedFetch("/api/stock/authority-letters", {
+      method: "PATCH",
+      body: JSON.stringify({
+        id: editLetterId,
+        contractor_id: editLetterForm.contractor_id,
+        letter_number: editLetterForm.letter_number,
+        issue_date: editLetterForm.issue_date,
+        issued_by: editLetterForm.issued_by,
+        expiry_date: editLetterForm.expiry_date || null,
+        qty_31: Number(editLetterForm.qty_31) || 0,
+        qty_36: Number(editLetterForm.qty_36) || 0,
+        qty_45: Number(editLetterForm.qty_45) || 0,
+        qty_meter: Number(editLetterForm.qty_meter) || 0,
+        notes: editLetterForm.notes || null,
+      }),
+    });
+    const json = await res.json();
+    setSavingEditLetter(false);
+    if (json.error) { toast(json.error, "error"); return; }
+    toast("Letter updated", "success");
+    setEditLetterId(null);
+    if (viewLettersPOId) loadLetters(viewLettersPOId);
+  }
+
+  function startEditContractor(c: Contractor) {
+    setEditContractorId(c.id);
+    setEditContractorForm({
+      name: c.name,
+      cnic_or_id: c.cnic_or_id || "",
+      contact_phone: c.contact_phone || "",
+      contact_address: c.contact_address || "",
+    });
+  }
+
+  async function saveEditContractor() {
+    if (!editContractorId) return;
+    if (!editContractorForm.name) { toast("Name is required", "error"); return; }
+    setSavingEditContractor(true);
+    const res = await authedFetch("/api/stock/contractors", {
+      method: "PATCH",
+      body: JSON.stringify({ id: editContractorId, ...editContractorForm }),
+    });
+    const json = await res.json();
+    setSavingEditContractor(false);
+    if (json.error) { toast(json.error, "error"); return; }
+    toast("Contractor updated", "success");
+    setEditContractorId(null);
+    loadContractors();
+  }
+
+  async function loadDispatches(letterId: string) {
+    setDispatchesLoading(true);
+    const res = await authedFetch(`/api/stock/dispatch-records?letterId=${letterId}`);
+    const json = await res.json();
+    setDispatches(json.dispatches || []);
+    setDispatchesLoading(false);
+  }
+
+  function startEditDispatch(d: DispatchRecord) {
+    setEditDispatchId(d.id);
+    setEditDispatchForm({
+      dispatch_date: d.dispatch_date,
+      qty_31: String(d.qty_31 || ""),
+      qty_36: String(d.qty_36 || ""),
+      qty_45: String(d.qty_45 || ""),
+      qty_meter: String(d.qty_meter || ""),
+      released_by: d.released_by,
+      vehicle_number: d.vehicle_number || "",
+      notes: d.notes || "",
+    });
+  }
+
+  async function saveEditDispatch() {
+    if (!editDispatchId) return;
+    setSavingEditDispatch(true);
+    const res = await authedFetch("/api/stock/dispatch-records", {
+      method: "PATCH",
+      body: JSON.stringify({
+        id: editDispatchId,
+        dispatch_date: editDispatchForm.dispatch_date,
+        qty_31: Number(editDispatchForm.qty_31) || 0,
+        qty_36: Number(editDispatchForm.qty_36) || 0,
+        qty_45: Number(editDispatchForm.qty_45) || 0,
+        qty_meter: Number(editDispatchForm.qty_meter) || 0,
+        released_by: editDispatchForm.released_by,
+        vehicle_number: editDispatchForm.vehicle_number || null,
+        notes: editDispatchForm.notes || null,
+      }),
+    });
+    const json = await res.json();
+    setSavingEditDispatch(false);
+    if (json.error) { toast(json.error, "error"); return; }
+    toast("Dispatch record updated", "success");
+    setEditDispatchId(null);
+    if (viewDispatchLetterId) loadDispatches(viewDispatchLetterId);
+  }
+
   if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions...</p></main></AuthWrapper>;
 
   const activePOs = pos.filter((p) => !p.is_system_unallocated && p.status === "Active");
@@ -281,7 +443,8 @@ export default function StockManagePage() {
               </div>
             )}
             {[...activePOs, ...closedPOs].map((po) => (
-              <div key={po.id} style={{ border: "1px solid var(--border-color,#e2e8f0)", borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "8px", opacity: po.status === "Closed" ? 0.6 : 1, borderLeft: `4px solid ${po.status === "Closed" ? "#94a3b8" : COLOURS.NAVY}` }}>
+              <div key={po.id} style={{ marginBottom: "8px" }}>
+              <div style={{ border: "1px solid var(--border-color,#e2e8f0)", borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card,#fff)", opacity: po.status === "Closed" ? 0.6 : 1, borderLeft: `4px solid ${po.status === "Closed" ? "#94a3b8" : COLOURS.NAVY}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
                   <div>
                     <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>
@@ -294,12 +457,24 @@ export default function StockManagePage() {
                       Ordered: {[po.ordered_31 && `${po.ordered_31} × 31ft`, po.ordered_36 && `${po.ordered_36} × 36ft`, po.ordered_45 && `${po.ordered_45} × 45ft`, po.ordered_meter && `${po.ordered_meter} × Mtr`].filter(Boolean).join(", ")}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: "6px" }}>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                     <button
                       onClick={() => { setSelectedPOId(po.id); setShowLetterForm(true); }}
                       style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: "var(--bg-card,#fff)", color: COLOURS.NAVY, cursor: "pointer" }}
                     >
                       + Authority Letter
+                    </button>
+                    <button
+                      onClick={() => {
+                        const isOpen = viewLettersPOId === po.id;
+                        setViewLettersPOId(isOpen ? null : po.id);
+                        setEditLetterId(null);
+                        setViewDispatchLetterId(null);
+                        if (!isOpen) loadLetters(po.id);
+                      }}
+                      style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: viewLettersPOId === po.id ? "#f1f5f9" : "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}
+                    >
+                      {viewLettersPOId === po.id ? "Hide Letters" : "Edit Letters"}
                     </button>
                     {po.status === "Active" && (
                       <button onClick={() => closePO(po)} style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>
@@ -309,7 +484,127 @@ export default function StockManagePage() {
                   </div>
                 </div>
               </div>
-            ))}
+
+              {/* ── Letters panel for this PO ── */}
+              {viewLettersPOId === po.id && (
+                <div style={{ marginTop: "10px", borderTop: "1px solid #e2e8f0", paddingTop: "10px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "8px" }}>Authority Letters</div>
+                  {lettersLoading ? (
+                    <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Loading…</div>
+                  ) : letters.length === 0 ? (
+                    <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>No letters issued for this PO yet.</div>
+                  ) : letters.map((l) => (
+                    <div key={l.id} style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px 12px", marginBottom: "8px", backgroundColor: "var(--bg-card,#fff)" }}>
+                      {editLetterId === l.id ? (
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>Edit Letter #{l.letter_number}</div>
+                          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
+                            <Field label="Contractor">
+                              <select value={editLetterForm.contractor_id} onChange={(e) => setEditLetterForm({ ...editLetterForm, contractor_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+                                <option value="">Select…</option>
+                                {contractors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                            </Field>
+                            <Field label="Letter number"><input value={editLetterForm.letter_number} onChange={(e) => setEditLetterForm({ ...editLetterForm, letter_number: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                            <Field label="Issue date"><input type="date" value={editLetterForm.issue_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                            <Field label="Issued by"><input value={editLetterForm.issued_by} onChange={(e) => setEditLetterForm({ ...editLetterForm, issued_by: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                            <Field label="Expiry date"><input type="date" value={editLetterForm.expiry_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                          </div>
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, margin: "8px 0 6px" }}>Authorised quantities</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: "8px" }}>
+                            <Field label="31ft"><NumInput value={editLetterForm.qty_31} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_31: v })} /></Field>
+                            <Field label="36ft"><NumInput value={editLetterForm.qty_36} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_36: v })} /></Field>
+                            <Field label="45ft"><NumInput value={editLetterForm.qty_45} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_45: v })} /></Field>
+                            <Field label="Meter"><NumInput value={editLetterForm.qty_meter} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_meter: v })} /></Field>
+                          </div>
+                          <Field label="Notes"><textarea value={editLetterForm.notes} onChange={(e) => setEditLetterForm({ ...editLetterForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} /></Field>
+                          <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                            <button onClick={saveEditLetter} disabled={savingEditLetter} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 14px", opacity: savingEditLetter ? 0.6 : 1 }}>{savingEditLetter ? "Saving…" : "Save changes"}</button>
+                            <button onClick={() => setEditLetterId(null)} style={{ padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "6px" }}>
+                            <div>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>Letter #{l.letter_number}</div>
+                              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                                {(Array.isArray(l.contractors) ? (l.contractors as {name:string}[])[0]?.name : (l.contractors as {name:string} | null)?.name) || "—"} · Issued {formatDateUK(l.issue_date)}
+                                {l.expiry_date && ` · Expires ${formatDateUK(l.expiry_date)}`}
+                              </div>
+                              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                                Auth: {[l.qty_31 && `${l.qty_31}×31`, l.qty_36 && `${l.qty_36}×36`, l.qty_45 && `${l.qty_45}×45`, l.qty_meter && `${l.qty_meter}×Mtr`].filter(Boolean).join(", ") || "—"}
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <button onClick={() => startEditLetter(l)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Edit</button>
+                              <button
+                                onClick={() => {
+                                  const isOpen = viewDispatchLetterId === l.id;
+                                  setViewDispatchLetterId(isOpen ? null : l.id);
+                                  setEditDispatchId(null);
+                                  if (!isOpen) loadDispatches(l.id);
+                                }}
+                                style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: viewDispatchLetterId === l.id ? "#f1f5f9" : "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}
+                              >
+                                {viewDispatchLetterId === l.id ? "Hide Dispatches" : "Edit Dispatches"}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Dispatch records for this letter */}
+                          {viewDispatchLetterId === l.id && (
+                            <div style={{ marginTop: "10px", borderTop: "1px solid #f1f5f9", paddingTop: "8px" }}>
+                              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "6px" }}>Dispatch Records</div>
+                              {dispatchesLoading ? (
+                                <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>Loading…</div>
+                              ) : dispatches.length === 0 ? (
+                                <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>No dispatch records for this letter.</div>
+                              ) : dispatches.map((d) => (
+                                <div key={d.id} style={{ border: "1px solid #f1f5f9", borderRadius: "6px", padding: "8px 10px", marginBottom: "6px", backgroundColor: "#f8fafc" }}>
+                                  {editDispatchId === d.id ? (
+                                    <div>
+                                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
+                                        <Field label="Date"><input type="date" value={editDispatchForm.dispatch_date} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                                        <Field label="Released by"><input value={editDispatchForm.released_by} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, released_by: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                                        <Field label="Vehicle"><input value={editDispatchForm.vehicle_number} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, vehicle_number: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+                                      </div>
+                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: "8px" }}>
+                                        <Field label="31ft"><NumInput value={editDispatchForm.qty_31} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_31: v })} /></Field>
+                                        <Field label="36ft"><NumInput value={editDispatchForm.qty_36} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_36: v })} /></Field>
+                                        <Field label="45ft"><NumInput value={editDispatchForm.qty_45} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_45: v })} /></Field>
+                                        <Field label="Meter"><NumInput value={editDispatchForm.qty_meter} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_meter: v })} /></Field>
+                                      </div>
+                                      <Field label="Notes"><input value={editDispatchForm.notes} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, notes: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+                                      <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                                        <button onClick={saveEditDispatch} disabled={savingEditDispatch} style={{ ...primaryButtonStyle, fontSize: "12px", padding: "5px 12px", opacity: savingEditDispatch ? 0.6 : 1 }}>{savingEditDispatch ? "Saving…" : "Save"}</button>
+                                        <button onClick={() => setEditDispatchId(null)} style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px" }}>
+                                      <div>
+                                        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>{formatDateUK(d.dispatch_date)}</span>
+                                        <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "8px" }}>
+                                          {[d.qty_31 && `${d.qty_31}×31`, d.qty_36 && `${d.qty_36}×36`, d.qty_45 && `${d.qty_45}×45`, d.qty_meter && `${d.qty_meter}×Mtr`].filter(Boolean).join(", ")} · {d.released_by}
+                                          {d.vehicle_number && ` · ${d.vehicle_number}`}
+                                        </span>
+                                      </div>
+                                      <button onClick={() => startEditDispatch(d)} style={{ padding: "3px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Edit</button>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
           </>
         )}
 
@@ -379,11 +674,29 @@ export default function StockManagePage() {
           {contractors.length === 0 ? (
             <div style={{ padding: "16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "14px" }}>No contractors yet. Add one above.</div>
           ) : contractors.map((c) => (
-            <div key={c.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--border-light,#f1f5f9)", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary,#1e293b)" }}>{c.name}</span>
-              {c.cnic_or_id && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>ID: {c.cnic_or_id}</span>}
-              {c.contact_phone && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.contact_phone}</span>}
-              {c.contact_address && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.contact_address}</span>}
+            <div key={c.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--border-light,#f1f5f9)" }}>
+              {editContractorId === c.id ? (
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
+                    <Field label="Name *"><input value={editContractorForm.name} onChange={(e) => setEditContractorForm({ ...editContractorForm, name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                    <Field label="CNIC / ID"><input value={editContractorForm.cnic_or_id} onChange={(e) => setEditContractorForm({ ...editContractorForm, cnic_or_id: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+                    <Field label="Phone"><input value={editContractorForm.contact_phone} onChange={(e) => setEditContractorForm({ ...editContractorForm, contact_phone: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+                    <Field label="Address"><input value={editContractorForm.contact_address} onChange={(e) => setEditContractorForm({ ...editContractorForm, contact_address: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                    <button onClick={saveEditContractor} disabled={savingEditContractor} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 14px", opacity: savingEditContractor ? 0.6 : 1 }}>{savingEditContractor ? "Saving…" : "Save changes"}</button>
+                    <button onClick={() => setEditContractorId(null)} style={{ padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary,#1e293b)", flex: 1 }}>{c.name}</span>
+                  {c.cnic_or_id && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>ID: {c.cnic_or_id}</span>}
+                  {c.contact_phone && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.contact_phone}</span>}
+                  {c.contact_address && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.contact_address}</span>}
+                  <button onClick={() => startEditContractor(c)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer", marginLeft: "auto" }}>Edit</button>
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -69,3 +69,35 @@ export async function POST(request: NextRequest) {
 
   return Response.json({ contractor }, { status: 201 });
 }
+
+export async function PATCH(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  const { data: member } = await supabase
+    .from("members").select("role, department").eq("email", auth.email).single();
+
+  if (!member || !canManage(member.role, member.department)) {
+    return Response.json({ error: "Ops Manager or Admin required" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const { id, name, cnic_or_id, contact_phone, contact_address, notes } = body;
+
+  if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+  if (name !== undefined && !name) return Response.json({ error: "name cannot be empty" }, { status: 400 });
+
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (name !== undefined) updates.name = name;
+  if (cnic_or_id !== undefined) updates.cnic_or_id = cnic_or_id || null;
+  if (contact_phone !== undefined) updates.contact_phone = contact_phone || null;
+  if (contact_address !== undefined) updates.contact_address = contact_address || null;
+  if (notes !== undefined) updates.notes = notes || null;
+
+  const { data, error } = await supabase
+    .from("contractors").update(updates).eq("id", id).select().single();
+
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ contractor: data });
+}
