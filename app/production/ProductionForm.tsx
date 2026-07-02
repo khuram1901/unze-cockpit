@@ -670,52 +670,29 @@ export default function ProductionForm() {
             {/* PO allocation */}
             {plantPOs.length > 0 && (
               <div style={{ marginTop: "10px" }}>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-secondary, #64748b)", marginBottom: "6px" }}>
+                <label style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-secondary, #64748b)" }}>
                   Which PO is this production for?
-                </div>
-                {loadingPOs ? (
-                  <p style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>Loading POs…</p>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {customerPOs.map((po) => (
-                      <button
-                        key={po.id}
-                        type="button"
-                        onClick={() => setSelectedPOId(po.id)}
-                        style={{
-                          textAlign: "left", padding: "10px 12px", borderRadius: "8px", cursor: "pointer",
-                          border: `2px solid ${selectedPOId === po.id ? "#2563eb" : "var(--border-color, #e2e8f0)"}`,
-                          backgroundColor: selectedPOId === po.id ? "#eff6ff" : "var(--bg-card, #fff)",
-                          transition: "all 0.1s",
-                        }}
-                      >
-                        <div style={{ fontSize: "14px", fontWeight: 700, color: selectedPOId === po.id ? "#1d4ed8" : "var(--text-primary, #1e293b)" }}>
-                          {po.customer_name} — PO #{po.po_number}
-                        </div>
-                        {po.po_label && (
-                          <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>{po.po_label}</div>
-                        )}
-                      </button>
-                    ))}
-                    {systemPO && (
-                      <button
-                        key={systemPO.id}
-                        type="button"
-                        onClick={() => setSelectedPOId(systemPO.id)}
-                        style={{
-                          textAlign: "left", padding: "8px 12px", borderRadius: "8px", cursor: "pointer",
-                          border: `2px solid ${selectedPOId === systemPO.id ? "#d97706" : "var(--border-color, #e2e8f0)"}`,
-                          backgroundColor: selectedPOId === systemPO.id ? "#fffbeb" : "var(--bg-card, #fff)",
-                          transition: "all 0.1s",
-                        }}
-                      >
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: selectedPOId === systemPO.id ? "#92400e" : "var(--text-secondary, #64748b)" }}>
+                  {loadingPOs ? (
+                    <p style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "4px" }}>Loading POs…</p>
+                  ) : (
+                    <select
+                      value={selectedPOId}
+                      onChange={(e) => setSelectedPOId(e.target.value)}
+                      style={{ ...inputStyle, marginTop: "6px" }}
+                    >
+                      {customerPOs.map((po) => (
+                        <option key={po.id} value={po.id}>
+                          {po.customer_name} — PO #{po.po_number}{po.po_label ? ` (${po.po_label})` : ""}
+                        </option>
+                      ))}
+                      {systemPO && (
+                        <option key={systemPO.id} value={systemPO.id}>
                           Unallocated (Unze stock)
-                        </div>
-                      </button>
-                    )}
-                  </div>
-                )}
+                        </option>
+                      )}
+                    </select>
+                  )}
+                </label>
               </div>
             )}
 
