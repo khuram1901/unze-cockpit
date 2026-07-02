@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { createServiceClient } from "../../../lib/supabase-server";
+import { encrypt } from "../../../lib/crypto";
 import { saveTokens } from "../../../lib/google-client";
 
 export async function GET(request: NextRequest) {
@@ -42,12 +44,30 @@ export async function GET(request: NextRequest) {
     const userInfo = await userInfoRes.json();
     const email = userInfo.email || "unknown";
 
-    await saveTokens(email, {
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expiry_date: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
-      scope: tokens.scope,
-    });
+    const supabase = createServiceClient();
+
+    if (tokens.refresh_token) {
+      // Full token set — save everything (first auth or user re-consented)
+      await saveTokens(email, {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        expiry_date: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+        scope: tokens.scope,
+      });
+    } else {
+      // Google didn't return a new refresh_token (already authorised).
+      // Only update access_token + expiry; preserve the existing refresh_token.
+      await supabase.from("google_oauth_tokens").upsert(
+        {
+          user_email: email,
+          access_token: tokens.access_token ? encrypt(tokens.access_token) : "",
+          token_expiry: tokens.expires_in ? new Date(Date.now() + tokens.expires_in * 1000).toISOString() : null,
+          scopes: tokens.scope || "",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_email", ignoreDuplicates: false }
+      );
+    }
 
     return Response.redirect(new URL("/finance?google=connected", request.url));
   } catch (err) {
