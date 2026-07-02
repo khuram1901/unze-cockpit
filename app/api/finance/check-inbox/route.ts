@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = createServiceClient();
-    const TARGET_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
+    const TARGET_EMAILS = ["k.saleem@unzegroup.com"];
 
     // Get existing dates for BOTH companies so we skip already-processed ones
     const { data: existingUtpl } = await supabase
