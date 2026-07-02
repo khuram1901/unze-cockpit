@@ -171,6 +171,11 @@ export default function CalendarPage() {
 
   useEffect(() => {
     loadData();
+    const params = new URLSearchParams(window.location.search);
+    const googleStatus = params.get("google");
+    if (googleStatus === "connected") {
+      window.history.replaceState({}, "", "/calendar");
+    }
   }, []);
 
   useEffect(() => {
@@ -415,7 +420,7 @@ export default function CalendarPage() {
                 </div>
               </div>
               {isAdmin && (
-                <a href="/api/google/auth" style={{
+                <a href="/api/google/auth?returnTo=/calendar" style={{
                   backgroundColor: "#dc2626", color: "white", border: "none", borderRadius: "8px",
                   padding: "8px 18px", fontSize: "14px", fontWeight: 700, textDecoration: "none",
                   whiteSpace: "nowrap", flexShrink: 0,
@@ -439,6 +444,13 @@ export default function CalendarPage() {
               <span style={{ fontSize: "14px" }}>✓</span>
               Showing calendar for {calendarAccounts.map((a) => a.email).join(", ")} · {busySlots.length} event{busySlots.length !== 1 ? "s" : ""} this week
             </div>
+            {isAdmin && (
+              <a href="/api/google/auth?returnTo=/calendar" style={{
+                fontSize: "12px", color: "#166534", textDecoration: "underline", whiteSpace: "nowrap",
+              }}>
+                Reconnect Google
+              </a>
+            )}
           </div>
         )}
 

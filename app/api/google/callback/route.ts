@@ -6,9 +6,11 @@ import { saveTokens } from "../../../lib/google-client";
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const error = request.nextUrl.searchParams.get("error");
+  const stateParam = request.nextUrl.searchParams.get("state");
+  const returnTo = stateParam ? decodeURIComponent(stateParam) : "/finance";
 
   if (error) {
-    return Response.redirect(new URL("/finance?google=denied", request.url));
+    return Response.redirect(new URL(`${returnTo}?google=denied`, request.url));
   }
 
   if (!code) {
@@ -69,10 +71,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return Response.redirect(new URL("/finance?google=connected", request.url));
+    return Response.redirect(new URL(`${returnTo}?google=connected`, request.url));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Google OAuth callback error:", message);
-    return Response.redirect(new URL("/finance?google=error", request.url));
+    return Response.redirect(new URL(`${returnTo}?google=error`, request.url));
   }
 }

@@ -1,4 +1,8 @@
-export async function GET() {
+import { NextRequest } from "next/server";
+
+export async function GET(request: NextRequest) {
+  const returnTo = request.nextUrl.searchParams.get("returnTo") || "/finance";
+
   const scopes = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.modify",
@@ -15,6 +19,7 @@ export async function GET() {
     scope: scopes.join(" "),
     access_type: "offline",
     prompt: "consent",
+    state: encodeURIComponent(returnTo),
   });
 
   const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;

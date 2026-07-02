@@ -11,6 +11,7 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import * as XLSX from "xlsx";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { canEditFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { UTPL_COMPANY_ID } from "../lib/constants";
 
 type OpeningBalance = {
   id: string;
@@ -56,6 +57,8 @@ function fmt(n: number) {
 }
 
 export default function FinanceManager({ companyId, companyName }: { companyId: string; companyName: string }) {
+  const companySlug = companyId === UTPL_COMPANY_ID ? "unze-trading" : "imperial";
+  const googleReturnTo = `/finance/${companySlug}`;
   const isMobile = useMobile();
   const toast = useToast();
   const dlg = useConfirm();
@@ -350,14 +353,14 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     const googleStatus = params.get("google");
     if (googleStatus === "connected") {
       setGmailConnected(true);
-      showMsg("Gmail connected successfully. Daily statements will be ingested automatically.");
-      window.history.replaceState({}, "", "/finance");
+      showMsg("Google connected — Drive and Calendar access is active.");
+      window.history.replaceState({}, "", googleReturnTo);
     } else if (googleStatus === "error") {
-      showMsg("Error: Failed to connect Gmail. Please try again.");
-      window.history.replaceState({}, "", "/finance");
+      showMsg("Error: Failed to connect Google. Please try again.");
+      window.history.replaceState({}, "", googleReturnTo);
     } else if (googleStatus === "denied") {
-      showMsg("Error: Gmail access was denied. Please try again and grant permissions.");
-      window.history.replaceState({}, "", "/finance");
+      showMsg("Error: Google access was denied. Please try again and grant all permissions.");
+      window.history.replaceState({}, "", googleReturnTo);
     }
   }, []);
 
@@ -585,8 +588,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               {gmailConnected ? "Daily statements ingested automatically from your cockpit-cash Gmail label." : "Connect Gmail to auto-ingest daily cash statements. Label: 'cockpit-cash'."}
             </div>
           </div>
-          <a href="/api/google/auth" style={{ ...btnStyle, textDecoration: "none", display: "inline-block", textAlign: "center", whiteSpace: "nowrap", alignSelf: "flex-start" }}>
-            {gmailConnected ? "Add Another Account" : "Connect Gmail"}
+          <a href={`/api/google/auth?returnTo=${encodeURIComponent(googleReturnTo)}`} style={{ ...btnStyle, textDecoration: "none", display: "inline-block", textAlign: "center", whiteSpace: "nowrap", alignSelf: "flex-start" }}>
+            {gmailConnected ? "Reconnect Google" : "Connect Google"}
           </a>
         </div>
 
