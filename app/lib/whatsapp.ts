@@ -6,6 +6,48 @@ export function whatsappLink(phone: string | null, message: string): string | nu
   return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 }
 
+export function dispatchNotificationMessage({
+  contractorName,
+  letterNumber,
+  customerName,
+  poNumber,
+  plantName,
+  qty31, qty36, qty45, qtyMeter,
+  vehicleNumber,
+  releasedBy,
+  dispatchDate,
+}: {
+  contractorName: string;
+  letterNumber: string;
+  customerName: string;
+  poNumber: string;
+  plantName: string;
+  qty31: number; qty36: number; qty45: number; qtyMeter: number;
+  vehicleNumber: string | null;
+  releasedBy: string;
+  dispatchDate: string;
+}): string {
+  const sizes = [
+    qty31 > 0 ? `${qty31} × 31ft` : null,
+    qty36 > 0 ? `${qty36} × 36ft` : null,
+    qty45 > 0 ? `${qty45} × 45ft` : null,
+    qtyMeter > 0 ? `${qtyMeter} × Mtr` : null,
+  ].filter(Boolean).join(", ");
+
+  let msg = `*Dispatch Notification — Unze Group*\n\n`;
+  msg += `Dear ${contractorName},\n\n`;
+  msg += `Poles have been dispatched against your authority letter.\n\n`;
+  msg += `*Letter No:* ${letterNumber}\n`;
+  msg += `*PO:* ${customerName} — ${poNumber}\n`;
+  msg += `*Plant:* ${plantName}\n`;
+  msg += `*Date:* ${dispatchDate}\n`;
+  msg += `*Quantity:* ${sizes}\n`;
+  if (vehicleNumber) msg += `*Vehicle:* ${vehicleNumber}\n`;
+  msg += `*Released by:* ${releasedBy}\n\n`;
+  msg += `Please arrange collection at your earliest convenience.`;
+  return msg;
+}
+
 export function taskReminderMessage(description: string, dueDate: string | null, assignedBy: string | null): string {
   let msg = `Task Reminder: ${description}`;
   if (dueDate) msg += `\nDue: ${dueDate}`;

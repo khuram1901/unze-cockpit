@@ -18,6 +18,21 @@ type PO = {
   opening_produced_31: number; opening_produced_36: number; opening_produced_45: number; opening_produced_meter: number;
 };
 type Contractor = { id: string; name: string; cnic_or_id: string | null; contact_phone: string | null; contact_address: string | null };
+type ContractorPerf = {
+  contractor_id: string;
+  contractor_name: string;
+  contractor_phone: string | null;
+  letters_issued: number;
+  total_authorised: number;
+  total_collected: number;
+  collection_pct: number;
+  letters_fully_collected: number;
+  letters_partial: number;
+  letters_not_started: number;
+  avg_days_to_full_collection: number | null;
+  fastest_days: number | null;
+  slowest_days: number | null;
+};
 
 async function authedFetch(url: string, opts: RequestInit = {}) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -25,7 +40,7 @@ async function authedFetch(url: string, opts: RequestInit = {}) {
 }
 
 const emptyPO = { customer_name: "", po_number: "", po_label: "", ordered_31: "", ordered_36: "", ordered_45: "", ordered_meter: "", start_date: "", notes: "", opening_produced_31: "0", opening_produced_36: "0", opening_produced_45: "0", opening_produced_meter: "0" };
-const emptyLetter = { contractor_id: "", letter_number: "", issue_date: "", issued_by: "", qty_31: "", qty_36: "", qty_45: "", qty_meter: "", opening_dispatched_31: "0", opening_dispatched_36: "0", opening_dispatched_45: "0", opening_dispatched_meter: "0", notes: "" };
+const emptyLetter = { contractor_id: "", letter_number: "", issue_date: "", issued_by: "", expiry_date: "", qty_31: "", qty_36: "", qty_45: "", qty_meter: "", opening_dispatched_31: "0", opening_dispatched_36: "0", opening_dispatched_45: "0", opening_dispatched_meter: "0", notes: "" };
 const emptyContractor = { name: "", cnic_or_id: "", contact_phone: "", contact_address: "" };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -75,8 +90,13 @@ export default function StockManagePage() {
   const [contractorForm, setContractorForm] = useState(emptyContractor);
   const [savingContractor, setSavingContractor] = useState(false);
 
+  // Contractor performance
+  const [performance, setPerformance] = useState<ContractorPerf[]>([]);
+  const [perfLoading, setPerfLoading] = useState(false);
+
   useEffect(() => { if (!checking) loadPlants(); }, [checking]);
-  useEffect(() => { if (selectedPlant) { loadPOs(); loadContractors(); } }, [selectedPlant]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (selectedPlant) { loadPOs(); loadContractors(); loadPerformance(); } }, [selectedPlant]);
 
   async function loadPlants() {
     const { data } = await supabase.from("plants").select("id, name, type").eq("active", true).order("name");
@@ -99,6 +119,18 @@ export default function StockManagePage() {
     const json = await res.json();
     setContractors(json.contractors || []);
   }, []);
+
+  const loadPerformance = useCallback(async () => {
+    if (!selectedPlant) return;
+    setPerfLoading(true);
+    try {
+      const res = await authedFetch(`/api/stock/contractor-performance?plantId=${selectedPlant}`);
+      const json = await res.json();
+      setPerformance(json.performance || []);
+    } finally {
+      setPerfLoading(false);
+    }
+  }, [selectedPlant]);
 
   async function savePO() {
     if (!poForm.customer_name || !poForm.po_number) { toast("Customer name and PO number are required", "error"); return; }
@@ -147,6 +179,7 @@ export default function StockManagePage() {
       body: JSON.stringify({
         po_id: selectedPOId, contractor_id: letterForm.contractor_id,
         letter_number: letterForm.letter_number, issue_date: letterForm.issue_date, issued_by: letterForm.issued_by,
+        expiry_date: letterForm.expiry_date || null,
         qty_31: Number(letterForm.qty_31) || 0, qty_36: Number(letterForm.qty_36) || 0,
         qty_45: Number(letterForm.qty_45) || 0, qty_meter: Number(letterForm.qty_meter) || 0,
         opening_dispatched_31: Number(letterForm.opening_dispatched_31) || 0,
@@ -296,6 +329,9 @@ export default function StockManagePage() {
               <Field label="Letter number *"><input value={letterForm.letter_number} onChange={(e) => setLetterForm({ ...letterForm, letter_number: e.target.value })} placeholder="e.g. MEPCO-LT-2291" style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="Issue date *"><input type="date" value={letterForm.issue_date} onChange={(e) => setLetterForm({ ...letterForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="Issued by (customer rep name) *"><input value={letterForm.issued_by} onChange={(e) => setLetterForm({ ...letterForm, issued_by: e.target.value })} placeholder="Name of MEPCO/FESCO contact who issued it" style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Expiry date (optional)">
+                <input type="date" value={letterForm.expiry_date} onChange={(e) => setLetterForm({ ...letterForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} />
+              </Field>
             </div>
             <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.SLATE, margin: "10px 0 8px" }}>Letter quantity (authorized to collect)</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px,1fr))", gap: "10px" }}>
@@ -350,6 +386,105 @@ export default function StockManagePage() {
               {c.contact_address && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.contact_address}</span>}
             </div>
           ))}
+        </div>
+
+        {/* ── Contractor Performance ── */}
+        <div style={{ marginTop: "28px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+            <SectionTitle title="Contractor Performance" />
+            <button
+              onClick={loadPerformance}
+              disabled={perfLoading}
+              style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer", opacity: perfLoading ? 0.6 : 1 }}
+            >
+              {perfLoading ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+          <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: "0 0 12px" }}>
+            Per-contractor totals across all POs for this plant.
+          </p>
+
+          {perfLoading ? (
+            <div style={{ color: COLOURS.SLATE, fontSize: "14px" }}>Loading performance data…</div>
+          ) : performance.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "20px", color: COLOURS.SLATE, border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "var(--bg-card,#fff)", fontSize: "14px" }}>
+              No contractor data yet for this plant.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: "10px" }}>
+              {performance.map((c) => {
+                const pctColor = c.collection_pct >= 90 ? "#16a34a" : c.collection_pct >= 60 ? "#d97706" : "#dc2626";
+                return (
+                  <div key={c.contractor_id} style={{ border: "1px solid var(--border-color,#e2e8f0)", borderRadius: "10px", backgroundColor: "var(--bg-card,#fff)", padding: "14px 16px" }}>
+                    {/* Header row */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+                      <div>
+                        <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>{c.contractor_name}</div>
+                        {c.contractor_phone && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>{c.contractor_phone}</div>}
+                      </div>
+                      {/* Collection % badge */}
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: "22px", fontWeight: 800, color: pctColor }}>{c.collection_pct}%</div>
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>collected</div>
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div style={{ height: "6px", borderRadius: "3px", backgroundColor: "#e2e8f0", marginBottom: "12px", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.min(100, c.collection_pct)}%`, backgroundColor: pctColor, borderRadius: "3px", transition: "width 0.3s" }} />
+                    </div>
+
+                    {/* Stats grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: "10px", marginBottom: "10px" }}>
+                      {[
+                        { label: "Letters issued", value: c.letters_issued, color: "var(--text-primary,#1e293b)" },
+                        { label: "Total authorised", value: c.total_authorised.toLocaleString(), color: COLOURS.SLATE },
+                        { label: "Total collected", value: c.total_collected.toLocaleString(), color: "#2563eb" },
+                        { label: "Still outstanding", value: Math.max(0, c.total_authorised - c.total_collected).toLocaleString(), color: c.total_authorised > c.total_collected ? "#dc2626" : "#16a34a" },
+                      ].map((s) => (
+                        <div key={s.label} style={{ padding: "8px 10px", borderRadius: "8px", backgroundColor: "var(--bg-card-hover,#f8fafc)", border: "1px solid var(--border-light,#f1f5f9)" }}>
+                          <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "2px" }}>{s.label}</div>
+                          <div style={{ fontSize: "16px", fontWeight: 700, color: s.color }}>{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Letter status breakdown */}
+                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: c.avg_days_to_full_collection !== null ? "10px" : "0" }}>
+                      {[
+                        { label: "Fully collected", value: c.letters_fully_collected, bg: "#f0fdf4", color: "#16a34a" },
+                        { label: "Partial", value: c.letters_partial, bg: "#fffbeb", color: "#d97706" },
+                        { label: "Not started", value: c.letters_not_started, bg: "#f8fafc", color: COLOURS.SLATE },
+                      ].map((s) => (
+                        <span key={s.label} style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "10px", backgroundColor: s.bg, color: s.color, fontWeight: 600 }}>
+                          {s.value} {s.label}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Speed metrics — only shown once at least one letter is fully collected */}
+                    {c.avg_days_to_full_collection !== null && (
+                      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", padding: "8px 10px", borderRadius: "8px", backgroundColor: "#eff6ff", border: "1px solid #bfdbfe" }}>
+                        <span style={{ fontSize: "12px", color: "#1d4ed8" }}>
+                          Avg days to collect: <strong>{c.avg_days_to_full_collection}d</strong>
+                        </span>
+                        {c.fastest_days !== null && (
+                          <span style={{ fontSize: "12px", color: "#16a34a" }}>
+                            Fastest: <strong>{c.fastest_days}d</strong>
+                          </span>
+                        )}
+                        {c.slowest_days !== null && (
+                          <span style={{ fontSize: "12px", color: "#dc2626" }}>
+                            Slowest: <strong>{c.slowest_days}d</strong>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {toastEl}

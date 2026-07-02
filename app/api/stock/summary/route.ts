@@ -3,7 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
 // Returns a full summary for the stock tree:
-// Plants → POs (with produced/dispatched totals) → Contractors → Letters (with remaining balance)
+// Plants → POs (with produced/dispatched totals + delivery forecast) → Contractors → Letters (with remaining balance + expiry)
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   const poIds = (pos || []).map((p) => p.id);
   if (poIds.length === 0) return Response.json({ summary: [] });
 
-  // 2. Fetch production allocations totals per PO
+  // 2a. Fetch production allocations totals per PO
   const { data: prodAllocs } = await supabase
     .from("production_allocations")
     .select("po_id, qty_31, qty_36, qty_45, qty_meter")
@@ -41,7 +41,37 @@ export async function GET(request: NextRequest) {
     prodByPO[r.po_id].qty_meter += r.qty_meter || 0;
   }
 
-  // 3. Fetch authority letters with dispatch totals
+  // 2b. Fetch recent production entries (last 14 days) for delivery forecast
+  // Join through production_allocations to get daily totals per PO
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - 14);
+  const cutoffStr = cutoffDate.toISOString().slice(0, 10);
+
+  const { data: recentAllocs } = await supabase
+    .from("production_allocations")
+    .select("po_id, qty_31, qty_36, qty_45, qty_meter, production_entries!inner(entry_date)")
+    .in("po_id", poIds)
+    .filter("production_entries.entry_date", "gte", cutoffStr);
+
+  // Map: po_id → Set of distinct days with total production per day
+  const dailyByPO: Record<string, Record<string, number>> = {};
+  for (const r of recentAllocs || []) {
+    const entries = r.production_entries as unknown as { entry_date: string }[] | { entry_date: string } | null;
+    const date = Array.isArray(entries) ? entries[0]?.entry_date : entries?.entry_date;
+    if (!date) continue;
+    if (!dailyByPO[r.po_id]) dailyByPO[r.po_id] = {};
+    const dayTotal = (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0) + (r.qty_meter || 0);
+    dailyByPO[r.po_id][date] = (dailyByPO[r.po_id][date] || 0) + dayTotal;
+  }
+
+  // avg daily rate per PO (total produced in window / 14 days, not just active days — smooths weekends/stoppages)
+  const avgDailyRateByPO: Record<string, number> = {};
+  for (const [poId, days] of Object.entries(dailyByPO)) {
+    const totalInWindow = Object.values(days).reduce((s, v) => s + v, 0);
+    avgDailyRateByPO[poId] = totalInWindow / 14;
+  }
+
+  // 3. Fetch authority letters with dispatch totals and expiry_date
   const { data: letters } = await supabase
     .from("authority_letters")
     .select("*, contractors(name, contact_phone), dispatch_records(qty_31, qty_36, qty_45, qty_meter)")
@@ -57,6 +87,7 @@ export async function GET(request: NextRequest) {
     contractor_phone: string | null;
     letter_number: string;
     issue_date: string;
+    expiry_date: string | null;
     issued_by: string;
     qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
     dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
@@ -77,6 +108,7 @@ export async function GET(request: NextRequest) {
       contractor_phone: l.contractors?.contact_phone || null,
       letter_number: l.letter_number,
       issue_date: l.issue_date,
+      expiry_date: l.expiry_date || null,
       issued_by: l.issued_by,
       qty_31: l.qty_31, qty_36: l.qty_36, qty_45: l.qty_45, qty_meter: l.qty_meter,
       dispatched_31, dispatched_36, dispatched_45, dispatched_meter,
@@ -138,6 +170,21 @@ export async function GET(request: NextRequest) {
     const totalDispatched_45 = poLetters.reduce((s, l) => s + l.dispatched_45, 0);
     const totalDispatched_meter = poLetters.reduce((s, l) => s + l.dispatched_meter, 0);
 
+    const ordered_total = po.ordered_31 + po.ordered_36 + po.ordered_45 + po.ordered_meter;
+    const produced_total = produced_31 + produced_36 + produced_45 + produced_meter;
+    const fulfillment_pct = ordered_total > 0 ? Math.round((produced_total / ordered_total) * 100) : null;
+
+    // Delivery forecast: estimate completion date from 14-day avg daily production rate
+    const daily_rate = avgDailyRateByPO[po.id] || 0;
+    let estimated_completion_date: string | null = null;
+    if (po.status === "Active" && !po.is_system_unallocated && daily_rate > 0 && ordered_total > produced_total) {
+      const remaining_total = ordered_total - produced_total;
+      const daysNeeded = Math.ceil(remaining_total / daily_rate);
+      const est = new Date();
+      est.setDate(est.getDate() + daysNeeded);
+      estimated_completion_date = est.toISOString().slice(0, 10);
+    }
+
     return {
       po: {
         id: po.id, plant_id: po.plant_id, plant_name: po.plant_name,
@@ -152,10 +199,9 @@ export async function GET(request: NextRequest) {
         in_stock_36: Math.max(0, produced_36 - totalDispatched_36),
         in_stock_45: Math.max(0, produced_45 - totalDispatched_45),
         in_stock_meter: Math.max(0, produced_meter - totalDispatched_meter),
-        fulfillment_pct: po.ordered_31 + po.ordered_36 + po.ordered_45 + po.ordered_meter > 0
-          ? Math.round(((produced_31 + produced_36 + produced_45 + produced_meter) /
-              (po.ordered_31 + po.ordered_36 + po.ordered_45 + po.ordered_meter)) * 100)
-          : null,
+        fulfillment_pct,
+        daily_rate: Math.round(daily_rate),
+        estimated_completion_date,
       },
       contractors: Array.from(contractorMap.values()),
     };

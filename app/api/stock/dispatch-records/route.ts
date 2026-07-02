@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { sendNotificationEmail } from "../../../lib/send-email";
+import { dispatchNotificationMessage, whatsappLink } from "../../../lib/whatsapp";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -158,6 +160,90 @@ export async function POST(request: NextRequest) {
   } catch {
     // Auto-close failure is non-fatal — log only
     console.error("dispatch-records: auto-close PO check failed");
+  }
+
+  // Fire dispatch notification (non-fatal — never blocks the dispatch)
+  try {
+    // Fetch full context: letter → PO → contractor → plant
+    const { data: letterFull } = await supabase
+      .from("authority_letters")
+      .select("letter_number, contractor_id, po_id, contractors(name, contact_phone), purchase_orders(customer_name, po_number, plant_id, plant_name)")
+      .eq("id", authority_letter_id)
+      .single();
+
+    if (letterFull) {
+      const contractor = (Array.isArray(letterFull.contractors) ? letterFull.contractors[0] : letterFull.contractors) as { name: string; contact_phone: string | null } | null;
+      const po = (Array.isArray(letterFull.purchase_orders) ? letterFull.purchase_orders[0] : letterFull.purchase_orders) as { customer_name: string; po_number: string; plant_id: string; plant_name: string } | null;
+
+      if (contractor && po) {
+        const msgText = dispatchNotificationMessage({
+          contractorName: contractor.name,
+          letterNumber: letterFull.letter_number,
+          customerName: po.customer_name,
+          poNumber: po.po_number,
+          plantName: po.plant_name,
+          qty31: qty_31, qty36: qty_36, qty45: qty_45, qtyMeter: qty_meter,
+          vehicleNumber: vehicle_number || null,
+          releasedBy: released_by,
+          dispatchDate: dispatch_date || new Date().toISOString().slice(0, 10),
+        });
+
+        const waLink = whatsappLink(contractor.contact_phone, msgText);
+
+        // Find Ops Managers for this plant who have email notifications enabled
+        const { data: opsManagers } = await supabase
+          .from("members")
+          .select("email, first_name, last_name, name, notify_email, notify_whatsapp, phone_e164")
+          .eq("department", "Unze Trading Ops")
+          .eq("role", "Manager")
+          .eq("notify_email", true);
+
+        const totalQty = qty_31 + qty_36 + qty_45 + qty_meter;
+        const sizes = [
+          qty_31 > 0 ? `${qty_31} × 31ft` : null,
+          qty_36 > 0 ? `${qty_36} × 36ft` : null,
+          qty_45 > 0 ? `${qty_45} × 45ft` : null,
+          qty_meter > 0 ? `${qty_meter} × Mtr` : null,
+        ].filter(Boolean).join(", ");
+
+        const waButtonHtml = waLink
+          ? `<p style="margin-top:16px"><a href="${waLink}" style="background:#25D366;color:white;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:14px">Send WhatsApp to ${contractor.name}</a></p>`
+          : contractor.contact_phone
+          ? `<p style="font-size:13px;color:#64748b">Contractor phone: ${contractor.contact_phone} (no WhatsApp link — number not in international format)</p>`
+          : `<p style="font-size:13px;color:#64748b">No phone number on file for this contractor.</p>`;
+
+        for (const mgr of opsManagers || []) {
+          const mgrName = `${mgr.first_name || ""} ${mgr.last_name || ""}`.trim() || mgr.name || mgr.email;
+          await sendNotificationEmail({
+            to: mgr.email,
+            subject: `[Dispatch] ${contractor.name} — ${po.customer_name} PO#${po.po_number}`,
+            heading: "Dispatch Recorded",
+            body: `
+              <p>Hi <strong>${mgrName}</strong>,</p>
+              <p>A dispatch has been recorded against authority letter <strong>${letterFull.letter_number}</strong>.</p>
+              <table style="width:100%;border-collapse:collapse;font-size:14px;margin:12px 0">
+                <tr><td style="padding:5px 8px;color:#64748b;width:40%">Contractor</td><td style="padding:5px 8px;font-weight:600">${contractor.name}</td></tr>
+                <tr style="background:#f8fafc"><td style="padding:5px 8px;color:#64748b">PO</td><td style="padding:5px 8px;font-weight:600">${po.customer_name} — ${po.po_number}</td></tr>
+                <tr><td style="padding:5px 8px;color:#64748b">Plant</td><td style="padding:5px 8px">${po.plant_name}</td></tr>
+                <tr style="background:#f8fafc"><td style="padding:5px 8px;color:#64748b">Quantity</td><td style="padding:5px 8px;font-weight:600">${sizes} (${totalQty} poles)</td></tr>
+                ${vehicle_number ? `<tr><td style="padding:5px 8px;color:#64748b">Vehicle</td><td style="padding:5px 8px">${vehicle_number}</td></tr>` : ""}
+                <tr style="background:#f8fafc"><td style="padding:5px 8px;color:#64748b">Released by</td><td style="padding:5px 8px">${released_by}</td></tr>
+              </table>
+              <p style="margin:12px 0 4px;font-weight:600;color:#1e293b">Notify the contractor via WhatsApp:</p>
+              <p style="font-size:13px;color:#64748b;margin:0 0 8px">Tap the button below to open WhatsApp with a pre-filled message ready to send to ${contractor.name}.</p>
+              ${waButtonHtml}
+            `,
+            linkUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://unze-cockpit.vercel.app"}/stock`,
+            linkLabel: "View Stock",
+            triggerType: "dispatch_notification",
+            triggerRecordId: data?.id,
+            recipientName: mgrName,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("dispatch-records: notification failed:", err instanceof Error ? err.message : err);
   }
 
   return Response.json({ dispatch: data }, { status: 201 });

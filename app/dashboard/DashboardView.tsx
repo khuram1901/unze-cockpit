@@ -94,6 +94,7 @@ type StockLetter = {
   id: string; letter_number: string; contractor_name: string;
   qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
   remaining_31: number; remaining_36: number; remaining_45: number; remaining_meter: number;
+  expiry_date: string | null;
 };
 type StockContractor = {
   contractor_id: string; contractor_name: string;
@@ -419,8 +420,55 @@ export default function DashboardView() {
           headers: { Authorization: `Bearer ${token}` },
         });
         const json = await res.json();
-        if (json.items?.length) {
-          results.push({ plant_id: plant.id, plant_name: plant.name, items: json.items });
+        const summary = json.summary || [];
+        if (summary.length) {
+          // Map API response shape → StockPO shape used by dashboard
+          const items: StockPO[] = summary.map((entry: { po: { id: string; customer_name: string; po_number: string; po_label: string; ordered_31: number; ordered_36: number; ordered_45: number; ordered_meter: number; status: string; is_system_unallocated: boolean; produced_31: number; produced_36: number; produced_45: number; produced_meter: number; dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number; in_stock_31: number; in_stock_36: number; in_stock_45: number; in_stock_meter: number; fulfillment_pct: number }; contractors: { contractor_id: string; contractor_name: string; letters: { id: string; letter_number: string; contractor_name: string; qty_31: number; qty_36: number; qty_45: number; qty_meter: number; remaining_31: number; remaining_36: number; remaining_45: number; remaining_meter: number; expiry_date: string | null }[] }[] }) => ({
+            po: {
+              id: entry.po.id,
+              customer_name: entry.po.customer_name,
+              po_number: entry.po.po_number,
+              po_label: entry.po.po_label,
+              ordered_31: entry.po.ordered_31,
+              ordered_36: entry.po.ordered_36,
+              ordered_45: entry.po.ordered_45,
+              ordered_meter: entry.po.ordered_meter,
+              status: entry.po.status,
+              is_system_unallocated: entry.po.is_system_unallocated,
+            },
+            produced_31: entry.po.produced_31,
+            produced_36: entry.po.produced_36,
+            produced_45: entry.po.produced_45,
+            produced_meter: entry.po.produced_meter,
+            dispatched_31: entry.po.dispatched_31,
+            dispatched_36: entry.po.dispatched_36,
+            dispatched_45: entry.po.dispatched_45,
+            dispatched_meter: entry.po.dispatched_meter,
+            in_stock_31: entry.po.in_stock_31,
+            in_stock_36: entry.po.in_stock_36,
+            in_stock_45: entry.po.in_stock_45,
+            in_stock_meter: entry.po.in_stock_meter,
+            fulfillment_pct: entry.po.fulfillment_pct ?? 0,
+            contractors: (entry.contractors || []).map((c) => ({
+              contractor_id: c.contractor_id,
+              contractor_name: c.contractor_name,
+              letters: (c.letters || []).map((l) => ({
+                id: l.id,
+                letter_number: l.letter_number,
+                contractor_name: l.contractor_name,
+                qty_31: l.qty_31,
+                qty_36: l.qty_36,
+                qty_45: l.qty_45,
+                qty_meter: l.qty_meter,
+                remaining_31: l.remaining_31,
+                remaining_36: l.remaining_36,
+                remaining_45: l.remaining_45,
+                remaining_meter: l.remaining_meter,
+                expiry_date: l.expiry_date || null,
+              })),
+            })),
+          }));
+          results.push({ plant_id: plant.id, plant_name: plant.name, items });
         }
       }));
       results.sort((a, b) => a.plant_name.localeCompare(b.plant_name));
@@ -654,6 +702,16 @@ export default function DashboardView() {
                   const rem = l.remaining_31 + l.remaining_36 + l.remaining_45 + l.remaining_meter;
                   return auth > 0 && rem / auth < 0.1;
                 });
+                // Expiry warnings
+                const today_str = new Date().toISOString().slice(0, 10);
+                const expiringLetters = allLetters.filter(l => {
+                  if (!l.expiry_date) return false;
+                  const diffDays = Math.ceil((new Date(l.expiry_date).getTime() - new Date(today_str).getTime()) / 86400000);
+                  return diffDays <= 14;
+                }).map(l => {
+                  const diffDays = Math.ceil((new Date(l.expiry_date!).getTime() - new Date(today_str).getTime()) / 86400000);
+                  return { ...l, diffDays };
+                });
 
                 return (
                   <div key={item.po.id} style={{ border: `1px solid ${BORDER}`, borderLeft: `4px solid ${isClosed ? "#94a3b8" : NAVY}`, borderRadius: "8px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "6px", opacity: isClosed ? 0.65 : 1 }}>
@@ -696,11 +754,16 @@ export default function DashboardView() {
                     </div>
 
                     {/* Letter warnings */}
-                    {nearlyExhausted.length > 0 && (
+                    {(nearlyExhausted.length > 0 || expiringLetters.length > 0) && (
                       <div style={{ padding: "4px 14px 8px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
                         {nearlyExhausted.map(l => (
                           <span key={l.id} style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", backgroundColor: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca" }}>
                             ⚠ Letter {l.letter_number} nearly exhausted
+                          </span>
+                        ))}
+                        {expiringLetters.map(l => (
+                          <span key={`exp-${l.id}`} style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", backgroundColor: l.diffDays < 0 ? "#fef2f2" : "#fffbeb", color: l.diffDays < 0 ? "#dc2626" : "#d97706", border: `1px solid ${l.diffDays < 0 ? "#fecaca" : "#fde68a"}` }}>
+                            {l.diffDays < 0 ? "EXPIRED" : `Expires in ${l.diffDays}d`}: Letter {l.letter_number}
                           </span>
                         ))}
                       </div>

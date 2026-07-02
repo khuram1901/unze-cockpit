@@ -16,6 +16,7 @@ type LetterSummary = {
   contractor_name: string;
   letter_number: string;
   issue_date: string;
+  expiry_date: string | null;
   issued_by: string;
   qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
   dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
@@ -44,6 +45,8 @@ type POSummary = {
     dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
     in_stock_31: number; in_stock_36: number; in_stock_45: number; in_stock_meter: number;
     fulfillment_pct: number | null;
+    daily_rate: number;
+    estimated_completion_date: string | null;
   };
   contractors: ContractorGroup[];
 };
@@ -73,6 +76,17 @@ function totalPoles(...nums: number[]) {
   return nums.reduce((a, b) => a + (b || 0), 0);
 }
 
+// Returns: "expired" | "expiring-soon" | "ok" | null
+function expiryStatus(expiry_date: string | null): "expired" | "expiring-soon" | "ok" | null {
+  if (!expiry_date) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const exp = new Date(expiry_date); exp.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return "expired";
+  if (diffDays <= 14) return "expiring-soon";
+  return "ok";
+}
+
 // ─── Sub-components ──────────────────────────────────────────────
 
 function SizeBadges({ label, qty_31, qty_36, qty_45, qty_meter, colour }: {
@@ -98,6 +112,15 @@ function LetterRow({ letter, expanded, onToggle }: {
   const authorized = totalPoles(letter.qty_31, letter.qty_36, letter.qty_45, letter.qty_meter);
   const dispatched = totalPoles(letter.dispatched_31, letter.dispatched_36, letter.dispatched_45, letter.dispatched_meter);
   const fullyCollected = remaining === 0 && authorized > 0;
+  const expStatus = expiryStatus(letter.expiry_date);
+
+  const expiryBadge = expStatus === "expired"
+    ? { label: `Expired ${formatDateUK(letter.expiry_date!)}`, bg: "#fef2f2", color: "#dc2626" }
+    : expStatus === "expiring-soon"
+    ? { label: `Expires ${formatDateUK(letter.expiry_date!)}`, bg: "#fffbeb", color: "#d97706" }
+    : expStatus === "ok"
+    ? { label: `Exp. ${formatDateUK(letter.expiry_date!)}`, bg: "#f0fdf4", color: "#16a34a" }
+    : null;
 
   return (
     <div style={{ marginLeft: "24px", marginBottom: "6px" }}>
@@ -106,8 +129,8 @@ function LetterRow({ letter, expanded, onToggle }: {
         style={{
           display: "flex", alignItems: "center", gap: "8px", padding: "7px 10px",
           borderRadius: "6px", cursor: "pointer", flexWrap: "wrap",
-          backgroundColor: fullyCollected ? "#f0fdf4" : "var(--bg-card-hover, #f8fafc)",
-          border: `1px solid ${fullyCollected ? "#bbf7d0" : "var(--border-light, #f1f5f9)"}`,
+          backgroundColor: expStatus === "expired" ? "#fef2f2" : fullyCollected ? "#f0fdf4" : "var(--bg-card-hover, #f8fafc)",
+          border: `1px solid ${expStatus === "expired" ? "#fecaca" : expStatus === "expiring-soon" ? "#fde68a" : fullyCollected ? "#bbf7d0" : "var(--border-light, #f1f5f9)"}`,
         }}
       >
         <span style={{ fontSize: "13px" }}>{expanded ? "▾" : "▸"}</span>
@@ -115,6 +138,11 @@ function LetterRow({ letter, expanded, onToggle }: {
           Letter #{letter.letter_number}
         </span>
         <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>— {formatDateUK(letter.issue_date)} — Issued by {letter.issued_by}</span>
+        {expiryBadge && (
+          <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 7px", borderRadius: "10px", backgroundColor: expiryBadge.bg, color: expiryBadge.color }}>
+            {expiryBadge.label}
+          </span>
+        )}
         <span style={{ marginLeft: "auto", display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Authorized: <strong>{authorized.toLocaleString()}</strong></span>
           <span style={{ fontSize: "12px", color: "#2563eb" }}>Collected: <strong>{dispatched.toLocaleString()}</strong></span>
@@ -236,6 +264,12 @@ function PORow({ item, expandedKeys, onToggle }: {
           <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
             {!po.is_system_unallocated && `Ordered: ${totalPoles(po.ordered_31, po.ordered_36, po.ordered_45, po.ordered_meter).toLocaleString()} · `}
             Produced: {produced.toLocaleString()} · Dispatched: {dispatched.toLocaleString()} · In stock: <strong style={{ color: inStock > 0 ? COLOURS.NAVY : "#16a34a" }}>{inStock.toLocaleString()}</strong>
+            {po.estimated_completion_date && (
+              <span style={{ marginLeft: "10px", padding: "1px 8px", borderRadius: "10px", backgroundColor: "#eff6ff", color: "#2563eb", fontWeight: 700, fontSize: "11px" }}>
+                Est. completion: {formatDateUK(po.estimated_completion_date)}
+                {po.daily_rate > 0 && <span style={{ fontWeight: 400, marginLeft: "4px" }}>({po.daily_rate}/day avg)</span>}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -330,6 +364,26 @@ export default function StockPage() {
   const activePOs = summary.filter((i) => i.po.status === "Active" && !i.po.is_system_unallocated).length;
   const visibleSummary = showClosed ? summary : summary.filter((i) => i.po.status === "Active");
 
+  // Expiry warnings — letters expiring within 14 days or already expired
+  const expiryWarnings: { po_label: string; contractor: string; letter_number: string; expiry_date: string; status: "expired" | "expiring-soon" }[] = [];
+  for (const item of summary) {
+    if (item.po.status === "Closed") continue;
+    for (const cg of item.contractors) {
+      for (const l of cg.letters) {
+        const s = expiryStatus(l.expiry_date);
+        if (s === "expired" || s === "expiring-soon") {
+          expiryWarnings.push({
+            po_label: item.po.is_system_unallocated ? "Unallocated" : `${item.po.customer_name} PO#${item.po.po_number}`,
+            contractor: cg.contractor_name,
+            letter_number: l.letter_number,
+            expiry_date: l.expiry_date!,
+            status: s,
+          });
+        }
+      }
+    }
+  }
+
   if (checking) return (
     <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions...</p></main></AuthWrapper>
   );
@@ -372,6 +426,20 @@ export default function StockPage() {
             <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>Total in stock: <strong style={{ color: COLOURS.NAVY, fontSize: "15px" }}>{totalInStock.toLocaleString()} poles</strong></span>
             <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>Active POs: <strong>{activePOs}</strong></span>
             <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>All POs: <strong>{summary.length}</strong></span>
+          </div>
+        )}
+
+        {/* Expiry warnings banner */}
+        {expiryWarnings.length > 0 && (
+          <div style={{ marginBottom: "14px", border: "1px solid #fde68a", borderRadius: "8px", backgroundColor: "#fffbeb", padding: "10px 14px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", marginBottom: "6px" }}>
+              ⚠ Authority Letter Expiry Alerts
+            </div>
+            {expiryWarnings.map((w, i) => (
+              <div key={i} style={{ fontSize: "12px", color: w.status === "expired" ? "#dc2626" : "#d97706", marginBottom: "3px" }}>
+                <strong>{w.status === "expired" ? "EXPIRED" : "Expiring soon"}:</strong> Letter #{w.letter_number} ({w.po_label} · {w.contractor}) — {formatDateUK(w.expiry_date)}
+              </div>
+            ))}
           </div>
         )}
 

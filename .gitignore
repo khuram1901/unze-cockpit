@@ -43,3 +43,7 @@ next-env.d.ts
 
 # local database backups (contain sensitive data, never commit)
 /backups/
+
+# Claude Code session data (local only)
+sessions/
+.blueprint-daily.log

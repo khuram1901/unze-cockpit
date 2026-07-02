@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const {
     po_id, contractor_id, letter_number, issue_date, issued_by,
+    expiry_date = null,
     qty_31 = 0, qty_36 = 0, qty_45 = 0, qty_meter = 0,
     opening_dispatched_31 = 0, opening_dispatched_36 = 0,
     opening_dispatched_45 = 0, opening_dispatched_meter = 0,
@@ -162,6 +163,7 @@ export async function POST(request: NextRequest) {
     .from("authority_letters")
     .insert({
       po_id, contractor_id, letter_number, issue_date, issued_by,
+      expiry_date: expiry_date || null,
       qty_31, qty_36, qty_45, qty_meter,
       opening_dispatched_31, opening_dispatched_36,
       opening_dispatched_45, opening_dispatched_meter,
