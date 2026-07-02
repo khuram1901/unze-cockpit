@@ -563,7 +563,7 @@ export default function HomePage() {
     if (cached) {
       try {
         const { ts, payload } = JSON.parse(cached);
-        if (Date.now() - ts < 2 * 60 * 1000) {
+        if (Date.now() - ts < 2 * 60 * 1000 && payload.investmentData) {
           setSummaries(payload.summaries);
           setMachineIssues(payload.machineIssues);
           setTasks(payload.tasks);
@@ -1036,7 +1036,7 @@ export default function HomePage() {
           recAgingByCustomer: recAgingByCust,
           showFinance: showFinanceForUser,
           deptHealth: healthResults,
-          investmentData: computedInvestmentData,
+          investmentData: computedInvestmentData ?? undefined,
           dailyOpsData: computedDailyOpsData,
         },
       }));
