@@ -13,12 +13,28 @@ export type CashFlowParsed = {
 };
 
 function parseAmount(text: string): number {
-  // Handle negative amounts in parentheses like (4,168,201)
-  const isNegative = text.includes("(") && text.includes(")");
-  const cleaned = text.replace(/[(),\s]/g, "");
-  const num = parseFloat(cleaned);
+  // Handle negative amounts in parentheses like (4,168,201) or -(4,168,201)
+  const trimmed = text.trim();
+  const isNegative = trimmed.startsWith("(") || trimmed.startsWith("-(");
+  const cleaned = trimmed.replace(/[(),-\s]/g, "");
+  const num = parseFloat(cleaned.replace(/,/g, ""));
   if (isNaN(num)) return 0;
   return isNegative ? -num : num;
+}
+
+// Extract a number (possibly negative in parens) that immediately follows a label on the same line
+// e.g. "Today Opening Balance(16,333,132)" or "Today Opening Balance 16,333,132"
+function extractInlineAmount(text: string, label: string): number | null {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Match label followed immediately by optional space then optional ( then digits/commas then optional )
+  const re = new RegExp(escaped + "\\s*\\(?([\\d,]+(?:\\.\\d+)?)\\)?", "i");
+  const m = text.match(re);
+  if (!m) return null;
+  // Check if there's a ( before the digits
+  const matchStart = text.indexOf(m[0]);
+  const chunk = text.slice(matchStart, matchStart + m[0].length + 5);
+  const isNeg = chunk.includes("(");
+  return isNeg ? -parseAmount(m[1]) : parseAmount(m[1]);
 }
 
 function extractDate(text: string): string | null {
@@ -94,32 +110,67 @@ function parseUnzeTrading(text: string, date: string | null): CashFlowParsed {
 }
 
 function parseImperial(text: string, date: string | null): CashFlowParsed {
-  const openingBalance = findAmount(text, "Today Opening Balance") || findAmount(text, "Opening Balance");
+  // ── Opening balance ──
+  // Format: "Today Opening Balance(16,333,132)" or "Opening Balance(16,333,132)"
+  const openingBalance =
+    extractInlineAmount(text, "Today Opening Balance") ??
+    extractInlineAmount(text, "Opening Balance") ??
+    0;
 
-  // Find all "Total" amounts in order — payments first, receipts second
-  const totalMatches: number[] = [];
-  const totalRe = /Total\s+([\d,]+(?:\.\d+)?)/gi;
-  let tm;
-  while ((tm = totalRe.exec(text)) !== null) {
-    totalMatches.push(parseAmount(tm[1]));
+  // ── Payments and Receipts totals ──
+  // The PDF has a Payments section then a Receipts section.
+  // Each ends with "Total   <amount>"
+  // We find the index of "DatePayments" and "DateReceipts" to split the text.
+  const paymentsIdx = text.search(/Date\s*Payments/i);
+  const receiptsIdx = text.search(/Date\s*Receipts/i);
+  const closingIdx = text.search(/Closing Balance\s*[\n\r(]/i);
+
+  // Extract payments total — in the payments block
+  let paymentsTotal = 0;
+  if (paymentsIdx >= 0) {
+    const end = receiptsIdx > paymentsIdx ? receiptsIdx : (closingIdx > paymentsIdx ? closingIdx : text.length);
+    const block = text.slice(paymentsIdx, end);
+    const m = block.match(/Total\s+([\d,]+(?:\.\d+)?)/i);
+    if (m) paymentsTotal = parseAmount(m[1]);
   }
-  const paymentsTotal = totalMatches.length >= 1 ? totalMatches[0] : 0;
-  const receiptsTotal = totalMatches.length >= 2 ? totalMatches[1] : 0;
 
-  // Closing balance — handle negative in parentheses like (4,168,201)
-  let closingBalance = 0;
-  const closingArea = text.match(/Today Closing Balance\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
-  if (closingArea) {
-    closingBalance = parseAmount(closingArea[1]);
-    const chunk = text.slice(text.indexOf("Today Closing Balance"), text.indexOf("Today Closing Balance") + 80);
-    if (chunk.includes("(") && chunk.includes(")")) closingBalance = -closingBalance;
+  // Extract receipts total — in the receipts block
+  let receiptsTotal = 0;
+  if (receiptsIdx >= 0) {
+    const end = closingIdx > receiptsIdx ? closingIdx : text.length;
+    const block = text.slice(receiptsIdx, end);
+    const m = block.match(/Total\s+([\d,]+(?:\.\d+)?)/i);
+    if (m) receiptsTotal = parseAmount(m[1]);
   }
-  if (closingBalance === 0) closingBalance = openingBalance + receiptsTotal - paymentsTotal;
 
-  // Post-dated cheques
-  const pdcMatch = text.match(/Total PDC['']s Balance\s+([\d,]+(?:\.\d+)?)/i);
-  const pdcTotal = pdcMatch ? parseAmount(pdcMatch[1]) : 0;
-  const closingAfterPDC = closingBalance + pdcTotal;
+  // ── Closing balance ──
+  // Format: "Today Closing Balance(15,731,695)" or "Closing Balance   (15,731,695)"
+  const closingBalance =
+    extractInlineAmount(text, "Today Closing Balance") ??
+    (openingBalance + receiptsTotal - paymentsTotal);
+
+  // ── PDC total ──
+  // Format: "Total PDC's Balance  62,057,051"
+  let pdcTotal = 0;
+  const pdcMatch = text.match(/Total\s+PDC[''’]s\s+Balance\s+\(?([,\d]+(?:\.\d+)?)\)?/i);
+  if (pdcMatch) {
+    const chunk = text.slice(text.search(/Total\s+PDC/i), text.search(/Total\s+PDC/i) + 60);
+    pdcTotal = chunk.includes("(") ? -parseAmount(pdcMatch[1]) : parseAmount(pdcMatch[1]);
+  }
+
+  // ── Closing after PDC ──
+  // Last "Closing Balance" line — comes after the PDC section
+  // Format: "Closing Balance\n(77,788,746)"
+  let closingAfterPDC = closingBalance - pdcTotal; // fallback: closing minus PDC (PDC reduces available cash)
+  const pdcSectionIdx = text.search(/Total\s+PDC/i);
+  if (pdcSectionIdx >= 0) {
+    const afterPDC = text.slice(pdcSectionIdx);
+    const m = afterPDC.match(/Closing Balance\s*\n?\s*\(?([,\d]+(?:\.\d+)?)\)?/i);
+    if (m) {
+      const chunk = afterPDC.slice(afterPDC.search(/Closing Balance/i), afterPDC.search(/Closing Balance/i) + 60);
+      closingAfterPDC = chunk.includes("(") ? -parseAmount(m[1]) : parseAmount(m[1]);
+    }
+  }
 
   return {
     openingBalanceTotal: openingBalance,
