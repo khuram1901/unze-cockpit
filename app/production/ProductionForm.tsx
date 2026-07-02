@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK } from "../lib/dateUtils";
-import { canAccessDailyEntry, OPS_HOD_EMAIL, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canAccessDailyEntry, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Plant = {
   id: string;
@@ -120,6 +120,7 @@ export default function ProductionForm() {
   const [notes, setNotes] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userIsAdmin, setUserIsAdmin] = useState(false);
+  const [userIsOpsManager, setUserIsOpsManager] = useState(false);
 
   // Per-section saving + message state
   const [savingSection, setSavingSection] = useState("");
@@ -140,18 +141,20 @@ export default function ProductionForm() {
 
       const { data: me } = await supabase
         .from("members")
-        .select("id, role")
+        .select("id, role, department")
         .eq("email", email)
         .single();
 
       const role = me?.role || "Member";
+      const department = me?.department || null;
       setUserEmail(email);
       setUserIsAdmin(role === "Admin");
+      setUserIsOpsManager(role === "Manager" && department === "Unze Trading Ops");
 
       let overrides: PermOverrides | null = null;
       const p = await loadMyPermissions();
       if (p) overrides = p as PermOverrides;
-      const ctx: UserCtx = { email, role, department: null, company: null, overrides };
+      const ctx: UserCtx = { email, role, department, company: null, overrides };
       const hasFullAccess = canAccessDailyEntry(ctx);
 
       const { data: allPlants } = await supabase
@@ -268,7 +271,7 @@ export default function ProductionForm() {
     return pastEntries.some((e) => e.entry_date === entryDate && e.type === type);
   }
 
-  const canDelete = userEmail === OPS_HOD_EMAIL || userIsAdmin;
+  const canDelete = userIsAdmin || userIsOpsManager;
 
   async function currentEmail() {
     const { data: userData } = await supabase.auth.getUser();
