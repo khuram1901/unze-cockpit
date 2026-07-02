@@ -67,10 +67,12 @@ function findTotalInSection(text: string, startLabel: string, endLabel: string):
 
 function detectCompany(text: string): "unze" | "imperial" | "unknown" {
   const lower = text.toLowerCase();
-  if (lower.includes("imperial footwear")) return "imperial";
-  if (lower.includes("unze trading")) return "unze";
-  if (lower.includes("today opening balance") && lower.includes("today closing balance")) return "imperial";
+  // Check Unze first — Unze cash flows sometimes mention "Imperial Footwear" as a payee
   if (lower.includes("opening balance total")) return "unze";
+  if (lower.includes("closing balance unze trading")) return "unze";
+  if (lower.includes("unze trading pvt")) return "unze";
+  if (lower.includes("today opening balance") && lower.includes("today closing balance")) return "imperial";
+  if (lower.includes("imperial footwear")) return "imperial";
   return "unknown";
 }
 
