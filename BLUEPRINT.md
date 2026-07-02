@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 01/07/2026 (initial creation).
+> **This is the source of truth.** Read before touching any code. Last updated: 02/07/2026.
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -89,8 +89,11 @@ app/
 ├── finance/
 │   ├── page.tsx                      Finance index — company picker, dept budgets, bulk upload
 │   ├── FinanceManager.tsx            Per-company finance dashboard: daily position, opening balance,
-│                                     cash plan, monthly budgets, charts
-│   └── [company]/page.tsx            Dynamic route — passes slug to FinanceManager
+│   │                                 cash plan, monthly budgets, charts. "Reconnect Google" button
+│   │                                 returns user to company page after OAuth
+│   ├── [company]/page.tsx            Dynamic route — passes slug to FinanceManager
+│   └── upload/page.tsx               Manual PDF upload — drag-and-drop cash flow + bank position
+│                                     PDFs, auto-detects company, shows per-file save status
 │
 ├── receivables/page.tsx              Receivables kanban — stage pipeline for MEPCO/customer bills
 │
@@ -197,12 +200,20 @@ api/
 │   └── freebusy/route.ts             GET — check calendar free/busy (auth required)
 ├── finance/
 │   ├── bulk-upload/route.ts          POST — upload multiple PDF cash flow files (admin only)
+│   ├── upload-pdfs/route.ts          POST — manual drag-and-drop PDF upload (cash flow + bank position pairs)
+│   ├── check-drive/route.ts          GET — cron every 10min; reads PDFs from Google Drive Drop Here folder,
+│   │                                 parses them, saves to daily_cash_position + bank_position_snapshots,
+│   │                                 moves processed files to Processed folder
+│   ├── setup-drive-folder/route.ts   GET — one-time setup; creates Cockpit Cash Sheets/Drop Here/Processed
+│   │                                 folders in Google Drive, saves folder IDs to app_settings table
+│   └── setup-gmail-filter/route.ts   GET — creates cockpit-cash Gmail label + filter (CRON_SECRET gated)
 │   ├── check-inbox/route.ts          POST — check Gmail for new finance PDFs (admin only)
 │   ├── parse-cash-flow/route.ts      POST — parse uploaded PDF into daily position data
 │   └── upload-forecast/route.ts      POST — upload Excel cash flow forecast
 ├── google/
-│   ├── auth/route.ts                 GET — initiate Google OAuth2 flow (finance)
-│   ├── callback/route.ts             GET — OAuth2 callback handler (finance)
+│   ├── auth/route.ts                 GET — initiate Google OAuth2 flow; accepts ?returnTo= param so
+│   │                                 callback redirects back to originating page (finance/calendar)
+│   ├── callback/route.ts             GET — OAuth2 callback; reads state param for returnTo redirect
 │   ├── auth-notifications/route.ts   GET — initiate OAuth2 flow (Gmail notifications)
 │   ├── callback-notifications/route.ts GET — OAuth2 callback (Gmail notifications)
 │   └── status/route.ts              GET — check connected Google accounts
@@ -1050,6 +1061,18 @@ Admin department budget tracking. Categories define monthly budgets; spend recor
 
 Indexes on created_at DESC, user_email, table_name.
 
+#### `app_settings`
+Key/value store for application configuration (migration 052).
+| Column | Type | Notes |
+|--------|------|-------|
+| key | text PK | e.g. 'drive_inbox_folder_id', 'drive_processed_folder_id' |
+| value | text NOT NULL | |
+| updated_at | timestamptz | DEFAULT now() |
+
+**RLS:** Service role only (no direct client access). Written by setup-drive-folder route.
+
+---
+
 #### `document_archive`
 | Column | Type | Notes |
 |--------|------|-------|
@@ -1464,12 +1487,36 @@ Calendar/meeting request tracking (referenced in code).
 ## 8. Data Flows
 
 ### Finance Data Flow
-1. Admin/CEO uploads PDF bank statement → `/api/finance/parse-cash-flow` parses it → stores in `daily_cash_position`
-2. Or: Gmail auto-ingestion checks inbox → `/api/finance/check-inbox` → parses → stores
-3. Finance Manager views via `/finance/[company]` — data scoped by `company_id`
-4. Forecast entered manually or via Excel upload → `monthly_cash_plan`
-5. Department budgets: admin enters per-department monthly budgets → `department_budgets`
-6. Source PDFs archived → `document_archive` table + Supabase Storage `source-documents` bucket
+Three ingestion paths — all end in `daily_cash_position` + `bank_position_snapshots`:
+
+**Path 1 — Google Drive (primary, fully automated)**
+1. Gmail receives cash sheet email with PDF attachments
+2. Google Apps Script (runs hourly at script.google.com under k.saleem@unzegroup.com) picks up unread PDFs → drops into Google Drive folder **Cockpit Cash Sheets/Drop Here** (folder ID: `140RkdEgn0JSi67gpjswr1L-lidClriJ1`)
+3. `/api/finance/check-drive` cron (every 10 min) reads PDFs from Drop Here, pairs cash flow + bank position by date/company prefix, parses both, saves to DB, moves files to **Processed** folder
+4. Company detected from PDF content by `detectCompany()` — checks Unze markers BEFORE Imperial (Unze sheets list Imperial as payee)
+
+**Path 2 — Manual upload**
+1. Admin goes to `/finance/upload` (Upload Cash Sheets page)
+2. Drag-and-drops PDFs → POST to `/api/finance/upload-pdfs` → same parsing + save logic
+
+**Path 3 — Gmail direct (legacy)**
+1. `/api/finance/check-inbox` cron checks k.saleem@unzegroup.com inbox for cockpit-cash label
+
+**All paths:**
+- Source PDFs archived → `document_archive` table + Supabase Storage `source-documents` bucket
+- Finance Manager views via `/finance/[company]` — data scoped by `company_id`
+- Forecast entered manually or via Excel upload → `monthly_cash_plan`
+- Department budgets: admin enters per-department monthly budgets → `department_budgets`
+
+**PDF parsing rules:**
+- `detectCompany()` checks Unze markers first (`opening balance total`, `closing balance unze trading`, `unze trading pvt`) then Imperial (`today opening balance` + `today closing balance`, `imperial footwear`)
+- `parseImperial()` uses `extractInlineAmount()` for values glued directly to labels e.g. `Today Opening Balance(16,333,132)`
+- Imperial: splits at `DatePayments` / `DateReceipts` to extract correct section totals
+- UTPL `closing_after_post_dated = closing_balance − post_dated_total`; IFPL `closing_after_post_dated = closing_balance + post_dated_total`
+
+**Google Drive folder setup (one-time):**
+Run: `curl -H 'Authorization: Bearer unze-cockpit-cron-2026' https://pulse.unze.co.uk/api/finance/setup-drive-folder`
+Requires: `app_settings` table (migration 052) + Google reconnected with Drive scope
 
 ### Production/Stock Data Flow
 1. Plant member opens `/production` → selects plant
