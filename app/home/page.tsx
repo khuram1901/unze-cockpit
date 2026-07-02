@@ -649,8 +649,8 @@ export default function HomePage() {
     setMachineIssues(activeMachineIssues);
     setTasks(taskData);
 
-    const currentMonthForCash = formatDate(new Date()).slice(0, 7);
-    const nowForHist = new Date();
+    const currentMonthForCash = dateToView.slice(0, 7);
+    const nowForHist = new Date(dateToView);
     const lastYearMonth = `${nowForHist.getFullYear() - 1}-${String(nowForHist.getMonth() + 1).padStart(2, "0")}`;
 
     const allCompanyFinance: CompanyFinanceData[] = [];
@@ -658,7 +658,7 @@ export default function HomePage() {
       const [cashOpenRes, cashPlanRes, cashPosRes, lyRes, forecastRes, deptBudgetRes] = await Promise.all([
         supabase.from("cash_opening_balance").select("*").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
         supabase.from("monthly_cash_plan").select("*").eq("company_id", company.id).eq("plan_month", currentMonthForCash).maybeSingle(),
-        supabase.from("daily_cash_position").select("*").eq("company_id", company.id).order("position_date", { ascending: false }).limit(30),
+        supabase.from("daily_cash_position").select("*").eq("company_id", company.id).lte("position_date", dateToView).order("position_date", { ascending: false }).limit(30),
         supabase.from("daily_cash_position").select("total_receipts, total_payments").eq("company_id", company.id).gte("position_date", lastYearMonth + "-01").lte("position_date", lastYearMonth + "-31"),
         supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("company_id", company.id).gte("budget_month", currentMonthForCash).order("budget_month", { ascending: true }),
         supabase.from("department_budgets").select("department, category, budgeted_amount, actual_amount").eq("company_id", company.id).eq("budget_month", currentMonthForCash),
@@ -982,10 +982,18 @@ export default function HomePage() {
 
     const [holdingsRes, pricesRes] = await Promise.all([
       supabase.from("holdings").select("ticker, company_name, quantity, buy_price"),
-      supabase.from("current_prices").select("ticker, price, as_of_date"),
+      // Use price_history to get the most recent price on or before the selected date,
+      // so historical date views show the correct portfolio value for that day.
+      supabase.from("price_history").select("ticker, price, as_of_date").lte("as_of_date", dateToView).order("as_of_date", { ascending: false }),
     ]);
     const hRows = holdingsRes.data || [];
-    const pRows = pricesRes.data || [];
+    const allPriceRows = pricesRes.data || [];
+    // Keep only the latest price per ticker (rows already sorted desc by as_of_date)
+    const priceLatestMap = new Map<string, { ticker: string; price: number; as_of_date: string }>();
+    for (const p of (allPriceRows as { ticker: string; price: number; as_of_date: string }[])) {
+      if (!priceLatestMap.has(p.ticker)) priceLatestMap.set(p.ticker, p);
+    }
+    const pRows = Array.from(priceLatestMap.values());
     let computedInvestmentData: InvestmentSummary | null = null;
     if (hRows.length > 0) {
       const priceMap = new Map(pRows.map((p: { ticker: string; price: number; as_of_date: string }) => [p.ticker, p]));
