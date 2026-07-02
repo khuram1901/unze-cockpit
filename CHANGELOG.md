@@ -4,6 +4,33 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-02 — Features 1-2, 7-9, Google OAuth fix, edit permissions
+
+**Features built:**
+- Feature 1: PO Delivery Forecast — estimated completion date + daily rate on stock summary + stock page
+- Feature 2: Authority Letter Expiry Tracker — migration 049 (expiry_date), amber/red badges, warning banner, dashboard alerts
+- Feature 7: Contractor Performance Tracker — new API route + performance cards on manage page
+- Feature 8: WhatsApp Dispatch Notification — auto-email to Ops Managers with pre-filled WhatsApp button on every dispatch
+- Feature 9: Monthly PO Progress Report — cron route `/api/reports/monthly-po`, runs 1st of each month, per-plant/PO email to Ops Managers + Admin
+
+**Edit permissions for Ops team:**
+- PATCH routes added for authority-letters, contractors, dispatch-records, production-allocations
+- Edit Letters / Edit Dispatches / Edit Contractor UI added to `/stock/manage`
+- All four Ops Managers (asif, usman, yahya, nadeem @unze.co.uk) can amend mistakes
+
+**Google OAuth fix:**
+- Root cause: `GOOGLE_REDIRECT_URI` was blank on Vercel production
+- Fixed: set to `https://unze-cockpit.vercel.app/api/google/callback`
+- Fixed: refresh_token overwrite bug in both callback routes
+- Consolidated to single account: k.saleem@unzegroup.com for calendar + Gmail + notifications + backup
+- Migration 050: deleted old khuram1901@gmail.com token from DB
+
+**Database changes:**
+- Migration 049: `alter table authority_letters add column if not exists expiry_date date`
+- Migration 050: `delete from google_oauth_tokens where user_email = 'khuram1901@gmail.com'`
+
+---
+
 ## 2026-07-01 00:00 — Initial blueprint created
 
 **Files changed:**
