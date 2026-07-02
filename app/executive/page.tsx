@@ -504,26 +504,29 @@ export default function ExecutiveDashboardPage() {
     const selectedMonthStart = getMonthStartFromDate(dateToView);
     const selectedMonthEnd = getMonthEndFromDate(dateToView);
 
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const ENTRY_COLS = "plant_id, entry_date, qty_31, qty_36, qty_45, qty_meter";
+    const TASK_COLS = "id, description, project, priority, due_date, assigned_to, assigned_by, assigned_date, status, task_type, reply_required, reply_text, assigned_to_department, assigned_to_business_unit, created_at, updated_at, source_type, source_record_id, source_label, exception_type, explanation_required";
     const [
       plantsRes, openRes, brokenOpenRes, prodRes, dispRes, brkRes, scrapRes,
       machineIssuesRes, tasksRes, ownerRes, monthlyProductionTargetsRes,
       monthlyDispatchTargetsRes, monthlyProductionRes, monthlyDispatchRes, monthlyBreakageRes,
     ] = await Promise.all([
       supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
-      supabase.from("opening_balances").select("*"),
-      supabase.from("broken_opening_balances").select("*"),
-      supabase.from("production_entries").select("*").lte("entry_date", dateToView),
-      supabase.from("dispatch_entries").select("*").lte("entry_date", dateToView),
-      supabase.from("breakage_entries").select("*").lte("entry_date", dateToView),
-      supabase.from("scrap_processed_entries").select("*").lte("entry_date", dateToView),
-      supabase.from("machine_issues").select("*").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
-      supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(500),
+      supabase.from("opening_balances").select("plant_id, bal_31, bal_36, bal_45, bal_meter, created_at"),
+      supabase.from("broken_opening_balances").select("plant_id, bal_31, bal_36, bal_45, bal_meter, created_at"),
+      supabase.from("production_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
+      supabase.from("dispatch_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
+      supabase.from("breakage_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
+      supabase.from("scrap_processed_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
+      supabase.from("machine_issues").select("id, plant_name, machine_name, issue_status, expected_resolution, issue_description, action_taken, created_at").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
+      supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(200),
       supabase.from("department_owners").select("department_name, primary_owner_name, primary_owner_email").eq("department_name", "Unze Trading Ops").single(),
-      supabase.from("monthly_production_targets").select("*").eq("target_month", selectedMonth),
-      supabase.from("monthly_dispatch_targets").select("*").eq("target_month", selectedMonth),
-      supabase.from("production_entries").select("*").gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
-      supabase.from("dispatch_entries").select("*").gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
-      supabase.from("breakage_entries").select("*").gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
+      supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
+      supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
+      supabase.from("production_entries").select(ENTRY_COLS).gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
+      supabase.from("dispatch_entries").select(ENTRY_COLS).gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
+      supabase.from("breakage_entries").select(ENTRY_COLS).gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
     ]);
 
     const plants: Plant[] = plantsRes.data || [];

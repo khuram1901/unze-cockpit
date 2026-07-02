@@ -127,9 +127,10 @@ export default function PADashboardPage() {
       if (member) setCurrentUserName(`${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || email);
     }
 
+    const TASK_COLS = "id, description, project, priority, due_date, assigned_to, assigned_to_email, assigned_by, status, source_type, exception_type, assigned_to_department, reply_text, notes, created_at";
     const [tasksRes, meetingsRes, membersRes] = await Promise.all([
-      supabase.from("tasks").select("*").order("created_at", { ascending: false }),
-      supabase.from("meeting_requests").select("*").eq("status", "Pending").order("created_at", { ascending: false }),
+      supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(300),
+      supabase.from("meeting_requests").select("id, requested_by_name, meeting_title, requested_date, priority, status").eq("status", "Pending").order("created_at", { ascending: false }),
       supabase.from("members").select("first_name, last_name, name, email, department, phone_e164"),
     ]);
 

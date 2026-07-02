@@ -243,23 +243,26 @@ export default function DashboardView() {
 
     const isPriv = canSeeAllTasks(userCtx);
 
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const ENTRY_COLS = "plant_id, entry_date, qty_31, qty_36, qty_45, qty_meter";
+    const TASK_COLS = "id, task_type, description, project, priority, due_date, assigned_date, assigned_to, assigned_to_email, assigned_by, status, stuck_reason, notes, reply_required, reply_text, reply_by, reply_at, corrective_action, recovery_date, impact_on_monthly_target, time_spent_minutes";
     const [
       plantsRes, openRes, brokenOpenRes, prodRes, dispRes, brkRes, scrapRes,
       prodTargetsRes, dispTargetsRes, machineRes, tasksRes,
     ] = await Promise.all([
       supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
-      supabase.from("opening_balances").select("*"),
-      supabase.from("broken_opening_balances").select("*"),
-      supabase.from("production_entries").select("*"),
-      supabase.from("dispatch_entries").select("*"),
-      supabase.from("breakage_entries").select("*"),
-      supabase.from("scrap_processed_entries").select("*"),
-      supabase.from("monthly_production_targets").select("*").eq("target_month", currentMonth),
-      supabase.from("monthly_dispatch_targets").select("*").eq("target_month", currentMonth),
-      supabase.from("machine_issues").select("*").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
+      supabase.from("opening_balances").select("plant_id, as_of_date, bal_31, bal_36, bal_45, bal_meter, created_at"),
+      supabase.from("broken_opening_balances").select("plant_id, as_of_date, bal_31, bal_36, bal_45, bal_meter, created_at"),
+      supabase.from("production_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo),
+      supabase.from("dispatch_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo),
+      supabase.from("breakage_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo),
+      supabase.from("scrap_processed_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo),
+      supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", currentMonth),
+      supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", currentMonth),
+      supabase.from("machine_issues").select("id, plant_name, machine_name, issue_status, expected_resolution, issue_description, action_taken, created_at").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
       isPriv
-        ? supabase.from("tasks").select("*").order("created_at", { ascending: false }).limit(500)
-        : supabase.from("tasks").select("*").eq("assigned_to_email", email || "").order("created_at", { ascending: false }),
+        ? supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(200)
+        : supabase.from("tasks").select(TASK_COLS).eq("assigned_to_email", email || "").order("created_at", { ascending: false }),
     ]);
 
     // Scope plants to user's assigned plants for non-privileged users

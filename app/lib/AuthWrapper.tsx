@@ -44,6 +44,11 @@ export default function AuthWrapper({
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifItems, setNotifItems] = useState<{ label: string; count: number; href: string }[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
+  const searchCacheRef = useRef<{
+    tasks: { id: string; description: string; assigned_to: string | null; status: string }[];
+    members: { name: string | null; email: string | null; role: string; department: string | null }[];
+    meetings: { id: string; title: string; meeting_date: string }[];
+  } | null>(null);
 
   // Auth check
   useEffect(() => {
@@ -139,23 +144,31 @@ export default function AuthWrapper({
     }
   }, [loading, email, member]);
 
-  // Global search
+  // Global search — data is fetched once per session and cached in memory
   async function runSearch(q: string) {
     if (q.length < 2) { setSearchResults([]); return; }
     setSearching(true);
     const lower = q.toLowerCase();
     const results: { type: string; label: string; sub: string; href: string }[] = [];
 
-    const { data: tasks } = await supabase.from("tasks").select("id, description, assigned_to, status").limit(100);
-    for (const t of (tasks || [])) {
+    if (!searchCacheRef.current) {
+      const [{ data: tasksData }, { data: membersData }, { data: meetingsData }] = await Promise.all([
+        supabase.from("tasks").select("id, description, assigned_to, status").not("status", "in", '("Completed","Cancelled")').order("created_at", { ascending: false }).limit(200),
+        supabase.from("members").select("name, email, role, department").limit(50),
+        supabase.from("meetings").select("id, title, meeting_date").order("meeting_date", { ascending: false }).limit(50),
+      ]);
+      searchCacheRef.current = { tasks: tasksData || [], members: membersData || [], meetings: meetingsData || [] };
+    }
+
+    const { tasks, members: membersList, meetings } = searchCacheRef.current;
+    for (const t of tasks) {
       if (t.description?.toLowerCase().includes(lower) || t.assigned_to?.toLowerCase().includes(lower)) {
         results.push({ type: "Task", label: t.description, sub: `${t.assigned_to || "Unassigned"} · ${t.status}`, href: `/tasks?task=${t.id}` });
       }
       if (results.length >= 8) break;
     }
 
-    const { data: members } = await supabase.from("members").select("name, email, role, department").limit(50);
-    for (const m of (members || [])) {
+    for (const m of (membersList || [])) {
       if (m.name?.toLowerCase().includes(lower) || m.email?.toLowerCase().includes(lower)) {
         const roleLabel = m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role;
         results.push({ type: "Member", label: m.name || m.email || "", sub: `${roleLabel} · ${m.department || "—"}`, href: "/members" });
@@ -163,8 +176,7 @@ export default function AuthWrapper({
       if (results.length >= 12) break;
     }
 
-    const { data: meetings } = await supabase.from("meetings").select("id, title, meeting_date").limit(30);
-    for (const mt of (meetings || [])) {
+    for (const mt of meetings) {
       if (mt.title?.toLowerCase().includes(lower)) {
         results.push({ type: "Meeting", label: mt.title, sub: mt.meeting_date, href: `/my-minutes?meeting=${mt.id}` });
       }
