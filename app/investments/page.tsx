@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { COLOURS, SectionTitle, PageHeader, useConfirm } from "../lib/SharedUI";
+import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { canEditInvestments, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -401,7 +402,7 @@ export default function InvestmentsPage() {
                   <input placeholder="Company Name" value={formCompany} onChange={(e) => setFormCompany(e.target.value)} style={inputStyle} />
                   <input placeholder="Quantity" type="number" step="1" value={formQty} onChange={(e) => setFormQty(e.target.value)} required style={inputStyle} />
                   <input placeholder="Buy Price (Rs)" type="number" step="0.01" value={formBuyPrice} onChange={(e) => setFormBuyPrice(e.target.value)} required style={inputStyle} />
-                  <input placeholder="Buy Date" type="date" value={formBuyDate} onChange={(e) => setFormBuyDate(e.target.value)} style={inputStyle} />
+                  <DateInput placeholder="Buy Date" value={formBuyDate} onChange={(e) => setFormBuyDate(e.target.value)} style={inputStyle} />
                   <input placeholder="Target Price (Rs)" type="number" step="0.01" value={formTarget} onChange={(e) => setFormTarget(e.target.value)} style={inputStyle} />
                   <input placeholder="Notes" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} style={inputStyle} />
                   <div style={{ display: "flex", gap: "8px" }}>

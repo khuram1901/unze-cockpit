@@ -13,6 +13,7 @@ import MyTasks from "../lib/MyTasks";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
 import { canViewFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import DateInput from "../lib/DateInput";
 
 type Plant = { id: string; name: string; type: string };
 type SizeTotals = { s31: number; s36: number; s45: number; meter: number };
@@ -1009,8 +1010,7 @@ export default function ExecutiveDashboardPage() {
           </div>
           <div style={{ backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "8px 12px" }}>
             <label style={{ fontWeight: 700, display: "block", marginBottom: "3px", fontSize: "15px", color: SLATE }}>View date</label>
-            <input
-              type="date"
+            <DateInput
               value={selectedDate}
               min={minDate}
               max={today}

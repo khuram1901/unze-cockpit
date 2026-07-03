@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
+import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
@@ -346,8 +347,8 @@ export default function TaxationDashboard() {
               <label style={lbl}>Type <select style={inp} value={formData.notice_type || ""} onChange={(e) => setField("notice_type", e.target.value)} required><option value="">Select</option>{NOTICE_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
               <label style={lbl}>Company <select style={inp} value={formData.company_name || ""} onChange={(e) => setField("company_name", e.target.value)} required><option value="">Select</option>{COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></label>
               <label style={lbl}>Consultant <select style={inp} value={formData.consultant_name || ""} onChange={(e) => setField("consultant_name", e.target.value)}><option value="">Select</option>{CONSULTANTS.map((c) => <option key={c}>{c}</option>)}</select></label>
-              <label style={lbl}>Received Date <input type="date" style={inp} value={formData.received_date || ""} onChange={(e) => setField("received_date", e.target.value)} /></label>
-              <label style={lbl}>Hearing Deadline <input type="date" style={inp} value={formData.hearing_deadline || ""} onChange={(e) => setField("hearing_deadline", e.target.value)} /></label>
+              <label style={lbl}>Received Date <DateInput style={inp} value={formData.received_date || ""} onChange={(e) => setField("received_date", e.target.value)} /></label>
+              <label style={lbl}>Hearing Deadline <DateInput style={inp} value={formData.hearing_deadline || ""} onChange={(e) => setField("hearing_deadline", e.target.value)} /></label>
               <label style={lbl}>Financial Exposure (PKR) <input type="number" style={inp} value={formData.financial_exposure || ""} onChange={(e) => setField("financial_exposure", e.target.value)} placeholder="0" /></label>
               <label style={lbl}>Our Action Required <textarea style={{ ...inp, height: "50px" }} value={formData.our_action_required || ""} onChange={(e) => setField("our_action_required", e.target.value)} /></label>
               <label style={lbl}>Consultant Action <textarea style={{ ...inp, height: "50px" }} value={formData.consultant_action_required || ""} onChange={(e) => setField("consultant_action_required", e.target.value)} /></label>

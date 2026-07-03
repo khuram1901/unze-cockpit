@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
+import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge } from "../lib/SharedUI";
 import { canSeeAllMinutes, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -413,7 +414,7 @@ function MyMinutesPage() {
                                 <option value="">Assign to...</option>
                                 {allMembers.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
                               </select>
-                              <input type="date" value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} required
+                              <DateInput value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} required
                                 style={{ padding: "6px 8px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "5px", fontSize: "15px", borderColor: !newTaskDue ? COLOURS.RED : undefined }} />
                               <select value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value)}
                                 style={{ padding: "6px 8px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "5px", fontSize: "15px" }}>

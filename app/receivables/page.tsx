@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
+import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, SkeletonRows, inputStyle, labelStyle } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
@@ -459,7 +460,7 @@ export default function ReceivablesPage() {
                 </div>
                 <div>
                   <label style={lbl}>Date Submitted</label>
-                  <input type="date" style={inp} value={dateSubmitted} onChange={(e) => setDateSubmitted(e.target.value)} required />
+                  <DateInput style={inp} value={dateSubmitted} onChange={(e) => setDateSubmitted(e.target.value)} required />
                 </div>
                 <div>
                   <label style={lbl}>Invoice Ref</label>
@@ -592,7 +593,7 @@ export default function ReceivablesPage() {
                                     </div>
                                     <div>
                                       <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>Date Submitted</label>
-                                      <input type="date" value={editForm.date_submitted} onChange={(e) => setEditForm({ ...editForm, date_submitted: e.target.value })} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box" }} />
+                                      <DateInput value={editForm.date_submitted} onChange={(e) => setEditForm({ ...editForm, date_submitted: e.target.value })} style={{ ...inp, fontSize: "13px", display: "block", width: "100%", boxSizing: "border-box" }} />
                                     </div>
                                     <div>
                                       <label style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>Bill Type</label>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
+import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
@@ -198,7 +199,7 @@ export default function HRDashboard() {
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
               <label style={lbl}>Position Title <input style={inp} value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Finance Manager" /></label>
               <label style={lbl}>Department <select style={inp} value={dept} onChange={(e) => setDept(e.target.value)} required><option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></label>
-              <label style={lbl}>Date Opened <input type="date" style={inp} value={dateOpened} onChange={(e) => setDateOpened(e.target.value)} required /></label>
+              <label style={lbl}>Date Opened <DateInput style={inp} value={dateOpened} onChange={(e) => setDateOpened(e.target.value)} required /></label>
               <label style={{ ...lbl, gridColumn: isMobile ? undefined : "1 / -1" }}>Notes <textarea style={{ ...inp, height: "50px" }} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
             </div>
             <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Save"}</button>

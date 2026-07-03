@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK, todayISO } from "../lib/dateUtils";
+import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import {
@@ -342,7 +343,7 @@ export default function PADashboardPage() {
               <select value={task.priority || "Normal"} onChange={(e) => updateTask(task.id, { priority: e.target.value })} style={controlStyle}>
                 {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
               </select>
-              <input type="date" value={task.due_date || ""} onChange={(e) => updateTask(task.id, { due_date: e.target.value || null })} style={controlStyle} />
+              <DateInput value={task.due_date || ""} onChange={(e) => updateTask(task.id, { due_date: e.target.value || null })} style={controlStyle} />
               <select value={task.assigned_to || ""} onChange={(e) => {
                 const m = members.find((mem) => memberName(mem) === e.target.value);
                 const prevOwner = task.assigned_to || "unassigned";
@@ -464,7 +465,7 @@ export default function PADashboardPage() {
                       {members.map((m) => { const n = memberName(m); return <option key={n} value={n}>{n}</option>; })}
                     </select>
                   </label>
-                  <label style={labelStyle}>Due Date <input type="date" value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} required style={inputStyle} /></label>
+                  <label style={labelStyle}>Due Date <DateInput value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} required style={inputStyle} /></label>
                   <label style={labelStyle}>Priority
                     <select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} style={inputStyle}>
                       {PRIORITIES.map((p) => <option key={p}>{p}</option>)}

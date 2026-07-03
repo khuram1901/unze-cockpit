@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
+import DateInput from "../lib/DateInput";
 
 type Stage = {
   id: string;
@@ -346,8 +347,7 @@ export default function ReceivablesSection({
           </label>
           <label>
             Date submitted
-            <input
-              type="date"
+            <DateInput
               style={inputStyle}
               value={dateSubmitted}
               onChange={(e) => setDateSubmitted(e.target.value)}

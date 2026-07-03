@@ -5,6 +5,7 @@ import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import { logAction } from "../lib/audit-log";
 import { useToast } from "../lib/SharedUI";
+import DateInput from "../lib/DateInput";
 
 type Member = {
   id: string;
@@ -340,8 +341,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
       <label>
         Assigned date
-        <input
-          type="date"
+        <DateInput
           style={inputStyle}
           value={assignedDate}
           max={today}
@@ -351,8 +351,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
       <label>
         Due date
-        <input
-          type="date"
+        <DateInput
           style={inputStyle}
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}

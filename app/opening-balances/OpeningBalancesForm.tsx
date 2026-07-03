@@ -5,6 +5,7 @@ import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, SectionTitle } from "../lib/SharedUI";
 import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
+import DateInput from "../lib/DateInput";
 
 type Plant = { id: string; name: string; type: string };
 
@@ -138,8 +139,7 @@ export default function OpeningBalancesForm() {
 
           <label style={labelStyle}>
             As of date
-            <input
-              type="date"
+            <DateInput
               style={inputStyle}
               value={asOfDate}
               onChange={(e) => setAsOfDate(e.target.value)}

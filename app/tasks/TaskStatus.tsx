@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
 import { useToast } from "../lib/SharedUI";
+import DateInput from "../lib/DateInput";
 
 type Task = {
   id: string;
@@ -246,12 +247,10 @@ export default function TaskStatus({
           }}
         >
           <span style={{ fontSize: "16px", fontWeight: "bold" }}>Due date:</span>
-          <input
-            type="date"
+          <DateInput
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
             style={controlStyle}
-            disabled={savingDate}
           />
           <button
             onClick={saveDueDate}
@@ -408,8 +407,7 @@ export default function TaskStatus({
 
           <label style={{ fontSize: "16px", fontWeight: "bold" }}>
             Expected Recovery Date
-            <input
-              type="date"
+            <DateInput
               value={recoveryDate}
               onChange={(e) => setRecoveryDate(e.target.value)}
               style={fieldStyle}

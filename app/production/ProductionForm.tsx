@@ -5,6 +5,7 @@ import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK } from "../lib/dateUtils";
 import { canAccessDailyEntry, type UserCtx, type PermOverrides } from "../lib/permissions";
+import DateInput from "../lib/DateInput";
 
 type Plant = {
   id: string;
@@ -612,8 +613,7 @@ export default function ProductionForm() {
         )}
         <div>
           <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "2px" }}>Date</div>
-          <input
-            type="date"
+          <DateInput
             style={{ ...inputStyle, marginBottom: 0, width: "auto" }}
             value={entryDate}
             onChange={(e) => setEntryDate(e.target.value)}

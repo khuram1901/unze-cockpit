@@ -14,6 +14,7 @@ import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, 
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import DateInput from "../lib/DateInput";
 
 const { NAVY, SLATE, BORDER } = COLOURS;
 
@@ -2227,8 +2228,7 @@ function ExecutiveDashboardBody({
         )}
         <div style={{ backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "8px 12px", flexShrink: 0 }}>
           <label style={{ fontWeight: 700, display: "block", marginBottom: "3px", fontSize: "15px", color: SLATE }}>View date</label>
-          <input
-            type="date"
+          <DateInput
             value={selectedDate}
             min={minDate}
             max={today}
