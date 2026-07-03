@@ -4,6 +4,16 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-03 (session continued 3) — Custom DateInput component, all date pickers replaced
+
+**What changed:**
+- Built `app/lib/DateInput.tsx` — custom text input that shows and accepts DD/MM/YYYY, auto-inserts slashes as you type, validates on blur with red border, and calls onChange with YYYY-MM-DD so all DB code is unchanged.
+- Root cause: Safari ignores `lang="en-GB"` for native `<input type="date">` and always shows MM/DD/YYYY regardless. The custom component bypasses this entirely.
+- Replaced all 29 native date inputs across 14 files: tasks, receivables, PA dashboard, home page, executive page, daily entry, receivables section, calendar, meetings, my-minutes, finance, opening balances, stock manage, investments, HR/Audit/Taxation department dashboards.
+- Rule added to CLAUDE.md: never use `<input type="date">` again — always use `<DateInput>` from `app/lib/DateInput.tsx`.
+
+---
+
 ## 2026-07-03 (session continued 2) — DD/MM/YYYY date pickers fixed globally
 
 **Root cause identified and fixed:**
