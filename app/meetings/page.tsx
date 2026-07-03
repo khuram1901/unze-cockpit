@@ -521,7 +521,7 @@ export default function MeetingsPage() {
         if (!groups.has(dept)) groups.set(dept, []);
         groups.get(dept)!.push(m);
       }
-      return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+      return Array.from(groups.entries()).sort(([a], [b]) => b.localeCompare(a));
     }
     const groups = new Map<string, Meeting[]>();
     for (const m of meetings) {
