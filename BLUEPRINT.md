@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 03/07/2026.
+> **This is the source of truth.** Read before touching any code. Last updated: 03/07/2026 (session 4).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -161,6 +161,9 @@ app/
     ├── SharedUI.tsx                  Design tokens (COLOURS, RADII, SHADOWS) + shared components
     ├── constants.ts                  COMPANIES array — UTPL and IFPL IDs/slugs
     ├── dateUtils.ts                  formatDateUK, formatDateTimeUK, todayISO, etc.
+    ├── DateInput.tsx                 Custom DD/MM/YYYY date input — replaces all <input type="date">
+    │                                 Shows DD/MM/YYYY, auto-inserts slashes, validates on blur,
+    │                                 calls onChange with YYYY-MM-DD. Fixes Safari MM/DD/YYYY issue.
     ├── department-config.ts          Department slug → name mapping
     ├── audit-log.ts                  logAuditEvent() helper
     ├── send-email.ts                 Email sending via Gmail API
@@ -1298,6 +1301,8 @@ Calendar/meeting request tracking (referenced in code).
   - Add/edit/delete holdings (Admin/CEO only)
   - Refresh prices via `/api/investments/update-prices` (Admin/CEO only)
   - Portfolio totals: total cost, total value, total gain/loss
+- **Price updates:** Automated via cron — 04:30 UTC (market open, 9:30am PKT) and 11:00 UTC (market close, 4:00pm PKT), Monday–Friday. Prices stored in `price_history` (one row per ticker per day, upserted). Source: PSX DPS API, Yahoo Finance as fallback.
+- **Historical portfolio value:** CEO home page uses `price_history` filtered to `<= selectedDate` so past dates show correct portfolio value for that day.
 
 #### `/opening-balances`
 - **File:** `app/opening-balances/page.tsx` + `OpeningBalancesForm.tsx`
@@ -1589,12 +1594,19 @@ Requires: `app_settings` table (migration 052) + Google reconnected with Drive s
 - **Flow:** Browser registers → `/api/notifications/push-subscribe` validates email from session → stores in `push_subscriptions` → server sends via `/api/notifications/push`
 
 ### Cron Jobs (all routes protected by `CRON_SECRET` header)
-| Route | Schedule (configured in Vercel) | Purpose |
+| Route | Schedule (UTC) | Purpose |
 |-------|------|---------|
-| `/api/tasks/recurring` | Daily | Generate recurring tasks from templates |
-| `/api/reports/daily-pdf` | Daily | Generate and email daily PDF report |
-| `/api/reports/weekly` | Weekly | Generate and email weekly digest |
-| `/api/notifications/digest` | Periodic | Send notification digest |
+| `/api/finance/check-inbox` | Every 10 min | Check Gmail for cash sheet emails |
+| `/api/finance/check-drive` | Every 10 min | Check Google Drive for PDF uploads |
+| `/api/meetings/check-inbox` | Every 10 min | Check Gmail for meeting minutes emails |
+| `/api/tasks/recurring` | 00:30 daily | Generate recurring tasks from templates |
+| `/api/notifications/digest` | 00:00 daily | Send notification digest |
+| `/api/reports/daily-pdf` | 03:30 daily | Generate and email daily PDF report |
+| `/api/reports/weekly` | 05:00 Fridays | Generate and email weekly digest |
+| `/api/backup` | 18:00 daily | Database backup |
+| `/api/investments/update-prices` | 04:30 Mon–Fri | PSX market open (9:30am PKT) — opening prices |
+| `/api/investments/update-prices` | 11:00 Mon–Fri | PSX market close (4:00pm PKT) — closing prices |
+| `/api/reports/monthly-po` | 06:00 1st of month | Monthly PO progress report email |
 
 > If `CRON_SECRET` env var is missing, ALL cron requests are blocked (migration 001-era security fix).
 
@@ -1623,6 +1635,7 @@ Requires: `app_settings` table (migration 052) + Google reconnected with Drive s
 15. **`createServiceClient()`** for all API route DB writes — bypasses RLS; never use anon client for writes in server routes.
 16. **`requireAuth(req)`** called first in every API route — validates Bearer token before any logic.
 17. **Ops HoD (nadeem.khan@unze.co.uk)** can edit operations targets even without Admin/Executive role.
+18. **Never use `<input type="date">`** — Safari ignores `lang="en-GB"` and always shows MM/DD/YYYY. Always use `<DateInput>` from `app/lib/DateInput.tsx`. It has an identical interface to native date inputs (value: YYYY-MM-DD, onChange fires YYYY-MM-DD) but displays in DD/MM/YYYY.
 
 ---
 
