@@ -4,6 +4,12 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-03 (session continued 4) — Meetings sort order fix
+
+- `app/meetings/page.tsx` — when grouped by department, month groups were sorted oldest-first (a→z). Fixed to newest-first (b→a), matching the date-grouped view.
+
+---
+
 ## 2026-07-03 (session continued 3) — Custom DateInput component, all date pickers replaced
 
 **What changed:**
