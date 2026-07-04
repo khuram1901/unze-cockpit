@@ -650,7 +650,7 @@ export default function GuaranteesPage() {
         )}
 
         {/* ── Bank facility utilisation — Finance only ── */}
-        {showFinancials && facilities.length > 0 && (
+        {showFinancials && banks.length > 0 && (
           <div style={{ marginBottom: "18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
               <SectionTitle title="Bank Facility Utilisation" />
@@ -696,7 +696,7 @@ export default function GuaranteesPage() {
         )}
 
         {/* No facilities yet — Finance only */}
-        {showFinancials && facilities.length === 0 && !loading && (
+        {showFinancials && banks.length === 0 && !loading && (
           <div style={{ marginBottom: "18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
               <SectionTitle title="Bank Facility Utilisation" />
@@ -735,7 +735,7 @@ export default function GuaranteesPage() {
               <Field label="Bank facility (optional)">
                 <select value={addForm.facility_id} onChange={(e) => setAddForm({ ...addForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
                   <option value="">— Not linked to a facility —</option>
-                  {facilities.map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type}</option>)}
+                  {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type}</option>)}
                 </select>
               </Field>
               <Field label="Tender / contract reference">
@@ -917,7 +917,7 @@ export default function GuaranteesPage() {
                         <Field label="Link to facility">
                           <select value={editForm.facility_id} onChange={(e) => setEditForm({ ...editForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
                             <option value="">— Not linked —</option>
-                            {facilities.map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type}</option>)}
+                            {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type}</option>)}
                           </select>
                         </Field>
                       </div>
