@@ -534,7 +534,17 @@ export default function StockPage() {
   }
 
   // Plant-level totals
-  const totalInStock = summary.reduce((s, i) => s + totalPoles(i.po.in_stock_31, i.po.in_stock_36, i.po.in_stock_45, i.po.in_stock_meter), 0);
+  const plantStock = summary.reduce(
+    (s, i) => ({
+      s31:   s.s31   + i.po.in_stock_31,
+      s36:   s.s36   + i.po.in_stock_36,
+      s40:   s.s40   + i.po.in_stock_40,
+      s45:   s.s45   + i.po.in_stock_45,
+      meter: s.meter + i.po.in_stock_meter,
+    }),
+    { s31: 0, s36: 0, s40: 0, s45: 0, meter: 0 }
+  );
+  const totalInStock = plantStock.s31 + plantStock.s36 + plantStock.s40 + plantStock.s45 + plantStock.meter;
   const activePOs = summary.filter((i) => i.po.status === "Active" && !i.po.is_system_unallocated).length;
   const visibleSummary = showClosed ? summary : summary.filter((i) => i.po.status === "Active");
 
@@ -594,12 +604,35 @@ export default function StockPage() {
           ))}
         </div>
 
-        {/* Stats strip */}
+        {/* Plant stock summary strip */}
         {!loading && summary.length > 0 && (
-          <div style={{ display: "flex", gap: "16px", marginBottom: "14px", flexWrap: "wrap", padding: "10px 14px", backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "8px", border: "1px solid var(--border-color, #e2e8f0)" }}>
-            <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>Total in stock: <strong style={{ color: COLOURS.NAVY, fontSize: "15px" }}>{totalInStock.toLocaleString()} poles</strong></span>
-            <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>Active POs: <strong>{activePOs}</strong></span>
-            <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>All POs: <strong>{summary.length}</strong></span>
+          <div style={{ marginBottom: "14px", padding: "12px 16px", backgroundColor: COLOURS.NAVY, borderRadius: "10px", color: "#fff" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, opacity: 0.8, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                {plants.find((p) => p.id === selectedPlant)?.name} — Total In Stock
+              </span>
+              <div style={{ display: "flex", gap: "16px", fontSize: "12px", opacity: 0.7 }}>
+                <span>Active POs: <strong>{activePOs}</strong></span>
+                <span>All POs: <strong>{summary.length}</strong></span>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: "26px", fontWeight: 800, lineHeight: 1 }}>{totalInStock.toLocaleString()}</span>
+              <span style={{ fontSize: "13px", opacity: 0.7, marginRight: "8px" }}>poles total</span>
+              <div style={{ width: "1px", height: "32px", backgroundColor: "rgba(255,255,255,0.2)", marginRight: "8px" }} />
+              {[
+                { label: "31 ft", value: plantStock.s31 },
+                { label: "36 ft", value: plantStock.s36 },
+                { label: "40 ft", value: plantStock.s40 },
+                { label: "45 ft", value: plantStock.s45 },
+                { label: "Mtr",   value: plantStock.meter },
+              ].filter((s) => s.value > 0).map((s) => (
+                <div key={s.label} style={{ padding: "6px 14px", borderRadius: "8px", backgroundColor: "rgba(255,255,255,0.12)", textAlign: "center" }}>
+                  <div style={{ fontSize: "18px", fontWeight: 700, lineHeight: 1 }}>{s.value.toLocaleString()}</div>
+                  <div style={{ fontSize: "11px", opacity: 0.75, marginTop: "2px" }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
