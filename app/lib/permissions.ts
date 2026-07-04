@@ -117,6 +117,15 @@ export function canViewStock(u: UserCtx) {
   return isAdminTier(u) || u.department === "Unze Trading Ops";
 }
 
+// Guarantees: Finance dept + Unze Trading Ops (they chase releases)
+export function canViewGuarantees(u: UserCtx) {
+  const o = ov(u, "can_view_guarantees");
+  if (o !== null) return o;
+  if (isPA(u)) return false;
+  if (isAdminTier(u)) return true;
+  return u.role === "Manager" && (u.department === "Finance" || u.department === "Unze Trading Ops");
+}
+
 export function canManageStock(u: UserCtx) {
   const o = ov(u, "can_manage_stock");
   if (o !== null) return o;

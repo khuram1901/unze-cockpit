@@ -316,7 +316,7 @@ const emptyConvertForm = {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function GuaranteesPage() {
-  const { checking } = useRequireCapability("finance");
+  const { checking } = useRequireCapability("guarantees");
   const isMobile = useMobile();
   const { show: toast, element: toastEl } = useToast();
   const { confirm, element: confirmEl } = useConfirm();

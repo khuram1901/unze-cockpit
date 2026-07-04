@@ -8,7 +8,7 @@ import {
   canViewOperations, canSeeAllMinutes, canSeeAllTasks, canManageRecurringTasks,
   canManageMembers, canViewAuditLog, canViewExceptions, canImportExport,
   canAccessDailyEntry, canViewPADashboard, canViewInvestments,
-  canViewStock,
+  canViewStock, canViewGuarantees,
   isPrivileged, isAdminTier, isMainAdmin,
   type UserCtx, type PermOverrides,
 } from "./permissions";
@@ -16,10 +16,11 @@ import {
 type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
   | "audit_log" | "exceptions" | "import_export" | "daily_entry"
-  | "pa_dashboard" | "investments" | "system_backups" | "stock";
+  | "pa_dashboard" | "investments" | "system_backups" | "stock" | "guarantees";
 
 const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   finance: canViewFinance,
+  guarantees: canViewGuarantees,
   receivables: canViewReceivables,
   executive: canViewExecutiveDashboard,
   operations: canViewOperations,
