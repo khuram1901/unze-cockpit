@@ -29,14 +29,15 @@ export async function GET(request: NextRequest) {
   // 2a. Fetch opening stock allocations per PO (pre-go-live stock split by PO)
   const { data: openingAllocs } = await supabase
     .from("opening_stock_allocations")
-    .select("po_id, qty_31, qty_36, qty_45, qty_meter")
+    .select("po_id, qty_31, qty_36, qty_40, qty_45, qty_meter")
     .in("po_id", poIds);
 
-  const openingByPO: Record<string, { qty_31: number; qty_36: number; qty_45: number; qty_meter: number }> = {};
+  const openingByPO: Record<string, { qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number }> = {};
   for (const r of openingAllocs || []) {
     openingByPO[r.po_id] = {
       qty_31:    Number(r.qty_31)    || 0,
       qty_36:    Number(r.qty_36)    || 0,
+      qty_40:    Number(r.qty_40)    || 0,
       qty_45:    Number(r.qty_45)    || 0,
       qty_meter: Number(r.qty_meter) || 0,
     };
@@ -45,14 +46,15 @@ export async function GET(request: NextRequest) {
   // 2b. Fetch production allocations totals per PO
   const { data: prodAllocs } = await supabase
     .from("production_allocations")
-    .select("po_id, qty_31, qty_36, qty_45, qty_meter")
+    .select("po_id, qty_31, qty_36, qty_40, qty_45, qty_meter")
     .in("po_id", poIds);
 
-  const prodByPO: Record<string, { qty_31: number; qty_36: number; qty_45: number; qty_meter: number }> = {};
+  const prodByPO: Record<string, { qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number }> = {};
   for (const r of prodAllocs || []) {
-    if (!prodByPO[r.po_id]) prodByPO[r.po_id] = { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
+    if (!prodByPO[r.po_id]) prodByPO[r.po_id] = { qty_31: 0, qty_36: 0, qty_40: 0, qty_45: 0, qty_meter: 0 };
     prodByPO[r.po_id].qty_31 += r.qty_31 || 0;
     prodByPO[r.po_id].qty_36 += r.qty_36 || 0;
+    prodByPO[r.po_id].qty_40 += r.qty_40 || 0;
     prodByPO[r.po_id].qty_45 += r.qty_45 || 0;
     prodByPO[r.po_id].qty_meter += r.qty_meter || 0;
   }
@@ -90,7 +92,7 @@ export async function GET(request: NextRequest) {
   // 3. Fetch authority letters with dispatch totals and expiry_date
   const { data: letters } = await supabase
     .from("authority_letters")
-    .select("*, contractors(name, contact_phone), dispatch_records(qty_31, qty_36, qty_45, qty_meter)")
+    .select("*, contractors(name, contact_phone), dispatch_records(qty_31, qty_36, qty_40, qty_45, qty_meter)")
     .in("po_id", poIds)
     .order("issue_date", { ascending: false });
 
@@ -105,15 +107,16 @@ export async function GET(request: NextRequest) {
     issue_date: string;
     expiry_date: string | null;
     issued_by: string;
-    qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
-    dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
-    remaining_31: number; remaining_36: number; remaining_45: number; remaining_meter: number;
+    qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number;
+    dispatched_31: number; dispatched_36: number; dispatched_40: number; dispatched_45: number; dispatched_meter: number;
+    remaining_31: number; remaining_36: number; remaining_40: number; remaining_45: number; remaining_meter: number;
     notes: string | null;
   };
 
   const letterSummaries: LetterSummary[] = (letters || []).map((l) => {
     const dispatched_31 = (l.opening_dispatched_31 || 0) + (l.dispatch_records || []).reduce((s: number, d: { qty_31: number }) => s + (d.qty_31 || 0), 0);
     const dispatched_36 = (l.opening_dispatched_36 || 0) + (l.dispatch_records || []).reduce((s: number, d: { qty_36: number }) => s + (d.qty_36 || 0), 0);
+    const dispatched_40 = (l.opening_dispatched_40 || 0) + (l.dispatch_records || []).reduce((s: number, d: { qty_40: number }) => s + (d.qty_40 || 0), 0);
     const dispatched_45 = (l.opening_dispatched_45 || 0) + (l.dispatch_records || []).reduce((s: number, d: { qty_45: number }) => s + (d.qty_45 || 0), 0);
     const dispatched_meter = (l.opening_dispatched_meter || 0) + (l.dispatch_records || []).reduce((s: number, d: { qty_meter: number }) => s + (d.qty_meter || 0), 0);
     return {
@@ -126,10 +129,11 @@ export async function GET(request: NextRequest) {
       issue_date: l.issue_date,
       expiry_date: l.expiry_date || null,
       issued_by: l.issued_by,
-      qty_31: l.qty_31, qty_36: l.qty_36, qty_45: l.qty_45, qty_meter: l.qty_meter,
-      dispatched_31, dispatched_36, dispatched_45, dispatched_meter,
+      qty_31: l.qty_31, qty_36: l.qty_36, qty_40: l.qty_40 || 0, qty_45: l.qty_45, qty_meter: l.qty_meter,
+      dispatched_31, dispatched_36, dispatched_40, dispatched_45, dispatched_meter,
       remaining_31: Math.max(0, l.qty_31 - dispatched_31),
       remaining_36: Math.max(0, l.qty_36 - dispatched_36),
+      remaining_40: Math.max(0, (l.qty_40 || 0) - dispatched_40),
       remaining_45: Math.max(0, l.qty_45 - dispatched_45),
       remaining_meter: Math.max(0, l.qty_meter - dispatched_meter),
       notes: l.notes,
@@ -142,9 +146,9 @@ export async function GET(request: NextRequest) {
     contractor_name: string;
     contractor_phone: string | null;
     letters: LetterSummary[];
-    total_authorized_31: number; total_authorized_36: number; total_authorized_45: number; total_authorized_meter: number;
-    total_dispatched_31: number; total_dispatched_36: number; total_dispatched_45: number; total_dispatched_meter: number;
-    total_remaining_31: number; total_remaining_36: number; total_remaining_45: number; total_remaining_meter: number;
+    total_authorized_31: number; total_authorized_36: number; total_authorized_40: number; total_authorized_45: number; total_authorized_meter: number;
+    total_dispatched_31: number; total_dispatched_36: number; total_dispatched_40: number; total_dispatched_45: number; total_dispatched_meter: number;
+    total_remaining_31: number; total_remaining_36: number; total_remaining_40: number; total_remaining_45: number; total_remaining_meter: number;
   };
 
   // 5. Build the final PO summary with nested contractors/letters
@@ -160,36 +164,38 @@ export async function GET(request: NextRequest) {
           contractor_name: l.contractor_name,
           contractor_phone: l.contractor_phone,
           letters: [],
-          total_authorized_31: 0, total_authorized_36: 0, total_authorized_45: 0, total_authorized_meter: 0,
-          total_dispatched_31: 0, total_dispatched_36: 0, total_dispatched_45: 0, total_dispatched_meter: 0,
-          total_remaining_31: 0, total_remaining_36: 0, total_remaining_45: 0, total_remaining_meter: 0,
+          total_authorized_31: 0, total_authorized_36: 0, total_authorized_40: 0, total_authorized_45: 0, total_authorized_meter: 0,
+          total_dispatched_31: 0, total_dispatched_36: 0, total_dispatched_40: 0, total_dispatched_45: 0, total_dispatched_meter: 0,
+          total_remaining_31: 0, total_remaining_36: 0, total_remaining_40: 0, total_remaining_45: 0, total_remaining_meter: 0,
         });
       }
       const cg = contractorMap.get(l.contractor_id)!;
       cg.letters.push(l);
       cg.total_authorized_31 += l.qty_31; cg.total_authorized_36 += l.qty_36;
-      cg.total_authorized_45 += l.qty_45; cg.total_authorized_meter += l.qty_meter;
+      cg.total_authorized_40 += l.qty_40; cg.total_authorized_45 += l.qty_45; cg.total_authorized_meter += l.qty_meter;
       cg.total_dispatched_31 += l.dispatched_31; cg.total_dispatched_36 += l.dispatched_36;
-      cg.total_dispatched_45 += l.dispatched_45; cg.total_dispatched_meter += l.dispatched_meter;
+      cg.total_dispatched_40 += l.dispatched_40; cg.total_dispatched_45 += l.dispatched_45; cg.total_dispatched_meter += l.dispatched_meter;
       cg.total_remaining_31 += l.remaining_31; cg.total_remaining_36 += l.remaining_36;
-      cg.total_remaining_45 += l.remaining_45; cg.total_remaining_meter += l.remaining_meter;
+      cg.total_remaining_40 += l.remaining_40; cg.total_remaining_45 += l.remaining_45; cg.total_remaining_meter += l.remaining_meter;
     }
 
-    const prod = prodByPO[po.id] || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
-    const opening = openingByPO[po.id] || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
+    const prod = prodByPO[po.id] || { qty_31: 0, qty_36: 0, qty_40: 0, qty_45: 0, qty_meter: 0 };
+    const opening = openingByPO[po.id] || { qty_31: 0, qty_36: 0, qty_40: 0, qty_45: 0, qty_meter: 0 };
     // opening_stock_allocations (PO-level) takes precedence over the legacy opening_produced_* backfill fields
-    const hasAllocation = opening.qty_31 > 0 || opening.qty_36 > 0 || opening.qty_45 > 0 || opening.qty_meter > 0;
+    const hasAllocation = opening.qty_31 > 0 || opening.qty_36 > 0 || opening.qty_40 > 0 || opening.qty_45 > 0 || opening.qty_meter > 0;
     const produced_31 = prod.qty_31 + (hasAllocation ? opening.qty_31 : (po.opening_produced_31 || 0));
     const produced_36 = prod.qty_36 + (hasAllocation ? opening.qty_36 : (po.opening_produced_36 || 0));
+    const produced_40 = prod.qty_40 + (hasAllocation ? opening.qty_40 : (po.opening_produced_40 || 0));
     const produced_45 = prod.qty_45 + (hasAllocation ? opening.qty_45 : (po.opening_produced_45 || 0));
     const produced_meter = prod.qty_meter + (hasAllocation ? opening.qty_meter : (po.opening_produced_meter || 0));
 
     const totalDispatched_31 = poLetters.reduce((s, l) => s + l.dispatched_31, 0);
     const totalDispatched_36 = poLetters.reduce((s, l) => s + l.dispatched_36, 0);
+    const totalDispatched_40 = poLetters.reduce((s, l) => s + l.dispatched_40, 0);
     const totalDispatched_45 = poLetters.reduce((s, l) => s + l.dispatched_45, 0);
     const totalDispatched_meter = poLetters.reduce((s, l) => s + l.dispatched_meter, 0);
 
-    const ordered_total = po.ordered_31 + po.ordered_36 + po.ordered_45 + po.ordered_meter;
+    const ordered_total = po.ordered_31 + po.ordered_36 + (po.ordered_40 || 0) + po.ordered_45 + po.ordered_meter;
     const produced_total = produced_31 + produced_36 + produced_45 + produced_meter;
     const fulfillment_pct = ordered_total > 0 ? Math.round((produced_total / ordered_total) * 100) : null;
 
@@ -208,14 +214,15 @@ export async function GET(request: NextRequest) {
       po: {
         id: po.id, plant_id: po.plant_id, plant_name: po.plant_name,
         customer_name: po.customer_name, po_number: po.po_number, po_label: po.po_label,
-        ordered_31: po.ordered_31, ordered_36: po.ordered_36, ordered_45: po.ordered_45, ordered_meter: po.ordered_meter,
+        ordered_31: po.ordered_31, ordered_36: po.ordered_36, ordered_40: po.ordered_40 || 0, ordered_45: po.ordered_45, ordered_meter: po.ordered_meter,
         variance_pct: po.variance_pct, status: po.status, is_system_unallocated: po.is_system_unallocated,
         start_date: po.start_date, notes: po.notes,
-        produced_31, produced_36, produced_45, produced_meter,
+        produced_31, produced_36, produced_40, produced_45, produced_meter,
         dispatched_31: totalDispatched_31, dispatched_36: totalDispatched_36,
-        dispatched_45: totalDispatched_45, dispatched_meter: totalDispatched_meter,
+        dispatched_40: totalDispatched_40, dispatched_45: totalDispatched_45, dispatched_meter: totalDispatched_meter,
         in_stock_31: Math.max(0, produced_31 - totalDispatched_31),
         in_stock_36: Math.max(0, produced_36 - totalDispatched_36),
+        in_stock_40: Math.max(0, produced_40 - totalDispatched_40),
         in_stock_45: Math.max(0, produced_45 - totalDispatched_45),
         in_stock_meter: Math.max(0, produced_meter - totalDispatched_meter),
         fulfillment_pct,

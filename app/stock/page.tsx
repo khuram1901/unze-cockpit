@@ -18,9 +18,9 @@ type LetterSummary = {
   issue_date: string;
   expiry_date: string | null;
   issued_by: string;
-  qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
-  dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
-  remaining_31: number; remaining_36: number; remaining_45: number; remaining_meter: number;
+  qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number;
+  dispatched_31: number; dispatched_36: number; dispatched_40: number; dispatched_45: number; dispatched_meter: number;
+  remaining_31: number; remaining_36: number; remaining_40: number; remaining_45: number; remaining_meter: number;
   notes: string | null;
 };
 
@@ -29,21 +29,21 @@ type ContractorGroup = {
   contractor_name: string;
   contractor_phone: string | null;
   letters: LetterSummary[];
-  total_authorized_31: number; total_authorized_36: number; total_authorized_45: number; total_authorized_meter: number;
-  total_dispatched_31: number; total_dispatched_36: number; total_dispatched_45: number; total_dispatched_meter: number;
-  total_remaining_31: number; total_remaining_36: number; total_remaining_45: number; total_remaining_meter: number;
+  total_authorized_31: number; total_authorized_36: number; total_authorized_40: number; total_authorized_45: number; total_authorized_meter: number;
+  total_dispatched_31: number; total_dispatched_36: number; total_dispatched_40: number; total_dispatched_45: number; total_dispatched_meter: number;
+  total_remaining_31: number; total_remaining_36: number; total_remaining_40: number; total_remaining_45: number; total_remaining_meter: number;
 };
 
 type POSummary = {
   po: {
     id: string; plant_id: string; plant_name: string;
     customer_name: string; po_number: string; po_label: string;
-    ordered_31: number; ordered_36: number; ordered_45: number; ordered_meter: number;
+    ordered_31: number; ordered_36: number; ordered_40: number; ordered_45: number; ordered_meter: number;
     variance_pct: number; status: string; is_system_unallocated: boolean;
     start_date: string | null; notes: string | null;
-    produced_31: number; produced_36: number; produced_45: number; produced_meter: number;
-    dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
-    in_stock_31: number; in_stock_36: number; in_stock_45: number; in_stock_meter: number;
+    produced_31: number; produced_36: number; produced_40: number; produced_45: number; produced_meter: number;
+    dispatched_31: number; dispatched_36: number; dispatched_40: number; dispatched_45: number; dispatched_meter: number;
+    in_stock_31: number; in_stock_36: number; in_stock_40: number; in_stock_45: number; in_stock_meter: number;
     fulfillment_pct: number | null;
     daily_rate: number;
     estimated_completion_date: string | null;
@@ -89,16 +89,17 @@ function expiryStatus(expiry_date: string | null): "expired" | "expiring-soon" |
 
 // ─── Sub-components ──────────────────────────────────────────────
 
-function SizeBadges({ label, qty_31, qty_36, qty_45, qty_meter, colour }: {
-  label: string; qty_31: number; qty_36: number; qty_45: number; qty_meter: number; colour?: string;
+function SizeBadges({ label, qty_31, qty_36, qty_40, qty_45, qty_meter, colour }: {
+  label: string; qty_31: number; qty_36: number; qty_40?: number; qty_45: number; qty_meter: number; colour?: string;
 }) {
-  const total = totalPoles(qty_31, qty_36, qty_45, qty_meter);
+  const total = totalPoles(qty_31, qty_36, qty_40 || 0, qty_45, qty_meter);
   if (total === 0) return <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{label}: 0</span>;
   return (
     <span>
       <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginRight: "6px" }}>{label}:</span>
       {sizeRow("31ft", qty_31, colour)}
       {sizeRow("36ft", qty_36, colour)}
+      {qty_40 ? sizeRow("40ft", qty_40, colour) : null}
       {sizeRow("45ft", qty_45, colour)}
       {sizeRow("Mtr", qty_meter, colour)}
     </span>
@@ -108,9 +109,9 @@ function SizeBadges({ label, qty_31, qty_36, qty_45, qty_meter, colour }: {
 function LetterRow({ letter, expanded, onToggle }: {
   letter: LetterSummary; expanded: boolean; onToggle: () => void;
 }) {
-  const remaining = totalPoles(letter.remaining_31, letter.remaining_36, letter.remaining_45, letter.remaining_meter);
-  const authorized = totalPoles(letter.qty_31, letter.qty_36, letter.qty_45, letter.qty_meter);
-  const dispatched = totalPoles(letter.dispatched_31, letter.dispatched_36, letter.dispatched_45, letter.dispatched_meter);
+  const remaining = totalPoles(letter.remaining_31, letter.remaining_36, letter.remaining_40, letter.remaining_45, letter.remaining_meter);
+  const authorized = totalPoles(letter.qty_31, letter.qty_36, letter.qty_40, letter.qty_45, letter.qty_meter);
+  const dispatched = totalPoles(letter.dispatched_31, letter.dispatched_36, letter.dispatched_40, letter.dispatched_45, letter.dispatched_meter);
   const fullyCollected = remaining === 0 && authorized > 0;
   const expStatus = expiryStatus(letter.expiry_date);
 
@@ -153,11 +154,11 @@ function LetterRow({ letter, expanded, onToggle }: {
       </div>
       {expanded && (
         <div style={{ padding: "8px 12px", fontSize: "12px", color: COLOURS.SLATE }}>
-          <SizeBadges label="Auth'd" qty_31={letter.qty_31} qty_36={letter.qty_36} qty_45={letter.qty_45} qty_meter={letter.qty_meter} />
+          <SizeBadges label="Auth'd" qty_31={letter.qty_31} qty_36={letter.qty_36} qty_40={letter.qty_40} qty_45={letter.qty_45} qty_meter={letter.qty_meter} />
           <span style={{ margin: "0 10px" }}>·</span>
-          <SizeBadges label="Collected" qty_31={letter.dispatched_31} qty_36={letter.dispatched_36} qty_45={letter.dispatched_45} qty_meter={letter.dispatched_meter} colour="#2563eb" />
+          <SizeBadges label="Collected" qty_31={letter.dispatched_31} qty_36={letter.dispatched_36} qty_40={letter.dispatched_40} qty_45={letter.dispatched_45} qty_meter={letter.dispatched_meter} colour="#2563eb" />
           <span style={{ margin: "0 10px" }}>·</span>
-          <SizeBadges label="Balance" qty_31={letter.remaining_31} qty_36={letter.remaining_36} qty_45={letter.remaining_45} qty_meter={letter.remaining_meter} colour={remaining === 0 ? "#16a34a" : "#dc2626"} />
+          <SizeBadges label="Balance" qty_31={letter.remaining_31} qty_36={letter.remaining_36} qty_40={letter.remaining_40} qty_45={letter.remaining_45} qty_meter={letter.remaining_meter} colour={remaining === 0 ? "#16a34a" : "#dc2626"} />
           {letter.notes && <div style={{ marginTop: "4px", fontStyle: "italic" }}>{letter.notes}</div>}
         </div>
       )}
@@ -171,8 +172,8 @@ function ContractorRow({ group, expandedLetters, onToggle, onLetterToggle }: {
   onToggle: () => void;
   onLetterToggle: (id: string) => void;
 }) {
-  const remaining = totalPoles(group.total_remaining_31, group.total_remaining_36, group.total_remaining_45, group.total_remaining_meter);
-  const authorized = totalPoles(group.total_authorized_31, group.total_authorized_36, group.total_authorized_45, group.total_authorized_meter);
+  const remaining = totalPoles(group.total_remaining_31, group.total_remaining_36, group.total_remaining_40, group.total_remaining_45, group.total_remaining_meter);
+  const authorized = totalPoles(group.total_authorized_31, group.total_authorized_36, group.total_authorized_40, group.total_authorized_45, group.total_authorized_meter);
   const isOpen = expandedLetters.has(`c-${group.contractor_id}`);
 
   return (
@@ -223,9 +224,9 @@ function PORow({ item, expandedKeys, onToggle }: {
   const { po, contractors } = item;
   const isClosed = po.status === "Closed";
   const isExpanded = expandedKeys.has(po.id);
-  const inStock = totalPoles(po.in_stock_31, po.in_stock_36, po.in_stock_45, po.in_stock_meter);
-  const produced = totalPoles(po.produced_31, po.produced_36, po.produced_45, po.produced_meter);
-  const dispatched = totalPoles(po.dispatched_31, po.dispatched_36, po.dispatched_45, po.dispatched_meter);
+  const inStock = totalPoles(po.in_stock_31, po.in_stock_36, po.in_stock_40, po.in_stock_45, po.in_stock_meter);
+  const produced = totalPoles(po.produced_31, po.produced_36, po.produced_40, po.produced_45, po.produced_meter);
+  const dispatched = totalPoles(po.dispatched_31, po.dispatched_36, po.dispatched_40, po.dispatched_45, po.dispatched_meter);
 
   return (
     <div style={{ marginBottom: "6px", opacity: isClosed ? 0.55 : 1 }}>
@@ -262,7 +263,7 @@ function PORow({ item, expandedKeys, onToggle }: {
             )}
           </div>
           <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-            {!po.is_system_unallocated && `Ordered: ${totalPoles(po.ordered_31, po.ordered_36, po.ordered_45, po.ordered_meter).toLocaleString()} · `}
+            {!po.is_system_unallocated && `Ordered: ${totalPoles(po.ordered_31, po.ordered_36, po.ordered_40, po.ordered_45, po.ordered_meter).toLocaleString()} · `}
             Produced: {produced.toLocaleString()} · Dispatched: {dispatched.toLocaleString()} · In stock: <strong style={{ color: inStock > 0 ? COLOURS.NAVY : "#16a34a" }}>{inStock.toLocaleString()}</strong>
             {po.estimated_completion_date && (
               <span style={{ marginLeft: "10px", padding: "1px 8px", borderRadius: "10px", backgroundColor: "#eff6ff", color: "#2563eb", fontWeight: 700, fontSize: "11px" }}>
@@ -277,6 +278,7 @@ function PORow({ item, expandedKeys, onToggle }: {
               <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>In stock by size:</span>
               {po.in_stock_31 > 0 && <span>31 ft: <strong>{po.in_stock_31.toLocaleString()}</strong></span>}
               {po.in_stock_36 > 0 && <span>36 ft: <strong>{po.in_stock_36.toLocaleString()}</strong></span>}
+              {po.in_stock_40 > 0 && <span>40 ft: <strong>{po.in_stock_40.toLocaleString()}</strong></span>}
               {po.in_stock_45 > 0 && <span>45 ft: <strong>{po.in_stock_45.toLocaleString()}</strong></span>}
               {po.in_stock_meter > 0 && <span>Mtr: <strong>{po.in_stock_meter.toLocaleString()}</strong></span>}
             </div>

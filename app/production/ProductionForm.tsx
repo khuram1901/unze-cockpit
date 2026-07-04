@@ -31,8 +31,8 @@ type LetterLookup = {
   po_number: string;
   customer_name: string;
   contractor_name: string;
-  qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
-  remaining_31: number; remaining_36: number; remaining_45: number; remaining_meter: number;
+  qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number;
+  remaining_31: number; remaining_36: number; remaining_40: number; remaining_45: number; remaining_meter: number;
 };
 
 const REASONS = [
@@ -768,6 +768,7 @@ export default function ProductionForm() {
                   {[
                     { size: "31ft", authorized: letterLookup.qty_31, remaining: letterLookup.remaining_31 },
                     { size: "36ft", authorized: letterLookup.qty_36, remaining: letterLookup.remaining_36 },
+                    { size: "40ft", authorized: letterLookup.qty_40 || 0, remaining: letterLookup.remaining_40 || 0 },
                     { size: "45ft", authorized: letterLookup.qty_45, remaining: letterLookup.remaining_45 },
                     { size: "Mtr", authorized: letterLookup.qty_meter, remaining: letterLookup.remaining_meter },
                   ].filter((s) => s.authorized > 0).map((s) => (

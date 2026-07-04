@@ -9,7 +9,7 @@ import DateInput from "../lib/DateInput";
 
 type Plant = { id: string; name: string; type: string };
 type PO = { id: string; customer_name: string; po_number: string; po_label: string; is_system_unallocated: boolean };
-type AllocRow = { po_id: string; qty_31: string; qty_36: string; qty_45: string; qty_meter: string };
+type AllocRow = { po_id: string; qty_31: string; qty_36: string; qty_40: string; qty_45: string; qty_meter: string };
 
 const { NAVY, SLATE, BORDER } = COLOURS;
 
@@ -90,6 +90,7 @@ export default function OpeningBalancesForm() {
           po_id: po.id,
           qty_31:    ex ? String(ex.qty_31)    : "",
           qty_36:    ex ? String(ex.qty_36)    : "",
+          qty_40:    ex ? String((ex as unknown as Record<string,number>).qty_40 || "") : "",
           qty_45:    ex ? String(ex.qty_45)    : "",
           qty_meter: ex ? String(ex.qty_meter) : "",
         };
@@ -164,6 +165,7 @@ export default function OpeningBalancesForm() {
       as_of_date: asOfDate,
       qty_31:    Number(r.qty_31)    || 0,
       qty_36:    Number(r.qty_36)    || 0,
+      qty_40:    Number(r.qty_40)    || 0,
       qty_45:    Number(r.qty_45)    || 0,
       qty_meter: Number(r.qty_meter) || 0,
       set_by:    userEmail,
@@ -197,7 +199,7 @@ export default function OpeningBalancesForm() {
   // Totals for the allocation validation banner
   const totalGood = (Number(g31) || 0) + (Number(g36) || 0) + (Number(g45) || 0);
   const totalAllocated = allocRows.reduce(
-    (s, r) => s + (Number(r.qty_31) || 0) + (Number(r.qty_36) || 0) + (Number(r.qty_45) || 0) + (Number(r.qty_meter) || 0), 0
+    (s, r) => s + (Number(r.qty_31) || 0) + (Number(r.qty_36) || 0) + (Number(r.qty_40) || 0) + (Number(r.qty_45) || 0) + (Number(r.qty_meter) || 0), 0
   );
   const allocDiff = totalGood - totalAllocated;
 
@@ -311,9 +313,9 @@ export default function OpeningBalancesForm() {
                     )}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
-                    {(["qty_31", "qty_36", "qty_45", "qty_meter"] as const).map((field) => (
+                    {(["qty_31", "qty_36", "qty_40", "qty_45", "qty_meter"] as const).map((field) => (
                       <label key={field} style={{ ...labelStyle, fontSize: "13px" }}>
-                        {field === "qty_31" ? "31 ft" : field === "qty_36" ? "36 ft" : field === "qty_45" ? "45 ft" : "Meter"}
+                        {field === "qty_31" ? "31 ft" : field === "qty_36" ? "36 ft" : field === "qty_40" ? "40 ft" : field === "qty_45" ? "45 ft" : "Meter"}
                         <input
                           type="number" min="0" placeholder="0"
                           value={row[field]}

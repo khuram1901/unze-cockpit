@@ -13,23 +13,23 @@ type Plant = { id: string; name: string; type: string };
 type PO = {
   id: string; plant_id: string; plant_name: string;
   customer_name: string; po_number: string; po_label: string;
-  ordered_31: number; ordered_36: number; ordered_45: number; ordered_meter: number;
+  ordered_31: number; ordered_36: number; ordered_40: number; ordered_45: number; ordered_meter: number;
   variance_pct: number; status: string; is_system_unallocated: boolean;
   start_date: string | null; notes: string | null;
-  opening_produced_31: number; opening_produced_36: number; opening_produced_45: number; opening_produced_meter: number;
+  opening_produced_31: number; opening_produced_36: number; opening_produced_40: number; opening_produced_45: number; opening_produced_meter: number;
 };
 type Contractor = { id: string; name: string; cnic_or_id: string | null; contact_phone: string | null; contact_address: string | null };
 type AuthorityLetter = {
   id: string; po_id: string; contractor_id: string; letter_number: string;
   issue_date: string; issued_by: string; expiry_date: string | null;
-  qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
-  opening_dispatched_31: number; opening_dispatched_36: number; opening_dispatched_45: number; opening_dispatched_meter: number;
+  qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number;
+  opening_dispatched_31: number; opening_dispatched_36: number; opening_dispatched_40: number; opening_dispatched_45: number; opening_dispatched_meter: number;
   notes: string | null;
   contractors?: { name: string } | null;
 };
 type DispatchRecord = {
   id: string; authority_letter_id: string; dispatch_date: string;
-  qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
+  qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number;
   released_by: string; vehicle_number: string | null; notes: string | null;
 };
 type ContractorPerf = {
@@ -53,8 +53,8 @@ async function authedFetch(url: string, opts: RequestInit = {}) {
   return fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}`, "Content-Type": "application/json" } });
 }
 
-const emptyPO = { customer_name: "", po_number: "", po_label: "", ordered_31: "", ordered_36: "", ordered_45: "", ordered_meter: "", start_date: "", notes: "", opening_produced_31: "0", opening_produced_36: "0", opening_produced_45: "0", opening_produced_meter: "0" };
-const emptyLetter = { contractor_id: "", letter_number: "", issue_date: "", issued_by: "", expiry_date: "", qty_31: "", qty_36: "", qty_45: "", qty_meter: "", opening_dispatched_31: "0", opening_dispatched_36: "0", opening_dispatched_45: "0", opening_dispatched_meter: "0", notes: "" };
+const emptyPO = { customer_name: "", po_number: "", po_label: "", ordered_31: "", ordered_36: "", ordered_40: "", ordered_45: "", ordered_meter: "", start_date: "", notes: "", opening_produced_31: "0", opening_produced_36: "0", opening_produced_40: "0", opening_produced_45: "0", opening_produced_meter: "0" };
+const emptyLetter = { contractor_id: "", letter_number: "", issue_date: "", issued_by: "", expiry_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", opening_dispatched_31: "0", opening_dispatched_36: "0", opening_dispatched_40: "0", opening_dispatched_45: "0", opening_dispatched_meter: "0", notes: "" };
 const emptyContractor = { name: "", cnic_or_id: "", contact_phone: "", contact_address: "" };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -122,7 +122,7 @@ export default function StockManagePage() {
   const [dispatchesLoading, setDispatchesLoading] = useState(false);
   // Edit dispatch
   const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
-  const [editDispatchForm, setEditDispatchForm] = useState({ dispatch_date: "", qty_31: "", qty_36: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
+  const [editDispatchForm, setEditDispatchForm] = useState({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
   const [savingEditDispatch, setSavingEditDispatch] = useState(false);
 
   // Contractor performance
@@ -177,10 +177,12 @@ export default function StockManagePage() {
         plant_id: selectedPlant, plant_name: plant?.name || "",
         customer_name: poForm.customer_name, po_number: poForm.po_number, po_label: poForm.po_label,
         ordered_31: Number(poForm.ordered_31) || 0, ordered_36: Number(poForm.ordered_36) || 0,
-        ordered_45: Number(poForm.ordered_45) || 0, ordered_meter: Number(poForm.ordered_meter) || 0,
+        ordered_40: Number(poForm.ordered_40) || 0, ordered_45: Number(poForm.ordered_45) || 0,
+        ordered_meter: Number(poForm.ordered_meter) || 0,
         start_date: poForm.start_date || null, notes: poForm.notes || null,
         opening_produced_31: Number(poForm.opening_produced_31) || 0,
         opening_produced_36: Number(poForm.opening_produced_36) || 0,
+        opening_produced_40: Number(poForm.opening_produced_40) || 0,
         opening_produced_45: Number(poForm.opening_produced_45) || 0,
         opening_produced_meter: Number(poForm.opening_produced_meter) || 0,
       }),
@@ -216,9 +218,11 @@ export default function StockManagePage() {
         letter_number: letterForm.letter_number, issue_date: letterForm.issue_date, issued_by: letterForm.issued_by,
         expiry_date: letterForm.expiry_date || null,
         qty_31: Number(letterForm.qty_31) || 0, qty_36: Number(letterForm.qty_36) || 0,
-        qty_45: Number(letterForm.qty_45) || 0, qty_meter: Number(letterForm.qty_meter) || 0,
+        qty_40: Number(letterForm.qty_40) || 0, qty_45: Number(letterForm.qty_45) || 0,
+        qty_meter: Number(letterForm.qty_meter) || 0,
         opening_dispatched_31: Number(letterForm.opening_dispatched_31) || 0,
         opening_dispatched_36: Number(letterForm.opening_dispatched_36) || 0,
+        opening_dispatched_40: Number(letterForm.opening_dispatched_40) || 0,
         opening_dispatched_45: Number(letterForm.opening_dispatched_45) || 0,
         opening_dispatched_meter: Number(letterForm.opening_dispatched_meter) || 0,
         notes: letterForm.notes || null,
@@ -263,10 +267,12 @@ export default function StockManagePage() {
       expiry_date: l.expiry_date || "",
       qty_31: String(l.qty_31 || ""),
       qty_36: String(l.qty_36 || ""),
+      qty_40: String(l.qty_40 || ""),
       qty_45: String(l.qty_45 || ""),
       qty_meter: String(l.qty_meter || ""),
       opening_dispatched_31: String(l.opening_dispatched_31 || "0"),
       opening_dispatched_36: String(l.opening_dispatched_36 || "0"),
+      opening_dispatched_40: String(l.opening_dispatched_40 || "0"),
       opening_dispatched_45: String(l.opening_dispatched_45 || "0"),
       opening_dispatched_meter: String(l.opening_dispatched_meter || "0"),
       notes: l.notes || "",
@@ -287,6 +293,7 @@ export default function StockManagePage() {
         expiry_date: editLetterForm.expiry_date || null,
         qty_31: Number(editLetterForm.qty_31) || 0,
         qty_36: Number(editLetterForm.qty_36) || 0,
+        qty_40: Number(editLetterForm.qty_40) || 0,
         qty_45: Number(editLetterForm.qty_45) || 0,
         qty_meter: Number(editLetterForm.qty_meter) || 0,
         notes: editLetterForm.notes || null,
@@ -340,6 +347,7 @@ export default function StockManagePage() {
       dispatch_date: d.dispatch_date,
       qty_31: String(d.qty_31 || ""),
       qty_36: String(d.qty_36 || ""),
+      qty_40: String(d.qty_40 || ""),
       qty_45: String(d.qty_45 || ""),
       qty_meter: String(d.qty_meter || ""),
       released_by: d.released_by,
@@ -358,6 +366,7 @@ export default function StockManagePage() {
         dispatch_date: editDispatchForm.dispatch_date,
         qty_31: Number(editDispatchForm.qty_31) || 0,
         qty_36: Number(editDispatchForm.qty_36) || 0,
+        qty_40: Number(editDispatchForm.qty_40) || 0,
         qty_45: Number(editDispatchForm.qty_45) || 0,
         qty_meter: Number(editDispatchForm.qty_meter) || 0,
         released_by: editDispatchForm.released_by,
@@ -419,6 +428,7 @@ export default function StockManagePage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px,1fr))", gap: "10px" }}>
               <Field label="31ft"><NumInput value={poForm.ordered_31} onChange={(v) => setPOForm({ ...poForm, ordered_31: v })} /></Field>
               <Field label="36ft"><NumInput value={poForm.ordered_36} onChange={(v) => setPOForm({ ...poForm, ordered_36: v })} /></Field>
+              <Field label="40ft"><NumInput value={poForm.ordered_40} onChange={(v) => setPOForm({ ...poForm, ordered_40: v })} /></Field>
               <Field label="45ft"><NumInput value={poForm.ordered_45} onChange={(v) => setPOForm({ ...poForm, ordered_45: v })} /></Field>
               <Field label="Meter"><NumInput value={poForm.ordered_meter} onChange={(v) => setPOForm({ ...poForm, ordered_meter: v })} /></Field>
             </div>
@@ -426,6 +436,7 @@ export default function StockManagePage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px,1fr))", gap: "10px" }}>
               <Field label="31ft"><NumInput value={poForm.opening_produced_31} onChange={(v) => setPOForm({ ...poForm, opening_produced_31: v })} /></Field>
               <Field label="36ft"><NumInput value={poForm.opening_produced_36} onChange={(v) => setPOForm({ ...poForm, opening_produced_36: v })} /></Field>
+              <Field label="40ft"><NumInput value={poForm.opening_produced_40} onChange={(v) => setPOForm({ ...poForm, opening_produced_40: v })} /></Field>
               <Field label="45ft"><NumInput value={poForm.opening_produced_45} onChange={(v) => setPOForm({ ...poForm, opening_produced_45: v })} /></Field>
               <Field label="Meter"><NumInput value={poForm.opening_produced_meter} onChange={(v) => setPOForm({ ...poForm, opening_produced_meter: v })} /></Field>
             </div>
@@ -455,7 +466,7 @@ export default function StockManagePage() {
                     </div>
                     <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px" }}>
                       {po.start_date && `From ${formatDateUK(po.start_date)} · `}
-                      Ordered: {[po.ordered_31 && `${po.ordered_31} × 31ft`, po.ordered_36 && `${po.ordered_36} × 36ft`, po.ordered_45 && `${po.ordered_45} × 45ft`, po.ordered_meter && `${po.ordered_meter} × Mtr`].filter(Boolean).join(", ")}
+                      Ordered: {[po.ordered_31 && `${po.ordered_31} × 31ft`, po.ordered_36 && `${po.ordered_36} × 36ft`, po.ordered_40 && `${po.ordered_40} × 40ft`, po.ordered_45 && `${po.ordered_45} × 45ft`, po.ordered_meter && `${po.ordered_meter} × Mtr`].filter(Boolean).join(", ")}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -515,6 +526,7 @@ export default function StockManagePage() {
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: "8px" }}>
                             <Field label="31ft"><NumInput value={editLetterForm.qty_31} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_31: v })} /></Field>
                             <Field label="36ft"><NumInput value={editLetterForm.qty_36} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_36: v })} /></Field>
+                            <Field label="40ft"><NumInput value={editLetterForm.qty_40} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_40: v })} /></Field>
                             <Field label="45ft"><NumInput value={editLetterForm.qty_45} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_45: v })} /></Field>
                             <Field label="Meter"><NumInput value={editLetterForm.qty_meter} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_meter: v })} /></Field>
                           </div>
@@ -534,7 +546,7 @@ export default function StockManagePage() {
                                 {l.expiry_date && ` · Expires ${formatDateUK(l.expiry_date)}`}
                               </div>
                               <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                                Auth: {[l.qty_31 && `${l.qty_31}×31`, l.qty_36 && `${l.qty_36}×36`, l.qty_45 && `${l.qty_45}×45`, l.qty_meter && `${l.qty_meter}×Mtr`].filter(Boolean).join(", ") || "—"}
+                                Auth: {[l.qty_31 && `${l.qty_31}×31`, l.qty_36 && `${l.qty_36}×36`, l.qty_40 && `${l.qty_40}×40`, l.qty_45 && `${l.qty_45}×45`, l.qty_meter && `${l.qty_meter}×Mtr`].filter(Boolean).join(", ") || "—"}
                               </div>
                             </div>
                             <div style={{ display: "flex", gap: "6px" }}>
@@ -573,6 +585,7 @@ export default function StockManagePage() {
                                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: "8px" }}>
                                         <Field label="31ft"><NumInput value={editDispatchForm.qty_31} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_31: v })} /></Field>
                                         <Field label="36ft"><NumInput value={editDispatchForm.qty_36} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_36: v })} /></Field>
+                                        <Field label="40ft"><NumInput value={editDispatchForm.qty_40} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_40: v })} /></Field>
                                         <Field label="45ft"><NumInput value={editDispatchForm.qty_45} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_45: v })} /></Field>
                                         <Field label="Meter"><NumInput value={editDispatchForm.qty_meter} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_meter: v })} /></Field>
                                       </div>
@@ -587,7 +600,7 @@ export default function StockManagePage() {
                                       <div>
                                         <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>{formatDateUK(d.dispatch_date)}</span>
                                         <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "8px" }}>
-                                          {[d.qty_31 && `${d.qty_31}×31`, d.qty_36 && `${d.qty_36}×36`, d.qty_45 && `${d.qty_45}×45`, d.qty_meter && `${d.qty_meter}×Mtr`].filter(Boolean).join(", ")} · {d.released_by}
+                                          {[d.qty_31 && `${d.qty_31}×31`, d.qty_36 && `${d.qty_36}×36`, d.qty_40 && `${d.qty_40}×40`, d.qty_45 && `${d.qty_45}×45`, d.qty_meter && `${d.qty_meter}×Mtr`].filter(Boolean).join(", ")} · {d.released_by}
                                           {d.vehicle_number && ` · ${d.vehicle_number}`}
                                         </span>
                                       </div>
@@ -633,6 +646,7 @@ export default function StockManagePage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px,1fr))", gap: "10px" }}>
               <Field label="31ft"><NumInput value={letterForm.qty_31} onChange={(v) => setLetterForm({ ...letterForm, qty_31: v })} /></Field>
               <Field label="36ft"><NumInput value={letterForm.qty_36} onChange={(v) => setLetterForm({ ...letterForm, qty_36: v })} /></Field>
+              <Field label="40ft"><NumInput value={letterForm.qty_40} onChange={(v) => setLetterForm({ ...letterForm, qty_40: v })} /></Field>
               <Field label="45ft"><NumInput value={letterForm.qty_45} onChange={(v) => setLetterForm({ ...letterForm, qty_45: v })} /></Field>
               <Field label="Meter"><NumInput value={letterForm.qty_meter} onChange={(v) => setLetterForm({ ...letterForm, qty_meter: v })} /></Field>
             </div>
@@ -640,6 +654,7 @@ export default function StockManagePage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px,1fr))", gap: "10px" }}>
               <Field label="31ft"><NumInput value={letterForm.opening_dispatched_31} onChange={(v) => setLetterForm({ ...letterForm, opening_dispatched_31: v })} /></Field>
               <Field label="36ft"><NumInput value={letterForm.opening_dispatched_36} onChange={(v) => setLetterForm({ ...letterForm, opening_dispatched_36: v })} /></Field>
+              <Field label="40ft"><NumInput value={letterForm.opening_dispatched_40} onChange={(v) => setLetterForm({ ...letterForm, opening_dispatched_40: v })} /></Field>
               <Field label="45ft"><NumInput value={letterForm.opening_dispatched_45} onChange={(v) => setLetterForm({ ...letterForm, opening_dispatched_45: v })} /></Field>
               <Field label="Meter"><NumInput value={letterForm.opening_dispatched_meter} onChange={(v) => setLetterForm({ ...letterForm, opening_dispatched_meter: v })} /></Field>
             </div>
