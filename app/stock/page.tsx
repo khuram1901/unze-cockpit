@@ -271,6 +271,16 @@ function PORow({ item, expandedKeys, onToggle }: {
               </span>
             )}
           </div>
+          {/* Size breakdown for in-stock — only shown when there's stock */}
+          {inStock > 0 && (
+            <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>In stock by size:</span>
+              {po.in_stock_31 > 0 && <span>31 ft: <strong>{po.in_stock_31.toLocaleString()}</strong></span>}
+              {po.in_stock_36 > 0 && <span>36 ft: <strong>{po.in_stock_36.toLocaleString()}</strong></span>}
+              {po.in_stock_45 > 0 && <span>45 ft: <strong>{po.in_stock_45.toLocaleString()}</strong></span>}
+              {po.in_stock_meter > 0 && <span>Mtr: <strong>{po.in_stock_meter.toLocaleString()}</strong></span>}
+            </div>
+          )}
         </div>
       </div>
 

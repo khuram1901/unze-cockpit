@@ -26,7 +26,23 @@ export async function GET(request: NextRequest) {
   const poIds = (pos || []).map((p) => p.id);
   if (poIds.length === 0) return Response.json({ summary: [] });
 
-  // 2a. Fetch production allocations totals per PO
+  // 2a. Fetch opening stock allocations per PO (pre-go-live stock split by PO)
+  const { data: openingAllocs } = await supabase
+    .from("opening_stock_allocations")
+    .select("po_id, qty_31, qty_36, qty_45, qty_meter")
+    .in("po_id", poIds);
+
+  const openingByPO: Record<string, { qty_31: number; qty_36: number; qty_45: number; qty_meter: number }> = {};
+  for (const r of openingAllocs || []) {
+    openingByPO[r.po_id] = {
+      qty_31:    Number(r.qty_31)    || 0,
+      qty_36:    Number(r.qty_36)    || 0,
+      qty_45:    Number(r.qty_45)    || 0,
+      qty_meter: Number(r.qty_meter) || 0,
+    };
+  }
+
+  // 2b. Fetch production allocations totals per PO
   const { data: prodAllocs } = await supabase
     .from("production_allocations")
     .select("po_id, qty_31, qty_36, qty_45, qty_meter")
@@ -160,10 +176,13 @@ export async function GET(request: NextRequest) {
     }
 
     const prod = prodByPO[po.id] || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
-    const produced_31 = prod.qty_31 + (po.opening_produced_31 || 0);
-    const produced_36 = prod.qty_36 + (po.opening_produced_36 || 0);
-    const produced_45 = prod.qty_45 + (po.opening_produced_45 || 0);
-    const produced_meter = prod.qty_meter + (po.opening_produced_meter || 0);
+    const opening = openingByPO[po.id] || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
+    // opening_stock_allocations (PO-level) takes precedence over the legacy opening_produced_* backfill fields
+    const hasAllocation = opening.qty_31 > 0 || opening.qty_36 > 0 || opening.qty_45 > 0 || opening.qty_meter > 0;
+    const produced_31 = prod.qty_31 + (hasAllocation ? opening.qty_31 : (po.opening_produced_31 || 0));
+    const produced_36 = prod.qty_36 + (hasAllocation ? opening.qty_36 : (po.opening_produced_36 || 0));
+    const produced_45 = prod.qty_45 + (hasAllocation ? opening.qty_45 : (po.opening_produced_45 || 0));
+    const produced_meter = prod.qty_meter + (hasAllocation ? opening.qty_meter : (po.opening_produced_meter || 0));
 
     const totalDispatched_31 = poLetters.reduce((s, l) => s + l.dispatched_31, 0);
     const totalDispatched_36 = poLetters.reduce((s, l) => s + l.dispatched_36, 0);

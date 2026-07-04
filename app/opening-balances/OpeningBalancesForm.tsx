@@ -8,6 +8,8 @@ import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permiss
 import DateInput from "../lib/DateInput";
 
 type Plant = { id: string; name: string; type: string };
+type PO = { id: string; customer_name: string; po_number: string; po_label: string; is_system_unallocated: boolean };
+type AllocRow = { po_id: string; qty_31: string; qty_36: string; qty_45: string; qty_meter: string };
 
 const { NAVY, SLATE, BORDER } = COLOURS;
 
@@ -27,10 +29,18 @@ export default function OpeningBalancesForm() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
+  // PO allocation state
+  const [pos, setPos] = useState<PO[]>([]);
+  const [allocRows, setAllocRows] = useState<AllocRow[]>([]);
+  const [allocSaving, setAllocSaving] = useState(false);
+  const [allocMessage, setAllocMessage] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+
   useEffect(() => {
     async function load() {
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user) {
+        setUserEmail(userData.user.email || "");
         const { data: me } = await supabase
           .from("members")
           .select("id, role, department, company")
@@ -53,6 +63,40 @@ export default function OpeningBalancesForm() {
     }
     load();
   }, []);
+
+  // Load POs + existing allocations whenever plant changes
+  useEffect(() => {
+    if (!plantId) { setPos([]); setAllocRows([]); return; }
+    async function loadPOs() {
+      const [{ data: poData }, { data: existing }] = await Promise.all([
+        supabase
+          .from("purchase_orders")
+          .select("id, customer_name, po_number, po_label, is_system_unallocated")
+          .eq("plant_id", plantId)
+          .eq("status", "Active")
+          .order("is_system_unallocated", { ascending: true })
+          .order("customer_name"),
+        supabase
+          .from("opening_stock_allocations")
+          .select("po_id, qty_31, qty_36, qty_45, qty_meter")
+          .eq("plant_id", plantId),
+      ]);
+      const poList = (poData || []) as PO[];
+      setPos(poList);
+      const existingMap = new Map((existing || []).map((r: { po_id: string; qty_31: number; qty_36: number; qty_45: number; qty_meter: number }) => [r.po_id, r]));
+      setAllocRows(poList.map((po) => {
+        const ex = existingMap.get(po.id);
+        return {
+          po_id: po.id,
+          qty_31:    ex ? String(ex.qty_31)    : "",
+          qty_36:    ex ? String(ex.qty_36)    : "",
+          qty_45:    ex ? String(ex.qty_45)    : "",
+          qty_meter: ex ? String(ex.qty_meter) : "",
+        };
+      }));
+    }
+    loadPOs();
+  }, [plantId]);
 
   const selectedPlant = plants.find((p) => p.id === plantId);
 
@@ -92,9 +136,52 @@ export default function OpeningBalancesForm() {
     }
 
     logAction("Created", "opening_balances", `Opening balances for ${selectedPlant?.name}`);
-    setMessage("✅ Opening balances saved for " + selectedPlant?.name);
+    setMessage("Opening balances saved for " + selectedPlant?.name);
     setG31(""); setG36(""); setG45("");
     setB31(""); setB36(""); setB45("");
+  }
+
+  function updateAlloc(poId: string, field: keyof Omit<AllocRow, "po_id">, value: string) {
+    setAllocRows((prev) => prev.map((r) => r.po_id === poId ? { ...r, [field]: value } : r));
+  }
+
+  async function handleAllocSave() {
+    setAllocSaving(true);
+    setAllocMessage("");
+
+    const rows = allocRows
+      .filter((r) => Number(r.qty_31) > 0 || Number(r.qty_36) > 0 || Number(r.qty_45) > 0 || Number(r.qty_meter) > 0);
+
+    if (rows.length === 0) {
+      setAllocMessage("No quantities entered — nothing saved.");
+      setAllocSaving(false);
+      return;
+    }
+
+    const upsertData = rows.map((r) => ({
+      plant_id:  plantId,
+      po_id:     r.po_id,
+      as_of_date: asOfDate,
+      qty_31:    Number(r.qty_31)    || 0,
+      qty_36:    Number(r.qty_36)    || 0,
+      qty_45:    Number(r.qty_45)    || 0,
+      qty_meter: Number(r.qty_meter) || 0,
+      set_by:    userEmail,
+    }));
+
+    const { error } = await supabase
+      .from("opening_stock_allocations")
+      .upsert(upsertData, { onConflict: "plant_id,po_id" });
+
+    setAllocSaving(false);
+
+    if (error) {
+      setAllocMessage("Error: " + error.message);
+      return;
+    }
+
+    logAction("Created", "opening_stock_allocations", `PO stock allocations for ${selectedPlant?.name}`);
+    setAllocMessage("PO stock allocations saved for " + selectedPlant?.name);
   }
 
   if (!canEdit) {
@@ -105,31 +192,23 @@ export default function OpeningBalancesForm() {
     );
   }
 
-  const asOfDateUK = asOfDate
-    ? asOfDate.split("-").reverse().join("/")
-    : "";
+  const asOfDateUK = asOfDate ? asOfDate.split("-").reverse().join("/") : "";
+
+  // Totals for the allocation validation banner
+  const totalGood = (Number(g31) || 0) + (Number(g36) || 0) + (Number(g45) || 0);
+  const totalAllocated = allocRows.reduce(
+    (s, r) => s + (Number(r.qty_31) || 0) + (Number(r.qty_36) || 0) + (Number(r.qty_45) || 0) + (Number(r.qty_meter) || 0), 0
+  );
+  const allocDiff = totalGood - totalAllocated;
 
   return (
-    <div style={{ maxWidth: "480px" }}>
+    <div style={{ maxWidth: "600px" }}>
+      {/* ── Section 1: Plant-level opening stock ── */}
       <form onSubmit={handleSubmit}>
-        {/* Plant + date */}
-        <div
-          style={{
-            border: `1px solid ${BORDER}`,
-            borderRadius: "8px",
-            padding: "16px",
-            backgroundColor: "var(--bg-card, #ffffff)",
-            marginBottom: "12px",
-          }}
-        >
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "12px" }}>
           <label style={labelStyle}>
             Plant
-            <select
-              style={inputStyle}
-              value={plantId}
-              onChange={(e) => setPlantId(e.target.value)}
-              required
-            >
+            <select style={inputStyle} value={plantId} onChange={(e) => setPlantId(e.target.value)} required>
               <option value="">— Select plant —</option>
               {plants.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
@@ -139,73 +218,28 @@ export default function OpeningBalancesForm() {
 
           <label style={labelStyle}>
             As of date
-            <DateInput
-              style={inputStyle}
-              value={asOfDate}
-              onChange={(e) => setAsOfDate(e.target.value)}
-              required
-            />
-            {asOfDate && (
-              <span style={{ fontSize: "15px", color: SLATE }}>{asOfDateUK}</span>
-            )}
+            <DateInput style={inputStyle} value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} required />
+            {asOfDate && <span style={{ fontSize: "15px", color: SLATE }}>{asOfDateUK}</span>}
           </label>
         </div>
 
         {plantId && (
           <>
-            {/* Good stock */}
-            <div
-              style={{
-                border: `1px solid ${BORDER}`,
-                borderTop: `3px solid #16a34a`,
-                borderRadius: "8px",
-                padding: "16px",
-                backgroundColor: "var(--bg-card, #ffffff)",
-                marginBottom: "12px",
-              }}
-            >
+            <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid #16a34a`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "12px" }}>
               <SectionTitle title="Good pole opening stock" />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "10px" }}>
-                <label style={labelStyle}>
-                  31 ft
-                  <input type="number" min="0" style={inputStyle} value={g31} onChange={(e) => setG31(e.target.value)} placeholder="0" />
-                </label>
-                <label style={labelStyle}>
-                  36 ft
-                  <input type="number" min="0" style={inputStyle} value={g36} onChange={(e) => setG36(e.target.value)} placeholder="0" />
-                </label>
-                <label style={labelStyle}>
-                  45 ft
-                  <input type="number" min="0" style={inputStyle} value={g45} onChange={(e) => setG45(e.target.value)} placeholder="0" />
-                </label>
+                <label style={labelStyle}>31 ft<input type="number" min="0" style={inputStyle} value={g31} onChange={(e) => setG31(e.target.value)} placeholder="0" /></label>
+                <label style={labelStyle}>36 ft<input type="number" min="0" style={inputStyle} value={g36} onChange={(e) => setG36(e.target.value)} placeholder="0" /></label>
+                <label style={labelStyle}>45 ft<input type="number" min="0" style={inputStyle} value={g45} onChange={(e) => setG45(e.target.value)} placeholder="0" /></label>
               </div>
             </div>
 
-            {/* Broken stock */}
-            <div
-              style={{
-                border: `1px solid ${BORDER}`,
-                borderTop: `3px solid #d97706`,
-                borderRadius: "8px",
-                padding: "16px",
-                backgroundColor: "var(--bg-card, #ffffff)",
-                marginBottom: "16px",
-              }}
-            >
+            <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid #d97706`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "16px" }}>
               <SectionTitle title="Broken pole opening stock" />
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "10px" }}>
-                <label style={labelStyle}>
-                  31 ft
-                  <input type="number" min="0" style={inputStyle} value={b31} onChange={(e) => setB31(e.target.value)} placeholder="0" />
-                </label>
-                <label style={labelStyle}>
-                  36 ft
-                  <input type="number" min="0" style={inputStyle} value={b36} onChange={(e) => setB36(e.target.value)} placeholder="0" />
-                </label>
-                <label style={labelStyle}>
-                  45 ft
-                  <input type="number" min="0" style={inputStyle} value={b45} onChange={(e) => setB45(e.target.value)} placeholder="0" />
-                </label>
+                <label style={labelStyle}>31 ft<input type="number" min="0" style={inputStyle} value={b31} onChange={(e) => setB31(e.target.value)} placeholder="0" /></label>
+                <label style={labelStyle}>36 ft<input type="number" min="0" style={inputStyle} value={b36} onChange={(e) => setB36(e.target.value)} placeholder="0" /></label>
+                <label style={labelStyle}>45 ft<input type="number" min="0" style={inputStyle} value={b45} onChange={(e) => setB45(e.target.value)} placeholder="0" /></label>
               </div>
             </div>
           </>
@@ -214,34 +248,102 @@ export default function OpeningBalancesForm() {
         <button
           type="submit"
           disabled={saving || !plantId}
-          style={{
-            backgroundColor: NAVY,
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            padding: "9px 20px",
-            fontSize: "17px",
-            fontWeight: 700,
-            cursor: saving || !plantId ? "not-allowed" : "pointer",
-            opacity: !plantId ? 0.5 : 1,
-          }}
+          style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "6px", padding: "9px 20px", fontSize: "17px", fontWeight: 700, cursor: saving || !plantId ? "not-allowed" : "pointer", opacity: !plantId ? 0.5 : 1 }}
         >
           {saving ? "Saving…" : "Save Opening Balances"}
         </button>
 
         {message && (
-          <p
-            style={{
-              marginTop: "12px",
-              fontSize: "17px",
-              fontWeight: 600,
-              color: message.startsWith("Error") ? "#dc2626" : "#16a34a",
-            }}
-          >
+          <p style={{ marginTop: "12px", fontSize: "17px", fontWeight: 600, color: message.startsWith("Error") ? "#dc2626" : "#16a34a" }}>
             {message}
           </p>
         )}
       </form>
+
+      {/* ── Section 2: Allocate opening stock to POs ── */}
+      {plantId && pos.length > 0 && (
+        <div style={{ marginTop: "32px" }}>
+          <div style={{ borderBottom: `2px solid ${BORDER}`, marginBottom: "16px", paddingBottom: "8px" }}>
+            <div style={{ fontSize: "18px", fontWeight: 700, color: NAVY }}>Allocate Opening Stock to POs</div>
+            <div style={{ fontSize: "13px", color: SLATE, marginTop: "4px" }}>
+              Split the good-pole opening stock across your active POs so the Stock page shows correct per-PO balances.
+              Enter how many poles of each size belong to each PO.
+            </div>
+          </div>
+
+          {/* Validation banner — only shown once user has entered a plant-level total */}
+          {totalGood > 0 && (
+            <div style={{
+              padding: "10px 14px", borderRadius: "6px", marginBottom: "14px", fontSize: "13px", fontWeight: 600,
+              backgroundColor: allocDiff === 0 ? "#f0fdf4" : allocDiff < 0 ? "#fef2f2" : "#fffbeb",
+              color: allocDiff === 0 ? "#16a34a" : allocDiff < 0 ? "#dc2626" : "#d97706",
+              border: `1px solid ${allocDiff === 0 ? "#bbf7d0" : allocDiff < 0 ? "#fecaca" : "#fde68a"}`,
+            }}>
+              {allocDiff === 0
+                ? `All ${totalGood.toLocaleString()} poles allocated — totals match.`
+                : allocDiff > 0
+                ? `${allocDiff.toLocaleString()} poles not yet allocated (plant total: ${totalGood.toLocaleString()}, allocated: ${totalAllocated.toLocaleString()})`
+                : `Over-allocated by ${Math.abs(allocDiff).toLocaleString()} poles — reduce quantities below.`
+              }
+            </div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {pos.map((po) => {
+              const row = allocRows.find((r) => r.po_id === po.id);
+              if (!row) return null;
+              const poTotal = (Number(row.qty_31) || 0) + (Number(row.qty_36) || 0) + (Number(row.qty_45) || 0) + (Number(row.qty_meter) || 0);
+              return (
+                <div key={po.id} style={{ border: `1px solid ${BORDER}`, borderLeft: `4px solid ${po.is_system_unallocated ? "#f59e0b" : NAVY}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px", flexWrap: "wrap", gap: "4px" }}>
+                    <div>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>
+                        {po.is_system_unallocated ? "Unze Unallocated Stock" : `${po.customer_name} — PO #${po.po_number}`}
+                      </span>
+                      {po.po_label && !po.is_system_unallocated && (
+                        <span style={{ marginLeft: "8px", fontSize: "12px", padding: "1px 7px", borderRadius: "10px", backgroundColor: "#eff6ff", color: "#2563eb", fontWeight: 600 }}>
+                          {po.po_label}
+                        </span>
+                      )}
+                    </div>
+                    {poTotal > 0 && (
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{poTotal.toLocaleString()} poles</span>
+                    )}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+                    {(["qty_31", "qty_36", "qty_45", "qty_meter"] as const).map((field) => (
+                      <label key={field} style={{ ...labelStyle, fontSize: "13px" }}>
+                        {field === "qty_31" ? "31 ft" : field === "qty_36" ? "36 ft" : field === "qty_45" ? "45 ft" : "Meter"}
+                        <input
+                          type="number" min="0" placeholder="0"
+                          value={row[field]}
+                          onChange={(e) => updateAlloc(po.id, field, e.target.value)}
+                          style={{ ...inputStyle, fontSize: "15px" }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ marginTop: "16px", display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
+            <button
+              onClick={handleAllocSave}
+              disabled={allocSaving}
+              style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "6px", padding: "9px 20px", fontSize: "17px", fontWeight: 700, cursor: allocSaving ? "not-allowed" : "pointer", opacity: allocSaving ? 0.7 : 1 }}
+            >
+              {allocSaving ? "Saving…" : "Save PO Allocations"}
+            </button>
+            {allocMessage && (
+              <span style={{ fontSize: "15px", fontWeight: 600, color: allocMessage.startsWith("Error") ? "#dc2626" : "#16a34a" }}>
+                {allocMessage}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -250,7 +352,7 @@ const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: "16px",
   fontWeight: 600,
-  color: NAVY,
+  color: COLOURS.NAVY,
   marginBottom: "0",
 };
 
@@ -259,7 +361,7 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "7px 9px",
   marginTop: "3px",
-  border: `1px solid ${BORDER}`,
+  border: `1px solid ${COLOURS.BORDER}`,
   borderRadius: "6px",
   fontSize: "17px",
   boxSizing: "border-box",
