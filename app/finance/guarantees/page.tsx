@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import AuthWrapper from "../../lib/AuthWrapper";
 import { useRequireCapability } from "../../lib/useRouteGuard";
 import { supabase } from "../../lib/supabase";
@@ -24,9 +24,16 @@ type Guarantee = {
   amount: number; cash_margin_pct: number; cash_margin_amount: number; bank_charges: number;
   customer_name: string; tender_reference: string | null; purpose: string | null;
   status: string; linked_guarantee_id: string | null;
-  performance_bill_date: string | null; release_due_date: string | null;
+  first_bill_receivable_id: string | null;
+  linked_bill_date: string | null; linked_invoice_ref: string | null; linked_bill_amount: number | null;
+  performance_bill_date: string | null; effective_bill_date: string | null; release_due_date: string | null;
   returned_date: string | null; days_to_expiry: number | null;
   chase_urgency: string; notes: string | null; created_by: string | null; created_at: string;
+};
+
+type BillOption = {
+  id: string; utility: string; invoice_ref: string | null;
+  amount: number; date_submitted: string; bill_type: string; status: string;
 };
 
 type Totals = {
@@ -54,6 +61,111 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div style={{ marginBottom: "12px" }}>
       <label style={labelStyle}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ─── Bill Picker ──────────────────────────────────────────────────────────────
+// Searches receivables and lets the user link one as the first bill.
+// Falls back to a manual date entry when no receivable exists in the system.
+
+function BillPicker({ linkedId, linkedDate, linkedRef, onLink, onManualDate, manualDate, showManual, onToggleManual }: {
+  linkedId: string | null;
+  linkedDate: string | null;
+  linkedRef: string | null;
+  onLink: (id: string | null) => void;
+  onManualDate: (d: string) => void;
+  manualDate: string;
+  showManual: boolean;
+  onToggleManual: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<BillOption[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [open, setOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function search(q: string) {
+    setSearching(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`/api/finance/receivables-search?q=${encodeURIComponent(q)}`, {
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+    });
+    const json = await res.json();
+    setResults(json.bills || []);
+    setSearching(false);
+  }
+
+  function handleInput(v: string) {
+    setQuery(v);
+    setOpen(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => search(v), 300);
+  }
+
+  function select(b: BillOption) {
+    onLink(b.id);
+    setQuery(`${b.utility}${b.invoice_ref ? " — " + b.invoice_ref : ""} (${formatDateUK(b.date_submitted)})`);
+    setOpen(false);
+  }
+
+  function clear() {
+    onLink(null);
+    setQuery("");
+    setResults([]);
+  }
+
+  return (
+    <div>
+      {linkedId ? (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", backgroundColor: "#f0fdf4", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+          <span style={{ fontSize: "13px", color: "#16a34a", fontWeight: 600 }}>
+            ✓ Linked: {linkedRef || "Bill"} — {linkedDate ? formatDateUK(linkedDate) : "—"}
+          </span>
+          <button onClick={clear} style={{ marginLeft: "auto", fontSize: "11px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Remove</button>
+        </div>
+      ) : (
+        <div style={{ position: "relative" }}>
+          <input
+            value={query}
+            onChange={(e) => handleInput(e.target.value)}
+            onFocus={() => { setOpen(true); if (!results.length) search(""); }}
+            onBlur={() => setTimeout(() => setOpen(false), 200)}
+            placeholder="Search by customer or invoice ref…"
+            style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+          />
+          {open && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", maxHeight: "200px", overflowY: "auto" }}>
+              {searching && <div style={{ padding: "10px 12px", fontSize: "12px", color: COLOURS.SLATE }}>Searching…</div>}
+              {!searching && results.length === 0 && <div style={{ padding: "10px 12px", fontSize: "12px", color: COLOURS.SLATE }}>No bills found</div>}
+              {results.map((b) => (
+                <div key={b.id} onMouseDown={() => select(b)}
+                  style={{ padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid #f1f5f9", fontSize: "13px" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fff")}
+                >
+                  <span style={{ fontWeight: 600 }}>{b.utility}</span>
+                  {b.invoice_ref && <span style={{ color: COLOURS.SLATE }}> — {b.invoice_ref}</span>}
+                  <span style={{ color: COLOURS.SLATE }}> · {formatDateUK(b.date_submitted)} · PKR {Math.round(b.amount).toLocaleString()}</span>
+                  <span style={{ marginLeft: "6px", fontSize: "11px", color: b.status === "Collected" ? "#16a34a" : "#d97706" }}>{b.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ marginTop: "6px" }}>
+        <button type="button" onClick={onToggleManual}
+          style={{ fontSize: "12px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+          {showManual ? "Hide manual date" : "Bill not in system? Enter date manually"}
+        </button>
+        {showManual && (
+          <div style={{ marginTop: "6px" }}>
+            <DateInput value={manualDate} onChange={(e) => onManualDate(e.target.value)} style={{ ...inputStyle, width: "220px" }} />
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px" }}>Used as fallback if no bill is linked above</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -117,16 +229,28 @@ export default function GuaranteesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [addBillId, setAddBillId] = useState<string | null>(null);
+  const [addBillDate, setAddBillDate] = useState("");
+  const [addBillRef, setAddBillRef] = useState<string | null>(null);
+  const [addShowManual, setAddShowManual] = useState(false);
 
   // Edit guarantee
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [editBillId, setEditBillId] = useState<string | null>(null);
+  const [editBillDate, setEditBillDate] = useState("");
+  const [editBillRef, setEditBillRef] = useState<string | null>(null);
+  const [editShowManual, setEditShowManual] = useState(false);
 
   // Convert to Performance Guarantee
   const [convertId, setConvertId] = useState<string | null>(null);
   const [convertForm, setConvertForm] = useState(emptyConvertForm);
   const [savingConvert, setSavingConvert] = useState(false);
+  const [convertBillId, setConvertBillId] = useState<string | null>(null);
+  const [convertBillDate, setConvertBillDate] = useState("");
+  const [convertBillRef, setConvertBillRef] = useState<string | null>(null);
+  const [convertShowManual, setConvertShowManual] = useState(false);
 
   // Mark returned / released
   const [statusActionId, setStatusActionId] = useState<string | null>(null);
@@ -170,13 +294,16 @@ export default function GuaranteesPage() {
       bank_charges: Number(addForm.bank_charges) || 0,
       facility_id: addForm.facility_id || null,
       expiry_date: addForm.expiry_date || null,
-      performance_bill_date: addForm.performance_bill_date || null,
+      performance_bill_date: addShowManual ? (addBillDate || null) : null,
+      first_bill_receivable_id: addBillId || null,
     })});
     const json = await res.json();
     setSaving(false);
     if (json.error) { toast(json.error, "error"); return; }
     toast("Guarantee added", "success");
-    setShowAddForm(false); setAddForm(emptyForm); load();
+    setShowAddForm(false); setAddForm(emptyForm);
+    setAddBillId(null); setAddBillDate(""); setAddBillRef(null); setAddShowManual(false);
+    load();
   }
 
   // ── Edit guarantee ──
@@ -192,6 +319,10 @@ export default function GuaranteesPage() {
       purpose: g.purpose || "", performance_bill_date: g.performance_bill_date || "",
       notes: g.notes || "",
     });
+    setEditBillId(g.first_bill_receivable_id || null);
+    setEditBillDate(g.performance_bill_date || "");
+    setEditBillRef(g.linked_invoice_ref || null);
+    setEditShowManual(!g.first_bill_receivable_id && !!g.performance_bill_date);
     setConvertId(null); setStatusActionId(null);
   }
 
@@ -205,7 +336,8 @@ export default function GuaranteesPage() {
       bank_charges: Number(editForm.bank_charges) || 0,
       facility_id: editForm.facility_id || null,
       expiry_date: editForm.expiry_date || null,
-      performance_bill_date: editForm.performance_bill_date || null,
+      performance_bill_date: editShowManual ? (editBillDate || null) : null,
+      first_bill_receivable_id: editBillId || null,
     })});
     const json = await res.json();
     setSavingEdit(false);
@@ -240,13 +372,16 @@ export default function GuaranteesPage() {
       bank_charges: Number(convertForm.bank_charges) || 0,
       facility_id: convertForm.facility_id || null,
       expiry_date: convertForm.expiry_date || null,
-      performance_bill_date: convertForm.performance_bill_date || null,
+      performance_bill_date: convertShowManual ? (convertBillDate || null) : null,
+      first_bill_receivable_id: convertBillId || null,
     })});
     const json = await res.json();
     setSavingConvert(false);
     if (json.error) { toast(json.error, "error"); return; }
     toast("Converted — Performance Guarantee created", "success");
-    setConvertId(null); load();
+    setConvertId(null);
+    setConvertBillId(null); setConvertBillDate(""); setConvertBillRef(null); setConvertShowManual(false);
+    load();
   }
 
   // ── Mark returned / released ──
@@ -450,12 +585,21 @@ export default function GuaranteesPage() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
               <Field label="Bank charges (PKR)"><input type="number" min="0" value={addForm.bank_charges} onChange={(e) => setAddForm({ ...addForm, bank_charges: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
-              {addForm.guarantee_type === "Performance Guarantee" && (
-                <Field label="1st bill submission date (starts 12-month clock)">
-                  <DateInput value={addForm.performance_bill_date} onChange={(e) => setAddForm({ ...addForm, performance_bill_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} />
-                </Field>
-              )}
             </div>
+            {addForm.guarantee_type === "Performance Guarantee" && (
+              <Field label="1st bill (links expiry clock — search by customer or invoice ref)">
+                <BillPicker
+                  linkedId={addBillId}
+                  linkedDate={null}
+                  linkedRef={addBillRef}
+                  onLink={(id) => setAddBillId(id)}
+                  onManualDate={(d) => setAddBillDate(d)}
+                  manualDate={addBillDate}
+                  showManual={addShowManual}
+                  onToggleManual={() => setAddShowManual((v) => !v)}
+                />
+              </Field>
+            )}
             <Field label="Purpose / description">
               <textarea value={addForm.purpose} onChange={(e) => setAddForm({ ...addForm, purpose: e.target.value })} rows={2} placeholder="e.g. PC Spun Poles bid for FESCO PO 4640" style={{ ...inputStyle, width: "100%", resize: "vertical" }} />
             </Field>
@@ -525,9 +669,13 @@ export default function GuaranteesPage() {
                           {g.tender_reference && <span>Ref: {g.tender_reference}</span>}
                         </div>
                         {g.purpose && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px", fontStyle: "italic" }}>{g.purpose}</div>}
-                        {g.guarantee_type === "Performance Guarantee" && g.performance_bill_date && (
+                        {g.guarantee_type === "Performance Guarantee" && g.effective_bill_date && (
                           <div style={{ fontSize: "12px", color: "#7c3aed", marginTop: "3px" }}>
-                            Bill submitted: {formatDateUK(g.performance_bill_date)}
+                            {g.linked_invoice_ref ? (
+                              <>Bill: <strong>{g.linked_invoice_ref}</strong> — {formatDateUK(g.effective_bill_date)}</>
+                            ) : (
+                              <>Bill submitted: {formatDateUK(g.effective_bill_date)}</>
+                            )}
                             {g.release_due_date && <> · Release due: <strong>{formatDateUK(g.release_due_date)}</strong></>}
                           </div>
                         )}
@@ -584,10 +732,21 @@ export default function GuaranteesPage() {
                         <Field label="Cash margin %"><input type="number" min="0" max="100" value={editForm.cash_margin_pct} onChange={(e) => setEditForm({ ...editForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Bank charges (PKR)"><input type="number" min="0" value={editForm.bank_charges} onChange={(e) => setEditForm({ ...editForm, bank_charges: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Tender reference"><input value={editForm.tender_reference} onChange={(e) => setEditForm({ ...editForm, tender_reference: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        {editForm.guarantee_type === "Performance Guarantee" && (
-                          <Field label="1st bill date"><DateInput value={editForm.performance_bill_date} onChange={(e) => setEditForm({ ...editForm, performance_bill_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        )}
                       </div>
+                      {editForm.guarantee_type === "Performance Guarantee" && (
+                        <Field label="1st bill (links expiry clock — search by customer or invoice ref)">
+                          <BillPicker
+                            linkedId={editBillId}
+                            linkedDate={g.linked_bill_date}
+                            linkedRef={editBillRef}
+                            onLink={(id) => setEditBillId(id)}
+                            onManualDate={(d) => setEditBillDate(d)}
+                            manualDate={editBillDate}
+                            showManual={editShowManual}
+                            onToggleManual={() => setEditShowManual((v) => !v)}
+                          />
+                        </Field>
+                      )}
                       <Field label="Purpose"><textarea value={editForm.purpose} onChange={(e) => setEditForm({ ...editForm, purpose: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} /></Field>
                       <Field label="Notes"><textarea value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} /></Field>
                       <div style={{ display: "flex", gap: "8px" }}>
@@ -612,10 +771,19 @@ export default function GuaranteesPage() {
                         <Field label="Amount (PKR) *"><input type="number" min="0" value={convertForm.amount} onChange={(e) => setConvertForm({ ...convertForm, amount: e.target.value })} placeholder="Performance guarantee amount" style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Cash margin %"><input type="number" min="0" max="100" value={convertForm.cash_margin_pct} onChange={(e) => setConvertForm({ ...convertForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Bank charges (PKR)"><input type="number" min="0" value={convertForm.bank_charges} onChange={(e) => setConvertForm({ ...convertForm, bank_charges: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="1st bill submission date (starts 12-month clock)">
-                          <DateInput value={convertForm.performance_bill_date} onChange={(e) => setConvertForm({ ...convertForm, performance_bill_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} />
-                        </Field>
                       </div>
+                      <Field label="1st bill (links 12-month expiry clock — search by customer or invoice ref)">
+                        <BillPicker
+                          linkedId={convertBillId}
+                          linkedDate={null}
+                          linkedRef={convertBillRef}
+                          onLink={(id) => setConvertBillId(id)}
+                          onManualDate={(d) => setConvertBillDate(d)}
+                          manualDate={convertBillDate}
+                          showManual={convertShowManual}
+                          onToggleManual={() => setConvertShowManual((v) => !v)}
+                        />
+                      </Field>
                       <Field label="Notes"><textarea value={convertForm.notes} onChange={(e) => setConvertForm({ ...convertForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} /></Field>
                       <div style={{ display: "flex", gap: "8px" }}>
                         <button onClick={saveConvert} disabled={savingConvert} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 14px", backgroundColor: "#7c3aed", opacity: savingConvert ? 0.6 : 1 }}>{savingConvert ? "Saving…" : "Confirm Conversion"}</button>
