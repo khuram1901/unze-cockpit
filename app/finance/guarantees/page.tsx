@@ -322,7 +322,7 @@ export default function GuaranteesPage() {
   const { show: toast, element: toastEl } = useToast();
   const { confirm, element: confirmEl } = useConfirm();
 
-  const [showFinancials, setShowFinancials] = useState(false);
+  const [showFinancials, setShowFinancials] = useState<boolean | null>(null);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [banks, setBanks] = useState<BankGroup[]>([]);
   const [guarantees, setGuarantees] = useState<Guarantee[]>([]);
@@ -385,10 +385,13 @@ export default function GuaranteesPage() {
 
   useEffect(() => {
     if (checking) return;
-    load();
+    // Resolve financials permission and load data in one pass
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) {
-        loadUserCtx(user.email).then((ctx) => setShowFinancials(canViewGuaranteeFinancials(ctx)));
+        loadUserCtx(user.email).then((ctx) => {
+          setShowFinancials(canViewGuaranteeFinancials(ctx));
+          load();
+        });
       }
     });
   }, [checking, load]);
@@ -705,7 +708,7 @@ export default function GuaranteesPage() {
           <div style={{ color: "#dc2626", fontSize: "14px", padding: "12px", backgroundColor: "#fef2f2", borderRadius: "8px" }}>{error}</div>
         ) : visible.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px", color: COLOURS.SLATE, border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "var(--bg-card,#fff)" }}>
-            No guarantees found. {filterStatus !== "All" || filterType !== "All" ? "Try clearing filters." : "Add the first one above."}
+            No guarantees found. {filterStatus !== "All" || filterType !== "All" ? "Try clearing filters." : showFinancials ? "Add the first one above." : "None recorded yet."}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
