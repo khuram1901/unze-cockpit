@@ -38,6 +38,16 @@ Full context lives in:
 
 ## Non-negotiable rules
 
+0. **App speed is the top priority. All aggregation and calculation must happen in the database, never in JavaScript.**
+   - Every time you write an API route: ask "is this doing a loop, reduce, filter, or sum in JS?" If yes, move it into a Postgres function (RPC) instead.
+   - Use `supabase.rpc("function_name", { args })` to call RPCs. Write the function in a numbered `.sql` file in `supabase/` and tell Khuram to apply it manually.
+   - RPCs must always have `security definer` and `set search_path = public` for safety.
+   - The pattern: one round-trip to the database returns a fully assembled result. The API route is a thin wrapper — auth check, RPC call, return JSON. Nothing more.
+   - Never fetch rows and then aggregate them in a `for` loop, `.reduce()`, `.map()`, or `.filter()` in the API route or the page. That is the problem we fixed.
+   - Fetching only the columns you need (`select("id, name, status")` not `select("*")`) is mandatory. `select("*")` is only acceptable when you genuinely need every column.
+   - Parallel queries (`Promise.all`) are fine where truly independent, but prefer a single RPC that returns everything in one shot.
+   - When reviewing existing routes: if you spot JS aggregation, flag it and propose an RPC replacement.
+
 1. **All displayed dates: DD/MM/YYYY — no exceptions.**
    - In `.tsx` files: always `formatDateUK(dateString)` from `lib/dateUtils.ts`. Never render a raw `YYYY-MM-DD` string from the database directly in JSX.
    - In API routes / email HTML (where imports aren't available): use `d.split("-").reverse().join("/")`.
