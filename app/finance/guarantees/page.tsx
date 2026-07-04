@@ -12,9 +12,16 @@ import DateInput from "../../lib/DateInput";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Facility = {
-  id: string; bank_name: string; facility_type: string;
+  id: string; bank_name: string; facility_name: string | null; facility_type: string;
   total_limit: number; seized: number; available: number;
   utilisation_pct: number; notes: string | null; active: boolean;
+};
+
+type BankGroup = {
+  bank_name: string;
+  bank_total_limit: number; bank_seized: number; bank_available: number;
+  bank_utilisation_pct: number;
+  sub_facilities: Facility[];
 };
 
 type Guarantee = {
@@ -61,6 +68,105 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div style={{ marginBottom: "12px" }}>
       <label style={labelStyle}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+// ─── Facility form (shared between empty-state and existing-state) ────────────
+
+const FACILITY_TYPES = [
+  "Guarantee Limit", "Overdraft", "Letter of Credit (LC)",
+  "Car Finance", "Running Finance", "Term Finance", "Pay Order Limit", "Other",
+];
+
+function FacilityForm({ facilityForm, setFacilityForm, saveFacility, savingFacility, isMobile }: {
+  facilityForm: { bank_name: string; facility_name: string; facility_type: string; total_limit: string; notes: string };
+  setFacilityForm: (f: { bank_name: string; facility_name: string; facility_type: string; total_limit: string; notes: string }) => void;
+  saveFacility: () => void;
+  savingFacility: boolean;
+  isMobile: boolean;
+}) {
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
+        <Field label="Bank name *">
+          <input value={facilityForm.bank_name} onChange={(e) => setFacilityForm({ ...facilityForm, bank_name: e.target.value })}
+            placeholder="e.g. HBL, Faysal Bank, MCB" style={{ ...inputStyle, width: "100%" }} />
+        </Field>
+        <Field label="Facility name *">
+          <input value={facilityForm.facility_name} onChange={(e) => setFacilityForm({ ...facilityForm, facility_name: e.target.value })}
+            placeholder="e.g. Guarantee Limit, Overdraft" style={{ ...inputStyle, width: "100%" }} />
+        </Field>
+        <Field label="Facility type">
+          <select value={facilityForm.facility_type} onChange={(e) => setFacilityForm({ ...facilityForm, facility_type: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+            {FACILITY_TYPES.map((t) => <option key={t}>{t}</option>)}
+          </select>
+        </Field>
+        <Field label="Total limit (PKR) *">
+          <input type="number" min="0" value={facilityForm.total_limit} onChange={(e) => setFacilityForm({ ...facilityForm, total_limit: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} />
+        </Field>
+        <Field label="Notes" >
+          <input value={facilityForm.notes} onChange={(e) => setFacilityForm({ ...facilityForm, notes: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} />
+        </Field>
+      </div>
+      <button onClick={saveFacility} disabled={savingFacility} style={{ ...primaryButtonStyle, opacity: savingFacility ? 0.6 : 1 }}>{savingFacility ? "Saving…" : "Add Facility"}</button>
+    </>
+  );
+}
+
+// ─── Bank-grouped utilisation card ────────────────────────────────────────────
+
+function BankFacilityCard({ bank }: { bank: BankGroup }) {
+  const pct = bank.bank_utilisation_pct;
+  const barColor = pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#16a34a";
+  return (
+    <div style={{ padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", borderRadius: "10px", border: "1px solid var(--border-color,#e2e8f0)" }}>
+      {/* Bank header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+        <div style={{ fontSize: "15px", fontWeight: 800, color: "var(--text-primary,#1e293b)" }}>{bank.bank_name}</div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: "18px", fontWeight: 800, color: barColor }}>{pct}%</div>
+          <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>utilised</div>
+        </div>
+      </div>
+
+      {/* Overall bank bar */}
+      <div style={{ height: "8px", borderRadius: "4px", backgroundColor: "#e2e8f0", marginBottom: "10px", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, backgroundColor: barColor, borderRadius: "4px" }} />
+      </div>
+
+      {/* Bank totals */}
+      <div style={{ display: "flex", gap: "16px", fontSize: "13px", marginBottom: "12px" }}>
+        <span style={{ color: COLOURS.SLATE }}>Total limit: <strong>{pkr(bank.bank_total_limit)}</strong></span>
+        <span style={{ color: "#dc2626" }}>Seized: <strong>{pkr(bank.bank_seized)}</strong></span>
+        <span style={{ color: "#16a34a" }}>Available: <strong>{pkr(bank.bank_available)}</strong></span>
+      </div>
+
+      {/* Sub-facility breakdown */}
+      {bank.sub_facilities.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: "8px" }}>
+          {bank.sub_facilities.map((sf) => {
+            const sfPct = sf.utilisation_pct;
+            const sfColor = sfPct >= 90 ? "#dc2626" : sfPct >= 70 ? "#d97706" : "#16a34a";
+            return (
+              <div key={sf.id} style={{ padding: "8px 10px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary,#1e293b)", marginBottom: "2px" }}>
+                  {sf.facility_name || sf.facility_type}
+                </div>
+                <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "6px" }}>{sf.facility_type}</div>
+                <div style={{ height: "4px", borderRadius: "2px", backgroundColor: "#e2e8f0", marginBottom: "6px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.min(100, sfPct)}%`, backgroundColor: sfColor, borderRadius: "2px" }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+                  <span style={{ color: "#dc2626" }}>{pkr(sf.seized)} seized</span>
+                  <span style={{ color: "#16a34a" }}>{pkr(sf.available)} free</span>
+                </div>
+                <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>Limit: {pkr(sf.total_limit)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -216,6 +322,7 @@ export default function GuaranteesPage() {
   const { confirm, element: confirmEl } = useConfirm();
 
   const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [banks, setBanks] = useState<BankGroup[]>([]);
   const [guarantees, setGuarantees] = useState<Guarantee[]>([]);
   const [totals, setTotals] = useState<Totals | null>(null);
   const [loading, setLoading] = useState(true);
@@ -259,7 +366,7 @@ export default function GuaranteesPage() {
 
   // Facility form
   const [showFacilityForm, setShowFacilityForm] = useState(false);
-  const [facilityForm, setFacilityForm] = useState({ bank_name: "", facility_type: "Guarantee", total_limit: "", notes: "" });
+  const [facilityForm, setFacilityForm] = useState({ bank_name: "", facility_name: "", facility_type: "Guarantee Limit", total_limit: "", notes: "" });
   const [savingFacility, setSavingFacility] = useState(false);
 
   const load = useCallback(async () => {
@@ -268,6 +375,7 @@ export default function GuaranteesPage() {
     const json = await res.json();
     if (json.error) { setError(json.error); setLoading(false); return; }
     setFacilities(json.facilities || []);
+    setBanks(json.banks || []);
     setGuarantees(json.guarantees || []);
     setTotals(json.totals || null);
     setLoading(false);
@@ -408,7 +516,7 @@ export default function GuaranteesPage() {
     setSavingFacility(false);
     if (json.error) { toast(json.error, "error"); return; }
     toast("Facility added", "success");
-    setShowFacilityForm(false); setFacilityForm({ bank_name: "", facility_type: "Guarantee", total_limit: "", notes: "" });
+    setShowFacilityForm(false); setFacilityForm({ bank_name: "", facility_name: "", facility_type: "Guarantee Limit", total_limit: "", notes: "" });
     load();
   }
 
@@ -464,49 +572,13 @@ export default function GuaranteesPage() {
 
             {showFacilityForm && (
               <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "12px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-                  <Field label="Bank name *"><input value={facilityForm.bank_name} onChange={(e) => setFacilityForm({ ...facilityForm, bank_name: e.target.value })} placeholder="e.g. HBL, MCB, UBL" style={{ ...inputStyle, width: "100%" }} /></Field>
-                  <Field label="Facility type">
-                    <select value={facilityForm.facility_type} onChange={(e) => setFacilityForm({ ...facilityForm, facility_type: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
-                      <option>Guarantee</option>
-                      <option>Pay Order</option>
-                      <option>Combined</option>
-                    </select>
-                  </Field>
-                  <Field label="Total limit (PKR) *"><input type="number" min="0" value={facilityForm.total_limit} onChange={(e) => setFacilityForm({ ...facilityForm, total_limit: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
-                  <Field label="Notes"><input value={facilityForm.notes} onChange={(e) => setFacilityForm({ ...facilityForm, notes: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
-                </div>
-                <button onClick={saveFacility} disabled={savingFacility} style={{ ...primaryButtonStyle, opacity: savingFacility ? 0.6 : 1 }}>{savingFacility ? "Saving…" : "Add Facility"}</button>
+                <FacilityForm facilityForm={facilityForm} setFacilityForm={setFacilityForm} saveFacility={saveFacility} savingFacility={savingFacility} isMobile={isMobile} />
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit,minmax(280px,1fr))", gap: "10px" }}>
-              {facilities.map((f) => {
-                const pct = f.utilisation_pct;
-                const barColor = pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#16a34a";
-                return (
-                  <div key={f.id} style={{ padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", borderRadius: "10px", border: "1px solid var(--border-color,#e2e8f0)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                      <div>
-                        <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>{f.bank_name}</div>
-                        <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{f.facility_type}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: "18px", fontWeight: 800, color: barColor }}>{pct}%</div>
-                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>utilised</div>
-                      </div>
-                    </div>
-                    <div style={{ height: "6px", borderRadius: "3px", backgroundColor: "#e2e8f0", marginBottom: "10px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, backgroundColor: barColor, borderRadius: "3px" }} />
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                      <span style={{ color: COLOURS.SLATE }}>Seized: <strong style={{ color: "#dc2626" }}>{pkr(f.seized)}</strong></span>
-                      <span style={{ color: COLOURS.SLATE }}>Available: <strong style={{ color: "#16a34a" }}>{pkr(f.available)}</strong></span>
-                    </div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>Limit: {pkr(f.total_limit)}</div>
-                  </div>
-                );
-              })}
+            {/* Bank-grouped utilisation bars */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} />)}
             </div>
           </div>
         )}
@@ -523,17 +595,7 @@ export default function GuaranteesPage() {
             </div>
             {showFacilityForm && (
               <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "12px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-                  <Field label="Bank name *"><input value={facilityForm.bank_name} onChange={(e) => setFacilityForm({ ...facilityForm, bank_name: e.target.value })} placeholder="e.g. HBL, MCB, UBL" style={{ ...inputStyle, width: "100%" }} /></Field>
-                  <Field label="Facility type">
-                    <select value={facilityForm.facility_type} onChange={(e) => setFacilityForm({ ...facilityForm, facility_type: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
-                      <option>Guarantee</option><option>Pay Order</option><option>Combined</option>
-                    </select>
-                  </Field>
-                  <Field label="Total limit (PKR) *"><input type="number" min="0" value={facilityForm.total_limit} onChange={(e) => setFacilityForm({ ...facilityForm, total_limit: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
-                  <Field label="Notes"><input value={facilityForm.notes} onChange={(e) => setFacilityForm({ ...facilityForm, notes: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
-                </div>
-                <button onClick={saveFacility} disabled={savingFacility} style={{ ...primaryButtonStyle, opacity: savingFacility ? 0.6 : 1 }}>{savingFacility ? "Saving…" : "Add Facility"}</button>
+                <FacilityForm facilityForm={facilityForm} setFacilityForm={setFacilityForm} saveFacility={saveFacility} savingFacility={savingFacility} isMobile={isMobile} />
               </div>
             )}
           </div>
@@ -561,7 +623,7 @@ export default function GuaranteesPage() {
               <Field label="Bank facility (optional)">
                 <select value={addForm.facility_id} onChange={(e) => setAddForm({ ...addForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
                   <option value="">— Not linked to a facility —</option>
-                  {facilities.map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_type}</option>)}
+                  {facilities.map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type}</option>)}
                 </select>
               </Field>
               <Field label="Tender / contract reference">

@@ -342,6 +342,7 @@ export default function ExecutiveDashboardPage() {
   };
 
   const [companyFinance, setCompanyFinance] = useState<CompanyFinanceData[]>([]);
+  const [facilitySynopsis, setFacilitySynopsis] = useState<{ bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[]>([]);
   const [receivableRows, setReceivableRows] = useState<ReceivableCustomerRow[]>([]);
   const [recAgingTotals, setRecAgingTotals] = useState<{ "0-30": number; "31-60": number; "61-90": number; "90+": number }>({ "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 });
   const [recAgingByCustomer, setRecAgingByCustomer] = useState<{ customer: string; "0-30": number; "31-60": number; "61-90": number; "90+": number; total: number }[]>([]);
@@ -597,6 +598,20 @@ export default function ExecutiveDashboardPage() {
       });
     }
     setCompanyFinance(allCompanyFinance);
+
+    // Facility synopsis — non-blocking, best-effort
+    try {
+      const synopsisToken = (await supabase.auth.getSession()).data.session?.access_token;
+      if (synopsisToken) {
+        const synRes = await fetch("/api/finance/facility-synopsis", {
+          headers: { Authorization: `Bearer ${synopsisToken}` },
+        });
+        if (synRes.ok) {
+          const synJson = await synRes.json();
+          setFacilitySynopsis(synJson.banks || []);
+        }
+      }
+    } catch { /* synopsis is non-critical */ }
 
     // Three RPCs replace two full-table fetches + three JS aggregation loops.
     // Slim bills fetch kept only for escalation engine (needs per-bill id/utility/amount/currency).
@@ -1360,6 +1375,44 @@ export default function ExecutiveDashboardPage() {
                 {showFinance && companyFinance.map((cfd) => (
                   <CompanyFinancePanel key={cfd.companyId} data={cfd} />
                 ))}
+
+                {/* ── Bank Facility Synopsis ── */}
+                {showFinance && facilitySynopsis.length > 0 && (
+                  <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card,#ffffff)", padding: "14px", marginBottom: "14px" }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>Bank Facilities</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      {facilitySynopsis.map((b) => {
+                        const pct = b.bank_utilisation_pct;
+                        const barColor = pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#16a34a";
+                        return (
+                          <div key={b.bank_name}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                              <div>
+                                <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{b.bank_name}</span>
+                                {b.overdue_count > 0 && (
+                                  <span style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 700, color: "#dc2626", backgroundColor: "#fef2f2", padding: "1px 6px", borderRadius: "8px" }}>
+                                    ⚠ {b.overdue_count} overdue
+                                  </span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: "13px", fontWeight: 800, color: barColor }}>{pct}%</span>
+                            </div>
+                            <div style={{ height: "8px", borderRadius: "4px", backgroundColor: "#e2e8f0", marginBottom: "4px", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, backgroundColor: barColor, borderRadius: "4px" }} />
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                              <span style={{ color: "#dc2626" }}>Seized: PKR {Math.round(b.bank_seized).toLocaleString()}</span>
+                              <span style={{ color: "#16a34a" }}>Available: PKR {Math.round(b.bank_available).toLocaleString()}</span>
+                            </div>
+                            <div style={{ fontSize: "11px", color: SLATE, marginTop: "1px" }}>
+                              Limit: PKR {Math.round(b.bank_total_limit).toLocaleString()} · {b.active_guarantees} active guarantee{b.active_guarantees !== 1 ? "s" : ""}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* RIGHT COLUMN */}
