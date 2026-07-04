@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   const {
     authority_letter_id,
     dispatch_date,
-    qty_31 = 0, qty_36 = 0, qty_45 = 0, qty_meter = 0,
+    qty_31 = 0, qty_36 = 0, qty_40 = 0, qty_45 = 0, qty_meter = 0,
     released_by,
     vehicle_number,
     notes,
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   // Fetch letter to validate dispatch cap
   const { data: letter } = await supabase
     .from("authority_letters")
-    .select("qty_31, qty_36, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_45, opening_dispatched_meter")
+    .select("qty_31, qty_36, qty_40, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_40, opening_dispatched_45, opening_dispatched_meter")
     .eq("id", authority_letter_id)
     .single();
 
@@ -55,19 +55,21 @@ export async function POST(request: NextRequest) {
   // Sum existing dispatch records for this letter
   const { data: existing } = await supabase
     .from("dispatch_records")
-    .select("qty_31, qty_36, qty_45, qty_meter")
+    .select("qty_31, qty_36, qty_40, qty_45, qty_meter")
     .eq("authority_letter_id", authority_letter_id);
 
   const alreadyDispatched = (existing || []).reduce(
     (acc, r) => ({
       qty_31: acc.qty_31 + (r.qty_31 || 0),
       qty_36: acc.qty_36 + (r.qty_36 || 0),
+      qty_40: acc.qty_40 + (r.qty_40 || 0),
       qty_45: acc.qty_45 + (r.qty_45 || 0),
       qty_meter: acc.qty_meter + (r.qty_meter || 0),
     }),
     {
       qty_31: letter.opening_dispatched_31 || 0,
       qty_36: letter.opening_dispatched_36 || 0,
+      qty_40: letter.opening_dispatched_40 || 0,
       qty_45: letter.opening_dispatched_45 || 0,
       qty_meter: letter.opening_dispatched_meter || 0,
     }
@@ -77,13 +79,15 @@ export async function POST(request: NextRequest) {
   const overflows = [
     { size: "31ft", total: alreadyDispatched.qty_31 + qty_31, limit: letter.qty_31 },
     { size: "36ft", total: alreadyDispatched.qty_36 + qty_36, limit: letter.qty_36 },
+    { size: "40ft", total: alreadyDispatched.qty_40 + qty_40, limit: letter.qty_40 || 0 },
     { size: "45ft", total: alreadyDispatched.qty_45 + qty_45, limit: letter.qty_45 },
     { size: "meter", total: alreadyDispatched.qty_meter + qty_meter, limit: letter.qty_meter },
   ].filter((s) => s.limit > 0 && s.total > s.limit);
 
   if (overflows.length > 0) {
     const detail = overflows.map((s) => {
-      const remaining = s.limit - (s.total - (s.size === "31ft" ? qty_31 : s.size === "36ft" ? qty_36 : s.size === "45ft" ? qty_45 : qty_meter));
+      const thisQty = s.size === "31ft" ? qty_31 : s.size === "36ft" ? qty_36 : s.size === "40ft" ? qty_40 : s.size === "45ft" ? qty_45 : qty_meter;
+      const remaining = s.limit - (s.total - thisQty);
       return `${s.size}: only ${remaining} remaining on this letter`;
     }).join(", ");
     return Response.json({ error: `Dispatch blocked — ${detail}` }, { status: 400 });
@@ -94,7 +98,7 @@ export async function POST(request: NextRequest) {
     .insert({
       authority_letter_id,
       dispatch_date: dispatch_date || new Date().toISOString().slice(0, 10),
-      qty_31, qty_36, qty_45, qty_meter,
+      qty_31, qty_36, qty_40, qty_45, qty_meter,
       released_by, vehicle_number: vehicle_number || null,
       notes: notes || null, created_by: auth.email,
     })
@@ -121,31 +125,33 @@ export async function POST(request: NextRequest) {
       if (po && !po.is_system_unallocated && po.status === "Active") {
         const { data: allLetters } = await supabase
           .from("authority_letters")
-          .select("qty_31, qty_36, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_45, opening_dispatched_meter, dispatch_records(qty_31, qty_36, qty_45, qty_meter)")
+          .select("qty_31, qty_36, qty_40, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_40, opening_dispatched_45, opening_dispatched_meter, dispatch_records(qty_31, qty_36, qty_40, qty_45, qty_meter)")
           .eq("po_id", po.id);
 
         const totalDispatched = (allLetters || []).reduce(
           (acc, l) => {
             const letterDisp = (l.dispatch_records || []).reduce(
-              (la: { qty_31: number; qty_36: number; qty_45: number; qty_meter: number }, dr: { qty_31: number; qty_36: number; qty_45: number; qty_meter: number }) => ({
+              (la: { qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number }, dr: { qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number }) => ({
                 qty_31: la.qty_31 + (dr.qty_31 || 0),
                 qty_36: la.qty_36 + (dr.qty_36 || 0),
+                qty_40: la.qty_40 + (dr.qty_40 || 0),
                 qty_45: la.qty_45 + (dr.qty_45 || 0),
                 qty_meter: la.qty_meter + (dr.qty_meter || 0),
               }),
-              { qty_31: l.opening_dispatched_31 || 0, qty_36: l.opening_dispatched_36 || 0, qty_45: l.opening_dispatched_45 || 0, qty_meter: l.opening_dispatched_meter || 0 }
+              { qty_31: l.opening_dispatched_31 || 0, qty_36: l.opening_dispatched_36 || 0, qty_40: l.opening_dispatched_40 || 0, qty_45: l.opening_dispatched_45 || 0, qty_meter: l.opening_dispatched_meter || 0 }
             );
             return {
               qty_31: acc.qty_31 + letterDisp.qty_31,
               qty_36: acc.qty_36 + letterDisp.qty_36,
+              qty_40: acc.qty_40 + letterDisp.qty_40,
               qty_45: acc.qty_45 + letterDisp.qty_45,
               qty_meter: acc.qty_meter + letterDisp.qty_meter,
             };
           },
-          { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 }
+          { qty_31: 0, qty_36: 0, qty_40: 0, qty_45: 0, qty_meter: 0 }
         );
 
-        const sizes = ["31", "36", "45", "meter"] as const;
+        const sizes = ["31", "36", "40", "45", "meter"] as const;
         const fullyDelivered = sizes.every((s) => {
           const ordered = po[`ordered_${s}` as keyof typeof po] as number;
           if (!ordered || ordered <= 0) return true;
@@ -182,7 +188,7 @@ export async function POST(request: NextRequest) {
           customerName: po.customer_name,
           poNumber: po.po_number,
           plantName: po.plant_name,
-          qty31: qty_31, qty36: qty_36, qty45: qty_45, qtyMeter: qty_meter,
+          qty31: qty_31, qty36: qty_36, qty40: qty_40, qty45: qty_45, qtyMeter: qty_meter,
           vehicleNumber: vehicle_number || null,
           releasedBy: released_by,
           dispatchDate: dispatch_date || new Date().toISOString().slice(0, 10),
@@ -198,10 +204,11 @@ export async function POST(request: NextRequest) {
           .eq("role", "Manager")
           .eq("notify_email", true);
 
-        const totalQty = qty_31 + qty_36 + qty_45 + qty_meter;
+        const totalQty = qty_31 + qty_36 + qty_40 + qty_45 + qty_meter;
         const sizes = [
           qty_31 > 0 ? `${qty_31} × 31ft` : null,
           qty_36 > 0 ? `${qty_36} × 36ft` : null,
+          qty_40 > 0 ? `${qty_40} × 40ft` : null,
           qty_45 > 0 ? `${qty_45} × 45ft` : null,
           qty_meter > 0 ? `${qty_meter} × Mtr` : null,
         ].filter(Boolean).join(", ");
@@ -255,14 +262,14 @@ export async function PATCH(request: NextRequest) {
 
   const supabase = createServiceClient();
   const body = await request.json().catch(() => ({}));
-  const { id, dispatch_date, qty_31, qty_36, qty_45, qty_meter, released_by, vehicle_number, notes } = body;
+  const { id, dispatch_date, qty_31, qty_36, qty_40, qty_45, qty_meter, released_by, vehicle_number, notes } = body;
 
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });
 
   // Fetch the dispatch record to get its letter
   const { data: record } = await supabase
     .from("dispatch_records")
-    .select("authority_letter_id, qty_31, qty_36, qty_45, qty_meter")
+    .select("authority_letter_id, qty_31, qty_36, qty_40, qty_45, qty_meter")
     .eq("id", id).single();
 
   if (!record) return Response.json({ error: "Dispatch record not found" }, { status: 404 });
@@ -270,24 +277,25 @@ export async function PATCH(request: NextRequest) {
   // Re-validate cap: other dispatches on this letter + new quantities must not exceed letter qty
   const { data: letter } = await supabase
     .from("authority_letters")
-    .select("qty_31, qty_36, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_45, opening_dispatched_meter")
+    .select("qty_31, qty_36, qty_40, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_40, opening_dispatched_45, opening_dispatched_meter")
     .eq("id", record.authority_letter_id).single();
 
   if (letter) {
     const { data: others } = await supabase
       .from("dispatch_records")
-      .select("qty_31, qty_36, qty_45, qty_meter")
+      .select("qty_31, qty_36, qty_40, qty_45, qty_meter")
       .eq("authority_letter_id", record.authority_letter_id)
       .neq("id", id);
 
     const otherTotal = (others || []).reduce(
-      (acc, r) => ({ qty_31: acc.qty_31 + (r.qty_31 || 0), qty_36: acc.qty_36 + (r.qty_36 || 0), qty_45: acc.qty_45 + (r.qty_45 || 0), qty_meter: acc.qty_meter + (r.qty_meter || 0) }),
-      { qty_31: letter.opening_dispatched_31 || 0, qty_36: letter.opening_dispatched_36 || 0, qty_45: letter.opening_dispatched_45 || 0, qty_meter: letter.opening_dispatched_meter || 0 }
+      (acc, r) => ({ qty_31: acc.qty_31 + (r.qty_31 || 0), qty_36: acc.qty_36 + (r.qty_36 || 0), qty_40: acc.qty_40 + (r.qty_40 || 0), qty_45: acc.qty_45 + (r.qty_45 || 0), qty_meter: acc.qty_meter + (r.qty_meter || 0) }),
+      { qty_31: letter.opening_dispatched_31 || 0, qty_36: letter.opening_dispatched_36 || 0, qty_40: letter.opening_dispatched_40 || 0, qty_45: letter.opening_dispatched_45 || 0, qty_meter: letter.opening_dispatched_meter || 0 }
     );
 
     const newQty = {
       qty_31: qty_31 !== undefined ? qty_31 : record.qty_31,
       qty_36: qty_36 !== undefined ? qty_36 : record.qty_36,
+      qty_40: qty_40 !== undefined ? qty_40 : record.qty_40,
       qty_45: qty_45 !== undefined ? qty_45 : record.qty_45,
       qty_meter: qty_meter !== undefined ? qty_meter : record.qty_meter,
     };
@@ -295,13 +303,15 @@ export async function PATCH(request: NextRequest) {
     const overflows = [
       { size: "31ft", total: otherTotal.qty_31 + newQty.qty_31, limit: letter.qty_31 },
       { size: "36ft", total: otherTotal.qty_36 + newQty.qty_36, limit: letter.qty_36 },
+      { size: "40ft", total: otherTotal.qty_40 + newQty.qty_40, limit: letter.qty_40 || 0 },
       { size: "45ft", total: otherTotal.qty_45 + newQty.qty_45, limit: letter.qty_45 },
       { size: "meter", total: otherTotal.qty_meter + newQty.qty_meter, limit: letter.qty_meter },
     ].filter((s) => s.limit > 0 && s.total > s.limit);
 
     if (overflows.length > 0) {
       const detail = overflows.map((s) => {
-        const remaining = s.limit - otherTotal[`qty_${s.size === "31ft" ? "31" : s.size === "36ft" ? "36" : s.size === "45ft" ? "45" : "meter"}` as keyof typeof otherTotal];
+        const key = s.size === "31ft" ? "qty_31" : s.size === "36ft" ? "qty_36" : s.size === "40ft" ? "qty_40" : s.size === "45ft" ? "qty_45" : "qty_meter";
+        const remaining = s.limit - otherTotal[key as keyof typeof otherTotal];
         return `${s.size}: only ${remaining} remaining on this letter`;
       }).join(", ");
       return Response.json({ error: `Dispatch blocked — ${detail}` }, { status: 400 });
@@ -312,6 +322,7 @@ export async function PATCH(request: NextRequest) {
   if (dispatch_date !== undefined) updates.dispatch_date = dispatch_date;
   if (qty_31 !== undefined) updates.qty_31 = qty_31;
   if (qty_36 !== undefined) updates.qty_36 = qty_36;
+  if (qty_40 !== undefined) updates.qty_40 = qty_40;
   if (qty_45 !== undefined) updates.qty_45 = qty_45;
   if (qty_meter !== undefined) updates.qty_meter = qty_meter;
   if (released_by !== undefined) updates.released_by = released_by;

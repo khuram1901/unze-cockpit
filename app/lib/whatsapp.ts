@@ -12,7 +12,7 @@ export function dispatchNotificationMessage({
   customerName,
   poNumber,
   plantName,
-  qty31, qty36, qty45, qtyMeter,
+  qty31, qty36, qty40, qty45, qtyMeter,
   vehicleNumber,
   releasedBy,
   dispatchDate,
@@ -22,7 +22,7 @@ export function dispatchNotificationMessage({
   customerName: string;
   poNumber: string;
   plantName: string;
-  qty31: number; qty36: number; qty45: number; qtyMeter: number;
+  qty31: number; qty36: number; qty40?: number; qty45: number; qtyMeter: number;
   vehicleNumber: string | null;
   releasedBy: string;
   dispatchDate: string;
@@ -30,6 +30,7 @@ export function dispatchNotificationMessage({
   const sizes = [
     qty31 > 0 ? `${qty31} × 31ft` : null,
     qty36 > 0 ? `${qty36} × 36ft` : null,
+    (qty40 || 0) > 0 ? `${qty40} × 40ft` : null,
     qty45 > 0 ? `${qty45} × 45ft` : null,
     qtyMeter > 0 ? `${qtyMeter} × Mtr` : null,
   ].filter(Boolean).join(", ");

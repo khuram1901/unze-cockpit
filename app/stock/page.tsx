@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, SkeletonRows, ErrorBanner } from "../lib/SharedUI";
+import { COLOURS, PageHeader, SectionTitle, SkeletonRows, ErrorBanner, useToast } from "../lib/SharedUI";
+import DateInput from "../lib/DateInput";
 import { formatDateUK } from "../lib/dateUtils";
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -106,8 +107,146 @@ function SizeBadges({ label, qty_31, qty_36, qty_40, qty_45, qty_meter, colour }
   );
 }
 
-function LetterRow({ letter, expanded, onToggle }: {
-  letter: LetterSummary; expanded: boolean; onToggle: () => void;
+type DispatchTarget = {
+  letterId: string;
+  letterNumber: string;
+  qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number;
+  remaining_31: number; remaining_36: number; remaining_40: number; remaining_45: number; remaining_meter: number;
+};
+
+const emptyDispatchForm = { dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" };
+
+function DispatchModal({ target, onClose, onSaved }: {
+  target: DispatchTarget;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState(emptyDispatchForm);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  async function save() {
+    if (!form.dispatch_date || !form.released_by) { setError("Date and released-by are required"); return; }
+    setSaving(true); setError(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch("/api/stock/dispatch-records", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session?.access_token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        authority_letter_id: target.letterId,
+        dispatch_date: form.dispatch_date,
+        qty_31: Number(form.qty_31) || 0,
+        qty_36: Number(form.qty_36) || 0,
+        qty_40: Number(form.qty_40) || 0,
+        qty_45: Number(form.qty_45) || 0,
+        qty_meter: Number(form.qty_meter) || 0,
+        released_by: form.released_by,
+        vehicle_number: form.vehicle_number || null,
+        notes: form.notes || null,
+      }),
+    });
+    const json = await res.json();
+    setSaving(false);
+    if (json.error) { setError(json.error); return; }
+    onSaved();
+    onClose();
+  }
+
+  const inputSt: React.CSSProperties = { border: "1px solid #cbd5e1", borderRadius: "6px", padding: "7px 10px", fontSize: "13px", width: "100%", boxSizing: "border-box", backgroundColor: "#fff" };
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+    >
+      <div style={{ backgroundColor: "#fff", borderRadius: "12px", padding: "20px 24px", width: "100%", maxWidth: "480px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY }}>Record Dispatch — Letter #{target.letterNumber}</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: COLOURS.SLATE, lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px", padding: "6px 10px", backgroundColor: "#f8fafc", borderRadius: "6px" }}>
+          Remaining on letter:{" "}
+          {[
+            target.remaining_31 > 0 && `${target.remaining_31} × 31ft`,
+            target.remaining_36 > 0 && `${target.remaining_36} × 36ft`,
+            target.remaining_40 > 0 && `${target.remaining_40} × 40ft`,
+            target.remaining_45 > 0 && `${target.remaining_45} × 45ft`,
+            target.remaining_meter > 0 && `${target.remaining_meter} × Mtr`,
+          ].filter(Boolean).join(", ") || "Fully collected"}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Date *</label>
+            <DateInput value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} style={inputSt} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Released by *</label>
+            <input value={form.released_by} onChange={(e) => setForm({ ...form, released_by: e.target.value })} placeholder="Name of person releasing poles" style={inputSt} />
+          </div>
+          <div>
+            <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Vehicle number</label>
+            <input value={form.vehicle_number} onChange={(e) => setForm({ ...form, vehicle_number: e.target.value })} placeholder="Optional" style={inputSt} />
+          </div>
+        </div>
+
+        <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, margin: "4px 0 8px" }}>Quantities dispatched</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(90px,1fr))", gap: "8px", marginBottom: "10px" }}>
+          {target.qty_31 > 0 && (
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>31ft</label>
+              <input type="number" min="0" max={target.remaining_31} value={form.qty_31} onChange={(e) => setForm({ ...form, qty_31: e.target.value })} placeholder="0" style={inputSt} />
+            </div>
+          )}
+          {target.qty_36 > 0 && (
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>36ft</label>
+              <input type="number" min="0" max={target.remaining_36} value={form.qty_36} onChange={(e) => setForm({ ...form, qty_36: e.target.value })} placeholder="0" style={inputSt} />
+            </div>
+          )}
+          {target.qty_40 > 0 && (
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>40ft</label>
+              <input type="number" min="0" max={target.remaining_40} value={form.qty_40} onChange={(e) => setForm({ ...form, qty_40: e.target.value })} placeholder="0" style={inputSt} />
+            </div>
+          )}
+          {target.qty_45 > 0 && (
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>45ft</label>
+              <input type="number" min="0" max={target.remaining_45} value={form.qty_45} onChange={(e) => setForm({ ...form, qty_45: e.target.value })} placeholder="0" style={inputSt} />
+            </div>
+          )}
+          {target.qty_meter > 0 && (
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Meter</label>
+              <input type="number" min="0" max={target.remaining_meter} value={form.qty_meter} onChange={(e) => setForm({ ...form, qty_meter: e.target.value })} placeholder="0" style={inputSt} />
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "12px" }}>
+          <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Notes</label>
+          <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional" style={inputSt} />
+        </div>
+
+        {error && <div style={{ fontSize: "13px", color: "#dc2626", marginBottom: "10px", padding: "6px 10px", backgroundColor: "#fef2f2", borderRadius: "6px" }}>{error}</div>}
+
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={save} disabled={saving} style={{ padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 700, backgroundColor: COLOURS.NAVY, color: "#fff", border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Saving…" : "Save Dispatch"}
+          </button>
+          <button onClick={onClose} style={{ padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "#fff", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LetterRow({ letter, expanded, onToggle, onDispatch }: {
+  letter: LetterSummary; expanded: boolean; onToggle: () => void; onDispatch: () => void;
 }) {
   const remaining = totalPoles(letter.remaining_31, letter.remaining_36, letter.remaining_40, letter.remaining_45, letter.remaining_meter);
   const authorized = totalPoles(letter.qty_31, letter.qty_36, letter.qty_40, letter.qty_45, letter.qty_meter);
@@ -144,12 +283,20 @@ function LetterRow({ letter, expanded, onToggle }: {
             {expiryBadge.label}
           </span>
         )}
-        <span style={{ marginLeft: "auto", display: "flex", gap: "14px", flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ marginLeft: "auto", display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
           <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Authorized: <strong>{authorized.toLocaleString()}</strong></span>
           <span style={{ fontSize: "12px", color: "#2563eb" }}>Collected: <strong>{dispatched.toLocaleString()}</strong></span>
           <span style={{ fontSize: "12px", fontWeight: 700, color: fullyCollected ? "#16a34a" : "#dc2626" }}>
             Balance: {remaining.toLocaleString()}
           </span>
+          {!fullyCollected && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDispatch(); }}
+              style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              + Dispatch
+            </button>
+          )}
         </span>
       </div>
       {expanded && (
@@ -166,11 +313,12 @@ function LetterRow({ letter, expanded, onToggle }: {
   );
 }
 
-function ContractorRow({ group, expandedLetters, onToggle, onLetterToggle }: {
+function ContractorRow({ group, expandedLetters, onToggle, onLetterToggle, onDispatch }: {
   group: ContractorGroup;
   expandedLetters: Set<string>;
   onToggle: () => void;
   onLetterToggle: (id: string) => void;
+  onDispatch: (letter: LetterSummary) => void;
 }) {
   const remaining = totalPoles(group.total_remaining_31, group.total_remaining_36, group.total_remaining_40, group.total_remaining_45, group.total_remaining_meter);
   const authorized = totalPoles(group.total_authorized_31, group.total_authorized_36, group.total_authorized_40, group.total_authorized_45, group.total_authorized_meter);
@@ -210,16 +358,18 @@ function ContractorRow({ group, expandedLetters, onToggle, onLetterToggle }: {
           letter={l}
           expanded={expandedLetters.has(l.id)}
           onToggle={() => onLetterToggle(l.id)}
+          onDispatch={() => onDispatch(l)}
         />
       ))}
     </div>
   );
 }
 
-function PORow({ item, expandedKeys, onToggle }: {
+function PORow({ item, expandedKeys, onToggle, onDispatch }: {
   item: POSummary;
   expandedKeys: Set<string>;
   onToggle: (key: string) => void;
+  onDispatch: (letter: LetterSummary) => void;
 }) {
   const { po, contractors } = item;
   const isClosed = po.status === "Closed";
@@ -299,6 +449,7 @@ function PORow({ item, expandedKeys, onToggle }: {
               expandedLetters={expandedKeys}
               onToggle={() => onToggle(`c-${cg.contractor_id}`)}
               onLetterToggle={(id) => onToggle(id)}
+              onDispatch={onDispatch}
             />
           ))}
         </div>
@@ -312,6 +463,7 @@ function PORow({ item, expandedKeys, onToggle }: {
 export default function StockPage() {
   const { checking } = useRequireCapability("stock");
   const isMobile = useMobile();
+  const { show: toast, element: toastEl } = useToast();
 
   const [plants, setPlants] = useState<Plant[]>([]);
   const [selectedPlant, setSelectedPlant] = useState<string>("");
@@ -320,6 +472,7 @@ export default function StockPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [showClosed, setShowClosed] = useState(true);
+  const [dispatchTarget, setDispatchTarget] = useState<DispatchTarget | null>(null);
 
   useEffect(() => {
     if (!checking) loadPlants();
@@ -350,6 +503,15 @@ export default function StockPage() {
       setLoading(false);
     }
   }, []);
+
+  function openDispatch(letter: LetterSummary) {
+    setDispatchTarget({
+      letterId: letter.id,
+      letterNumber: letter.letter_number,
+      qty_31: letter.qty_31, qty_36: letter.qty_36, qty_40: letter.qty_40, qty_45: letter.qty_45, qty_meter: letter.qty_meter,
+      remaining_31: letter.remaining_31, remaining_36: letter.remaining_36, remaining_40: letter.remaining_40, remaining_45: letter.remaining_45, remaining_meter: letter.remaining_meter,
+    });
+  }
 
   function toggle(key: string) {
     setExpandedKeys((prev) => {
@@ -483,10 +645,22 @@ export default function StockPage() {
         ) : (
           <div>
             {visibleSummary.map((item) => (
-              <PORow key={item.po.id} item={item} expandedKeys={expandedKeys} onToggle={toggle} />
+              <PORow key={item.po.id} item={item} expandedKeys={expandedKeys} onToggle={toggle} onDispatch={openDispatch} />
             ))}
           </div>
         )}
+
+        {dispatchTarget && (
+          <DispatchModal
+            target={dispatchTarget}
+            onClose={() => setDispatchTarget(null)}
+            onSaved={() => {
+              toast("Dispatch recorded successfully", "success");
+              loadSummary(selectedPlant);
+            }}
+          />
+        )}
+        {toastEl}
       </main>
     </AuthWrapper>
   );
