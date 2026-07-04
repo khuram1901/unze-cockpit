@@ -983,52 +983,37 @@ export default function HomePage() {
     }
     setDeptHealth(healthResults);
 
-    const [holdingsRes, pricesRes] = await Promise.all([
-      supabase.from("holdings").select("ticker, company_name, quantity, buy_price"),
-      // Use price_history to get the most recent price on or before the selected date,
-      // so historical date views show the correct portfolio value for that day.
-      supabase.from("price_history").select("ticker, price, as_of_date").lte("as_of_date", dateToView).order("as_of_date", { ascending: false }),
-    ]);
-    const hRows = holdingsRes.data || [];
-    const allPriceRows = pricesRes.data || [];
-    // Keep only the latest price per ticker (rows already sorted desc by as_of_date)
-    const priceLatestMap = new Map<string, { ticker: string; price: number; as_of_date: string }>();
-    for (const p of (allPriceRows as { ticker: string; price: number; as_of_date: string }[])) {
-      if (!priceLatestMap.has(p.ticker)) priceLatestMap.set(p.ticker, p);
-    }
-    const pRows = Array.from(priceLatestMap.values());
+    // get_portfolio_summary_as_of() runs DISTINCT ON + aggregation in Postgres,
+    // returning one row per ticker instead of the full price_history table.
+    const { data: portfolioRows } = await supabase.rpc("get_portfolio_summary_as_of", { as_of: dateToView });
+    const pRows = (portfolioRows || []) as {
+      ticker: string; company_name: string;
+      total_qty: number; total_cost: number; avg_cost: number;
+      current_price: number | null; price_date: string | null;
+      current_value: number | null; gain_loss: number | null; gain_loss_pct: number | null;
+    }[];
     let computedInvestmentData: InvestmentSummary | null = null;
-    if (hRows.length > 0) {
-      const priceMap = new Map(pRows.map((p: { ticker: string; price: number; as_of_date: string }) => [p.ticker, p]));
-      const stockMap = new Map<string, { ticker: string; company: string; totalQty: number; totalCost: number; currentPrice: number | null }>();
-      for (const h of hRows) {
-        if (!stockMap.has(h.ticker)) {
-          const cp = priceMap.get(h.ticker);
-          stockMap.set(h.ticker, { ticker: h.ticker, company: h.company_name || h.ticker, totalQty: 0, totalCost: 0, currentPrice: cp?.price ?? null });
-        }
-        const s = stockMap.get(h.ticker)!;
-        s.totalQty += h.quantity;
-        s.totalCost += h.quantity * h.buy_price;
-      }
+    if (pRows.length > 0) {
       let tCost = 0, tValue = 0;
       const invLosers: { ticker: string; company: string; pct: number }[] = [];
-      for (const s of stockMap.values()) {
-        tCost += s.totalCost;
-        if (s.currentPrice !== null) {
-          const val = s.totalQty * s.currentPrice;
-          tValue += val;
-          const pct = ((val - s.totalCost) / s.totalCost) * 100;
-          if (pct < -5) invLosers.push({ ticker: s.ticker, company: s.company, pct });
+      for (const r of pRows) {
+        tCost += r.total_cost || 0;
+        if (r.current_price !== null && r.current_value !== null) {
+          tValue += r.current_value;
+          if ((r.gain_loss_pct ?? 0) < -5) {
+            invLosers.push({ ticker: r.ticker, company: r.company_name || r.ticker, pct: r.gain_loss_pct! });
+          }
         }
       }
+      const priceDate = pRows.find(r => r.price_date)?.price_date ?? null;
       computedInvestmentData = {
         totalCost: tCost,
         totalValue: tValue,
         gainLoss: tValue - tCost,
         gainLossPct: tCost > 0 ? ((tValue - tCost) / tCost) * 100 : 0,
-        stockCount: stockMap.size,
+        stockCount: pRows.length,
         losers: invLosers.sort((a, b) => a.pct - b.pct),
-        priceDate: pRows[0]?.as_of_date || null,
+        priceDate,
       };
       setInvestmentData(computedInvestmentData);
     }

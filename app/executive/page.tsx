@@ -882,44 +882,37 @@ export default function ExecutiveDashboardPage() {
     }
     setDeptHealth(healthResults);
 
-    // Investment portfolio summary
-    const [holdingsRes, pricesRes] = await Promise.all([
-      supabase.from("holdings").select("ticker, company_name, quantity, buy_price"),
-      supabase.from("current_prices").select("ticker, price, as_of_date"),
-    ]);
-    const hRows = holdingsRes.data || [];
-    const pRows = pricesRes.data || [];
-    if (hRows.length > 0) {
-      const priceMap = new Map(pRows.map((p: { ticker: string; price: number; as_of_date: string }) => [p.ticker, p]));
-      const stockMap = new Map<string, { ticker: string; company: string; totalQty: number; totalCost: number; currentPrice: number | null }>();
-      for (const h of hRows) {
-        if (!stockMap.has(h.ticker)) {
-          const cp = priceMap.get(h.ticker);
-          stockMap.set(h.ticker, { ticker: h.ticker, company: h.company_name || h.ticker, totalQty: 0, totalCost: 0, currentPrice: cp?.price ?? null });
-        }
-        const s = stockMap.get(h.ticker)!;
-        s.totalQty += h.quantity;
-        s.totalCost += h.quantity * h.buy_price;
-      }
+    // Investment portfolio summary — uses today's date since executive page
+    // always shows current prices (no historical date selector).
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: portfolioRows } = await supabase.rpc("get_portfolio_summary_as_of", { as_of: today });
+    const pRows = (portfolioRows || []) as {
+      ticker: string; company_name: string;
+      total_qty: number; total_cost: number; avg_cost: number;
+      current_price: number | null; price_date: string | null;
+      current_value: number | null; gain_loss: number | null; gain_loss_pct: number | null;
+    }[];
+    if (pRows.length > 0) {
       let tCost = 0, tValue = 0;
       const invLosers: { ticker: string; company: string; pct: number }[] = [];
-      for (const s of stockMap.values()) {
-        tCost += s.totalCost;
-        if (s.currentPrice !== null) {
-          const val = s.totalQty * s.currentPrice;
-          tValue += val;
-          const pct = ((val - s.totalCost) / s.totalCost) * 100;
-          if (pct < -5) invLosers.push({ ticker: s.ticker, company: s.company, pct });
+      for (const r of pRows) {
+        tCost += r.total_cost || 0;
+        if (r.current_price !== null && r.current_value !== null) {
+          tValue += r.current_value;
+          if ((r.gain_loss_pct ?? 0) < -5) {
+            invLosers.push({ ticker: r.ticker, company: r.company_name || r.ticker, pct: r.gain_loss_pct! });
+          }
         }
       }
+      const priceDate = pRows.find(r => r.price_date)?.price_date ?? null;
       setInvestmentData({
         totalCost: tCost,
         totalValue: tValue,
         gainLoss: tValue - tCost,
         gainLossPct: tCost > 0 ? ((tValue - tCost) / tCost) * 100 : 0,
-        stockCount: stockMap.size,
+        stockCount: pRows.length,
         losers: invLosers.sort((a, b) => a.pct - b.pct),
-        priceDate: pRows[0]?.as_of_date || null,
+        priceDate,
       });
     }
 

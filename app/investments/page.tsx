@@ -8,6 +8,7 @@ import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { canEditInvestments, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { formatDateUK } from "../lib/dateUtils";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid, Cell,
@@ -28,9 +29,14 @@ type Holding = {
 
 type PriceRow = {
   ticker: string;
-  price: number;
-  as_of_date: string;
-  source: string;
+  current_price: number | null;
+  price_date: string | null;
+  total_qty: number;
+  total_cost: number;
+  avg_cost: number;
+  current_value: number | null;
+  gain_loss: number | null;
+  gain_loss_pct: number | null;
 };
 
 type HistoryRow = {
@@ -67,12 +73,6 @@ function fmtPct(n: number) {
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
-function fmtDate(d: string | null) {
-  if (!d) return "—";
-  const [y, m, day] = d.split("-");
-  return `${day}-${m}-${y}`;
-}
-
 function glColor(n: number | null) {
   if (n === null) return SLATE;
   if (n > 0) return GREEN;
@@ -92,9 +92,12 @@ export default function InvestmentsPage() {
   const isMobile = useMobile();
   const dlg = useConfirm();
 
+  const todayISO = new Date().toISOString().slice(0, 10);
+
   const [canEdit, setCanEdit] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(todayISO);
   const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [currentPrices, setCurrentPrices] = useState<PriceRow[]>([]);
+  const [portfolioPrices, setPortfolioPrices] = useState<PriceRow[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -115,15 +118,16 @@ export default function InvestmentsPage() {
   const [formTarget, setFormTarget] = useState("");
   const [formNotes, setFormNotes] = useState("");
 
-  const load = useCallback(async () => {
-    const [hRes, pRes, histRes, latestRes] = await Promise.all([
+  const load = useCallback(async (asOf: string) => {
+    const [hRes, portfolioRes, histRes, latestRes] = await Promise.all([
       supabase.from("holdings").select("*").order("ticker"),
-      supabase.from("current_prices").select("*"),
+      // RPC returns one pre-aggregated row per ticker with prices as of the selected date.
+      supabase.rpc("get_portfolio_summary_as_of", { as_of: asOf }),
       supabase.from("price_history").select("ticker, price, as_of_date").order("as_of_date", { ascending: true }),
       supabase.from("price_history").select("created_at").order("created_at", { ascending: false }).limit(1).single(),
     ]);
     setHoldings(hRes.data || []);
-    setCurrentPrices(pRes.data || []);
+    setPortfolioPrices((portfolioRes.data || []) as PriceRow[]);
     setHistory(histRes.data || []);
     setLastPriceUpdate(latestRes.data?.created_at ?? null);
     setLoading(false);
@@ -131,7 +135,7 @@ export default function InvestmentsPage() {
 
   useEffect(() => {
     if (checking) return;
-    load();
+    load(selectedDate);
     (async () => {
       const { data: userData } = await supabase.auth.getUser();
       const email = userData.user?.email;
@@ -143,46 +147,40 @@ export default function InvestmentsPage() {
       const ctx: UserCtx = { email, role: memberData?.role ?? null, department: memberData?.department ?? null, company: memberData?.company ?? null, overrides };
       setCanEdit(canEditInvestments(ctx));
     })();
-  }, [checking, load]);
+  }, [checking, load, selectedDate]);
 
   const stocks: PortfolioStock[] = (() => {
-    const map = new Map<string, PortfolioStock>();
+    // portfolioPrices from the RPC already has one aggregated row per ticker
+    // with quantities, costs, and prices as of the selected date.
+    const priceMap = new Map(portfolioPrices.map((p) => [p.ticker, p]));
+
+    // We still need holdings to get the individual lots (for edit/delete) and target prices.
+    const lotMap = new Map<string, Holding[]>();
+    const targetMap = new Map<string, number | null>();
     for (const h of holdings) {
-      if (!map.has(h.ticker)) {
-        const cp = currentPrices.find((p) => p.ticker === h.ticker);
-        map.set(h.ticker, {
-          ticker: h.ticker,
-          company: h.company_name || h.ticker,
-          totalQty: 0,
-          avgCost: 0,
-          totalCost: 0,
-          currentPrice: cp?.price ?? null,
-          currentValue: null,
-          gainLoss: null,
-          gainLossPct: null,
-          priceDate: cp?.as_of_date ?? null,
-          priceSource: cp?.source ?? null,
-          targetPrice: h.target_price,
-          lots: [],
-        });
-      }
-      const s = map.get(h.ticker)!;
-      s.totalQty += h.quantity;
-      s.totalCost += h.quantity * h.buy_price;
-      if (h.target_price && (!s.targetPrice || h.target_price > s.targetPrice)) {
-        s.targetPrice = h.target_price;
-      }
-      s.lots.push(h);
-    }
-    for (const s of map.values()) {
-      s.avgCost = s.totalQty > 0 ? s.totalCost / s.totalQty : 0;
-      if (s.currentPrice !== null) {
-        s.currentValue = s.totalQty * s.currentPrice;
-        s.gainLoss = s.currentValue - s.totalCost;
-        s.gainLossPct = s.totalCost > 0 ? (s.gainLoss / s.totalCost) * 100 : 0;
+      if (!lotMap.has(h.ticker)) lotMap.set(h.ticker, []);
+      lotMap.get(h.ticker)!.push(h);
+      if (h.target_price && (!targetMap.get(h.ticker) || h.target_price > (targetMap.get(h.ticker) ?? 0))) {
+        targetMap.set(h.ticker, h.target_price);
       }
     }
-    return Array.from(map.values()).sort((a, b) => a.ticker.localeCompare(b.ticker));
+
+    // Build PortfolioStock from the RPC result — quantities/costs come from the DB.
+    return portfolioPrices.map((p) => ({
+      ticker: p.ticker,
+      company: (holdings.find(h => h.ticker === p.ticker)?.company_name) || p.ticker,
+      totalQty: p.total_qty,
+      avgCost: p.avg_cost,
+      totalCost: p.total_cost,
+      currentPrice: p.current_price,
+      currentValue: p.current_value,
+      gainLoss: p.gain_loss,
+      gainLossPct: p.gain_loss_pct,
+      priceDate: p.price_date,
+      priceSource: null,
+      targetPrice: targetMap.get(p.ticker) ?? null,
+      lots: lotMap.get(p.ticker) || [],
+    })).sort((a, b) => a.ticker.localeCompare(b.ticker));
   })();
 
   const totalCost = stocks.reduce((s, st) => s + st.totalCost, 0);
@@ -203,7 +201,7 @@ export default function InvestmentsPage() {
       });
       const json = await res.json();
       setUpdateResult(`Updated ${json.succeeded}/${json.total} prices. ${json.failed > 0 ? `${json.failed} failed.` : ""}`);
-      await load();
+      await load(selectedDate);
     } catch {
       setUpdateResult("Failed to update prices.");
     }
@@ -214,14 +212,13 @@ export default function InvestmentsPage() {
     if (!canEdit) return;
     const price = parseFloat(manualPrice);
     if (isNaN(price) || price <= 0) return;
-    const today = new Date().toISOString().slice(0, 10);
     await supabase.from("price_history").upsert(
-      { ticker, price, as_of_date: today, source: "manual" },
+      { ticker, price, as_of_date: todayISO, source: "manual" },
       { onConflict: "ticker,as_of_date" },
     );
     setManualPriceModal(null);
     setManualPrice("");
-    await load();
+    await load(selectedDate);
   }
 
   async function handleAddHolding(e: React.FormEvent) {
@@ -242,14 +239,14 @@ export default function InvestmentsPage() {
       await supabase.from("holdings").insert(payload);
     }
     resetForm();
-    await load();
+    await load(selectedDate);
   }
 
   async function handleDelete(id: string) {
     if (!canEdit) return;
     if (!await dlg.confirm("Delete this holding?", true)) return;
     await supabase.from("holdings").delete().eq("id", id);
-    await load();
+    await load(selectedDate);
   }
 
   function startEdit(h: Holding) {
@@ -302,13 +299,43 @@ export default function InvestmentsPage() {
 
   if (checking) return null;
 
-  const priceDate = currentPrices[0]?.as_of_date;
+  const priceDate = portfolioPrices.find(p => p.price_date)?.price_date ?? null;
+  const isHistorical = selectedDate < todayISO;
 
   return (
     <AuthWrapper>
       {dlg.element}
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
         <PageHeader />
+
+        {/* Date selector */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>View portfolio as of:</span>
+          <DateInput
+            value={selectedDate}
+            onChange={(e) => { setSelectedDate(e.target.value); setLoading(true); }}
+            style={{ padding: "6px 10px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px" }}
+          />
+          {isHistorical && (
+            <button
+              onClick={() => { setSelectedDate(todayISO); setLoading(true); }}
+              style={{ fontSize: "13px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+            >
+              Back to today
+            </button>
+          )}
+        </div>
+
+        {/* Historical date notice */}
+        {isHistorical && !loading && (
+          <div style={{
+            border: "1px solid #bfdbfe", borderLeft: `4px solid ${COLOURS.BLUE}`,
+            borderRadius: "8px", backgroundColor: "#eff6ff",
+            padding: "8px 14px", marginBottom: "14px", fontSize: "14px", color: "#1d4ed8",
+          }}>
+            Showing portfolio value as of <strong>{formatDateUK(selectedDate)}</strong> — prices are the most recent recorded on or before that date.
+          </div>
+        )}
 
         {loading ? (
           <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading portfolio...</p>
@@ -341,7 +368,7 @@ export default function InvestmentsPage() {
                 sub={fmtPct(totalGLPct)}
                 color={glColor(totalGL)}
               />
-              <SummaryCard label="Stocks" value={String(stocks.length)} sub={priceDate ? `Prices: ${fmtDate(priceDate)}` : "No prices"} color={SLATE} />
+              <SummaryCard label="Stocks" value={String(stocks.length)} sub={priceDate ? `Prices: ${formatDateUK(priceDate)}` : "No prices"} color={SLATE} />
             </div>
 
             {/* Last updated */}
@@ -483,7 +510,7 @@ export default function InvestmentsPage() {
                         {s.targetPrice ? fmtPrice(s.targetPrice) : "—"}
                       </td>
                       <td style={{ ...td, color: "var(--text-secondary, #64748b)", fontSize: "14px" }}>
-                        {s.priceDate ? fmtDate(s.priceDate) : "—"}
+                        {s.priceDate ? formatDateUK(s.priceDate) : "—"}
                         {s.priceSource ? ` (${s.priceSource})` : ""}
                       </td>
                       {canEdit && (
