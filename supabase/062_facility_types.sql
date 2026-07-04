@@ -2,19 +2,14 @@
 -- Apply manually via Supabase SQL Editor AFTER 061.
 
 -- ── 1. Add facility_name column (the sub-facility label within a bank) ─────────
--- E.g. bank_name = "HBL", facility_name = "Guarantee Limit"
---      bank_name = "HBL", facility_name = "Overdraft"
---      bank_name = "Faysal Bank", facility_name = "LC Facility"
-
 alter table guarantee_facilities
   add column if not exists facility_name text;
 
--- Back-fill: use the existing facility_type as the name for any existing rows
 update guarantee_facilities
   set facility_name = facility_type
   where facility_name is null;
 
--- ── 2. Rebuild get_guarantee_summary() to include facility_name + bank grouping ─
+-- ── 2. Rebuild get_guarantee_summary() ──────────────────────────────────────────
 
 create or replace function get_guarantee_summary()
 returns jsonb
@@ -25,10 +20,7 @@ as $$
 declare
   v_result jsonb;
 begin
-
   with
-
-  -- resolve effective bill date: linked receivable wins, manual fallback
   g as (
     select
       g.*,
@@ -64,8 +56,6 @@ begin
     from guarantees g
     left join receivables r on r.id = g.first_bill_receivable_id
   ),
-
-  -- per-facility utilisation
   fac_util as (
     select
       f.id, f.bank_name, f.facility_name, f.facility_type,
@@ -73,71 +63,62 @@ begin
       coalesce(sum(g.amount) filter (where g.status = 'Active'), 0) as seized
     from guarantee_facilities f
     left join guarantees g on g.facility_id = f.id
+    where f.active = true
     group by f.id
   ),
-
-  -- per-bank rollup (for the grouped display)
   bank_rollup as (
     select
       bank_name,
-      sum(total_limit)                       as bank_total_limit,
-      sum(seized)                            as bank_seized,
-      greatest(0, sum(total_limit) - sum(seized)) as bank_available,
+      sum(total_limit)                                           as bank_total_limit,
+      sum(seized)                                                as bank_seized,
+      greatest(0, sum(total_limit) - sum(seized))               as bank_available,
       case when sum(total_limit) > 0
            then round(sum(seized) * 100 / sum(total_limit))
            else 0
-      end                                    as bank_utilisation_pct,
+      end                                                        as bank_utilisation_pct,
       jsonb_agg(jsonb_build_object(
-        'id',               id,
-        'facility_name',    facility_name,
-        'facility_type',    facility_type,
-        'total_limit',      total_limit,
-        'seized',           seized,
-        'available',        greatest(0, total_limit - seized),
-        'utilisation_pct',  case when total_limit > 0
-                                 then round(seized * 100 / total_limit)
-                                 else 0 end,
-        'notes',            notes,
-        'active',           active
+        'id',              id,
+        'facility_name',   facility_name,
+        'facility_type',   facility_type,
+        'bank_name',       bank_name,
+        'total_limit',     total_limit,
+        'seized',          seized,
+        'available',       greatest(0, total_limit - seized),
+        'utilisation_pct', case when total_limit > 0 then round(seized * 100 / total_limit) else 0 end,
+        'notes',           notes,
+        'active',          active
       ) order by facility_name) as sub_facilities
     from fac_util
-    where active = true
     group by bank_name
     order by bank_name
   )
-
   select jsonb_build_object(
-
     'facilities', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'id',               fu.id,
-        'bank_name',        fu.bank_name,
-        'facility_name',    fu.facility_name,
-        'facility_type',    fu.facility_type,
-        'total_limit',      fu.total_limit,
-        'seized',           fu.seized,
-        'available',        greatest(0, fu.total_limit - fu.seized),
-        'utilisation_pct',  case when fu.total_limit > 0
-                                 then round(fu.seized * 100 / fu.total_limit)
-                                 else 0 end,
-        'notes',            fu.notes,
-        'active',           fu.active
+        'id',              fu.id,
+        'bank_name',       fu.bank_name,
+        'facility_name',   fu.facility_name,
+        'facility_type',   fu.facility_type,
+        'total_limit',     fu.total_limit,
+        'seized',          fu.seized,
+        'available',       greatest(0, fu.total_limit - fu.seized),
+        'utilisation_pct', case when fu.total_limit > 0 then round(fu.seized * 100 / fu.total_limit) else 0 end,
+        'notes',           fu.notes,
+        'active',          fu.active
       ) order by fu.bank_name, fu.facility_name)
-      from fac_util fu where fu.active = true
+      from fac_util fu
     ), '[]'::jsonb),
-
     'banks', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'bank_name',          br.bank_name,
-        'bank_total_limit',   br.bank_total_limit,
-        'bank_seized',        br.bank_seized,
-        'bank_available',     br.bank_available,
+        'bank_name',            br.bank_name,
+        'bank_total_limit',     br.bank_total_limit,
+        'bank_seized',          br.bank_seized,
+        'bank_available',       br.bank_available,
         'bank_utilisation_pct', br.bank_utilisation_pct,
-        'sub_facilities',     br.sub_facilities
+        'sub_facilities',       br.sub_facilities
       ))
       from bank_rollup br
     ), '[]'::jsonb),
-
     'guarantees', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id',                       g.id,
@@ -175,21 +156,18 @@ begin
       )
       from g
     ), '[]'::jsonb),
-
     'totals', (
       select jsonb_build_object(
-        'active_count',              count(*)          filter (where g.status = 'Active'),
-        'total_amount_active',       coalesce(sum(g.amount)              filter (where g.status = 'Active'), 0),
-        'total_cash_margin_stuck',   coalesce(sum(g.cash_margin_amount)  filter (where g.status = 'Active'), 0),
-        'total_bank_charges',        coalesce(sum(g.bank_charges), 0),
-        'overdue_count',             count(*)          filter (where g.chase_urgency = 'Overdue'),
-        'due_soon_count',            count(*)          filter (where g.chase_urgency = 'Due soon')
+        'active_count',            count(*)         filter (where g.status = 'Active'),
+        'total_amount_active',     coalesce(sum(g.amount)             filter (where g.status = 'Active'), 0),
+        'total_cash_margin_stuck', coalesce(sum(g.cash_margin_amount) filter (where g.status = 'Active'), 0),
+        'total_bank_charges',      coalesce(sum(g.bank_charges), 0),
+        'overdue_count',           count(*)         filter (where g.chase_urgency = 'Overdue'),
+        'due_soon_count',          count(*)         filter (where g.chase_urgency = 'Due soon')
       )
       from g
     )
-
   ) into v_result;
-
   return v_result;
 end;
 $$;
@@ -197,8 +175,7 @@ $$;
 grant execute on function get_guarantee_summary() to authenticated;
 
 
--- ── 3. New RPC: get_facility_synopsis() — for the executive dashboard ──────────
--- Returns a compact bank-by-bank summary for the CEO strip.
+-- ── 3. get_facility_synopsis() — executive dashboard bank strip ──────────────────
 
 create or replace function get_facility_synopsis()
 returns jsonb
