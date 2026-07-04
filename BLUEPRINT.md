@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 03/07/2026 (session 4).
+> **This is the source of truth.** Read before touching any code. Last updated: 04/07/2026 (performance optimisation session).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -367,7 +367,7 @@ api/
 
 ## 4. Complete Database Schema
 
-> Source of truth: `supabase/` migration files 001–049. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run.
+> Source of truth: `supabase/` migration files 001–056. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run.
 
 ### Core tables
 
@@ -991,10 +991,42 @@ Gmail-ingested raw minutes awaiting admin review.
 **Constraint:** UNIQUE(ticker, as_of_date).
 
 #### Views
-- `current_prices` — latest price per ticker (DISTINCT ON). Used by `/investments` page only.
-- `portfolio_summary` — joins holdings with current_prices for P&L view
+- `current_prices` — latest price per ticker (DISTINCT ON). Legacy view, still exists in DB.
+- `portfolio_summary` — joins holdings with current_prices for P&L view. Legacy view.
 
-**Important:** The CEO home page (`/home`) does NOT use `current_prices` when the date selector is in the past. Instead it queries `price_history` with `.lte("as_of_date", dateToView)` and picks the most recent price per ticker in JS — this ensures historical date views show the correct portfolio value for that day.
+**Important:** Neither view is used by the live app. All pages use `get_portfolio_summary_as_of(date)` RPC (migration 054) which handles both today and historical dates correctly in Postgres.
+
+---
+
+### Postgres RPC Functions (performance layer)
+
+These functions run entirely in Postgres and return pre-aggregated results. **Never replaced by raw table fetches** — they are the correct way to load data on the pages below.
+
+#### `get_portfolio_summary_as_of(as_of date)` — migration 054
+Returns one row per ticker with: ticker, company_name, total_qty, total_cost, avg_cost, current_price, price_date, current_value, gain_loss, gain_loss_pct.
+- Uses DISTINCT ON to find most recent price ≤ as_of date. Works for today and historical dates.
+- **Used by:** `app/investments/page.tsx`, `app/home/page.tsx` (investment section), `app/executive/page.tsx` (investment section).
+
+#### `get_plant_kpis(as_of_date date, month_start date, month_end date)` — migration 055
+Returns one row per active plant with opening balances, cumulative totals since cutoff, on-date totals, MTD totals, and entered_on_date boolean.
+- Replaces 7 raw table fetches: opening_balances, broken_opening_balances, production_entries (90d), dispatch_entries (90d), breakage_entries (90d), scrap_processed_entries (90d).
+- **Used by:** `app/home/page.tsx`, `app/executive/page.tsx`, `app/dashboard/DashboardView.tsx`.
+- Monthly production/dispatch/breakage arrays are still fetched separately for the daily ops chart (needs per-day breakdown) and quarterly escalation checks (needs per-quarter cumulative sums).
+
+#### `get_receivable_rag_by_customer()` — migration 056
+Returns one row per customer with green_amount, amber_amount, red_amount, total_amount, red_count.
+- RAG status computed in Postgres using working-day arithmetic and stage budgets.
+- **Used by:** `app/home/page.tsx` (receivables section + Finance Manager briefing).
+
+#### `get_receivable_aging_totals()` — migration 056
+Returns 4 rows (buckets: 0-30, 31-60, 61-90, 90+) with total PKR amount per bucket.
+- **Used by:** `app/home/page.tsx` (receivables aging bar).
+
+#### `get_receivable_aging_by_customer()` — migration 056
+Returns one row per customer with b0_30, b31_60, b61_90, b90_plus, total columns.
+- **Used by:** `app/home/page.tsx` (receivables aging by customer chart).
+
+**Security:** All RPCs use `security definer` + `set search_path = public` — they bypass RLS intentionally and are accessible to `authenticated` role only. Raw `receivables` table rows are NOT readable by the browser client directly (RLS blocks anon/authenticated reads) — the RPCs are the only correct read path.
 
 ---
 

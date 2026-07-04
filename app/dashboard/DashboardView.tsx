@@ -11,6 +11,21 @@ import MonthlyTargets from "./MonthlyTargets";
 import { canSeeAllTasks, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Plant = { id: string; name: string; type: string };
+type PlantKpiRow = {
+  plant_id: string; plant_name: string; plant_type: string;
+  opening_good_31: number; opening_good_36: number; opening_good_45: number; opening_good_meter: number;
+  opening_broken_31: number; opening_broken_36: number; opening_broken_45: number;
+  opening_cutoff_date: string | null; broken_cutoff_date: string | null;
+  produced_31: number; produced_36: number; produced_45: number; produced_meter: number;
+  dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
+  broken_31: number; broken_36: number; broken_45: number;
+  scrap_31: number; scrap_36: number; scrap_45: number;
+  on_date_produced_31: number; on_date_produced_36: number; on_date_produced_45: number; on_date_produced_meter: number;
+  on_date_dispatched_31: number; on_date_dispatched_36: number; on_date_dispatched_45: number; on_date_dispatched_meter: number;
+  on_date_broken_31: number; on_date_broken_36: number; on_date_broken_45: number;
+  mtd_produced: number; mtd_dispatched: number; mtd_broken: number;
+  entered_on_date: boolean;
+};
 type SizeTotals = { s31: number; s36: number; s45: number };
 
 type MonthlyTarget = {
@@ -120,9 +135,6 @@ const BORDER = "var(--border-color, #e2e8f0)";
 
 const today = new Date().toISOString().slice(0, 10);
 
-function emptyTotals(): SizeTotals {
-  return { s31: 0, s36: 0, s45: 0 };
-}
 function total(t: SizeTotals) {
   return t.s31 + t.s36 + t.s45;
 }
@@ -162,25 +174,6 @@ function statusColor(s: Status) {
 function statusLabel(s: Status) {
   if (s === "none") return "No Target";
   return s.toUpperCase();
-}
-
-// Working days (Mon-Fri) between two dates, exclusive of start, inclusive of end.
-function workingDaysBetween(fromDate: string, toDate: string): number {
-  const start = new Date(fromDate + "T00:00:00");
-  const end = new Date(toDate + "T00:00:00");
-  if (start >= end) return 0;
-  let count = 0;
-  const cur = new Date(start);
-  while (cur < end) {
-    cur.setDate(cur.getDate() + 1);
-    const day = cur.getDay();
-    if (day !== 0 && day !== 6) count++;
-  }
-  return count;
-}
-function lastEntryDate(rows: { plant_id: string; entry_date: string }[], plantId: string): string | null {
-  const dates = rows.filter((r) => r.plant_id === plantId).map((r) => r.entry_date).sort();
-  return dates.length ? dates[dates.length - 1] : null;
 }
 
 const THRESHOLD = 85;
@@ -243,39 +236,36 @@ export default function DashboardView() {
 
     const isPriv = canSeeAllTasks(userCtx);
 
-    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const ENTRY_COLS = "plant_id, entry_date, qty_31, qty_36, qty_45, qty_meter";
     const TASK_COLS = "id, task_type, description, project, priority, due_date, assigned_date, assigned_to, assigned_to_email, assigned_by, status, stuck_reason, notes, reply_required, reply_text, reply_by, reply_at, corrective_action, recovery_date, impact_on_monthly_target, time_spent_minutes";
+
     const [
-      plantsRes, openRes, brokenOpenRes, prodRes, dispRes, brkRes, scrapRes,
-      prodTargetsRes, dispTargetsRes, machineRes, tasksRes,
+      plantKpisRes, prodTargetsRes, dispTargetsRes, machineRes, tasksRes, trendProdRes,
     ] = await Promise.all([
-      supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
-      supabase.from("opening_balances").select("plant_id, as_of_date, bal_31, bal_36, bal_45, bal_meter, created_at"),
-      supabase.from("broken_opening_balances").select("plant_id, as_of_date, bal_31, bal_36, bal_45, bal_meter, created_at"),
-      supabase.from("production_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo),
-      supabase.from("dispatch_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo),
-      supabase.from("breakage_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo),
-      supabase.from("scrap_processed_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo),
+      // Single RPC replaces 7 raw table fetches — returns one row per active plant
+      supabase.rpc("get_plant_kpis", {
+        as_of_date: today,
+        month_start: monthStart,
+        month_end: monthEnd,
+      }),
       supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", currentMonth),
       supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", currentMonth),
       supabase.from("machine_issues").select("id, plant_name, machine_name, issue_status, expected_resolution, issue_description, action_taken, created_at").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
       isPriv
         ? supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(200)
         : supabase.from("tasks").select(TASK_COLS).eq("assigned_to_email", email || "").order("created_at", { ascending: false }),
+      // Monthly production kept for the 30-day trend chart (per-day breakdown needed)
+      supabase.from("production_entries").select(ENTRY_COLS).gte("entry_date", monthStart).lte("entry_date", today),
     ]);
 
-    // Scope plants to user's assigned plants for non-privileged users
-    const allPlants = plantsRes.data || [];
-    const plants = assignedPlantIds ? allPlants.filter((p) => assignedPlantIds!.has(p.id)) : allPlants;
+    const allPlantKpis = (plantKpisRes.data || []) as PlantKpiRow[];
+    // Scope to user's assigned plants for non-privileged users
+    const plantKpis = assignedPlantIds
+      ? allPlantKpis.filter((r) => assignedPlantIds!.has(r.plant_id))
+      : allPlantKpis;
+    const plants: Plant[] = plantKpis.map((r) => ({ id: r.plant_id, name: r.plant_name, type: r.plant_type }));
     const plantIdSet = new Set(plants.map((p) => p.id));
 
-    const opening = openRes.data || [];
-    const brokenOpening = brokenOpenRes.data || [];
-    const production = prodRes.data || [];
-    const dispatch = dispRes.data || [];
-    const breakage = brkRes.data || [];
-    const scrap = scrapRes.data || [];
     const prodTargets: MonthlyTarget[] = prodTargetsRes.data || [];
     const dispTargets: MonthlyTarget[] = dispTargetsRes.data || [];
 
@@ -293,109 +283,70 @@ export default function DashboardView() {
 
     const weekNumber = getMonthWeekNumber(today);
 
-    function cutoffFor(rows: any[], plantId: string): { cutoff: string | null; bal: SizeTotals } {
-      const forPlant = rows.filter((r) => r.plant_id === plantId).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-      if (forPlant.length === 0) return { cutoff: null, bal: emptyTotals() };
-      const latest = forPlant[0];
-      return { cutoff: latest.as_of_date || null, bal: { s31: latest.bal_31 || 0, s36: latest.bal_36 || 0, s45: latest.bal_45 || 0 } };
-    }
-
-    function sumFor(rows: any[], plantId: string, opts: { cutoff?: string | null; from?: string; to?: string; onlyToday?: boolean } = {}): SizeTotals {
-      const t = emptyTotals();
-      for (const r of rows) {
-        if (r.plant_id !== plantId) continue;
-        if (opts.onlyToday && r.entry_date !== today) continue;
-        if (opts.cutoff && r.entry_date < opts.cutoff) continue;
-        if (opts.from && r.entry_date < opts.from) continue;
-        if (opts.to && r.entry_date > opts.to) continue;
-        t.s31 += r.qty_31 || 0;
-        t.s36 += r.qty_36 || 0;
-        t.s45 += r.qty_45 || 0;
-      }
-      return t;
-    }
-
-    function buildKPI(rows: any[], plantId: string, target: MonthlyTarget | undefined): MetricKPI {
-      const monthlyTarget = targetTotal(target);
-      const hasTarget = monthlyTarget > 0;
-      const monthActual = total(sumFor(rows, plantId, { from: monthStart, to: monthEnd }));
-      const quarterTarget = hasTarget ? Math.round((monthlyTarget / 4) * weekNumber) : 0;
-      const quarterActual = monthActual;
-      const monthAchievement = hasTarget ? Math.round((monthActual / monthlyTarget) * 100) : 0;
-      const quarterAchievement = quarterTarget > 0 ? Math.round((quarterActual / quarterTarget) * 100) : 0;
-      const behindThisCheckpoint = hasTarget && quarterAchievement < THRESHOLD;
-      return {
-        monthlyTarget, monthActual, monthAchievement, quarterTarget, quarterActual,
-        quarterAchievement, status: achievementStatus(monthAchievement, hasTarget),
-        behindThisCheckpoint, weekNumber,
-      };
-    }
-
-    const result: PlantSummary[] = plants.map((plant) => {
-      const goodOpen = cutoffFor(opening, plant.id);
-      const brokenOpen = cutoffFor(brokenOpening, plant.id);
-      const cut = goodOpen.cutoff;
-      const brokenCut = brokenOpen.cutoff;
-
-      const totalProduced = sumFor(production, plant.id, { cutoff: cut });
-      const totalDispatched = sumFor(dispatch, plant.id, { cutoff: cut });
-      const totalBroken = sumFor(breakage, plant.id, { cutoff: cut });
-      const totalScrapProcessed = sumFor(scrap, plant.id, { cutoff: brokenCut });
-      const totalBrokenFromBrokenCut = sumFor(breakage, plant.id, { cutoff: brokenCut });
-
+    // Build plant summaries from RPC rows — no JS loops over raw entries needed
+    const result: PlantSummary[] = plantKpis.map((r) => {
       const closingGoodStock: SizeTotals = {
-        s31: goodOpen.bal.s31 + totalProduced.s31 - totalBroken.s31 - totalDispatched.s31,
-        s36: goodOpen.bal.s36 + totalProduced.s36 - totalBroken.s36 - totalDispatched.s36,
-        s45: goodOpen.bal.s45 + totalProduced.s45 - totalBroken.s45 - totalDispatched.s45,
+        s31: r.opening_good_31 + r.produced_31 - r.broken_31 - r.dispatched_31,
+        s36: r.opening_good_36 + r.produced_36 - r.broken_36 - r.dispatched_36,
+        s45: r.opening_good_45 + r.produced_45 - r.broken_45 - r.dispatched_45,
       };
       const closingBrokenStock: SizeTotals = {
-        s31: brokenOpen.bal.s31 + totalBrokenFromBrokenCut.s31 - totalScrapProcessed.s31,
-        s36: brokenOpen.bal.s36 + totalBrokenFromBrokenCut.s36 - totalScrapProcessed.s36,
-        s45: brokenOpen.bal.s45 + totalBrokenFromBrokenCut.s45 - totalScrapProcessed.s45,
+        s31: r.opening_broken_31 + r.broken_31 - r.scrap_31,
+        s36: r.opening_broken_36 + r.broken_36 - r.scrap_36,
+        s45: r.opening_broken_45 + r.broken_45 - r.scrap_45,
       };
 
-      const todayProduced = sumFor(production, plant.id, { onlyToday: true });
-      const todayDispatched = sumFor(dispatch, plant.id, { onlyToday: true });
-      const todayBroken = sumFor(breakage, plant.id, { onlyToday: true });
+      const prodTarget = prodTargets.find((t) => t.plant_id === r.plant_id);
+      const dispTarget = dispTargets.find((t) => t.plant_id === r.plant_id);
+      const monthlyProdTarget = targetTotal(prodTarget);
+      const monthlyDispTarget = targetTotal(dispTarget);
 
-      const productionKPI = buildKPI(production, plant.id, prodTargets.find((t) => t.plant_id === plant.id));
-      const dispatchKPI = buildKPI(dispatch, plant.id, dispTargets.find((t) => t.plant_id === plant.id));
+      const buildKPI = (mtdActual: number, monthlyTarget: number): MetricKPI => {
+        const hasTarget = monthlyTarget > 0;
+        const quarterTarget = hasTarget ? Math.round((monthlyTarget / 4) * weekNumber) : 0;
+        const monthAchievement = hasTarget ? Math.round((mtdActual / monthlyTarget) * 100) : 0;
+        const quarterAchievement = quarterTarget > 0 ? Math.round((mtdActual / quarterTarget) * 100) : 0;
+        return {
+          monthlyTarget, monthActual: mtdActual, monthAchievement,
+          quarterTarget, quarterActual: mtdActual, quarterAchievement,
+          status: achievementStatus(monthAchievement, hasTarget),
+          behindThisCheckpoint: hasTarget && quarterAchievement < THRESHOLD,
+          weekNumber,
+        };
+      };
 
-      const monthProducedTotal = productionKPI.monthActual;
-      const monthBrokenTotal = total(sumFor(breakage, plant.id, { from: monthStart, to: monthEnd }));
-      const breakageRate = monthProducedTotal > 0 ? (monthBrokenTotal / monthProducedTotal) * 100 : 0;
+      const breakageRate = r.mtd_produced > 0 ? (r.mtd_broken / r.mtd_produced) * 100 : 0;
       let breakageStatus: Status = "green";
-      if (monthProducedTotal === 0) breakageStatus = "none";
+      if (r.mtd_produced === 0) breakageStatus = "none";
       else if (breakageRate > 1.5) breakageStatus = "red";
       else if (breakageRate > 1.0) breakageStatus = "amber";
 
-      const enteredProductionToday = production.some((r) => r.plant_id === plant.id && r.entry_date === today);
-      const enteredDispatchToday = dispatch.some((r) => r.plant_id === plant.id && r.entry_date === today);
-      const lastProd = lastEntryDate(production, plant.id);
-      const lastDisp = lastEntryDate(dispatch, plant.id);
-      const productionDaysMissing = lastProd ? workingDaysBetween(lastProd, today) : 999;
-      const dispatchDaysMissing = lastDisp ? workingDaysBetween(lastDisp, today) : 999;
-
       return {
-        plant, closingGoodStock, closingBrokenStock, todayProduced, todayDispatched, todayBroken,
-        production: productionKPI, dispatch: dispatchKPI, breakageRate, breakageStatus,
-        enteredProductionToday, enteredDispatchToday, productionDaysMissing, dispatchDaysMissing,
+        plant: { id: r.plant_id, name: r.plant_name, type: r.plant_type },
+        closingGoodStock,
+        closingBrokenStock,
+        todayProduced:   { s31: r.on_date_produced_31,   s36: r.on_date_produced_36,   s45: r.on_date_produced_45 },
+        todayDispatched: { s31: r.on_date_dispatched_31, s36: r.on_date_dispatched_36, s45: r.on_date_dispatched_45 },
+        todayBroken:     { s31: r.on_date_broken_31,     s36: r.on_date_broken_36,     s45: r.on_date_broken_45 },
+        production: buildKPI(r.mtd_produced, monthlyProdTarget),
+        dispatch:   buildKPI(r.mtd_dispatched, monthlyDispTarget),
+        breakageRate, breakageStatus,
+        enteredProductionToday: r.entered_on_date,
+        enteredDispatchToday:   r.entered_on_date,
+        productionDaysMissing: r.entered_on_date ? 0 : 1,
+        dispatchDaysMissing:   r.entered_on_date ? 0 : 1,
       };
     });
 
     setSummaries(result);
 
-    // Build 30-day production trend
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const cutoffStr = thirtyDaysAgo.toISOString().slice(0, 10);
+    // Build 30-day production trend from the monthly fetch (per-day breakdown needed for chart)
+    const trendProd = trendProdRes.data || [];
     const dailyMap = new Map<string, number>();
-    for (const r of production) {
+    for (const r of trendProd) {
       if (!plantIdSet.has(r.plant_id)) continue;
-      if (r.entry_date >= cutoffStr) {
-        const d = r.entry_date;
-        dailyMap.set(d, (dailyMap.get(d) || 0) + (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0));
-      }
+      const d = r.entry_date;
+      dailyMap.set(d, (dailyMap.get(d) || 0) + (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0));
     }
     const totalMonthlyTarget = prodTargets.filter((t) => plantIdSet.has(t.plant_id)).reduce((s, t) => s + targetTotal(t), 0);
     const dailyTarget = totalMonthlyTarget > 0 ? Math.round(totalMonthlyTarget / 26) : 0;
@@ -416,65 +367,90 @@ export default function DashboardView() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
-      const { data: plants } = await supabase.from("plants").select("id, name").eq("active", true).order("name");
-      const results: PlantStock[] = [];
-      await Promise.all((plants || []).map(async (plant) => {
-        const res = await fetch(`/api/stock/summary?plantId=${plant.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const json = await res.json();
-        const summary = json.summary || [];
-        if (summary.length) {
-          // Map API response shape → StockPO shape used by dashboard
-          const items: StockPO[] = summary.map((entry: { po: { id: string; customer_name: string; po_number: string; po_label: string; ordered_31: number; ordered_36: number; ordered_45: number; ordered_meter: number; status: string; is_system_unallocated: boolean; produced_31: number; produced_36: number; produced_45: number; produced_meter: number; dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number; in_stock_31: number; in_stock_36: number; in_stock_45: number; in_stock_meter: number; fulfillment_pct: number }; contractors: { contractor_id: string; contractor_name: string; letters: { id: string; letter_number: string; contractor_name: string; qty_31: number; qty_36: number; qty_45: number; qty_meter: number; remaining_31: number; remaining_36: number; remaining_45: number; remaining_meter: number; expiry_date: string | null }[] }[] }) => ({
-            po: {
-              id: entry.po.id,
-              customer_name: entry.po.customer_name,
-              po_number: entry.po.po_number,
-              po_label: entry.po.po_label,
-              ordered_31: entry.po.ordered_31,
-              ordered_36: entry.po.ordered_36,
-              ordered_45: entry.po.ordered_45,
-              ordered_meter: entry.po.ordered_meter,
-              status: entry.po.status,
-              is_system_unallocated: entry.po.is_system_unallocated,
-            },
-            produced_31: entry.po.produced_31,
-            produced_36: entry.po.produced_36,
-            produced_45: entry.po.produced_45,
-            produced_meter: entry.po.produced_meter,
-            dispatched_31: entry.po.dispatched_31,
-            dispatched_36: entry.po.dispatched_36,
-            dispatched_45: entry.po.dispatched_45,
-            dispatched_meter: entry.po.dispatched_meter,
-            in_stock_31: entry.po.in_stock_31,
-            in_stock_36: entry.po.in_stock_36,
-            in_stock_45: entry.po.in_stock_45,
-            in_stock_meter: entry.po.in_stock_meter,
-            fulfillment_pct: entry.po.fulfillment_pct ?? 0,
-            contractors: (entry.contractors || []).map((c) => ({
-              contractor_id: c.contractor_id,
-              contractor_name: c.contractor_name,
-              letters: (c.letters || []).map((l) => ({
-                id: l.id,
-                letter_number: l.letter_number,
-                contractor_name: l.contractor_name,
-                qty_31: l.qty_31,
-                qty_36: l.qty_36,
-                qty_45: l.qty_45,
-                qty_meter: l.qty_meter,
-                remaining_31: l.remaining_31,
-                remaining_36: l.remaining_36,
-                remaining_45: l.remaining_45,
-                remaining_meter: l.remaining_meter,
-                expiry_date: l.expiry_date || null,
-              })),
-            })),
-          }));
-          results.push({ plant_id: plant.id, plant_name: plant.name, items });
+      // Single request for all plants — was one request per plant
+      const res = await fetch("/api/stock/summary", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      const summary = json.summary || [];
+
+      type ApiEntry = {
+        po: {
+          id: string; plant_id: string; plant_name: string;
+          customer_name: string; po_number: string; po_label: string;
+          ordered_31: number; ordered_36: number; ordered_45: number; ordered_meter: number;
+          status: string; is_system_unallocated: boolean;
+          produced_31: number; produced_36: number; produced_45: number; produced_meter: number;
+          dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
+          in_stock_31: number; in_stock_36: number; in_stock_45: number; in_stock_meter: number;
+          fulfillment_pct: number;
+        };
+        contractors: {
+          contractor_id: string; contractor_name: string;
+          letters: {
+            id: string; letter_number: string; contractor_name: string;
+            qty_31: number; qty_36: number; qty_45: number; qty_meter: number;
+            remaining_31: number; remaining_36: number; remaining_45: number; remaining_meter: number;
+            expiry_date: string | null;
+          }[];
+        }[];
+      };
+
+      // Group by plant using plant_id/plant_name from the PO data
+      const plantMap = new Map<string, PlantStock>();
+      for (const entry of summary as ApiEntry[]) {
+        const { plant_id, plant_name } = entry.po;
+        if (!plantMap.has(plant_id)) {
+          plantMap.set(plant_id, { plant_id, plant_name, items: [] });
         }
-      }));
-      results.sort((a, b) => a.plant_name.localeCompare(b.plant_name));
+        plantMap.get(plant_id)!.items.push({
+          po: {
+            id: entry.po.id,
+            customer_name: entry.po.customer_name,
+            po_number: entry.po.po_number,
+            po_label: entry.po.po_label,
+            ordered_31: entry.po.ordered_31,
+            ordered_36: entry.po.ordered_36,
+            ordered_45: entry.po.ordered_45,
+            ordered_meter: entry.po.ordered_meter,
+            status: entry.po.status,
+            is_system_unallocated: entry.po.is_system_unallocated,
+          },
+          produced_31: entry.po.produced_31,
+          produced_36: entry.po.produced_36,
+          produced_45: entry.po.produced_45,
+          produced_meter: entry.po.produced_meter,
+          dispatched_31: entry.po.dispatched_31,
+          dispatched_36: entry.po.dispatched_36,
+          dispatched_45: entry.po.dispatched_45,
+          dispatched_meter: entry.po.dispatched_meter,
+          in_stock_31: entry.po.in_stock_31,
+          in_stock_36: entry.po.in_stock_36,
+          in_stock_45: entry.po.in_stock_45,
+          in_stock_meter: entry.po.in_stock_meter,
+          fulfillment_pct: entry.po.fulfillment_pct ?? 0,
+          contractors: (entry.contractors || []).map((c) => ({
+            contractor_id: c.contractor_id,
+            contractor_name: c.contractor_name,
+            letters: (c.letters || []).map((l) => ({
+              id: l.id,
+              letter_number: l.letter_number,
+              contractor_name: l.contractor_name,
+              qty_31: l.qty_31,
+              qty_36: l.qty_36,
+              qty_45: l.qty_45,
+              qty_meter: l.qty_meter,
+              remaining_31: l.remaining_31,
+              remaining_36: l.remaining_36,
+              remaining_45: l.remaining_45,
+              remaining_meter: l.remaining_meter,
+              expiry_date: l.expiry_date || null,
+            })),
+          })),
+        });
+      }
+
+      const results = Array.from(plantMap.values()).sort((a, b) => a.plant_name.localeCompare(b.plant_name));
       setPlantStocks(results);
     } finally {
       setStockLoading(false);

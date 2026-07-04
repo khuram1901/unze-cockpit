@@ -28,6 +28,8 @@ export type DepartmentConfig = {
   departmentName: string;
   allowedRoles: string[];
   table: string;
+  /** Minimum columns the KPI lambdas + open-count filter need. Omit to fetch all. */
+  selectColumns?: string;
   columns: ColumnDef[];
   formFields: FormField[];
   kpis: KPIDef[];
@@ -50,6 +52,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
     departmentName: "Audit",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "audit_plan_items",
+    selectColumns: "status, target_date, completion_pct",
     statusField: "status",
     statusOptions: ["Planned", "In Progress", "Completed", "Cancelled"],
     columns: [
@@ -85,6 +88,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
     departmentName: "HR",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "recruitment_positions",
+    selectColumns: "status, date_opened",
     statusField: "status",
     statusOptions: ["Open", "Interviewing", "Offered", "Filled", "Cancelled"],
     columns: [
@@ -113,6 +117,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
     departmentName: "Tax",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "legal_notices",
+    selectColumns: "resolution_status, hearing_deadline, financial_exposure",
     statusField: "resolution_status",
     statusOptions: ["pending", "won", "lost", "settled"],
     columns: [
@@ -149,6 +154,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
     departmentName: "Admin",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "tasks",
+    selectColumns: "status, due_date",
     statusField: "status",
     statusOptions: ["Not Started", "In Progress", "Waiting Reply", "Completed", "Cancelled"],
     columns: [
@@ -180,6 +186,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
     departmentName: "IT",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "tasks",
+    selectColumns: "status, due_date",
     statusField: "status",
     statusOptions: ["Not Started", "In Progress", "Waiting Reply", "Completed", "Cancelled"],
     columns: [
@@ -209,6 +216,7 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
     departmentName: "Unze Trading Ops",
     allowedRoles: ["Admin", "Executive", "Manager"],
     table: "tasks",
+    selectColumns: "status, due_date",
     statusField: "status",
     statusOptions: ["Not Started", "In Progress", "Waiting Reply", "Completed", "Cancelled"],
     columns: [

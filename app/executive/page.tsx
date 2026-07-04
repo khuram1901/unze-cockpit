@@ -16,6 +16,22 @@ import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tool
 import DateInput from "../lib/DateInput";
 
 type Plant = { id: string; name: string; type: string };
+
+type PlantKpiRow = {
+  plant_id: string; plant_name: string; plant_type: string;
+  opening_good_31: number; opening_good_36: number; opening_good_45: number; opening_good_meter: number;
+  opening_broken_31: number; opening_broken_36: number; opening_broken_45: number;
+  opening_cutoff_date: string | null; broken_cutoff_date: string | null;
+  produced_31: number; produced_36: number; produced_45: number; produced_meter: number;
+  dispatched_31: number; dispatched_36: number; dispatched_45: number; dispatched_meter: number;
+  broken_31: number; broken_36: number; broken_45: number;
+  scrap_31: number; scrap_36: number; scrap_45: number;
+  on_date_produced_31: number; on_date_produced_36: number; on_date_produced_45: number; on_date_produced_meter: number;
+  on_date_dispatched_31: number; on_date_dispatched_36: number; on_date_dispatched_45: number; on_date_dispatched_meter: number;
+  on_date_broken_31: number; on_date_broken_36: number; on_date_broken_45: number;
+  mtd_produced: number; mtd_dispatched: number; mtd_broken: number;
+  entered_on_date: boolean;
+};
 type SizeTotals = { s31: number; s36: number; s45: number; meter: number };
 type Status = "red" | "amber" | "green" | "none";
 
@@ -247,9 +263,6 @@ const minDate = getThirtyDaysAgo();
 const sevenDaysFromNow = getSevenDaysFromNow();
 const currentMonthStart = getCurrentMonthStart();
 
-function emptyTotals(): SizeTotals {
-  return { s31: 0, s36: 0, s45: 0, meter: 0 };
-}
 
 function total(t: SizeTotals) {
   return t.s31 + t.s36 + t.s45 + t.meter;
@@ -505,38 +518,32 @@ export default function ExecutiveDashboardPage() {
     const selectedMonthStart = getMonthStartFromDate(dateToView);
     const selectedMonthEnd = getMonthEndFromDate(dateToView);
 
-    const ninetyDaysAgo = new Date(new Date(dateToView).getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const ENTRY_COLS = "plant_id, entry_date, qty_31, qty_36, qty_45, qty_meter";
     const TASK_COLS = "id, description, project, priority, due_date, assigned_to, assigned_by, assigned_date, status, task_type, reply_required, reply_text, assigned_to_department, assigned_to_business_unit, created_at, updated_at, source_type, source_record_id, source_label, exception_type, explanation_required";
     const [
-      plantsRes, openRes, brokenOpenRes, prodRes, dispRes, brkRes, scrapRes,
-      machineIssuesRes, tasksRes, ownerRes, monthlyProductionTargetsRes,
-      monthlyDispatchTargetsRes, monthlyProductionRes, monthlyDispatchRes, monthlyBreakageRes,
+      plantKpisRes, machineIssuesRes, tasksRes, ownerRes,
+      monthlyProductionTargetsRes, monthlyDispatchTargetsRes,
+      monthlyProductionRes, monthlyDispatchRes, monthlyBreakageRes,
     ] = await Promise.all([
-      supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
-      supabase.from("opening_balances").select("plant_id, bal_31, bal_36, bal_45, bal_meter, created_at"),
-      supabase.from("broken_opening_balances").select("plant_id, bal_31, bal_36, bal_45, bal_meter, created_at"),
-      supabase.from("production_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
-      supabase.from("dispatch_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
-      supabase.from("breakage_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
-      supabase.from("scrap_processed_entries").select(ENTRY_COLS).gte("entry_date", ninetyDaysAgo).lte("entry_date", dateToView),
+      // Single RPC replaces 7 raw table fetches (opening balances + 90-day entry dumps)
+      supabase.rpc("get_plant_kpis", {
+        as_of_date: dateToView,
+        month_start: selectedMonthStart,
+        month_end: selectedMonthEnd,
+      }),
       supabase.from("machine_issues").select("id, plant_name, machine_name, issue_status, expected_resolution, issue_description, action_taken, created_at").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
       supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(200),
       supabase.from("department_owners").select("department_name, primary_owner_name, primary_owner_email").eq("department_name", "Unze Trading Ops").single(),
       supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
       supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
+      // Monthly entries kept for daily ops chart (per-day breakdown needed) and quarterly escalation checks
       supabase.from("production_entries").select(ENTRY_COLS).gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
       supabase.from("dispatch_entries").select(ENTRY_COLS).gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
       supabase.from("breakage_entries").select(ENTRY_COLS).gte("entry_date", selectedMonthStart).lte("entry_date", selectedMonthEnd),
     ]);
 
-    const plants: Plant[] = plantsRes.data || [];
-    const opening = openRes.data || [];
-    const brokenOpening = brokenOpenRes.data || [];
-    const production = prodRes.data || [];
-    const dispatch = dispRes.data || [];
-    const breakage = brkRes.data || [];
-    const scrap = scrapRes.data || [];
+    const plantKpis = (plantKpisRes.data || []) as PlantKpiRow[];
+    const plants: Plant[] = plantKpis.map((r) => ({ id: r.plant_id, name: r.plant_name, type: r.plant_type }));
     const activeMachineIssues = machineIssuesRes.data || [];
     const taskData: Task[] = tasksRes.data || [];
     const owner: DepartmentOwner | null = ownerRes.data || null;
@@ -591,12 +598,17 @@ export default function ExecutiveDashboardPage() {
     }
     setCompanyFinance(allCompanyFinance);
 
-    const [stagesRes, billsRes] = await Promise.all([
-      supabase.from("receivable_stages").select("*").order("stage_order"),
-      supabase.from("receivables").select("*").neq("status", "Collected"),
+    // Three RPCs replace two full-table fetches + three JS aggregation loops.
+    // Slim bills fetch kept only for escalation engine (needs per-bill id/utility/amount/currency).
+    const [stagesRes, billsRes, ragRes, agingTotalsRes, agingByCustRes] = await Promise.all([
+      supabase.from("receivable_stages").select("stage_order, stage_name, working_day_budget").order("stage_order"),
+      supabase.from("receivables").select("id, utility, amount, currency, current_stage_order, current_stage_entered_date").neq("status", "Collected"),
+      supabase.rpc("get_receivable_rag_by_customer"),
+      supabase.rpc("get_receivable_aging_totals"),
+      supabase.rpc("get_receivable_aging_by_customer"),
     ]);
-    const recStages: ReceivableStage[] = stagesRes.data || [];
-    const bills: Receivable[] = billsRes.data || [];
+    const recStages: ReceivableStage[] = (stagesRes.data || []) as ReceivableStage[];
+    const bills: Receivable[] = (billsRes.data || []) as Receivable[];
 
     function stageBudget(order: number) {
       return recStages.find((s) => s.stage_order === order)?.working_day_budget || 0;
@@ -613,50 +625,35 @@ export default function ExecutiveDashboardPage() {
       return "green";
     }
 
-    const custMap = new Map<string, ReceivableCustomerRow>();
-    for (const bill of bills) {
-      const key = bill.utility || "Unknown";
-      if (!custMap.has(key)) {
-        custMap.set(key, { customer: key, greenAmount: 0, amberAmount: 0, redAmount: 0, totalAmount: 0, redCount: 0 });
-      }
-      const row = custMap.get(key)!;
-      const rag = billRagStatus(bill);
-      const amt = Number(bill.amount) || 0;
-      row.totalAmount += amt;
-      if (rag === "green") row.greenAmount += amt;
-      else if (rag === "amber") row.amberAmount += amt;
-      else { row.redAmount += amt; row.redCount += 1; }
-    }
-    const recRows = Array.from(custMap.values()).sort(
-      (a, b) => b.redAmount - a.redAmount || b.totalAmount - a.totalAmount
-    );
+    // RAG by customer — from RPC, already sorted by red_amount desc
+    const recRows: ReceivableCustomerRow[] = (ragRes.data || []).map((r: { customer: string; green_amount: number; amber_amount: number; red_amount: number; total_amount: number; red_count: number }) => ({
+      customer: r.customer,
+      greenAmount: Number(r.green_amount) || 0,
+      amberAmount: Number(r.amber_amount) || 0,
+      redAmount:   Number(r.red_amount)   || 0,
+      totalAmount: Number(r.total_amount) || 0,
+      redCount:    Number(r.red_count)    || 0,
+    }));
     setReceivableRows(recRows);
 
-    // Bill aging — calendar days since date_submitted
+    // Aging totals — from RPC
     const aging = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 } as { "0-30": number; "31-60": number; "61-90": number; "90+": number };
-    const nowMs = new Date().setHours(0, 0, 0, 0);
-    for (const bill of bills) {
-      const startMs = new Date(bill.date_submitted + "T00:00:00").getTime();
-      const days = startMs > nowMs ? 0 : Math.floor((nowMs - startMs) / (1000 * 60 * 60 * 24));
-      const bucket = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
-      aging[bucket] += Number(bill.amount) || 0;
+    for (const r of (agingTotalsRes.data || []) as { bucket: string; total: number }[]) {
+      if (r.bucket in aging) (aging as Record<string, number>)[r.bucket] = Number(r.total) || 0;
     }
     setRecAgingTotals(aging);
 
-    const custAgingMap = new Map<string, { customer: string; "0-30": number; "31-60": number; "61-90": number; "90+": number; total: number }>();
-    for (const bill of bills) {
-      const key = bill.utility || "Unknown";
-      if (!custAgingMap.has(key)) custAgingMap.set(key, { customer: key, "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0, total: 0 });
-      const row = custAgingMap.get(key)!;
-      const startMs = new Date(bill.date_submitted + "T00:00:00").getTime();
-      const days = startMs > nowMs ? 0 : Math.floor((nowMs - startMs) / (1000 * 60 * 60 * 24));
-      const bucket = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
-      const amt = Number(bill.amount) || 0;
-      row[bucket] += amt;
-      row.total += amt;
-    }
-    setRecAgingByCustomer(Array.from(custAgingMap.values()).sort((a, b) => b.total - a.total));
+    // Aging by customer — from RPC
+    setRecAgingByCustomer((agingByCustRes.data || []).map((r: { customer: string; b0_30: number; b31_60: number; b61_90: number; b90_plus: number; total: number }) => ({
+      customer: r.customer,
+      "0-30":   Number(r.b0_30)    || 0,
+      "31-60":  Number(r.b31_60)   || 0,
+      "61-90":  Number(r.b61_90)   || 0,
+      "90+":    Number(r.b90_plus) || 0,
+      total:    Number(r.total)    || 0,
+    })));
 
+    // Escalation engine — slim bills fetch above covers the fields needed
     for (const bill of bills) {
       if (billRagStatus(bill) === "red") {
         await autoCreateReceivableTask(bill, stageNameFor(bill.current_stage_order), taskData, owner);
@@ -672,62 +669,27 @@ export default function ExecutiveDashboardPage() {
       }
       return t;
     }
-    function sumForDate(rows: any[], plantId: string, onlyDate: boolean): SizeTotals {
-      const t = emptyTotals();
-      for (const r of rows) {
-        if (r.plant_id !== plantId) continue;
-        if (onlyDate && r.entry_date !== dateToView) continue;
-        t.s31 += r.qty_31 || 0;
-        t.s36 += r.qty_36 || 0;
-        t.s45 += r.qty_45 || 0;
-        t.meter += r.qty_meter || 0;
-      }
-      return t;
-    }
-    function openingFor(rows: any[], plantId: string): SizeTotals {
-      const t = emptyTotals();
-      const forPlant = rows.filter((r) => r.plant_id === plantId).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
-      if (forPlant.length > 0) {
-        const latest = forPlant[0];
-        t.s31 = latest.bal_31 || 0;
-        t.s36 = latest.bal_36 || 0;
-        t.s45 = latest.bal_45 || 0;
-        t.meter = latest.bal_meter || 0;
-      }
-      return t;
-    }
 
-    const result: PlantExecutiveSummary[] = plants.map((plant) => {
-      const openingGood = openingFor(opening, plant.id);
-      const openingBroken = openingFor(brokenOpening, plant.id);
-      const totalProduced = sumForDate(production, plant.id, false);
-      const totalDispatched = sumForDate(dispatch, plant.id, false);
-      const totalBroken = sumForDate(breakage, plant.id, false);
-      const totalScrap = sumForDate(scrap, plant.id, false);
-      const closingGoodStock: SizeTotals = {
-        s31: openingGood.s31 + totalProduced.s31 - totalBroken.s31 - totalDispatched.s31,
-        s36: openingGood.s36 + totalProduced.s36 - totalBroken.s36 - totalDispatched.s36,
-        s45: openingGood.s45 + totalProduced.s45 - totalBroken.s45 - totalDispatched.s45,
-        meter: openingGood.meter + totalProduced.meter - totalDispatched.meter,
-      };
-      const closingBrokenStock: SizeTotals = {
-        s31: openingBroken.s31 + totalBroken.s31 - totalScrap.s31,
-        s36: openingBroken.s36 + totalBroken.s36 - totalScrap.s36,
-        s45: openingBroken.s45 + totalBroken.s45 - totalScrap.s45,
+    // Build plant summaries directly from RPC rows — no JS loops over raw entries needed
+    const result: PlantExecutiveSummary[] = plantKpis.map((r) => ({
+      plant: { id: r.plant_id, name: r.plant_name, type: r.plant_type },
+      closingGoodStock: {
+        s31:   r.opening_good_31   + r.produced_31   - r.broken_31   - r.dispatched_31,
+        s36:   r.opening_good_36   + r.produced_36   - r.broken_36   - r.dispatched_36,
+        s45:   r.opening_good_45   + r.produced_45   - r.broken_45   - r.dispatched_45,
+        meter: r.opening_good_meter + r.produced_meter - r.dispatched_meter,
+      },
+      closingBrokenStock: {
+        s31:   r.opening_broken_31 + r.broken_31 - r.scrap_31,
+        s36:   r.opening_broken_36 + r.broken_36 - r.scrap_36,
+        s45:   r.opening_broken_45 + r.broken_45 - r.scrap_45,
         meter: 0,
-      };
-      const enteredOnDate =
-        production.some((r) => r.plant_id === plant.id && r.entry_date === dateToView) ||
-        dispatch.some((r) => r.plant_id === plant.id && r.entry_date === dateToView) ||
-        breakage.some((r) => r.plant_id === plant.id && r.entry_date === dateToView);
-      return {
-        plant, closingGoodStock, closingBrokenStock,
-        producedOnDate: sumForDate(production, plant.id, true),
-        dispatchedOnDate: sumForDate(dispatch, plant.id, true),
-        brokenOnDate: sumForDate(breakage, plant.id, true),
-        enteredOnDate,
-      };
-    });
+      },
+      producedOnDate:   { s31: r.on_date_produced_31,   s36: r.on_date_produced_36,   s45: r.on_date_produced_45,   meter: r.on_date_produced_meter },
+      dispatchedOnDate: { s31: r.on_date_dispatched_31, s36: r.on_date_dispatched_36, s45: r.on_date_dispatched_45, meter: r.on_date_dispatched_meter },
+      brokenOnDate:     { s31: r.on_date_broken_31,     s36: r.on_date_broken_36,     s45: r.on_date_broken_45,     meter: 0 },
+      enteredOnDate:    r.entered_on_date,
+    }));
 
     const currentQuarter = getMonthQuarter(dateToView);
     const q1End = quarterEndDate(selectedMonthStart, 1);
@@ -773,8 +735,9 @@ export default function ExecutiveDashboardPage() {
           });
         }
       }
-      const producedMTD = sumBetween(monthlyProduction, plant.id, selectedMonthStart, dateToView);
-      const brokenMTD = sumBetween(monthlyBreakage, plant.id, selectedMonthStart, dateToView);
+      const kpiRow = plantKpis.find((k) => k.plant_id === plant.id);
+      const producedMTD = kpiRow?.mtd_produced ?? sumBetween(monthlyProduction, plant.id, selectedMonthStart, dateToView);
+      const brokenMTD = kpiRow?.mtd_broken ?? sumBetween(monthlyBreakage, plant.id, selectedMonthStart, dateToView);
       if (producedMTD > 0) {
         const rate = (brokenMTD / producedMTD) * 100;
         if (rate > 1.5) {

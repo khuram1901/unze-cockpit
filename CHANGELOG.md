@@ -143,3 +143,40 @@ Permission model (migration 027):
 - PA (Executive role) financial exclusion enforced at permission, RLS, and UI levels
 
 ---
+
+---
+
+## 2026-07-04 — Performance optimisation (DB-side calculations)
+
+**Goal:** Move data calculations out of the browser and into Supabase (Postgres). Pages now receive small pre-aggregated results instead of large raw datasets.
+
+**Files changed:**
+- `supabase/054_portfolio_summary_rpc.sql` — NEW migration (applied)
+- `supabase/055_plant_kpi_rpc.sql` — NEW migration (applied)
+- `supabase/056_receivables_summary_rpc.sql` — NEW migration (applied)
+- `app/investments/page.tsx` — date selector added; RPC replaces raw fetch
+- `app/home/page.tsx` — plant KPIs, investments, receivables, dept health all use RPCs/COUNTs
+- `app/executive/page.tsx` — plant KPIs and investments use RPCs; 15-query → 9-query load
+- `app/dashboard/DashboardView.tsx` — plant KPIs use RPC; stock tab uses single request for all plants
+
+**Database changes:**
+- Migration 054: `get_portfolio_summary_as_of(as_of date)` — DISTINCT ON price_history + holdings aggregate; replaces two-table JS fetch
+- Migration 055: `get_plant_kpis(as_of_date, month_start, month_end)` — replaces 7 raw 90-day table fetches; returns one row per active plant with opening balances, cumulative totals, on-date totals, MTD totals, entered_on_date
+- Migration 056: Three receivables RPCs — `get_receivable_rag_by_customer()`, `get_receivable_aging_totals()`, `get_receivable_aging_by_customer()` — replace full select("*") + JS aggregation loops
+
+**Behaviour changes:**
+- Investments page: date selector (DateInput) lets CEO view portfolio as of any past date; "Back to today" button + blue historical banner
+- Home page plant summary: closing stock, breakage, entered-today indicators unchanged — same numbers, now computed in Postgres
+- Receivables section: RAG totals, aging buckets, customer groupings unchanged — verified PKR 171,995,700 across all three RPCs matches
+- Ops/Finance Manager briefing: task open/overdue counts from COUNT queries (zero rows downloaded)
+- Stock tab on Ops Dashboard: single HTTP request for all plants instead of one per plant
+- Monthly production/dispatch/breakage arrays kept for daily ops chart (per-day breakdown) and quarterly escalation checks
+
+**Performance impact:**
+- Home page: ~15 queries → ~9 queries; raw row downloads reduced from thousands to tens
+- Executive page: ~15 queries → ~9 queries; 7 raw 90-day dumps eliminated
+- Ops Dashboard: ~11 queries → ~6 queries; stock tab N-requests → 1
+- Receivables: 2 full-table fetches → 3 RPC calls returning ~10 rows each
+
+**Verification:** All RPC outputs cross-checked against raw table data — all matched. No data loss.
+
