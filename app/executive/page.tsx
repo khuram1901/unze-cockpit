@@ -599,19 +599,9 @@ export default function ExecutiveDashboardPage() {
     }
     setCompanyFinance(allCompanyFinance);
 
-    // Facility synopsis — non-blocking, best-effort
-    try {
-      const synopsisToken = (await supabase.auth.getSession()).data.session?.access_token;
-      if (synopsisToken) {
-        const synRes = await fetch("/api/finance/facility-synopsis", {
-          headers: { Authorization: `Bearer ${synopsisToken}` },
-        });
-        if (synRes.ok) {
-          const synJson = await synRes.json();
-          setFacilitySynopsis(synJson.banks || []);
-        }
-      }
-    } catch { /* synopsis is non-critical */ }
+    // Facility synopsis — direct RPC call
+    const { data: synData } = await supabase.rpc("get_facility_synopsis");
+    setFacilitySynopsis((synData as typeof facilitySynopsis) || []);
 
     // Three RPCs replace two full-table fetches + three JS aggregation loops.
     // Slim bills fetch kept only for escalation engine (needs per-bill id/utility/amount/currency).
