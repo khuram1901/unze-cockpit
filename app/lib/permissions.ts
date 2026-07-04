@@ -126,6 +126,14 @@ export function canViewGuarantees(u: UserCtx) {
   return u.role === "Manager" && (u.department === "Finance" || u.department === "Unze Trading Ops");
 }
 
+// Full guarantee details (limits, cash margin, bank charges, facility utilisation)
+// Ops team gets chase-only view — no financial figures
+export function canViewGuaranteeFinancials(u: UserCtx) {
+  if (isPA(u)) return false;
+  if (isAdminTier(u)) return true;
+  return u.role === "Manager" && u.department === "Finance";
+}
+
 export function canManageStock(u: UserCtx) {
   const o = ov(u, "can_manage_stock");
   if (o !== null) return o;

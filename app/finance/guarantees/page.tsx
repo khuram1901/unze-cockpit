@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import AuthWrapper from "../../lib/AuthWrapper";
-import { useRequireCapability } from "../../lib/useRouteGuard";
+import { useRequireCapability, loadUserCtx } from "../../lib/useRouteGuard";
 import { supabase } from "../../lib/supabase";
+import { canViewGuaranteeFinancials } from "../../lib/permissions";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, primaryButtonStyle, inputStyle, labelStyle } from "../../lib/SharedUI";
 import { formatDateUK } from "../../lib/dateUtils";
@@ -321,6 +322,7 @@ export default function GuaranteesPage() {
   const { show: toast, element: toastEl } = useToast();
   const { confirm, element: confirmEl } = useConfirm();
 
+  const [showFinancials, setShowFinancials] = useState(false);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [banks, setBanks] = useState<BankGroup[]>([]);
   const [guarantees, setGuarantees] = useState<Guarantee[]>([]);
@@ -381,7 +383,15 @@ export default function GuaranteesPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { if (!checking) load(); }, [checking, load]);
+  useEffect(() => {
+    if (checking) return;
+    load();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user?.email) {
+        loadUserCtx(user.email).then((ctx) => setShowFinancials(canViewGuaranteeFinancials(ctx)));
+      }
+    });
+  }, [checking, load]);
 
   // ── Filtered list ──
   const visible = guarantees.filter((g) => {
@@ -535,14 +545,16 @@ export default function GuaranteesPage() {
             <h1 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary,#1e293b)", margin: "0 0 4px" }}>Guarantees & Pay Orders</h1>
             <p style={{ fontSize: "14px", color: COLOURS.SLATE, margin: 0 }}>Unze Trading — bid guarantees, pay orders, performance guarantees</p>
           </div>
-          <button onClick={() => { setShowAddForm((v) => !v); setEditId(null); setConvertId(null); setStatusActionId(null); }}
-            style={primaryButtonStyle}>
-            {showAddForm ? "Cancel" : "+ New Guarantee"}
-          </button>
+          {showFinancials && (
+            <button onClick={() => { setShowAddForm((v) => !v); setEditId(null); setConvertId(null); setStatusActionId(null); }}
+              style={primaryButtonStyle}>
+              {showAddForm ? "Cancel" : "+ New Guarantee"}
+            </button>
+          )}
         </div>
 
-        {/* ── Summary strip ── */}
-        {totals && (
+        {/* ── Summary strip — Finance only ── */}
+        {showFinancials && totals && (
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: "10px", marginBottom: "18px" }}>
             {[
               { label: "Active guarantees", value: String(totals.active_count), sub: totals.overdue_count > 0 ? `${totals.overdue_count} overdue` : totals.due_soon_count > 0 ? `${totals.due_soon_count} due soon` : "All OK", alertColor: totals.overdue_count > 0 ? "#dc2626" : totals.due_soon_count > 0 ? "#d97706" : "#16a34a" },
@@ -559,8 +571,8 @@ export default function GuaranteesPage() {
           </div>
         )}
 
-        {/* ── Bank facility utilisation ── */}
-        {facilities.length > 0 && (
+        {/* ── Bank facility utilisation — Finance only ── */}
+        {showFinancials && facilities.length > 0 && (
           <div style={{ marginBottom: "18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
               <SectionTitle title="Bank Facility Utilisation" />
@@ -583,8 +595,8 @@ export default function GuaranteesPage() {
           </div>
         )}
 
-        {/* No facilities yet — prompt to add */}
-        {facilities.length === 0 && !loading && (
+        {/* No facilities yet — Finance only */}
+        {showFinancials && facilities.length === 0 && !loading && (
           <div style={{ marginBottom: "18px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
               <SectionTitle title="Bank Facility Utilisation" />
@@ -601,8 +613,8 @@ export default function GuaranteesPage() {
           </div>
         )}
 
-        {/* ── Add Guarantee form ── */}
-        {showAddForm && (
+        {/* ── Add Guarantee form — Finance only ── */}
+        {showFinancials && showAddForm && (
           <div style={{ border: "2px solid #2563eb", borderRadius: "10px", padding: "18px", backgroundColor: "#eff6ff", marginBottom: "20px" }}>
             <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "14px" }}>New Guarantee / Pay Order</div>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
@@ -744,16 +756,18 @@ export default function GuaranteesPage() {
                         {g.returned_date && <div style={{ fontSize: "12px", color: "#16a34a", marginTop: "2px" }}>Returned: {formatDateUK(g.returned_date)}</div>}
                       </div>
 
-                      {/* Financials */}
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <div style={{ fontSize: "16px", fontWeight: 800, color: "var(--text-primary,#1e293b)" }}>{pkr(g.amount)}</div>
-                        <div style={{ fontSize: "12px", color: "#d97706" }}>Margin: {pkr(g.cash_margin_amount)}</div>
-                        {g.bank_charges > 0 && <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Charges: {pkr(g.bank_charges)}</div>}
-                      </div>
+                      {/* Financials — Finance only */}
+                      {showFinancials && (
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontSize: "16px", fontWeight: 800, color: "var(--text-primary,#1e293b)" }}>{pkr(g.amount)}</div>
+                          <div style={{ fontSize: "12px", color: "#d97706" }}>Margin: {pkr(g.cash_margin_amount)}</div>
+                          {g.bank_charges > 0 && <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Charges: {pkr(g.bank_charges)}</div>}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Action buttons */}
-                    {!isEditing && !isConverting && !isActioning && (
+                    {/* Action buttons — Finance only */}
+                    {showFinancials && !isEditing && !isConverting && !isActioning && (
                       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "10px" }}>
                         <button onClick={() => startEdit(g)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Edit</button>
                         {canConvert && (
@@ -775,8 +789,8 @@ export default function GuaranteesPage() {
                     )}
                   </div>
 
-                  {/* ── Edit form ── */}
-                  {isEditing && (
+                  {/* ── Edit form — Finance only ── */}
+                  {showFinancials && isEditing && (
                     <div style={{ borderTop: "1px solid #e2e8f0", padding: "14px", backgroundColor: "#f8fafc" }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>Edit Guarantee</div>
                       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
@@ -818,8 +832,8 @@ export default function GuaranteesPage() {
                     </div>
                   )}
 
-                  {/* ── Convert to Performance Guarantee form ── */}
-                  {isConverting && convertTarget && (
+                  {/* ── Convert to Performance Guarantee form — Finance only ── */}
+                  {showFinancials && isConverting && convertTarget && (
                     <div style={{ borderTop: "1px solid #e2e8f0", padding: "14px", backgroundColor: "#faf5ff" }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: "#7c3aed", marginBottom: "6px" }}>Convert to Performance Guarantee</div>
                       <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>
@@ -854,8 +868,8 @@ export default function GuaranteesPage() {
                     </div>
                   )}
 
-                  {/* ── Mark Returned / Released ── */}
-                  {isActioning && (
+                  {/* ── Mark Returned / Released — Finance only ── */}
+                  {showFinancials && isActioning && (
                     <div style={{ borderTop: "1px solid #e2e8f0", padding: "14px", backgroundColor: "#f0fdf4" }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a", marginBottom: "10px" }}>
                         {canRelease ? "Mark as Released" : "Mark as Returned to Bank"}
