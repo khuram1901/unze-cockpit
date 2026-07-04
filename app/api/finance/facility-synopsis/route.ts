@@ -10,5 +10,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase.rpc("get_facility_synopsis");
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
-  return Response.json({ banks: data || [] });
+  // get_facility_synopsis returns jsonb — data is the parsed value (array or null)
+  const banks = Array.isArray(data) ? data : [];
+  return Response.json({ banks });
 }

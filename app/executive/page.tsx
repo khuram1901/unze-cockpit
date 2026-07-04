@@ -599,12 +599,19 @@ export default function ExecutiveDashboardPage() {
     }
     setCompanyFinance(allCompanyFinance);
 
-    // Facility synopsis — direct RPC call
-    const { data: synData, error: synErr } = await supabase.rpc("get_facility_synopsis");
-    if (synErr) console.error("get_facility_synopsis error:", synErr);
-    // RPC returns jsonb scalar; Supabase JS gives us the parsed value directly
-    const synArray = Array.isArray(synData) ? synData : [];
-    setFacilitySynopsis(synArray as typeof facilitySynopsis);
+    // Facility synopsis — via API route (more reliable than direct jsonb RPC)
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const synRes = await fetch("/api/finance/facility-synopsis", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (synRes.ok) {
+        const synJson = await synRes.json();
+        setFacilitySynopsis(synJson.banks || []);
+      }
+    } catch (e) {
+      console.error("facility-synopsis fetch error:", e);
+    }
 
     // Three RPCs replace two full-table fetches + three JS aggregation loops.
     // Slim bills fetch kept only for escalation engine (needs per-bill id/utility/amount/currency).
