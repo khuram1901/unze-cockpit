@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     facility_id, guarantee_type, guarantee_number, bank_name,
     issue_date, expiry_date, amount, cash_margin_pct, bank_charges,
     customer_name, tender_reference, purpose,
-    performance_bill_date, linked_guarantee_id, notes,
+    performance_bill_date, first_bill_receivable_id, linked_guarantee_id, notes,
   } = body;
 
   if (!guarantee_type || !guarantee_number || !bank_name || !issue_date || !amount || !customer_name) {
@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
       purpose: purpose || null,
       status: "Active",
       linked_guarantee_id: linked_guarantee_id || null,
+      first_bill_receivable_id: first_bill_receivable_id || null,
       performance_bill_date: performance_bill_date || null,
       notes: notes || null,
       created_by: auth.email,
@@ -70,7 +71,7 @@ export async function PATCH(request: NextRequest) {
       guarantee_number, bank_name, issue_date, expiry_date,
       amount, cash_margin_pct, bank_charges,
       customer_name, tender_reference, purpose, notes,
-      facility_id, performance_bill_date,
+      facility_id, performance_bill_date, first_bill_receivable_id,
     } = fields;
 
     if (!guarantee_number || !bank_name || !issue_date || !amount) {
@@ -99,6 +100,7 @@ export async function PATCH(request: NextRequest) {
         purpose: purpose || null,
         status: "Active",
         linked_guarantee_id: id,
+        first_bill_receivable_id: first_bill_receivable_id || null,
         performance_bill_date: performance_bill_date || null,
         notes: notes || null,
         created_by: auth.email,
@@ -114,7 +116,7 @@ export async function PATCH(request: NextRequest) {
   const allowed = [
     "facility_id", "guarantee_number", "bank_name", "issue_date", "expiry_date",
     "amount", "cash_margin_pct", "bank_charges", "customer_name", "tender_reference",
-    "purpose", "status", "performance_bill_date", "returned_date", "notes",
+    "purpose", "status", "performance_bill_date", "first_bill_receivable_id", "returned_date", "notes",
   ];
   for (const key of allowed) {
     if (fields[key] !== undefined) updates[key] = fields[key] || null;
@@ -128,4 +130,18 @@ export async function PATCH(request: NextRequest) {
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ guarantee: data });
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  const body = await request.json().catch(() => ({}));
+  const { id } = body;
+  if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+
+  const { error } = await supabase.from("guarantees").delete().eq("id", id);
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ ok: true });
 }

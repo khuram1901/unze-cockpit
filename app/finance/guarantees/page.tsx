@@ -117,7 +117,7 @@ function FacilityForm({ facilityForm, setFacilityForm, saveFacility, savingFacil
 
 // ─── Bank-grouped utilisation card ────────────────────────────────────────────
 
-function BankFacilityCard({ bank }: { bank: BankGroup }) {
+function BankFacilityCard({ bank, onEdit }: { bank: BankGroup; onEdit: (f: Facility) => void }) {
   const pct = bank.bank_utilisation_pct;
   const barColor = pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#16a34a";
   return (
@@ -151,8 +151,11 @@ function BankFacilityCard({ bank }: { bank: BankGroup }) {
             const sfColor = sfPct >= 90 ? "#dc2626" : sfPct >= 70 ? "#d97706" : "#16a34a";
             return (
               <div key={sf.id} style={{ padding: "8px 10px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary,#1e293b)", marginBottom: "2px" }}>
-                  {sf.facility_name || sf.facility_type}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>
+                    {sf.facility_name || sf.facility_type}
+                  </div>
+                  <button onClick={() => onEdit(sf)} style={{ fontSize: "11px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0, flexShrink: 0 }}>Edit</button>
                 </div>
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "6px" }}>{sf.facility_type}</div>
                 <div style={{ height: "4px", borderRadius: "2px", backgroundColor: "#e2e8f0", marginBottom: "6px", overflow: "hidden" }}>
@@ -186,7 +189,11 @@ function BillPicker({ linkedId, linkedDate, linkedRef, onLink, onManualDate, man
   showManual: boolean;
   onToggleManual: () => void;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() =>
+    linkedId && (linkedRef || linkedDate)
+      ? `${linkedRef || "Bill"}${linkedDate ? " (" + formatDateUK(linkedDate) + ")" : ""}`
+      : ""
+  );
   const [results, setResults] = useState<BillOption[]>([]);
   const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(false);
@@ -277,7 +284,7 @@ function BillPicker({ linkedId, linkedDate, linkedRef, onLink, onManualDate, man
   );
 }
 
-const GUARANTEE_TYPES = ["Bid Guarantee", "Pay Order", "Performance Guarantee", "Other"];
+const GUARANTEE_TYPES = ["Bid Guarantee", "Pay Order", "Performance Guarantee", "Car Finance Drawdown", "Other"];
 const STATUSES = ["Active", "Converted", "Returned", "Released", "Expired"];
 
 function statusBadge(status: string) {
@@ -366,10 +373,18 @@ export default function GuaranteesPage() {
   const [returnedDate, setReturnedDate] = useState("");
   const [savingStatus, setSavingStatus] = useState(false);
 
-  // Facility form
+  // Facility form (add)
   const [showFacilityForm, setShowFacilityForm] = useState(false);
   const [facilityForm, setFacilityForm] = useState({ bank_name: "", facility_name: "", facility_type: "Guarantee Limit", total_limit: "", notes: "" });
   const [savingFacility, setSavingFacility] = useState(false);
+
+  // Facility edit
+  const [editFacilityId, setEditFacilityId] = useState<string | null>(null);
+  const [editFacilityForm, setEditFacilityForm] = useState({ bank_name: "", facility_name: "", facility_type: "", total_limit: "", notes: "" });
+  const [savingEditFacility, setSavingEditFacility] = useState(false);
+
+  // Delete guarantee
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -533,6 +548,49 @@ export default function GuaranteesPage() {
     load();
   }
 
+  // ── Edit facility ──
+  function startEditFacility(f: Facility) {
+    setEditFacilityId(f.id);
+    setEditFacilityForm({
+      bank_name: f.bank_name, facility_name: f.facility_name || "",
+      facility_type: f.facility_type, total_limit: String(f.total_limit), notes: f.notes || "",
+    });
+    setShowFacilityForm(false);
+  }
+
+  async function saveEditFacility() {
+    if (!editFacilityId) return;
+    if (!editFacilityForm.bank_name || !editFacilityForm.facility_name || !editFacilityForm.total_limit) {
+      toast("Bank name, facility name and limit are required", "error"); return;
+    }
+    setSavingEditFacility(true);
+    const res = await authedFetch("/api/finance/guarantee-facilities", { method: "PATCH", body: JSON.stringify({
+      id: editFacilityId, ...editFacilityForm, total_limit: Number(editFacilityForm.total_limit),
+    })});
+    const json = await res.json();
+    setSavingEditFacility(false);
+    if (json.error) { toast(json.error, "error"); return; }
+    toast("Facility updated", "success");
+    setEditFacilityId(null); load();
+  }
+
+  // ── Delete guarantee ──
+  async function deleteGuarantee(g: Guarantee) {
+    const confirmed = await confirm(
+      g.status === "Active"
+        ? `This guarantee is still Active. Are you sure you want to delete it? This cannot be undone.`
+        : `Delete this guarantee (${g.customer_name} — ${g.guarantee_number})? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    setDeletingId(g.id);
+    const res = await authedFetch("/api/finance/guarantees", { method: "DELETE", body: JSON.stringify({ id: g.id }) });
+    const json = await res.json();
+    setDeletingId(null);
+    if (json.error) { toast(json.error, "error"); return; }
+    toast("Guarantee deleted", "success");
+    load();
+  }
+
   if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions…</p></main></AuthWrapper>;
 
   const convertTarget = convertId ? guarantees.find((g) => g.id === convertId) : null;
@@ -593,8 +651,30 @@ export default function GuaranteesPage() {
 
             {/* Bank-grouped utilisation bars */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} />)}
+              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} onEdit={startEditFacility} />)}
             </div>
+
+            {/* Inline edit facility form */}
+            {editFacilityId && (
+              <div style={{ border: "2px solid #d97706", borderRadius: "10px", padding: "16px", backgroundColor: "#fffbeb", marginTop: "10px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", marginBottom: "10px" }}>Edit Facility</div>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
+                  <Field label="Bank name *"><input value={editFacilityForm.bank_name} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                  <Field label="Facility name *"><input value={editFacilityForm.facility_name} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, facility_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                  <Field label="Facility type">
+                    <select value={editFacilityForm.facility_type} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, facility_type: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+                      {FACILITY_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Total limit (PKR) *"><input type="number" min="0" value={editFacilityForm.total_limit} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, total_limit: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                  <Field label="Notes"><input value={editFacilityForm.notes} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, notes: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                </div>
+                <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                  <button onClick={saveEditFacility} disabled={savingEditFacility} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 14px", opacity: savingEditFacility ? 0.6 : 1 }}>{savingEditFacility ? "Saving…" : "Save changes"}</button>
+                  <button onClick={() => setEditFacilityId(null)} style={{ padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -788,6 +868,12 @@ export default function GuaranteesPage() {
                             Mark Returned
                           </button>
                         )}
+                        <button
+                          onClick={() => deleteGuarantee(g)}
+                          disabled={deletingId === g.id}
+                          style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #fecaca", backgroundColor: "#fef2f2", color: "#dc2626", cursor: "pointer", marginLeft: "auto", opacity: deletingId === g.id ? 0.6 : 1 }}>
+                          {deletingId === g.id ? "Deleting…" : "Delete"}
+                        </button>
                       </div>
                     )}
                   </div>
