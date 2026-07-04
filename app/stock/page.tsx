@@ -137,7 +137,7 @@ function LetterRow({ letter, expanded, onToggle }: {
         <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
           Letter #{letter.letter_number}
         </span>
-        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>— {formatDateUK(letter.issue_date)} — Issued by {letter.issued_by}</span>
+        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>— {formatDateUK(letter.issue_date)} — Auth'd by {letter.issued_by}</span>
         {expiryBadge && (
           <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 7px", borderRadius: "10px", backgroundColor: expiryBadge.bg, color: expiryBadge.color }}>
             {expiryBadge.label}

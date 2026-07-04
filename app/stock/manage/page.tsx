@@ -410,8 +410,8 @@ export default function StockManagePage() {
         {showPOForm && (
           <div style={{ border: "1px solid var(--border-color,#e2e8f0)", borderRadius: "10px", padding: "18px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px" }}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
-              <Field label="Customer name *"><input value={poForm.customer_name} onChange={(e) => setPOForm({ ...poForm, customer_name: e.target.value })} placeholder="e.g. FESCO" style={{ ...inputStyle, width: "100%" }} /></Field>
-              <Field label="PO number *"><input value={poForm.po_number} onChange={(e) => setPOForm({ ...poForm, po_number: e.target.value })} placeholder="e.g. FESCO-2024-001" style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Customer name *"><input value={poForm.customer_name} onChange={(e) => setPOForm({ ...poForm, customer_name: e.target.value })} placeholder="e.g. FESCO, MEPCO, Packages Ltd" style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="PO number *"><input value={poForm.po_number} onChange={(e) => setPOForm({ ...poForm, po_number: e.target.value })} placeholder="e.g. FESCO-2024-001 or PKG-PO-005" style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="PO label / description"><input value={poForm.po_label} onChange={(e) => setPOForm({ ...poForm, po_label: e.target.value })} placeholder="e.g. Old PO, 1st Year with 15% Repeat" style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="Start date"><DateInput value={poForm.start_date} onChange={(e) => setPOForm({ ...poForm, start_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
             </div>
@@ -622,9 +622,9 @@ export default function StockManagePage() {
                   {contractors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </Field>
-              <Field label="Letter number *"><input value={letterForm.letter_number} onChange={(e) => setLetterForm({ ...letterForm, letter_number: e.target.value })} placeholder="e.g. MEPCO-LT-2291" style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Letter / reference number *"><input value={letterForm.letter_number} onChange={(e) => setLetterForm({ ...letterForm, letter_number: e.target.value })} placeholder="e.g. FESCO-LT-2291 or PVT-REF-007" style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="Issue date *"><DateInput value={letterForm.issue_date} onChange={(e) => setLetterForm({ ...letterForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-              <Field label="Issued by (customer rep name) *"><input value={letterForm.issued_by} onChange={(e) => setLetterForm({ ...letterForm, issued_by: e.target.value })} placeholder="Name of MEPCO/FESCO contact who issued it" style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Authorised by (customer rep name) *"><input value={letterForm.issued_by} onChange={(e) => setLetterForm({ ...letterForm, issued_by: e.target.value })} placeholder="Name of the contact who authorised collection" style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="Expiry date (optional)">
                 <DateInput value={letterForm.expiry_date} onChange={(e) => setLetterForm({ ...letterForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} />
               </Field>
