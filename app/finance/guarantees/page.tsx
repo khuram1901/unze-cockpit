@@ -914,6 +914,12 @@ export default function GuaranteesPage() {
                         <Field label="Cash margin %"><input type="number" min="0" max="100" value={editForm.cash_margin_pct} onChange={(e) => setEditForm({ ...editForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Bank charges (PKR)"><input type="number" min="0" value={editForm.bank_charges} onChange={(e) => setEditForm({ ...editForm, bank_charges: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Tender reference"><input value={editForm.tender_reference} onChange={(e) => setEditForm({ ...editForm, tender_reference: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Link to facility">
+                          <select value={editForm.facility_id} onChange={(e) => setEditForm({ ...editForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+                            <option value="">— Not linked —</option>
+                            {facilities.map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type}</option>)}
+                          </select>
+                        </Field>
                       </div>
                       {editForm.guarantee_type === "Performance Guarantee" && (
                         <Field label="1st bill (links expiry clock — search by customer or invoice ref)">
