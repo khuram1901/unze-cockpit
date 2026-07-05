@@ -141,7 +141,7 @@ export function SectionTitle({ title, style }: { title: string; style?: React.CS
     <h2
       style={{
         fontFamily:    "var(--font-display, 'Inter Tight', sans-serif)",
-        fontSize:      "20px",
+        fontSize:      "22px",
         fontWeight:    600,
         letterSpacing: "-0.01em",
         color:         COLOURS.NAVY,

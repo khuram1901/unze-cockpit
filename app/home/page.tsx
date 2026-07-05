@@ -1377,23 +1377,33 @@ export default function HomePage() {
       <main style={{ padding: isMobile ? "16px 20px" : "32px 40px", maxWidth: "100%", minWidth: 0, backgroundColor: CANVAS, fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
 
         {!allLoading && userName && (
-          <div style={{ marginBottom: "4px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: isMobile ? "18px" : "22px", fontWeight: 800, color: "var(--text-primary)" }}>
-              {greetByTime()}, {userName.split(" ")[0]}
-            </span>
-            {ctx?.role && (
-              <span style={{
-                fontSize: "13px", fontWeight: 700, padding: "2px 10px", borderRadius: "10px",
-                backgroundColor: "var(--border-light)", color: "var(--text-secondary)",
-              }}>
-                {displayRole(ctx.role, ctx.email)}
-              </span>
-            )}
+          <div style={{ marginBottom: "28px" }}>
+            <div style={{
+              fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+              fontSize: isMobile ? "28px" : "44px",
+              fontWeight: 600,
+              color: NAVY,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.1,
+              marginBottom: "8px",
+            }}>
+              {greetByTime()}, {userName.split(" ")[0]}.
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "13px", color: SLATE }}>{dateStr}</span>
+              {ctx?.role && (
+                <span style={{
+                  fontSize: "11px", fontWeight: 500, padding: "2px 8px",
+                  borderRadius: "999px",
+                  backgroundColor: COLOURS.HAIRLINE, color: SLATE,
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                }}>
+                  {displayRole(ctx.role, ctx.email)}
+                </span>
+              )}
+            </div>
           </div>
         )}
-        <p style={{ color: "var(--text-secondary)", fontSize: "16px", margin: "0 0 20px" }}>
-          {dateStr}
-        </p>
 
         {allLoading ? (
           <HomeSkeleton isMobile={isMobile} />
@@ -2169,15 +2179,19 @@ function ExecutiveDashboardBody({
               {totalAttentionCount} item{totalAttentionCount > 1 ? "s" : ""} need attention
             </span>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", flex: 1, minWidth: 0 }}>
-              {attentionRows.slice(0, 3).map((row) => (
+              {attentionRows.slice(0, 3).map((row) => {
+                const isRed = row.color === RED;
+                const softBg = isRed ? COLOURS.DANGER_SOFT : COLOURS.WARNING_SOFT;
+                return (
                 <span key={`chip-${row.id}`} style={{
                   display: "inline-flex", alignItems: "center", gap: "4px",
-                  fontSize: "12px", fontWeight: 600, color: "white",
-                  backgroundColor: row.color, borderRadius: "9px", padding: "1px 8px",
+                  fontSize: "12px", fontWeight: 600, color: row.color,
+                  backgroundColor: softBg, borderRadius: "999px", padding: "2px 8px",
                 }}>
                   {row.count} {row.label}
                 </span>
-              ))}
+                );
+              })}
               {attentionRows.length > 3 && (
                 <span style={{ fontSize: "12px", color: hasCritical ? RED : AMBER, fontWeight: 600, alignSelf: "center" }}>
                   +{attentionRows.length - 3} more
@@ -2290,21 +2304,25 @@ function ExecutiveDashboardBody({
 
       {/* ── SECTION 2: OPERATIONS STATUS ── */}
       <SectionTitle title="Operations Status — Today" />
-      {/* Hero tile: Good Stock is the one number that's always meaningful (a running inventory level, not a daily flow that can legitimately be zero) */}
+      {/* Hero tile: Good Stock — dark NAVY card */}
       <a href="/dashboard" style={{ textDecoration: "none", display: "block", marginBottom: "10px" }}>
         <div style={{
-          ...execCard(BLUE),
-          cursor: "pointer", transition: "box-shadow 0.15s",
-          display: "flex", justifyContent: "space-between", alignItems: "center",
+          borderRadius: "14px",
+          backgroundColor: NAVY,
+          padding: "24px",
+          cursor: "pointer",
+          transition: "opacity 0.15s",
+          display: "flex", flexDirection: "column", gap: "4px",
         }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(15,23,32,0.08)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.opacity = "0.93"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.opacity = "1"; }}
         >
-          <div>
-            <div style={{ color: SLATE, fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Good Stock — Closing Inventory</div>
-            <div style={{ fontSize: "28px", fontWeight: 600, color: BLUE, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{closingGoodStock.toLocaleString()}</div>
+          <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: "var(--font-sans, Inter, sans-serif)", marginBottom: "6px" }}>Good Stock — Closing Inventory</div>
+          <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: isMobile ? "44px" : "60px", fontWeight: 600, color: "#FFFFFF", lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{closingGoodStock.toLocaleString()}</div>
+          <div style={{ marginTop: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "11px", fontWeight: 500, color: "rgba(255,255,255,0.55)", letterSpacing: "0.04em" }}>pairs · all plants combined</span>
+            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", fontWeight: 500 }}>View dashboard →</span>
           </div>
-          <span style={{ fontSize: "13px", color: BLUE, fontWeight: 600 }}>View dashboard →</span>
         </div>
       </a>
       <div style={{
@@ -2369,11 +2387,11 @@ function ExecutiveDashboardBody({
                       <div style={{ display: "flex", gap: "16px" }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: "11px", color: SLATE }}>Receipts</div>
-                          <div style={{ fontSize: "22px", fontWeight: 600, color: GREEN, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>PKR {fmt(m.receipts)}</div>
+                          <div style={{ fontSize: "32px", fontWeight: 600, color: GREEN, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>PKR {fmt(m.receipts)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: "11px", color: SLATE }}>Payments</div>
-                          <div style={{ fontSize: "22px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>PKR {fmt(m.payments)}</div>
+                          <div style={{ fontSize: "32px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>PKR {fmt(m.payments)}</div>
                         </div>
                       </div>
                     </div>
@@ -2416,12 +2434,12 @@ function ExecutiveDashboardBody({
         }
         if (waterfallData.length === 0) return null;
         return (
-          <div style={{ ...execCard(NAVY), padding: "14px", marginBottom: "12px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>Cash Flow Waterfall — Latest Day</div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${waterfallData.length}, 1fr)`, gap: "16px" }}>
+          <div style={{ ...execCard(NAVY), padding: "24px", marginBottom: "12px" }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "16px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Cash Flow Waterfall — Latest Day</div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${waterfallData.length}, 1fr)`, gap: "24px" }}>
               {waterfallData.map((w) => {
                 const maxVal = Math.max(Math.abs(w.opening), Math.abs(w.receipts), Math.abs(w.payments), Math.abs(w.postDated), Math.abs(w.closing), 1);
-                const barHeight = (v: number) => Math.max(4, (Math.abs(v) / maxVal) * 80);
+                const barHeight = (v: number) => Math.max(6, (Math.abs(v) / maxVal) * 120);
                 const items = [
                   { label: "Opening", value: w.opening, color: COLOURS.BLUE },
                   { label: "Receipts", value: w.receipts, color: COLOURS.GREEN },
@@ -2432,22 +2450,22 @@ function ExecutiveDashboardBody({
                 return (
                   <div key={w.company}>
                     <div style={{
-                      fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px",
-                      lineHeight: 1.25, minHeight: "35px", display: "flex", alignItems: "flex-end",
+                      fontSize: "13px", fontWeight: 500, color: NAVY, marginBottom: "14px",
+                      lineHeight: 1.25, minHeight: "20px",
                     }}>{w.company}</div>
-                    <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "118px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", height: "160px" }}>
                       {items.map((item) => (
                         <div key={item.label} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
                           <div style={{
-                            fontSize: "10px", fontWeight: 600, color: item.color, marginBottom: "4px",
+                            fontSize: "9.5px", fontWeight: 500, color: item.color, marginBottom: "4px",
                             textAlign: "center", lineHeight: 1.2, height: "26px",
                             display: "flex", alignItems: "flex-end", justifyContent: "center",
                             wordBreak: "break-word", width: "100%",
                           }}>
                             {item.value >= 0 ? "" : "−"}{fmtMoney(Math.abs(item.value))}
                           </div>
-                          <div style={{ width: "100%", maxWidth: "40px", height: `${barHeight(item.value)}px`, backgroundColor: item.color, borderRadius: "4px 4px 0 0", opacity: 0.8 }} />
-                          <div style={{ fontSize: "10px", color: SLATE, marginTop: "4px", textAlign: "center" }}>{item.label}</div>
+                          <div style={{ width: "100%", maxWidth: "40px", height: `${barHeight(item.value)}px`, backgroundColor: item.color, borderRadius: "4px 4px 0 0", opacity: 0.55 }} />
+                          <div style={{ fontSize: "9.5px", color: SLATE, marginTop: "6px", textAlign: "center" }}>{item.label}</div>
                         </div>
                       ))}
                     </div>
@@ -2471,29 +2489,29 @@ function ExecutiveDashboardBody({
         ];
         const maxVal = Math.max(...metrics.map((m) => Math.max(Math.abs(m.a), Math.abs(m.b))), 1);
         return (
-          <div style={{ ...execCard(NAVY), padding: "14px", marginBottom: "12px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Company Comparison</div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: BLUE }}>{a.companyName.split(" ")[0]}</span>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: GREEN }}>{b.companyName.split(" ")[0]}</span>
+          <div style={{ ...execCard(NAVY), padding: "24px", marginBottom: "12px" }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "16px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Company Comparison</div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: BLUE }}>{a.companyName.split(" ")[0]}</span>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: GREEN }}>{b.companyName.split(" ")[0]}</span>
             </div>
             {metrics.map((m) => {
               const pctA = maxVal > 0 ? (Math.abs(m.a) / maxVal) * 100 : 0;
               const pctB = maxVal > 0 ? (Math.abs(m.b) / maxVal) * 100 : 0;
               return (
-                <div key={m.label} style={{ marginBottom: "8px" }}>
-                  <div style={{ fontSize: "12px", color: SLATE, textAlign: "center", marginBottom: "2px" }}>{m.label}</div>
-                  <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                    <span style={{ fontSize: "12px", color: BLUE, width: "70px", textAlign: "right" }}>{fmtMoney(m.a)}</span>
-                    <div style={{ flex: 1, display: "flex", height: "14px", gap: "2px" }}>
+                <div key={m.label} style={{ marginBottom: "12px" }}>
+                  <div style={{ fontSize: "10.5px", color: SLATE, textAlign: "center", marginBottom: "6px", letterSpacing: "0.04em", textTransform: "uppercase", fontWeight: 500 }}>{m.label}</div>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <span style={{ fontSize: "12px", color: BLUE, width: "70px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(m.a)}</span>
+                    <div style={{ flex: 1, display: "flex", height: "18px", gap: "2px" }}>
                       <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
-                        <div style={{ width: `${pctA}%`, backgroundColor: BLUE, borderRadius: "3px 0 0 3px", minWidth: pctA > 0 ? "2px" : 0 }} />
+                        <div style={{ width: `${pctA}%`, backgroundColor: BLUE, borderRadius: "4px 0 0 4px", minWidth: pctA > 0 ? "3px" : 0, opacity: 0.7 }} />
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ width: `${pctB}%`, backgroundColor: GREEN, borderRadius: "0 3px 3px 0", minWidth: pctB > 0 ? "2px" : 0 }} />
+                        <div style={{ width: `${pctB}%`, backgroundColor: GREEN, borderRadius: "0 4px 4px 0", minWidth: pctB > 0 ? "3px" : 0, opacity: 0.7 }} />
                       </div>
                     </div>
-                    <span style={{ fontSize: "12px", color: GREEN, width: "70px" }}>{fmtMoney(m.b)}</span>
+                    <span style={{ fontSize: "12px", color: GREEN, width: "70px", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(m.b)}</span>
                   </div>
                 </div>
               );
@@ -2589,38 +2607,49 @@ function ExecutiveDashboardBody({
       {showFinance && facilitySynopsis.length > 0 && (
         <>
           <SectionTitle title="Bank Facilities" />
-          <div style={{ ...execCard(NAVY), padding: "14px", marginBottom: "12px" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {facilitySynopsis.map((b) => {
-                const pct = b.bank_utilisation_pct;
-                const barColor = pct >= 90 ? RED : pct >= 70 ? AMBER : GREEN;
-                return (
-                  <div key={b.bank_name}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                      <div>
-                        <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{b.bank_name}</span>
-                        {b.overdue_count > 0 && (
-                          <span style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 700, color: RED, backgroundColor: DANGER_SOFT, padding: "1px 6px", borderRadius: "8px" }}>
-                            ⚠ {b.overdue_count} overdue
-                          </span>
-                        )}
-                      </div>
-                      <span style={{ fontSize: "13px", fontWeight: 800, color: barColor }}>{pct}%</span>
+          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", overflow: "hidden", marginBottom: "12px", backgroundColor: COLOURS.CARD }}>
+            {facilitySynopsis.map((b, bi) => {
+              const pct = b.bank_utilisation_pct;
+              const barColor = pct >= 90 ? RED : pct >= 70 ? AMBER : GREEN;
+              return (
+                <div key={b.bank_name} style={{
+                  padding: "24px",
+                  borderBottom: bi < facilitySynopsis.length - 1 ? `1px solid ${HAIRLINE}` : "none",
+                }}>
+                  {/* Bank name + overdue chip */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+                    <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>{b.bank_name}</div>
+                    {b.overdue_count > 0 && (
+                      <span style={{ fontSize: "10.5px", fontWeight: 600, color: RED, backgroundColor: DANGER_SOFT, padding: "2px 8px", borderRadius: "999px" }}>
+                        {b.overdue_count} overdue
+                      </span>
+                    )}
+                  </div>
+                  {/* Utilisation figure */}
+                  <div style={{ display: "flex", gap: "24px", marginBottom: "14px", flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 500, marginBottom: "4px" }}>Utilisation</div>
+                      <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "36px", fontWeight: 600, color: barColor, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{pct}%</div>
                     </div>
-                    <div style={{ height: "8px", borderRadius: "4px", backgroundColor: COLOURS.TRACK, marginBottom: "4px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, backgroundColor: barColor, borderRadius: "4px" }} />
+                    <div>
+                      <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 500, marginBottom: "4px" }}>Available</div>
+                      <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "36px", fontWeight: 600, color: GREEN, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>PKR {Math.round(b.bank_available).toLocaleString()}</div>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                      <span style={{ color: RED }}>Seized: PKR {Math.round(b.bank_seized).toLocaleString()}</span>
-                      <span style={{ color: GREEN }}>Available: PKR {Math.round(b.bank_available).toLocaleString()}</span>
-                    </div>
-                    <div style={{ fontSize: "11px", color: SLATE, marginTop: "1px" }}>
-                      Limit: PKR {Math.round(b.bank_total_limit).toLocaleString()} · {b.active_guarantees} active guarantee{b.active_guarantees !== 1 ? "s" : ""}
+                    <div>
+                      <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 500, marginBottom: "4px" }}>Seized</div>
+                      <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "36px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>PKR {Math.round(b.bank_seized).toLocaleString()}</div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  {/* Progress bar */}
+                  <div style={{ height: "6px", borderRadius: "3px", backgroundColor: COLOURS.HAIRLINE, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, backgroundColor: barColor, borderRadius: "3px" }} />
+                  </div>
+                  <div style={{ fontSize: "11px", color: SLATE, marginTop: "6px" }}>
+                    Limit: PKR {Math.round(b.bank_total_limit).toLocaleString()} · {b.active_guarantees} active guarantee{b.active_guarantees !== 1 ? "s" : ""}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </>
       )}
@@ -2632,30 +2661,28 @@ function ExecutiveDashboardBody({
           <a href="/investments" style={{ textDecoration: "none", display: "block" }}>
             <div style={{
               ...execCard(investmentData.gainLoss >= 0 ? GREEN : RED),
-              padding: "14px", marginBottom: "12px",
-              cursor: "pointer", transition: "box-shadow 0.15s",
+              marginBottom: "12px",
+              cursor: "pointer",
             }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(15,23,32,0.08)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
             >
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: investmentData.losers.length > 0 ? "12px" : "0" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "16px", marginBottom: investmentData.losers.length > 0 ? "16px" : "0" }}>
                 <div>
                   <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Invested</div>
-                  <div style={{ fontSize: "22px", fontWeight: 600, color: NAVY, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Rs {fmtMoney(investmentData.totalCost)}</div>
+                  <div style={{ fontSize: "28px", fontWeight: 600, color: NAVY, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Rs {fmtMoney(investmentData.totalCost)}</div>
                 </div>
                 <div>
                   <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Current Value</div>
-                  <div style={{ fontSize: "22px", fontWeight: 600, color: BLUE, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Rs {fmtMoney(investmentData.totalValue)}</div>
+                  <div style={{ fontSize: "28px", fontWeight: 600, color: BLUE, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Rs {fmtMoney(investmentData.totalValue)}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Gain/Loss</div>
-                  <div style={{ fontSize: "22px", fontWeight: 600, color: investmentData.gainLoss >= 0 ? GREEN : RED, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
+                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Gain / Loss</div>
+                  <div style={{ fontSize: "28px", fontWeight: 600, color: investmentData.gainLoss >= 0 ? GREEN : RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
                     {investmentData.gainLoss >= 0 ? "+" : ""}Rs {fmtMoney(Math.abs(investmentData.gainLoss))}
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Return</div>
-                  <div style={{ fontSize: "22px", fontWeight: 600, color: investmentData.gainLossPct >= 0 ? GREEN : RED, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
+                  <div style={{ fontSize: "28px", fontWeight: 600, color: investmentData.gainLossPct >= 0 ? GREEN : RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
                     {investmentData.gainLossPct >= 0 ? "+" : ""}{investmentData.gainLossPct.toFixed(2)}%
                   </div>
                 </div>
@@ -2689,44 +2716,49 @@ function ExecutiveDashboardBody({
 
       {/* ── DEPARTMENT SCORECARD ── */}
       <SectionTitle title="Department Scorecard" />
-      <div style={{ ...execCard(NAVY), padding: 0, overflow: "hidden", marginBottom: "12px" }}>
+      <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", overflow: "hidden", marginBottom: "12px", backgroundColor: COLOURS.CARD }}>
         {scorecardRows.map((d, i) => {
           const statusColor = d.status === "GREEN" ? GREEN : d.status === "AMBER" ? AMBER : RED;
+          const softBg = d.status === "GREEN" ? COLOURS.SUCCESS_SOFT : d.status === "AMBER" ? COLOURS.WARNING_SOFT : COLOURS.DANGER_SOFT;
           const isLegalStub = d.title === "Legal" && d.owner === "Not yet built";
           const hasPerf = !!d.perf && d.perf.total > 0;
           const inner = (
             <div style={{
-              display: "flex", alignItems: "center", gap: "10px",
-              padding: "10px 14px",
+              display: "flex", alignItems: "center", gap: "12px",
+              padding: "12px 16px",
               borderBottom: i < scorecardRows.length - 1 ? `1px solid ${HAIRLINE}` : "none",
             }}>
+              {/* Left status dot */}
               <span style={{
-                width: "10px", height: "10px", borderRadius: "50%",
+                width: "8px", height: "8px", borderRadius: "50%",
                 backgroundColor: statusColor, flexShrink: 0,
-                boxShadow: `0 0 4px ${statusColor}40`,
               }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{d.title}</div>
+                <div style={{ fontSize: "13px", fontWeight: 500, color: NAVY }}>{d.title}</div>
+                {d.owner && d.owner !== "—" && (
+                  <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px" }}>{d.owner}</div>
+                )}
               </div>
-              <span style={{ fontSize: "13px", color: SLATE, flexShrink: 0, fontWeight: hasPerf ? 700 : 400, width: "150px", textAlign: "right" }}>
-                {hasPerf
-                  ? <>
-                      <span style={{ color: d.perf!.red > 0 ? RED : SLATE }}>{d.perf!.red} overdue</span>
-                      {" / "}
-                      <span style={{ color: d.perf!.amber > 0 ? AMBER : SLATE }}>{d.perf!.amber} active</span>
-                    </>
-                  : d.detail}
-              </span>
+              {/* Task counts */}
+              {hasPerf && (
+                <span style={{ fontSize: "12px", color: SLATE, flexShrink: 0 }}>
+                  <span style={{ color: d.perf!.red > 0 ? RED : SLATE }}>{d.perf!.red}↑</span>
+                  {" / "}
+                  <span style={{ color: d.perf!.amber > 0 ? AMBER : SLATE }}>{d.perf!.amber} active</span>
+                </span>
+              )}
+              {/* Right soft chip */}
               <span style={{
-                fontSize: "12px", fontWeight: 700, color: statusColor, flexShrink: 0, minWidth: "54px", textAlign: "center",
-                padding: "2px 8px", borderRadius: "10px", backgroundColor: `${statusColor}1a`,
+                fontSize: "10.5px", fontWeight: 600, color: statusColor, flexShrink: 0,
+                padding: "3px 8px", borderRadius: "999px", backgroundColor: softBg,
+                letterSpacing: "0.04em",
               }}>{d.status}</span>
             </div>
           );
           return isLegalStub ? (
-            <div key={d.slug} style={{ opacity: 0.6 }}>{inner}</div>
+            <div key={d.slug} style={{ opacity: 0.55 }}>{inner}</div>
           ) : (
-            <a key={d.slug} href={`/department/${d.slug}`} style={{ textDecoration: "none", color: "inherit", display: "block", transition: "background-color 0.1s" }}
+            <a key={d.slug} href={`/department/${d.slug}`} style={{ textDecoration: "none", color: "inherit", display: "block", transition: "background-color 0.12s" }}
               onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = COLOURS.CARD_ALT; }}
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
             >{inner}</a>
@@ -2749,7 +2781,7 @@ function execCard(accentColor: string, extra?: React.CSSProperties): React.CSSPr
     border: `1px solid ${HAIRLINE}`,
     borderTop: `3px solid ${accentColor}`,
     borderRadius: "14px",
-    padding: "20px 24px",
+    padding: "24px",
     backgroundColor: COLOURS.CARD,
     ...extra,
   };
@@ -2820,7 +2852,7 @@ function Card({ title, value, color, onClick, href, muted, caption }: { title: s
       <div style={{ color: SLATE, fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "10px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
         {title} {isClickable && <span>→</span>}
       </div>
-      <div style={{ fontSize: "22px", fontWeight: 600, color: displayColor, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value.toLocaleString()}</div>
+      <div style={{ fontSize: "44px", fontWeight: 600, color: displayColor, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value.toLocaleString()}</div>
       {caption && isZero && (
         <div style={{ fontSize: "11px", color: SLATE, marginTop: "6px" }}>{caption}</div>
       )}
@@ -2901,7 +2933,7 @@ function Mini({ label, value, color }: { label: string; value: string; color: st
   return (
     <div>
       <div style={{ color: SLATE, fontSize: "10.5px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>{label}</div>
-      <div style={{ fontSize: "22px", fontWeight: 600, color, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value}</div>
+      <div style={{ fontSize: "32px", fontWeight: 600, color, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value}</div>
     </div>
   );
 }
@@ -2933,19 +2965,19 @@ function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRow
 
   return (
     <div style={{ ...execCard(NAVY), overflow: "hidden", marginBottom: "12px", padding: 0 }}>
-      <div style={{ padding: "12px 14px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Task Load by Department — click a bar to see people</div>
-        <div style={{ minHeight: "180px" }}>
-        <ResponsiveContainer width="100%" height={Math.max(180, departmentRows.length * 38)}>
+      <div style={{ padding: "24px" }}>
+        <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "16px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Task Load by Department — click a bar to drill down</div>
+        <div style={{ minHeight: "220px" }}>
+        <ResponsiveContainer width="100%" height={Math.max(220, departmentRows.length * 46)}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 0, bottom: 0 }} onClick={(state: unknown) => { const s = state as { activePayload?: { payload?: { fullName?: string } }[] }; const fn = s?.activePayload?.[0]?.payload?.fullName; if (fn) setSelectedDept(selectedDept === fn ? null : fn); }}>
             <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 12, fill: SLATE }} />
-            <YAxis dataKey="name" type="category" tick={{ fontSize: 13, fill: NAVY, fontWeight: 600 }} width={130} />
+            <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: SLATE, fontWeight: 500 }} width={130} />
             <Tooltip />
-            <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
-            <Bar dataKey="Overdue" stackId="a" fill={RED} radius={[0, 0, 0, 0]} cursor="pointer" name="Overdue" />
-            <Bar dataKey="In Progress" stackId="a" fill={AMBER} cursor="pointer" name="In Progress" />
-            <Bar dataKey="Completed" stackId="a" fill={GREEN} radius={[0, 4, 4, 0]} cursor="pointer" name="Completed" />
+            <Legend iconType="square" wrapperStyle={{ fontSize: "12px", color: SLATE }} />
+            <Bar dataKey="Overdue" stackId="a" fill={RED} radius={[0, 0, 0, 0]} cursor="pointer" name="Overdue" opacity={0.75} />
+            <Bar dataKey="In Progress" stackId="a" fill={AMBER} cursor="pointer" name="In Progress" opacity={0.75} />
+            <Bar dataKey="Completed" stackId="a" fill={GREEN} radius={[0, 4, 4, 0]} cursor="pointer" name="Completed" opacity={0.75} />
           </BarChart>
         </ResponsiveContainer>
         </div>
@@ -3049,7 +3081,7 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
         <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>{label}</div>
         {opts?.freshnessDate !== undefined && <FreshnessBadge date={opts.freshnessDate} />}
       </div>
-      <div style={{ fontSize: "22px", fontWeight: 600, color, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value}</div>
+      <div style={{ fontSize: "36px", fontWeight: 600, color, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value}</div>
       <div style={{ fontSize: "11px", color: SLATE, marginTop: "6px" }}>{sub}</div>
     </div>
   );
@@ -3168,13 +3200,13 @@ function KPICard({ icon, value, label, alert, sparkline }: { icon: string; value
   return (
     <div style={{
       backgroundColor: COLOURS.CARD, border: `1px solid ${HAIRLINE}`,
-      borderRadius: RADII.CARD, padding: "16px 20px",
+      borderRadius: RADII.CARD, padding: "24px",
     }}>
       <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
         {icon} {label}
       </div>
       <div style={{
-        fontSize: "22px", fontWeight: 600, lineHeight: 1, letterSpacing: "-0.015em", fontVariantNumeric: "tabular-nums",
+        fontSize: "44px", fontWeight: 600, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums",
         fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
         color: alert ? COLOURS.RED : NAVY,
       }}>
