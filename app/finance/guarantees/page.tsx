@@ -669,14 +669,9 @@ export default function GuaranteesPage() {
               </div>
             )}
 
-            {/* Bank-grouped utilisation bars */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} onEdit={startEditFacility} />)}
-            </div>
-
-            {/* Inline edit facility form */}
+            {/* Inline edit facility form — shown above cards so it's always visible */}
             {editFacilityId && (
-              <div style={{ border: "2px solid #d97706", borderRadius: "10px", padding: "16px", backgroundColor: "#fffbeb", marginTop: "10px" }}>
+              <div style={{ border: "2px solid #d97706", borderRadius: "10px", padding: "16px", backgroundColor: "#fffbeb", marginBottom: "12px" }}>
                 <div style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", marginBottom: "10px" }}>Edit Facility</div>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
                   <Field label="Bank name *"><input value={editFacilityForm.bank_name} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
@@ -695,6 +690,11 @@ export default function GuaranteesPage() {
                 </div>
               </div>
             )}
+
+            {/* Bank-grouped utilisation bars */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} onEdit={startEditFacility} />)}
+            </div>
           </div>
         )}
 
