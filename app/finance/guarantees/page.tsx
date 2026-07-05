@@ -601,6 +601,9 @@ export default function GuaranteesPage() {
         <PageHeader />
 
         {/* Header */}
+        <div style={{ fontSize: "11px", color: "#fff", backgroundColor: "#1e293b", padding: "4px 8px", borderRadius: "4px", marginBottom: "8px", fontFamily: "monospace" }}>
+          DEBUG — showFinancials: {String(showFinancials)} | banks: {banks.length} | facilities: {facilities.length} | loading: {String(loading)}
+        </div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "20px" }}>
           <div>
             <h1 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary,#1e293b)", margin: "0 0 4px" }}>Guarantees & Pay Orders</h1>
