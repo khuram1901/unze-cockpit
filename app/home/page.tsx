@@ -2300,8 +2300,7 @@ function ExecutiveDashboardBody({
       {/* Hero tile: Good Stock is the one number that's always meaningful (a running inventory level, not a daily flow that can legitimately be zero) */}
       <a href="/dashboard" style={{ textDecoration: "none", display: "block", marginBottom: "10px" }}>
         <div style={{
-          border: `1px solid ${BORDER}`, borderLeft: "4px solid #2563eb", borderRadius: "8px",
-          padding: "16px 20px", backgroundColor: "var(--bg-card, #ffffff)",
+          ...execCard("#2563eb"),
           cursor: "pointer", transition: "box-shadow 0.15s",
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}
@@ -2309,16 +2308,16 @@ function ExecutiveDashboardBody({
           onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}
         >
           <div>
-            <div style={{ color: SLATE, fontSize: "15px", marginBottom: "2px" }}>Good Stock — Closing Inventory</div>
-            <div style={{ fontSize: "32px", fontWeight: 800, color: "#2563eb", lineHeight: 1.1 }}>{closingGoodStock.toLocaleString()}</div>
+            <div style={{ color: SLATE, fontSize: "13px", fontWeight: 700, marginBottom: "4px" }}>Good Stock — Closing Inventory</div>
+            <div style={{ fontSize: "24px", fontWeight: 800, color: "#2563eb", lineHeight: 1.1 }}>{closingGoodStock.toLocaleString()}</div>
           </div>
-          <span style={{ fontSize: "14px", color: "#2563eb", fontWeight: 600 }}>View dashboard →</span>
+          <span style={{ fontSize: "13px", color: "#2563eb", fontWeight: 600 }}>View dashboard →</span>
         </div>
       </a>
       <div style={{
         display: "grid",
-        gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(130px, 1fr))",
-        gap: "14px", marginBottom: "14px",
+        gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
+        gap: "12px", marginBottom: "12px",
       }}>
         <Card title="Produced" value={produced} color="#16a34a" href="/dashboard" muted={produced === 0} caption="No data submitted yet today" />
         <Card title="Dispatched" value={dispatched} color="#059669" href="/dashboard" muted={dispatched === 0} caption="No data submitted yet today" />
@@ -2329,10 +2328,10 @@ function ExecutiveDashboardBody({
       </div>
 
       {/* ── CHARTS ROW (exactly 2 items so the grid never wraps to a half-empty row) ── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
         {dailyOpsData.length > 1 && (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Daily Production Trend — This Month</div>
+          <div style={{ ...execCard(NAVY), padding: "14px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Daily Production Trend — This Month</div>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={dailyOpsData.map((d) => ({ ...d, date: d.date.slice(5) }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -2368,8 +2367,8 @@ function ExecutiveDashboardBody({
 
           if (cashData.length < 3) {
             return (
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>Monthly Receipts vs Payments</div>
+              <div style={{ ...execCard(NAVY), padding: "14px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>Monthly Receipts vs Payments</div>
                 <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "14px", height: "220px" }}>
                   {cashData.map((m) => (
                     <div key={m.month}>
@@ -2377,11 +2376,11 @@ function ExecutiveDashboardBody({
                       <div style={{ display: "flex", gap: "16px" }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: "11px", color: SLATE }}>Receipts</div>
-                          <div style={{ fontSize: "20px", fontWeight: 800, color: "#16a34a" }}>PKR {fmt(m.receipts)}</div>
+                          <div style={{ fontSize: "24px", fontWeight: 800, color: "#16a34a", lineHeight: 1.1 }}>PKR {fmt(m.receipts)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: "11px", color: SLATE }}>Payments</div>
-                          <div style={{ fontSize: "20px", fontWeight: 800, color: "#dc2626" }}>PKR {fmt(m.payments)}</div>
+                          <div style={{ fontSize: "24px", fontWeight: 800, color: "#dc2626", lineHeight: 1.1 }}>PKR {fmt(m.payments)}</div>
                         </div>
                       </div>
                     </div>
@@ -2393,8 +2392,8 @@ function ExecutiveDashboardBody({
           }
 
           return (
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Monthly Receipts vs Payments</div>
+            <div style={{ ...execCard(NAVY), padding: "14px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Monthly Receipts vs Payments</div>
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={cashData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -2424,8 +2423,8 @@ function ExecutiveDashboardBody({
         }
         if (waterfallData.length === 0) return null;
         return (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>Cash Flow Waterfall — Latest Day</div>
+          <div style={{ ...execCard(NAVY), padding: "14px", marginBottom: "12px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "12px" }}>Cash Flow Waterfall — Latest Day</div>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : `repeat(${waterfallData.length}, 1fr)`, gap: "16px" }}>
               {waterfallData.map((w) => {
                 const maxVal = Math.max(Math.abs(w.opening), Math.abs(w.receipts), Math.abs(w.payments), Math.abs(w.postDated), Math.abs(w.closing), 1);
@@ -2440,7 +2439,7 @@ function ExecutiveDashboardBody({
                 return (
                   <div key={w.company}>
                     <div style={{
-                      fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "10px",
+                      fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px",
                       lineHeight: 1.25, minHeight: "35px", display: "flex", alignItems: "flex-end",
                     }}>{w.company}</div>
                     <div style={{ display: "flex", alignItems: "flex-end", gap: "6px", height: "118px" }}>
@@ -2468,7 +2467,7 @@ function ExecutiveDashboardBody({
       })()}
 
       {/* ── Two continuous columns: left = Finance, right = Receivables + Investments + Department Scorecard ── */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", alignItems: "start" }}>
         {/* LEFT COLUMN */}
         <div>
           {showFinance && companyFinance.length === 2 && (() => {
@@ -2482,8 +2481,8 @@ function ExecutiveDashboardBody({
             ];
             const maxVal = Math.max(...metrics.map((m) => Math.max(Math.abs(m.a), Math.abs(m.b))), 1);
             return (
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "14px", marginBottom: "14px" }}>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Company Comparison</div>
+              <div style={{ ...execCard(NAVY), padding: "14px", marginBottom: "12px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Company Comparison</div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb" }}>{a.companyName.split(" ")[0]}</span>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a" }}>{b.companyName.split(" ")[0]}</span>
@@ -2521,10 +2520,10 @@ function ExecutiveDashboardBody({
         <div>
           <SectionTitle title="Receivables — Bills in Progress" style={{ marginTop: 0 }} />
           {receivableRows.length === 0 ? (
-            <p style={{ color: SLATE, fontSize: "17px" }}>No receivable bills in progress.</p>
+            <p style={{ color: SLATE, fontSize: "13px" }}>No receivable bills in progress.</p>
           ) : (
             <div style={panelCard(recRed > 0)}>
-              <div style={{ fontSize: "17px", fontWeight: 700, marginBottom: "10px", color: NAVY }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "10px", color: NAVY }}>
                 Receivables: <span style={{ color: recRed > 0 ? "#dc2626" : "#16a34a" }}>{recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}</span>
               </div>
               <div style={miniGrid}>
@@ -2533,7 +2532,7 @@ function ExecutiveDashboardBody({
                 <Mini label="Due Soon" value={fmtMoney(recAmber)} color="#d97706" />
                 <Mini label="Stuck" value={fmtMoney(recRed)} color="#dc2626" />
               </div>
-              <div style={{ fontSize: "15px", color: NAVY, marginTop: "4px", marginBottom: "8px", lineHeight: "1.6" }}>
+              <div style={{ fontSize: "13px", color: NAVY, marginTop: "4px", marginBottom: "8px", lineHeight: "1.6" }}>
                 <span style={{ fontWeight: 700 }}>Aging:</span>{" "}
                 <span style={{ color: "#16a34a" }}>PKR {fmtMoney(recAgingTotals["0-30"])} (0-30d)</span>{" · "}
                 <span style={{ color: "#d97706" }}>PKR {fmtMoney(recAgingTotals["31-60"])} (31-60d)</span>{" · "}
@@ -2601,7 +2600,7 @@ function ExecutiveDashboardBody({
           {showFinance && facilitySynopsis.length > 0 && (
             <>
               <SectionTitle title="Bank Facilities" />
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card,#ffffff)", padding: "14px", marginBottom: "14px" }}>
+              <div style={{ ...execCard(NAVY), padding: "14px", marginBottom: "12px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {facilitySynopsis.map((b) => {
                     const pct = b.bank_utilisation_pct;
@@ -2642,10 +2641,8 @@ function ExecutiveDashboardBody({
               <SectionTitle title="Investments — PSX Portfolio" />
               <a href="/investments" style={{ textDecoration: "none", display: "block" }}>
                 <div style={{
-                  border: `1px solid ${BORDER}`,
-                  borderLeft: `4px solid ${investmentData.gainLoss >= 0 ? "#16a34a" : "#dc2626"}`,
-                  borderRadius: "8px", padding: "14px 16px",
-                  backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px",
+                  ...execCard(investmentData.gainLoss >= 0 ? "#16a34a" : "#dc2626"),
+                  padding: "14px", marginBottom: "12px",
                   cursor: "pointer", transition: "box-shadow 0.15s",
                 }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"; }}
@@ -2653,28 +2650,28 @@ function ExecutiveDashboardBody({
                 >
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: investmentData.losers.length > 0 ? "10px" : "0" }}>
                     <div>
-                      <div style={{ fontSize: "14px", color: SLATE }}>Invested</div>
-                      <div style={{ fontSize: "16px", fontWeight: 800, color: NAVY }}>Rs {fmtMoney(investmentData.totalCost)}</div>
+                      <div style={{ fontSize: "11px", color: SLATE, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Invested</div>
+                      <div style={{ fontSize: "16px", fontWeight: 800, color: NAVY, lineHeight: 1.2 }}>Rs {fmtMoney(investmentData.totalCost)}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: "14px", color: SLATE }}>Current Value</div>
-                      <div style={{ fontSize: "16px", fontWeight: 800, color: "#2563eb" }}>Rs {fmtMoney(investmentData.totalValue)}</div>
+                      <div style={{ fontSize: "11px", color: SLATE, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Current Value</div>
+                      <div style={{ fontSize: "16px", fontWeight: 800, color: "#2563eb", lineHeight: 1.2 }}>Rs {fmtMoney(investmentData.totalValue)}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: "14px", color: SLATE }}>Gain/Loss</div>
-                      <div style={{ fontSize: "16px", fontWeight: 800, color: investmentData.gainLoss >= 0 ? "#16a34a" : "#dc2626" }}>
+                      <div style={{ fontSize: "11px", color: SLATE, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Gain/Loss</div>
+                      <div style={{ fontSize: "16px", fontWeight: 800, color: investmentData.gainLoss >= 0 ? "#16a34a" : "#dc2626", lineHeight: 1.2 }}>
                         {investmentData.gainLoss >= 0 ? "+" : ""}Rs {fmtMoney(Math.abs(investmentData.gainLoss))}
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: "14px", color: SLATE }}>Return</div>
-                      <div style={{ fontSize: "16px", fontWeight: 800, color: investmentData.gainLossPct >= 0 ? "#16a34a" : "#dc2626" }}>
+                      <div style={{ fontSize: "11px", color: SLATE, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em" }}>Return</div>
+                      <div style={{ fontSize: "16px", fontWeight: 800, color: investmentData.gainLossPct >= 0 ? "#16a34a" : "#dc2626", lineHeight: 1.2 }}>
                         {investmentData.gainLossPct >= 0 ? "+" : ""}{investmentData.gainLossPct.toFixed(2)}%
                       </div>
                     </div>
                   </div>
                   {investmentData.losers.length > 0 && (
-                    <div style={{ borderTop: `1px solid #fecaca`, paddingTop: "8px", fontSize: "15px", color: "#991b1b" }}>
+                    <div style={{ borderTop: `1px solid #fecaca`, paddingTop: "8px", fontSize: "13px", color: "#991b1b" }}>
                       <span style={{ fontWeight: 700 }}>{investmentData.losers.length} stock{investmentData.losers.length > 1 ? "s" : ""} down &gt;5%:</span>{" "}
                       {investmentData.losers.map((l, i) => (
                         <span key={l.ticker}>{i > 0 ? ", " : ""}{l.ticker} ({l.pct.toFixed(1)}%)</span>
@@ -2694,8 +2691,8 @@ function ExecutiveDashboardBody({
           {/* ── Department Scorecard — merges Department Health + Performance into one view ── */}
           <SectionTitle title="Department Scorecard" />
           <div style={{
-            border: `1px solid ${BORDER}`, borderRadius: "8px",
-            backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px",
+            ...execCard(NAVY),
+            padding: 0, overflow: "hidden", marginBottom: "12px",
           }}>
             {scorecardRows.map((d, i) => {
               const statusColor = d.status === "GREEN" ? "#16a34a" : d.status === "AMBER" ? "#d97706" : "#dc2626";
@@ -2713,7 +2710,7 @@ function ExecutiveDashboardBody({
                     boxShadow: `0 0 4px ${statusColor}40`,
                   }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{d.title}</div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{d.title}</div>
                   </div>
                   <span style={{ fontSize: "13px", color: SLATE, flexShrink: 0, fontWeight: hasPerf ? 700 : 400, width: "150px", textAlign: "right" }}>
                     {hasPerf
@@ -2748,34 +2745,34 @@ function ExecutiveDashboardBody({
   );
 }
 
-/* ───────────────────────── Shared style constants ───────────────────────── */
+/* ───────────────────────── Design system — exec dashboard ───────────────────────── */
+// Type scale: title=13px/700, headline=24px/800, body=13px/400, caption=11px/400
+// Card style: white bg, 1px border, 3px colour top accent, 8px radius, 12px 14px padding
+// All gaps: 12px. Operations grid: 3-col desktop, 2-col mobile.
 
-const miniGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(105px, 1fr))",
-  gap: "9px",
-};
-
-function panelCard(red: boolean): React.CSSProperties {
+function execCard(accentColor: string, extra?: React.CSSProperties): React.CSSProperties {
   return {
     border: `1px solid ${BORDER}`,
-    borderTop: `3px solid ${red ? "#dc2626" : "#16a34a"}`,
+    borderTop: `3px solid ${accentColor}`,
     borderRadius: "8px",
-    padding: "12px",
+    padding: "12px 14px",
     backgroundColor: "var(--bg-card, #ffffff)",
-    marginBottom: "4px",
+    ...extra,
   };
 }
 
+const miniGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+  gap: "10px",
+};
+
+function panelCard(red: boolean): React.CSSProperties {
+  return execCard(red ? "#dc2626" : "#16a34a", { marginBottom: "4px" });
+}
+
 function panelCardRAG(status: RAGStatus): React.CSSProperties {
-  return {
-    border: `1px solid ${BORDER}`,
-    borderTop: `3px solid ${ragColour(status)}`,
-    borderRadius: "8px",
-    padding: "12px",
-    backgroundColor: "var(--bg-card, #ffffff)",
-    marginBottom: "4px",
-  };
+  return execCard(ragColour(status), { marginBottom: "4px" });
 }
 void panelCardRAG;
 
@@ -2783,7 +2780,7 @@ const th: React.CSSProperties = {
   textAlign: "left",
   borderBottom: `1px solid ${BORDER}`,
   padding: "6px 8px",
-  fontSize: "15px",
+  fontSize: "13px",
   color: SLATE,
   fontWeight: 700,
 };
@@ -2791,7 +2788,7 @@ const th: React.CSSProperties = {
 const td: React.CSSProperties = {
   borderBottom: `1px solid var(--border-light, #f1f5f9)`,
   padding: "6px 8px",
-  fontSize: "16px",
+  fontSize: "13px",
 };
 
 const tdBold: React.CSSProperties = {
@@ -2809,10 +2806,7 @@ function Card({ title, value, color, onClick, href, muted, caption }: { title: s
   const displayColor = effectiveMuted ? SLATE : color;
   const content = (
     <div style={{
-      border: `1px solid ${BORDER}`,
-      borderTop: effectiveMuted ? `3px solid ${BORDER}` : `3px solid ${color}`,
-      borderRadius: "7px",
-      padding: "8px 10px",
+      ...execCard(effectiveMuted ? BORDER : color),
       backgroundColor: effectiveMuted ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
       cursor: isClickable ? "pointer" : "default",
       transition: "box-shadow 0.15s",
@@ -2821,12 +2815,12 @@ function Card({ title, value, color, onClick, href, muted, caption }: { title: s
     onMouseEnter={isClickable ? (e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)"; } : undefined}
     onMouseLeave={isClickable ? (e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; } : undefined}
     >
-      <div style={{ color: SLATE, fontSize: "15px", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {title} {isClickable && <span style={{ fontSize: "12px" }}>→</span>}
+      <div style={{ color: SLATE, fontSize: "13px", fontWeight: 700, marginBottom: "4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {title} {isClickable && <span style={{ fontSize: "11px" }}>→</span>}
       </div>
-      <div style={{ fontSize: "19px", fontWeight: 800, color: displayColor }}>{value.toLocaleString()}</div>
+      <div style={{ fontSize: "24px", fontWeight: 800, color: displayColor, lineHeight: 1.1 }}>{value.toLocaleString()}</div>
       {caption && isZero && (
-        <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px", fontStyle: "italic" }}>{caption}</div>
+        <div style={{ fontSize: "11px", color: SLATE, marginTop: "3px" }}>{caption}</div>
       )}
     </div>
   );
@@ -2904,17 +2898,17 @@ void DetailRow;
 function Mini({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div>
-      <div style={{ color: SLATE, fontSize: "16px", marginBottom: "1px" }}>{label}</div>
-      <div style={{ fontSize: "16px", fontWeight: 700, color }}>{value}</div>
+      <div style={{ color: SLATE, fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "3px" }}>{label}</div>
+      <div style={{ fontSize: "24px", fontWeight: 800, color, lineHeight: 1.1 }}>{value}</div>
     </div>
   );
 }
 
 function SlimAlert({ color, text }: { color: string; text: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "10px", backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid ${BORDER}`, borderLeft: `4px solid ${color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
-      <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
-      <span style={{ fontSize: "17px", color: NAVY }}>{text}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: "10px", backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid ${BORDER}`, borderTop: `3px solid ${color}`, borderRadius: "8px", padding: "10px 14px", marginBottom: "12px" }}>
+      <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
+      <span style={{ fontSize: "13px", color: NAVY }}>{text}</span>
     </div>
   );
 }
@@ -2923,7 +2917,7 @@ void SlimAlert;
 function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRows: PerformanceRow[]; deptPeopleMap: Map<string, PerformanceRow[]> }) {
   const [selectedDept, setSelectedDept] = useState<string | null>(null);
 
-  if (departmentRows.length === 0) return <p style={{ color: SLATE, fontSize: "17px" }}>No task data yet.</p>;
+  if (departmentRows.length === 0) return <p style={{ color: SLATE, fontSize: "13px" }}>No task data yet.</p>;
 
   const chartData = departmentRows.map((d) => ({
     name: d.name.length > 16 ? d.name.slice(0, 14) + "…" : d.name,
@@ -2936,9 +2930,9 @@ function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRow
   const selectedPeople = selectedDept ? (deptPeopleMap.get(selectedDept) || []).filter((p) => p.total > 0) : [];
 
   return (
-    <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "12px" }}>
-      <div style={{ padding: "14px" }}>
-        <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Task Load by Department — click a bar to see people</div>
+    <div style={{ ...execCard(NAVY), overflow: "hidden", marginBottom: "12px", padding: 0 }}>
+      <div style={{ padding: "12px 14px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Task Load by Department — click a bar to see people</div>
         <div style={{ minHeight: "180px" }}>
         <ResponsiveContainer width="100%" height={Math.max(180, departmentRows.length * 38)}>
           <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 0, bottom: 0 }} onClick={(state: unknown) => { const s = state as { activePayload?: { payload?: { fullName?: string } }[] }; const fn = s?.activePayload?.[0]?.payload?.fullName; if (fn) setSelectedDept(selectedDept === fn ? null : fn); }}>
@@ -2958,13 +2952,13 @@ function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRow
       {selectedDept && selectedPeople.length > 0 && (
         <div style={{ borderTop: `1px solid ${BORDER}`, padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <span style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>{selectedDept} — People</span>
-            <button onClick={() => setSelectedDept(null)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: "5px", padding: "3px 10px", fontSize: "15px", color: SLATE, cursor: "pointer" }}>Close</button>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{selectedDept} — People</span>
+            <button onClick={() => setSelectedDept(null)} style={{ background: "transparent", border: `1px solid ${BORDER}`, borderRadius: "5px", padding: "3px 10px", fontSize: "13px", color: SLATE, cursor: "pointer" }}>Close</button>
           </div>
           {selectedPeople.map((person) => (
             <div key={person.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: `1px solid ${BORDER}` }}>
-              <span style={{ fontSize: "16px", fontWeight: 600, color: NAVY }}>{person.name}</span>
-              <div style={{ display: "flex", gap: "10px", fontSize: "15px", fontWeight: 700 }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{person.name}</span>
+              <div style={{ display: "flex", gap: "10px", fontSize: "13px", fontWeight: 700 }}>
                 {person.red > 0 && <span style={{ color: "#dc2626" }}>{person.red} overdue</span>}
                 {person.amber > 0 && <span style={{ color: "#d97706" }}>{person.amber} active</span>}
                 {person.green > 0 && <span style={{ color: "#16a34a" }}>{person.green} done</span>}
@@ -2978,7 +2972,7 @@ function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRow
 }
 
 function PerformanceTable({ rows }: { rows: PerformanceRow[] }) {
-  if (rows.length === 0) return <p style={{ color: SLATE, fontSize: "17px" }}>No task data yet.</p>;
+  if (rows.length === 0) return <p style={{ color: SLATE, fontSize: "13px" }}>No task data yet.</p>;
   return (
     <div style={{ overflowX: "auto", marginBottom: "12px", backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid ${BORDER}`, borderRadius: "8px" }}>
       <table style={{ borderCollapse: "collapse", width: "100%" }}>
@@ -3039,8 +3033,8 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
       marginTop: opts?.borderTop ? "4px" : undefined,
       paddingTop: opts?.borderTop ? "6px" : undefined,
     }}>
-      <span style={{ fontSize: opts?.bold ? "15px" : "16px", fontWeight: opts?.bold ? 700 : 400, color: opts?.color || (opts?.bold ? NAVY : SLATE) }}>{label}</span>
-      <span style={{ fontSize: opts?.bold ? "16px" : "16px", fontWeight: opts?.bold ? 700 : 600, color: opts?.color || NAVY }}>{value}</span>
+      <span style={{ fontSize: "13px", fontWeight: opts?.bold ? 700 : 400, color: opts?.color || (opts?.bold ? NAVY : SLATE) }}>{label}</span>
+      <span style={{ fontSize: "13px", fontWeight: opts?.bold ? 700 : 600, color: opts?.color || NAVY }}>{value}</span>
     </div>
   );
 
@@ -3048,27 +3042,21 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
   const toggleDetail = (key: string) => setShowDetail(showDetail === key ? null : key);
 
   const summaryCard = (label: string, value: string, sub: string, color: string, opts?: { primary?: boolean; freshnessDate?: string | null }) => (
-    <div style={{
-      borderRadius: "8px",
-      padding: opts?.primary ? "14px 16px" : "10px 12px",
-      backgroundColor: "var(--bg-card, #ffffff)",
-      border: `1px solid ${BORDER}`,
-      borderTop: `3px solid ${color}`,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "2px" }}>
-        <div style={{ fontSize: "15px", color: SLATE }}>{label}</div>
+    <div style={execCard(color)}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 700, color: SLATE }}>{label}</div>
         {opts?.freshnessDate !== undefined && <FreshnessBadge date={opts.freshnessDate} />}
       </div>
-      <div style={{ fontSize: opts?.primary ? "24px" : "18px", fontWeight: 800, color }}>{value}</div>
-      <div style={{ fontSize: "14px", color: SLATE, marginTop: "2px" }}>{sub}</div>
+      <div style={{ fontSize: "24px", fontWeight: 800, color, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontSize: "11px", color: SLATE, marginTop: "3px" }}>{sub}</div>
     </div>
   );
 
   const expandSection = (key: string, title: string, children: React.ReactNode) => (
     <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: "8px" }}>
       <div onClick={() => toggleDetail(key)} style={{ padding: "8px 0", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: "16px", fontWeight: 700, color: NAVY }}>{title}</span>
-        <span style={{ fontSize: "15px", color: SLATE }}>{showDetail === key ? "▲ Hide" : "▼ Show"}</span>
+        <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{title}</span>
+        <span style={{ fontSize: "13px", color: SLATE }}>{showDetail === key ? "▲ Hide" : "▼ Show"}</span>
       </div>
       {showDetail === key && <div style={{ paddingBottom: "6px" }}>{children}</div>}
     </div>
@@ -3078,9 +3066,9 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
     <>
       <SectionTitle title={`Finance — ${data.companyName}`} />
       {!data.cashPlan && !data.cashOpening && data.cashPositions.length === 0 && data.forecast.length === 0 ? (
-        <p style={{ color: SLATE, fontSize: "17px" }}>No finance data yet.</p>
+        <p style={{ color: SLATE, fontSize: "13px" }}>No finance data yet.</p>
       ) : (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "8px" }}>
+        <div style={{ ...execCard(NAVY), padding: "12px", marginBottom: "8px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px", marginBottom: "8px" }}>
             {summaryCard(
               "Cash Available",
@@ -3103,19 +3091,19 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
             )}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 4px", fontSize: "16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 4px", fontSize: "13px" }}>
             <span style={{ color: SLATE }}>Projected month-end</span>
             <span style={{ fontWeight: 700, color: projected >= 0 ? "#16a34a" : "#dc2626" }}>PKR {fmtMoney(projected)}</span>
           </div>
           {data.forecast.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px 6px", fontSize: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 4px 6px", fontSize: "13px" }}>
               <span style={{ color: SLATE }}>Forecast net cash flow</span>
               <span style={{ fontWeight: 700, color: forecastNet >= 0 ? "#16a34a" : "#dc2626" }}>PKR {fmtMoney(forecastNet)}</span>
             </div>
           )}
 
           {(plannedRecv > 0 || plannedPay > 0) && expandSection("plan", "Actual vs Plan Details", (
-            <div style={{ fontSize: "16px" }}>
+            <div style={{ fontSize: "13px" }}>
               {fRow("Received so far", `PKR ${fmtMoney(actualReceiptsMTD)}`)}
               {fRow(`Expected by day ${de} of ${dim}`, `PKR ${fmtMoney(Math.round(expRecv))}`, { indent: true })}
               {fRow("Receipts status", recvStatus === "GREEN" ? "On track" : recvStatus === "AMBER" ? "Slightly behind" : "Behind", { bold: true, color: ragColour(recvStatus) })}
@@ -3127,12 +3115,12 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
           ))}
 
           {data.forecast.length > 0 && expandSection("forecast", `Forecast Breakdown — ${data.forecast[0]?.budget_month === financeMonth ? "This Month" : formatMonthUK(data.forecast[0]?.budget_month || null)}`, (
-            <div style={{ fontSize: "16px" }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#16a34a", marginBottom: "2px", textTransform: "uppercase" }}>Money In</div>
+            <div style={{ fontSize: "13px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#16a34a", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Money In</div>
               {inflows.map((f) => fRow(f.category, `PKR ${fmtMoney(f.budgeted_amount)}`, { indent: true }))}
               {fRow("Total inflows", `PKR ${fmtMoney(forecastTotalIn)}`, { bold: true, color: "#16a34a" })}
               <div style={{ height: "6px" }} />
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#dc2626", marginBottom: "2px", textTransform: "uppercase" }}>Money Out</div>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#dc2626", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Money Out</div>
               {outflows.map((f) => fRow(f.category, `PKR ${fmtMoney(f.budgeted_amount)}`, { indent: true }))}
               {fRow("Total outflows", `PKR ${fmtMoney(forecastTotalOut)}`, { bold: true, color: "#dc2626" })}
               {fRow("Net", `PKR ${fmtMoney(forecastNet)}`, { bold: true, borderTop: true, color: forecastNet >= 0 ? "#16a34a" : "#dc2626" })}
@@ -3140,7 +3128,7 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
           ))}
 
           {data.lastYearReceipts !== null && expandSection("lastyear", "vs Same Month Last Year", (
-            <div style={{ fontSize: "16px" }}>
+            <div style={{ fontSize: "13px" }}>
               {fRow("Received last year", `PKR ${fmtMoney(data.lastYearReceipts)}`)}
               {fRow("Received this year", `PKR ${fmtMoney(actualReceiptsMTD)}`)}
               {fRow("Difference", `${actualReceiptsMTD >= data.lastYearReceipts! ? "+" : ""}PKR ${fmtMoney(actualReceiptsMTD - data.lastYearReceipts!)}`, { bold: true, color: actualReceiptsMTD >= data.lastYearReceipts! ? "#16a34a" : "#dc2626" })}
@@ -3152,7 +3140,7 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
             const totalA = data.deptBudgets.reduce((s, b) => s + b.actual_amount, 0);
             const over = totalA > totalB;
             return expandSection("deptbudget", `Department Budgets — ${over ? "Over" : "Under"} by PKR ${fmtMoney(Math.abs(totalB - totalA))}`, (
-              <div style={{ fontSize: "16px" }}>
+              <div style={{ fontSize: "13px" }}>
                 {data.deptBudgets.map((b, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: `1px solid ${BORDER}` }}>
                     <span style={{ color: SLATE }}>{b.department} — {b.category}</span>

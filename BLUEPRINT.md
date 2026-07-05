@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 04/07/2026 (performance optimisation session).
+> **This is the source of truth.** Read before touching any code. Last updated: 05/07/2026 (Bank Facilities API security hardening + sidebar reorder).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -156,7 +156,13 @@ app/
     ├── useRouteGuard.ts              useRequireCapability() + useRequireDepartment() hooks
     ├── useUserCtx.ts                 useUserCtx() hook — loads user role/dept/overrides
     ├── AuthWrapper.tsx               Wraps app — handles auth state, notification bell, sidebar
-    ├── SidebarLayout.tsx             Sidebar nav + mobile header — visibility via PERM_FUNC map
+    ├── SidebarLayout.tsx             Sidebar nav + mobile header — visibility via PERM_FUNC map.
+│   │                                 SIDEBAR_GROUPS order: Finance → Departments → Operations →
+│   │                                 Tasks & Meetings → Settings. "Command Centre" group removed
+│   │                                 (contained only PA Dashboard, never shown to Admin/CEO).
+│   │                                 Items within each group are sorted A–Z case-insensitively at
+│   │                                 render time via .sort((a,b) => a.title.trim().toLowerCase()
+│   │                                 .localeCompare(b.title.trim().toLowerCase())).
     ├── ThemeProvider.tsx             Dark/light mode context
     ├── SharedUI.tsx                  Design tokens (COLOURS, RADII, SHADOWS) + shared components
     ├── constants.ts                  COMPANIES array — UTPL and IFPL IDs/slugs
@@ -209,10 +215,17 @@ api/
 │   │                                 moves processed files to Processed folder
 │   ├── setup-drive-folder/route.ts   GET — one-time setup; creates Cockpit Cash Sheets/Drop Here/Processed
 │   │                                 folders in Google Drive, saves folder IDs to app_settings table
-│   └── setup-gmail-filter/route.ts   GET — creates cockpit-cash Gmail label + filter (CRON_SECRET gated)
+│   ├── setup-gmail-filter/route.ts   GET — creates cockpit-cash Gmail label + filter (CRON_SECRET gated)
 │   ├── check-inbox/route.ts          POST — check Gmail for new finance PDFs (admin only)
 │   ├── parse-cash-flow/route.ts      POST — parse uploaded PDF into daily position data
-│   └── upload-forecast/route.ts      POST — upload Excel cash flow forecast
+│   ├── upload-forecast/route.ts      POST — upload Excel cash flow forecast
+│   ├── guarantees/route.ts           GET/POST/PATCH/DELETE — Bank guarantee records.
+│   │                                 GET: Admin, CEO, Finance Manager, Ops Manager only.
+│   │                                 POST/PATCH/DELETE: Admin, CEO, Finance Manager only.
+│   │                                 Any other authenticated user → 403 Forbidden.
+│   │                                 Server-side role check enforced in addition to UI-level gates.
+│   └── guarantee-facilities/route.ts All methods: Admin, CEO, Finance Manager only → 403 otherwise.
+│                                     Server-side role check enforced in addition to UI-level gates.
 ├── google/
 │   ├── auth/route.ts                 GET — initiate Google OAuth2 flow; accepts ?returnTo= param so
 │   │                                 callback redirects back to originating page (finance/calendar)
@@ -1217,6 +1230,18 @@ Calendar/meeting request tracking (referenced in code).
 | `is_ops_manager()` | role='Manager' AND department='Unze Trading Ops' |
 | `can_see_company_finance(uuid)` | Admin-tier OR scoped Finance manager for that company |
 
+### API-Level Security (Bank Facilities routes — hardened 05/07/2026)
+
+The Bank Facilities page has both UI-level permission gates AND server-side role checks enforced in the API routes. Any authenticated user outside the allowed roles receives `403 Forbidden` immediately, regardless of what the UI shows.
+
+| Route | Method | Allowed roles |
+|-------|--------|---------------|
+| `/api/finance/guarantees` | GET | Admin, CEO, Finance Manager, Ops Manager |
+| `/api/finance/guarantees` | POST / PATCH / DELETE | Admin, CEO, Finance Manager only |
+| `/api/finance/guarantee-facilities` | All methods | Admin, CEO, Finance Manager only |
+
+**Pattern:** After `requireAuth(req)`, each route calls a role check helper and returns `NextResponse.json({ error: "Forbidden" }, { status: 403 })` for any role not in the allowed list. This is defence-in-depth on top of the existing UI gates.
+
 ---
 
 ## 6. Every Page and Workflow
@@ -1668,6 +1693,8 @@ Requires: `app_settings` table (migration 052) + Google reconnected with Drive s
 16. **`requireAuth(req)`** called first in every API route — validates Bearer token before any logic.
 17. **Ops HoD (nadeem.khan@unze.co.uk)** can edit operations targets even without Admin/Executive role.
 18. **Never use `<input type="date">`** — Safari ignores `lang="en-GB"` and always shows MM/DD/YYYY. Always use `<DateInput>` from `app/lib/DateInput.tsx`. It has an identical interface to native date inputs (value: YYYY-MM-DD, onChange fires YYYY-MM-DD) but displays in DD/MM/YYYY.
+19. **Sidebar group order is fixed: Finance → Departments → Operations → Tasks & Meetings → Settings.** "Command Centre" group is removed — it only ever contained PA Dashboard which Admin/CEO never see. Items within each group are sorted A–Z case-insensitively at render time. Do not re-add "Command Centre" or change the group order without a deliberate decision.
+20. **All sensitive API routes must have server-side role checks in addition to UI gates** — defence-in-depth. Pattern: call `requireAuth(req)` first, then check role and return 403 immediately if not in the allowed list. The Bank Facilities routes (`/api/finance/guarantees` and `/api/finance/guarantee-facilities`) are the reference implementation.
 
 ---
 
