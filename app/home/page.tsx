@@ -2387,11 +2387,11 @@ function ExecutiveDashboardBody({
                       <div style={{ display: "flex", gap: "16px" }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: "11px", color: SLATE }}>Receipts</div>
-                          <div style={{ fontSize: "32px", fontWeight: 600, color: GREEN, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>PKR {fmt(m.receipts)}</div>
+                          <div style={{ fontSize: "24px", fontWeight: 600, color: GREEN, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>PKR {fmt(m.receipts)}</div>
                         </div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: "11px", color: SLATE }}>Payments</div>
-                          <div style={{ fontSize: "32px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>PKR {fmt(m.payments)}</div>
+                          <div style={{ fontSize: "24px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>PKR {fmt(m.payments)}</div>
                         </div>
                       </div>
                     </div>
@@ -2933,7 +2933,7 @@ function Mini({ label, value, color }: { label: string; value: string; color: st
   return (
     <div>
       <div style={{ color: SLATE, fontSize: "10.5px", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>{label}</div>
-      <div style={{ fontSize: "32px", fontWeight: 600, color, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value}</div>
+      <div style={{ fontSize: "24px", fontWeight: 600, color, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value}</div>
     </div>
   );
 }
@@ -3081,7 +3081,7 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
         <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>{label}</div>
         {opts?.freshnessDate !== undefined && <FreshnessBadge date={opts.freshnessDate} />}
       </div>
-      <div style={{ fontSize: "36px", fontWeight: 600, color, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value}</div>
+      <div style={{ fontSize: "28px", fontWeight: 600, color, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>{value}</div>
       <div style={{ fontSize: "11px", color: SLATE, marginTop: "6px" }}>{sub}</div>
     </div>
   );
@@ -3115,13 +3115,13 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
               "Money In (MTD)",
               `PKR ${fmtMoney(actualReceiptsMTD)}`,
               plannedRecv > 0 ? `${Math.round(recvPct)}% of expected` : "No plan set",
-              plannedRecv > 0 ? (recvStatus === "RED" ? RED : recvStatus === "AMBER" ? AMBER : GREEN) : BLUE
+              plannedRecv > 0 ? (recvStatus === "RED" ? RED : recvStatus === "AMBER" ? AMBER : GREEN) : SLATE
             )}
             {summaryCard(
               "Money Out (MTD)",
               `PKR ${fmtMoney(actualPaymentsMTD)}`,
               plannedPay > 0 ? `${Math.round(payPct)}% of expected` : "No plan set",
-              plannedPay > 0 ? (payStatus === "RED" ? RED : payStatus === "AMBER" ? AMBER : GREEN) : BLUE
+              plannedPay > 0 ? (payStatus === "RED" ? RED : payStatus === "AMBER" ? AMBER : GREEN) : SLATE
             )}
           </div>
 
