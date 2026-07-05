@@ -58,3 +58,20 @@ export async function PATCH(request: NextRequest) {
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ facility: data });
 }
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  const body = await request.json().catch(() => ({}));
+  const { id } = body;
+  if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+
+  const { error } = await supabase
+    .from("guarantee_facilities")
+    .delete()
+    .eq("id", id);
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ ok: true });
+}

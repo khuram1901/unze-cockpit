@@ -599,20 +599,6 @@ export default function ExecutiveDashboardPage() {
     }
     setCompanyFinance(allCompanyFinance);
 
-    // Facility synopsis — via API route (more reliable than direct jsonb RPC)
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const synRes = await fetch("/api/finance/facility-synopsis", {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-      });
-      if (synRes.ok) {
-        const synJson = await synRes.json();
-        setFacilitySynopsis(synJson.banks || []);
-      }
-    } catch (e) {
-      console.error("facility-synopsis fetch error:", e);
-    }
-
     // Three RPCs replace two full-table fetches + three JS aggregation loops.
     // Slim bills fetch kept only for escalation engine (needs per-bill id/utility/amount/currency).
     const [stagesRes, billsRes, ragRes, agingTotalsRes, agingByCustRes] = await Promise.all([
@@ -914,6 +900,22 @@ export default function ExecutiveDashboardPage() {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [selectedDate]);
+
+  useEffect(() => {
+    async function loadSynopsis() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch("/api/finance/facility-synopsis", {
+          headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setFacilitySynopsis(json.banks || []);
+        }
+      } catch { /* silent */ }
+    }
+    loadSynopsis();
+  }, []);
 
   const produced = summaries.reduce((sum, s) => sum + total(s.producedOnDate), 0);
   const dispatched = summaries.reduce((sum, s) => sum + total(s.dispatchedOnDate), 0);

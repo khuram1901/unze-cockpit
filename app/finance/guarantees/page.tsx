@@ -123,7 +123,7 @@ function FacilityForm({ facilityForm, setFacilityForm, saveFacility, savingFacil
 
 // ─── Bank-grouped utilisation card ────────────────────────────────────────────
 
-function BankFacilityCard({ bank, onEdit }: { bank: BankGroup; onEdit: (f: Facility) => void }) {
+function BankFacilityCard({ bank, onEdit, onDelete }: { bank: BankGroup; onEdit: (f: Facility) => void; onDelete: (f: Facility) => void }) {
   const pct = bank.bank_utilisation_pct;
   const barColor = pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#16a34a";
   return (
@@ -161,7 +161,10 @@ function BankFacilityCard({ bank, onEdit }: { bank: BankGroup; onEdit: (f: Facil
                   <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>
                     {sf.facility_name || sf.facility_type}
                   </div>
-                  <button onClick={() => onEdit(sf)} style={{ fontSize: "11px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0, flexShrink: 0 }}>Edit</button>
+                  <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                    <button onClick={() => onEdit(sf)} style={{ fontSize: "11px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>Edit</button>
+                    <button onClick={() => onDelete(sf)} style={{ fontSize: "11px", color: "#dc2626", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>Delete</button>
+                  </div>
                 </div>
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "6px" }}>{sf.facility_type}</div>
                 <div style={{ height: "4px", borderRadius: "2px", backgroundColor: "#e2e8f0", marginBottom: "6px", overflow: "hidden" }}>
@@ -580,6 +583,16 @@ export default function GuaranteesPage() {
     setEditFacilityId(null); load();
   }
 
+  // ── Delete facility ──
+  async function deleteFacility(f: Facility) {
+    if (!confirm(`Delete "${f.facility_name || f.facility_type}" at ${f.bank_name}? This cannot be undone.`)) return;
+    const res = await authedFetch("/api/finance/guarantee-facilities", { method: "DELETE", body: JSON.stringify({ id: f.id }) });
+    const json = await res.json();
+    if (json.error) { toast(json.error, "error"); return; }
+    toast("Facility deleted", "success");
+    load();
+  }
+
   // ── Delete guarantee ──
   async function deleteGuarantee(g: Guarantee) {
     const confirmed = await confirm(
@@ -700,7 +713,7 @@ export default function GuaranteesPage() {
 
             {/* Bank-grouped utilisation bars */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} onEdit={startEditFacility} />)}
+              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} onEdit={startEditFacility} onDelete={deleteFacility} />)}
             </div>
           </div>
         )}
