@@ -690,18 +690,105 @@ export default function GuaranteesPage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <PageHeader />
 
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "20px" }}>
-          <div>
-            <h1 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary,#1e293b)", margin: "0 0 4px" }}>Bank Facilities</h1>
-            <p style={{ fontSize: "14px", color: COLOURS.SLATE, margin: 0 }}>Unze Trading — bank facilities, bid guarantees, pay orders &amp; performance guarantees</p>
-          </div>
-          {showFinancials && (
-            <button onClick={() => { setShowAddForm((v) => !v); setEditId(null); setConvertId(null); setStatusActionId(null); }}
-              style={primaryButtonStyle}>
-              {showAddForm ? "Cancel" : "+ New Guarantee"}
-            </button>
-          )}
+        <div style={{ marginBottom: "16px" }}>
+          <h1 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary,#1e293b)", margin: "0 0 2px" }}>Bank Facilities</h1>
+          <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: 0 }}>Unze Trading — bank facilities, bid guarantees, pay orders &amp; performance guarantees</p>
         </div>
+
+        {/* ── Action bar — both buttons, same size, at the top ── */}
+        {showFinancials && (
+          <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+            {(() => {
+              const btnBase: React.CSSProperties = {
+                padding: "7px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 700,
+                cursor: "pointer", border: "none", transition: "opacity 0.1s",
+              };
+              const activeForm = showAddForm ? "guarantee" : showFacilityForm ? "facility" : null;
+              return (
+                <>
+                  <button
+                    onClick={() => { setShowFacilityForm((v) => !v); setShowAddForm(false); setEditId(null); setConvertId(null); setStatusActionId(null); }}
+                    style={{ ...btnBase, backgroundColor: activeForm === "facility" ? COLOURS.NAVY : "#f1f5f9", color: activeForm === "facility" ? "#fff" : COLOURS.NAVY, border: `1px solid ${COLOURS.NAVY}` }}
+                  >{activeForm === "facility" ? "✕ Cancel" : "+ New Facility"}</button>
+                  <button
+                    onClick={() => { setShowAddForm((v) => !v); setShowFacilityForm(false); setEditId(null); setConvertId(null); setStatusActionId(null); }}
+                    style={{ ...btnBase, backgroundColor: activeForm === "guarantee" ? COLOURS.NAVY : "#f1f5f9", color: activeForm === "guarantee" ? "#fff" : COLOURS.NAVY, border: `1px solid ${COLOURS.NAVY}` }}
+                  >{activeForm === "guarantee" ? "✕ Cancel" : "+ New Guarantee"}</button>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ── Inline panel — opens at the top, used for both New Facility and New Guarantee ── */}
+        {showFinancials && showFacilityForm && (
+          <div style={{ border: `1.5px solid ${COLOURS.NAVY}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>New Bank Facility</div>
+            <FacilityForm facilityForm={facilityForm} setFacilityForm={setFacilityForm} saveFacility={saveFacility} savingFacility={savingFacility} isMobile={isMobile} />
+          </div>
+        )}
+
+        {showFinancials && showAddForm && (
+          <div style={{ border: `1.5px solid ${COLOURS.NAVY}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>New Guarantee / Pay Order</div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: "10px" }}>
+              <Field label="Type *">
+                <select value={addForm.guarantee_type} onChange={(e) => setAddForm({ ...addForm, guarantee_type: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+                  {GUARANTEE_TYPES.map((t) => <option key={t}>{t}</option>)}
+                </select>
+              </Field>
+              <Field label="Facility * (sets bank)">
+                <select value={addForm.facility_id} onChange={(e) => {
+                  const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === e.target.value);
+                  setAddForm({ ...addForm, facility_id: e.target.value, bank_name: sel ? sel.bank_name : "" });
+                }} style={{ ...inputStyle, width: "100%", borderColor: !addForm.facility_id ? "#fca5a5" : undefined }}>
+                  <option value="">— Select facility —</option>
+                  {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
+                </select>
+                {addForm.facility_id && (() => {
+                  const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === addForm.facility_id);
+                  if (!sel) return null;
+                  const over = Number(addForm.amount) > 0 && Number(addForm.amount) > sel.available;
+                  return <div style={{ marginTop: "3px", fontSize: "11px", fontWeight: 600, color: over ? "#dc2626" : "#16a34a" }}>{over ? `⚠ Over by ${pkr(Number(addForm.amount) - sel.available)}` : `Free: ${pkr(sel.available)}`}</div>;
+                })()}
+              </Field>
+              <Field label="Customer / Beneficiary *">
+                <input value={addForm.customer_name} onChange={(e) => setAddForm({ ...addForm, customer_name: e.target.value })} placeholder="e.g. FESCO, MEPCO" style={{ ...inputStyle, width: "100%" }} />
+              </Field>
+              <Field label="Guarantee / PO number *">
+                <input value={addForm.guarantee_number} onChange={(e) => setAddForm({ ...addForm, guarantee_number: e.target.value })} placeholder="Bank-issued reference" style={{ ...inputStyle, width: "100%" }} />
+              </Field>
+              <Field label="Issue date *"><DateInput value={addForm.issue_date} onChange={(e) => setAddForm({ ...addForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Expiry date"><DateInput value={addForm.expiry_date} onChange={(e) => setAddForm({ ...addForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Amount (PKR) *"><input type="number" min="0" value={addForm.amount} onChange={(e) => setAddForm({ ...addForm, amount: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Cash margin %">
+                <input type="number" min="0" max="100" value={addForm.cash_margin_pct} onChange={(e) => setAddForm({ ...addForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} />
+              </Field>
+              <Field label="Bank charges (PKR)"><input type="number" min="0" value={addForm.bank_charges} onChange={(e) => setAddForm({ ...addForm, bank_charges: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Tender reference"><input value={addForm.tender_reference} onChange={(e) => setAddForm({ ...addForm, tender_reference: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+            </div>
+            {addForm.guarantee_type === "Performance Guarantee" && (
+              <div style={{ marginTop: "10px" }}>
+                <Field label="1st bill (links expiry clock)">
+                  <BillPicker linkedId={addBillId} linkedDate={null} linkedRef={addBillRef}
+                    onLink={(id) => setAddBillId(id)} onManualDate={(d) => setAddBillDate(d)}
+                    manualDate={addBillDate} showManual={addShowManual} onToggleManual={() => setAddShowManual((v) => !v)} />
+                </Field>
+              </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginTop: "2px" }}>
+              <Field label="Purpose">
+                <input value={addForm.purpose} onChange={(e) => setAddForm({ ...addForm, purpose: e.target.value })} placeholder="e.g. PC Spun Poles bid for FESCO PO 4640" style={{ ...inputStyle, width: "100%" }} />
+              </Field>
+              <Field label="Notes">
+                <input value={addForm.notes} onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })} style={{ ...inputStyle, width: "100%" }} />
+              </Field>
+            </div>
+            <div style={{ marginTop: "12px" }}>
+              <button onClick={saveAdd} disabled={saving} style={{ ...primaryButtonStyle, opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Add Guarantee"}</button>
+            </div>
+          </div>
+        )}
 
         {/* ── Summary strip — Ops: counts only, no PKR amounts ── */}
         {showFinancials === false && totals && (
@@ -738,38 +825,25 @@ export default function GuaranteesPage() {
           </div>
         )}
 
-        {/* ── Bank facility utilisation — Finance only ── */}
-        {showFinancials && banks.length > 0 && (
+        {/* ── Bank facility utilisation ── */}
+        {showFinancials && (
           <div style={{ marginBottom: "18px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <SectionTitle title="Bank Facility Utilisation" />
-              <button onClick={() => setShowFacilityForm((v) => !v)}
-                style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: "var(--bg-card,#fff)", color: COLOURS.NAVY, cursor: "pointer" }}>
-                {showFacilityForm ? "Cancel" : "+ Add Facility"}
-              </button>
-            </div>
+            <SectionTitle title="Bank Facility Utilisation" />
 
-            {showFacilityForm && (
-              <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "12px" }}>
-                <FacilityForm facilityForm={facilityForm} setFacilityForm={setFacilityForm} saveFacility={saveFacility} savingFacility={savingFacility} isMobile={isMobile} />
-              </div>
-            )}
-
-            {/* Inline edit facility form — shown above cards so it's always visible */}
+            {/* Edit facility inline panel */}
             {editFacilityId && (
-              <div style={{ border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-                {/* Traffic light header */}
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+              <div style={{ border: `1.5px solid ${COLOURS.NAVY}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "10px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
                   <div style={{ display: "flex", gap: "5px" }}>
                     <TrafficDot color="#ff5f57" title="Cancel edit" onClick={() => setEditFacilityId(null)} />
                     <TrafficDot color="#ffbd2e" title="Editing…" onClick={() => {}} />
                     <TrafficDot color="#28c840" title="Save changes" onClick={saveEditFacility} />
                   </div>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary,#1e293b)", marginLeft: "4px" }}>Edit Facility</span>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>Edit Facility</span>
                   {savingEditFacility && <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "auto" }}>Saving…</span>}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-                  <Field label="Bank name *">
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: "10px" }}>
+                  <Field label="Bank *">
                     <select value={editFacilityForm.bank_name} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
                       <option value="">— Select bank —</option>
                       {BANKS.map((b) => <option key={b}>{b}</option>)}
@@ -784,119 +858,21 @@ export default function GuaranteesPage() {
                   <Field label="Total limit (PKR) *"><input type="number" min="0" value={editFacilityForm.total_limit} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, total_limit: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                   <Field label="Notes"><input value={editFacilityForm.notes} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, notes: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                 </div>
-                <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                <div style={{ marginTop: "10px" }}>
                   <button onClick={saveEditFacility} disabled={savingEditFacility} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 16px", opacity: savingEditFacility ? 0.6 : 1 }}>{savingEditFacility ? "Saving…" : "Save changes"}</button>
-                  <button onClick={() => setEditFacilityId(null)} style={{ padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
                 </div>
               </div>
             )}
 
-            {/* Bank-grouped utilisation bars */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} allGuarantees={guarantees} onEdit={startEditFacility} onDelete={deleteFacility} />)}
-            </div>
-          </div>
-        )}
-
-        {/* No facilities yet — Finance only */}
-        {showFinancials && banks.length === 0 && !loading && (
-          <div style={{ marginBottom: "18px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <SectionTitle title="Bank Facility Utilisation" />
-              <button onClick={() => setShowFacilityForm((v) => !v)}
-                style={{ padding: "4px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: "var(--bg-card,#fff)", color: COLOURS.NAVY, cursor: "pointer" }}>
-                {showFacilityForm ? "Cancel" : "+ Add Facility"}
-              </button>
-            </div>
-            {showFacilityForm && (
-              <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", padding: "16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "12px" }}>
-                <FacilityForm facilityForm={facilityForm} setFacilityForm={setFacilityForm} saveFacility={saveFacility} savingFacility={savingFacility} isMobile={isMobile} />
+            {banks.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} allGuarantees={guarantees} onEdit={startEditFacility} onDelete={deleteFacility} />)}
+              </div>
+            ) : !loading && (
+              <div style={{ padding: "18px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px", border: "1px dashed #e2e8f0", borderRadius: "8px" }}>
+                No facilities set up yet. Click <strong>+ New Facility</strong> above to add one.
               </div>
             )}
-          </div>
-        )}
-
-        {/* ── Add Guarantee form — Finance only ── */}
-        {showFinancials && showAddForm && (
-          <div style={{ border: "2px solid #2563eb", borderRadius: "10px", padding: "18px", backgroundColor: "#eff6ff", marginBottom: "20px" }}>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "14px" }}>New Guarantee / Pay Order</div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
-              <Field label="Type *">
-                <select value={addForm.guarantee_type} onChange={(e) => setAddForm({ ...addForm, guarantee_type: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
-                  {GUARANTEE_TYPES.map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </Field>
-              <Field label="Customer / Beneficiary *">
-                <input value={addForm.customer_name} onChange={(e) => setAddForm({ ...addForm, customer_name: e.target.value })} placeholder="e.g. FESCO, MEPCO, PSO" style={{ ...inputStyle, width: "100%" }} />
-              </Field>
-              <Field label="Guarantee / PO number *">
-                <input value={addForm.guarantee_number} onChange={(e) => setAddForm({ ...addForm, guarantee_number: e.target.value })} placeholder="Bank-issued reference" style={{ ...inputStyle, width: "100%" }} />
-              </Field>
-              <Field label="Bank facility * (bank is set automatically)">
-                <select value={addForm.facility_id} onChange={(e) => {
-                  const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === e.target.value);
-                  setAddForm({ ...addForm, facility_id: e.target.value, bank_name: sel ? sel.bank_name : "" });
-                }} style={{ ...inputStyle, width: "100%", borderColor: !addForm.facility_id ? "#fca5a5" : undefined }}>
-                  <option value="">— Select facility —</option>
-                  {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
-                </select>
-                {addForm.facility_id && (() => {
-                  const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === addForm.facility_id);
-                  if (!sel) return null;
-                  const requestedAmt = Number(addForm.amount) || 0;
-                  const wouldExceed = requestedAmt > 0 && requestedAmt > sel.available;
-                  return (
-                    <div style={{ marginTop: "4px", fontSize: "11px", color: wouldExceed ? "#dc2626" : "#16a34a", fontWeight: 600 }}>
-                      {wouldExceed
-                        ? `⚠ Exceeds available capacity by ${pkr(requestedAmt - sel.available)}`
-                        : `Bank: ${sel.bank_name} · Available: ${pkr(sel.available)}`}
-                    </div>
-                  );
-                })()}
-              </Field>
-              <Field label="Tender / contract reference">
-                <input value={addForm.tender_reference} onChange={(e) => setAddForm({ ...addForm, tender_reference: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} />
-              </Field>
-              <Field label="Issue date *"><DateInput value={addForm.issue_date} onChange={(e) => setAddForm({ ...addForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-              <Field label="Expiry date"><DateInput value={addForm.expiry_date} onChange={(e) => setAddForm({ ...addForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "12px" }}>
-              <Field label="Amount (PKR) *"><input type="number" min="0" value={addForm.amount} onChange={(e) => setAddForm({ ...addForm, amount: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
-              <Field label="Cash margin %">
-                <input type="number" min="0" max="100" value={addForm.cash_margin_pct} onChange={(e) => setAddForm({ ...addForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} />
-              </Field>
-              <Field label="Cash margin held (auto)">
-                <div style={{ ...inputStyle, width: "100%", backgroundColor: "#f1f5f9", color: COLOURS.SLATE, display: "flex", alignItems: "center" }}>
-                  {addForm.amount && addForm.cash_margin_pct
-                    ? pkr(Number(addForm.amount) * Number(addForm.cash_margin_pct) / 100)
-                    : "—"}
-                </div>
-              </Field>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
-              <Field label="Bank charges (PKR)"><input type="number" min="0" value={addForm.bank_charges} onChange={(e) => setAddForm({ ...addForm, bank_charges: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
-            </div>
-            {addForm.guarantee_type === "Performance Guarantee" && (
-              <Field label="1st bill (links expiry clock — search by customer or invoice ref)">
-                <BillPicker
-                  linkedId={addBillId}
-                  linkedDate={null}
-                  linkedRef={addBillRef}
-                  onLink={(id) => setAddBillId(id)}
-                  onManualDate={(d) => setAddBillDate(d)}
-                  manualDate={addBillDate}
-                  showManual={addShowManual}
-                  onToggleManual={() => setAddShowManual((v) => !v)}
-                />
-              </Field>
-            )}
-            <Field label="Purpose / description">
-              <textarea value={addForm.purpose} onChange={(e) => setAddForm({ ...addForm, purpose: e.target.value })} rows={2} placeholder="e.g. PC Spun Poles bid for FESCO PO 4640" style={{ ...inputStyle, width: "100%", resize: "vertical" }} />
-            </Field>
-            <Field label="Notes">
-              <textarea value={addForm.notes} onChange={(e) => setAddForm({ ...addForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} />
-            </Field>
-            <button onClick={saveAdd} disabled={saving} style={{ ...primaryButtonStyle, opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Add Guarantee"}</button>
           </div>
         )}
 
