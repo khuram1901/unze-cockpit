@@ -4,6 +4,28 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-05 — Pass 3: font fix, colour sweep, number scale
+
+### Font fix (`app/layout.tsx`)
+- `Inter_Tight` was loaded without an explicit `weight` array — `next/font/google` defaults to weight 400 only. Weight 600 was not downloaded, causing all display numbers to fall back to system bold (blocky appearance). Fixed: `weight: ["400", "500", "600", "700"]` added to both Inter and Inter Tight.
+
+### Colour sweep (`app/executive/page.tsx` — 91 hardcoded hex → 0)
+- All old hex values replaced with COLOURS token references: `#16a34a`/`#059669` → GREEN, `#dc2626` → RED, `#d97706` → AMBER, `#2563eb` → BLUE, `#1e293b` → NAVY, `#e2e8f0`/`#f1f5f9` → HAIRLINE, `#f8fafc` → CANVAS, `#fef2f2` → DANGER_SOFT, `#fffbeb` → WARNING_SOFT.
+- Destructure at top of file expanded to include all tokens.
+- JSX props fixed: bare `color=GREEN` → `color={GREEN}` etc. (sed stripped quotes; Python regex wrapped with braces).
+- Chart legend names cleaned: "Produced (solid green)" → "Produced" etc.
+- Company Comparison bars: 18px height, 70% opacity, tabular-nums figures.
+- `app/home/page.tsx` was already clean (0 hardcoded hex).
+
+### Number scale calibration (`app/home/page.tsx`)
+- Rule: only Good Stock hero (60px) and 6 ops KPI cards (44px) get full display size. Everything else secondary.
+- `summaryCard` (Cash Available / Money In / Money Out): 36px → 28px.
+- `Mini` component (Receivables totals): 32px → 24px.
+- Monthly Receipts/Payments fallback card: 32px → 24px.
+- "No plan set" sub-label: `BLUE` → `SLATE` (quiet, not a CTA).
+
+---
+
 ## 2026-07-05 — Genspark deep restyle: sidebar + executive dashboard (second pass)
 
 ### Sidebar (`app/lib/SidebarLayout.tsx`, `app/lib/pageRegistry.ts`)
