@@ -84,20 +84,18 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
 
 // ── Sidebar nav groups — reordered for the sidebar layout ────────
 const SIDEBAR_GROUPS = [
-  "Command Centre",
-  "Tasks & Meetings",
   "Finance",
-  "Operations",
   "Departments",
+  "Operations",
+  "Tasks & Meetings",
   "Settings",
 ] as const;
 
 const GROUP_ICONS: Record<string, string> = {
-  "Command Centre": "🚀",
-  "Tasks & Meetings": "✅",
   Finance: "💎",
-  Operations: "🏗️",
   Departments: "🗂️",
+  Operations: "🏗️",
+  "Tasks & Meetings": "✅",
   Settings: "⚙️",
 };
 
@@ -274,7 +272,9 @@ export default function SidebarLayout({
 
           {/* Permission-gated groups */}
           {SIDEBAR_GROUPS.map((groupName) => {
-            const groupCards = visibleCards.filter((c) => c.group === groupName);
+            const groupCards = visibleCards
+              .filter((c) => c.group === groupName)
+              .sort((a, b) => a.title.trim().toLowerCase().localeCompare(b.title.trim().toLowerCase()));
             if (groupCards.length === 0) return null;
             return (
               <div key={groupName} style={{ marginBottom: "4px" }}>
