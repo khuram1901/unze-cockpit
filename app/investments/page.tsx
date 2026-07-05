@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase, loadMyPermissions } from "../lib/supabase";
+import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { COLOURS, SectionTitle, PageHeader, useConfirm } from "../lib/SharedUI";
 import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
@@ -15,6 +15,24 @@ import {
 } from "recharts";
 
 const { NAVY, SLATE, BORDER, GREEN, RED, AMBER } = COLOURS;
+
+type DividendRow = {
+  id: string;
+  ticker: string;
+  dividend_per_share: number;
+  ex_dividend_date: string;
+  payment_date: string | null;
+  announced_date: string | null;
+  status: string;
+  source: string;
+  confirmed: boolean;
+  notes: string | null;
+  entered_by: string | null;
+  entered_at: string;
+  total_qty: number;
+  estimated_payout: number;
+  days_to_ex: number;
+};
 
 type Holding = {
   id: string;
@@ -118,24 +136,61 @@ export default function InvestmentsPage() {
   const [formTarget, setFormTarget] = useState("");
   const [formNotes, setFormNotes] = useState("");
 
+  // Dividend state
+  const [dayChange, setDayChange] = useState<{ value: number; pct: number } | null>(null);
+  const [dividends, setDividends] = useState<DividendRow[]>([]);
+  const [divSectionOpen, setDivSectionOpen] = useState(true);
+  const [showDivForm, setShowDivForm] = useState(false);
+  const [editingDivId, setEditingDivId] = useState<string | null>(null);
+  const [divTicker, setDivTicker] = useState("");
+  const [divAmount, setDivAmount] = useState("");
+  const [divExDate, setDivExDate] = useState("");
+  const [divPayDate, setDivPayDate] = useState("");
+  const [divAnnounced, setDivAnnounced] = useState("");
+  const [divNotes, setDivNotes] = useState("");
+  const [divError, setDivError] = useState<string | null>(null);
+  const [divSaving, setDivSaving] = useState(false);
+
+  const loadDividends = useCallback(async () => {
+    try {
+      const res = await authFetch("/api/investments/dividends?mode=upcoming&days=14");
+      const json = await res.json();
+      setDividends(json.dividends ?? []);
+    } catch { /* silently ignore — dividends are additive */ }
+  }, []);
+
   const load = useCallback(async (asOf: string) => {
-    const [hRes, portfolioRes, histRes, latestRes] = await Promise.all([
+    const yesterday = new Date(new Date(asOf).getTime() - 86400000).toISOString().slice(0, 10);
+    const [hRes, portfolioRes, histRes, latestRes, prevSnap] = await Promise.all([
       supabase.from("holdings").select("*").order("ticker"),
       // RPC returns one pre-aggregated row per ticker with prices as of the selected date.
       supabase.rpc("get_portfolio_summary_as_of", { as_of: asOf }),
       supabase.from("price_history").select("ticker, price, as_of_date").order("as_of_date", { ascending: true }),
       supabase.from("price_history").select("created_at").order("created_at", { ascending: false }).limit(1).single(),
+      supabase.from("portfolio_snapshots").select("current_value").eq("snapshot_date", yesterday),
     ]);
     setHoldings(hRes.data || []);
     setPortfolioPrices((portfolioRes.data || []) as PriceRow[]);
     setHistory(histRes.data || []);
     setLastPriceUpdate(latestRes.data?.created_at ?? null);
+    // Compute day-change from yesterday's snapshots
+    const prevRows = prevSnap.data ?? [];
+    if (prevRows.length > 0) {
+      const prevTotal = prevRows.reduce((s: number, r: { current_value: number | null }) => s + (r.current_value ?? 0), 0);
+      const currTotal = ((portfolioRes.data ?? []) as PriceRow[]).reduce((s, r) => s + (r.current_value ?? 0), 0);
+      const change = currTotal - prevTotal;
+      const pct = prevTotal > 0 ? (change / prevTotal) * 100 : 0;
+      setDayChange({ value: change, pct });
+    } else {
+      setDayChange(null);
+    }
     setLoading(false);
   }, []);
 
   useEffect(() => {
     if (checking) return;
     load(selectedDate);
+    loadDividends();
     (async () => {
       const { data: userData } = await supabase.auth.getUser();
       const email = userData.user?.email;
@@ -187,7 +242,8 @@ export default function InvestmentsPage() {
   const totalValue = stocks.reduce((s, st) => s + (st.currentValue ?? 0), 0);
   const totalGL = totalValue - totalCost;
   const totalGLPct = totalCost > 0 ? (totalGL / totalCost) * 100 : 0;
-  const losers = stocks.filter((s) => s.gainLossPct !== null && s.gainLossPct < -5);
+  const ALERT_THRESHOLD = -3;
+  const losers = stocks.filter((s) => s.gainLossPct !== null && s.gainLossPct <= ALERT_THRESHOLD);
   const winners = stocks.filter((s) => s.gainLossPct !== null && s.gainLossPct > 20);
 
   async function handleRefreshPrices() {
@@ -297,6 +353,101 @@ export default function InvestmentsPage() {
       fill: (s.gainLossPct ?? 0) >= 0 ? GREEN : RED,
     }));
 
+  // ── Dividend CRUD ──────────────────────────────────────────────────────────
+
+  function resetDivForm() {
+    setEditingDivId(null);
+    setDivTicker("");
+    setDivAmount("");
+    setDivExDate("");
+    setDivPayDate("");
+    setDivAnnounced("");
+    setDivNotes("");
+    setDivError(null);
+    setShowDivForm(false);
+  }
+
+  function startEditDiv(d: DividendRow) {
+    setEditingDivId(d.id);
+    setDivTicker(d.ticker);
+    setDivAmount(String(d.dividend_per_share));
+    setDivExDate(d.ex_dividend_date);
+    setDivPayDate(d.payment_date ?? "");
+    setDivAnnounced(d.announced_date ?? "");
+    setDivNotes(d.notes ?? "");
+    setDivError(null);
+    setShowDivForm(true);
+  }
+
+  async function handleSaveDividend(e: React.FormEvent) {
+    e.preventDefault();
+    setDivError(null);
+    setDivSaving(true);
+    try {
+      const payload = {
+        ticker: divTicker.toUpperCase().trim(),
+        dividend_per_share: parseFloat(divAmount),
+        ex_dividend_date: divExDate,
+        payment_date: divPayDate || null,
+        announced_date: divAnnounced || null,
+        notes: divNotes.trim() || null,
+        source: "manual",
+        confirmed: true,
+      };
+      if (editingDivId) {
+        const res = await authFetch("/api/investments/dividends", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: editingDivId, ...payload }),
+        });
+        const json = await res.json();
+        if (!res.ok) { setDivError(json.error ?? "Failed to save."); setDivSaving(false); return; }
+      } else {
+        const res = await authFetch("/api/investments/dividends", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) { setDivError(json.error ?? "Failed to save."); setDivSaving(false); return; }
+      }
+      resetDivForm();
+      await loadDividends();
+    } catch { setDivError("Network error. Please try again."); }
+    setDivSaving(false);
+  }
+
+  async function handleDeleteDividend(id: string) {
+    if (!await dlg.confirm("Remove this dividend record?", true)) return;
+    await authFetch("/api/investments/dividends", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    await loadDividends();
+  }
+
+  async function handleConfirmDiv(id: string) {
+    await authFetch("/api/investments/dividends", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, confirmed: true }),
+    });
+    await loadDividends();
+  }
+
+  async function handleDismissDiv(id: string) {
+    await authFetch("/api/investments/dividends", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status: "cancelled" }),
+    });
+    await loadDividends();
+  }
+
+  const confirmedDivs = dividends.filter((d) => d.confirmed);
+  const unconfirmedDivs = dividends.filter((d) => !d.confirmed);
+
   if (checking) return null;
 
   const priceDate = portfolioPrices.find(p => p.price_date)?.price_date ?? null;
@@ -368,7 +519,16 @@ export default function InvestmentsPage() {
                 sub={fmtPct(totalGLPct)}
                 color={glColor(totalGL)}
               />
-              <SummaryCard label="Stocks" value={String(stocks.length)} sub={priceDate ? `Prices: ${formatDateUK(priceDate)}` : "No prices"} color={SLATE} />
+              {dayChange !== null ? (
+                <SummaryCard
+                  label="Today's Change"
+                  value={fmtRs(dayChange.value)}
+                  sub={fmtPct(dayChange.pct)}
+                  color={dayChange.value >= 0 ? GREEN : RED}
+                />
+              ) : (
+                <SummaryCard label="Stocks" value={String(stocks.length)} sub={priceDate ? `Prices: ${formatDateUK(priceDate)}` : "No prices"} color={SLATE} />
+              )}
             </div>
 
             {/* Last updated */}
@@ -386,7 +546,7 @@ export default function InvestmentsPage() {
                 padding: "10px 16px", marginBottom: "14px",
               }}>
                 <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b", marginBottom: "4px" }}>
-                  {losers.length} stock{losers.length > 1 ? "s" : ""} down more than 5%
+                  {losers.length} stock{losers.length > 1 ? "s" : ""} down more than {Math.abs(ALERT_THRESHOLD)}%
                 </div>
                 {losers.map((s) => (
                   <div key={s.ticker} style={{ fontSize: "15px", color: "#991b1b", lineHeight: 1.8 }}>
@@ -659,6 +819,197 @@ export default function InvestmentsPage() {
                 </div>
               </>
             )}
+
+            {/* ── Dividends ── */}
+            <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: "8px", paddingTop: "4px" }}>
+              <div
+                onClick={() => setDivSectionOpen((o) => !o)}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "10px 0" }}
+              >
+                <span style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>
+                  Dividends — Next 14 Days
+                  {confirmedDivs.length > 0 && (
+                    <span style={{ marginLeft: "8px", fontSize: "12px", fontWeight: 700, color: "white", backgroundColor: AMBER, padding: "2px 8px", borderRadius: "10px" }}>
+                      {confirmedDivs.length} upcoming
+                    </span>
+                  )}
+                  {unconfirmedDivs.length > 0 && (
+                    <span style={{ marginLeft: "6px", fontSize: "12px", fontWeight: 700, color: NAVY, backgroundColor: "#fef9c3", padding: "2px 8px", borderRadius: "10px", border: `1px solid ${AMBER}` }}>
+                      {unconfirmedDivs.length} to verify
+                    </span>
+                  )}
+                </span>
+                <span style={{ fontSize: "13px", color: SLATE }}>{divSectionOpen ? "▲ Hide" : "▼ Show"}</span>
+              </div>
+
+              {divSectionOpen && (
+                <>
+                  {/* Confirmed upcoming dividends */}
+                  {confirmedDivs.length > 0 && (
+                    <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${AMBER}`, borderRadius: "8px", padding: "12px 14px", marginBottom: "12px", backgroundColor: "var(--bg-card, #fff)" }}>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Confirmed Upcoming</div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "560px" }}>
+                          <thead>
+                            <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                              <Th>Ticker</Th>
+                              <Th align="right">Rs/Share</Th>
+                              <Th>Ex-Date</Th>
+                              <Th>Pay Date</Th>
+                              <Th align="right">Days</Th>
+                              <Th align="right">Est. Payout</Th>
+                              {canEdit && <Th>Actions</Th>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {confirmedDivs.map((d) => (
+                              <tr key={d.id} style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)" }}>
+                                <td style={{ ...divTd, fontWeight: 700, color: NAVY }}>{d.ticker}</td>
+                                <td style={{ ...divTd, textAlign: "right" }}>{fmtPrice(d.dividend_per_share)}</td>
+                                <td style={{ ...divTd }}>
+                                  <span style={{ fontWeight: d.days_to_ex <= 3 ? 700 : 400, color: d.days_to_ex <= 3 ? RED : "inherit" }}>
+                                    {formatDateUK(d.ex_dividend_date)}
+                                  </span>
+                                </td>
+                                <td style={{ ...divTd, color: SLATE }}>{d.payment_date ? formatDateUK(d.payment_date) : "—"}</td>
+                                <td style={{ ...divTd, textAlign: "right" }}>
+                                  <span style={{ fontWeight: 700, color: d.days_to_ex <= 3 ? RED : d.days_to_ex <= 7 ? AMBER : GREEN }}>
+                                    {d.days_to_ex}d
+                                  </span>
+                                </td>
+                                <td style={{ ...divTd, textAlign: "right", fontWeight: 700, color: GREEN }}>
+                                  {d.total_qty > 0 ? fmtRs(d.estimated_payout) : "—"}
+                                </td>
+                                {canEdit && (
+                                  <td style={{ ...divTd, whiteSpace: "nowrap" }}>
+                                    <button onClick={() => startEditDiv(d)} style={miniBtn} title="Edit">✏️</button>
+                                    <button onClick={() => handleDeleteDividend(d.id)} style={{ ...miniBtn, color: RED }} title="Delete">🗑️</button>
+                                  </td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {confirmedDivs.length === 0 && !unconfirmedDivs.length && (
+                    <p style={{ color: SLATE, fontSize: "13px", marginBottom: "12px" }}>No upcoming dividends in the next 14 days.</p>
+                  )}
+
+                  {/* Unconfirmed dividends — review list */}
+                  {unconfirmedDivs.length > 0 && (
+                    <div style={{ border: `1px solid ${AMBER}`, borderRadius: "8px", padding: "12px 14px", marginBottom: "12px", backgroundColor: "#fffbeb" }}>
+                      <div style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", marginBottom: "4px" }}>
+                        Unconfirmed — please verify before acting on these
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#92400e", marginBottom: "10px" }}>
+                        Auto-fetched data. Review each entry and confirm or dismiss.
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "500px" }}>
+                          <thead>
+                            <tr style={{ backgroundColor: "#fef3c7" }}>
+                              <Th>Ticker</Th>
+                              <Th align="right">Rs/Share</Th>
+                              <Th>Ex-Date</Th>
+                              <Th>Source</Th>
+                              <Th>Action</Th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {unconfirmedDivs.map((d) => (
+                              <tr key={d.id} style={{ borderBottom: "1px solid #fde68a" }}>
+                                <td style={{ ...divTd, fontWeight: 700 }}>{d.ticker}</td>
+                                <td style={{ ...divTd, textAlign: "right" }}>{fmtPrice(d.dividend_per_share)}</td>
+                                <td style={{ ...divTd }}>{formatDateUK(d.ex_dividend_date)}</td>
+                                <td style={{ ...divTd, color: SLATE, fontSize: "12px" }}>{d.source}</td>
+                                <td style={{ ...divTd, whiteSpace: "nowrap" }}>
+                                  {canEdit && (
+                                    <>
+                                      <button
+                                        onClick={() => handleConfirmDiv(d.id)}
+                                        style={{ ...miniConfirmBtn, backgroundColor: GREEN }}
+                                      >Confirm</button>
+                                      <button
+                                        onClick={() => handleDismissDiv(d.id)}
+                                        style={{ ...miniConfirmBtn, backgroundColor: SLATE, marginLeft: "6px" }}
+                                      >Dismiss</button>
+                                    </>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add / Edit dividend form */}
+                  {canEdit && (
+                    <>
+                      {!showDivForm ? (
+                        <button
+                          onClick={() => { resetDivForm(); setShowDivForm(true); }}
+                          style={{ ...btnStyle, backgroundColor: AMBER, marginBottom: "16px" }}
+                        >
+                          + Add Dividend
+                        </button>
+                      ) : (
+                        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #fff)", padding: "14px", marginBottom: "16px" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+                            {editingDivId ? "Edit Dividend" : "Add Dividend"}
+                          </div>
+                          <form onSubmit={handleSaveDividend} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: "10px" }}>
+                            <div>
+                              <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Ticker *</label>
+                              <select
+                                value={divTicker}
+                                onChange={(e) => setDivTicker(e.target.value)}
+                                required
+                                style={inputStyle}
+                              >
+                                <option value="">Select stock…</option>
+                                {[...new Set(holdings.map((h) => h.ticker))].sort().map((t) => (
+                                  <option key={t} value={t}>{t}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Rs per Share *</label>
+                              <input type="number" step="0.0001" min="0" placeholder="e.g. 5.00" value={divAmount} onChange={(e) => setDivAmount(e.target.value)} required style={inputStyle} />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Ex-Dividend Date *</label>
+                              <DateInput value={divExDate} onChange={(e) => setDivExDate(e.target.value)} required style={inputStyle} />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Payment Date</label>
+                              <DateInput value={divPayDate} onChange={(e) => setDivPayDate(e.target.value)} style={inputStyle} />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Announced Date</label>
+                              <DateInput value={divAnnounced} onChange={(e) => setDivAnnounced(e.target.value)} style={inputStyle} />
+                            </div>
+                            <div>
+                              <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Notes</label>
+                              <input placeholder="Optional notes" value={divNotes} onChange={(e) => setDivNotes(e.target.value)} style={inputStyle} />
+                            </div>
+                            <div style={{ gridColumn: isMobile ? "1" : "1 / -1", display: "flex", gap: "8px", alignItems: "center" }}>
+                              <button type="submit" disabled={divSaving} style={btnStyle}>{divSaving ? "Saving…" : editingDivId ? "Save Changes" : "Add Dividend"}</button>
+                              <button type="button" onClick={resetDivForm} style={{ ...btnStyle, backgroundColor: SLATE }}>Cancel</button>
+                              {divError && <span style={{ fontSize: "13px", color: RED }}>{divError}</span>}
+                            </div>
+                          </form>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           </>
         )}
       </main>
@@ -708,4 +1059,13 @@ const btnStyle: React.CSSProperties = {
 const miniBtn: React.CSSProperties = {
   background: "transparent", border: "none", cursor: "pointer",
   fontSize: "15px", padding: "2px 4px",
+};
+
+const divTd: React.CSSProperties = {
+  padding: "7px 10px", fontSize: "13px",
+};
+
+const miniConfirmBtn: React.CSSProperties = {
+  color: "white", border: "none", borderRadius: "4px",
+  padding: "3px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
 };

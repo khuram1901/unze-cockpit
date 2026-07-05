@@ -56,6 +56,14 @@ type Member = {
   phone_e164: string | null;
 };
 
+type PaDividend = {
+  id: string;
+  ticker: string;
+  ex_dividend_date: string;
+  payment_date: string | null;
+  days_to_ex: number;
+};
+
 const today = new Date().toISOString().slice(0, 10);
 const STATUSES = ["Not Started", "In Progress", "Waiting Reply", "Completed", "Cancelled"];
 const PRIORITIES = ["Low", "Normal", "High", "Urgent"];
@@ -112,8 +120,9 @@ export default function PADashboardPage() {
   const [newPriority, setNewPriority] = useState("Normal");
   const [newProject, setNewProject] = useState("");
   const [savingTask, setSavingTask] = useState(false);
+  const [paDividends, setPaDividends] = useState<PaDividend[]>([]);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); loadPaDividends(); }, []);
 
   async function loadData() {
     setLoading(true);
@@ -139,6 +148,21 @@ export default function PADashboardPage() {
     setMeetingRequests(meetingsRes.data || []);
     setMembers(membersRes.data || []);
     setLoading(false);
+  }
+
+  async function loadPaDividends() {
+    try {
+      const res = await supabase.rpc("get_upcoming_dividends", { p_days_ahead: 14 });
+      // Only show confirmed dividends to PA — no unconfirmed data
+      const confirmed = (res.data ?? []).filter((d: { confirmed: boolean }) => d.confirmed);
+      setPaDividends(confirmed.map((d: { id: string; ticker: string; ex_dividend_date: string; payment_date: string | null; days_to_ex: number }) => ({
+        id: d.id,
+        ticker: d.ticker,
+        ex_dividend_date: d.ex_dividend_date,
+        payment_date: d.payment_date,
+        days_to_ex: d.days_to_ex,
+      })));
+    } catch { /* dividends are optional — don't crash PA page */ }
   }
 
   function showMsg(text: string) { setMessage(text); setTimeout(() => setMessage(""), 3000); }
@@ -737,6 +761,41 @@ export default function PADashboardPage() {
                   </div>
                 )}
               </div>
+
+              {/* ── Dividend Calendar (confirmed only — no financial figures) ── */}
+              {paDividends.length > 0 && (
+                <div style={{ marginBottom: "16px" }}>
+                  <SectionTitle title="Dividend Dates — Next 14 Days" />
+                  <div style={{
+                    border: `1px solid ${COLOURS.BORDER}`,
+                    borderTop: `3px solid ${COLOURS.AMBER}`,
+                    borderRadius: "8px",
+                    backgroundColor: "var(--bg-card, #ffffff)",
+                    overflow: "hidden",
+                  }}>
+                    {paDividends.map((d, i) => (
+                      <div key={d.id} style={{
+                        display: "flex", alignItems: "center", gap: "12px",
+                        padding: "9px 14px",
+                        borderBottom: i < paDividends.length - 1 ? `1px solid var(--border-light, #f1f5f9)` : "none",
+                      }}>
+                        <span style={{ fontWeight: 700, fontSize: "14px", color: COLOURS.NAVY, minWidth: "60px" }}>{d.ticker}</span>
+                        <span style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)", flex: 1 }}>
+                          Ex-date: <strong>{formatDateUK(d.ex_dividend_date)}</strong>
+                          {d.payment_date && <> &nbsp;·&nbsp; Pay: {formatDateUK(d.payment_date)}</>}
+                        </span>
+                        <span style={{
+                          fontSize: "12px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px",
+                          color: "white",
+                          backgroundColor: d.days_to_ex <= 3 ? COLOURS.RED : d.days_to_ex <= 7 ? COLOURS.AMBER : COLOURS.GREEN,
+                        }}>
+                          {d.days_to_ex === 0 ? "Today" : d.days_to_ex === 1 ? "Tomorrow" : `${d.days_to_ex}d`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* ── Purpose Statement ── */}
               <div style={{

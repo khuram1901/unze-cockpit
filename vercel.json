@@ -43,6 +43,14 @@
     {
       "path": "/api/reports/monthly-po",
       "schedule": "0 6 1 * *"
+    },
+    {
+      "path": "/api/investments/daily-summary",
+      "schedule": "0 5 * * 1-5"
+    },
+    {
+      "path": "/api/investments/fetch-dividends",
+      "schedule": "0 6 * * 1-5"
     }
   ]
 }
