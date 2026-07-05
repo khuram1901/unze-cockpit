@@ -1039,7 +1039,6 @@ export default function HomePage() {
   }, [selectedDate, isExec]);
 
   useEffect(() => {
-    if (!isExec) return;
     async function loadSynopsis() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -1053,7 +1052,7 @@ export default function HomePage() {
       } catch { /* silent */ }
     }
     loadSynopsis();
-  }, [isExec]);
+  }, []);
 
   /* ── Member-view data loader (non-CEO logins) ── */
   useEffect(() => {

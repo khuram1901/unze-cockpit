@@ -123,58 +123,79 @@ function FacilityForm({ facilityForm, setFacilityForm, saveFacility, savingFacil
 
 // ─── Bank-grouped utilisation card ────────────────────────────────────────────
 
+function TrafficDot({ color, title, onClick }: { color: string; title: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        width: "13px", height: "13px", borderRadius: "50%",
+        backgroundColor: color, border: "none", cursor: "pointer",
+        flexShrink: 0, padding: 0,
+        boxShadow: `0 0 0 1px ${color}55`,
+        transition: "transform 0.1s, box-shadow 0.1s",
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.2)"; (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 0 3px ${color}33`; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 0 1px ${color}55`; }}
+    />
+  );
+}
+
 function BankFacilityCard({ bank, onEdit, onDelete }: { bank: BankGroup; onEdit: (f: Facility) => void; onDelete: (f: Facility) => void }) {
   const pct = bank.bank_utilisation_pct;
   const barColor = pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#16a34a";
   return (
-    <div style={{ padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", borderRadius: "10px", border: "1px solid var(--border-color,#e2e8f0)" }}>
+    <div style={{ padding: "16px 18px", backgroundColor: "var(--bg-card,#fff)", borderRadius: "12px", border: "1px solid var(--border-color,#e2e8f0)", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
       {/* Bank header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-        <div style={{ fontSize: "15px", fontWeight: 800, color: "var(--text-primary,#1e293b)" }}>{bank.bank_name}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+        <div style={{ fontSize: "16px", fontWeight: 800, color: "var(--text-primary,#1e293b)", letterSpacing: "-0.2px" }}>{bank.bank_name}</div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: "18px", fontWeight: 800, color: barColor }}>{pct}%</div>
-          <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>utilised</div>
+          <div style={{ fontSize: "20px", fontWeight: 800, color: barColor, letterSpacing: "-0.5px" }}>{pct}%</div>
+          <div style={{ fontSize: "10px", color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.5px" }}>utilised</div>
         </div>
       </div>
 
       {/* Overall bank bar */}
-      <div style={{ height: "8px", borderRadius: "4px", backgroundColor: "#e2e8f0", marginBottom: "10px", overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, backgroundColor: barColor, borderRadius: "4px" }} />
+      <div style={{ height: "6px", borderRadius: "3px", backgroundColor: "#e2e8f0", marginBottom: "12px", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${Math.min(100, pct)}%`, backgroundColor: barColor, borderRadius: "3px", transition: "width 0.4s ease" }} />
       </div>
 
       {/* Bank totals */}
-      <div style={{ display: "flex", gap: "16px", fontSize: "13px", marginBottom: "12px" }}>
-        <span style={{ color: COLOURS.SLATE }}>Total limit: <strong>{pkr(bank.bank_total_limit)}</strong></span>
-        <span style={{ color: "#dc2626" }}>Seized: <strong>{pkr(bank.bank_seized)}</strong></span>
-        <span style={{ color: "#16a34a" }}>Available: <strong>{pkr(bank.bank_available)}</strong></span>
+      <div style={{ display: "flex", gap: "16px", fontSize: "12px", marginBottom: "14px" }}>
+        <span style={{ color: COLOURS.SLATE }}>Limit <strong style={{ color: "var(--text-primary,#1e293b)" }}>{pkr(bank.bank_total_limit)}</strong></span>
+        <span style={{ color: "#dc2626" }}>Seized <strong>{pkr(bank.bank_seized)}</strong></span>
+        <span style={{ color: "#16a34a" }}>Free <strong>{pkr(bank.bank_available)}</strong></span>
       </div>
 
       {/* Sub-facility breakdown */}
       {bank.sub_facilities.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: "8px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {bank.sub_facilities.map((sf) => {
             const sfPct = sf.utilisation_pct;
             const sfColor = sfPct >= 90 ? "#dc2626" : sfPct >= 70 ? "#d97706" : "#16a34a";
             return (
-              <div key={sf.id} style={{ padding: "8px 10px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "2px" }}>
-                  <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>
+              <div key={sf.id} style={{ padding: "10px 12px", backgroundColor: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                {/* Traffic light controls + name */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+                    <TrafficDot color="#ff5f57" title="Delete this facility" onClick={() => onDelete(sf)} />
+                    <TrafficDot color="#ffbd2e" title="Edit this facility" onClick={() => onEdit(sf)} />
+                  </div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary,#1e293b)", marginLeft: "4px" }}>
                     {sf.facility_name || sf.facility_type}
                   </div>
-                  <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-                    <button onClick={() => onEdit(sf)} style={{ fontSize: "11px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>Edit</button>
-                    <button onClick={() => onDelete(sf)} style={{ fontSize: "11px", color: "#dc2626", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>Delete</button>
-                  </div>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "auto" }}>{sf.facility_type}</div>
                 </div>
-                <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "6px" }}>{sf.facility_type}</div>
-                <div style={{ height: "4px", borderRadius: "2px", backgroundColor: "#e2e8f0", marginBottom: "6px", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${Math.min(100, sfPct)}%`, backgroundColor: sfColor, borderRadius: "2px" }} />
+                {/* Utilisation bar */}
+                <div style={{ height: "4px", borderRadius: "2px", backgroundColor: "#e2e8f0", marginBottom: "8px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.min(100, sfPct)}%`, backgroundColor: sfColor, borderRadius: "2px", transition: "width 0.4s ease" }} />
                 </div>
+                {/* Numbers */}
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
-                  <span style={{ color: "#dc2626" }}>{pkr(sf.seized)} seized</span>
-                  <span style={{ color: "#16a34a" }}>{pkr(sf.available)} free</span>
+                  <span style={{ color: "#dc2626", fontWeight: 600 }}>{pkr(sf.seized)} seized</span>
+                  <span style={{ color: COLOURS.SLATE }}>{pkr(sf.total_limit)} limit</span>
+                  <span style={{ color: "#16a34a", fontWeight: 600 }}>{pkr(sf.available)} free</span>
                 </div>
-                <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>Limit: {pkr(sf.total_limit)}</div>
               </div>
             );
           })}
@@ -686,8 +707,17 @@ export default function GuaranteesPage() {
 
             {/* Inline edit facility form — shown above cards so it's always visible */}
             {editFacilityId && (
-              <div style={{ border: "2px solid #d97706", borderRadius: "10px", padding: "16px", backgroundColor: "#fffbeb", marginBottom: "12px" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", marginBottom: "10px" }}>Edit Facility</div>
+              <div style={{ border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+                {/* Traffic light header */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+                  <div style={{ display: "flex", gap: "5px" }}>
+                    <TrafficDot color="#ff5f57" title="Cancel edit" onClick={() => setEditFacilityId(null)} />
+                    <TrafficDot color="#ffbd2e" title="Editing…" onClick={() => {}} />
+                    <TrafficDot color="#28c840" title="Save changes" onClick={saveEditFacility} />
+                  </div>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary,#1e293b)", marginLeft: "4px" }}>Edit Facility</span>
+                  {savingEditFacility && <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "auto" }}>Saving…</span>}
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
                   <Field label="Bank name *">
                     <select value={editFacilityForm.bank_name} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
@@ -704,8 +734,8 @@ export default function GuaranteesPage() {
                   <Field label="Total limit (PKR) *"><input type="number" min="0" value={editFacilityForm.total_limit} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, total_limit: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                   <Field label="Notes"><input value={editFacilityForm.notes} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, notes: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                 </div>
-                <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-                  <button onClick={saveEditFacility} disabled={savingEditFacility} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 14px", opacity: savingEditFacility ? 0.6 : 1 }}>{savingEditFacility ? "Saving…" : "Save changes"}</button>
+                <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                  <button onClick={saveEditFacility} disabled={savingEditFacility} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 16px", opacity: savingEditFacility ? 0.6 : 1 }}>{savingEditFacility ? "Saving…" : "Save changes"}</button>
                   <button onClick={() => setEditFacilityId(null)} style={{ padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
                 </div>
               </div>
