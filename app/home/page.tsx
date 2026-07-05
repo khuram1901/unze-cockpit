@@ -959,43 +959,29 @@ export default function HomePage() {
     }
     setDeptHealth(healthResults);
 
-    // get_portfolio_summary_as_of() runs DISTINCT ON + aggregation in Postgres,
-    // returning one row per ticker instead of the full price_history table.
-    const [{ data: portfolioRows }, { data: divRows }] = await Promise.all([
-      supabase.rpc("get_portfolio_summary_as_of", { as_of: dateToView }),
-      supabase.rpc("get_upcoming_dividends", { p_days_ahead: 7 }),
-    ]);
-    const pRows = (portfolioRows || []) as {
-      ticker: string; company_name: string;
-      total_qty: number; total_cost: number; avg_cost: number;
-      current_price: number | null; price_date: string | null;
-      current_value: number | null; gain_loss: number | null; gain_loss_pct: number | null;
-    }[];
-    const confirmedDivCount = ((divRows ?? []) as { confirmed: boolean }[])
-      .filter((d) => d.confirmed).length;
+    // Single RPC returns totals, per-ticker rows, losers, and dividend count — no JS aggregation.
+    const { data: summaryData } = await supabase.rpc("get_portfolio_summary_full", {
+      p_as_of: dateToView, p_alert_pct: -3, p_div_days: 7,
+    });
+    const summary = summaryData as {
+      totals: { total_cost: number; total_value: number; gain_loss: number; gain_loss_pct: number; stock_count: number; price_date: string | null; dividend_count: number };
+      losers: { ticker: string; company_name: string; gain_loss_pct: number; gain_loss: number }[];
+    } | null;
     let computedInvestmentData: InvestmentSummary | null = null;
-    if (pRows.length > 0) {
-      let tCost = 0, tValue = 0;
-      const invLosers: { ticker: string; company: string; pct: number }[] = [];
-      for (const r of pRows) {
-        tCost += r.total_cost || 0;
-        if (r.current_price !== null && r.current_value !== null) {
-          tValue += r.current_value;
-          if ((r.gain_loss_pct ?? 0) < -5) {
-            invLosers.push({ ticker: r.ticker, company: r.company_name || r.ticker, pct: r.gain_loss_pct! });
-          }
-        }
-      }
-      const priceDate = pRows.find(r => r.price_date)?.price_date ?? null;
+    if (summary?.totals && summary.totals.stock_count > 0) {
       computedInvestmentData = {
-        totalCost: tCost,
-        totalValue: tValue,
-        gainLoss: tValue - tCost,
-        gainLossPct: tCost > 0 ? ((tValue - tCost) / tCost) * 100 : 0,
-        stockCount: pRows.length,
-        losers: invLosers.sort((a, b) => a.pct - b.pct),
-        priceDate,
-        dividendCount: confirmedDivCount,
+        totalCost:     summary.totals.total_cost,
+        totalValue:    summary.totals.total_value,
+        gainLoss:      summary.totals.gain_loss,
+        gainLossPct:   summary.totals.gain_loss_pct,
+        stockCount:    summary.totals.stock_count,
+        priceDate:     summary.totals.price_date,
+        dividendCount: summary.totals.dividend_count,
+        losers: (summary.losers ?? []).map((l) => ({
+          ticker:  l.ticker,
+          company: l.company_name,
+          pct:     l.gain_loss_pct,
+        })),
       };
       setInvestmentData(computedInvestmentData);
     }

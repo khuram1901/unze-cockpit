@@ -136,6 +136,15 @@ export default function InvestmentsPage() {
   const [formTarget, setFormTarget] = useState("");
   const [formNotes, setFormNotes] = useState("");
 
+  // Portfolio totals — come directly from DB, no JS aggregation
+  const [portfolioTotals, setPortfolioTotals] = useState<{
+    total_cost: number; total_value: number; gain_loss: number; gain_loss_pct: number;
+    stock_count: number; price_date: string | null;
+    prev_value: number; day_change: number | null; day_change_pct: number | null;
+    dividend_count: number;
+  } | null>(null);
+  const [losersDB, setLosersDB] = useState<{ ticker: string; company_name: string; gain_loss_pct: number; gain_loss: number }[]>([]);
+
   // Dividend state
   const [dayChange, setDayChange] = useState<{ value: number; pct: number } | null>(null);
   const [dividends, setDividends] = useState<DividendRow[]>([]);
@@ -160,30 +169,33 @@ export default function InvestmentsPage() {
   }, []);
 
   const load = useCallback(async (asOf: string) => {
-    const yesterday = new Date(new Date(asOf).getTime() - 86400000).toISOString().slice(0, 10);
-    const [hRes, portfolioRes, histRes, latestRes, prevSnap] = await Promise.all([
+    const [summaryRes, hRes, histRes, latestRes] = await Promise.all([
+      // Single RPC: totals, per-ticker rows, losers, day-change, dividend count — all in DB
+      supabase.rpc("get_portfolio_summary_full", { p_as_of: asOf, p_alert_pct: -3, p_div_days: 7 }),
+      // Holdings still needed for individual lot edit/delete UI
       supabase.from("holdings").select("*").order("ticker"),
-      // RPC returns one pre-aggregated row per ticker with prices as of the selected date.
-      supabase.rpc("get_portfolio_summary_as_of", { as_of: asOf }),
+      // Chart history — for the portfolio value graph only
       supabase.from("price_history").select("ticker, price, as_of_date").order("as_of_date", { ascending: true }),
       supabase.from("price_history").select("created_at").order("created_at", { ascending: false }).limit(1).single(),
-      supabase.from("portfolio_snapshots").select("current_value").eq("snapshot_date", yesterday),
     ]);
+
+    const summary = summaryRes.data as {
+      totals: { total_cost: number; total_value: number; gain_loss: number; gain_loss_pct: number; stock_count: number; price_date: string | null; prev_value: number; day_change: number | null; day_change_pct: number | null; dividend_count: number };
+      stocks: PriceRow[];
+      losers: { ticker: string; company_name: string; gain_loss_pct: number; gain_loss: number }[];
+    } | null;
+
     setHoldings(hRes.data || []);
-    setPortfolioPrices((portfolioRes.data || []) as PriceRow[]);
+    setPortfolioPrices(summary?.stocks ?? []);
     setHistory(histRes.data || []);
     setLastPriceUpdate(latestRes.data?.created_at ?? null);
-    // Compute day-change from yesterday's snapshots
-    const prevRows = prevSnap.data ?? [];
-    if (prevRows.length > 0) {
-      const prevTotal = prevRows.reduce((s: number, r: { current_value: number | null }) => s + (r.current_value ?? 0), 0);
-      const currTotal = ((portfolioRes.data ?? []) as PriceRow[]).reduce((s, r) => s + (r.current_value ?? 0), 0);
-      const change = currTotal - prevTotal;
-      const pct = prevTotal > 0 ? (change / prevTotal) * 100 : 0;
-      setDayChange({ value: change, pct });
-    } else {
-      setDayChange(null);
-    }
+    setPortfolioTotals(summary?.totals ?? null);
+    setLosersDB(summary?.losers ?? []);
+    setDayChange(
+      summary?.totals?.day_change != null && summary?.totals?.day_change_pct != null
+        ? { value: summary.totals.day_change, pct: summary.totals.day_change_pct }
+        : null
+    );
     setLoading(false);
   }, []);
 
@@ -238,12 +250,11 @@ export default function InvestmentsPage() {
     })).sort((a, b) => a.ticker.localeCompare(b.ticker));
   })();
 
-  const totalCost = stocks.reduce((s, st) => s + st.totalCost, 0);
-  const totalValue = stocks.reduce((s, st) => s + (st.currentValue ?? 0), 0);
-  const totalGL = totalValue - totalCost;
-  const totalGLPct = totalCost > 0 ? (totalGL / totalCost) * 100 : 0;
-  const ALERT_THRESHOLD = -3;
-  const losers = stocks.filter((s) => s.gainLossPct !== null && s.gainLossPct <= ALERT_THRESHOLD);
+  const totalCost = portfolioTotals?.total_cost ?? 0;
+  const totalValue = portfolioTotals?.total_value ?? 0;
+  const totalGL = portfolioTotals?.gain_loss ?? 0;
+  const totalGLPct = portfolioTotals?.gain_loss_pct ?? 0;
+  const losers = losersDB;
   const winners = stocks.filter((s) => s.gainLossPct !== null && s.gainLossPct > 20);
 
   async function handleRefreshPrices() {
@@ -450,7 +461,7 @@ export default function InvestmentsPage() {
 
   if (checking) return null;
 
-  const priceDate = portfolioPrices.find(p => p.price_date)?.price_date ?? null;
+  const priceDate = portfolioTotals?.price_date ?? null;
   const isHistorical = selectedDate < todayISO;
 
   return (
@@ -546,11 +557,11 @@ export default function InvestmentsPage() {
                 padding: "10px 16px", marginBottom: "14px",
               }}>
                 <div style={{ fontSize: "16px", fontWeight: 700, color: "#991b1b", marginBottom: "4px" }}>
-                  {losers.length} stock{losers.length > 1 ? "s" : ""} down more than {Math.abs(ALERT_THRESHOLD)}%
+                  {losers.length} stock{losers.length > 1 ? "s" : ""} down more than 3%
                 </div>
                 {losers.map((s) => (
                   <div key={s.ticker} style={{ fontSize: "15px", color: "#991b1b", lineHeight: 1.8 }}>
-                    <span style={{ fontWeight: 700 }}>{s.ticker}</span> ({s.company}) — {fmtPct(s.gainLossPct!)} ({fmtRs(s.gainLoss!)})
+                    <span style={{ fontWeight: 700 }}>{s.ticker}</span> ({s.company_name}) — {fmtPct(s.gain_loss_pct)} ({fmtRs(s.gain_loss)})
                   </div>
                 ))}
               </div>
