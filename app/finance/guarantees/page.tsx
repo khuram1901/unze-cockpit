@@ -12,10 +12,17 @@ import DateInput from "../../lib/DateInput";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type FacilityTypeBreakdown = {
+  guarantee_type: string;
+  count: number;
+  seized: number;
+};
+
 type Facility = {
   id: string; bank_name: string; facility_name: string | null; facility_type: string;
   total_limit: number; seized: number; available: number;
   utilisation_pct: number; notes: string | null; active: boolean;
+  type_breakdown: FacilityTypeBreakdown[];
 };
 
 type BankGroup = {
@@ -141,7 +148,12 @@ function TrafficDot({ color, title, onClick }: { color: string; title: string; o
   );
 }
 
-function BankFacilityCard({ bank, onEdit, onDelete }: { bank: BankGroup; onEdit: (f: Facility) => void; onDelete: (f: Facility) => void }) {
+function BankFacilityCard({ bank, allGuarantees, onEdit, onDelete }: {
+  bank: BankGroup;
+  allGuarantees: Guarantee[];
+  onEdit: (f: Facility) => void;
+  onDelete: (f: Facility) => void;
+}) {
   const pct = bank.bank_utilisation_pct;
   const barColor = pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#16a34a";
   return (
@@ -169,14 +181,15 @@ function BankFacilityCard({ bank, onEdit, onDelete }: { bank: BankGroup; onEdit:
 
       {/* Sub-facility breakdown */}
       {bank.sub_facilities.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {bank.sub_facilities.map((sf) => {
             const sfPct = sf.utilisation_pct;
             const sfColor = sfPct >= 90 ? "#dc2626" : sfPct >= 70 ? "#d97706" : "#16a34a";
+            const sfGuarantees = allGuarantees.filter((g) => g.facility_id === sf.id && g.status === "Active");
             return (
-              <div key={sf.id} style={{ padding: "10px 12px", backgroundColor: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+              <div key={sf.id} style={{ padding: "12px 14px", backgroundColor: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
                 {/* Traffic light controls + name */}
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
                   <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
                     <TrafficDot color="#ff5f57" title="Delete this facility" onClick={() => onDelete(sf)} />
                     <TrafficDot color="#ffbd2e" title="Edit this facility" onClick={() => onEdit(sf)} />
@@ -186,16 +199,47 @@ function BankFacilityCard({ bank, onEdit, onDelete }: { bank: BankGroup; onEdit:
                   </div>
                   <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "auto" }}>{sf.facility_type}</div>
                 </div>
+
                 {/* Utilisation bar */}
-                <div style={{ height: "4px", borderRadius: "2px", backgroundColor: "#e2e8f0", marginBottom: "8px", overflow: "hidden" }}>
+                <div style={{ height: "4px", borderRadius: "2px", backgroundColor: "#e2e8f0", marginBottom: "10px", overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${Math.min(100, sfPct)}%`, backgroundColor: sfColor, borderRadius: "2px", transition: "width 0.4s ease" }} />
                 </div>
-                {/* Numbers */}
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+
+                {/* Limit / Seized / Free */}
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "10px" }}>
+                  <span style={{ color: COLOURS.SLATE }}>Limit: <strong style={{ color: "var(--text-primary,#1e293b)" }}>{pkr(sf.total_limit)}</strong></span>
                   <span style={{ color: "#dc2626", fontWeight: 600 }}>{pkr(sf.seized)} seized</span>
-                  <span style={{ color: COLOURS.SLATE }}>{pkr(sf.total_limit)} limit</span>
                   <span style={{ color: "#16a34a", fontWeight: 600 }}>{pkr(sf.available)} free</span>
                 </div>
+
+                {/* Per-type breakdown chips */}
+                {sf.type_breakdown && sf.type_breakdown.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: sfGuarantees.length > 0 ? "10px" : "0" }}>
+                    {sf.type_breakdown.map((tb) => (
+                      <div key={tb.guarantee_type} style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", backgroundColor: "#e0e7ff", color: "#3730a3", fontWeight: 600 }}>
+                        {tb.guarantee_type}: {pkr(tb.seized)} ({tb.count})
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Individual Active instruments */}
+                {sfGuarantees.length > 0 && (
+                  <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {sfGuarantees.map((g) => (
+                      <div key={g.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontWeight: 600, color: "var(--text-primary,#1e293b)" }}>{g.customer_name}</span>
+                          <span style={{ color: COLOURS.SLATE }}> · {g.guarantee_number}</span>
+                          <span style={{ marginLeft: "6px", fontSize: "10px", padding: "1px 6px", borderRadius: "8px", backgroundColor: "#f1f5f9", color: COLOURS.SLATE, fontWeight: 600 }}>{g.guarantee_type}</span>
+                          {g.chase_urgency === "Overdue" && <span style={{ marginLeft: "4px", fontSize: "10px", color: "#dc2626", fontWeight: 700 }}>⚠ Overdue</span>}
+                          {g.chase_urgency === "Due soon" && <span style={{ marginLeft: "4px", fontSize: "10px", color: "#d97706", fontWeight: 700 }}>⏱ Soon</span>}
+                        </div>
+                        <span style={{ fontWeight: 700, color: "#dc2626", flexShrink: 0, marginLeft: "10px" }}>{pkr(g.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -453,6 +497,9 @@ export default function GuaranteesPage() {
     if (!addForm.guarantee_type || !addForm.guarantee_number || !addForm.bank_name || !addForm.issue_date || !addForm.amount || !addForm.customer_name) {
       toast("Please fill all required fields", "error"); return;
     }
+    if (!addForm.facility_id) {
+      toast("A bank facility must be selected", "error"); return;
+    }
     setSaving(true);
     const res = await authedFetch("/api/finance/guarantees", { method: "POST", body: JSON.stringify({
       ...addForm, amount: Number(addForm.amount),
@@ -529,6 +576,9 @@ export default function GuaranteesPage() {
     if (!convertId) return;
     if (!convertForm.guarantee_number || !convertForm.bank_name || !convertForm.issue_date || !convertForm.amount) {
       toast("Guarantee number, bank, issue date and amount are required", "error"); return;
+    }
+    if (!convertForm.facility_id) {
+      toast("A bank facility must be selected for the Performance Guarantee", "error"); return;
     }
     setSavingConvert(true);
     const res = await authedFetch("/api/finance/guarantees", { method: "PATCH", body: JSON.stringify({
@@ -743,7 +793,7 @@ export default function GuaranteesPage() {
 
             {/* Bank-grouped utilisation bars */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} onEdit={startEditFacility} onDelete={deleteFacility} />)}
+              {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} allGuarantees={guarantees} onEdit={startEditFacility} onDelete={deleteFacility} />)}
             </div>
           </div>
         )}
@@ -788,11 +838,24 @@ export default function GuaranteesPage() {
                   {BANKS.map((b) => <option key={b}>{b}</option>)}
                 </select>
               </Field>
-              <Field label="Bank facility (optional)">
-                <select value={addForm.facility_id} onChange={(e) => setAddForm({ ...addForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
-                  <option value="">— Not linked to a facility —</option>
-                  {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type}</option>)}
+              <Field label="Bank facility *">
+                <select value={addForm.facility_id} onChange={(e) => setAddForm({ ...addForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%", borderColor: !addForm.facility_id ? "#fca5a5" : undefined }}>
+                  <option value="">— Select facility —</option>
+                  {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
                 </select>
+                {addForm.facility_id && (() => {
+                  const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === addForm.facility_id);
+                  if (!sel) return null;
+                  const requestedAmt = Number(addForm.amount) || 0;
+                  const wouldExceed = requestedAmt > 0 && requestedAmt > sel.available;
+                  return (
+                    <div style={{ marginTop: "4px", fontSize: "11px", color: wouldExceed ? "#dc2626" : "#16a34a", fontWeight: 600 }}>
+                      {wouldExceed
+                        ? `⚠ Exceeds available capacity by ${pkr(requestedAmt - sel.available)}`
+                        : `Available in this facility: ${pkr(sel.available)}`}
+                    </div>
+                  );
+                })()}
               </Field>
               <Field label="Tender / contract reference">
                 <input value={addForm.tender_reference} onChange={(e) => setAddForm({ ...addForm, tender_reference: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} />
@@ -975,11 +1038,24 @@ export default function GuaranteesPage() {
                         <Field label="Cash margin %"><input type="number" min="0" max="100" value={editForm.cash_margin_pct} onChange={(e) => setEditForm({ ...editForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Bank charges (PKR)"><input type="number" min="0" value={editForm.bank_charges} onChange={(e) => setEditForm({ ...editForm, bank_charges: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Tender reference"><input value={editForm.tender_reference} onChange={(e) => setEditForm({ ...editForm, tender_reference: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Link to facility">
-                          <select value={editForm.facility_id} onChange={(e) => setEditForm({ ...editForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
-                            <option value="">— Not linked —</option>
-                            {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type}</option>)}
+                        <Field label="Bank facility *">
+                          <select value={editForm.facility_id} onChange={(e) => setEditForm({ ...editForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%", borderColor: !editForm.facility_id ? "#fca5a5" : undefined }}>
+                            <option value="">— Select facility —</option>
+                            {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
                           </select>
+                          {editForm.facility_id && (() => {
+                            const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === editForm.facility_id);
+                            if (!sel) return null;
+                            const requestedAmt = Number(editForm.amount) || 0;
+                            const wouldExceed = requestedAmt > 0 && requestedAmt > sel.available + (editId ? (guarantees.find((gg) => gg.id === editId && gg.facility_id === editForm.facility_id)?.amount || 0) : 0);
+                            return (
+                              <div style={{ marginTop: "4px", fontSize: "11px", color: wouldExceed ? "#dc2626" : "#16a34a", fontWeight: 600 }}>
+                                {wouldExceed
+                                  ? `⚠ May exceed available capacity`
+                                  : `Available in this facility: ${pkr(sel.available)}`}
+                              </div>
+                            );
+                          })()}
                         </Field>
                       </div>
                       {editForm.guarantee_type === "Performance Guarantee" && (
@@ -1025,6 +1101,12 @@ export default function GuaranteesPage() {
                         <Field label="Amount (PKR) *"><input type="number" min="0" value={convertForm.amount} onChange={(e) => setConvertForm({ ...convertForm, amount: e.target.value })} placeholder="Performance guarantee amount" style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Cash margin %"><input type="number" min="0" max="100" value={convertForm.cash_margin_pct} onChange={(e) => setConvertForm({ ...convertForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Bank charges (PKR)"><input type="number" min="0" value={convertForm.bank_charges} onChange={(e) => setConvertForm({ ...convertForm, bank_charges: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Bank facility *">
+                          <select value={convertForm.facility_id} onChange={(e) => setConvertForm({ ...convertForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%", borderColor: !convertForm.facility_id ? "#fca5a5" : undefined }}>
+                            <option value="">— Select facility —</option>
+                            {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
+                          </select>
+                        </Field>
                       </div>
                       <Field label="1st bill (links 12-month expiry clock — search by customer or invoice ref)">
                         <BillPicker

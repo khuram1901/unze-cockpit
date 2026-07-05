@@ -13,6 +13,38 @@ export async function GET(request: NextRequest) {
   return Response.json(data);
 }
 
+async function checkFacilityCapacity(
+  supabase: ReturnType<typeof createServiceClient>,
+  facility_id: string,
+  newAmount: number,
+  excludeGuaranteeId?: string
+): Promise<string | null> {
+  const { data: fac, error: facErr } = await supabase
+    .from("guarantee_facilities")
+    .select("total_limit, facility_name, facility_type, bank_name")
+    .eq("id", facility_id)
+    .single();
+  if (facErr || !fac) return "Facility not found.";
+
+  const { data: used, error: usedErr } = await supabase.rpc("get_facility_used", {
+    p_facility_id: facility_id,
+    p_exclude_guarantee_id: excludeGuaranteeId ?? null,
+  });
+  if (usedErr) return "Could not check facility capacity.";
+
+  const currentUsed = Number(used) || 0;
+  const limit = Number(fac.total_limit);
+  if (currentUsed + newAmount > limit) {
+    const available = limit - currentUsed;
+    const facilityLabel = fac.facility_name || fac.facility_type;
+    return `This would exceed the ${fac.bank_name} — ${facilityLabel} limit. ` +
+      `Limit: PKR ${Math.round(limit).toLocaleString()}, ` +
+      `already used: PKR ${Math.round(currentUsed).toLocaleString()}, ` +
+      `available: PKR ${Math.round(Math.max(0, available)).toLocaleString()}.`;
+  }
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
@@ -30,10 +62,17 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "guarantee_type, guarantee_number, bank_name, issue_date, amount and customer_name are required" }, { status: 400 });
   }
 
+  if (!facility_id) {
+    return Response.json({ error: "A bank facility must be selected. Link this guarantee to a facility before saving." }, { status: 400 });
+  }
+
+  const limitError = await checkFacilityCapacity(supabase, facility_id, Number(amount));
+  if (limitError) return Response.json({ error: limitError }, { status: 422 });
+
   const { data, error } = await supabase
     .from("guarantees")
     .insert({
-      facility_id: facility_id || null,
+      facility_id,
       guarantee_type, guarantee_number, bank_name,
       issue_date, expiry_date: expiry_date || null,
       amount: Number(amount),
@@ -65,7 +104,6 @@ export async function PATCH(request: NextRequest) {
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });
 
   // Special action: convert Bid Guarantee → Performance Guarantee
-  // Creates the Performance Guarantee and marks the original as Converted
   if (action === "convert") {
     const {
       guarantee_number, bank_name, issue_date, expiry_date,
@@ -78,6 +116,14 @@ export async function PATCH(request: NextRequest) {
       return Response.json({ error: "guarantee_number, bank_name, issue_date and amount are required for conversion" }, { status: 400 });
     }
 
+    if (!facility_id) {
+      return Response.json({ error: "A bank facility must be selected for the Performance Guarantee." }, { status: 400 });
+    }
+
+    // The original Bid Guarantee will be marked Converted (no longer Active), so we don't exclude it
+    const limitError = await checkFacilityCapacity(supabase, facility_id, Number(amount));
+    if (limitError) return Response.json({ error: limitError }, { status: 422 });
+
     // Mark original as Converted
     const { error: convertErr } = await supabase
       .from("guarantees")
@@ -89,7 +135,7 @@ export async function PATCH(request: NextRequest) {
     const { data: newG, error: createErr } = await supabase
       .from("guarantees")
       .insert({
-        facility_id: facility_id || null,
+        facility_id,
         guarantee_type: "Performance Guarantee",
         guarantee_number, bank_name,
         issue_date, expiry_date: expiry_date || null,
@@ -111,7 +157,32 @@ export async function PATCH(request: NextRequest) {
     return Response.json({ guarantee: newG }, { status: 201 });
   }
 
-  // Standard update
+  // Standard update — check limit if amount or facility_id is changing
+  if (fields.amount !== undefined || fields.facility_id !== undefined) {
+    // Determine effective facility_id and amount after update
+    let targetFacilityId = fields.facility_id;
+    let targetAmount = fields.amount !== undefined ? Number(fields.amount) : undefined;
+
+    if (targetFacilityId || targetAmount !== undefined) {
+      // Fetch current record to fill in missing values
+      const { data: current } = await supabase
+        .from("guarantees")
+        .select("facility_id, amount, status")
+        .eq("id", id)
+        .single();
+
+      if (current && current.status === "Active") {
+        const effectiveFacilityId = targetFacilityId ?? current.facility_id;
+        const effectiveAmount = targetAmount ?? current.amount;
+
+        if (effectiveFacilityId) {
+          const limitError = await checkFacilityCapacity(supabase, effectiveFacilityId, effectiveAmount, id);
+          if (limitError) return Response.json({ error: limitError }, { status: 422 });
+        }
+      }
+    }
+  }
+
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   const allowed = [
     "facility_id", "guarantee_number", "bank_name", "issue_date", "expiry_date",
