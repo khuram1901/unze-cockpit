@@ -4,6 +4,27 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-05 — Restyle Operations Dashboard to Genspark design system
+
+**Files changed:** `app/dashboard/DashboardView.tsx`, `app/dashboard/MonthlyTargets.tsx`
+
+### What changed (visual only — no logic, queries, or data flows touched)
+
+- **62 hardcoded hex values replaced** with `COLOURS.*` tokens from `SharedUI.tsx`
+- **Good Stock hero card** — dark ink-900 background, 44px Inter Tight number, matches mobile design spec
+- **5 compact KPI cards** — 26px Inter Tight numbers, uppercase kicker labels (10.5px), hairline-border cards, no top-accent strip
+- **Card treatment** — borderRadius 14px (RADII.CARD), 24px padding, hairline borders, no shadows
+- **Section titles** — `SectionTitle` component from SharedUI (Inter Tight 22px, w600, no border-left bar)
+- **Tab strip** — pill tabstrip replacing solid navy pill buttons
+- **Alert banner** — Genspark pattern: soft background, 30×30 rounded icon mark with triangle/check SVG, COLOURS tokens
+- **Status badges** — `StatusBadge` component (soft background + matching text colour) replacing solid colour + white text
+- **JetBrains Mono** — all table body numbers, percentages, dates, bar labels use `var(--font-mono)`
+- **Breakage rate rows** — 3-column layout with ultra-thin bar + threshold marker at 1.5%
+- **MonthlyTargets** — COLOURS tokens, pill buttons, TRACK progress bars, kicker labels
+- **Build:** `npm run build` clean — 0 TypeScript errors
+
+---
+
 ## 2026-07-05 — Remove legacy /executive page
 
 - `app/executive/page.tsx` deleted — its functionality was fully merged into `app/home/page.tsx` in earlier sessions.

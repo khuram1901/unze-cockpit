@@ -80,8 +80,13 @@ app/
 ├── dashboard/
 │   ├── page.tsx                      Operations Dashboard shell — loads DashboardView
 │   ├── DashboardView.tsx             Full ops dashboard: plant KPIs, charts, stock by PO,
-│                                     tasks, machine issues, breakage pareto
-│   └── MonthlyTargets.tsx            Monthly targets edit form (inline modal)
+│                                     tasks, machine issues, breakage pareto.
+│                                     Restyled to Genspark design system (2026-07-05):
+│                                     dark hero card (Good Stock), 5 compact KPI cards,
+│                                     pill tabstrip, COLOURS tokens throughout, JetBrains
+│                                     Mono for tabular numbers, soft status badges.
+│   └── MonthlyTargets.tsx            Monthly targets edit form. Restyled (2026-07-05):
+│                                     COLOURS tokens, pill buttons, TRACK progress bars.
 │
 ├── finance/
 │   ├── page.tsx                      Finance index — company picker, dept budgets, bulk upload
