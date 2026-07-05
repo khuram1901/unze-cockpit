@@ -205,6 +205,7 @@ type InvestmentSummary = {
   stockCount: number;
   losers: { ticker: string; company: string; pct: number }[];
   priceDate: string | null;
+  dividendCount: number;
 };
 
 type DailyOpsPoint = { date: string; produced: number; dispatched: number; broken: number };
@@ -960,13 +961,18 @@ export default function HomePage() {
 
     // get_portfolio_summary_as_of() runs DISTINCT ON + aggregation in Postgres,
     // returning one row per ticker instead of the full price_history table.
-    const { data: portfolioRows } = await supabase.rpc("get_portfolio_summary_as_of", { as_of: dateToView });
+    const [{ data: portfolioRows }, { data: divRows }] = await Promise.all([
+      supabase.rpc("get_portfolio_summary_as_of", { as_of: dateToView }),
+      supabase.rpc("get_upcoming_dividends", { p_days_ahead: 7 }),
+    ]);
     const pRows = (portfolioRows || []) as {
       ticker: string; company_name: string;
       total_qty: number; total_cost: number; avg_cost: number;
       current_price: number | null; price_date: string | null;
       current_value: number | null; gain_loss: number | null; gain_loss_pct: number | null;
     }[];
+    const confirmedDivCount = ((divRows ?? []) as { confirmed: boolean }[])
+      .filter((d) => d.confirmed).length;
     let computedInvestmentData: InvestmentSummary | null = null;
     if (pRows.length > 0) {
       let tCost = 0, tValue = 0;
@@ -989,6 +995,7 @@ export default function HomePage() {
         stockCount: pRows.length,
         losers: invLosers.sort((a, b) => a.pct - b.pct),
         priceDate,
+        dividendCount: confirmedDivCount,
       };
       setInvestmentData(computedInvestmentData);
     }
@@ -2675,11 +2682,20 @@ function ExecutiveDashboardBody({
                   ))}
                 </div>
               )}
-              {investmentData.priceDate && (
-                <div style={{ fontSize: "13px", color: SLATE, marginTop: "6px" }}>
-                  {investmentData.stockCount} stocks · Prices as of {formatDateUK(investmentData.priceDate)} · Click to view portfolio →
-                </div>
-              )}
+              <div style={{ fontSize: "13px", color: SLATE, marginTop: "6px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                {investmentData.priceDate && (
+                  <span>{investmentData.stockCount} stocks · Prices as of {formatDateUK(investmentData.priceDate)} · Click to view portfolio →</span>
+                )}
+                {investmentData.dividendCount > 0 && (
+                  <span style={{
+                    fontSize: "12px", fontWeight: 700,
+                    backgroundColor: COLOURS.AMBER, color: "white",
+                    padding: "2px 9px", borderRadius: "10px",
+                  }}>
+                    {investmentData.dividendCount} dividend{investmentData.dividendCount > 1 ? "s" : ""} due this week
+                  </span>
+                )}
+              </div>
             </div>
           </a>
         </>
