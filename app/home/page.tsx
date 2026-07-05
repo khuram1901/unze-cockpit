@@ -1426,6 +1426,7 @@ export default function HomePage() {
             deptHealth={deptHealth}
             investmentData={investmentData}
             dailyOpsData={dailyOpsData}
+            facilitySynopsis={facilitySynopsis}
             isMobile={isMobile}
             quickTaskAction={quickTaskAction}
             quickMachineResolve={quickMachineResolve}
@@ -1987,7 +1988,7 @@ function ExecutiveDashboardBody({
   ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, dailyOpsData,
-  isMobile, quickTaskAction, quickMachineResolve,
+  facilitySynopsis, isMobile, quickTaskAction, quickMachineResolve,
 }: {
   ctx: UserCtx | null;
   selectedDate: string;
@@ -2010,6 +2011,7 @@ function ExecutiveDashboardBody({
   investmentData: InvestmentSummary | null;
   dailyOpsData: DailyOpsPoint[];
   isMobile: boolean;
+  facilitySynopsis: { bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[];
   quickTaskAction: (taskId: string, newStatus: string) => Promise<void>;
   quickMachineResolve: (issueId: string) => Promise<void>;
 }) {
