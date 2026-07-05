@@ -4,6 +4,26 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-05 — Genspark design system foundation installed
+
+- `app/lib/SharedUI.tsx` — full rewrite of design tokens and shared components to match Genspark design system v1. All exports preserved (backward-compatible). Key changes:
+  - COLOURS: NAVY `#1e293b` → Ink 900 `#0F1720`, GREEN `#16a34a` → `#0F7B5F`, AMBER `#d97706` → `#B4791F`, RED `#dc2626` → `#B3261E`, BLUE `#2563eb` → Accent `#3B4CCA`. PURPLE and TEAL remapped to Accent and Success respectively.
+  - New tokens: CANVAS, CARD, CARD_ALT, HAIRLINE, TRACK, INK_700, INK_400, INK_300, SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT.
+  - New exports: `cardStyle`, `cardAltStyle` — base card containers.
+  - RADII: CARD 12px → 14px. PILL/BUTTON now `999px`. New XS (6px), SM (10px), LG (20px).
+  - SHADOWS: CARD now `none` per design spec. Other shadows updated to use `rgba(15,23,32,…)`.
+  - `StatusBadge` / `PriorityBadge`: coloured-text chip on soft background (was white text on solid colour).
+  - `SectionTitle`: Inter Tight 20px/600, no border-left accent.
+  - `tableHeaderStyle`: uppercase label style, card-alt background.
+  - `labelStyle`: uppercase kicker style.
+  - `primaryButtonStyle`: pill radius, 13px.
+- `app/layout.tsx` — three `next/font/google` fonts added (Inter, Inter Tight, JetBrains Mono). CSS variables `--font-display`, `--font-sans`, `--font-mono` injected on `<html>`. No npm install required — `next/font` is built into Next.js. Source Sans 3 retained for backward compatibility.
+- `designs/DESIGN_MAP.md` — permanent reference mapping all 23 Genspark HTML design files to their corresponding code files.
+- `BLUEPRINT.md` — Design System section fully rewritten to reflect new tokens, type scale, and component table.
+- No individual page files changed — foundation only.
+
+---
+
 ## 2026-07-03 (session continued 4) — Meetings sort order fix
 
 - `app/meetings/page.tsx` — when grouped by department, month groups were sorted oldest-first (a→z). Fixed to newest-first (b→a), matching the date-grouped view.

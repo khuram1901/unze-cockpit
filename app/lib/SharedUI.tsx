@@ -3,25 +3,85 @@
 import React from "react";
 
 // ─────────────────────────────────────────────────────────────────
-// Shared design tokens — single source of truth for colours
+// Design tokens — Genspark design system v1
+// Source of truth for all colours, radii, and shadows.
 // ─────────────────────────────────────────────────────────────────
+
 export const COLOURS = {
-  NAVY: "#1e293b",
-  SLATE: "#64748b",
-  BORDER: "#e2e8f0",
-  LIGHT: "#f1f5f9",
-  BG: "#f8fafc",
-  GREEN: "#16a34a",
-  AMBER: "#d97706",
-  RED: "#dc2626",
-  BLUE: "#2563eb",
-  TEAL: "#059669",
-  PURPLE: "#7c3aed",
+  // Surfaces
+  CANVAS:      "#F7F5F1", // page background
+  CARD:        "#FFFFFF", // card surface
+  CARD_ALT:    "#FBFAF7", // tinted / alternate card
+  HAIRLINE:    "#EEF0F3", // borders, dividers
+  TRACK:       "#F1F3F6", // progress bar background
+
+  // Ink (text)
+  NAVY:        "#0F1720", // Ink 900 — headlines, numbers (was #1e293b)
+  INK_700:     "#334155", // body copy
+  SLATE:       "#64748B", // Ink 500 — labels, secondary (unchanged)
+  INK_400:     "#94A3B8", // captions, meta
+  INK_300:     "#CBD5E1", // disabled
+
+  // Accent
+  BLUE:        "#3B4CCA", // Accent — links, CTAs, active (was #2563eb)
+
+  // Status — solid
+  GREEN:       "#0F7B5F", // Success (was #16a34a)
+  AMBER:       "#B4791F", // Warning (was #d97706)
+  RED:         "#B3261E", // Danger (was #dc2626)
+
+  // Status — soft backgrounds
+  SUCCESS_SOFT: "#E7F2ED",
+  WARNING_SOFT: "#FBF1DE",
+  DANGER_SOFT:  "#F8E4E2",
+
+  // Legacy aliases kept for backward compatibility
+  BG:     "#F7F5F1", // = CANVAS
+  LIGHT:  "#F1F3F6", // = TRACK
+  BORDER: "#EEF0F3", // = HAIRLINE
+
+  // Role identity (Members/Admin area only)
+  PURPLE: "#3B4CCA", // remapped from #7c3aed → Accent
+  TEAL:   "#0F7B5F", // remapped from #059669 → Success
 };
 
-export const RADII = { CARD: "12px", BUTTON: "8px", BADGE: "6px", PILL: "16px" };
-export const SHADOWS = { CARD: "0 1px 3px rgba(15,23,42,0.06)", ELEVATED: "0 4px 12px rgba(15,23,42,0.08)", DROPDOWN: "0 8px 30px rgba(15,23,42,0.12)", MODAL: "0 2px 6px rgba(0,0,0,0.15)", HOVER: "0 2px 8px rgba(0,0,0,0.1)" };
+export const RADII = {
+  XS:     "6px",   // small chips
+  SM:     "10px",  // inputs, small chips
+  CARD:   "14px",  // standard cards (was 12px)
+  LG:     "20px",  // hero / feature cards
+  PILL:   "999px", // buttons, tab strips, filter pills
+  BUTTON: "999px", // alias for PILL (backward compat)
+  BADGE:  "6px",   // alias for XS (backward compat)
+};
 
+// Shadows removed from card spec by design system — kept only for modals/dropdowns
+export const SHADOWS = {
+  CARD:     "none",
+  ELEVATED: "0 2px 8px rgba(15,23,32,0.06)",
+  DROPDOWN: "0 8px 30px rgba(15,23,32,0.12)",
+  MODAL:    "0 20px 60px rgba(15,23,32,0.15)",
+  HOVER:    "0 1px 4px rgba(15,23,32,0.08)",
+};
+
+// ─────────────────────────────────────────────────────────────────
+// Shared card style — use as the base for any card container
+// ─────────────────────────────────────────────────────────────────
+export const cardStyle: React.CSSProperties = {
+  background:   COLOURS.CARD,
+  border:       `1px solid ${COLOURS.HAIRLINE}`,
+  borderRadius: RADII.CARD,
+  padding:      "24px",
+};
+
+export const cardAltStyle: React.CSSProperties = {
+  ...cardStyle,
+  background: COLOURS.CARD_ALT,
+};
+
+// ─────────────────────────────────────────────────────────────────
+// Role display helper
+// ─────────────────────────────────────────────────────────────────
 export function displayRole(role: string, email?: string | null): string {
   if (email === "k.saleem@unzegroup.com") return "CEO";
   return role;
@@ -80,12 +140,12 @@ export function SectionTitle({ title, style }: { title: string; style?: React.CS
   return (
     <h2
       style={{
-        fontSize: "17px",
-        fontWeight: 700,
-        color: "var(--text-primary, #1e293b)",
-        margin: "20px 0 10px",
-        paddingLeft: "9px",
-        borderLeft: "3px solid var(--text-primary, #1e293b)",
+        fontFamily:    "var(--font-display, 'Inter Tight', sans-serif)",
+        fontSize:      "20px",
+        fontWeight:    600,
+        letterSpacing: "-0.01em",
+        color:         COLOURS.NAVY,
+        margin:        "32px 0 16px",
         ...style,
       }}
     >
@@ -98,18 +158,24 @@ export function PageHeader({ hideHome }: { hideHome?: boolean } = {}) {
   if (hideHome) return null;
   return (
     <div style={{ marginBottom: "8px" }}>
-      <a href="/home" style={{
-        display: "inline-flex", alignItems: "center", gap: "6px",
-        fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)", textDecoration: "none",
-        padding: "5px 12px 5px 8px",
-        borderRadius: "16px", backgroundColor: "var(--bg-card-hover, #f1f5f9)",
-        border: "1px solid var(--border-color, #e2e8f0)", cursor: "pointer",
-        transition: "background-color 0.15s",
-      }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "var(--border-color, #e2e8f0)"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "var(--bg-card-hover, #f1f5f9)"; }}
+      <a
+        href="/home"
+        style={{
+          display:         "inline-flex",
+          alignItems:      "center",
+          gap:             "6px",
+          fontSize:        "13px",
+          fontWeight:      500,
+          color:           COLOURS.SLATE,
+          textDecoration:  "none",
+          padding:         "5px 12px 5px 8px",
+          borderRadius:    RADII.PILL,
+          backgroundColor: COLOURS.CARD_ALT,
+          border:          `1px solid ${COLOURS.HAIRLINE}`,
+          cursor:          "pointer",
+        }}
       >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M10 12L6 8l4-4" />
         </svg>
         Home
@@ -120,16 +186,23 @@ export function PageHeader({ hideHome }: { hideHome?: boolean } = {}) {
 
 export function StatusBadge({ status }: { status: string | null }) {
   const colour = statusColor(status);
+  const softMap: Record<string, string> = {
+    [COLOURS.GREEN]: COLOURS.SUCCESS_SOFT,
+    [COLOURS.AMBER]: COLOURS.WARNING_SOFT,
+    [COLOURS.RED]:   COLOURS.DANGER_SOFT,
+  };
+  const soft = softMap[colour] ?? COLOURS.HAIRLINE;
   return (
     <span
       style={{
-        fontSize: "14px",
-        fontWeight: 700,
-        padding: "3px 9px",
-        borderRadius: "10px",
-        color: "white",
-        backgroundColor: colour,
-        whiteSpace: "nowrap",
+        display:       "inline-block",
+        fontSize:      "11px",
+        fontWeight:    600,
+        padding:       "3px 10px",
+        borderRadius:  RADII.PILL,
+        color:         colour,
+        backgroundColor: soft,
+        whiteSpace:    "nowrap",
       }}
     >
       {status || "—"}
@@ -139,16 +212,24 @@ export function StatusBadge({ status }: { status: string | null }) {
 
 export function PriorityBadge({ priority }: { priority: string | null }) {
   const colour = priorityColor(priority);
+  const softMap: Record<string, string> = {
+    [COLOURS.RED]:   COLOURS.DANGER_SOFT,
+    [COLOURS.AMBER]: COLOURS.WARNING_SOFT,
+    [COLOURS.BLUE]:  "#EEF1FC",
+    [COLOURS.SLATE]: COLOURS.HAIRLINE,
+  };
+  const soft = softMap[colour] ?? COLOURS.HAIRLINE;
   return (
     <span
       style={{
-        fontSize: "14px",
-        fontWeight: 700,
-        padding: "3px 9px",
-        borderRadius: "10px",
-        color: "white",
-        backgroundColor: colour,
-        whiteSpace: "nowrap",
+        display:         "inline-block",
+        fontSize:        "11px",
+        fontWeight:      600,
+        padding:         "3px 10px",
+        borderRadius:    RADII.PILL,
+        color:           colour,
+        backgroundColor: soft,
+        whiteSpace:      "nowrap",
       }}
     >
       {priority || "Normal"}
@@ -170,30 +251,41 @@ export function CountCard({
   return (
     <div
       style={{
-        border: "1px solid var(--border-color, #e2e8f0)",
-        borderTop: `2px solid ${color}`,
-        borderRadius: "6px",
-        padding: "6px 8px",
-        backgroundColor: "var(--bg-card, #ffffff)",
+        ...cardStyle,
+        padding:   "16px 20px",
+        borderTop: `3px solid ${color}`,
       }}
     >
       <div
         style={{
-          color: "var(--text-secondary, #64748b)",
-          fontSize: "12px",
-          marginBottom: "1px",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
+          fontFamily:    "var(--font-sans, Inter, sans-serif)",
+          fontSize:      "10.5px",
+          fontWeight:    500,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color:         COLOURS.SLATE,
+          marginBottom:  "10px",
+          whiteSpace:    "nowrap",
+          overflow:      "hidden",
+          textOverflow:  "ellipsis",
         }}
       >
         {label}
       </div>
-      <div style={{ fontSize: "17px", fontWeight: 800, color }}>
+      <div
+        style={{
+          fontFamily:         "var(--font-display, 'Inter Tight', sans-serif)",
+          fontSize:           "26px",
+          fontWeight:         600,
+          letterSpacing:      "-0.02em",
+          fontVariantNumeric: "tabular-nums",
+          color,
+        }}
+      >
         {typeof value === "number" ? value.toLocaleString() : value}
       </div>
       {sub && (
-        <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginTop: "1px" }}>
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "6px" }}>
           {sub}
         </div>
       )}
@@ -226,18 +318,17 @@ export function TrafficLight({
     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
       <span
         style={{
-          width: "12px",
-          height: "12px",
-          borderRadius: "50%",
+          width:           "8px",
+          height:          "8px",
+          borderRadius:    "50%",
           backgroundColor: colour,
-          flexShrink: 0,
-          boxShadow: `0 0 4px ${colour}40`,
+          flexShrink:      0,
         }}
       />
       <div>
-        <div style={{ fontSize: "16px", fontWeight: 700, color: colour }}>{label}</div>
+        <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "15px", fontWeight: 600, color: colour }}>{label}</div>
         {detail && (
-          <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{detail}</div>
+          <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{detail}</div>
         )}
       </div>
     </div>
@@ -245,7 +336,7 @@ export function TrafficLight({
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Data freshness badge — shows how recent the data is
+// Data freshness badge
 // ─────────────────────────────────────────────────────────────────
 export function FreshnessBadge({ date, label }: { date: string | null; label?: string }) {
   if (!date) return null;
@@ -271,14 +362,25 @@ export function FreshnessBadge({ date, label }: { date: string | null; label?: s
     color = COLOURS.RED;
   }
 
+  const softMap: Record<string, string> = {
+    [COLOURS.GREEN]: COLOURS.SUCCESS_SOFT,
+    [COLOURS.AMBER]: COLOURS.WARNING_SOFT,
+    [COLOURS.RED]:   COLOURS.DANGER_SOFT,
+  };
+
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: "4px",
-      fontSize: "12px", fontWeight: 600, color,
-      padding: "2px 8px", borderRadius: "8px",
-      backgroundColor: `${color}10`,
+      display:         "inline-flex",
+      alignItems:      "center",
+      gap:             "4px",
+      fontSize:        "11px",
+      fontWeight:      500,
+      color,
+      padding:         "2px 8px",
+      borderRadius:    RADII.PILL,
+      backgroundColor: softMap[color] ?? COLOURS.HAIRLINE,
     }}>
-      <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: color }} />
+      <span style={{ width: "5px", height: "5px", borderRadius: "50%", backgroundColor: color }} />
       {label ? `${label}: ${text}` : text}
     </span>
   );
@@ -288,89 +390,99 @@ export function FreshnessBadge({ date, label }: { date: string | null; label?: s
 // Warning / alert banner wrapper
 // ─────────────────────────────────────────────────────────────────
 export const WARNING_BANNER_STYLE: React.CSSProperties = {
-  border: "1px solid #fecaca",
-  borderLeft: "4px solid #dc2626",
-  borderRadius: "8px",
-  backgroundColor: "#fef2f2",
-  overflow: "hidden",
-  marginBottom: "14px",
+  border:          `1px solid #F1D9A9`,
+  borderLeft:      `4px solid ${COLOURS.AMBER}`,
+  borderRadius:    RADII.CARD,
+  backgroundColor: COLOURS.WARNING_SOFT,
+  overflow:        "hidden",
+  marginBottom:    "16px",
 };
 
 export const WARNING_BANNER_INNER: React.CSSProperties = {
-  borderTop: "1px solid #fecaca",
-  backgroundColor: "var(--bg-card, #ffffff)",
+  borderTop:       `1px solid #F1D9A9`,
+  backgroundColor: COLOURS.CARD,
 };
 
-export const WARNING_TITLE_COLOR = "#991b1b";
+export const WARNING_TITLE_COLOR = COLOURS.AMBER;
 
 // ─────────────────────────────────────────────────────────────────
 // Shared table styles
 // ─────────────────────────────────────────────────────────────────
 export const tableHeaderStyle: React.CSSProperties = {
-  textAlign: "left",
-  borderBottom: "1px solid var(--border-color, #e2e8f0)",
-  padding: "6px 10px",
-  fontSize: "15px",
-  color: "var(--text-secondary, #64748b)",
-  fontWeight: 700,
+  textAlign:     "left",
+  borderBottom:  `1px solid ${COLOURS.HAIRLINE}`,
+  padding:       "12px 20px",
+  fontSize:      "10.5px",
+  fontWeight:    500,
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  color:         COLOURS.SLATE,
+  backgroundColor: COLOURS.CARD_ALT,
+  fontFamily:    "var(--font-sans, Inter, sans-serif)",
 };
 
 export const tableCellStyle: React.CSSProperties = {
-  borderBottom: "1px solid var(--border-light, #f1f5f9)",
-  padding: "7px 10px",
-  fontSize: "16px",
-  color: "var(--text-primary, #1e293b)",
+  borderBottom:       `1px solid ${COLOURS.HAIRLINE}`,
+  padding:            "12px 20px",
+  fontSize:           "13px",
+  color:              COLOURS.NAVY,
+  fontVariantNumeric: "tabular-nums",
 };
 
 export const tableCellBoldStyle: React.CSSProperties = {
   ...tableCellStyle,
-  fontWeight: 700,
+  fontWeight: 500,
 };
 
 // ─────────────────────────────────────────────────────────────────
 // Shared form styles
 // ─────────────────────────────────────────────────────────────────
 export const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "16px",
-  fontWeight: 600,
-  color: "var(--text-primary, #1e293b)",
-  marginBottom: "10px",
+  display:       "block",
+  fontSize:      "10.5px",
+  fontWeight:    500,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color:         COLOURS.SLATE,
+  marginBottom:  "6px",
+  fontFamily:    "var(--font-sans, Inter, sans-serif)",
 };
 
 export const inputStyle: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  padding: "8px 10px",
-  marginTop: "3px",
-  border: "1px solid var(--border-color, #e2e8f0)",
-  borderRadius: "6px",
-  fontSize: "17px",
-  boxSizing: "border-box",
-  backgroundColor: "var(--bg-input, #ffffff)",
-  color: "var(--text-primary, #1e293b)",
+  display:         "block",
+  width:           "100%",
+  padding:         "8px 12px",
+  marginTop:       "3px",
+  border:          `1px solid ${COLOURS.HAIRLINE}`,
+  borderRadius:    RADII.SM,
+  fontSize:        "13px",
+  boxSizing:       "border-box",
+  backgroundColor: COLOURS.CARD,
+  color:           COLOURS.NAVY,
+  fontFamily:      "var(--font-sans, Inter, sans-serif)",
 };
 
 export const primaryButtonStyle: React.CSSProperties = {
   backgroundColor: COLOURS.NAVY,
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  padding: "10px 20px",
-  fontSize: "17px",
-  fontWeight: 700,
-  cursor: "pointer",
+  color:           "white",
+  border:          "none",
+  borderRadius:    RADII.PILL,
+  padding:         "8px 20px",
+  fontSize:        "13px",
+  fontWeight:      500,
+  cursor:          "pointer",
+  fontFamily:      "var(--font-sans, Inter, sans-serif)",
 };
 
 // ─────────────────────────────────────────────────────────────────
-// Toast notification (replaces alert())
+// Toast notification
 // ─────────────────────────────────────────────────────────────────
 type ToastType = "success" | "error" | "info";
 
 const TOAST_COLORS: Record<ToastType, { bg: string; border: string; text: string; icon: string }> = {
-  success: { bg: "#f0fdf4", border: "#bbf7d0", text: "#166534", icon: "✓" },
-  error: { bg: "#fef2f2", border: "#fecaca", text: "#991b1b", icon: "✗" },
-  info: { bg: "#eff6ff", border: "#bfdbfe", text: "#1e40af", icon: "ℹ" },
+  success: { bg: COLOURS.SUCCESS_SOFT, border: "#A8D5C2", text: COLOURS.GREEN, icon: "✓" },
+  error:   { bg: COLOURS.DANGER_SOFT,  border: "#EDB5B2", text: COLOURS.RED,   icon: "✗" },
+  info:    { bg: "#EEF1FC",            border: "#C0C8EF", text: COLOURS.BLUE,  icon: "ℹ" },
 };
 
 export function Toast({ message, type = "info", onClose }: { message: string; type?: ToastType; onClose: () => void }) {
@@ -378,13 +490,23 @@ export function Toast({ message, type = "info", onClose }: { message: string; ty
   React.useEffect(() => { const t = setTimeout(onClose, type === "error" ? 6000 : 4000); return () => clearTimeout(t); }, [onClose, type]);
   return (
     <div style={{
-      position: "fixed", bottom: "24px", right: "24px", zIndex: 9999,
-      backgroundColor: c.bg, border: `1px solid ${c.border}`, borderRadius: "10px",
-      padding: "12px 20px", maxWidth: "420px", boxShadow: "0 8px 30px rgba(15,23,42,0.12)",
-      display: "flex", alignItems: "center", gap: "10px", animation: "loginFadeIn 0.2s ease-out",
+      position:        "fixed",
+      bottom:          "24px",
+      right:           "24px",
+      zIndex:          9999,
+      backgroundColor: c.bg,
+      border:          `1px solid ${c.border}`,
+      borderRadius:    RADII.CARD,
+      padding:         "14px 20px",
+      maxWidth:        "420px",
+      boxShadow:       SHADOWS.DROPDOWN,
+      display:         "flex",
+      alignItems:      "center",
+      gap:             "10px",
+      animation:       "loginFadeIn 0.2s ease-out",
     }}>
-      <span style={{ fontSize: "16px", fontWeight: 700, color: c.text }}>{c.icon}</span>
-      <span style={{ fontSize: "14px", color: c.text, lineHeight: 1.4, flex: 1, whiteSpace: "pre-wrap" }}>{message}</span>
+      <span style={{ fontSize: "14px", fontWeight: 600, color: c.text }}>{c.icon}</span>
+      <span style={{ fontSize: "13px", color: c.text, lineHeight: 1.4, flex: 1, whiteSpace: "pre-wrap" }}>{message}</span>
       <button onClick={onClose} style={{ background: "none", border: "none", color: c.text, cursor: "pointer", fontSize: "18px", padding: "0 2px", opacity: 0.6 }}>&times;</button>
     </div>
   );
@@ -398,29 +520,51 @@ export function useToast() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Confirm dialog (replaces confirm())
+// Confirm dialog
 // ─────────────────────────────────────────────────────────────────
 export function ConfirmDialog({ message, onConfirm, onCancel, confirmLabel = "Confirm", danger = false }: {
   message: string; onConfirm: () => void; onCancel: () => void; confirmLabel?: string; danger?: boolean;
 }) {
   return (
     <div style={{
-      position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)",
-      display: "flex", alignItems: "center", justifyContent: "center", padding: "16px",
+      position:        "fixed",
+      inset:           0,
+      zIndex:          9998,
+      backgroundColor: "rgba(15,23,32,0.4)",
+      display:         "flex",
+      alignItems:      "center",
+      justifyContent:  "center",
+      padding:         "16px",
     }} onClick={onCancel}>
       <div onClick={(e) => e.stopPropagation()} style={{
-        backgroundColor: "var(--bg-card, #ffffff)", borderRadius: "14px", padding: "28px",
-        maxWidth: "420px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)",
+        backgroundColor: COLOURS.CARD,
+        borderRadius:    RADII.CARD,
+        padding:         "28px",
+        maxWidth:        "420px",
+        width:           "100%",
+        boxShadow:       SHADOWS.MODAL,
       }}>
-        <p style={{ fontSize: "15px", color: "var(--text-primary, #1e293b)", lineHeight: 1.5, margin: "0 0 20px", whiteSpace: "pre-wrap" }}>{message}</p>
+        <p style={{ fontSize: "14px", color: COLOURS.NAVY, lineHeight: 1.6, margin: "0 0 20px", whiteSpace: "pre-wrap" }}>{message}</p>
         <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
           <button onClick={onCancel} style={{
-            padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 600,
-            border: `1px solid ${COLOURS.BORDER}`, backgroundColor: "var(--bg-card, #fff)", color: COLOURS.NAVY, cursor: "pointer",
+            padding:         "8px 18px",
+            borderRadius:    RADII.PILL,
+            fontSize:        "13px",
+            fontWeight:      500,
+            border:          `1px solid ${COLOURS.HAIRLINE}`,
+            backgroundColor: COLOURS.CARD,
+            color:           COLOURS.NAVY,
+            cursor:          "pointer",
           }}>Cancel</button>
           <button onClick={onConfirm} style={{
-            padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 600,
-            border: "none", backgroundColor: danger ? COLOURS.RED : COLOURS.NAVY, color: "white", cursor: "pointer",
+            padding:         "8px 18px",
+            borderRadius:    RADII.PILL,
+            fontSize:        "13px",
+            fontWeight:      500,
+            border:          "none",
+            backgroundColor: danger ? COLOURS.RED : COLOURS.NAVY,
+            color:           "white",
+            cursor:          "pointer",
           }}>{confirmLabel}</button>
         </div>
       </div>
@@ -442,19 +586,31 @@ export function useConfirm() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Error banner (replaces silent fetch failures)
+// Error banner
 // ─────────────────────────────────────────────────────────────────
 export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div style={{
-      backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px",
-      padding: "12px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px",
+      backgroundColor: COLOURS.DANGER_SOFT,
+      border:          `1px solid #EDB5B2`,
+      borderRadius:    RADII.CARD,
+      padding:         "12px 16px",
+      marginBottom:    "16px",
+      display:         "flex",
+      alignItems:      "center",
+      gap:             "10px",
     }}>
-      <span style={{ fontSize: "14px", color: "#991b1b", flex: 1 }}>{message}</span>
+      <span style={{ fontSize: "13px", color: COLOURS.RED, flex: 1 }}>{message}</span>
       {onRetry && (
         <button onClick={onRetry} style={{
-          padding: "6px 14px", borderRadius: "6px", fontSize: "13px", fontWeight: 600,
-          border: "1px solid #fecaca", backgroundColor: "#fff", color: "#991b1b", cursor: "pointer",
+          padding:         "6px 14px",
+          borderRadius:    RADII.PILL,
+          fontSize:        "12px",
+          fontWeight:      500,
+          border:          `1px solid #EDB5B2`,
+          backgroundColor: COLOURS.CARD,
+          color:           COLOURS.RED,
+          cursor:          "pointer",
         }}>Retry</button>
       )}
     </div>
@@ -462,15 +618,17 @@ export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: (
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Loading skeleton (replaces bare "Loading..." text)
+// Loading skeleton
 // ─────────────────────────────────────────────────────────────────
 export function SkeletonCard({ width = "100%", height = "80px" }: { width?: string; height?: string }) {
   return (
     <div style={{
-      width, height, borderRadius: "12px",
-      background: "linear-gradient(90deg, var(--bg-card, #f1f5f9) 25%, var(--bg-card-hover, #e8ecf1) 50%, var(--bg-card, #f1f5f9) 75%)",
+      width,
+      height,
+      borderRadius: RADII.CARD,
+      background:   `linear-gradient(90deg, ${COLOURS.CARD_ALT} 25%, ${COLOURS.HAIRLINE} 50%, ${COLOURS.CARD_ALT} 75%)`,
       backgroundSize: "200% 100%",
-      animation: "shimmer 1.5s infinite linear",
+      animation:    "shimmer 1.5s infinite linear",
     }} />
   );
 }

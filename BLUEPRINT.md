@@ -269,95 +269,143 @@ api/
 
 ## 3. Design System
 
+**Source:** Genspark design system v1 (`designs/Design System.html` + 22 page designs in `designs/`).
+**Installed:** 2026-07-05. Foundation only — tokens and shared components updated. Individual pages not yet restyled.
+**Design map:** `designs/DESIGN_MAP.md` — maps every Genspark HTML file to its code file.
+
 ### Colours (SharedUI.tsx — COLOURS constant)
-| Token | Hex | Semantic use |
-|-------|-----|-------------|
-| `NAVY` | `#1e293b` | Primary text, primary button background, borders accent |
-| `SLATE` | `#64748b` | Secondary text, disabled states, "Settings" group |
-| `BORDER` | `#e2e8f0` | Card borders, table dividers, input borders |
-| `LIGHT` | `#f1f5f9` | Light background, hover states |
-| `BG` | `#f8fafc` | Page background |
-| `GREEN` | `#16a34a` | Success, on-track status, Finance group colour |
-| `AMBER` | `#d97706` | Warning, at-risk status, Tasks & Meetings group |
-| `RED` | `#dc2626` | Error, critical status, danger actions |
-| `BLUE` | `#2563eb` | Information, Operations group, "Submitted" status |
-| `TEAL` | `#059669` | Alternative green accent (rarely used) |
-| `PURPLE` | `#7c3aed` | Departments group colour |
+
+#### Surfaces
+| Token | Hex | Use |
+|-------|-----|-----|
+| `CANVAS` / `BG` | `#F7F5F1` | Page background |
+| `CARD` | `#FFFFFF` | Card surface |
+| `CARD_ALT` | `#FBFAF7` | Tinted / alternate tile |
+| `HAIRLINE` / `BORDER` | `#EEF0F3` | Borders, dividers |
+| `TRACK` / `LIGHT` | `#F1F3F6` | Progress bar background |
+
+#### Ink (text)
+| Token | Hex | Use |
+|-------|-----|-----|
+| `NAVY` | `#0F1720` | Ink 900 — headlines, numbers, primary text |
+| `INK_700` | `#334155` | Body copy |
+| `SLATE` | `#64748B` | Ink 500 — labels, secondary text |
+| `INK_400` | `#94A3B8` | Captions, metadata |
+| `INK_300` | `#CBD5E1` | Disabled |
+
+#### Status — solid
+| Token | Hex | Use |
+|-------|-----|-----|
+| `GREEN` | `#0F7B5F` | Success / on-target |
+| `AMBER` | `#B4791F` | Warning / needs attention |
+| `RED` | `#B3261E` | Danger / critical / overdue |
+| `BLUE` | `#3B4CCA` | Accent — links, CTAs, active state |
+
+#### Status — soft (chip backgrounds)
+| Token | Hex | Use |
+|-------|-----|-----|
+| `SUCCESS_SOFT` | `#E7F2ED` | Success chip / banner bg |
+| `WARNING_SOFT` | `#FBF1DE` | Warning chip / banner bg |
+| `DANGER_SOFT` | `#F8E4E2` | Danger chip / banner bg |
+
+#### Role identity (Members/Admin area only)
+| Token | Hex | Note |
+|-------|-----|------|
+| `PURPLE` | `#3B4CCA` | Remapped from `#7c3aed` → Accent |
+| `TEAL` | `#0F7B5F` | Remapped from `#059669` → Success |
 
 #### Group Colours (pageRegistry.ts — GROUP_COLOURS)
 | Group | Colour |
 |-------|--------|
-| Command Centre | `#0f172a` (near-black) |
-| Finance | `#16a34a` (green) |
-| Operations | `#2563eb` (blue) |
-| Tasks & Meetings | `#d97706` (amber) |
-| Departments | `#7c3aed` (purple) |
-| Settings | `#64748b` (slate) |
+| Finance | `#0F7B5F` (Success green) |
+| Operations | `#3B4CCA` (Accent blue) |
+| Tasks & Meetings | `#B4791F` (Warning amber) |
+| Departments | `#3B4CCA` (Accent blue) |
+| Settings | `#64748B` (Slate) |
 
 ### Fonts
-- System font stack (no custom font imported)
-- Page body: ~16–17px
-- Table header: 15px, weight 700
-- Table cell: 16px, weight 400 (bold variant weight 700)
-- Section title: 17px, weight 700
-- Card label: 12px, weight 400
-- Card value: 17px, weight 800
-- Primary button: 17px, weight 700
+Three custom fonts loaded via `next/font/google` in `app/layout.tsx`. CSS variables injected on `<html>`:
+
+| Variable | Font | Use |
+|----------|------|-----|
+| `--font-display` | Inter Tight | Section titles, metric numbers, card titles |
+| `--font-sans` | Inter | Body text, labels, buttons, UI |
+| `--font-mono` | JetBrains Mono | Tabular numbers, IDs, due dates |
+
+**Type scale:**
+| Role | Font | Size / Weight / Tracking |
+|------|------|--------------------------|
+| Display / hero KPI | Inter Tight | 48–56px / 600 / −0.025em |
+| Page title (H1) | Inter Tight | 32px / 600 / −0.02em |
+| Section title (H2) | Inter Tight | 20–22px / 600 / −0.01em |
+| Metric large | Inter Tight | 36px / 600 / −0.02em |
+| Metric medium | Inter Tight | 26px / 600 / −0.02em |
+| Metric small | Inter Tight | 22px / 600 / −0.015em |
+| Body | Inter | 14px / 400 |
+| UI text / sidebar | Inter | 13px / 400–500 |
+| Label / kicker | Inter | 10.5–11px / 500 / 0.08em uppercase |
+| Caption | Inter | 11–12px / 400 |
+| Tabular / IDs | JetBrains Mono | 11–12px / 400 / tabular-nums |
 
 ### Border Radius (RADII constant)
 | Token | Value | Usage |
 |-------|-------|-------|
-| `CARD` | 12px | Card containers |
-| `BUTTON` | 8px | Buttons |
-| `BADGE` | 6px | Status badges |
-| `PILL` | 16px | Navigation pills, tag pills |
+| `XS` / `BADGE` | `6px` | Small chips |
+| `SM` | `10px` | Inputs, small chips |
+| `CARD` | `14px` | Standard cards |
+| `LG` | `20px` | Hero / feature cards |
+| `PILL` / `BUTTON` | `999px` | Buttons, tab strips, filter pills |
 
 ### Shadows (SHADOWS constant)
+Cards have **no shadow** by design (Genspark spec). Shadows reserved for overlays only.
 | Token | Value | Usage |
 |-------|-------|-------|
-| `CARD` | `0 1px 3px rgba(15,23,42,0.06)` | Default card shadow |
-| `ELEVATED` | `0 4px 12px rgba(15,23,42,0.08)` | Elevated panels |
-| `DROPDOWN` | `0 8px 30px rgba(15,23,42,0.12)` | Dropdowns, sidebar |
-| `MODAL` | `0 2px 6px rgba(0,0,0,0.15)` | Modal overlays |
-| `HOVER` | `0 2px 8px rgba(0,0,0,0.1)` | Hover state lift |
+| `CARD` | `none` | Cards (no shadow) |
+| `ELEVATED` | `0 2px 8px rgba(15,23,32,0.06)` | Subtle lifted panels |
+| `DROPDOWN` | `0 8px 30px rgba(15,23,32,0.12)` | Dropdowns, menus |
+| `MODAL` | `0 20px 60px rgba(15,23,32,0.15)` | Modal overlays |
 
 ### Spacing
-- Page padding: `14px 18px` (mobile: `12px 14px`)
-- Card padding: `6px 8px` (compact)
-- Gap between cards: `8px`
-- Gap between sections: `14px`
+- Base unit: 4px. Scale: 4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 48 · 64
+- Card padding: `24px`
+- Between cards: `16–20px`
+- Between sections: `32–40px`
+- Page padding: `40px` desktop / `20px` mobile
 - **NEVER use `overflowX: hidden` on `<main>` tags** — clips nested scroll containers
 
 ### Shared Components in lib/SharedUI.tsx
 
 | Component / Export | Props | Purpose |
 |-------------------|-------|---------|
-| `COLOURS` | — | Colour token object |
+| `COLOURS` | — | Colour token object — source of truth |
 | `RADII` | — | Border radius constants |
 | `SHADOWS` | — | Shadow constants |
+| `cardStyle` | — | Base card style object (24px pad, 14px radius, hairline border) |
+| `cardAltStyle` | — | Tinted card-alt variant |
 | `displayRole(role, email?)` | string, string? | Returns "CEO" for k.saleem email, else role |
 | `statusColor(status)` | string\|null | Maps status string to colour hex |
 | `priorityColor(priority)` | string\|null | Maps priority to colour hex |
-| `SectionTitle` | `{ title, style? }` | h2 with left border accent at 17px/700 |
+| `SectionTitle` | `{ title, style? }` | Inter Tight h2 at 20px/600 |
 | `PageHeader` | `{ hideHome? }` | "← Home" back link pill |
-| `StatusBadge` | `{ status }` | Coloured pill badge for status values |
-| `PriorityBadge` | `{ priority }` | Coloured pill badge for priority values |
-| `CountCard` | `{ label, value, color, sub? }` | Compact KPI card with top border in colour |
-| `TrafficLight` | `{ status: RAGStatus, label, detail? }` | Green/Amber/Red dot with label |
-| `FreshnessBadge` | `{ date, label? }` | Data age indicator: green 0–1d, amber 2–3d, red 4+d |
-| `WARNING_BANNER_STYLE` | — | Style object for red warning banner |
-| `tableHeaderStyle` | — | Style for `<th>` elements |
-| `tableCellStyle` | — | Style for `<td>` elements |
+| `StatusBadge` | `{ status }` | Coloured-text chip on soft background |
+| `PriorityBadge` | `{ priority }` | Coloured-text chip on soft background |
+| `CountCard` | `{ label, value, color, sub? }` | Metric card: label → number → sub |
+| `TrafficLight` | `{ status: RAGStatus, label, detail? }` | Dot + label in Green/Amber/Red |
+| `FreshnessBadge` | `{ date, label? }` | Data age: green 0–1d, amber 2–3d, red 4+d |
+| `WARNING_BANNER_STYLE` | — | Warning banner style (amber, warning-soft bg) |
+| `tableHeaderStyle` | — | `<th>` — uppercase label, card-alt bg |
+| `tableCellStyle` | — | `<td>` — 13px, tabular-nums, hairline divider |
 | `tableCellBoldStyle` | — | Bold variant of tableCellStyle |
-| `labelStyle` | — | Form label style |
-| `inputStyle` | — | Form input style (full-width, border, 17px) |
-| `primaryButtonStyle` | — | Navy primary button style |
+| `labelStyle` | — | Form label — uppercase kicker style |
+| `inputStyle` | — | Form input — 13px, hairline border, sm radius |
+| `primaryButtonStyle` | — | Ink 900 background, pill radius, 13px |
 | `Toast` | `{ message, type?, onClose }` | Fixed-position toast notification |
 | `useToast()` | — | Returns `{ show(msg, type), element }` |
 | `ConfirmDialog` | `{ message, onConfirm, onCancel, confirmLabel?, danger? }` | Modal confirm dialog |
 | `useConfirm()` | — | Returns `{ confirm(msg, danger?), element }` |
-| `ErrorBanner` | `{ message, onRetry? }` | Red error banner with optional retry |
+| `ErrorBanner` | `{ message, onRetry? }` | Danger-soft error banner |
 | `SkeletonCard` | `{ width?, height? }` | Shimmer loading placeholder |
+| `SkeletonRows` | `{ count?, height? }` | Stack of shimmer rows |
 | `SkeletonRows` | `{ count?, height? }` | Multiple skeleton rows for table loading |
 
 ### Date Format Rules

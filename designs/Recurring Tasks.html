@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Recurring Tasks — Unze OS</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/page-shell.css"/>
+<style>
+  /* Form card */
+  .form-card { padding: 24px; margin-bottom: 20px; }
+  .form-card__head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--hairline); }
+  .form-card__title { font-family: var(--font-display); font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .form-card__mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); display: grid; place-items: center; }
+  .form-card__mark svg { width: 15px; height: 15px; }
+
+  .form-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .form-grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+  .field-label { font-size: 12px; font-weight: 500; color: var(--ink-700); margin-bottom: 6px; }
+  .field-input, .field-select {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    font-size: 13.5px;
+    color: var(--ink-900);
+    font-family: var(--font-sans);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .field-input--placeholder { color: var(--ink-400); }
+  .field-select svg { width: 12px; height: 12px; color: var(--ink-500); }
+
+  .form-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 20px; border-top: 1px solid var(--hairline); }
+  .form-actions__hint { font-size: 12px; color: var(--ink-500); }
+
+  /* Empty state */
+  .empty {
+    padding: 72px 28px;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .empty__icon {
+    width: 64px; height: 64px;
+    border-radius: 18px;
+    background: var(--card-alt); border: 1px solid var(--hairline);
+    display: grid; place-items: center; color: var(--ink-500);
+    margin-bottom: 20px;
+  }
+  .empty__icon svg { width: 26px; height: 26px; }
+  .empty__title { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+  .empty__body { font-size: 13px; color: var(--ink-500); max-width: 380px; line-height: 1.55; margin: 0 0 22px; }
+  .empty__actions { display: flex; gap: 10px; }
+
+  /* Examples grid (added value — helps user get started) */
+  .examples-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 700px; }
+  .example-card {
+    padding: 16px 18px;
+    background: var(--card-alt);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    text-align: left;
+    cursor: default;
+    transition: background 120ms, border-color 120ms;
+  }
+  .example-card:hover { background: var(--card); border-color: var(--ink-300); }
+  .example-card__title { font-size: 12.5px; font-weight: 500; color: var(--ink-900); margin-bottom: 6px; }
+  .example-card__meta { font-size: 10.5px; color: var(--ink-500); font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage__header">
+    <div>
+      <div class="stage__kicker">Unze OS · Design v1 · Page 11 of ?</div>
+      <h1 class="stage__title">Recurring Tasks</h1>
+    </div>
+    <div class="stage__sub">
+      A single-form page. Redesigns the "New Recurring Task" panel as a properly labeled form and rewrites the empty state as a helpful onboarding surface with pre-filled examples.
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- DESKTOP -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Desktop · 1440 × auto</span><span class="frame__dim" id="desktop-scale-caption">Web · Next.js</span></div>
+      <div class="desktop-scaler" id="desktop-scaler"><div class="desktop-inner" id="desktop-inner"><div class="desktop-app">
+
+        <aside class="side">
+          <div class="side__brand"><div class="side__brand-mark">U</div><div><div class="side__brand-name">Unze Group</div><div style="font-size:10px; color: var(--ink-500);">Operations</div></div></div>
+          <div class="side__group">Overview</div>
+          <a class="side__item"><svg class="icon"><use href="#i-home"/></svg>Executive</a>
+          <div class="side__group">Tasks &amp; Meetings</div>
+          <a class="side__item"><svg class="icon"><use href="#i-calendar"/></svg>Calendar</a>
+          <a class="side__item"><svg class="icon"><use href="#i-users"/></svg>Meetings</a>
+          <a class="side__item side__item--active"><svg class="icon"><use href="#i-repeat"/></svg>Recurring tasks</a>
+          <div class="side__group">Account</div>
+          <a class="side__item"><svg class="icon"><use href="#i-user"/></svg>My profile</a>
+
+          <div class="side__group">Preferences</div>
+          <a class="side__item" data-theme-toggle style="cursor:pointer;"><svg class="icon"><use href="#i-moon"/></svg>Dark mode</a>
+          <div class="side__user"><div class="side__avatar">KS</div><div><div class="side__user-name">Khuram Saleem</div><div class="side__user-role">CEO · Unze Group</div></div></div>
+        </aside>
+
+        <main class="main">
+          <nav class="crumb"><span>Home</span><svg><use href="#i-chevron"/></svg><span>Tasks</span><svg><use href="#i-chevron"/></svg><span class="crumb__current">Recurring Tasks</span></nav>
+          <div class="main__top">
+            <div>
+              <h1 class="main__title">Recurring Tasks</h1>
+              <div class="main__meta">Manage recurring task templates. Define a task once — it appears in the assignee's queue on a schedule you choose.</div>
+            </div>
+          </div>
+
+          <!-- New task form -->
+          <div class="card form-card">
+            <div class="form-card__head">
+              <div class="form-card__title">
+                <span class="form-card__mark"><svg><use href="#i-plus"/></svg></span>
+                New recurring task
+              </div>
+              <span class="chip">Template</span>
+            </div>
+
+            <div class="form-grid">
+              <div>
+                <div class="field-label">Task description</div>
+                <div class="field-input field-input--placeholder">e.g. Submit weekly production report</div>
+              </div>
+              <div>
+                <div class="field-label">Assign to</div>
+                <div class="field-select"><span style="color: var(--ink-400);">Select</span><svg><use href="#i-chevron-down"/></svg></div>
+              </div>
+              <div>
+                <div class="field-label">Priority</div>
+                <div class="field-select"><span>Normal</span><svg><use href="#i-chevron-down"/></svg></div>
+              </div>
+            </div>
+
+            <div class="form-grid-3">
+              <div>
+                <div class="field-label">Frequency</div>
+                <div class="field-select"><span>Weekly</span><svg><use href="#i-chevron-down"/></svg></div>
+              </div>
+              <div>
+                <div class="field-label">Day</div>
+                <div class="field-select"><span>Monday</span><svg><use href="#i-chevron-down"/></svg></div>
+              </div>
+              <div>
+                <div class="field-label">Due after (days)</div>
+                <div class="field-input">3</div>
+              </div>
+            </div>
+
+            <div class="form-grid-2" style="margin-bottom: 0;">
+              <div>
+                <div class="field-label">Department / project (optional)</div>
+                <div class="field-input field-input--placeholder">Add a tag to group templates…</div>
+              </div>
+              <div>
+                <div class="field-label">Auto-close after</div>
+                <div class="field-select"><span>7 days · unmarked</span><svg><use href="#i-chevron-down"/></svg></div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <div class="form-actions__hint">Next occurrence: <b style="color: var(--ink-900); font-family: var(--font-mono); font-size: 11.5px;">Mon 06 Jul 2026</b> · Assignee will get a task 3 days before it's due.</div>
+              <div style="display: flex; gap: 10px;">
+                <button class="btn">Cancel</button>
+                <button class="btn btn--primary">Create template</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty state with helpful examples -->
+          <div class="card">
+            <div class="empty">
+              <div class="empty__icon"><svg><use href="#i-repeat"/></svg></div>
+              <h3 class="empty__title">No recurring templates yet</h3>
+              <p class="empty__body">
+                Recurring tasks turn day-to-day rituals into scheduled assignments. Start from a template below, or fill in the form above.
+              </p>
+
+              <div class="examples-grid">
+                <div class="example-card">
+                  <div class="example-card__title">Weekly production report</div>
+                  <div class="example-card__meta">Every Mon · Ops team · due Fri</div>
+                </div>
+                <div class="example-card">
+                  <div class="example-card__title">Bank facility utilisation check</div>
+                  <div class="example-card__meta">1st of month · Finance · due 3d</div>
+                </div>
+                <div class="example-card">
+                  <div class="example-card__title">Vendor payment run</div>
+                  <div class="example-card__meta">Every Wed · Finance · due same day</div>
+                </div>
+                <div class="example-card">
+                  <div class="example-card__title">Departmental headcount review</div>
+                  <div class="example-card__meta">1st of quarter · HR · due 7d</div>
+                </div>
+                <div class="example-card">
+                  <div class="example-card__title">Audit follow-up round</div>
+                  <div class="example-card__meta">Every 2 weeks · Audit · due 5d</div>
+                </div>
+                <div class="example-card">
+                  <div class="example-card__title">Board pack preparation</div>
+                  <div class="example-card__meta">1st of month · Exec Office · due 14d</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div></div></div>
+    </div>
+
+    <!-- MOBILE -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Mobile · 390 × auto</span><span class="frame__dim">iOS / Android / PWA</span></div>
+      <div class="phone">
+        <div class="status-bar"><span>9:42</span><div class="status-bar__right"><span>●●●●</span><span style="margin-left:6px;">100%</span></div></div>
+        <div class="m-nav"><span class="m-nav__back"><svg><use href="#i-chevron-left"/></svg>Home</span><div class="m-nav__actions"><svg><use href="#i-search"/></svg></div></div>
+        <div class="m-page-head"><div class="m-page-head__kicker">Tasks &amp; Meetings</div><h1 class="m-page-head__title">Recurring Tasks</h1><div class="m-page-head__sub">Manage recurring task templates.</div></div>
+
+        <!-- Form -->
+        <div class="m-card">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+            <span class="form-card__mark"><svg class="icon" style="width: 15px; height: 15px;"><use href="#i-plus"/></svg></span>
+            <div style="font-family: var(--font-display); font-size: 15px; font-weight: 600;">New recurring task</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div>
+              <div class="field-label">Task description</div>
+              <div class="field-input field-input--placeholder">e.g. Weekly production report</div>
+            </div>
+            <div>
+              <div class="field-label">Assign to</div>
+              <div class="field-select"><span style="color: var(--ink-400);">Select</span><svg><use href="#i-chevron-down"/></svg></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <div class="field-label">Priority</div>
+                <div class="field-select"><span>Normal</span><svg><use href="#i-chevron-down"/></svg></div>
+              </div>
+              <div>
+                <div class="field-label">Due after</div>
+                <div class="field-input">3 days</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <div class="field-label">Frequency</div>
+                <div class="field-select"><span>Weekly</span><svg><use href="#i-chevron-down"/></svg></div>
+              </div>
+              <div>
+                <div class="field-label">Day</div>
+                <div class="field-select"><span>Monday</span><svg><use href="#i-chevron-down"/></svg></div>
+              </div>
+            </div>
+            <button class="btn btn--primary" style="width: 100%; justify-content: center; margin-top: 6px;">Create template</button>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div class="m-section-head"><div class="m-section-head__title">Or start from</div></div>
+        <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 20px;">
+          <div class="example-card"><div class="example-card__title">Weekly production report</div><div class="example-card__meta">Mon · Ops · due Fri</div></div>
+          <div class="example-card"><div class="example-card__title">Bank facility check</div><div class="example-card__meta">1st month · Finance · due 3d</div></div>
+          <div class="example-card"><div class="example-card__title">Vendor payment run</div><div class="example-card__meta">Wed · Finance · same day</div></div>
+          <div class="example-card"><div class="example-card__title">Board pack prep</div><div class="example-card__meta">1st month · Exec · due 14d</div></div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-home"/></svg><span class="tabbar__lbl">Home</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-cash"/></svg><span class="tabbar__lbl">Cash</span></div>
+          <div class="tabbar__item tabbar__item--active"><svg class="icon" style="width:20px;height:20px;"><use href="#i-repeat"/></svg><span class="tabbar__lbl">Tasks</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-users"/></svg><span class="tabbar__lbl">Teams</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-bell"/></svg><span class="tabbar__lbl">Alerts</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="reflow-panel">
+    <div class="sec-head" style="margin-bottom: 4px;"><h2 class="sec-head__title" style="font-size: 22px;">Reflow &amp; new components</h2><div class="sec-head__meta">Desktop → Mobile</div></div>
+    <div class="reflow-panel__grid">
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">01 · NEW</div><div class="reflow-card__title">Form card (long-form)</div><div class="reflow-card__body">Card with a bordered head (icon mark + title + optional chip), then a grid of labeled fields, then a footer with an informative hint on the left and cancel/primary buttons on the right.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">02 · NEW</div><div class="reflow-card__title">Field group patterns</div><div class="reflow-card__body">3-col row (task desc [2fr] + assignee + priority), 3-col row for scheduling, 2-col row for optional tags. On mobile, all fields stack single-column except priority + due-after which pair up.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">03 · NEW</div><div class="reflow-card__title">Example / starter cards</div><div class="reflow-card__body">3×2 grid of pre-filled templates on desktop (production report, vendor payment run, etc.). Each card is a "start from here" affordance — clicking pre-fills the form.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">04</div><div class="reflow-card__title">Rich empty state</div><div class="reflow-card__body">Instead of your current one-line "No recurring tasks set up yet", the empty state now has icon + headline + body + a whole starter grid. Turns a dead-end into onboarding.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">05</div><div class="reflow-card__title">Informative footer hint</div><div class="reflow-card__body">"Next occurrence: Mon 06 Jul 2026 · Assignee will get a task 3 days before it's due." Live preview of what the template will actually do — reduces surprises.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">06</div><div class="reflow-card__title">Mobile form density</div><div class="reflow-card__body">Desktop uses a 3-col form. Mobile keeps the field grouping intact but stacks them, with tight pairing (priority + due days on one row) preserved for related concepts.</div></div>
+    </div>
+  </div>
+</div>
+<script src="assets/page-shell.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
