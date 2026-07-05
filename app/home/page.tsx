@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch, loadMyPermissions } from "../lib/supabase";
-import EscalationTrafficLights from "../executive/EscalationTrafficLights";
+import EscalationTrafficLights from "../lib/EscalationTrafficLights";
 import { COLOURS, RADII, StatusBadge, SectionTitle, RAGStatus, ragColour, FreshnessBadge, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR, displayRole } from "../lib/SharedUI";
 import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtils";
 import { UTPL_COMPANY_ID, COMPANIES } from "../lib/constants";

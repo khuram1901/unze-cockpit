@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
             ${overdue.slice(0, 5).map((t) => `<li>${t.description?.slice(0, 80)} -${t.assigned_to || "Unassigned"} (due ${t.due_date})</li>`).join("")}
           </ul>` : ""}
         `,
-        linkUrl: isAdmin ? `${APP_URL}/executive` : `${APP_URL}/pa`,
+        linkUrl: isAdmin ? `${APP_URL}/home` : `${APP_URL}/pa`,
         linkLabel: isAdmin ? "Open Executive Dashboard" : "Open PA Dashboard",
         triggerType: "daily_digest",
         recipientName: adminName,

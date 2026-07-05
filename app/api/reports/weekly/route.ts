@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
         subject: `Weekly Report — ${today}`,
         heading: `Weekly Report for ${admin.first_name || admin.name || "Team"}`,
         body: html,
-        linkUrl: `${APP_URL}/executive`,
+        linkUrl: `${APP_URL}/home`,
         linkLabel: "Open Unze Group Dashboard",
         triggerType: "weekly_report",
         recipientName: admin.first_name || admin.name || admin.email,

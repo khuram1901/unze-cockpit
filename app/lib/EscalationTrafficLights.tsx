@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { COLOURS } from "./SharedUI";
 
 type Escalation = {
   plantId: string;
@@ -9,10 +10,6 @@ type Escalation = {
   detail: string;
   sourceLabel: string;
 };
-
-const NAVY = "var(--text-primary, #1e293b)";
-const SLATE = "var(--text-secondary, #64748b)";
-const BORDER = "var(--border-color, #e2e8f0)";
 
 const METRICS: Escalation["metric"][] = ["Production", "Dispatch", "Breakage"];
 
@@ -33,17 +30,17 @@ export default function EscalationTrafficLights({
     return (
       <div
         style={{
-          border: `1px solid ${BORDER}`,
-          borderLeft: "4px solid #16a34a",
+          border: `1px solid ${COLOURS.HAIRLINE}`,
+          borderLeft: `4px solid ${COLOURS.GREEN}`,
           borderRadius: "6px",
           padding: "10px 14px",
-          backgroundColor: "var(--bg-card, #ffffff)",
-          fontSize: "17px",
-          color: NAVY,
+          backgroundColor: COLOURS.CARD,
+          fontSize: "15px",
+          color: COLOURS.NAVY,
           marginBottom: "14px",
         }}
       >
-        No active executive escalations. All tracked metrics are within tolerance.
+        No active escalations. All tracked metrics are within tolerance.
       </div>
     );
   }
@@ -69,10 +66,10 @@ export default function EscalationTrafficLights({
               style={{
                 minWidth: "100px",
                 padding: "8px 10px",
-                border: `1px solid ${BORDER}`,
-                borderTop: `3px solid ${isRed ? "#dc2626" : "#16a34a"}`,
+                border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderTop: `3px solid ${isRed ? COLOURS.RED : COLOURS.GREEN}`,
                 borderRadius: "7px",
-                backgroundColor: isActive ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
+                backgroundColor: isActive ? COLOURS.CARD_ALT : COLOURS.CARD,
                 cursor: count === 0 ? "default" : "pointer",
                 textAlign: "left",
                 opacity: count === 0 ? 0.6 : 1,
@@ -80,21 +77,26 @@ export default function EscalationTrafficLights({
             >
               <div
                 style={{
-                  color: SLATE,
-                  fontSize: "15px",
-                  marginBottom: "2px",
+                  color: COLOURS.SLATE,
+                  fontSize: "13px",
+                  marginBottom: "4px",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  fontWeight: 500,
                 }}
               >
                 {metric}
               </div>
               <div
                 style={{
-                  fontSize: "19px",
-                  fontWeight: 800,
-                  color: isRed ? "#dc2626" : "#16a34a",
+                  fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                  fontSize: "28px",
+                  fontWeight: 600,
+                  letterSpacing: "-0.02em",
+                  color: isRed ? COLOURS.RED : COLOURS.GREEN,
                 }}
               >
                 {count}
@@ -107,9 +109,9 @@ export default function EscalationTrafficLights({
       {openMetric !== null && selected.length > 0 && (
         <div
           style={{
-            border: `1px solid ${BORDER}`,
+            border: `1px solid ${COLOURS.HAIRLINE}`,
             borderRadius: "8px",
-            backgroundColor: "var(--bg-card, #ffffff)",
+            backgroundColor: COLOURS.CARD,
             marginTop: "8px",
             overflow: "hidden",
           }}
@@ -117,11 +119,11 @@ export default function EscalationTrafficLights({
           <div
             style={{
               padding: "8px 12px",
-              backgroundColor: "var(--bg-card-hover, #f8fafc)",
-              borderBottom: `1px solid ${BORDER}`,
-              fontSize: "16px",
-              fontWeight: 700,
-              color: NAVY,
+              backgroundColor: COLOURS.CARD_ALT,
+              borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+              fontSize: "13px",
+              fontWeight: 600,
+              color: COLOURS.NAVY,
             }}
           >
             {openMetric} escalations ({selected.length})
@@ -130,14 +132,14 @@ export default function EscalationTrafficLights({
             <div
               key={e.sourceLabel}
               style={{
-                padding: "9px 12px",
-                borderTop: i === 0 ? "none" : `1px solid ${BORDER}`,
+                padding: "10px 12px",
+                borderTop: i === 0 ? "none" : `1px solid ${COLOURS.HAIRLINE}`,
               }}
             >
-              <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>
                 {e.plantName}
               </div>
-              <div style={{ fontSize: "16px", color: SLATE, marginTop: "2px" }}>
+              <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px" }}>
                 {e.detail}
               </div>
             </div>
