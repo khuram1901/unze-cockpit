@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 05/07/2026 (Bank Facilities API security hardening + sidebar reorder).
+> **This is the source of truth.** Read before touching any code. Last updated: 05/07/2026 (Dividend tracking, daily portfolio summary, PSX auto-fetch, DB-side aggregation overhaul).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -1003,11 +1003,45 @@ Gmail-ingested raw minutes awaiting admin review.
 
 **Constraint:** UNIQUE(ticker, as_of_date).
 
+#### `stock_dividends` — migration 065
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| ticker | text NOT NULL | PSX ticker |
+| dividend_per_share | numeric(12,4) NOT NULL | Rs per share |
+| ex_dividend_date | date NOT NULL | |
+| payment_date | date | |
+| announced_date | date | |
+| status | text | 'upcoming', 'paid', 'cancelled' |
+| source | text | 'manual', 'auto-psx', 'auto-company-site' |
+| confirmed | boolean NOT NULL DEFAULT false | true = manual/verified; false = auto-fetched unverified |
+| notes | text | Raw PSX label stored here for traceability |
+| entered_by | text | Email of who added/triggered entry |
+| entered_at | timestamptz | |
+
+**Constraint:** UNIQUE(ticker, ex_dividend_date). Manual (confirmed=true) entries are never overwritten by auto-fetch. RLS: authenticated read; Admin/CEO write via service client.
+
+#### `portfolio_snapshots` — migration 066
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| snapshot_date | date NOT NULL | |
+| ticker | text NOT NULL | |
+| total_qty | numeric | |
+| total_cost | numeric | |
+| current_price | numeric | |
+| current_value | numeric | |
+| gain_loss | numeric | |
+| gain_loss_pct | numeric | |
+| created_at | timestamptz | |
+
+**Constraint:** UNIQUE(snapshot_date, ticker). Written by the daily-summary cron each weekday. Used by `get_portfolio_summary_full` to compute day-on-day change without re-fetching yesterday's prices.
+
 #### Views
 - `current_prices` — latest price per ticker (DISTINCT ON). Legacy view, still exists in DB.
 - `portfolio_summary` — joins holdings with current_prices for P&L view. Legacy view.
 
-**Important:** Neither view is used by the live app. All pages use `get_portfolio_summary_as_of(date)` RPC (migration 054) which handles both today and historical dates correctly in Postgres.
+**Important:** Neither view is used by the live app. All pages use `get_portfolio_summary_full` RPC (migration 067) which handles today and historical dates and returns everything in one round-trip. `get_portfolio_summary_as_of` (migration 054) still exists in the DB but is no longer called by any page.
 
 ---
 
@@ -1017,8 +1051,23 @@ These functions run entirely in Postgres and return pre-aggregated results. **Ne
 
 #### `get_portfolio_summary_as_of(as_of date)` — migration 054
 Returns one row per ticker with: ticker, company_name, total_qty, total_cost, avg_cost, current_price, price_date, current_value, gain_loss, gain_loss_pct.
-- Uses DISTINCT ON to find most recent price ≤ as_of date. Works for today and historical dates.
-- **Used by:** `app/investments/page.tsx`, `app/home/page.tsx` (investment section), `app/executive/page.tsx` (investment section).
+- Still exists in DB. **No longer called by any page** — superseded by `get_portfolio_summary_full` (067).
+
+#### `get_portfolio_summary_full(p_as_of date, p_alert_pct numeric, p_div_days int)` — migration 067
+Returns a single JSONB object with everything needed for the investments page and executive dashboard — no JS aggregation required:
+- `totals`: total_cost, total_value, gain_loss, gain_loss_pct, stock_count, price_date, prev_value (from yesterday's snapshots), day_change, day_change_pct, dividend_count (confirmed divs due within p_div_days)
+- `stocks`: array of per-ticker rows (ticker, company_name, total_qty, total_cost, avg_cost, target_price, current_price, price_date, current_value, gain_loss, gain_loss_pct)
+- `losers`: array of stocks where gain_loss_pct ≤ p_alert_pct, ordered worst first
+- **Used by:** `app/investments/page.tsx` (p_alert_pct=-3, p_div_days=7), `app/home/page.tsx` (same params).
+
+#### `get_portfolio_daily_summary(p_as_of, p_prev_date, p_alert_pct, p_div_days)` — migration 066
+Returns a full JSONB summary used exclusively by the daily-summary cron:
+- `totals`, `stocks`, `alerts`, `best`, `worst`, `dividends` (confirmed + unconfirmed arrays)
+- **Used by:** `app/api/investments/daily-summary/route.ts` only. Not called from any page.
+
+#### `get_upcoming_dividends(p_days_ahead int)` — migration 065
+Returns confirmed + unconfirmed dividends joined with holdings (total_qty, estimated_payout, days_to_ex).
+- **Used by:** `app/investments/page.tsx` (via `/api/investments/dividends?mode=upcoming`), `app/pa/page.tsx` (direct RPC, confirmed only).
 
 #### `get_plant_kpis(as_of_date date, month_start date, month_end date)` — migration 055
 Returns one row per active plant with opening balances, cumulative totals since cutoff, on-date totals, MTD totals, and entered_on_date boolean.
@@ -1273,6 +1322,7 @@ The Bank Facilities page has both UI-level permission gates AND server-side role
 - **What it does:**
   - Shows PAGE_REGISTRY cards grouped by section (only cards the user has permission for)
   - CEO/Admin: briefing strip (cash total, production %, stuck bills, sparklines), quick task actions
+  - **Investments card**: shows total cost, current value, gain/loss, return %. If any confirmed dividends are due within 7 days, shows an amber "X dividends due this week" badge. Data from `get_portfolio_summary_full` — zero JS aggregation.
   - Cron health panel (Admin only) via `/api/admin/cron-health`
   - Manager briefing (collapsible — starts collapsed):
     - **Ops Manager**: today's production RAG, MTD production RAG, dispatch ratio, breakage, machines, overdue ops tasks
@@ -1280,7 +1330,7 @@ The Bank Facilities page has both UI-level permission gates AND server-side role
   - Notification bell badges update in real-time via Supabase channels
 - **Date selector (CEO/Admin):** Allows viewing the dashboard as of any date up to 90 days back. All data sections respect the selected date:
   - Production/dispatch/breakage entries: filtered `<= selectedDate`
-  - Investment portfolio: uses `price_history` filtered `<= selectedDate` (latest price per ticker on or before that day) — **not** `current_prices` view
+  - Investment portfolio: calls `get_portfolio_summary_full(selectedDate, -3, 7)` — returns totals, per-ticker rows, losers, day-change, dividend count in one round-trip. No JS aggregation.
   - Cash positions: filtered `<= selectedDate` (most recent 30 entries up to that date)
   - Cash plan and budget month: derived from `selectedDate.slice(0,7)` (not today)
 - **Performance (sessionStorage cache):** `loadExecutiveData` caches the full payload for 2 minutes per date key (`exec_home_YYYY-MM-DD`). Cache is busted on any Supabase Realtime change. Cache not served if `payload.investmentData` is falsy (prevents stale null from hiding the investment section).
@@ -1305,6 +1355,7 @@ The Bank Facilities page has both UI-level permission gates AND server-side role
 - **File:** `app/pa/page.tsx`
 - **Access:** PA (Sundas) + Admin/CEO (`useRequireCapability("pa_dashboard")`)
 - **What it does:** PA operating hub — pending tasks, notes, delegations, calendar appointments.
+  - **Dividend calendar** (confirmed only): shows ticker, ex-date, payment date, and coloured days badge (green >7d, amber ≤7d, red ≤3d) for confirmed dividends due in the next 14 days. **No financial figures, no prices, no payout amounts** — dates and tickers only. PA must never see financial data.
 
 #### `/dashboard`
 - **File:** `app/dashboard/page.tsx` → `DashboardView.tsx`
@@ -1357,9 +1408,17 @@ The Bank Facilities page has both UI-level permission gates AND server-side role
   - PSX portfolio holdings table: ticker, qty, avg cost, current price, current value, P&L, P&L %
   - Add/edit/delete holdings (Admin/CEO only)
   - Refresh prices via `/api/investments/update-prices` (Admin/CEO only)
-  - Portfolio totals: total cost, total value, total gain/loss
-- **Price updates:** Automated via cron — 04:30 UTC (market open, 9:30am PKT) and 11:00 UTC (market close, 4:00pm PKT), Monday–Friday. Prices stored in `price_history` (one row per ticker per day, upserted). Source: PSX DPS API, Yahoo Finance as fallback.
-- **Historical portfolio value:** CEO home page uses `price_history` filtered to `<= selectedDate` so past dates show correct portfolio value for that day.
+  - Portfolio totals (from DB — no JS aggregation): total cost, total value, total gain/loss, today's change vs yesterday
+  - Alert banner: any stock down more than 3% shown in red (threshold = -3, computed in DB)
+  - **Dividends section** (collapsible, Admin/CEO only to edit):
+    - Confirmed upcoming dividends table: ticker, Rs/share, ex-date, payment date, days countdown, estimated payout
+    - Unconfirmed review queue: auto-fetched PSX entries shown amber with Confirm/Dismiss buttons
+    - Add/edit dividend form: ticker dropdown (from holdings), Rs/share, ex-date, payment date, notes
+    - All manual entries saved as confirmed=true, source='manual'
+  - **Today's Change card**: appears in summary grid once the daily cron has run and populated yesterday's snapshot
+- **Data loading:** Single call to `get_portfolio_summary_full` RPC returns all totals, per-ticker rows, losers, and day-change. Holdings table fetched separately for lot-level edit/delete UI. Price history fetched separately for the chart only.
+- **Price updates:** Automated via cron — 04:30 UTC (9:30am PKT) and 11:00 UTC (4:00pm PKT), Monday–Friday. Prices stored in `price_history`. Source: PSX DPS API (`/timeseries/eod/{ticker}`), Yahoo Finance as fallback.
+- **Historical portfolio value:** Investments page has a date picker — selecting a past date calls `get_portfolio_summary_full` with that date, showing the portfolio as it was then.
 
 #### `/opening-balances`
 - **File:** `app/opening-balances/page.tsx` + `OpeningBalancesForm.tsx`
@@ -1663,6 +1722,8 @@ Requires: `app_settings` table (migration 052) + Google reconnected with Drive s
 | `/api/backup` | 18:00 daily | Database backup |
 | `/api/investments/update-prices` | 04:30 Mon–Fri | PSX market open (9:30am PKT) — opening prices |
 | `/api/investments/update-prices` | 11:00 Mon–Fri | PSX market close (4:00pm PKT) — closing prices |
+| `/api/investments/daily-summary` | 05:00 Mon–Fri | Portfolio summary: calls `get_portfolio_daily_summary` RPC, upserts to `portfolio_snapshots`, emails Khuram |
+| `/api/investments/fetch-dividends` | 06:00 Mon–Fri | PSX dividend auto-fetch: scrapes `/payouts` per holding ticker, inserts unconfirmed entries to `stock_dividends` |
 | `/api/reports/monthly-po` | 06:00 1st of month | Monthly PO progress report email |
 
 > If `CRON_SECRET` env var is missing, ALL cron requests are blocked (migration 001-era security fix).
