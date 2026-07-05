@@ -4,6 +4,43 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-05 — Genspark deep restyle: sidebar + executive dashboard (second pass)
+
+### Sidebar (`app/lib/SidebarLayout.tsx`, `app/lib/pageRegistry.ts`)
+- Group structure overhauled: OVERVIEW → FINANCE → DEPARTMENTS → OPERATIONS → SETTINGS → PREFERENCES (bottom)
+- "Tasks & Meetings" and "Command Centre" groups eliminated; tasks/calendar/meetings moved to OPERATIONS; profile/minutes stay in OVERVIEW
+- Brand area: NAVY square "U" mark + "Unze Group" / "Operations" sub-label (replaced logo image). Image import removed.
+- Nav items: 13px Inter, active = NAVY background + white text — no blue left-bar. Hover = `var(--sidebar-hover-bg)`
+- Group labels: 10px / 500 weight / 0.12em letter-spacing / uppercase SLATE kickers
+- User card: gradient round avatar (blue gradient), 13px/600 name, 11px SLATE role label
+- Dark Mode moved into PREFERENCES group (nav item inside scroll area)
+- Collapse + Sign Out moved below user card as small tertiary controls
+
+### Executive Dashboard — greeting & hero (`app/home/page.tsx`)
+- Greeting header: Inter Tight 44px/600, "Good morning, [name]." — full period. Metadata line: date + role chip below
+- Good Stock hero: dark NAVY card, 60px Inter Tight number (44px mobile), white text, footer with "pairs · all plants combined"
+
+### Executive Dashboard — KPI numbers (all pages)
+- Card component: 44px Inter Tight numbers (was 22px), -0.02em tracking, 24px padding
+- KPICard component: 44px numbers, 24px padding
+- Mini component: 32px numbers
+- CompanyFinancePanel.summaryCard: 36px numbers
+- Bank Facilities figures: 36px per metric (utilisation %, available, seized)
+- Investment tiles: 28px (4-tile grid, 2-col on mobile)
+- Monthly receipts/payments fallback: 32px
+- All tracking updated to -0.02em (was -0.015em)
+- SectionTitle (SharedUI): bumped 20px → 22px
+
+### Executive Dashboard — section-specific changes
+- **Attention banner chips**: soft chips (coloured text on SOFT bg — DANGER_SOFT/WARNING_SOFT) — no longer white-on-solid
+- **Cash Flow Waterfall**: 160px bar area (was 118px), 24px padding, muted bars (55% opacity)
+- **Company Comparison**: 18px bar height (was 14px), kicker labels, muted bars (70% opacity)
+- **Bank Facilities**: hero layout per bank — kicker name, 36px utilisation/available/seized figures, hairline progress bar
+- **Department Scorecard**: editorial rows — left 8px status dot, owner sub-label, right soft chip (SOFT bg + saturated text); no execCard border-top accent
+- **Task Load chart**: 220px min height (was 180px), 46px per row (was 38px), muted bars, sober palette
+
+---
+
 ## 2026-07-05 — Genspark design system foundation installed
 
 - `app/lib/SharedUI.tsx` — full rewrite of design tokens and shared components to match Genspark design system v1. All exports preserved (backward-compatible). Key changes:
