@@ -2,11 +2,31 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
+// Mirrors canViewGuarantees() from permissions.ts — Admin/CEO + Finance/Ops managers
+async function resolveGuaranteePerms(supabase: ReturnType<typeof createServiceClient>, email: string) {
+  const lc = email.toLowerCase();
+  const isAdminByEmail = lc === "khuram1901@gmail.com" || lc === "k.saleem@unzegroup.com";
+  const { data: m } = await supabase
+    .from("members")
+    .select("role, department")
+    .eq("email", lc)
+    .maybeSingle();
+  const role = m?.role ?? null;
+  const dept = m?.department ?? null;
+  const isAdminTier = isAdminByEmail || role === "Admin" || role === "CEO";
+  const canView = isAdminTier || (role === "Manager" && (dept === "Finance" || dept === "Unze Trading Ops"));
+  const canViewFinancials = isAdminTier || (role === "Manager" && dept === "Finance");
+  return { canView, canViewFinancials };
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  const { canView } = await resolveGuaranteePerms(supabase, auth.email);
+  if (!canView) return Response.json({ error: "Forbidden" }, { status: 403 });
+
   const { data, error } = await supabase.rpc("get_guarantee_summary");
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
@@ -50,6 +70,8 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  const { canViewFinancials } = await resolveGuaranteePerms(supabase, auth.email);
+  if (!canViewFinancials) return Response.json({ error: "Forbidden" }, { status: 403 });
   const body = await request.json().catch(() => ({}));
   const {
     facility_id, guarantee_type, guarantee_number, bank_name,
@@ -98,6 +120,9 @@ export async function PATCH(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  const { canViewFinancials } = await resolveGuaranteePerms(supabase, auth.email);
+  if (!canViewFinancials) return Response.json({ error: "Forbidden" }, { status: 403 });
+
   const body = await request.json().catch(() => ({}));
   const { id, action, ...fields } = body;
 
@@ -208,6 +233,9 @@ export async function DELETE(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  const { canViewFinancials } = await resolveGuaranteePerms(supabase, auth.email);
+  if (!canViewFinancials) return Response.json({ error: "Forbidden" }, { status: 403 });
+
   const body = await request.json().catch(() => ({}));
   const { id } = body;
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });

@@ -2,11 +2,33 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
+async function requireGuaranteeFinancialsAccess(
+  supabase: ReturnType<typeof createServiceClient>,
+  email: string
+): Promise<true | Response> {
+  const lc = email.toLowerCase();
+  const isAdminByEmail = lc === "khuram1901@gmail.com" || lc === "k.saleem@unzegroup.com";
+  const { data: m } = await supabase
+    .from("members")
+    .select("role, department")
+    .eq("email", lc)
+    .maybeSingle();
+  const role = m?.role ?? null;
+  const dept = m?.department ?? null;
+  const isAdminTier = isAdminByEmail || role === "Admin" || role === "CEO";
+  const allowed = isAdminTier || (role === "Manager" && dept === "Finance");
+  if (!allowed) return Response.json({ error: "Forbidden" }, { status: 403 });
+  return true;
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  const access = await requireGuaranteeFinancialsAccess(supabase, auth.email);
+  if (access !== true) return access;
+
   const { data, error } = await supabase
     .from("guarantee_facilities")
     .select("*")
@@ -20,6 +42,9 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  const access = await requireGuaranteeFinancialsAccess(supabase, auth.email);
+  if (access !== true) return access;
+
   const body = await request.json().catch(() => ({}));
   const { bank_name, facility_name, facility_type, total_limit, notes } = body;
 
@@ -41,6 +66,9 @@ export async function PATCH(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  const access = await requireGuaranteeFinancialsAccess(supabase, auth.email);
+  if (access !== true) return access;
+
   const body = await request.json().catch(() => ({}));
   const { id, ...fields } = body;
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });
@@ -64,6 +92,9 @@ export async function DELETE(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  const access = await requireGuaranteeFinancialsAccess(supabase, auth.email);
+  if (access !== true) return access;
+
   const body = await request.json().catch(() => ({}));
   const { id } = body;
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });
