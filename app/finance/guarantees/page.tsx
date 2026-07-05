@@ -832,14 +832,11 @@ export default function GuaranteesPage() {
               <Field label="Guarantee / PO number *">
                 <input value={addForm.guarantee_number} onChange={(e) => setAddForm({ ...addForm, guarantee_number: e.target.value })} placeholder="Bank-issued reference" style={{ ...inputStyle, width: "100%" }} />
               </Field>
-              <Field label="Bank *">
-                <select value={addForm.bank_name} onChange={(e) => setAddForm({ ...addForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
-                  <option value="">— Select bank —</option>
-                  {BANKS.map((b) => <option key={b}>{b}</option>)}
-                </select>
-              </Field>
-              <Field label="Bank facility *">
-                <select value={addForm.facility_id} onChange={(e) => setAddForm({ ...addForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%", borderColor: !addForm.facility_id ? "#fca5a5" : undefined }}>
+              <Field label="Bank facility * (bank is set automatically)">
+                <select value={addForm.facility_id} onChange={(e) => {
+                  const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === e.target.value);
+                  setAddForm({ ...addForm, facility_id: e.target.value, bank_name: sel ? sel.bank_name : "" });
+                }} style={{ ...inputStyle, width: "100%", borderColor: !addForm.facility_id ? "#fca5a5" : undefined }}>
                   <option value="">— Select facility —</option>
                   {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
                 </select>
@@ -852,7 +849,7 @@ export default function GuaranteesPage() {
                     <div style={{ marginTop: "4px", fontSize: "11px", color: wouldExceed ? "#dc2626" : "#16a34a", fontWeight: 600 }}>
                       {wouldExceed
                         ? `⚠ Exceeds available capacity by ${pkr(requestedAmt - sel.available)}`
-                        : `Available in this facility: ${pkr(sel.available)}`}
+                        : `Bank: ${sel.bank_name} · Available: ${pkr(sel.available)}`}
                     </div>
                   );
                 })()}
@@ -1026,20 +1023,11 @@ export default function GuaranteesPage() {
                         </Field>
                         <Field label="Customer *"><input value={editForm.customer_name} onChange={(e) => setEditForm({ ...editForm, customer_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Guarantee number *"><input value={editForm.guarantee_number} onChange={(e) => setEditForm({ ...editForm, guarantee_number: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Bank *">
-                          <select value={editForm.bank_name} onChange={(e) => setEditForm({ ...editForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
-                            <option value="">— Select bank —</option>
-                            {BANKS.map((b) => <option key={b}>{b}</option>)}
-                          </select>
-                        </Field>
-                        <Field label="Issue date"><DateInput value={editForm.issue_date} onChange={(e) => setEditForm({ ...editForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Expiry date"><DateInput value={editForm.expiry_date} onChange={(e) => setEditForm({ ...editForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Amount (PKR)"><input type="number" min="0" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Cash margin %"><input type="number" min="0" max="100" value={editForm.cash_margin_pct} onChange={(e) => setEditForm({ ...editForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Bank charges (PKR)"><input type="number" min="0" value={editForm.bank_charges} onChange={(e) => setEditForm({ ...editForm, bank_charges: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Tender reference"><input value={editForm.tender_reference} onChange={(e) => setEditForm({ ...editForm, tender_reference: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Bank facility *">
-                          <select value={editForm.facility_id} onChange={(e) => setEditForm({ ...editForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%", borderColor: !editForm.facility_id ? "#fca5a5" : undefined }}>
+                        <Field label="Bank facility * (bank is set automatically)">
+                          <select value={editForm.facility_id} onChange={(e) => {
+                            const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === e.target.value);
+                            setEditForm({ ...editForm, facility_id: e.target.value, bank_name: sel ? sel.bank_name : editForm.bank_name });
+                          }} style={{ ...inputStyle, width: "100%", borderColor: !editForm.facility_id ? "#fca5a5" : undefined }}>
                             <option value="">— Select facility —</option>
                             {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
                           </select>
@@ -1052,11 +1040,17 @@ export default function GuaranteesPage() {
                               <div style={{ marginTop: "4px", fontSize: "11px", color: wouldExceed ? "#dc2626" : "#16a34a", fontWeight: 600 }}>
                                 {wouldExceed
                                   ? `⚠ May exceed available capacity`
-                                  : `Available in this facility: ${pkr(sel.available)}`}
+                                  : `Bank: ${sel.bank_name} · Available: ${pkr(sel.available)}`}
                               </div>
                             );
                           })()}
                         </Field>
+                        <Field label="Issue date"><DateInput value={editForm.issue_date} onChange={(e) => setEditForm({ ...editForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Expiry date"><DateInput value={editForm.expiry_date} onChange={(e) => setEditForm({ ...editForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Amount (PKR)"><input type="number" min="0" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Cash margin %"><input type="number" min="0" max="100" value={editForm.cash_margin_pct} onChange={(e) => setEditForm({ ...editForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Bank charges (PKR)"><input type="number" min="0" value={editForm.bank_charges} onChange={(e) => setEditForm({ ...editForm, bank_charges: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Tender reference"><input value={editForm.tender_reference} onChange={(e) => setEditForm({ ...editForm, tender_reference: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                       </div>
                       {editForm.guarantee_type === "Performance Guarantee" && (
                         <Field label="1st bill (links expiry clock — search by customer or invoice ref)">
@@ -1090,23 +1084,24 @@ export default function GuaranteesPage() {
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
                         <Field label="New guarantee number *"><input value={convertForm.guarantee_number} onChange={(e) => setConvertForm({ ...convertForm, guarantee_number: e.target.value })} placeholder="New PG number from bank" style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Bank *">
-                          <select value={convertForm.bank_name} onChange={(e) => setConvertForm({ ...convertForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
-                            <option value="">— Select bank —</option>
-                            {BANKS.map((b) => <option key={b}>{b}</option>)}
+                        <Field label="Bank facility * (bank is set automatically)">
+                          <select value={convertForm.facility_id} onChange={(e) => {
+                            const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === e.target.value);
+                            setConvertForm({ ...convertForm, facility_id: e.target.value, bank_name: sel ? sel.bank_name : convertForm.bank_name });
+                          }} style={{ ...inputStyle, width: "100%", borderColor: !convertForm.facility_id ? "#fca5a5" : undefined }}>
+                            <option value="">— Select facility —</option>
+                            {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
                           </select>
+                          {convertForm.facility_id && (() => {
+                            const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === convertForm.facility_id);
+                            return sel ? <div style={{ marginTop: "4px", fontSize: "11px", color: "#16a34a", fontWeight: 600 }}>Bank: {sel.bank_name} · Available: {pkr(sel.available)}</div> : null;
+                          })()}
                         </Field>
                         <Field label="Issue date *"><DateInput value={convertForm.issue_date} onChange={(e) => setConvertForm({ ...convertForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Expiry date"><DateInput value={convertForm.expiry_date} onChange={(e) => setConvertForm({ ...convertForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Amount (PKR) *"><input type="number" min="0" value={convertForm.amount} onChange={(e) => setConvertForm({ ...convertForm, amount: e.target.value })} placeholder="Performance guarantee amount" style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Cash margin %"><input type="number" min="0" max="100" value={convertForm.cash_margin_pct} onChange={(e) => setConvertForm({ ...convertForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Bank charges (PKR)"><input type="number" min="0" value={convertForm.bank_charges} onChange={(e) => setConvertForm({ ...convertForm, bank_charges: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Bank facility *">
-                          <select value={convertForm.facility_id} onChange={(e) => setConvertForm({ ...convertForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%", borderColor: !convertForm.facility_id ? "#fca5a5" : undefined }}>
-                            <option value="">— Select facility —</option>
-                            {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
-                          </select>
-                        </Field>
                       </div>
                       <Field label="1st bill (links 12-month expiry clock — search by customer or invoice ref)">
                         <BillPicker
