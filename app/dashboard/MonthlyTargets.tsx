@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle } from "../lib/SharedUI";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { canEditOperationsTargets, type UserCtx, type PermOverrides } from "../lib/permissions";
+
+const { NAVY, SLATE, HAIRLINE, TRACK, GREEN, AMBER, RED, CARD, CARD_ALT, INK_300 } = COLOURS;
 
 type Plant = { id: string; name: string; type: string; active: boolean };
 type MonthlyTarget = {
@@ -14,10 +16,6 @@ type MonthlyTarget = {
   target_31: number | null; target_36: number | null; target_45: number | null; target_meter: number | null;
   submitted_by: string | null; notes: string | null;
 };
-
-const NAVY = "var(--text-primary, #1e293b)";
-const SLATE = "var(--text-secondary, #64748b)";
-const BORDER = "var(--border-color, #e2e8f0)";
 
 function currentMonth() { return new Date().toISOString().slice(0, 7); }
 function formatMonthUK(m: string) { const [y, mo] = m.split("-"); return `${mo}/${y}`; }
@@ -137,89 +135,132 @@ export default function MonthlyTargets() {
 
   if (!loaded) return null;
 
+  const kickerStyle: React.CSSProperties = {
+    fontFamily: "var(--font-sans, Inter, sans-serif)",
+    fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em",
+    textTransform: "uppercase", color: SLATE, marginBottom: "6px",
+  };
+
   return (
     <div>
-      <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "10px", flexWrap: "wrap" }}>
+      {/* Month picker + set target button */}
+      <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" }}>
         <input type="month" value={targetMonth} onChange={(e) => setTargetMonth(e.target.value)}
-          style={{ padding: "5px 8px", border: `1px solid ${BORDER}`, borderRadius: "5px", fontSize: "15px" }} />
+          style={{ padding: "7px 10px", border: `1px solid ${HAIRLINE}`, borderRadius: RADII.SM, fontSize: "13px", color: NAVY, background: CARD, fontFamily: "var(--font-sans, Inter, sans-serif)" }} />
         {canEdit && (
           <button onClick={() => setShowForm(!showForm)} style={{
-            backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px",
-            padding: "5px 12px", fontSize: "15px", fontWeight: 700, cursor: "pointer",
+            background: NAVY, color: "#fff", border: "none", borderRadius: RADII.PILL,
+            padding: "7px 16px", fontSize: "12px", fontWeight: 500, cursor: "pointer",
+            fontFamily: "var(--font-sans, Inter, sans-serif)",
           }}>{showForm ? "Cancel" : "+ Set Target"}</button>
         )}
       </div>
 
-      {message && <div style={{ fontSize: "15px", fontWeight: 600, color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, marginBottom: "8px" }}>{message}</div>}
+      {message && (
+        <div style={{
+          fontSize: "13px", fontWeight: 600, marginBottom: "12px",
+          color: message.startsWith("Error") ? RED : GREEN,
+        }}>{message}</div>
+      )}
 
       {showForm && canEdit && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "10px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+        <div style={{ ...cardStyle, background: CARD_ALT, padding: "16px 20px", marginBottom: "16px" }}>
           <form onSubmit={handleSubmit}>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "6px" }}>
-              <div><label style={lbl}>Type</label><select style={inp} value={targetType} onChange={(e) => setTargetType(e.target.value as "production" | "dispatch")}><option value="production">Production</option><option value="dispatch">Dispatch</option></select></div>
-              <div><label style={lbl}>Plant</label><select style={inp} value={plantId} onChange={(e) => setPlantId(e.target.value)} required><option value="">Select</option>{plants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px" }}>
+              <div>
+                <label style={kickerStyle as React.CSSProperties}>Type</label>
+                <select style={inp} value={targetType} onChange={(e) => setTargetType(e.target.value as "production" | "dispatch")}>
+                  <option value="production">Production</option>
+                  <option value="dispatch">Dispatch</option>
+                </select>
+              </div>
+              <div>
+                <label style={kickerStyle as React.CSSProperties}>Plant</label>
+                <select style={inp} value={plantId} onChange={(e) => setPlantId(e.target.value)} required>
+                  <option value="">Select plant</option>
+                  {plants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
               {!isMeter ? (
                 <>
-                  <div><label style={lbl}>31ft</label><input type="number" min="0" style={inp} value={target31} onChange={(e) => setTarget31(e.target.value)} placeholder="0" /></div>
-                  <div><label style={lbl}>36ft</label><input type="number" min="0" style={inp} value={target36} onChange={(e) => setTarget36(e.target.value)} placeholder="0" /></div>
-                  <div><label style={lbl}>45ft</label><input type="number" min="0" style={inp} value={target45} onChange={(e) => setTarget45(e.target.value)} placeholder="0" /></div>
+                  <div><label style={kickerStyle as React.CSSProperties}>31ft</label><input type="number" min="0" style={inp} value={target31} onChange={(e) => setTarget31(e.target.value)} placeholder="0" /></div>
+                  <div><label style={kickerStyle as React.CSSProperties}>36ft</label><input type="number" min="0" style={inp} value={target36} onChange={(e) => setTarget36(e.target.value)} placeholder="0" /></div>
+                  <div><label style={kickerStyle as React.CSSProperties}>45ft</label><input type="number" min="0" style={inp} value={target45} onChange={(e) => setTarget45(e.target.value)} placeholder="0" /></div>
                 </>
               ) : (
-                <div><label style={lbl}>Meters</label><input type="number" min="0" style={inp} value={targetMeter} onChange={(e) => setTargetMeter(e.target.value)} placeholder="0" /></div>
+                <div><label style={kickerStyle as React.CSSProperties}>Metres</label><input type="number" min="0" style={inp} value={targetMeter} onChange={(e) => setTargetMeter(e.target.value)} placeholder="0" /></div>
               )}
             </div>
-            {existingTarget && <div style={{ fontSize: "14px", color: "#d97706", marginTop: "4px" }}>Existing target found — saving will update it.</div>}
-            <button type="submit" disabled={saving} style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "5px", padding: "6px 14px", fontSize: "15px", fontWeight: 700, cursor: "pointer", marginTop: "6px" }}>{saving ? "Saving..." : existingTarget ? "Update" : "Save"}</button>
+            {existingTarget && (
+              <div style={{ fontSize: "12px", color: AMBER, marginTop: "8px", fontWeight: 500 }}>
+                Existing target found — saving will update it.
+              </div>
+            )}
+            <button type="submit" disabled={saving} style={{
+              background: NAVY, color: "#fff", border: "none", borderRadius: RADII.PILL,
+              padding: "8px 20px", fontSize: "12px", fontWeight: 500, cursor: "pointer",
+              marginTop: "12px", fontFamily: "var(--font-sans, Inter, sans-serif)",
+            }}>
+              {saving ? "Saving…" : existingTarget ? "Update" : "Save"}
+            </button>
           </form>
         </div>
       )}
 
       {chartData.length > 0 && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "10px" }}>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>Target vs Actual — {formatMonthUK(targetMonth)}</div>
+        <div style={{ ...cardStyle, padding: "20px 24px", marginBottom: "16px" }}>
+          <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "15px", fontWeight: 600, color: NAVY, marginBottom: "14px" }}>
+            Target vs Actual — {formatMonthUK(targetMonth)}
+          </div>
           <ResponsiveContainer width="100%" height={Math.max(140, chartData.length * 40)}>
             <BarChart data={chartData} layout="vertical" margin={{ left: 5, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10, fill: SLATE }} />
-              <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: NAVY, fontWeight: 600 }} width={60} />
+              <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: SLATE, fontFamily: "var(--font-mono)" }} />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: NAVY, fontWeight: 500 }} width={60} />
               <Tooltip formatter={(value) => Number(value).toLocaleString()} />
               <Legend iconType="square" wrapperStyle={{ fontSize: "11px" }} />
-              <Bar dataKey="Prod Target" fill="#cbd5e1" name="Prod Target" />
-              <Bar dataKey="Prod Actual" fill="#16a34a" name="Prod Actual" />
-              <Bar dataKey="Disp Target" fill="#e2e8f0" name="Disp Target" />
-              <Bar dataKey="Disp Actual" fill="#059669" name="Disp Actual" />
+              <Bar dataKey="Prod Target" fill={INK_300}  name="Prod Target" />
+              <Bar dataKey="Prod Actual" fill={GREEN}    name="Prod Actual" />
+              <Bar dataKey="Disp Target" fill={HAIRLINE} name="Disp Target" />
+              <Bar dataKey="Disp Actual" fill={COLOURS.TEAL} name="Disp Actual" />
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
       {progressData.length > 0 ? (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
           {progressData.map((d) => {
-            const prodColor = d.prodPct >= 95 ? COLOURS.GREEN : d.prodPct >= 85 ? "#d97706" : COLOURS.RED;
-            const dispColor = d.dispPct >= 95 ? COLOURS.GREEN : d.dispPct >= 85 ? "#d97706" : COLOURS.RED;
+            const prodColor = d.prodPct >= 95 ? GREEN : d.prodPct >= 85 ? AMBER : RED;
+            const dispColor = d.dispPct >= 95 ? GREEN : d.dispPct >= 85 ? AMBER : RED;
             return (
-              <div key={d.plant.id} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "10px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>{d.plant.name}</div>
+              <div key={d.plant.id} style={{ ...cardStyle, padding: "16px 20px" }}>
+                <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "12px" }}>
+                  {d.plant.name}
+                </div>
                 {d.prodTarget > 0 && (
-                  <div style={{ marginBottom: "4px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "2px" }}>
-                      <span style={{ color: SLATE }}>Production</span>
-                      <span style={{ fontWeight: 700, color: prodColor }}>{d.prodActual.toLocaleString()} / {d.prodTarget.toLocaleString()} ({d.prodPct}%)</span>
+                  <div style={{ marginBottom: "10px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                      <span style={kickerStyle as React.CSSProperties}>Production</span>
+                      <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "11px", fontWeight: 600, color: prodColor }}>
+                        {d.prodActual.toLocaleString()} / {d.prodTarget.toLocaleString()} ({d.prodPct}%)
+                      </span>
                     </div>
-                    <div style={{ height: "8px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "4px" }}>
-                      <div style={{ width: `${Math.min(d.prodPct, 100)}%`, height: "100%", backgroundColor: prodColor, borderRadius: "4px" }} />
+                    <div style={{ height: "6px", background: TRACK, borderRadius: "999px", overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(d.prodPct, 100)}%`, height: "100%", background: prodColor, borderRadius: "999px", transition: "width 0.3s" }} />
                     </div>
                   </div>
                 )}
                 {d.dispTarget > 0 && (
                   <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "2px" }}>
-                      <span style={{ color: SLATE }}>Dispatch</span>
-                      <span style={{ fontWeight: 700, color: dispColor }}>{d.dispActual.toLocaleString()} / {d.dispTarget.toLocaleString()} ({d.dispPct}%)</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                      <span style={kickerStyle as React.CSSProperties}>Dispatch</span>
+                      <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "11px", fontWeight: 600, color: dispColor }}>
+                        {d.dispActual.toLocaleString()} / {d.dispTarget.toLocaleString()} ({d.dispPct}%)
+                      </span>
                     </div>
-                    <div style={{ height: "8px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "4px" }}>
-                      <div style={{ width: `${Math.min(d.dispPct, 100)}%`, height: "100%", backgroundColor: dispColor, borderRadius: "4px" }} />
+                    <div style={{ height: "6px", background: TRACK, borderRadius: "999px", overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(d.dispPct, 100)}%`, height: "100%", background: dispColor, borderRadius: "999px", transition: "width 0.3s" }} />
                     </div>
                   </div>
                 )}
@@ -228,11 +269,15 @@ export default function MonthlyTargets() {
           })}
         </div>
       ) : (
-        <div style={{ fontSize: "15px", color: SLATE }}>No targets set for {formatMonthUK(targetMonth)}.</div>
+        <div style={{ fontSize: "13px", color: SLATE }}>No targets set for {formatMonthUK(targetMonth)}.</div>
       )}
     </div>
   );
 }
 
-const inp: React.CSSProperties = { display: "block", width: "100%", padding: "5px 8px", marginTop: "2px", border: `1px solid ${BORDER}`, borderRadius: "5px", fontSize: "15px", boxSizing: "border-box" };
-const lbl: React.CSSProperties = { display: "block", fontSize: "13px", fontWeight: 600, color: SLATE };
+const inp: React.CSSProperties = {
+  display: "block", width: "100%", padding: "7px 10px", marginTop: "4px",
+  border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
+  fontSize: "13px", boxSizing: "border-box", background: COLOURS.CARD,
+  color: COLOURS.NAVY, fontFamily: "var(--font-sans, Inter, sans-serif)",
+};
