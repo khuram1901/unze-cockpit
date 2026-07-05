@@ -178,7 +178,7 @@ export default function SidebarLayout({
   const isPAUser = userCtx ? (userCtx.role === "Executive" || (userCtx.email || "").toLowerCase() === "pa.ceo@unze.co.uk") : false;
 
   const alwaysItems: PageCard[] = [
-    { permKey: "_home", title: "Dashboard", subtitle: "", href: isPAUser ? "/pa" : "/home", icon: "🏠", group: "_top" },
+    { permKey: "_home", title: "Executive Dashboard", subtitle: "", href: isPAUser ? "/pa" : "/home", icon: "🏠", group: "_top" },
   ];
 
   const sidebarW = isMobile ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;

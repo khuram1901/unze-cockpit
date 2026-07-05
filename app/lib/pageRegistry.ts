@@ -39,7 +39,6 @@ export const GROUP_COLOURS: Record<string, string> = {
 
 export const PAGE_REGISTRY: PageCard[] = [
   // ── Command Centre ──
-  { permKey: "can_view_executive_dashboard", title: "Executive Dashboard", subtitle: "Full company overview — operations, finance, tasks", href: "/executive", icon: "🎯", group: "Command Centre", badgeKey: "executive" },
   { permKey: "can_view_pa_dashboard", title: "PA Dashboard", subtitle: "Tasks, notes, quick actions, delegations", href: "/pa", icon: "⚡", group: "Command Centre", badgeKey: "pa" },
   { permKey: "can_view_operations_dashboard", title: "Operations Dashboard", subtitle: "Production, dispatch, stock, machines", href: "/dashboard", icon: "🏗️", group: "Operations", badgeKey: "operations" },
 
