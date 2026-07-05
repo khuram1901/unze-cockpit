@@ -4,6 +4,18 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-05 — Remove legacy /executive page
+
+- `app/executive/page.tsx` deleted — its functionality was fully merged into `app/home/page.tsx` in earlier sessions.
+- `app/executive/EscalationTrafficLights.tsx` moved to `app/lib/EscalationTrafficLights.tsx` (git rename, no history loss). Updated to use COLOURS tokens and Genspark type scale.
+- `next.config.ts`: permanent 308 redirect added — `/executive` → `/home`. Bookmarks, old email links, and muscle memory all continue to work.
+- `app/api/notifications/digest/route.ts`: email link for admins updated `/executive` → `/home`.
+- `app/api/reports/weekly/route.ts`: weekly report link updated `/executive` → `/home`.
+- `app/home/page.tsx`: import path updated to `app/lib/EscalationTrafficLights`.
+- BLUEPRINT.md updated: folder removed from file tree, route entry updated, notification flow updated.
+
+---
+
 ## 2026-07-05 — Pass 3: font fix, colour sweep, number scale
 
 ### Font fix (`app/layout.tsx`)

@@ -74,9 +74,6 @@ app/
 ├── my-dashboard/page.tsx             Personal task summary for logged-in user
 ├── profile/page.tsx                  User profile — name, email, password change, notification prefs
 │
-├── executive/
-│   ├── page.tsx                      Executive dashboard (Admin/CEO only) — cross-company KPIs
-│   └── EscalationTrafficLights.tsx   Production/Dispatch/Breakage escalation count cards
 │
 ├── pa/page.tsx                       PA Dashboard — tasks, notes, calendar events, delegations
 │
@@ -1120,7 +1117,7 @@ Returns confirmed + unconfirmed dividends joined with holdings (total_qty, estim
 #### `get_plant_kpis(as_of_date date, month_start date, month_end date)` — migration 055
 Returns one row per active plant with opening balances, cumulative totals since cutoff, on-date totals, MTD totals, and entered_on_date boolean.
 - Replaces 7 raw table fetches: opening_balances, broken_opening_balances, production_entries (90d), dispatch_entries (90d), breakage_entries (90d), scrap_processed_entries (90d).
-- **Used by:** `app/home/page.tsx`, `app/executive/page.tsx`, `app/dashboard/DashboardView.tsx`.
+- **Used by:** `app/home/page.tsx`, `app/dashboard/DashboardView.tsx`.
 - Monthly production/dispatch/breakage arrays are still fetched separately for the daily ops chart (needs per-day breakdown) and quarterly escalation checks (needs per-quarter cumulative sums).
 
 #### `get_receivable_rag_by_customer()` — migration 056
@@ -1394,10 +1391,8 @@ The Bank Facilities page has both UI-level permission gates AND server-side role
 - **Access:** All authenticated users
 - Change display name, password, notification preferences (email/WhatsApp toggle).
 
-#### `/executive`
-- **File:** `app/executive/page.tsx` + `EscalationTrafficLights.tsx`
-- **Access:** Admin/CEO ONLY (`useRequireCapability("executive")`)
-- **What it does:** Cross-company executive overview — production/dispatch/breakage escalations shown as traffic light count cards (Production, Dispatch, Breakage metrics). Click a card to see which plants have issues.
+#### `/executive` → redirects permanently to `/home` (308)
+- **Removed 2026-07-05.** Functionality fully merged into `/home` (Executive Dashboard). `EscalationTrafficLights.tsx` moved to `app/lib/`. Redirect added in `next.config.ts` so bookmarks and email links still work.
 
 #### `/pa`
 - **File:** `app/pa/page.tsx`
@@ -1724,7 +1719,7 @@ Requires: `app_settings` table (migration 052) + Google reconnected with Drive s
 1. Cron jobs run daily/weekly reports
 2. Metrics checked against thresholds (production, dispatch, breakage, cash)
 3. Exceptions surfaced on `/exceptions` page and in manager briefings on home page
-4. EscalationTrafficLights component on `/executive` shows count by metric type
+4. EscalationTrafficLights component (now in `app/lib/`) shows count by metric type on the Executive Dashboard (`/home`)
 
 ### Notification Flow
 1. Task creation → `/api/notifications/send` → email to assignee
