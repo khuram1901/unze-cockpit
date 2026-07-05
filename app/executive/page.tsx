@@ -973,9 +973,6 @@ export default function ExecutiveDashboardPage() {
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "14px 18px", maxWidth: "100%", minWidth: 0 }}>
-        <div style={{ fontSize: "11px", color: "#fff", backgroundColor: "#1e293b", padding: "4px 8px", borderRadius: "4px", marginBottom: "8px", fontFamily: "monospace" }}>
-          DEBUG — showFinance: {String(showFinance)} | facilitySynopsis: {facilitySynopsis.length} | loading: {String(loading)}
-        </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
           <div>
             <p style={{ color: SLATE, fontSize: "15px", marginTop: "2px", maxWidth: "640px" }}>

@@ -49,7 +49,7 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_receivables", title: "Receivables", subtitle: "Track bills through collection stages", href: "/receivables", icon: "💳", group: "Finance", badgeKey: "receivables" },
   { permKey: "can_view_investments", title: "Investments", subtitle: "PSX stock portfolio tracker", href: "/investments", icon: "📈", group: "Finance" },
   { permKey: "can_edit_finance", title: "Opening Balances", subtitle: "Set starting balances for companies", href: "/opening-balances", icon: "🏧", group: "Finance" },
-  { permKey: "can_view_guarantees", title: "Guarantees & Pay Orders", subtitle: "Track bid/performance guarantees, facility utilisation", href: "/finance/guarantees", icon: "🔐", group: "Finance" },
+  { permKey: "can_view_guarantees", title: "Bank Facilities", subtitle: "Guarantees, pay orders &amp; bank facility utilisation", href: "/finance/guarantees", icon: "🔐", group: "Finance" },
 
   // ── Production / Operations ──
   { permKey: "can_access_daily_entry", title: "Daily Entry", subtitle: "Log daily production and dispatch", href: "/production", icon: "📊", group: "Operations" },

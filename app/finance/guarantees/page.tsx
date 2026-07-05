@@ -75,6 +75,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 // ─── Facility form (shared between empty-state and existing-state) ────────────
 
+const BANKS = [
+  "HBL", "Faysal Bank", "AlFalah Bank", "Allied Bank", "BOP", "DIB", "Other",
+];
+
 const FACILITY_TYPES = [
   "Guarantee Limit", "Overdraft", "Letter of Credit (LC)",
   "Car Finance", "Running Finance", "Term Finance", "Pay Order Limit", "Other",
@@ -91,8 +95,10 @@ function FacilityForm({ facilityForm, setFacilityForm, saveFacility, savingFacil
     <>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
         <Field label="Bank name *">
-          <input value={facilityForm.bank_name} onChange={(e) => setFacilityForm({ ...facilityForm, bank_name: e.target.value })}
-            placeholder="e.g. HBL, Faysal Bank, MCB" style={{ ...inputStyle, width: "100%" }} />
+          <select value={facilityForm.bank_name} onChange={(e) => setFacilityForm({ ...facilityForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+            <option value="">— Select bank —</option>
+            {BANKS.map((b) => <option key={b}>{b}</option>)}
+          </select>
         </Field>
         <Field label="Facility name *">
           <input value={facilityForm.facility_name} onChange={(e) => setFacilityForm({ ...facilityForm, facility_name: e.target.value })}
@@ -600,14 +606,10 @@ export default function GuaranteesPage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <PageHeader />
 
-        {/* Header */}
-        <div style={{ fontSize: "11px", color: "#fff", backgroundColor: "#1e293b", padding: "4px 8px", borderRadius: "4px", marginBottom: "8px", fontFamily: "monospace" }}>
-          DEBUG — showFinancials: {String(showFinancials)} | banks: {banks.length} | facilities: {facilities.length} | loading: {String(loading)}
-        </div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "20px" }}>
           <div>
-            <h1 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary,#1e293b)", margin: "0 0 4px" }}>Guarantees & Pay Orders</h1>
-            <p style={{ fontSize: "14px", color: COLOURS.SLATE, margin: 0 }}>Unze Trading — bid guarantees, pay orders, performance guarantees</p>
+            <h1 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary,#1e293b)", margin: "0 0 4px" }}>Bank Facilities</h1>
+            <p style={{ fontSize: "14px", color: COLOURS.SLATE, margin: 0 }}>Unze Trading — bank facilities, bid guarantees, pay orders &amp; performance guarantees</p>
           </div>
           {showFinancials && (
             <button onClick={() => { setShowAddForm((v) => !v); setEditId(null); setConvertId(null); setStatusActionId(null); }}
@@ -674,7 +676,12 @@ export default function GuaranteesPage() {
               <div style={{ border: "2px solid #d97706", borderRadius: "10px", padding: "16px", backgroundColor: "#fffbeb", marginBottom: "12px" }}>
                 <div style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", marginBottom: "10px" }}>Edit Facility</div>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-                  <Field label="Bank name *"><input value={editFacilityForm.bank_name} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                  <Field label="Bank name *">
+                    <select value={editFacilityForm.bank_name} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+                      <option value="">— Select bank —</option>
+                      {BANKS.map((b) => <option key={b}>{b}</option>)}
+                    </select>
+                  </Field>
                   <Field label="Facility name *"><input value={editFacilityForm.facility_name} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, facility_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                   <Field label="Facility type">
                     <select value={editFacilityForm.facility_type} onChange={(e) => setEditFacilityForm({ ...editFacilityForm, facility_type: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
@@ -733,7 +740,10 @@ export default function GuaranteesPage() {
                 <input value={addForm.guarantee_number} onChange={(e) => setAddForm({ ...addForm, guarantee_number: e.target.value })} placeholder="Bank-issued reference" style={{ ...inputStyle, width: "100%" }} />
               </Field>
               <Field label="Bank *">
-                <input value={addForm.bank_name} onChange={(e) => setAddForm({ ...addForm, bank_name: e.target.value })} placeholder="e.g. HBL, MCB" style={{ ...inputStyle, width: "100%" }} />
+                <select value={addForm.bank_name} onChange={(e) => setAddForm({ ...addForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+                  <option value="">— Select bank —</option>
+                  {BANKS.map((b) => <option key={b}>{b}</option>)}
+                </select>
               </Field>
               <Field label="Bank facility (optional)">
                 <select value={addForm.facility_id} onChange={(e) => setAddForm({ ...addForm, facility_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
@@ -910,7 +920,12 @@ export default function GuaranteesPage() {
                         </Field>
                         <Field label="Customer *"><input value={editForm.customer_name} onChange={(e) => setEditForm({ ...editForm, customer_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Guarantee number *"><input value={editForm.guarantee_number} onChange={(e) => setEditForm({ ...editForm, guarantee_number: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Bank *"><input value={editForm.bank_name} onChange={(e) => setEditForm({ ...editForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Bank *">
+                          <select value={editForm.bank_name} onChange={(e) => setEditForm({ ...editForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+                            <option value="">— Select bank —</option>
+                            {BANKS.map((b) => <option key={b}>{b}</option>)}
+                          </select>
+                        </Field>
                         <Field label="Issue date"><DateInput value={editForm.issue_date} onChange={(e) => setEditForm({ ...editForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Expiry date"><DateInput value={editForm.expiry_date} onChange={(e) => setEditForm({ ...editForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Amount (PKR)"><input type="number" min="0" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
@@ -956,7 +971,12 @@ export default function GuaranteesPage() {
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
                         <Field label="New guarantee number *"><input value={convertForm.guarantee_number} onChange={(e) => setConvertForm({ ...convertForm, guarantee_number: e.target.value })} placeholder="New PG number from bank" style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Bank *"><input value={convertForm.bank_name} onChange={(e) => setConvertForm({ ...convertForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Bank *">
+                          <select value={convertForm.bank_name} onChange={(e) => setConvertForm({ ...convertForm, bank_name: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+                            <option value="">— Select bank —</option>
+                            {BANKS.map((b) => <option key={b}>{b}</option>)}
+                          </select>
+                        </Field>
                         <Field label="Issue date *"><DateInput value={convertForm.issue_date} onChange={(e) => setConvertForm({ ...convertForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Expiry date"><DateInput value={convertForm.expiry_date} onChange={(e) => setConvertForm({ ...convertForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Amount (PKR) *"><input type="number" min="0" value={convertForm.amount} onChange={(e) => setConvertForm({ ...convertForm, amount: e.target.value })} placeholder="Performance guarantee amount" style={{ ...inputStyle, width: "100%" }} /></Field>
