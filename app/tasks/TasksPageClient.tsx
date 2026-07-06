@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { COLOURS, SHADOWS, PageHeader } from "../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, PageHeader } from "../lib/SharedUI";
 import { useUserCtx } from "../lib/useUserCtx";
 import {
   canCreateAssignments as checkCanCreate,
@@ -28,7 +28,7 @@ export default function TasksPageClient() {
         <PageHeader />
         {canCreate && (
           <button onClick={() => setShowForm(!showForm)} style={{
-            backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
+            backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: "50%",
             width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
             boxShadow: SHADOWS.MODAL,
@@ -37,7 +37,7 @@ export default function TasksPageClient() {
       </div>
 
       {canCreate && showForm && (
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", marginBottom: "14px", overflow: "hidden" }}>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, marginBottom: "14px", overflow: "hidden" }}>
           <NewTaskForm />
         </div>
       )}

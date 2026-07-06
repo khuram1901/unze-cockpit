@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
-import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
-import { useToast } from "../lib/SharedUI";
+import { useToast, COLOURS, RADII } from "../lib/SharedUI";
 import DateInput from "../lib/DateInput";
 
 type Task = {
@@ -52,7 +51,6 @@ export default function TaskStatus({
   const [correctiveAction, setCorrectiveAction] = useState(task.corrective_action || "");
   const [recoveryDate, setRecoveryDate] = useState(task.recovery_date || "");
 
-  // Due-date editing
   const [dueDate, setDueDate] = useState(task.due_date || "");
   const [savingDate, setSavingDate] = useState(false);
   const [dateMessage, setDateMessage] = useState("");
@@ -81,10 +79,7 @@ export default function TaskStatus({
 
     const { error } = await supabase
       .from("tasks")
-      .update({
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq("id", task.id);
 
     setSaving(false);
@@ -107,10 +102,7 @@ export default function TaskStatus({
 
     const { error } = await supabase
       .from("tasks")
-      .update({
-        due_date: dueDate || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ due_date: dueDate || null, updated_at: new Date().toISOString() })
       .eq("id", task.id);
 
     setSavingDate(false);
@@ -149,7 +141,7 @@ export default function TaskStatus({
         recovery_date: recoveryDate || null,
         reply_by: userData.user?.email || "unknown",
         reply_at: new Date().toISOString(),
-        status: "Submitted", // ball goes to the reviewer, not "In Progress"
+        status: "Submitted",
         updated_at: new Date().toISOString(),
       })
       .eq("id", task.id);
@@ -195,30 +187,42 @@ export default function TaskStatus({
     onChanged();
   }
 
-  const controlStyle = {
-    padding: "6px",
-    border: "1px solid var(--border-color, #e2e8f0)",
-    borderRadius: "6px",
-    fontSize: "16px",
+  const controlStyle: React.CSSProperties = {
+    padding: "6px 8px",
+    border: `1px solid ${COLOURS.HAIRLINE}`,
+    borderRadius: RADII.SM,
+    fontSize: "13px",
+    color: COLOURS.NAVY,
+    backgroundColor: COLOURS.CARD,
   };
 
-  const fieldStyle = {
+  const fieldStyle: React.CSSProperties = {
     width: "100%",
     maxWidth: "520px",
-    padding: "8px",
-    border: "1px solid var(--border-color, #e2e8f0)",
-    borderRadius: "6px",
-    fontSize: "16px",
+    padding: "8px 10px",
+    border: `1px solid ${COLOURS.HAIRLINE}`,
+    borderRadius: RADII.SM,
+    fontSize: "13px",
+    color: COLOURS.NAVY,
     display: "block",
     marginTop: "4px",
     marginBottom: "10px",
+    boxSizing: "border-box",
+  };
+
+  const kickerStyle: React.CSSProperties = {
+    fontSize: "10.5px",
+    fontWeight: 500,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: COLOURS.SLATE,
   };
 
   return (
-    <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--border-color, #e2e8f0)" }}>
+    <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
       {toast.element}
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-        <span style={{ fontSize: "16px", fontWeight: "bold" }}>Update status:</span>
+        <span style={kickerStyle}>Update status</span>
 
         <select
           style={controlStyle}
@@ -231,22 +235,14 @@ export default function TaskStatus({
           ))}
         </select>
 
-        {savedMessage && <span style={{ color: "green", fontSize: "16px" }}>{savedMessage}</span>}
-        {saving && <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "16px" }}>Saving…</span>}
+        {savedMessage && <span style={{ color: COLOURS.GREEN, fontSize: "13px", fontWeight: 600 }}>{savedMessage}</span>}
+        {saving && <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Saving…</span>}
       </div>
 
-      {/* Due-date editor: Admin / Executive only */}
+      {/* Due-date editor */}
       {canEditDate && (
-        <div
-          style={{
-            marginTop: "12px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            flexWrap: "wrap",
-          }}
-        >
-          <span style={{ fontSize: "16px", fontWeight: "bold" }}>Due date:</span>
+        <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <span style={kickerStyle}>Due date</span>
           <DateInput
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
@@ -256,26 +252,27 @@ export default function TaskStatus({
             onClick={saveDueDate}
             disabled={savingDate}
             style={{
-              backgroundColor: "#2563eb",
+              backgroundColor: COLOURS.BLUE,
               color: "white",
               border: "none",
-              borderRadius: "6px",
+              borderRadius: RADII.SM,
               padding: "6px 14px",
-              fontSize: "16px",
+              fontSize: "13px",
               cursor: "pointer",
-              fontWeight: "bold",
+              fontWeight: 600,
+              opacity: savingDate ? 0.7 : 1,
             }}
           >
             Save date
           </button>
-          {dateMessage && <span style={{ color: "green", fontSize: "16px" }}>{dateMessage}</span>}
-          {savingDate && <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "16px" }}>Saving…</span>}
+          {dateMessage && <span style={{ color: COLOURS.GREEN, fontSize: "13px", fontWeight: 600 }}>{dateMessage}</span>}
+          {savingDate && <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Saving…</span>}
         </div>
       )}
 
       {/* Time tracking */}
       <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-        <span style={{ fontSize: "16px", fontWeight: "bold" }}>Time spent:</span>
+        <span style={kickerStyle}>Time spent</span>
         <input
           type="number"
           min="0"
@@ -291,9 +288,9 @@ export default function TaskStatus({
           }}
           style={{ ...controlStyle, width: "80px" }}
         />
-        <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>minutes</span>
+        <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>minutes</span>
         {(task.time_spent_minutes || 0) > 0 && (
-          <span style={{ fontSize: "15px", color: "var(--text-primary, #1e293b)", fontWeight: 600 }}>
+          <span style={{ fontSize: "13px", color: COLOURS.NAVY, fontWeight: 600 }}>
             ({Math.floor((task.time_spent_minutes || 0) / 60)}h {(task.time_spent_minutes || 0) % 60}m)
           </span>
         )}
@@ -306,11 +303,11 @@ export default function TaskStatus({
             onClick={() => setShowNoteInput(true)}
             style={{
               backgroundColor: "transparent",
-              color: "#2563eb",
-              border: "1px solid #2563eb",
-              borderRadius: "6px",
+              color: COLOURS.BLUE,
+              border: `1px solid ${COLOURS.BLUE}`,
+              borderRadius: RADII.SM,
               padding: "5px 14px",
-              fontSize: "15px",
+              fontSize: "13px",
               fontWeight: 600,
               cursor: "pointer",
             }}
@@ -325,8 +322,9 @@ export default function TaskStatus({
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               style={{
-                flex: 1, padding: "8px", border: "1px solid var(--border-color, #e2e8f0)",
-                borderRadius: "6px", fontSize: "16px", minHeight: "60px", resize: "vertical",
+                flex: 1, padding: "8px 10px", border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: RADII.SM, fontSize: "13px", minHeight: "60px", resize: "vertical",
+                color: COLOURS.NAVY,
               }}
             />
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -334,8 +332,8 @@ export default function TaskStatus({
                 onClick={saveNote}
                 disabled={savingNote || !noteText.trim()}
                 style={{
-                  backgroundColor: "#16a34a", color: "white", border: "none",
-                  borderRadius: "6px", padding: "6px 12px", fontSize: "15px",
+                  backgroundColor: COLOURS.GREEN, color: "white", border: "none",
+                  borderRadius: RADII.SM, padding: "6px 12px", fontSize: "13px",
                   fontWeight: 700, cursor: savingNote || !noteText.trim() ? "not-allowed" : "pointer",
                   opacity: savingNote || !noteText.trim() ? 0.5 : 1,
                 }}
@@ -345,8 +343,8 @@ export default function TaskStatus({
               <button
                 onClick={() => { setShowNoteInput(false); setNoteText(""); }}
                 style={{
-                  backgroundColor: "transparent", color: "var(--text-secondary, #64748b)", border: "none",
-                  fontSize: "14px", cursor: "pointer", padding: "4px",
+                  backgroundColor: "transparent", color: COLOURS.SLATE, border: "none",
+                  fontSize: "13px", cursor: "pointer", padding: "4px",
                 }}
               >
                 Cancel
@@ -359,7 +357,7 @@ export default function TaskStatus({
       {/* Reassign: Admin / Executive only */}
       {canEditDate && (
         <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "16px", fontWeight: "bold" }}>Reassign to:</span>
+          <span style={kickerStyle}>Reassign to</span>
           <select
             style={controlStyle}
             defaultValue=""
@@ -382,11 +380,11 @@ export default function TaskStatus({
         </div>
       )}
 
-      {/* The assignee fills in their explanation while status is Waiting Reply */}
+      {/* Assignee explanation form — status: Waiting Reply */}
       {task.reply_required && status === "Waiting Reply" && (
         <div style={{ marginTop: "12px" }}>
-          <label style={{ fontSize: "16px", fontWeight: "bold" }}>
-            Explanation
+          <label>
+            <span style={kickerStyle}>Explanation</span>
             <textarea
               placeholder="Explain what happened..."
               value={replyText}
@@ -395,8 +393,8 @@ export default function TaskStatus({
             />
           </label>
 
-          <label style={{ fontSize: "16px", fontWeight: "bold" }}>
-            Corrective Action
+          <label>
+            <span style={kickerStyle}>Corrective Action</span>
             <textarea
               placeholder="What action has been taken or will be taken?"
               value={correctiveAction}
@@ -405,8 +403,8 @@ export default function TaskStatus({
             />
           </label>
 
-          <label style={{ fontSize: "16px", fontWeight: "bold" }}>
-            Expected Recovery Date
+          <label>
+            <span style={kickerStyle}>Expected Recovery Date</span>
             <DateInput
               value={recoveryDate}
               onChange={(e) => setRecoveryDate(e.target.value)}
@@ -419,14 +417,15 @@ export default function TaskStatus({
             disabled={saving}
             style={{
               marginTop: "8px",
-              backgroundColor: "#16a34a",
+              backgroundColor: COLOURS.GREEN,
               color: "white",
               border: "none",
-              borderRadius: "6px",
-              padding: "8px 16px",
-              fontSize: "16px",
+              borderRadius: RADII.SM,
+              padding: "8px 18px",
+              fontSize: "13px",
               cursor: "pointer",
-              fontWeight: "bold",
+              fontWeight: 700,
+              opacity: saving ? 0.7 : 1,
             }}
           >
             Submit Explanation
@@ -434,38 +433,40 @@ export default function TaskStatus({
         </div>
       )}
 
-      {/* Reviewer (Admin/Executive) closes or reopens a Submitted task */}
+      {/* Reviewer closes or reopens a Submitted task */}
       {isReviewer && status === "Submitted" && (
         <div style={{ marginTop: "12px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
             onClick={() => saveStatus("Completed")}
             disabled={saving}
             style={{
-              backgroundColor: "#16a34a",
+              backgroundColor: COLOURS.GREEN,
               color: "white",
               border: "none",
-              borderRadius: "6px",
-              padding: "8px 16px",
-              fontSize: "16px",
+              borderRadius: RADII.SM,
+              padding: "8px 18px",
+              fontSize: "13px",
               cursor: "pointer",
-              fontWeight: "bold",
+              fontWeight: 700,
+              opacity: saving ? 0.7 : 1,
             }}
           >
-            Accept & Close
+            Accept &amp; Close
           </button>
 
           <button
             onClick={() => saveStatus("Waiting Reply")}
             disabled={saving}
             style={{
-              backgroundColor: "var(--bg-card, #ffffff)",
-              color: "#dc2626",
-              border: "1px solid #dc2626",
-              borderRadius: "6px",
-              padding: "8px 16px",
-              fontSize: "16px",
+              backgroundColor: COLOURS.CARD,
+              color: COLOURS.RED,
+              border: `1px solid ${COLOURS.RED}`,
+              borderRadius: RADII.SM,
+              padding: "8px 18px",
+              fontSize: "13px",
               cursor: "pointer",
-              fontWeight: "bold",
+              fontWeight: 700,
+              opacity: saving ? 0.7 : 1,
             }}
           >
             Reopen (send back)

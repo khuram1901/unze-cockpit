@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, SHADOWS, PageHeader, SectionTitle, useConfirm, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, SHADOWS, PageHeader, SectionTitle, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 
 type Template = {
@@ -28,6 +28,36 @@ type Template = {
 type Member = { name: string; email: string | null; department: string | null; first_name: string | null; last_name: string | null };
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const STARTER_EXAMPLES = [
+  { icon: "📊", title: "Weekly Production Report", desc: "Submit weekly output vs target summary to management", freq: "Weekly · Monday", dept: "Operations" },
+  { icon: "💰", title: "Monthly Payroll Review", desc: "Review and approve payroll figures before processing", freq: "Monthly · Day 25", dept: "Finance" },
+  { icon: "🔒", title: "IT Security Check", desc: "Review access logs and update password rotation tracker", freq: "Weekly · Friday", dept: "IT" },
+  { icon: "📋", title: "Weekly Team Meeting Agenda", desc: "Prepare and circulate agenda 24 hours in advance", freq: "Weekly · Thursday", dept: "Admin" },
+];
+
+const inp: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  padding: "7px 10px",
+  marginTop: "4px",
+  border: `1px solid ${COLOURS.HAIRLINE}`,
+  borderRadius: RADII.SM,
+  fontSize: "14px",
+  color: COLOURS.NAVY,
+  backgroundColor: COLOURS.CARD,
+  boxSizing: "border-box",
+};
+
+const lbl: React.CSSProperties = {
+  display: "block",
+  fontSize: "10.5px",
+  fontWeight: 500,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: COLOURS.SLATE,
+  marginBottom: "4px",
+};
 
 export default function RecurringTasksPage() {
   const { checking } = useRequireCapability("recurring_tasks");
@@ -93,70 +123,106 @@ export default function RecurringTasksPage() {
     loadData();
   }
 
-  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return (
+    <AuthWrapper>
+      <main style={{ padding: "14px 18px" }}>
+        <p style={{ color: COLOURS.SLATE }}>Checking permissions...</p>
+      </main>
+    </AuthWrapper>
+  );
 
   return (
     <AuthWrapper>
-        {dlg.element}
-        <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-            <PageHeader />
-            <button onClick={() => setShowForm(!showForm)} style={{
-              backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
-              width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: SHADOWS.MODAL,
-            }} title="Add recurring task">{showForm ? "×" : "+"}</button>
+      {dlg.element}
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
+          <PageHeader />
+          <button onClick={() => setShowForm(!showForm)} style={{
+            backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: "50%",
+            width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: SHADOWS.MODAL,
+          }} title="Add recurring task">{showForm ? "×" : "+"}</button>
+        </div>
+
+        {/* ── Add form ── */}
+        {showForm && (
+          <div style={{ ...cardStyle, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, padding: "16px 20px", marginBottom: "14px" }}>
+            <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px", letterSpacing: "-0.01em" }}>New Recurring Task</div>
+            <form onSubmit={handleAdd}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: "8px 16px" }}>
+                <label style={lbl}>Task Description <input style={inp} value={desc} onChange={(e) => setDesc(e.target.value)} required placeholder="e.g. Submit weekly production report" /></label>
+                <label style={lbl}>Assign To <select style={inp} value={assignTo} onChange={(e) => setAssignTo(e.target.value)} required><option value="">Select</option>{members.map((m) => <option key={memberName(m)} value={memberName(m)}>{memberName(m)}</option>)}</select></label>
+                <label style={lbl}>Priority <select style={inp} value={priority} onChange={(e) => setPriority(e.target.value)}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></label>
+                <label style={lbl}>Frequency <select style={inp} value={frequency} onChange={(e) => setFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+                {frequency === "weekly" && <label style={lbl}>Day <select style={inp} value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>}
+                {frequency === "monthly" && <label style={lbl}>Day of Month <input type="number" min="1" max="28" style={inp} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} /></label>}
+                <label style={lbl}>Due after (days) <input type="number" min="1" style={inp} value={dueDays} onChange={(e) => setDueDays(e.target.value)} /></label>
+                <label style={lbl}>Department / Project <input style={inp} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Optional" /></label>
+              </div>
+              <button type="submit" disabled={saving} style={{
+                backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL,
+                padding: "8px 22px", fontSize: "13px", fontWeight: 600, cursor: "pointer", marginTop: "10px",
+                opacity: saving ? 0.7 : 1,
+              }}>{saving ? "Saving..." : "Create Template"}</button>
+            </form>
           </div>
+        )}
 
-          {showForm && (
-            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "10px" }}>New Recurring Task</div>
-              <form onSubmit={handleAdd}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: "8px" }}>
-                  <label style={lbl}>Task Description <input style={inp} value={desc} onChange={(e) => setDesc(e.target.value)} required placeholder="e.g. Submit weekly production report" /></label>
-                  <label style={lbl}>Assign To <select style={inp} value={assignTo} onChange={(e) => setAssignTo(e.target.value)} required><option value="">Select</option>{members.map((m) => <option key={memberName(m)} value={memberName(m)}>{memberName(m)}</option>)}</select></label>
-                  <label style={lbl}>Priority <select style={inp} value={priority} onChange={(e) => setPriority(e.target.value)}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></label>
-                  <label style={lbl}>Frequency <select style={inp} value={frequency} onChange={(e) => setFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
-                  {frequency === "weekly" && <label style={lbl}>Day <select style={inp} value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>}
-                  {frequency === "monthly" && <label style={lbl}>Day of Month <input type="number" min="1" max="28" style={inp} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} /></label>}
-                  <label style={lbl}>Due after (days) <input type="number" min="1" style={inp} value={dueDays} onChange={(e) => setDueDays(e.target.value)} /></label>
-                  <label style={lbl}>Department/Project <input style={inp} value={project} onChange={(e) => setProject(e.target.value)} placeholder="Optional" /></label>
-                </div>
-                <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving..." : "Create Template"}</button>
-              </form>
+        {/* ── List / empty state ── */}
+        {loading ? <SkeletonRows count={3} height="48px" /> : templates.length === 0 ? (
+          <>
+            <div style={{ ...cardStyle, padding: "24px", textAlign: "center", marginBottom: "16px" }}>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px" }}>No recurring tasks set up yet.</div>
+              <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Use the + button to create your first recurring task template. Here are some examples to get you started:</div>
             </div>
-          )}
 
-          {loading ? <SkeletonRows count={3} height="48px" /> : templates.length === 0 ? (
-            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)", textAlign: "center" }}>No recurring tasks set up yet.</div>
-          ) : (
-            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
-              {templates.map((t) => (
-                <div key={t.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--border-light, #f1f5f9)", opacity: t.active ? 1 : 0.5 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{t.description}</div>
-                      <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
-                        {t.assigned_to || "Unassigned"} · {t.frequency}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : t.frequency === "monthly" ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
-                        {t.last_created_at && ` · Last: ${t.last_created_at.slice(0, 10)}`}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-                      <button onClick={() => toggleActive(t.id, t.active)} style={{ backgroundColor: t.active ? "#d97706" : COLOURS.GREEN, color: "white", border: "none", borderRadius: "5px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
-                        {t.active ? "Pause" : "Resume"}
-                      </button>
-                      <button onClick={() => deleteTemplate(t.id)} style={{ backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, borderRadius: "5px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>Delete</button>
-                    </div>
+            <SectionTitle title="Example Templates" />
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginBottom: "20px" }}>
+              {STARTER_EXAMPLES.map((ex) => (
+                <div key={ex.title} style={{ ...cardStyle, padding: "16px 18px" }}>
+                  <div style={{ fontSize: "24px", marginBottom: "8px" }}>{ex.icon}</div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>{ex.title}</div>
+                  <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "8px", lineHeight: "1.4" }}>{ex.desc}</div>
+                  <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: COLOURS.NAVY, border: `1px solid ${COLOURS.HAIRLINE}` }}>{ex.freq}</span>
+                    <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>{ex.dept}</span>
                   </div>
                 </div>
               ))}
             </div>
-          )}
-        </main>
+          </>
+        ) : (
+          <div style={{ ...cardStyle, overflow: "hidden" }}>
+            {templates.map((t) => (
+              <div key={t.id} style={{ padding: "10px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, opacity: t.active ? 1 : 0.5 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                      {t.assigned_to || "Unassigned"} · {t.frequency}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : t.frequency === "monthly" ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
+                      {t.last_created_at && ` · Last: ${t.last_created_at.slice(0, 10)}`}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "5px", flexShrink: 0 }}>
+                    <button onClick={() => toggleActive(t.id, t.active)} style={{
+                      backgroundColor: t.active ? COLOURS.AMBER : COLOURS.GREEN,
+                      color: "white", border: "none", borderRadius: RADII.SM,
+                      padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                    }}>
+                      {t.active ? "Pause" : "Resume"}
+                    </button>
+                    <button onClick={() => deleteTemplate(t.id)} style={{
+                      backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`,
+                      borderRadius: RADII.SM, padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                    }}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
     </AuthWrapper>
   );
 }
-
-const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "3px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box" };
-const lbl: React.CSSProperties = { display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "4px" };

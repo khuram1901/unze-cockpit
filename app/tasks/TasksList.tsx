@@ -9,7 +9,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Cart
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
-import { statusColor, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, useConfirm, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, useConfirm, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
 import { canDeleteTask, canEditTask, isTaskProtected } from "../lib/permissions";
 
 type Task = {
@@ -39,11 +39,6 @@ type Task = {
   created_at: string | null;
   assigned_to_department: string | null;
 };
-
-const NAVY = "var(--text-primary, #1e293b)";
-const SLATE = "var(--text-secondary, #64748b)";
-const BORDER = "var(--border-color, #e2e8f0)";
-
 
 const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -89,7 +84,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(taskIdFromUrl);
   const [timeView, setTimeView] = useState<"department" | "weekly" | "monthly" | "quarterly" | "timeline">("department");
-  const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "person">("all");
+  const [filter, setFilter] = useState<"all" | "overdue" | "waiting">("all");
   const [bannerOpen, setBannerOpen] = useState(false);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
@@ -218,6 +213,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const people = Array.from(personMap.entries())
     .map(([name, d]) => ({ name, ...d }))
     .sort((a, b) => b.overdue - a.overdue || b.total - a.total);
+  void people; // used indirectly via personMap
 
   // ── Department grouping ──
   type DeptStats = { dept: string; tasks: Task[]; open: number; overdue: number; waiting: number; stuck: number; completed: number };
@@ -250,7 +246,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   if (filter === "overdue") filteredTasks = overdueTasks;
   else if (filter === "waiting") filteredTasks = waitingReply;
 
-  const weekGroupColor = (g: string) => g === "Overdue" ? "#dc2626" : g === "This Week" ? "#d97706" : g === "Next Week" ? "#2563eb" : SLATE;
+  const weekGroupColor = (g: string) =>
+    g === "Overdue" ? COLOURS.RED : g === "This Week" ? COLOURS.AMBER : g === "Next Week" ? COLOURS.BLUE : COLOURS.SLATE;
 
   function TaskRow({ task }: { task: Task }) {
     const isOpen = expandedTaskId === task.id;
@@ -258,52 +255,56 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     const overdue = isOverdue(task);
 
     return (
-      <div id={`task-${task.id}`} style={{ borderBottom: `1px solid ${BORDER}` }}>
-        <div onClick={() => setExpandedTaskId(isOpen ? null : task.id)}
-          style={{ padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", backgroundColor: overdue ? "#fef2f2" : isOpen ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)" }}>
+      <div id={`task-${task.id}`} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+        <div
+          onClick={() => setExpandedTaskId(isOpen ? null : task.id)}
+          style={{
+            padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between",
+            alignItems: "center", gap: "8px",
+            backgroundColor: overdue ? COLOURS.DANGER_SOFT : isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+          }}
+        >
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "16px", fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
-            <div style={{ fontSize: "14px", color: SLATE, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
+            <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
               <span>{task.assigned_to || "Unassigned"}</span>
               {task.assigned_to_department && timeView !== "department" && (
-                <span style={{ fontSize: "11px", fontWeight: 600, padding: "1px 6px", borderRadius: "6px", color: NAVY, backgroundColor: "#e2e8f0" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, padding: "1px 6px", borderRadius: RADII.XS, color: COLOURS.NAVY, backgroundColor: COLOURS.HAIRLINE }}>
                   {task.assigned_to_department}
                 </span>
               )}
               {task.due_date && (
-                <span style={{ color: overdue ? "#dc2626" : SLATE, fontWeight: overdue ? 700 : 400 }}>
-                  {formatDateUK(task.due_date)}{od > 0 && ` (${od}d late)`}
+                <span style={{ fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 600 : 400 }}>
+                  {formatDateUK(task.due_date)}{od > 0 && ` · ${od}d late`}
                 </span>
               )}
-              {task.priority && (
-                <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "6px", color: "white",
-                  backgroundColor: task.priority === "High" || task.priority === "Urgent" ? "#dc2626" : task.priority === "Medium" ? "#2563eb" : SLATE }}>
-                  {task.priority}
-                </span>
-              )}
-              <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 6px", borderRadius: "6px", color: "white", backgroundColor: statusColor(task.status) }}>
-                {task.status}
-              </span>
             </div>
           </div>
-          <span style={{ color: SLATE, fontSize: "15px", flexShrink: 0 }}>{isOpen ? "▼" : "▶"}</span>
+          <div style={{ display: "flex", gap: "5px", alignItems: "center", flexShrink: 0 }}>
+            {task.priority && <PriorityBadge priority={task.priority} />}
+            <StatusBadge status={task.status} />
+            <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>{isOpen ? "▼" : "▶"}</span>
+          </div>
         </div>
 
         {isOpen && (
-          <div style={{ padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderTop: `1px solid ${BORDER}` }}>
-            <div style={{ fontSize: "15px", color: SLATE, marginBottom: "6px" }}>
-              Type: <strong>{task.task_type || "Task"}</strong> · Assigned by: <strong>{task.assigned_by || "—"}</strong> · Date: {formatDateUK(task.assigned_date)} · Project: {task.project || "—"}
+          <div style={{ padding: "12px 16px", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
+            <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "6px" }}>
+              Type: <strong style={{ color: COLOURS.NAVY }}>{task.task_type || "Task"}</strong>
+              {" · "}Assigned by: <strong style={{ color: COLOURS.NAVY }}>{task.assigned_by || "—"}</strong>
+              {" · "}Date: {formatDateUK(task.assigned_date)}
+              {" · "}Project: {task.project || "—"}
               {task.meeting_id && (
-                <span> · <a href={`/my-minutes?meeting=${task.meeting_id}`} style={{ color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>View Minutes →</a></span>
+                <span> · <a href={`/my-minutes?meeting=${task.meeting_id}`} style={{ color: COLOURS.BLUE, fontWeight: 600, textDecoration: "none" }}>View Minutes →</a></span>
               )}
             </div>
-            {task.notes && <div style={{ fontSize: "15px", color: SLATE, marginBottom: "6px" }}>Notes: {task.notes}</div>}
+            {task.notes && <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "6px" }}>Notes: {task.notes}</div>}
             {task.reply_text && (
-              <div style={{ padding: "8px 10px", border: "1px solid #bbf7d0", backgroundColor: "#f0fdf4", borderRadius: "6px", color: "#166534", fontSize: "15px", marginBottom: "8px" }}>
+              <div style={{ padding: "8px 12px", border: `1px solid ${COLOURS.GREEN}`, backgroundColor: COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, color: COLOURS.GREEN, fontSize: "13px", marginBottom: "8px" }}>
                 <strong>Explanation:</strong> {task.reply_text}
                 {task.corrective_action && <div style={{ marginTop: "4px" }}><strong>Corrective action:</strong> {task.corrective_action}</div>}
                 {task.recovery_date && <div style={{ marginTop: "4px" }}><strong>Expected recovery:</strong> {formatDateUK(task.recovery_date)}</div>}
-                <div style={{ marginTop: "4px", fontSize: "14px" }}>By {task.reply_by || "unknown"} {task.reply_at ? `on ${formatDateUK(task.reply_at)}` : ""}</div>
+                <div style={{ marginTop: "4px", fontSize: "12px", color: COLOURS.SLATE }}>By {task.reply_by || "unknown"} {task.reply_at ? `on ${formatDateUK(task.reply_at)}` : ""}</div>
               </div>
             )}
             {(() => {
@@ -314,19 +315,20 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               return (
                 <>
                   {protected_ && !isPrivileged && (
-                    <div style={{ fontSize: "13px", color: "#d97706", fontWeight: 600, marginBottom: "6px", padding: "4px 8px", backgroundColor: "#fffbeb", borderRadius: "4px", border: "1px solid #fde68a" }}>
+                    <div style={{ fontSize: "12px", color: COLOURS.AMBER, fontWeight: 600, marginBottom: "6px", padding: "4px 8px", backgroundColor: COLOURS.WARNING_SOFT, borderRadius: RADII.XS, border: `1px solid ${COLOURS.AMBER}` }}>
                       Assigned by {task.assigned_by || "management"} — you can update status and add notes but cannot edit or delete this task.
                     </div>
                   )}
                   <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} canReview={canReview ?? isPrivileged} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
                   {((canDelete ?? isPrivileged) || taskDeletable) && (
-                    <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${BORDER}`, display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                    <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "flex-end", gap: "6px" }}>
                       {task.assigned_to && memberPhones[task.assigned_to] && (
-                        <a href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
-                          target="_blank" rel="noopener noreferrer" style={{
-                            backgroundColor: "#16a34a", color: "white", border: "none", borderRadius: "5px",
-                            padding: "6px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer", textDecoration: "none", minHeight: "36px",
-                          }} title="Send WhatsApp reminder to assignee">
+                        <a
+                          href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{ backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: RADII.SM, padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", textDecoration: "none", minHeight: "34px", display: "inline-flex", alignItems: "center" }}
+                          title="Send WhatsApp reminder to assignee"
+                        >
                           WhatsApp
                         </a>
                       )}
@@ -337,10 +339,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                             await supabase.from("tasks").delete().eq("id", task.id);
                             loadTasks();
                           }}
-                          style={{
-                            backgroundColor: "var(--bg-card, #ffffff)", color: "#dc2626", border: "1px solid #dc2626",
-                            borderRadius: "5px", padding: "6px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer", minHeight: "36px",
-                          }}
+                          style={{ backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.SM, padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", minHeight: "34px" }}
                           title="Permanently delete this task"
                         >
                           Delete Task
@@ -361,39 +360,38 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     <div>
       {toast.element}
       {dlg.element}
+
       {/* ═══ OVERDUE BANNER ═══ */}
       {overdueTasks.length > 0 && (
         <div style={WARNING_BANNER_STYLE}>
-          <div onClick={() => setBannerOpen(!bannerOpen)} style={{
-            padding: "12px 16px", cursor: "pointer",
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-          }}>
+          <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ fontSize: "20px" }}>⚠</span>
               <div>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
                   {overdueTasks.length} overdue task{overdueTasks.length > 1 ? "s" : ""} need attention
                 </div>
-                <div style={{ fontSize: "15px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
+                <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
                   {overdueTasks.slice(0, 3).map((t) => `${t.assigned_to || "Unassigned"}: ${t.description.slice(0, 30)}${t.description.length > 30 ? "…" : ""}`).join(" · ")}
                   {overdueTasks.length > 3 && ` · +${overdueTasks.length - 3} more`}
                 </div>
               </div>
             </div>
-            <span style={{ fontSize: "16px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
           </div>
           {bannerOpen && (
             <div style={WARNING_BANNER_INNER}>
               {overdueTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a)).map((t) => (
-                <div key={t.id} onClick={() => { setExpandedTaskId(t.id); setBannerOpen(false); setTimeout(() => document.getElementById(`task-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}
-                  style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "#fef2f2"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.backgroundColor = "var(--bg-card, #ffffff)"; }}>
+                <div
+                  key={t.id}
+                  onClick={() => { setExpandedTaskId(t.id); setBannerOpen(false); setTimeout(() => document.getElementById(`task-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}
+                  style={{ padding: "8px 16px 8px 48px", borderBottom: `1px solid ${COLOURS.TRACK}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                >
                   <div>
-                    <div style={{ fontSize: "16px", fontWeight: 600, color: NAVY }}>{t.description}</div>
-                    <div style={{ fontSize: "14px", color: SLATE }}>{t.assigned_to || "Unassigned"}</div>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{t.assigned_to || "Unassigned"}</div>
                   </div>
-                  <span style={{ fontSize: "15px", fontWeight: 700, color: "#dc2626", flexShrink: 0 }}>{daysOverdue(t)}d late</span>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED, flexShrink: 0 }}>{daysOverdue(t)}d late</span>
                 </div>
               ))}
             </div>
@@ -401,13 +399,20 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         </div>
       )}
 
-      {/* ═══ SUMMARY ROW ═══ */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "center" }}>
+      {/* ═══ KPI SUMMARY ROW ═══ */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "flex-start" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", flex: 1 }}>
-          <MiniCard label="Open" value={allOpen.length} color="#2563eb" />
-          <MiniCard label="Overdue" value={overdueTasks.length} color="#dc2626" />
-          <MiniCard label="Waiting Reply" value={waitingReply.length} color="#d97706" />
-          <MiniCard label="Completed" value={completedAll.length} color="#16a34a" />
+          {[
+            { label: "Open",          value: allOpen.length },
+            { label: "Overdue",       value: overdueTasks.length },
+            { label: "Waiting Reply", value: waitingReply.length },
+            { label: "Completed",     value: completedAll.length },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ ...cardStyle, padding: "10px 14px" }}>
+              <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "6px" }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY }}>{value.toLocaleString()}</div>
+            </div>
+          ))}
         </div>
         {(canImport ?? isPrivileged) && (
           <ImportExportButtons
@@ -471,25 +476,32 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         )}
       </div>
 
-      {/* ═══ TIME VIEW TOGGLE ═══ */}
-      <div style={{ display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--bg-page, #f8fafc)", paddingTop: "4px", paddingBottom: "4px" }}>
+      {/* ═══ VIEW TOGGLE + FILTER PILLS ═══ */}
+      <div style={{
+        display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap",
+        position: "sticky", top: 0, zIndex: 10,
+        backgroundColor: COLOURS.CARD_ALT,
+        paddingTop: "6px", paddingBottom: "6px",
+      }}>
         {(["department", "weekly", "monthly", "quarterly", "timeline"] as const).map((v) => (
           <button key={v} onClick={() => setTimeView(v)} style={{
-            backgroundColor: timeView === v ? NAVY : "var(--bg-card, #ffffff)",
-            color: timeView === v ? "white" : NAVY,
-            border: `1px solid ${timeView === v ? NAVY : BORDER}`,
-            borderRadius: "6px", padding: "7px 16px", fontSize: "16px", fontWeight: 600, cursor: "pointer",
+            backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
+            color: timeView === v ? "white" : COLOURS.NAVY,
+            border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+            borderRadius: RADII.PILL, padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
             textTransform: "capitalize",
           }}>{v}</button>
         ))}
         <div style={{ flex: 1 }} />
         {(["all", "overdue", "waiting"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} style={{
-            backgroundColor: filter === f ? (f === "overdue" ? "#dc2626" : f === "waiting" ? "#d97706" : NAVY) : "var(--bg-card, #ffffff)",
-            color: filter === f ? "white" : NAVY,
-            border: `1px solid ${filter === f ? "transparent" : BORDER}`,
-            borderRadius: "6px", padding: "6px 12px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
-          }}>{f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueTasks.length})` : `Waiting (${waitingReply.length})`}</button>
+            backgroundColor: filter === f ? COLOURS.NAVY : COLOURS.CARD,
+            color: filter === f ? "white" : COLOURS.NAVY,
+            border: `1px solid ${filter === f ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+            borderRadius: RADII.PILL, padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+          }}>
+            {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueTasks.length})` : `Waiting (${waitingReply.length})`}
+          </button>
         ))}
       </div>
 
@@ -497,7 +509,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {timeView === "department" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "14px" }}>
           {departments.length === 0 ? (
-            <div style={{ padding: "16px", textAlign: "center", color: SLATE, border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)" }}>No tasks to show.</div>
+            <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks to show.</div>
           ) : departments.map((d) => {
             const isCollapsed = collapsedDepts.has(d.dept);
             const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
@@ -517,34 +529,41 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             if (deptFiltered.length === 0 && filter !== "all") return null;
 
             return (
-              <div key={d.dept} style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", borderLeft: hasIssues ? "4px solid #dc2626" : `4px solid #16a34a` }}>
+              <div key={d.dept} style={{
+                border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderLeft: `4px solid ${hasIssues ? COLOURS.RED : COLOURS.GREEN}`,
+                borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden",
+              }}>
                 {/* Department header */}
-                <div onClick={() => toggleDept(d.dept)} style={{
-                  padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
-                  backgroundColor: hasIssues ? "#fef2f2" : "var(--bg-card-hover, #f8fafc)",
-                }}>
+                <div
+                  onClick={() => toggleDept(d.dept)}
+                  style={{
+                    padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
+                    backgroundColor: hasIssues ? COLOURS.DANGER_SOFT : COLOURS.CARD_ALT,
+                  }}
+                >
                   <div>
-                    <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>{d.dept}</div>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{d.dept}</div>
                     <div style={{ display: "flex", gap: "12px", marginTop: "4px", flexWrap: "wrap" }}>
-                      <span style={{ fontSize: "14px", color: "#2563eb", fontWeight: 600 }}>{d.open} open</span>
-                      {d.overdue > 0 && <span style={{ fontSize: "14px", color: "#dc2626", fontWeight: 700 }}>{d.overdue} overdue</span>}
-                      {d.waiting > 0 && <span style={{ fontSize: "14px", color: "#d97706", fontWeight: 600 }}>{d.waiting} waiting</span>}
-                      {d.stuck > 0 && <span style={{ fontSize: "14px", color: "#ea580c", fontWeight: 600 }}>{d.stuck} stuck</span>}
-                      <span style={{ fontSize: "14px", color: "#16a34a", fontWeight: 600 }}>{d.completed} done</span>
+                      <span style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600 }}>{d.open} open</span>
+                      {d.overdue > 0 && <span style={{ fontSize: "12px", color: COLOURS.RED, fontWeight: 700 }}>{d.overdue} overdue</span>}
+                      {d.waiting > 0 && <span style={{ fontSize: "12px", color: COLOURS.AMBER, fontWeight: 600 }}>{d.waiting} waiting</span>}
+                      {d.stuck > 0 && <span style={{ fontSize: "12px", color: COLOURS.AMBER, fontWeight: 600 }}>{d.stuck} stuck</span>}
+                      <span style={{ fontSize: "12px", color: COLOURS.GREEN, fontWeight: 600 }}>{d.completed} done</span>
                     </div>
                   </div>
-                  <span style={{ color: SLATE, fontSize: "15px", flexShrink: 0 }}>{isCollapsed ? "▶" : "▼"}</span>
+                  <span style={{ color: COLOURS.SLATE, fontSize: "13px", flexShrink: 0 }}>{isCollapsed ? "▶" : "▼"}</span>
                 </div>
 
                 {/* Person breakdown bar */}
                 {!isCollapsed && persons.length > 0 && (
-                  <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderTop: `1px solid ${BORDER}`, display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  <div style={{ padding: "8px 16px", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", gap: "6px", flexWrap: "wrap" }}>
                     {persons.map((p) => (
                       <div key={p.name} style={{
-                        padding: "4px 10px", borderRadius: "6px", fontSize: "13px", fontWeight: 600,
-                        backgroundColor: p.overdue > 0 ? "#fef2f2" : "var(--bg-card, #ffffff)",
-                        border: `1px solid ${p.overdue > 0 ? "#fecaca" : BORDER}`,
-                        color: p.overdue > 0 ? "#dc2626" : NAVY,
+                        padding: "3px 10px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600,
+                        backgroundColor: p.overdue > 0 ? COLOURS.DANGER_SOFT : COLOURS.CARD,
+                        border: `1px solid ${p.overdue > 0 ? COLOURS.RED : COLOURS.HAIRLINE}`,
+                        color: p.overdue > 0 ? COLOURS.RED : COLOURS.NAVY,
                       }}>
                         {p.name.split(" ")[0]} — {p.total}{p.overdue > 0 && ` (${p.overdue} late)`}{p.waiting > 0 && ` (${p.waiting} wait)`}
                       </div>
@@ -554,9 +573,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
                 {/* Tasks list */}
                 {!isCollapsed && (
-                  <div style={{ borderTop: `1px solid ${BORDER}` }}>
+                  <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
                     {deptFiltered.length === 0 ? (
-                      <div style={{ padding: "12px 14px", textAlign: "center", color: SLATE, fontSize: "15px" }}>No matching tasks.</div>
+                      <div style={{ padding: "12px 16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>No matching tasks.</div>
                     ) : (
                       deptFiltered.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} />)
                     )}
@@ -570,22 +589,22 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
       {/* ═══ WEEKLY VIEW ═══ */}
       {timeView === "weekly" && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
+        <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
           {weekOrder.filter((g) => weekGroups.has(g)).map((group) => {
             const groupTasks = (filter === "overdue" ? weekGroups.get(group)!.filter(isOverdue) : filter === "waiting" ? weekGroups.get(group)!.filter((t) => t.status === "Waiting Reply") : weekGroups.get(group)!);
             if (groupTasks.length === 0) return null;
             return (
               <div key={group}>
-                <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "16px", fontWeight: 700, color: weekGroupColor(group) }}>{group}</span>
-                  <span style={{ fontSize: "15px", fontWeight: 600, color: SLATE }}>{groupTasks.length} task{groupTasks.length > 1 ? "s" : ""}</span>
+                <div style={{ padding: "8px 16px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: weekGroupColor(group) }}>{group}</span>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE }}>{groupTasks.length} task{groupTasks.length > 1 ? "s" : ""}</span>
                 </div>
                 {groupTasks.map((t) => <TaskRow key={t.id} task={t} />)}
               </div>
             );
           })}
           {filteredTasks.length === 0 && (
-            <div style={{ padding: "16px", textAlign: "center", color: SLATE }}>No tasks match this filter.</div>
+            <div style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks match this filter.</div>
           )}
         </div>
       )}
@@ -594,24 +613,24 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {timeView === "monthly" && (
         <>
           {monthlyData.length > 0 && (
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Tasks Created vs Completed — Last 6 Months</div>
+            <div style={{ ...cardStyle, padding: "20px 24px", marginBottom: "14px" }}>
+              <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Tasks Created vs Completed — Last 6 Months</div>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="label" tick={{ fontSize: 12, fill: SLATE }} />
-                  <YAxis tick={{ fontSize: 12, fill: SLATE }} allowDecimals={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: COLOURS.SLATE }} />
+                  <YAxis tick={{ fontSize: 11, fill: COLOURS.SLATE }} allowDecimals={false} />
                   <Tooltip />
-                  <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
-                  <Bar dataKey="created" fill="#2563eb" name="Created (blue)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="completed" fill="#16a34a" name="Completed (green)" radius={[4, 4, 0, 0]} />
+                  <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
+                  <Bar dataKey="created" fill={COLOURS.BLUE} name="Created" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="completed" fill={COLOURS.GREEN} name="Completed" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           )}
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
+          <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
             {filteredTasks.length === 0 ? (
-              <div style={{ padding: "16px", textAlign: "center", color: SLATE }}>No tasks match this filter.</div>
+              <div style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks match this filter.</div>
             ) : (
               filteredTasks.map((t) => <TaskRow key={t.id} task={t} />)
             )}
@@ -623,40 +642,40 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {timeView === "quarterly" && (
         <>
           {quarterlyData.length > 0 && (
-            <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Quarterly Overview</div>
+            <div style={{ ...cardStyle, padding: "20px 24px", marginBottom: "14px" }}>
+              <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Quarterly Overview</div>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={quarterlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="quarter" tick={{ fontSize: 12, fill: SLATE }} />
-                  <YAxis tick={{ fontSize: 12, fill: SLATE }} allowDecimals={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} />
+                  <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: COLOURS.SLATE }} />
+                  <YAxis tick={{ fontSize: 11, fill: COLOURS.SLATE }} allowDecimals={false} />
                   <Tooltip />
-                  <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
-                  <Bar dataKey="overdue" stackId="a" fill="#dc2626" name="Overdue (red)" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="active" stackId="a" fill="#2563eb" name="Active (blue)" />
-                  <Bar dataKey="completed" stackId="a" fill="#16a34a" name="Completed (green)" radius={[4, 4, 0, 0]} />
+                  <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
+                  <Bar dataKey="overdue" stackId="a" fill={COLOURS.RED} name="Overdue" />
+                  <Bar dataKey="active" stackId="a" fill={COLOURS.BLUE} name="Active" />
+                  <Bar dataKey="completed" stackId="a" fill={COLOURS.GREEN} name="Completed" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           )}
 
           {/* Quarterly summary cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginBottom: "14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "8px", marginBottom: "14px" }}>
             {quarterlyData.map((q) => (
-              <div key={q.quarter} style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>{q.quarter}</div>
-                <div style={{ display: "flex", gap: "12px", fontSize: "16px" }}>
-                  <span style={{ color: "#dc2626", fontWeight: 700 }}>{q.overdue} overdue</span>
-                  <span style={{ color: "#2563eb", fontWeight: 700 }}>{q.active} active</span>
-                  <span style={{ color: "#16a34a", fontWeight: 700 }}>{q.completed} done</span>
+              <div key={q.quarter} style={{ ...cardStyle, padding: "16px 20px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>{q.quarter}</div>
+                <div style={{ display: "flex", gap: "10px", fontSize: "12px", flexWrap: "wrap" }}>
+                  <span style={{ color: COLOURS.RED, fontWeight: 700 }}>{q.overdue} overdue</span>
+                  <span style={{ color: COLOURS.BLUE, fontWeight: 600 }}>{q.active} active</span>
+                  <span style={{ color: COLOURS.GREEN, fontWeight: 600 }}>{q.completed} done</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
+          <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
             {filteredTasks.length === 0 ? (
-              <div style={{ padding: "16px", textAlign: "center", color: SLATE }}>No tasks match this filter.</div>
+              <div style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks match this filter.</div>
             ) : (
               filteredTasks.map((t) => <TaskRow key={t.id} task={t} />)
             )}
@@ -668,7 +687,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {timeView === "timeline" && (() => {
         const tasksWithDates = filteredTasks.filter((t) => t.due_date);
         if (tasksWithDates.length === 0) return (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px", textAlign: "center", color: SLATE }}>
+          <div style={{ ...cardStyle, padding: "24px", marginBottom: "14px", textAlign: "center", color: COLOURS.SLATE }}>
             No tasks with due dates to show on timeline.
           </div>
         );
@@ -699,34 +718,34 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         }
 
         return (
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px", overflowX: "auto" }}>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>Due Date Timeline — {sorted.length} tasks</div>
+          <div style={{ ...cardStyle, padding: "20px 24px", marginBottom: "14px", overflowX: "auto" }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px" }}>Due Date Timeline — {sorted.length} tasks</div>
             <svg width="780" height={svgH} style={{ display: "block", minWidth: "780px" }}>
-              <line x1="60" y1="20" x2="740" y2="20" stroke="#e2e8f0" strokeWidth="1" />
+              <line x1="60" y1="20" x2="740" y2="20" stroke={COLOURS.HAIRLINE} strokeWidth="1" />
               {tickDates.map((d) => {
                 const x = toX(d);
                 return (
                   <g key={d}>
-                    <line x1={x} y1="16" x2={x} y2={svgH - 10} stroke="#f1f5f9" strokeWidth="1" />
-                    <text x={x} y="12" textAnchor="middle" fontSize="11" fill="#94a3b8">
+                    <line x1={x} y1="16" x2={x} y2={svgH - 10} stroke={COLOURS.TRACK} strokeWidth="1" />
+                    <text x={x} y="12" textAnchor="middle" fontSize="11" fill={COLOURS.SLATE}>
                       {new Date(d + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                     </text>
                   </g>
                 );
               })}
-              <line x1={todayX} y1="16" x2={todayX} y2={svgH - 10} stroke="#dc2626" strokeWidth="1.5" strokeDasharray="4 3" />
-              <text x={todayX} y={svgH - 2} textAnchor="middle" fontSize="10" fill="#dc2626" fontWeight="700">Today</text>
+              <line x1={todayX} y1="16" x2={todayX} y2={svgH - 10} stroke={COLOURS.RED} strokeWidth="1.5" strokeDasharray="4 3" />
+              <text x={todayX} y={svgH - 2} textAnchor="middle" fontSize="10" fill={COLOURS.RED} fontWeight="700">Today</text>
               {sorted.map((t, i) => {
                 const x = toX(t.due_date!);
                 const y = 36 + i * ROW_H;
                 const od = isOverdue(t);
-                const color = od ? "#dc2626" : t.status === "Waiting Reply" ? "#d97706" : t.priority === "High" || t.priority === "Urgent" ? "#f97316" : "#2563eb";
+                const color = od ? COLOURS.RED : t.status === "Waiting Reply" ? COLOURS.AMBER : t.priority === "High" || t.priority === "Urgent" ? COLOURS.AMBER : COLOURS.BLUE;
                 const label = t.description.length > 32 ? t.description.slice(0, 30) + "…" : t.description;
                 return (
                   <g key={t.id} style={{ cursor: "pointer" }} onClick={() => { setTimeView("weekly"); setExpandedTaskId(t.id); setTimeout(() => document.getElementById(`task-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}>
                     <circle cx={x} cy={y} r="5" fill={color} />
-                    <text x={x + 8} y={y + 4} fontSize="12" fill={NAVY} fontWeight="600">{label}</text>
-                    <text x="4" y={y + 4} fontSize="11" fill={SLATE}>{t.assigned_to?.split(" ")[0] || "?"}</text>
+                    <text x={x + 8} y={y + 4} fontSize="12" fill={COLOURS.NAVY} fontWeight="600">{label}</text>
+                    <text x="4" y={y + 4} fontSize="11" fill={COLOURS.SLATE}>{t.assigned_to?.split(" ")[0] || "?"}</text>
                   </g>
                 );
               })}
@@ -736,17 +755,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       })()}
 
       {scopedTasks.length === 0 && (
-        <p style={{ color: SLATE, fontSize: "16px" }}>No tasks yet.</p>
+        <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No tasks yet.</p>
       )}
-    </div>
-  );
-}
-
-function MiniCard({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div style={{ border: `1px solid ${BORDER}`, borderTop: `2px solid ${color}`, borderRadius: "6px", padding: "5px 8px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-      <div style={{ color: SLATE, fontSize: "12px" }}>{label}</div>
-      <div style={{ fontSize: "17px", fontWeight: 800, color }}>{value}</div>
     </div>
   );
 }
