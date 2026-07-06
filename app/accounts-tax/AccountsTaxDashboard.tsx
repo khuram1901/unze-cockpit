@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, loadMyPermissions } from "../lib/supabase";
-import { COLOURS, RADII, useToast } from "../lib/SharedUI";
+import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, useToast } from "../lib/SharedUI";
 import { canManageTaxSchedule, isPA, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { useMobile } from "../lib/useMobile";
 
@@ -59,11 +59,11 @@ const RETURN_TYPES = [
   { key: "INCOME_TAX"    as ReturnType, label: "Income Tax",     frequency: "quarterly" as const, entities: ["UT","IMP","BARANH","HD","ALMAHAR"], dueDay: 15 },
 ];
 
-const STATUS_COLOURS: Record<ScheduleStatus, { bg: string; text: string }> = {
-  "Not Started":       { bg: COLOURS.CARD_ALT,    text: COLOURS.SLATE },
-  "In Progress":       { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
-  "External Auditors": { bg: "#EEF1FC",            text: COLOURS.BLUE  },
-  "Completed":         { bg: COLOURS.SUCCESS_SOFT, text: COLOURS.GREEN },
+const STATUS_COLOURS: Record<ScheduleStatus, { bg: string; text: string; border: string }> = {
+  "Not Started":       { bg: COLOURS.CARD_ALT,    text: COLOURS.SLATE, border: COLOURS.HAIRLINE },
+  "In Progress":       { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER, border: "#F6D28A" },
+  "External Auditors": { bg: "#EEF1FC",            text: COLOURS.BLUE,  border: "#C5CFF5" },
+  "Completed":         { bg: COLOURS.SUCCESS_SOFT, text: COLOURS.GREEN, border: "#9ED4A3" },
 };
 
 const STATUS_OPTIONS: ScheduleStatus[] = ["Not Started","In Progress","External Auditors","Completed"];
@@ -72,21 +72,19 @@ const STATUS_OPTIONS: ScheduleStatus[] = ["Not Started","In Progress","External 
 
 function getCurrentTaxYear(): string {
   const now = new Date();
-  const m = now.getMonth() + 1; // 1-12
+  const m = now.getMonth() + 1;
   const y = now.getFullYear();
-  // Fiscal year: Jul–Jun. If month >= 7, year is e.g. "2026-27", else "2025-26"
   if (m >= 7) return `${y}-${String(y + 1).slice(2)}`;
   return `${y - 1}-${String(y).slice(2)}`;
 }
 
 function fiscalYearStart(year: string): number {
-  // "2026-27" → 2026
   return parseInt(year.split("-")[0], 10);
 }
 
 function getFiscalSections(year: string): { key: Quarter; label: string; badge: string; months: string[] }[] {
   const s = fiscalYearStart(year);
-  const n = s + 1; // next calendar year
+  const n = s + 1;
   return [
     { key: "Q1", label: "Q1", badge: "Jul–Sep", months: [`${s}-07`,`${s}-08`,`${s}-09`] },
     { key: "Q2", label: "Q2", badge: "Oct–Dec", months: [`${s}-10`,`${s}-11`,`${s}-12`] },
@@ -123,7 +121,6 @@ export function isOverdue(
   let dueDate: Date;
 
   if (returnType === "INCOME_TAX") {
-    // Quarterly: due 15th of month AFTER quarter ends
     const quarterDue: Record<Quarter, string> = {
       Q1: `${s}-10-15`,
       Q2: `${n}-01-15`,
@@ -134,7 +131,6 @@ export function isOverdue(
     if (!ds) return false;
     dueDate = new Date(ds + "T00:00:00");
   } else {
-    // Monthly: due 15th of the same month as the period
     dueDate = new Date(`${periodKey}-15T00:00:00`);
   }
 
@@ -155,9 +151,7 @@ export default function AccountsTaxDashboard() {
   const [selectedYear, setSelectedYear] = useState(getCurrentTaxYear);
   const [availableYears, setAvailableYears] = useState<string[]>([getCurrentTaxYear()]);
 
-  // Map key: "${year}:${section}:${stepIndex}:${entityKey}"
   const [scheduleEntries, setScheduleEntries] = useState<Map<string, ScheduleStatus>>(new Map());
-  // Map key: "${year}:${returnType}:${entityKey}:${periodKey}"
   const [returnFilings, setReturnFilings] = useState<Map<string, boolean>>(new Map());
 
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
@@ -228,19 +222,12 @@ export default function AccountsTaxDashboard() {
 
   async function handleStatusChange(section: string, stepIndex: number, entityKey: string, newStatus: ScheduleStatus) {
     const key = `${selectedYear}:${section}:${stepIndex}:${entityKey}`;
-
-    // Optimistic update
     setScheduleEntries((prev) => new Map(prev).set(key, newStatus));
     setSavingSchedule((prev) => new Set(prev).add(key));
 
     const { error } = await supabase.from("tax_schedule_entries").upsert({
-      tax_year: selectedYear,
-      section,
-      step_index: stepIndex,
-      entity_key: entityKey,
-      status: newStatus,
-      updated_by: userEmail,
-      updated_at: new Date().toISOString(),
+      tax_year: selectedYear, section, step_index: stepIndex, entity_key: entityKey,
+      status: newStatus, updated_by: userEmail, updated_at: new Date().toISOString(),
     }, { onConflict: "tax_year,section,step_index,entity_key" });
 
     setSavingSchedule((prev) => { const s = new Set(prev); s.delete(key); return s; });
@@ -258,19 +245,13 @@ export default function AccountsTaxDashboard() {
     const current = returnFilings.get(key) ?? false;
     const next = !current;
 
-    // Optimistic update
     setReturnFilings((prev) => new Map(prev).set(key, next));
     setSavingFiling((prev) => new Set(prev).add(key));
 
     const { error } = await supabase.from("tax_return_filings").upsert({
-      tax_year: selectedYear,
-      return_type: returnType,
-      entity_key: entityKey,
-      period_key: periodKey,
-      filed: next,
-      filed_at: next ? new Date().toISOString() : null,
-      filed_by: next ? userEmail : null,
-      updated_at: new Date().toISOString(),
+      tax_year: selectedYear, return_type: returnType, entity_key: entityKey, period_key: periodKey,
+      filed: next, filed_at: next ? new Date().toISOString() : null,
+      filed_by: next ? userEmail : null, updated_at: new Date().toISOString(),
     }, { onConflict: "tax_year,return_type,entity_key,period_key" });
 
     setSavingFiling((prev) => { const s = new Set(prev); s.delete(key); return s; });
@@ -305,11 +286,31 @@ export default function AccountsTaxDashboard() {
     setSelectedYear(next);
   }
 
-  // ── Derived: overdue count for Return Filings banner ──
+  // ── Derived data ──
 
   const today = new Date();
   const fiscalSections = getFiscalSections(selectedYear);
 
+  // Schedule KPIs — totals across all sections and entities
+  function getAllScheduleCounts() {
+    let notStarted = 0, inProgress = 0, extAuditors = 0, completed = 0;
+    const allSections = [...fiscalSections.map((s) => ({ key: s.key, entities: QUARTERLY_ENTITIES, steps: QUARTERLY_STEPS })),
+      { key: "Annual", entities: ANNUAL_ENTITIES, steps: ANNUAL_STEPS }];
+    for (const sec of allSections) {
+      for (const e of sec.entities) {
+        for (let i = 1; i <= sec.steps.length; i++) {
+          const s = getScheduleStatus(sec.key, i, e.key);
+          if (s === "Completed") completed++;
+          else if (s === "In Progress") inProgress++;
+          else if (s === "External Auditors") extAuditors++;
+          else notStarted++;
+        }
+      }
+    }
+    return { notStarted, inProgress, extAuditors, completed };
+  }
+
+  // Overdue items for banner
   type OverdueItem = { entityLabel: string; returnLabel: string; period: string };
   const overdueItems: OverdueItem[] = [];
 
@@ -339,6 +340,35 @@ export default function AccountsTaxDashboard() {
     }
   }
 
+  // Return Filings KPIs — all periods across all return types
+  function getAllFilingCounts() {
+    let filed = 0, notFiled = 0, overdue = 0;
+    for (const rt of RETURN_TYPES) {
+      if (rt.frequency === "monthly") {
+        for (const sec of fiscalSections) {
+          for (const month of sec.months) {
+            for (const ek of rt.entities) {
+              const f = getFiled(rt.key, ek, month);
+              if (f) filed++;
+              else if (isOverdue(rt.key, month, f, today, selectedYear)) overdue++;
+              else notFiled++;
+            }
+          }
+        }
+      } else {
+        for (const q of ["Q1","Q2","Q3","Q4"] as Quarter[]) {
+          for (const ek of rt.entities) {
+            const f = getFiled(rt.key, ek, q);
+            if (f) filed++;
+            else if (isOverdue(rt.key, q, f, today, selectedYear)) overdue++;
+            else notFiled++;
+          }
+        }
+      }
+    }
+    return { filed, notFiled, overdue };
+  }
+
   // ── Section summary chips ──
 
   function getSectionSummary(sectionKey: string, entities: typeof QUARTERLY_ENTITIES, steps: string[]) {
@@ -356,43 +386,43 @@ export default function AccountsTaxDashboard() {
     return { completed, inProgress, notStarted, total, pct };
   }
 
-  // ── Styles ──
+  // ── Design tokens ──
 
   const { NAVY, SLATE, HAIRLINE, CARD, CARD_ALT, CANVAS, GREEN, AMBER, RED, BLUE,
     SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT, TRACK, INK_700 } = COLOURS;
 
   const pillTab = (active: boolean): React.CSSProperties => ({
     padding: "5px 14px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 600,
-    cursor: "pointer", border: "none",
+    cursor: "pointer", border: `1px solid ${active ? NAVY : HAIRLINE}`,
     backgroundColor: active ? NAVY : CARD_ALT,
     color: active ? "#fff" : SLATE,
     transition: "background 0.15s",
   });
 
   const tableHeaderCell: React.CSSProperties = {
-    padding: "6px 10px", fontSize: "11px", fontWeight: 600, color: SLATE,
+    padding: "8px 10px", fontSize: "10.5px", fontWeight: 600, color: SLATE,
     textAlign: "center", whiteSpace: "nowrap", backgroundColor: CARD_ALT,
     borderBottom: `1px solid ${HAIRLINE}`, minWidth: "130px",
+    textTransform: "uppercase", letterSpacing: "0.05em",
   };
 
-  const tableRowLabel: React.CSSProperties = {
-    padding: "8px 12px", fontSize: "12px", color: SLATE, fontWeight: 500,
+  const tableRowLabel = (even: boolean): React.CSSProperties => ({
+    padding: "10px 14px", fontSize: "13px", color: NAVY, fontWeight: 500,
     minWidth: isMobile ? "140px" : "200px", borderRight: `1px solid ${HAIRLINE}`,
-    backgroundColor: CARD_ALT, whiteSpace: "nowrap",
+    backgroundColor: even ? CARD_ALT : CARD, whiteSpace: "nowrap",
     position: "sticky", left: 0, zIndex: 1,
-  };
+  });
 
-  const tableCell: React.CSSProperties = {
-    padding: "6px 8px", textAlign: "center", borderBottom: `1px solid ${HAIRLINE}`,
-    minWidth: "130px",
-  };
+  const tableCell = (even: boolean): React.CSSProperties => ({
+    padding: "8px 10px", textAlign: "center", borderBottom: `1px solid ${HAIRLINE}`,
+    minWidth: "130px", backgroundColor: even ? CARD_ALT : CARD,
+  });
 
-  // Fix 2 — styled status select (pill, coloured, no browser arrow)
-  const statusSelectStyle = (bg: string, text: string, saving: boolean): React.CSSProperties => ({
+  const statusSelectStyle = (bg: string, text: string, border: string, saving: boolean): React.CSSProperties => ({
     fontSize: "12px", fontWeight: 600,
     padding: "4px 24px 4px 8px",
     borderRadius: RADII.PILL,
-    border: `1px solid ${HAIRLINE}`,
+    border: `1px solid ${border}`,
     backgroundColor: bg, color: text,
     cursor: saving ? "wait" : "pointer",
     opacity: saving ? 0.6 : 1,
@@ -405,24 +435,32 @@ export default function AccountsTaxDashboard() {
     fontFamily: "var(--font-sans, Inter, sans-serif)",
   });
 
-  // Fix 3 — filing chip (read-only)
+  const statusChipStyle = (bg: string, text: string, border: string): React.CSSProperties => ({
+    fontSize: "12px", fontWeight: 600,
+    padding: "4px 10px",
+    borderRadius: RADII.PILL,
+    border: `1px solid ${border}`,
+    backgroundColor: bg, color: text,
+    whiteSpace: "nowrap" as const,
+    display: "inline-block",
+  });
+
   const filingChipStyle = (filed: boolean, overdue: boolean): React.CSSProperties => ({
     fontSize: "11px", fontWeight: 600,
     padding: "3px 9px",
     borderRadius: RADII.PILL,
-    border: `1px solid ${filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : HAIRLINE}`,
+    border: `1px solid ${filed ? "#9ED4A3" : overdue ? "#EDB5B2" : HAIRLINE}`,
     backgroundColor: filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : CARD_ALT,
     color: filed ? GREEN : overdue ? RED : SLATE,
     whiteSpace: "nowrap" as const,
     display: "inline-block",
   });
 
-  // Fix 3 — filing button (canManage)
   const filingButtonStyle = (filed: boolean, overdue: boolean, saving: boolean): React.CSSProperties => ({
     fontSize: "11px", fontWeight: 600,
     padding: "3px 9px",
     borderRadius: RADII.PILL,
-    border: `1px solid ${filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : HAIRLINE}`,
+    border: `1px solid ${filed ? "#9ED4A3" : overdue ? "#EDB5B2" : HAIRLINE}`,
     backgroundColor: filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : CARD_ALT,
     color: filed ? GREEN : overdue ? RED : SLATE,
     cursor: saving ? "wait" : "pointer",
@@ -433,29 +471,27 @@ export default function AccountsTaxDashboard() {
   if (!userCtx && !loading) return null;
 
   return (
-    <main style={{ padding: isMobile ? "16px 16px" : "32px 40px", maxWidth: "100%", minWidth: 0, backgroundColor: CANVAS, fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
+    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden", backgroundColor: CANVAS, fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
       {toast.element}
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px", marginBottom: "28px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px", marginBottom: "20px" }}>
         <div>
-          <h1 style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "22px", fontWeight: 600, color: NAVY, margin: 0, letterSpacing: "-0.01em" }}>
+          <PageHeader />
+          <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "22px", fontWeight: 600, color: NAVY, letterSpacing: "-0.01em", marginTop: "4px" }}>
             Accounts (Tax)
-          </h1>
-          <p style={{ fontSize: "13px", color: SLATE, margin: "4px 0 0" }}>
+          </div>
+          <div style={{ fontSize: "13px", color: SLATE, marginTop: "3px" }}>
             Quarterly accounts schedule and monthly return filings
-          </p>
+          </div>
         </div>
 
         {/* Year selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", paddingTop: "4px" }}>
           {availableYears.map((y) => (
             <button key={y} style={pillTab(y === selectedYear)} onClick={() => setSelectedYear(y)}>{y}</button>
           ))}
-          <button
-            onClick={addNewYear}
-            style={{ ...pillTab(false), backgroundColor: CARD_ALT, color: BLUE, border: `1px solid ${HAIRLINE}` }}
-          >
+          <button onClick={addNewYear} style={{ ...pillTab(false), color: BLUE }}>
             + New year
           </button>
         </div>
@@ -468,10 +504,21 @@ export default function AccountsTaxDashboard() {
           {/* ══════════════════════════════════════════════════════
               AREA 1 — ACCOUNTS SCHEDULE
           ══════════════════════════════════════════════════════ */}
-          <div style={{ marginBottom: "32px" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "14px" }}>
-              Accounts Schedule
-            </div>
+          <div style={{ marginBottom: "8px" }}>
+            <SectionTitle title="Accounts Schedule" style={{ margin: "0 0 12px" }} />
+
+            {/* Schedule KPI cards */}
+            {(() => {
+              const { notStarted, inProgress, extAuditors, completed } = getAllScheduleCounts();
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "16px" }}>
+                  <CountCard label="Not Started" value={notStarted} color={SLATE} />
+                  <CountCard label="In Progress" value={inProgress} color={AMBER} />
+                  <CountCard label="Ext. Auditors" value={extAuditors} color={BLUE} />
+                  <CountCard label="Completed" value={completed} color={GREEN} />
+                </div>
+              );
+            })()}
 
             {/* Q1–Q4 sections */}
             {fiscalSections.map((sec) => {
@@ -481,30 +528,30 @@ export default function AccountsTaxDashboard() {
               const collapsed = collapsedSections.has(sec.key);
 
               return (
-                <div key={sec.key} style={{ border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: CARD, overflow: "hidden", marginBottom: "10px" }}>
+                <div key={sec.key} style={{ border: `1px solid ${HAIRLINE}`, borderTop: `3px solid ${NAVY}`, borderRadius: RADII.CARD, backgroundColor: CARD, overflow: "hidden", marginBottom: "10px" }}>
                   {/* Section header */}
                   <div
                     onClick={() => toggleSection(sec.key)}
-                    style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}
+                    style={{ padding: "12px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", backgroundColor: CARD_ALT, borderBottom: collapsed ? "none" : `1px solid ${HAIRLINE}` }}
                   >
-                    <span style={{ fontSize: "13px", color: SLATE }}>{collapsed ? "▶" : "▼"}</span>
+                    <span style={{ fontSize: "12px", color: SLATE, fontWeight: 600 }}>{collapsed ? "▶" : "▼"}</span>
                     <span style={{ fontWeight: 700, fontSize: "14px", color: NAVY }}>{sec.label}</span>
-                    <span style={{ fontSize: "12px", color: SLATE, backgroundColor: CARD_ALT, padding: "2px 8px", borderRadius: RADII.PILL }}>{sec.badge}</span>
+                    <span style={{ fontSize: "11px", color: SLATE, backgroundColor: CARD, padding: "2px 8px", borderRadius: RADII.PILL, border: `1px solid ${HAIRLINE}` }}>{sec.badge}</span>
                     <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginLeft: "4px" }}>
-                      {summary.completed > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: SUCCESS_SOFT, color: GREEN }}>{summary.completed} done</span>}
-                      {summary.inProgress > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: WARNING_SOFT, color: AMBER }}>{summary.inProgress} in progress</span>}
-                      {summary.notStarted > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: CARD_ALT, color: SLATE }}>{summary.notStarted} not started</span>}
+                      {summary.completed > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: SUCCESS_SOFT, color: GREEN, border: `1px solid #9ED4A3` }}>{summary.completed} done</span>}
+                      {summary.inProgress > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: WARNING_SOFT, color: AMBER, border: `1px solid #F6D28A` }}>{summary.inProgress} in progress</span>}
+                      {summary.notStarted > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: CARD, color: SLATE, border: `1px solid ${HAIRLINE}` }}>{summary.notStarted} not started</span>}
                     </div>
-                    {/* Progress bar — TRACK always visible, GREEN fill on top */}
-                    <div style={{ flex: 1, minWidth: "80px", height: "3px", backgroundColor: TRACK, borderRadius: "2px", position: "relative" }}>
+                    {/* Progress bar */}
+                    <div style={{ flex: 1, minWidth: "80px", height: "4px", backgroundColor: TRACK, borderRadius: "2px", position: "relative" }}>
                       {summary.pct > 0 && <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${summary.pct}%`, backgroundColor: GREEN, borderRadius: "2px", transition: "width 0.3s" }} />}
                     </div>
-                    <span style={{ fontSize: "11px", color: SLATE }}>{summary.pct}%</span>
+                    <span style={{ fontSize: "11px", color: SLATE, fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", minWidth: "28px" }}>{summary.pct}%</span>
                   </div>
 
                   {/* Section body */}
                   {!collapsed && (
-                    <div style={{ overflowX: "auto", borderTop: `1px solid ${HAIRLINE}` }}>
+                    <div style={{ overflowX: "auto" }}>
                       <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "auto" }}>
                         <thead>
                           <tr>
@@ -519,29 +566,28 @@ export default function AccountsTaxDashboard() {
                         <tbody>
                           {steps.map((step, si) => {
                             const stepIndex = si + 1;
+                            const even = si % 2 === 1;
                             return (
-                              <tr key={stepIndex} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-                                <td style={tableRowLabel}>{stepIndex}. {step}</td>
+                              <tr key={stepIndex}>
+                                <td style={tableRowLabel(even)}>{stepIndex}. {step}</td>
                                 {entities.map((e) => {
                                   const status = getScheduleStatus(sec.key, stepIndex, e.key);
-                                  const { bg, text } = STATUS_COLOURS[status];
+                                  const { bg, text, border } = STATUS_COLOURS[status];
                                   const cellKey = `${selectedYear}:${sec.key}:${stepIndex}:${e.key}`;
                                   const saving = savingSchedule.has(cellKey);
                                   return (
-                                    <td key={e.key} style={tableCell}>
+                                    <td key={e.key} style={tableCell(even)}>
                                       {canManage ? (
                                         <select
                                           value={status}
                                           disabled={saving}
                                           onChange={(ev) => handleStatusChange(sec.key, stepIndex, e.key, ev.target.value as ScheduleStatus)}
-                                          style={statusSelectStyle(bg, text, saving)}
+                                          style={statusSelectStyle(bg, text, border, saving)}
                                         >
                                           {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                                         </select>
                                       ) : (
-                                        <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 8px", borderRadius: RADII.PILL, border: `1px solid ${HAIRLINE}`, backgroundColor: bg, color: text, whiteSpace: "nowrap", display: "inline-block" }}>
-                                          {status}
-                                        </span>
+                                        <span style={statusChipStyle(bg, text, border)}>{status}</span>
                                       )}
                                     </td>
                                   );
@@ -566,27 +612,27 @@ export default function AccountsTaxDashboard() {
               const collapsed = collapsedSections.has(sectionKey);
 
               return (
-                <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: CARD, overflow: "hidden", marginBottom: "10px" }}>
+                <div style={{ border: `1px solid ${HAIRLINE}`, borderTop: `3px solid ${NAVY}`, borderRadius: RADII.CARD, backgroundColor: CARD, overflow: "hidden", marginBottom: "10px" }}>
                   <div
                     onClick={() => toggleSection(sectionKey)}
-                    style={{ padding: "14px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}
+                    style={{ padding: "12px 18px", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", backgroundColor: CARD_ALT, borderBottom: collapsed ? "none" : `1px solid ${HAIRLINE}` }}
                   >
-                    <span style={{ fontSize: "13px", color: SLATE }}>{collapsed ? "▶" : "▼"}</span>
+                    <span style={{ fontSize: "12px", color: SLATE, fontWeight: 600 }}>{collapsed ? "▶" : "▼"}</span>
                     <span style={{ fontWeight: 700, fontSize: "14px", color: NAVY }}>Annual Returns</span>
-                    <span style={{ fontSize: "12px", color: SLATE, backgroundColor: CARD_ALT, padding: "2px 8px", borderRadius: RADII.PILL }}>All entities</span>
+                    <span style={{ fontSize: "11px", color: SLATE, backgroundColor: CARD, padding: "2px 8px", borderRadius: RADII.PILL, border: `1px solid ${HAIRLINE}` }}>All entities</span>
                     <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginLeft: "4px" }}>
-                      {summary.completed > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: SUCCESS_SOFT, color: GREEN }}>{summary.completed} done</span>}
-                      {summary.inProgress > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: WARNING_SOFT, color: AMBER }}>{summary.inProgress} in progress</span>}
-                      {summary.notStarted > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: CARD_ALT, color: SLATE }}>{summary.notStarted} not started</span>}
+                      {summary.completed > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: SUCCESS_SOFT, color: GREEN, border: `1px solid #9ED4A3` }}>{summary.completed} done</span>}
+                      {summary.inProgress > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: WARNING_SOFT, color: AMBER, border: `1px solid #F6D28A` }}>{summary.inProgress} in progress</span>}
+                      {summary.notStarted > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: CARD, color: SLATE, border: `1px solid ${HAIRLINE}` }}>{summary.notStarted} not started</span>}
                     </div>
-                    <div style={{ flex: 1, minWidth: "80px", height: "3px", backgroundColor: TRACK, borderRadius: "2px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${summary.pct}%`, backgroundColor: GREEN, borderRadius: "2px", transition: "width 0.3s" }} />
+                    <div style={{ flex: 1, minWidth: "80px", height: "4px", backgroundColor: TRACK, borderRadius: "2px", position: "relative" }}>
+                      {summary.pct > 0 && <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${summary.pct}%`, backgroundColor: GREEN, borderRadius: "2px", transition: "width 0.3s" }} />}
                     </div>
-                    <span style={{ fontSize: "11px", color: SLATE }}>{summary.pct}%</span>
+                    <span style={{ fontSize: "11px", color: SLATE, fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", minWidth: "28px" }}>{summary.pct}%</span>
                   </div>
 
                   {!collapsed && (
-                    <div style={{ overflowX: "auto", borderTop: `1px solid ${HAIRLINE}` }}>
+                    <div style={{ overflowX: "auto" }}>
                       <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "auto" }}>
                         <thead>
                           <tr>
@@ -601,29 +647,28 @@ export default function AccountsTaxDashboard() {
                         <tbody>
                           {steps.map((step, si) => {
                             const stepIndex = si + 1;
+                            const even = si % 2 === 1;
                             return (
-                              <tr key={stepIndex} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-                                <td style={tableRowLabel}>{stepIndex}. {step}</td>
+                              <tr key={stepIndex}>
+                                <td style={tableRowLabel(even)}>{stepIndex}. {step}</td>
                                 {entities.map((e) => {
                                   const status = getScheduleStatus(sectionKey, stepIndex, e.key);
-                                  const { bg, text } = STATUS_COLOURS[status];
+                                  const { bg, text, border } = STATUS_COLOURS[status];
                                   const cellKey = `${selectedYear}:${sectionKey}:${stepIndex}:${e.key}`;
                                   const saving = savingSchedule.has(cellKey);
                                   return (
-                                    <td key={e.key} style={tableCell}>
+                                    <td key={e.key} style={tableCell(even)}>
                                       {canManage ? (
                                         <select
                                           value={status}
                                           disabled={saving}
                                           onChange={(ev) => handleStatusChange(sectionKey, stepIndex, e.key, ev.target.value as ScheduleStatus)}
-                                          style={statusSelectStyle(bg, text, saving)}
+                                          style={statusSelectStyle(bg, text, border, saving)}
                                         >
                                           {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                                         </select>
                                       ) : (
-                                        <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 8px", borderRadius: RADII.PILL, border: `1px solid ${HAIRLINE}`, backgroundColor: bg, color: text, whiteSpace: "nowrap", display: "inline-block" }}>
-                                          {status}
-                                        </span>
+                                        <span style={statusChipStyle(bg, text, border)}>{status}</span>
                                       )}
                                     </td>
                                   );
@@ -640,30 +685,34 @@ export default function AccountsTaxDashboard() {
             })()}
           </div>
 
-          {/* ── Divider ── */}
-          <div style={{ height: "1px", backgroundColor: HAIRLINE, margin: "0 0 32px" }} />
-
           {/* ══════════════════════════════════════════════════════
               AREA 2 — RETURN FILINGS
           ══════════════════════════════════════════════════════ */}
           <div>
-            <div style={{ marginBottom: "14px" }}>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "2px" }}>Return Filings</div>
-              <div style={{ fontSize: "13px", color: SLATE }}>Monthly and quarterly tax return filing status — due 15th of each period</div>
-            </div>
+            <SectionTitle title="Return Filings" style={{ margin: "0 0 4px" }} />
+            <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px" }}>Monthly and quarterly tax return filing status — due 15th of each period</div>
+
+            {/* Filing KPI cards */}
+            {(() => {
+              const { filed, notFiled, overdue } = getAllFilingCounts();
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "16px" }}>
+                  <CountCard label="Filed" value={filed} color={GREEN} />
+                  <CountCard label="Not Filed" value={notFiled} color={SLATE} />
+                  {overdue > 0 && <CountCard label="Overdue" value={overdue} color={RED} />}
+                </div>
+              );
+            })()}
 
             {/* Overdue alert banner */}
             {overdueItems.length > 0 && (
-              <div style={{ backgroundColor: DANGER_SOFT, border: `1px solid ${RED}20`, borderRadius: RADII.CARD, padding: "14px 18px", marginBottom: "16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "16px" }}>⚠</span>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: RED }}>
-                    {overdueItems.length} return{overdueItems.length > 1 ? "s" : ""} overdue — past 15th deadline and not yet filed
-                  </span>
+              <div style={{ backgroundColor: DANGER_SOFT, borderLeft: `4px solid ${RED}`, borderRadius: RADII.CARD, padding: "14px 18px", marginBottom: "16px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
+                  {overdueItems.length} return{overdueItems.length > 1 ? "s" : ""} overdue — past 15th deadline and not yet filed
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
                   {overdueItems.map((item, i) => (
-                    <div key={i} style={{ fontSize: "12px", color: RED }}>
+                    <div key={i} style={{ fontSize: "13px", color: NAVY }}>
                       {item.entityLabel} — {item.returnLabel} — {item.period}
                     </div>
                   ))}
@@ -713,42 +762,49 @@ export default function AccountsTaxDashboard() {
                 );
               }
 
-              // Month label helper
               const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
               function monthLabel(ym: string) {
                 const m = parseInt(ym.split("-")[1], 10);
                 return MONTH_NAMES[m - 1];
               }
 
+              const tableHeaderCellFiling: React.CSSProperties = {
+                ...tableHeaderCell,
+                minWidth: "90px",
+              };
+
               return (
-                <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
 
                   {/* Sub-section A: Monthly Returns */}
                   <div>
-                    <div style={{ fontSize: "11px", fontWeight: 700, color: INK_700, marginBottom: "12px", textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>
+                    <div style={{ fontSize: "10.5px", fontWeight: 600, color: INK_700, marginBottom: "14px", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
                       Monthly Returns
                     </div>
                     {monthlyRTs.map((rt) => (
-                      <div key={rt.key} style={{ marginBottom: "14px" }}>
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, marginBottom: "8px" }}>{rt.label}</div>
+                      <div key={rt.key} style={{ border: `1px solid ${HAIRLINE}`, borderTop: `3px solid ${NAVY}`, borderRadius: RADII.CARD, backgroundColor: CARD, overflow: "hidden", marginBottom: "10px" }}>
+                        <div style={{ padding: "10px 18px", backgroundColor: CARD_ALT, borderBottom: `1px solid ${HAIRLINE}`, display: "flex", alignItems: "center" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{rt.label}</span>
+                        </div>
                         <div style={{ overflowX: "auto" }}>
                           <table style={{ borderCollapse: "collapse", width: "100%" }}>
                             <thead>
                               <tr>
-                                <th style={{ ...tableHeaderCell, textAlign: "left", minWidth: isMobile ? "100px" : "140px" }}>Entity</th>
+                                <th style={{ ...tableHeaderCellFiling, textAlign: "left", minWidth: isMobile ? "100px" : "140px" }}>Entity</th>
                                 {sec.months.map((m) => (
-                                  <th key={m} style={tableHeaderCell}>{monthLabel(m)}</th>
+                                  <th key={m} style={tableHeaderCellFiling}>{monthLabel(m)}</th>
                                 ))}
                               </tr>
                             </thead>
                             <tbody>
-                              {rt.entities.map((ek) => {
+                              {rt.entities.map((ek, ri) => {
                                 const entity = QUARTERLY_ENTITIES.find((e) => e.key === ek);
+                                const even = ri % 2 === 1;
                                 return (
-                                  <tr key={ek} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-                                    <td style={tableRowLabel}>{entity?.label ?? ek}</td>
+                                  <tr key={ek}>
+                                    <td style={tableRowLabel(even)}>{entity?.label ?? ek}</td>
                                     {sec.months.map((m) => (
-                                      <td key={m} style={tableCell}>
+                                      <td key={m} style={tableCell(even)}>
                                         <FilingCell returnType={rt.key} entityKey={ek} periodKey={m} />
                                       </td>
                                     ))}
@@ -764,27 +820,30 @@ export default function AccountsTaxDashboard() {
 
                   {/* Sub-section B: Quarterly Returns */}
                   <div>
-                    <div style={{ fontSize: "11px", fontWeight: 700, color: INK_700, marginBottom: "12px", textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>
+                    <div style={{ fontSize: "10.5px", fontWeight: 600, color: INK_700, marginBottom: "14px", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>
                       Quarterly Returns
                     </div>
                     {quarterlyRTs.map((rt) => (
-                      <div key={rt.key} style={{ marginBottom: "14px" }}>
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, marginBottom: "8px" }}>{rt.label}</div>
+                      <div key={rt.key} style={{ border: `1px solid ${HAIRLINE}`, borderTop: `3px solid ${NAVY}`, borderRadius: RADII.CARD, backgroundColor: CARD, overflow: "hidden", marginBottom: "10px" }}>
+                        <div style={{ padding: "10px 18px", backgroundColor: CARD_ALT, borderBottom: `1px solid ${HAIRLINE}`, display: "flex", alignItems: "center" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{rt.label}</span>
+                        </div>
                         <div style={{ overflowX: "auto" }}>
                           <table style={{ borderCollapse: "collapse", width: "100%" }}>
                             <thead>
                               <tr>
-                                <th style={{ ...tableHeaderCell, textAlign: "left", minWidth: isMobile ? "100px" : "140px" }}>Entity</th>
-                                <th style={tableHeaderCell}>{selectedReturnQuarter} Filing</th>
+                                <th style={{ ...tableHeaderCellFiling, textAlign: "left", minWidth: isMobile ? "100px" : "140px" }}>Entity</th>
+                                <th style={tableHeaderCellFiling}>{selectedReturnQuarter} Filing</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {rt.entities.map((ek) => {
+                              {rt.entities.map((ek, ri) => {
                                 const entity = QUARTERLY_ENTITIES.find((e) => e.key === ek);
+                                const even = ri % 2 === 1;
                                 return (
-                                  <tr key={ek} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-                                    <td style={tableRowLabel}>{entity?.label ?? ek}</td>
-                                    <td style={tableCell}>
+                                  <tr key={ek}>
+                                    <td style={tableRowLabel(even)}>{entity?.label ?? ek}</td>
+                                    <td style={tableCell(even)}>
                                       <FilingCell returnType={rt.key} entityKey={ek} periodKey={selectedReturnQuarter} />
                                     </td>
                                   </tr>
