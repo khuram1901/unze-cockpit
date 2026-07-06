@@ -465,6 +465,7 @@ export default function HomePage() {
   const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[]>([]);
   const [investmentData, setInvestmentData] = useState<InvestmentSummary | null>(null);
   const [dailyOpsData, setDailyOpsData] = useState<DailyOpsPoint[]>([]);
+  const [taxOverdueCount, setTaxOverdueCount] = useState(0);
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -986,6 +987,59 @@ export default function HomePage() {
       setInvestmentData(computedInvestmentData);
     }
 
+    // Tax return overdue count — current fiscal year
+    const taxYearNow = (() => {
+      const m = new Date().getMonth() + 1;
+      const y = new Date().getFullYear();
+      return m >= 7 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`;
+    })();
+    const { data: taxFilings } = await supabase
+      .from("tax_return_filings")
+      .select("return_type, entity_key, period_key, filed")
+      .eq("tax_year", taxYearNow);
+
+    const todayForTax = new Date();
+    const taxYearStart = parseInt(taxYearNow.split("-")[0], 10);
+    const taxYearNext = taxYearStart + 1;
+    const MONTHLY_RT_ENTITIES: Record<string, string[]> = {
+      FBR_SALES_TAX: ["UT","IMP","ALMAHAR"],
+      PRA_TAX:       ["UT","IMP","BARANH","HD","ALMAHAR"],
+    };
+    const QUARTERLY_RT_ENTITIES = ["UT","IMP","BARANH","HD","ALMAHAR"];
+    const monthlyPeriods = [
+      `${taxYearStart}-07`,`${taxYearStart}-08`,`${taxYearStart}-09`,
+      `${taxYearStart}-10`,`${taxYearStart}-11`,`${taxYearStart}-12`,
+      `${taxYearNext}-01`,`${taxYearNext}-02`,`${taxYearNext}-03`,
+      `${taxYearNext}-04`,`${taxYearNext}-05`,`${taxYearNext}-06`,
+    ];
+    const quarterlyDueDates: Record<string, Date> = {
+      Q1: new Date(`${taxYearStart}-10-15T00:00:00`),
+      Q2: new Date(`${taxYearNext}-01-15T00:00:00`),
+      Q3: new Date(`${taxYearNext}-04-15T00:00:00`),
+      Q4: new Date(`${taxYearNext}-07-15T00:00:00`),
+    };
+
+    const filedSet = new Set((taxFilings || []).filter((r) => r.filed).map((r) => `${r.return_type}:${r.entity_key}:${r.period_key}`));
+
+    let computedTaxOverdue = 0;
+    for (const [rtKey, entities] of Object.entries(MONTHLY_RT_ENTITIES)) {
+      for (const period of monthlyPeriods) {
+        const dueDate = new Date(`${period}-15T00:00:00`);
+        if (todayForTax <= dueDate) continue;
+        for (const ek of entities) {
+          if (!filedSet.has(`${rtKey}:${ek}:${period}`)) computedTaxOverdue++;
+        }
+      }
+    }
+    for (const q of ["Q1","Q2","Q3","Q4"]) {
+      const dueDate = quarterlyDueDates[q];
+      if (todayForTax <= dueDate) continue;
+      for (const ek of QUARTERLY_RT_ENTITIES) {
+        if (!filedSet.has(`INCOME_TAX:${ek}:${q}`)) computedTaxOverdue++;
+      }
+    }
+    setTaxOverdueCount(computedTaxOverdue);
+
     try {
       sessionStorage.setItem(cacheKey, JSON.stringify({
         ts: Date.now(),
@@ -1430,6 +1484,7 @@ export default function HomePage() {
             investmentData={investmentData}
             dailyOpsData={dailyOpsData}
             facilitySynopsis={facilitySynopsis}
+            taxOverdueCount={taxOverdueCount}
             isMobile={isMobile}
             quickTaskAction={quickTaskAction}
             quickMachineResolve={quickMachineResolve}
@@ -1991,7 +2046,7 @@ function ExecutiveDashboardBody({
   ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, dailyOpsData,
-  facilitySynopsis, isMobile, quickTaskAction, quickMachineResolve,
+  facilitySynopsis, taxOverdueCount, isMobile, quickTaskAction, quickMachineResolve,
 }: {
   ctx: UserCtx | null;
   selectedDate: string;
@@ -2015,6 +2070,7 @@ function ExecutiveDashboardBody({
   dailyOpsData: DailyOpsPoint[];
   isMobile: boolean;
   facilitySynopsis: { bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[];
+  taxOverdueCount: number;
   quickTaskAction: (taskId: string, newStatus: string) => Promise<void>;
   quickMachineResolve: (issueId: string) => Promise<void>;
 }) {
@@ -2652,6 +2708,28 @@ function ExecutiveDashboardBody({
             })}
           </div>
         </>
+      )}
+
+      {/* ── TAX RETURNS OVERDUE ── */}
+      {taxOverdueCount > 0 && (
+        <a href="/accounts-tax" style={{ textDecoration: "none", display: "block", marginBottom: "12px" }}>
+          <div style={{
+            backgroundColor: DANGER_SOFT,
+            border: `1px solid ${HAIRLINE}`,
+            borderTop: `3px solid ${RED}`,
+            borderRadius: RADII.CARD,
+            padding: "16px 20px",
+            cursor: "pointer",
+          }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
+              Tax returns overdue
+            </div>
+            <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "36px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", marginBottom: "6px" }}>
+              {taxOverdueCount}
+            </div>
+            <div style={{ fontSize: "12px", color: RED }}>past 15th — filing required</div>
+          </div>
+        </a>
       )}
 
       {/* ── INVESTMENTS ── */}

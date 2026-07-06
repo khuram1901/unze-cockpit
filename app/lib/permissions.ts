@@ -329,6 +329,22 @@ export function canEditOperationsTargets(u: UserCtx) {
   return isPrivileged(u) || lc(u.email) === OPS_HOD_EMAIL;
 }
 
+// ── Tax Accounts Schedule ────────────────────────────────────────
+export function canViewTaxAccounts(u: UserCtx): boolean {
+  const o = ov(u, "can_view_dept_tax_accounts");
+  if (o !== null) return o;
+  if (isPA(u)) return false;
+  return true; // all other authenticated users can view by default
+}
+
+export function canManageTaxSchedule(u: UserCtx): boolean {
+  const o = ov(u, "can_manage_tax_schedule");
+  if (o !== null) return o;
+  if (isPA(u)) return false;
+  if (isAdminTier(u)) return true;
+  return false;
+}
+
 // ── Task ownership ──────────────────────────────────────────────
 const PROTECTED_CREATOR_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, PA_EMAIL];
 

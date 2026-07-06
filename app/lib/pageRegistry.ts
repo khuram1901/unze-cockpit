@@ -57,6 +57,7 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_dept_hr", title: "HR", subtitle: "Human resources dashboard", href: "/department/hr", icon: "🧑‍💼", group: "Departments" },
   { permKey: "can_view_dept_it", title: "IT", subtitle: "IT department dashboard", href: "/department/it", icon: "🖥️", group: "Departments" },
   { permKey: "can_view_dept_tax", title: "Taxation", subtitle: "Tax notices and compliance", href: "/department/taxation", icon: "🧾", group: "Departments" },
+  { permKey: "can_view_dept_tax_accounts", title: "Accounts (Tax)", subtitle: "Quarterly accounts schedule and return filings", href: "/accounts-tax", icon: "📂", group: "Departments" },
 
   // ── Operations (alphabetical) ──
   { permKey: "_calendar", title: "Calendar", subtitle: "Tasks and deadlines view", href: "/calendar", icon: "🗓️", group: "Operations", badgeKey: "calendar" },

@@ -43,6 +43,7 @@ const PERM_COLUMNS = [
   { key: "can_view_dept_hr", label: "HR", group: "Depts", tip: "Access the HR department dashboard" },
   { key: "can_view_dept_tax", label: "Tax", group: "Depts", tip: "Access the Taxation department dashboard" },
   { key: "can_manage_tax_notices", label: "Edit", group: "Tax", tip: "Add, edit, delete and manage tax notices — Active/Inactive, Status, Stage" },
+  { key: "can_manage_tax_schedule", label: "Accts", group: "Tax", tip: "Update the tax accounts schedule and monthly return filings" },
   { key: "can_view_dept_audit", label: "Aud", group: "Depts", tip: "Access the Audit department dashboard" },
   { key: "can_view_dept_admin", label: "Adm", group: "Depts", tip: "Access the Admin department dashboard" },
   { key: "can_view_dept_it", label: "IT", group: "Depts", tip: "Access the IT department dashboard" },
