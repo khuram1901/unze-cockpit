@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, SkeletonRows, ErrorBanner, useToast } from "../lib/SharedUI";
+import { COLOURS, RADII, PageHeader, SectionTitle, SkeletonRows, ErrorBanner, useToast } from "../lib/SharedUI";
 import DateInput from "../lib/DateInput";
 import { formatDateUK } from "../lib/dateUtils";
 
@@ -67,7 +67,7 @@ async function authedFetch(url: string, opts: RequestInit = {}) {
 function sizeRow(label: string, qty: number | null, colour?: string) {
   if (!qty) return null;
   return (
-    <span style={{ fontSize: "12px", color: colour || COLOURS.SLATE, marginRight: "10px" }}>
+    <span style={{ fontSize: "12px", color: colour || COLOURS.SLATE, marginRight: "10px", fontFamily: "var(--font-mono)" }}>
       {label}: <strong>{qty.toLocaleString()}</strong>
     </span>
   );
@@ -77,7 +77,6 @@ function totalPoles(...nums: number[]) {
   return nums.reduce((a, b) => a + (b || 0), 0);
 }
 
-// Returns: "expired" | "expiring-soon" | "ok" | null
 function expiryStatus(expiry_date: string | null): "expired" | "expiring-soon" | "ok" | null {
   if (!expiry_date) return null;
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -153,7 +152,11 @@ function DispatchModal({ target, onClose, onSaved }: {
     onClose();
   }
 
-  const inputSt: React.CSSProperties = { border: "1px solid #cbd5e1", borderRadius: "6px", padding: "7px 10px", fontSize: "13px", width: "100%", boxSizing: "border-box", backgroundColor: "#fff" };
+  const inputSt: React.CSSProperties = {
+    border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
+    padding: "7px 10px", fontSize: "13px", width: "100%",
+    boxSizing: "border-box" as const, backgroundColor: COLOURS.CARD,
+  };
 
   return (
     <div
@@ -161,13 +164,13 @@ function DispatchModal({ target, onClose, onSaved }: {
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
       style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
     >
-      <div style={{ backgroundColor: "#fff", borderRadius: "12px", padding: "20px 24px", width: "100%", maxWidth: "480px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+      <div style={{ backgroundColor: COLOURS.CARD, borderRadius: RADII.CARD, padding: "20px 24px", width: "100%", maxWidth: "480px", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
           <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY }}>Record Dispatch — Letter #{target.letterNumber}</div>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: COLOURS.SLATE, lineHeight: 1 }}>×</button>
         </div>
 
-        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px", padding: "6px 10px", backgroundColor: "#f8fafc", borderRadius: "6px" }}>
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px", padding: "6px 10px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.XS }}>
           Remaining on letter:{" "}
           {[
             target.remaining_31 > 0 && `${target.remaining_31} × 31ft`,
@@ -232,13 +235,15 @@ function DispatchModal({ target, onClose, onSaved }: {
           <input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional" style={inputSt} />
         </div>
 
-        {error && <div style={{ fontSize: "13px", color: "#dc2626", marginBottom: "10px", padding: "6px 10px", backgroundColor: "#fef2f2", borderRadius: "6px" }}>{error}</div>}
+        {error && (
+          <div style={{ fontSize: "13px", color: COLOURS.RED, marginBottom: "10px", padding: "6px 10px", backgroundColor: COLOURS.DANGER_SOFT, borderRadius: RADII.XS }}>{error}</div>
+        )}
 
         <div style={{ display: "flex", gap: "8px" }}>
-          <button onClick={save} disabled={saving} style={{ padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 700, backgroundColor: COLOURS.NAVY, color: "#fff", border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
+          <button onClick={save} disabled={saving} style={{ padding: "8px 18px", borderRadius: RADII.PILL, fontSize: "14px", fontWeight: 700, backgroundColor: COLOURS.NAVY, color: "#fff", border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
             {saving ? "Saving…" : "Save Dispatch"}
           </button>
-          <button onClick={onClose} style={{ padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "#fff", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+          <button onClick={onClose} style={{ padding: "8px 18px", borderRadius: RADII.PILL, fontSize: "14px", fontWeight: 600, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
         </div>
       </div>
     </div>
@@ -255,11 +260,11 @@ function LetterRow({ letter, expanded, onToggle, onDispatch }: {
   const expStatus = expiryStatus(letter.expiry_date);
 
   const expiryBadge = expStatus === "expired"
-    ? { label: `Expired ${formatDateUK(letter.expiry_date!)}`, bg: "#fef2f2", color: "#dc2626" }
+    ? { label: `Expired ${formatDateUK(letter.expiry_date!)}`, bg: COLOURS.DANGER_SOFT, color: COLOURS.RED }
     : expStatus === "expiring-soon"
-    ? { label: `Expires ${formatDateUK(letter.expiry_date!)}`, bg: "#fffbeb", color: "#d97706" }
+    ? { label: `Expires ${formatDateUK(letter.expiry_date!)}`, bg: COLOURS.WARNING_SOFT, color: COLOURS.AMBER }
     : expStatus === "ok"
-    ? { label: `Exp. ${formatDateUK(letter.expiry_date!)}`, bg: "#f0fdf4", color: "#16a34a" }
+    ? { label: `Exp. ${formatDateUK(letter.expiry_date!)}`, bg: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }
     : null;
 
   return (
@@ -268,31 +273,31 @@ function LetterRow({ letter, expanded, onToggle, onDispatch }: {
         onClick={onToggle}
         style={{
           display: "flex", alignItems: "center", gap: "8px", padding: "7px 10px",
-          borderRadius: "6px", cursor: "pointer", flexWrap: "wrap",
-          backgroundColor: expStatus === "expired" ? "#fef2f2" : fullyCollected ? "#f0fdf4" : "var(--bg-card-hover, #f8fafc)",
-          border: `1px solid ${expStatus === "expired" ? "#fecaca" : expStatus === "expiring-soon" ? "#fde68a" : fullyCollected ? "#bbf7d0" : "var(--border-light, #f1f5f9)"}`,
+          borderRadius: RADII.SM, cursor: "pointer", flexWrap: "wrap",
+          backgroundColor: expStatus === "expired" ? COLOURS.DANGER_SOFT : fullyCollected ? COLOURS.SUCCESS_SOFT : COLOURS.CARD_ALT,
+          border: `1px solid ${expStatus === "expired" ? COLOURS.RED : expStatus === "expiring-soon" ? COLOURS.AMBER : fullyCollected ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
         }}
       >
         <span style={{ fontSize: "13px" }}>{expanded ? "▾" : "▸"}</span>
-        <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
+        <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>
           Letter #{letter.letter_number}
         </span>
-        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>— {formatDateUK(letter.issue_date)} — Auth'd by {letter.issued_by}</span>
+        <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>— {formatDateUK(letter.issue_date)} — Auth&apos;d by {letter.issued_by}</span>
         {expiryBadge && (
-          <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 7px", borderRadius: "10px", backgroundColor: expiryBadge.bg, color: expiryBadge.color }}>
+          <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 7px", borderRadius: RADII.PILL, backgroundColor: expiryBadge.bg, color: expiryBadge.color }}>
             {expiryBadge.label}
           </span>
         )}
         <span style={{ marginLeft: "auto", display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Authorized: <strong>{authorized.toLocaleString()}</strong></span>
-          <span style={{ fontSize: "12px", color: "#2563eb" }}>Collected: <strong>{dispatched.toLocaleString()}</strong></span>
-          <span style={{ fontSize: "12px", fontWeight: 700, color: fullyCollected ? "#16a34a" : "#dc2626" }}>
+          <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontFamily: "var(--font-mono)" }}>Authorized: <strong>{authorized.toLocaleString()}</strong></span>
+          <span style={{ fontSize: "12px", color: COLOURS.BLUE, fontFamily: "var(--font-mono)" }}>Collected: <strong>{dispatched.toLocaleString()}</strong></span>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: fullyCollected ? COLOURS.GREEN : COLOURS.RED, fontFamily: "var(--font-mono)" }}>
             Balance: {remaining.toLocaleString()}
           </span>
           {!fullyCollected && (
             <button
               onClick={(e) => { e.stopPropagation(); onDispatch(); }}
-              style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" }}
+              style={{ padding: "3px 10px", borderRadius: RADII.PILL, fontSize: "11px", fontWeight: 700, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" }}
             >
               + Dispatch
             </button>
@@ -303,9 +308,9 @@ function LetterRow({ letter, expanded, onToggle, onDispatch }: {
         <div style={{ padding: "8px 12px", fontSize: "12px", color: COLOURS.SLATE }}>
           <SizeBadges label="Auth'd" qty_31={letter.qty_31} qty_36={letter.qty_36} qty_40={letter.qty_40} qty_45={letter.qty_45} qty_meter={letter.qty_meter} />
           <span style={{ margin: "0 10px" }}>·</span>
-          <SizeBadges label="Collected" qty_31={letter.dispatched_31} qty_36={letter.dispatched_36} qty_40={letter.dispatched_40} qty_45={letter.dispatched_45} qty_meter={letter.dispatched_meter} colour="#2563eb" />
+          <SizeBadges label="Collected" qty_31={letter.dispatched_31} qty_36={letter.dispatched_36} qty_40={letter.dispatched_40} qty_45={letter.dispatched_45} qty_meter={letter.dispatched_meter} colour={COLOURS.BLUE} />
           <span style={{ margin: "0 10px" }}>·</span>
-          <SizeBadges label="Balance" qty_31={letter.remaining_31} qty_36={letter.remaining_36} qty_40={letter.remaining_40} qty_45={letter.remaining_45} qty_meter={letter.remaining_meter} colour={remaining === 0 ? "#16a34a" : "#dc2626"} />
+          <SizeBadges label="Balance" qty_31={letter.remaining_31} qty_36={letter.remaining_36} qty_40={letter.remaining_40} qty_45={letter.remaining_45} qty_meter={letter.remaining_meter} colour={remaining === 0 ? COLOURS.GREEN : COLOURS.RED} />
           {letter.notes && <div style={{ marginTop: "4px", fontStyle: "italic" }}>{letter.notes}</div>}
         </div>
       )}
@@ -330,13 +335,13 @@ function ContractorRow({ group, expandedLetters, onToggle, onLetterToggle, onDis
         onClick={onToggle}
         style={{
           display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px",
-          borderRadius: "6px", cursor: "pointer", flexWrap: "wrap",
-          backgroundColor: "var(--bg-card, #ffffff)",
-          border: "1px solid var(--border-color, #e2e8f0)",
+          borderRadius: RADII.SM, cursor: "pointer", flexWrap: "wrap",
+          backgroundColor: COLOURS.CARD,
+          border: `1px solid ${COLOURS.HAIRLINE}`,
         }}
       >
         <span style={{ fontSize: "13px" }}>{isOpen ? "▾" : "▸"}</span>
-        <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>
+        <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>
           {group.contractor_name}
         </span>
         {group.contractor_phone && (
@@ -346,8 +351,8 @@ function ContractorRow({ group, expandedLetters, onToggle, onLetterToggle, onDis
           {group.letters.length} letter{group.letters.length !== 1 ? "s" : ""}
         </span>
         <span style={{ marginLeft: "auto", display: "flex", gap: "14px", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Auth'd: <strong>{authorized.toLocaleString()}</strong></span>
-          <span style={{ fontSize: "12px", fontWeight: 700, color: remaining === 0 ? "#16a34a" : "#dc2626" }}>
+          <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontFamily: "var(--font-mono)" }}>Auth&apos;d: <strong>{authorized.toLocaleString()}</strong></span>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: remaining === 0 ? COLOURS.GREEN : COLOURS.RED, fontFamily: "var(--font-mono)" }}>
             Balance: {remaining.toLocaleString()}
           </span>
         </span>
@@ -384,48 +389,47 @@ function PORow({ item, expandedKeys, onToggle, onDispatch }: {
         onClick={() => onToggle(po.id)}
         style={{
           display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px",
-          borderRadius: "8px", cursor: "pointer", flexWrap: "wrap",
-          backgroundColor: "var(--bg-card, #ffffff)",
-          border: `1px solid ${isClosed ? "#e2e8f0" : "#cbd5e1"}`,
-          borderLeft: `4px solid ${isClosed ? "#94a3b8" : po.is_system_unallocated ? "#f59e0b" : COLOURS.NAVY}`,
+          borderRadius: RADII.SM, cursor: "pointer", flexWrap: "wrap",
+          backgroundColor: COLOURS.CARD,
+          border: `1px solid ${COLOURS.HAIRLINE}`,
+          borderLeft: `4px solid ${isClosed ? COLOURS.INK_400 : po.is_system_unallocated ? COLOURS.AMBER : COLOURS.NAVY}`,
         }}
       >
         <span style={{ fontSize: "13px" }}>{isExpanded ? "▾" : "▸"}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>
               {po.is_system_unallocated ? "Unze Unallocated Stock" : `${po.customer_name} — PO #${po.po_number}`}
             </span>
             {po.po_label && !po.is_system_unallocated && (
-              <span style={{ fontSize: "12px", padding: "1px 8px", borderRadius: "10px", backgroundColor: "#eff6ff", color: "#2563eb", fontWeight: 600 }}>
+              <span style={{ fontSize: "12px", padding: "1px 8px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: COLOURS.BLUE, fontWeight: 600, border: `1px solid ${COLOURS.HAIRLINE}` }}>
                 {po.po_label}
               </span>
             )}
             {isClosed && (
-              <span style={{ fontSize: "11px", padding: "1px 8px", borderRadius: "10px", backgroundColor: "#f1f5f9", color: COLOURS.SLATE, fontWeight: 700 }}>
+              <span style={{ fontSize: "11px", padding: "1px 8px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: COLOURS.SLATE, fontWeight: 700 }}>
                 CLOSED
               </span>
             )}
             {po.fulfillment_pct !== null && (
-              <span style={{ fontSize: "12px", color: po.fulfillment_pct >= 100 ? "#16a34a" : "#d97706", fontWeight: 600 }}>
+              <span style={{ fontSize: "12px", color: po.fulfillment_pct >= 100 ? COLOURS.GREEN : COLOURS.AMBER, fontWeight: 600, fontFamily: "var(--font-mono)" }}>
                 {po.fulfillment_pct}% produced
               </span>
             )}
           </div>
-          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px", fontFamily: "var(--font-mono)" }}>
             {!po.is_system_unallocated && `Ordered: ${totalPoles(po.ordered_31, po.ordered_36, po.ordered_40, po.ordered_45, po.ordered_meter).toLocaleString()} · `}
-            Produced: {produced.toLocaleString()} · Dispatched: {dispatched.toLocaleString()} · In stock: <strong style={{ color: inStock > 0 ? COLOURS.NAVY : "#16a34a" }}>{inStock.toLocaleString()}</strong>
+            Produced: {produced.toLocaleString()} · Dispatched: {dispatched.toLocaleString()} · In stock: <strong style={{ color: inStock > 0 ? COLOURS.NAVY : COLOURS.GREEN }}>{inStock.toLocaleString()}</strong>
             {po.estimated_completion_date && (
-              <span style={{ marginLeft: "10px", padding: "1px 8px", borderRadius: "10px", backgroundColor: "#eff6ff", color: "#2563eb", fontWeight: 700, fontSize: "11px" }}>
+              <span style={{ marginLeft: "10px", padding: "1px 8px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: COLOURS.BLUE, fontWeight: 700, fontSize: "11px", border: `1px solid ${COLOURS.HAIRLINE}` }}>
                 Est. completion: {formatDateUK(po.estimated_completion_date)}
                 {po.daily_rate > 0 && <span style={{ fontWeight: 400, marginLeft: "4px" }}>({po.daily_rate}/day avg)</span>}
               </span>
             )}
           </div>
-          {/* Size breakdown for in-stock — only shown when there's stock */}
           {inStock > 0 && (
-            <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px", display: "flex", gap: "12px", flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>In stock by size:</span>
+            <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px", display: "flex", gap: "12px", flexWrap: "wrap", fontFamily: "var(--font-mono)" }}>
+              <span style={{ fontWeight: 600, color: COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>In stock by size:</span>
               {po.in_stock_31 > 0 && <span>31 ft: <strong>{po.in_stock_31.toLocaleString()}</strong></span>}
               {po.in_stock_36 > 0 && <span>36 ft: <strong>{po.in_stock_36.toLocaleString()}</strong></span>}
               {po.in_stock_40 > 0 && <span>40 ft: <strong>{po.in_stock_40.toLocaleString()}</strong></span>}
@@ -533,7 +537,6 @@ export default function StockPage() {
     setExpandedKeys(keys);
   }
 
-  // Plant-level totals
   const plantStock = summary.reduce(
     (s, i) => ({
       s31:   s.s31   + i.po.in_stock_31,
@@ -548,7 +551,6 @@ export default function StockPage() {
   const activePOs = summary.filter((i) => i.po.status === "Active" && !i.po.is_system_unallocated).length;
   const visibleSummary = showClosed ? summary : summary.filter((i) => i.po.status === "Active");
 
-  // Expiry warnings — letters expiring within 14 days or already expired
   const expiryWarnings: { po_label: string; contractor: string; letter_number: string; expiry_date: string; status: "expired" | "expiring-soon" }[] = [];
   for (const item of summary) {
     if (item.po.status === "Closed") continue;
@@ -572,17 +574,22 @@ export default function StockPage() {
     <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions...</p></main></AuthWrapper>
   );
 
+  const ghostBtn: React.CSSProperties = {
+    padding: "5px 12px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 600,
+    border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, cursor: "pointer",
+  };
+
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <PageHeader />
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "18px" }}>
           <div>
-            <h1 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary, #1e293b)", margin: "0 0 4px" }}>Stock</h1>
+            <h1 style={{ fontSize: "22px", fontWeight: 800, color: COLOURS.NAVY, margin: "0 0 4px" }}>Stock</h1>
             <p style={{ fontSize: "14px", color: COLOURS.SLATE, margin: 0 }}>Customer POs, authority letters, and dispatch balances</p>
           </div>
-          <a href="/stock/manage" style={{ padding: "8px 16px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, backgroundColor: COLOURS.NAVY, color: "white", textDecoration: "none" }}>
-            Manage POs & Letters
+          <a href="/stock/manage" style={{ padding: "8px 16px", borderRadius: RADII.PILL, fontSize: "14px", fontWeight: 600, backgroundColor: COLOURS.NAVY, color: "white", textDecoration: "none" }}>
+            Manage POs &amp; Letters
           </a>
         </div>
 
@@ -593,9 +600,9 @@ export default function StockPage() {
               key={p.id}
               onClick={() => setSelectedPlant(p.id)}
               style={{
-                padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer",
-                border: `2px solid ${selectedPlant === p.id ? COLOURS.NAVY : "#e2e8f0"}`,
-                backgroundColor: selectedPlant === p.id ? COLOURS.NAVY : "var(--bg-card, #fff)",
+                padding: "8px 18px", borderRadius: RADII.PILL, fontSize: "14px", fontWeight: 600, cursor: "pointer",
+                border: `1px solid ${selectedPlant === p.id ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                backgroundColor: selectedPlant === p.id ? COLOURS.NAVY : COLOURS.CARD,
                 color: selectedPlant === p.id ? "white" : COLOURS.NAVY,
               }}
             >
@@ -606,18 +613,18 @@ export default function StockPage() {
 
         {/* Plant stock summary strip */}
         {!loading && summary.length > 0 && (
-          <div style={{ marginBottom: "14px", padding: "12px 16px", backgroundColor: COLOURS.NAVY, borderRadius: "10px", color: "#fff" }}>
+          <div style={{ marginBottom: "14px", padding: "12px 16px", backgroundColor: COLOURS.NAVY, borderRadius: RADII.CARD, color: "#fff" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
-              <span style={{ fontSize: "13px", fontWeight: 700, opacity: 0.8, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, opacity: 0.8, letterSpacing: "0.04em", textTransform: "uppercase" as const }}>
                 {plants.find((p) => p.id === selectedPlant)?.name} — Total In Stock
               </span>
-              <div style={{ display: "flex", gap: "16px", fontSize: "12px", opacity: 0.7 }}>
+              <div style={{ display: "flex", gap: "16px", fontSize: "12px", opacity: 0.7, fontFamily: "var(--font-mono)" }}>
                 <span>Active POs: <strong>{activePOs}</strong></span>
                 <span>All POs: <strong>{summary.length}</strong></span>
               </div>
             </div>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: "26px", fontWeight: 800, lineHeight: 1 }}>{totalInStock.toLocaleString()}</span>
+              <span style={{ fontSize: "26px", fontWeight: 800, lineHeight: 1, fontFamily: "var(--font-mono)" }}>{totalInStock.toLocaleString()}</span>
               <span style={{ fontSize: "13px", opacity: 0.7, marginRight: "8px" }}>poles total</span>
               <div style={{ width: "1px", height: "32px", backgroundColor: "rgba(255,255,255,0.2)", marginRight: "8px" }} />
               {[
@@ -627,8 +634,8 @@ export default function StockPage() {
                 { label: "45 ft", value: plantStock.s45 },
                 { label: "Mtr",   value: plantStock.meter },
               ].filter((s) => s.value > 0).map((s) => (
-                <div key={s.label} style={{ padding: "6px 14px", borderRadius: "8px", backgroundColor: "rgba(255,255,255,0.12)", textAlign: "center" }}>
-                  <div style={{ fontSize: "18px", fontWeight: 700, lineHeight: 1 }}>{s.value.toLocaleString()}</div>
+                <div key={s.label} style={{ padding: "6px 14px", borderRadius: RADII.SM, backgroundColor: "rgba(255,255,255,0.12)", textAlign: "center" as const }}>
+                  <div style={{ fontSize: "18px", fontWeight: 700, lineHeight: 1, fontFamily: "var(--font-mono)" }}>{s.value.toLocaleString()}</div>
                   <div style={{ fontSize: "11px", opacity: 0.75, marginTop: "2px" }}>{s.label}</div>
                 </div>
               ))}
@@ -638,12 +645,12 @@ export default function StockPage() {
 
         {/* Expiry warnings banner */}
         {expiryWarnings.length > 0 && (
-          <div style={{ marginBottom: "14px", border: "1px solid #fde68a", borderRadius: "8px", backgroundColor: "#fffbeb", padding: "10px 14px" }}>
-            <div style={{ fontSize: "13px", fontWeight: 700, color: "#92400e", marginBottom: "6px" }}>
+          <div style={{ marginBottom: "14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.WARNING_SOFT, padding: "10px 14px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.AMBER, marginBottom: "6px" }}>
               ⚠ Authority Letter Expiry Alerts
             </div>
             {expiryWarnings.map((w, i) => (
-              <div key={i} style={{ fontSize: "12px", color: w.status === "expired" ? "#dc2626" : "#d97706", marginBottom: "3px" }}>
+              <div key={i} style={{ fontSize: "12px", color: w.status === "expired" ? COLOURS.RED : COLOURS.AMBER, marginBottom: "3px" }}>
                 <strong>{w.status === "expired" ? "EXPIRED" : "Expiring soon"}:</strong> Letter #{w.letter_number} ({w.po_label} · {w.contractor}) — {formatDateUK(w.expiry_date)}
               </div>
             ))}
@@ -654,15 +661,15 @@ export default function StockPage() {
         <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center" }}>
           <SectionTitle title="Purchase Orders" />
           <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
-            <button onClick={expandAll} style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.NAVY, cursor: "pointer" }}>
+            <button onClick={expandAll} style={{ ...ghostBtn, color: COLOURS.NAVY }}>
               Expand all
             </button>
-            <button onClick={() => setExpandedKeys(new Set())} style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>
+            <button onClick={() => setExpandedKeys(new Set())} style={{ ...ghostBtn, color: COLOURS.SLATE }}>
               Collapse all
             </button>
             <button
               onClick={() => setShowClosed((v) => !v)}
-              style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}
+              style={{ ...ghostBtn, color: COLOURS.SLATE }}
             >
               {showClosed ? "Hide closed" : "Show closed"}
             </button>
@@ -672,7 +679,7 @@ export default function StockPage() {
         {error && <ErrorBanner message={error} onRetry={() => loadSummary(selectedPlant)} />}
 
         {loading ? <SkeletonRows count={5} height="48px" /> : visibleSummary.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "32px", color: COLOURS.SLATE, border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #fff)" }}>
+          <div style={{ textAlign: "center" as const, padding: "32px", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD }}>
             No POs found for this plant. <a href="/stock/manage" style={{ color: COLOURS.NAVY, fontWeight: 600 }}>Add the first PO →</a>
           </div>
         ) : (

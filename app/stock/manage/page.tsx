@@ -5,7 +5,7 @@ import AuthWrapper from "../../lib/AuthWrapper";
 import { useRequireCapability } from "../../lib/useRouteGuard";
 import { supabase } from "../../lib/supabase";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, primaryButtonStyle, inputStyle, labelStyle } from "../../lib/SharedUI";
+import { COLOURS, RADII, PageHeader, SectionTitle, useToast, useConfirm, primaryButtonStyle, inputStyle, labelStyle } from "../../lib/SharedUI";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInput from "../../lib/DateInput";
 
@@ -76,6 +76,16 @@ function NumInput({ value, onChange, placeholder }: { value: string; onChange: (
   );
 }
 
+// Shared ghost button for secondary actions
+function ghostBtn(active?: boolean): React.CSSProperties {
+  return {
+    padding: "5px 12px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600,
+    border: `1px solid ${COLOURS.HAIRLINE}`,
+    backgroundColor: active ? COLOURS.CARD_ALT : COLOURS.CARD,
+    color: COLOURS.SLATE, cursor: "pointer",
+  };
+}
+
 export default function StockManagePage() {
   const { checking } = useRequireCapability("stock");
   const isMobile = useMobile();
@@ -88,48 +98,38 @@ export default function StockManagePage() {
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // PO form
   const [showPOForm, setShowPOForm] = useState(false);
   const [poForm, setPOForm] = useState(emptyPO);
   const [savingPO, setSavingPO] = useState(false);
 
-  // Letter form
   const [showLetterForm, setShowLetterForm] = useState(false);
   const [selectedPOId, setSelectedPOId] = useState("");
   const [letterForm, setLetterForm] = useState(emptyLetter);
   const [savingLetter, setSavingLetter] = useState(false);
 
-  // Contractor form
   const [showContractorForm, setShowContractorForm] = useState(false);
   const [contractorForm, setContractorForm] = useState(emptyContractor);
   const [savingContractor, setSavingContractor] = useState(false);
 
-  // Letters list (for a selected PO)
   const [viewLettersPOId, setViewLettersPOId] = useState<string | null>(null);
   const [letters, setLetters] = useState<AuthorityLetter[]>([]);
   const [lettersLoading, setLettersLoading] = useState(false);
-  // Edit letter
   const [editLetterId, setEditLetterId] = useState<string | null>(null);
   const [editLetterForm, setEditLetterForm] = useState(emptyLetter);
   const [savingEditLetter, setSavingEditLetter] = useState(false);
-  // Edit contractor
   const [editContractorId, setEditContractorId] = useState<string | null>(null);
   const [editContractorForm, setEditContractorForm] = useState(emptyContractor);
   const [savingEditContractor, setSavingEditContractor] = useState(false);
-  // Dispatch records for a letter
   const [viewDispatchLetterId, setViewDispatchLetterId] = useState<string | null>(null);
   const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
   const [dispatchesLoading, setDispatchesLoading] = useState(false);
-  // New dispatch
   const [showNewDispatchForm, setShowNewDispatchForm] = useState(false);
   const [newDispatchForm, setNewDispatchForm] = useState({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
   const [savingNewDispatch, setSavingNewDispatch] = useState(false);
-  // Edit dispatch
   const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
   const [editDispatchForm, setEditDispatchForm] = useState({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
   const [savingEditDispatch, setSavingEditDispatch] = useState(false);
 
-  // Contractor performance
   const [performance, setPerformance] = useState<ContractorPerf[]>([]);
   const [perfLoading, setPerfLoading] = useState(false);
 
@@ -373,7 +373,6 @@ export default function StockManagePage() {
     setShowNewDispatchForm(false);
     setNewDispatchForm({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
     loadDispatches(viewDispatchLetterId);
-    // Refresh PO list in case the auto-close triggered
     loadPOs();
   }
 
@@ -429,7 +428,7 @@ export default function StockManagePage() {
         <PageHeader />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "18px" }}>
           <div>
-            <h1 style={{ fontSize: "22px", fontWeight: 800, color: "var(--text-primary,#1e293b)", margin: "0 0 4px" }}>Manage POs & Letters</h1>
+            <h1 style={{ fontSize: "22px", fontWeight: 800, color: COLOURS.NAVY, margin: "0 0 4px" }}>Manage POs &amp; Letters</h1>
             <p style={{ fontSize: "14px", color: COLOURS.SLATE, margin: 0 }}>Create purchase orders, add contractors, issue authority letters</p>
           </div>
           <a href="/stock" style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, textDecoration: "none" }}>← Back to Stock</a>
@@ -438,7 +437,12 @@ export default function StockManagePage() {
         {/* Plant selector */}
         <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
           {plants.map((p) => (
-            <button key={p.id} onClick={() => setSelectedPlant(p.id)} style={{ padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, cursor: "pointer", border: `2px solid ${selectedPlant === p.id ? COLOURS.NAVY : "#e2e8f0"}`, backgroundColor: selectedPlant === p.id ? COLOURS.NAVY : "var(--bg-card,#fff)", color: selectedPlant === p.id ? "white" : COLOURS.NAVY }}>
+            <button key={p.id} onClick={() => setSelectedPlant(p.id)} style={{
+              padding: "8px 18px", borderRadius: RADII.PILL, fontSize: "14px", fontWeight: 600, cursor: "pointer",
+              border: `1px solid ${selectedPlant === p.id ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+              backgroundColor: selectedPlant === p.id ? COLOURS.NAVY : COLOURS.CARD,
+              color: selectedPlant === p.id ? "white" : COLOURS.NAVY,
+            }}>
               {p.name}
             </button>
           ))}
@@ -453,7 +457,7 @@ export default function StockManagePage() {
         </div>
 
         {showPOForm && (
-          <div style={{ border: "1px solid var(--border-color,#e2e8f0)", borderRadius: "10px", padding: "18px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px" }}>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "18px", backgroundColor: COLOURS.CARD, marginBottom: "16px" }}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
               <Field label="Customer name *"><input value={poForm.customer_name} onChange={(e) => setPOForm({ ...poForm, customer_name: e.target.value })} placeholder="e.g. FESCO, MEPCO, Packages Ltd" style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="PO number *"><input value={poForm.po_number} onChange={(e) => setPOForm({ ...poForm, po_number: e.target.value })} placeholder="e.g. FESCO-2024-001 or PKG-PO-005" style={{ ...inputStyle, width: "100%" }} /></Field>
@@ -476,7 +480,7 @@ export default function StockManagePage() {
               <Field label="45ft"><NumInput value={poForm.opening_produced_45} onChange={(v) => setPOForm({ ...poForm, opening_produced_45: v })} /></Field>
               <Field label="Meter"><NumInput value={poForm.opening_produced_meter} onChange={(v) => setPOForm({ ...poForm, opening_produced_meter: v })} /></Field>
             </div>
-            <Field label="Notes"><textarea value={poForm.notes} onChange={(e) => setPOForm({ ...poForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} /></Field>
+            <Field label="Notes"><textarea value={poForm.notes} onChange={(e) => setPOForm({ ...poForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" as const }} /></Field>
             <button onClick={savePO} disabled={savingPO} style={{ ...primaryButtonStyle, opacity: savingPO ? 0.6 : 1 }}>
               {savingPO ? "Saving…" : "Create PO"}
             </button>
@@ -486,216 +490,225 @@ export default function StockManagePage() {
         {loading ? <div style={{ color: COLOURS.SLATE, fontSize: "14px" }}>Loading…</div> : (
           <>
             {activePOs.length === 0 && !showPOForm && (
-              <div style={{ textAlign: "center", padding: "24px", color: COLOURS.SLATE, border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px" }}>
+              <div style={{ textAlign: "center" as const, padding: "24px", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD, marginBottom: "16px" }}>
                 No active POs for this plant. Add the first one above.
               </div>
             )}
             {[...activePOs, ...closedPOs].map((po) => (
               <div key={po.id} style={{ marginBottom: "8px" }}>
-              <div style={{ border: "1px solid var(--border-color,#e2e8f0)", borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card,#fff)", opacity: po.status === "Closed" ? 0.6 : 1, borderLeft: `4px solid ${po.status === "Closed" ? "#94a3b8" : COLOURS.NAVY}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
-                  <div>
-                    <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>
-                      {po.customer_name} — PO #{po.po_number}
-                      {po.po_label && <span style={{ fontSize: "12px", marginLeft: "8px", padding: "1px 8px", borderRadius: "10px", backgroundColor: "#eff6ff", color: "#2563eb", fontWeight: 600 }}>{po.po_label}</span>}
-                      {po.status === "Closed" && <span style={{ fontSize: "11px", marginLeft: "8px", padding: "1px 8px", borderRadius: "10px", backgroundColor: "#f1f5f9", color: COLOURS.SLATE, fontWeight: 700 }}>CLOSED</span>}
+                <div style={{
+                  border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
+                  padding: "12px 14px", backgroundColor: COLOURS.CARD,
+                  opacity: po.status === "Closed" ? 0.6 : 1,
+                  borderLeft: `4px solid ${po.status === "Closed" ? COLOURS.INK_400 : COLOURS.NAVY}`,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px" }}>
+                    <div>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>
+                        {po.customer_name} — PO #{po.po_number}
+                        {po.po_label && (
+                          <span style={{ fontSize: "12px", marginLeft: "8px", padding: "1px 8px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: COLOURS.BLUE, fontWeight: 600, border: `1px solid ${COLOURS.HAIRLINE}` }}>{po.po_label}</span>
+                        )}
+                        {po.status === "Closed" && (
+                          <span style={{ fontSize: "11px", marginLeft: "8px", padding: "1px 8px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: COLOURS.SLATE, fontWeight: 700 }}>CLOSED</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px", fontFamily: "var(--font-mono)" }}>
+                        {po.start_date && `From ${formatDateUK(po.start_date)} · `}
+                        Ordered: {[po.ordered_31 && `${po.ordered_31} × 31ft`, po.ordered_36 && `${po.ordered_36} × 36ft`, po.ordered_40 && `${po.ordered_40} × 40ft`, po.ordered_45 && `${po.ordered_45} × 45ft`, po.ordered_meter && `${po.ordered_meter} × Mtr`].filter(Boolean).join(", ")}
+                      </div>
                     </div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px" }}>
-                      {po.start_date && `From ${formatDateUK(po.start_date)} · `}
-                      Ordered: {[po.ordered_31 && `${po.ordered_31} × 31ft`, po.ordered_36 && `${po.ordered_36} × 36ft`, po.ordered_40 && `${po.ordered_40} × 40ft`, po.ordered_45 && `${po.ordered_45} × 45ft`, po.ordered_meter && `${po.ordered_meter} × Mtr`].filter(Boolean).join(", ")}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    <button
-                      onClick={() => { setSelectedPOId(po.id); setShowLetterForm(true); }}
-                      style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: "var(--bg-card,#fff)", color: COLOURS.NAVY, cursor: "pointer" }}
-                    >
-                      + Authority Letter
-                    </button>
-                    <button
-                      onClick={() => {
-                        const isOpen = viewLettersPOId === po.id;
-                        setViewLettersPOId(isOpen ? null : po.id);
-                        setEditLetterId(null);
-                        setViewDispatchLetterId(null);
-                        if (!isOpen) loadLetters(po.id);
-                      }}
-                      style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: viewLettersPOId === po.id ? "#f1f5f9" : "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}
-                    >
-                      {viewLettersPOId === po.id ? "Hide Letters" : "Edit Letters"}
-                    </button>
-                    {po.status === "Active" && (
-                      <button onClick={() => closePO(po)} style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>
-                        Close PO
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => { setSelectedPOId(po.id); setShowLetterForm(true); }}
+                        style={{ padding: "5px 12px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 600, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, cursor: "pointer" }}
+                      >
+                        + Authority Letter
                       </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Letters panel for this PO ── */}
-              {viewLettersPOId === po.id && (
-                <div style={{ marginTop: "10px", borderTop: "1px solid #e2e8f0", paddingTop: "10px" }}>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "8px" }}>Authority Letters</div>
-                  {lettersLoading ? (
-                    <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Loading…</div>
-                  ) : letters.length === 0 ? (
-                    <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>No letters issued for this PO yet.</div>
-                  ) : letters.map((l) => (
-                    <div key={l.id} style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px 12px", marginBottom: "8px", backgroundColor: "var(--bg-card,#fff)" }}>
-                      {editLetterId === l.id ? (
-                        <div>
-                          <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>Edit Letter #{l.letter_number}</div>
-                          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-                            <Field label="Contractor">
-                              <select value={editLetterForm.contractor_id} onChange={(e) => setEditLetterForm({ ...editLetterForm, contractor_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
-                                <option value="">Select…</option>
-                                {contractors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                              </select>
-                            </Field>
-                            <Field label="Letter number"><input value={editLetterForm.letter_number} onChange={(e) => setEditLetterForm({ ...editLetterForm, letter_number: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                            <Field label="Issue date"><DateInput value={editLetterForm.issue_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                            <Field label="Issued by"><input value={editLetterForm.issued_by} onChange={(e) => setEditLetterForm({ ...editLetterForm, issued_by: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                            <Field label="Expiry date"><DateInput value={editLetterForm.expiry_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                          </div>
-                          <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, margin: "8px 0 6px" }}>Authorised quantities</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: "8px" }}>
-                            <Field label="31ft"><NumInput value={editLetterForm.qty_31} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_31: v })} /></Field>
-                            <Field label="36ft"><NumInput value={editLetterForm.qty_36} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_36: v })} /></Field>
-                            <Field label="40ft"><NumInput value={editLetterForm.qty_40} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_40: v })} /></Field>
-                            <Field label="45ft"><NumInput value={editLetterForm.qty_45} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_45: v })} /></Field>
-                            <Field label="Meter"><NumInput value={editLetterForm.qty_meter} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_meter: v })} /></Field>
-                          </div>
-                          <Field label="Notes"><textarea value={editLetterForm.notes} onChange={(e) => setEditLetterForm({ ...editLetterForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} /></Field>
-                          <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-                            <button onClick={saveEditLetter} disabled={savingEditLetter} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 14px", opacity: savingEditLetter ? 0.6 : 1 }}>{savingEditLetter ? "Saving…" : "Save changes"}</button>
-                            <button onClick={() => setEditLetterId(null)} style={{ padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "6px" }}>
-                            <div>
-                              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>Letter #{l.letter_number}</div>
-                              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                                {(Array.isArray(l.contractors) ? (l.contractors as {name:string}[])[0]?.name : (l.contractors as {name:string} | null)?.name) || "—"} · Issued {formatDateUK(l.issue_date)}
-                                {l.expiry_date && ` · Expires ${formatDateUK(l.expiry_date)}`}
-                              </div>
-                              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                                Auth: {[l.qty_31 && `${l.qty_31}×31`, l.qty_36 && `${l.qty_36}×36`, l.qty_40 && `${l.qty_40}×40`, l.qty_45 && `${l.qty_45}×45`, l.qty_meter && `${l.qty_meter}×Mtr`].filter(Boolean).join(", ") || "—"}
-                              </div>
-                            </div>
-                            <div style={{ display: "flex", gap: "6px" }}>
-                              <button onClick={() => startEditLetter(l)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Edit</button>
-                              <button
-                                onClick={() => {
-                                  const isOpen = viewDispatchLetterId === l.id;
-                                  setViewDispatchLetterId(isOpen ? null : l.id);
-                                  setEditDispatchId(null);
-                                  setShowNewDispatchForm(false);
-                                  setNewDispatchForm({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
-                                  if (!isOpen) loadDispatches(l.id);
-                                }}
-                                style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: viewDispatchLetterId === l.id ? "#f1f5f9" : "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}
-                              >
-                                {viewDispatchLetterId === l.id ? "Hide Dispatches" : "Edit Dispatches"}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Dispatch records for this letter */}
-                          {viewDispatchLetterId === l.id && (
-                            <div style={{ marginTop: "10px", borderTop: "1px solid #f1f5f9", paddingTop: "8px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                                <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE }}>Dispatch Records</div>
-                                <button
-                                  onClick={() => { setShowNewDispatchForm((v) => !v); setEditDispatchId(null); }}
-                                  style={{ padding: "3px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: showNewDispatchForm ? "#f1f5f9" : "var(--bg-card,#fff)", color: COLOURS.NAVY, cursor: "pointer" }}
-                                >
-                                  {showNewDispatchForm ? "Cancel" : "+ Record Dispatch"}
-                                </button>
-                              </div>
-
-                              {/* New dispatch form */}
-                              {showNewDispatchForm && (
-                                <div style={{ border: "2px solid #2563eb", borderRadius: "8px", padding: "12px 14px", backgroundColor: "#eff6ff", marginBottom: "10px" }}>
-                                  <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>Record new dispatch</div>
-                                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
-                                    <Field label="Date *"><DateInput value={newDispatchForm.dispatch_date} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                                    <Field label="Released by *"><input value={newDispatchForm.released_by} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, released_by: e.target.value })} placeholder="Name of person releasing poles" style={{ ...inputStyle, width: "100%" }} /></Field>
-                                    <Field label="Vehicle number"><input value={newDispatchForm.vehicle_number} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, vehicle_number: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
-                                  </div>
-                                  <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, margin: "6px 0 4px" }}>Quantities dispatched</div>
-                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: "8px" }}>
-                                    {l.qty_31 > 0 && <Field label="31ft"><NumInput value={newDispatchForm.qty_31} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_31: v })} /></Field>}
-                                    {l.qty_36 > 0 && <Field label="36ft"><NumInput value={newDispatchForm.qty_36} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_36: v })} /></Field>}
-                                    {l.qty_40 > 0 && <Field label="40ft"><NumInput value={newDispatchForm.qty_40} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_40: v })} /></Field>}
-                                    {l.qty_45 > 0 && <Field label="45ft"><NumInput value={newDispatchForm.qty_45} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_45: v })} /></Field>}
-                                    {l.qty_meter > 0 && <Field label="Meter"><NumInput value={newDispatchForm.qty_meter} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_meter: v })} /></Field>}
-                                  </div>
-                                  <Field label="Notes"><input value={newDispatchForm.notes} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, notes: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
-                                  <button onClick={saveNewDispatch} disabled={savingNewDispatch} style={{ ...primaryButtonStyle, fontSize: "12px", padding: "6px 14px", opacity: savingNewDispatch ? 0.6 : 1 }}>
-                                    {savingNewDispatch ? "Saving…" : "Save Dispatch"}
-                                  </button>
-                                </div>
-                              )}
-
-                              {dispatchesLoading ? (
-                                <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>Loading…</div>
-                              ) : dispatches.length === 0 ? (
-                                <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>No dispatch records yet.</div>
-                              ) : dispatches.map((d) => (
-                                <div key={d.id} style={{ border: "1px solid #f1f5f9", borderRadius: "6px", padding: "8px 10px", marginBottom: "6px", backgroundColor: "#f8fafc" }}>
-                                  {editDispatchId === d.id ? (
-                                    <div>
-                                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
-                                        <Field label="Date"><DateInput value={editDispatchForm.dispatch_date} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                                        <Field label="Released by"><input value={editDispatchForm.released_by} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, released_by: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                                        <Field label="Vehicle"><input value={editDispatchForm.vehicle_number} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, vehicle_number: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
-                                      </div>
-                                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: "8px" }}>
-                                        <Field label="31ft"><NumInput value={editDispatchForm.qty_31} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_31: v })} /></Field>
-                                        <Field label="36ft"><NumInput value={editDispatchForm.qty_36} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_36: v })} /></Field>
-                                        <Field label="40ft"><NumInput value={editDispatchForm.qty_40} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_40: v })} /></Field>
-                                        <Field label="45ft"><NumInput value={editDispatchForm.qty_45} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_45: v })} /></Field>
-                                        <Field label="Meter"><NumInput value={editDispatchForm.qty_meter} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_meter: v })} /></Field>
-                                      </div>
-                                      <Field label="Notes"><input value={editDispatchForm.notes} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, notes: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
-                                      <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-                                        <button onClick={saveEditDispatch} disabled={savingEditDispatch} style={{ ...primaryButtonStyle, fontSize: "12px", padding: "5px 12px", opacity: savingEditDispatch ? 0.6 : 1 }}>{savingEditDispatch ? "Saving…" : "Save"}</button>
-                                        <button onClick={() => setEditDispatchId(null)} style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px" }}>
-                                      <div>
-                                        <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>{formatDateUK(d.dispatch_date)}</span>
-                                        <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "8px" }}>
-                                          {[d.qty_31 && `${d.qty_31}×31`, d.qty_36 && `${d.qty_36}×36`, d.qty_40 && `${d.qty_40}×40`, d.qty_45 && `${d.qty_45}×45`, d.qty_meter && `${d.qty_meter}×Mtr`].filter(Boolean).join(", ")} · {d.released_by}
-                                          {d.vehicle_number && ` · ${d.vehicle_number}`}
-                                        </span>
-                                      </div>
-                                      <button onClick={() => startEditDispatch(d)} style={{ padding: "3px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Edit</button>
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                      <button
+                        onClick={() => {
+                          const isOpen = viewLettersPOId === po.id;
+                          setViewLettersPOId(isOpen ? null : po.id);
+                          setEditLetterId(null);
+                          setViewDispatchLetterId(null);
+                          if (!isOpen) loadLetters(po.id);
+                        }}
+                        style={{ ...ghostBtn(viewLettersPOId === po.id) }}
+                      >
+                        {viewLettersPOId === po.id ? "Hide Letters" : "Edit Letters"}
+                      </button>
+                      {po.status === "Active" && (
+                        <button onClick={() => closePO(po)} style={{ ...ghostBtn() }}>
+                          Close PO
+                        </button>
                       )}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {/* ── Letters panel for this PO ── */}
+                {viewLettersPOId === po.id && (
+                  <div style={{ marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "10px" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "8px" }}>Authority Letters</div>
+                    {lettersLoading ? (
+                      <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Loading…</div>
+                    ) : letters.length === 0 ? (
+                      <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>No letters issued for this PO yet.</div>
+                    ) : letters.map((l) => (
+                      <div key={l.id} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "10px 12px", marginBottom: "8px", backgroundColor: COLOURS.CARD }}>
+                        {editLetterId === l.id ? (
+                          <div>
+                            <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>Edit Letter #{l.letter_number}</div>
+                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
+                              <Field label="Contractor">
+                                <select value={editLetterForm.contractor_id} onChange={(e) => setEditLetterForm({ ...editLetterForm, contractor_id: e.target.value })} style={{ ...inputStyle, width: "100%" }}>
+                                  <option value="">Select…</option>
+                                  {contractors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                              </Field>
+                              <Field label="Letter number"><input value={editLetterForm.letter_number} onChange={(e) => setEditLetterForm({ ...editLetterForm, letter_number: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                              <Field label="Issue date"><DateInput value={editLetterForm.issue_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                              <Field label="Issued by"><input value={editLetterForm.issued_by} onChange={(e) => setEditLetterForm({ ...editLetterForm, issued_by: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                              <Field label="Expiry date"><DateInput value={editLetterForm.expiry_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                            </div>
+                            <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, margin: "8px 0 6px" }}>Authorised quantities</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: "8px" }}>
+                              <Field label="31ft"><NumInput value={editLetterForm.qty_31} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_31: v })} /></Field>
+                              <Field label="36ft"><NumInput value={editLetterForm.qty_36} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_36: v })} /></Field>
+                              <Field label="40ft"><NumInput value={editLetterForm.qty_40} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_40: v })} /></Field>
+                              <Field label="45ft"><NumInput value={editLetterForm.qty_45} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_45: v })} /></Field>
+                              <Field label="Meter"><NumInput value={editLetterForm.qty_meter} onChange={(v) => setEditLetterForm({ ...editLetterForm, qty_meter: v })} /></Field>
+                            </div>
+                            <Field label="Notes"><textarea value={editLetterForm.notes} onChange={(e) => setEditLetterForm({ ...editLetterForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" as const }} /></Field>
+                            <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                              <button onClick={saveEditLetter} disabled={savingEditLetter} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 14px", opacity: savingEditLetter ? 0.6 : 1 }}>{savingEditLetter ? "Saving…" : "Save changes"}</button>
+                              <button onClick={() => setEditLetterId(null)} style={{ padding: "6px 14px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 600, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "6px" }}>
+                              <div>
+                                <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>Letter #{l.letter_number}</div>
+                                <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                                  {(Array.isArray(l.contractors) ? (l.contractors as {name:string}[])[0]?.name : (l.contractors as {name:string} | null)?.name) || "—"} · Issued {formatDateUK(l.issue_date)}
+                                  {l.expiry_date && ` · Expires ${formatDateUK(l.expiry_date)}`}
+                                </div>
+                                <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px", fontFamily: "var(--font-mono)" }}>
+                                  Auth: {[l.qty_31 && `${l.qty_31}×31`, l.qty_36 && `${l.qty_36}×36`, l.qty_40 && `${l.qty_40}×40`, l.qty_45 && `${l.qty_45}×45`, l.qty_meter && `${l.qty_meter}×Mtr`].filter(Boolean).join(", ") || "—"}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", gap: "6px" }}>
+                                <button onClick={() => startEditLetter(l)} style={{ ...ghostBtn() }}>Edit</button>
+                                <button
+                                  onClick={() => {
+                                    const isOpen = viewDispatchLetterId === l.id;
+                                    setViewDispatchLetterId(isOpen ? null : l.id);
+                                    setEditDispatchId(null);
+                                    setShowNewDispatchForm(false);
+                                    setNewDispatchForm({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
+                                    if (!isOpen) loadDispatches(l.id);
+                                  }}
+                                  style={{ ...ghostBtn(viewDispatchLetterId === l.id) }}
+                                >
+                                  {viewDispatchLetterId === l.id ? "Hide Dispatches" : "Edit Dispatches"}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Dispatch records for this letter */}
+                            {viewDispatchLetterId === l.id && (
+                              <div style={{ marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "8px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                  <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE }}>Dispatch Records</div>
+                                  <button
+                                    onClick={() => { setShowNewDispatchForm((v) => !v); setEditDispatchId(null); }}
+                                    style={{ padding: "3px 10px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: showNewDispatchForm ? COLOURS.CARD_ALT : COLOURS.CARD, color: COLOURS.NAVY, cursor: "pointer" }}
+                                  >
+                                    {showNewDispatchForm ? "Cancel" : "+ Record Dispatch"}
+                                  </button>
+                                </div>
+
+                                {/* New dispatch form */}
+                                {showNewDispatchForm && (
+                                  <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px 14px", backgroundColor: COLOURS.CARD_ALT, marginBottom: "10px" }}>
+                                    <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>Record new dispatch</div>
+                                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
+                                      <Field label="Date *"><DateInput value={newDispatchForm.dispatch_date} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                                      <Field label="Released by *"><input value={newDispatchForm.released_by} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, released_by: e.target.value })} placeholder="Name of person releasing poles" style={{ ...inputStyle, width: "100%" }} /></Field>
+                                      <Field label="Vehicle number"><input value={newDispatchForm.vehicle_number} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, vehicle_number: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+                                    </div>
+                                    <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, margin: "6px 0 4px" }}>Quantities dispatched</div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: "8px" }}>
+                                      {l.qty_31 > 0 && <Field label="31ft"><NumInput value={newDispatchForm.qty_31} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_31: v })} /></Field>}
+                                      {l.qty_36 > 0 && <Field label="36ft"><NumInput value={newDispatchForm.qty_36} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_36: v })} /></Field>}
+                                      {l.qty_40 > 0 && <Field label="40ft"><NumInput value={newDispatchForm.qty_40} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_40: v })} /></Field>}
+                                      {l.qty_45 > 0 && <Field label="45ft"><NumInput value={newDispatchForm.qty_45} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_45: v })} /></Field>}
+                                      {l.qty_meter > 0 && <Field label="Meter"><NumInput value={newDispatchForm.qty_meter} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_meter: v })} /></Field>}
+                                    </div>
+                                    <Field label="Notes"><input value={newDispatchForm.notes} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, notes: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+                                    <button onClick={saveNewDispatch} disabled={savingNewDispatch} style={{ ...primaryButtonStyle, fontSize: "12px", padding: "6px 14px", opacity: savingNewDispatch ? 0.6 : 1 }}>
+                                      {savingNewDispatch ? "Saving…" : "Save Dispatch"}
+                                    </button>
+                                  </div>
+                                )}
+
+                                {dispatchesLoading ? (
+                                  <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>Loading…</div>
+                                ) : dispatches.length === 0 ? (
+                                  <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>No dispatch records yet.</div>
+                                ) : dispatches.map((d) => (
+                                  <div key={d.id} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.XS, padding: "8px 10px", marginBottom: "6px", backgroundColor: COLOURS.CARD_ALT }}>
+                                    {editDispatchId === d.id ? (
+                                      <div>
+                                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
+                                          <Field label="Date"><DateInput value={editDispatchForm.dispatch_date} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                                          <Field label="Released by"><input value={editDispatchForm.released_by} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, released_by: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                                          <Field label="Vehicle"><input value={editDispatchForm.vehicle_number} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, vehicle_number: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+                                        </div>
+                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: "8px" }}>
+                                          <Field label="31ft"><NumInput value={editDispatchForm.qty_31} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_31: v })} /></Field>
+                                          <Field label="36ft"><NumInput value={editDispatchForm.qty_36} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_36: v })} /></Field>
+                                          <Field label="40ft"><NumInput value={editDispatchForm.qty_40} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_40: v })} /></Field>
+                                          <Field label="45ft"><NumInput value={editDispatchForm.qty_45} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_45: v })} /></Field>
+                                          <Field label="Meter"><NumInput value={editDispatchForm.qty_meter} onChange={(v) => setEditDispatchForm({ ...editDispatchForm, qty_meter: v })} /></Field>
+                                        </div>
+                                        <Field label="Notes"><input value={editDispatchForm.notes} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, notes: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
+                                        <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                                          <button onClick={saveEditDispatch} disabled={savingEditDispatch} style={{ ...primaryButtonStyle, fontSize: "12px", padding: "5px 12px", opacity: savingEditDispatch ? 0.6 : 1 }}>{savingEditDispatch ? "Saving…" : "Save"}</button>
+                                          <button onClick={() => setEditDispatchId(null)} style={{ padding: "5px 12px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px" }}>
+                                        <div>
+                                          <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{formatDateUK(d.dispatch_date)}</span>
+                                          <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "8px", fontFamily: "var(--font-mono)" }}>
+                                            {[d.qty_31 && `${d.qty_31}×31`, d.qty_36 && `${d.qty_36}×36`, d.qty_40 && `${d.qty_40}×40`, d.qty_45 && `${d.qty_45}×45`, d.qty_meter && `${d.qty_meter}×Mtr`].filter(Boolean).join(", ")} · {d.released_by}
+                                            {d.vehicle_number && ` · ${d.vehicle_number}`}
+                                          </span>
+                                        </div>
+                                        <button onClick={() => startEditDispatch(d)} style={{ ...ghostBtn() }}>Edit</button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </>
         )}
 
         {/* ── Issue Authority Letter ── */}
         {showLetterForm && (
-          <div style={{ border: "2px solid #2563eb", borderRadius: "10px", padding: "18px", backgroundColor: "#eff6ff", marginBottom: "20px" }}>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "18px", backgroundColor: COLOURS.CARD_ALT, marginBottom: "20px" }}>
             <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>
               Issue Authority Letter — {pos.find((p) => p.id === selectedPOId)?.customer_name} PO #{pos.find((p) => p.id === selectedPOId)?.po_number}
             </div>
@@ -729,10 +742,10 @@ export default function StockManagePage() {
               <Field label="45ft"><NumInput value={letterForm.opening_dispatched_45} onChange={(v) => setLetterForm({ ...letterForm, opening_dispatched_45: v })} /></Field>
               <Field label="Meter"><NumInput value={letterForm.opening_dispatched_meter} onChange={(v) => setLetterForm({ ...letterForm, opening_dispatched_meter: v })} /></Field>
             </div>
-            <Field label="Notes"><textarea value={letterForm.notes} onChange={(e) => setLetterForm({ ...letterForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" }} /></Field>
+            <Field label="Notes"><textarea value={letterForm.notes} onChange={(e) => setLetterForm({ ...letterForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" as const }} /></Field>
             <div style={{ display: "flex", gap: "8px" }}>
               <button onClick={saveLetter} disabled={savingLetter} style={{ ...primaryButtonStyle, opacity: savingLetter ? 0.6 : 1 }}>{savingLetter ? "Saving…" : "Issue Letter"}</button>
-              <button onClick={() => { setShowLetterForm(false); setLetterForm(emptyLetter); }} style={{ padding: "8px 18px", borderRadius: "8px", fontSize: "14px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => { setShowLetterForm(false); setLetterForm(emptyLetter); }} style={{ padding: "8px 18px", borderRadius: RADII.PILL, fontSize: "14px", fontWeight: 600, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
             </div>
           </div>
         )}
@@ -740,13 +753,13 @@ export default function StockManagePage() {
         {/* ── Contractors ── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", marginTop: "8px" }}>
           <SectionTitle title="Contractors" />
-          <button onClick={() => setShowContractorForm((v) => !v)} style={{ padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: "var(--bg-card,#fff)", color: COLOURS.NAVY, cursor: "pointer" }}>
+          <button onClick={() => setShowContractorForm((v) => !v)} style={{ padding: "6px 14px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 600, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, cursor: "pointer" }}>
             {showContractorForm ? "Cancel" : "+ New Contractor"}
           </button>
         </div>
 
         {showContractorForm && (
-          <div style={{ border: "1px solid var(--border-color,#e2e8f0)", borderRadius: "10px", padding: "18px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px" }}>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "18px", backgroundColor: COLOURS.CARD, marginBottom: "16px" }}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
               <Field label="Name *"><input value={contractorForm.name} onChange={(e) => setContractorForm({ ...contractorForm, name: e.target.value })} placeholder="Contractor / firm name" style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="CNIC / ID"><input value={contractorForm.cnic_or_id} onChange={(e) => setContractorForm({ ...contractorForm, cnic_or_id: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
@@ -757,11 +770,11 @@ export default function StockManagePage() {
           </div>
         )}
 
-        <div style={{ border: "1px solid var(--border-color,#e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card,#fff)", overflow: "hidden" }}>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
           {contractors.length === 0 ? (
-            <div style={{ padding: "16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "14px" }}>No contractors yet. Add one above.</div>
+            <div style={{ padding: "16px", textAlign: "center" as const, color: COLOURS.SLATE, fontSize: "14px" }}>No contractors yet. Add one above.</div>
           ) : contractors.map((c) => (
-            <div key={c.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--border-light,#f1f5f9)" }}>
+            <div key={c.id} style={{ padding: "10px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
               {editContractorId === c.id ? (
                 <div>
                   <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
@@ -772,16 +785,16 @@ export default function StockManagePage() {
                   </div>
                   <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
                     <button onClick={saveEditContractor} disabled={savingEditContractor} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 14px", opacity: savingEditContractor ? 0.6 : 1 }}>{savingEditContractor ? "Saving…" : "Save changes"}</button>
-                    <button onClick={() => setEditContractorId(null)} style={{ padding: "6px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+                    <button onClick={() => setEditContractorId(null)} style={{ padding: "6px 14px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 600, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
                   </div>
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 600, fontSize: "14px", color: "var(--text-primary,#1e293b)", flex: 1 }}>{c.name}</span>
+                  <span style={{ fontWeight: 600, fontSize: "14px", color: COLOURS.NAVY, flex: 1 }}>{c.name}</span>
                   {c.cnic_or_id && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>ID: {c.cnic_or_id}</span>}
                   {c.contact_phone && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.contact_phone}</span>}
                   {c.contact_address && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.contact_address}</span>}
-                  <button onClick={() => startEditContractor(c)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer", marginLeft: "auto" }}>Edit</button>
+                  <button onClick={() => startEditContractor(c)} style={{ ...ghostBtn(), marginLeft: "auto" }}>Edit</button>
                 </div>
               )}
             </div>
@@ -795,7 +808,7 @@ export default function StockManagePage() {
             <button
               onClick={loadPerformance}
               disabled={perfLoading}
-              style={{ padding: "5px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer", opacity: perfLoading ? 0.6 : 1 }}
+              style={{ ...ghostBtn(), opacity: perfLoading ? 0.6 : 1 }}
             >
               {perfLoading ? "Loading…" : "Refresh"}
             </button>
@@ -807,44 +820,42 @@ export default function StockManagePage() {
           {perfLoading ? (
             <div style={{ color: COLOURS.SLATE, fontSize: "14px" }}>Loading performance data…</div>
           ) : performance.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "20px", color: COLOURS.SLATE, border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "var(--bg-card,#fff)", fontSize: "14px" }}>
+            <div style={{ textAlign: "center" as const, padding: "20px", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD, fontSize: "14px" }}>
               No contractor data yet for this plant.
             </div>
           ) : (
             <div style={{ display: "grid", gap: "10px" }}>
               {performance.map((c) => {
-                const pctColor = c.collection_pct >= 90 ? "#16a34a" : c.collection_pct >= 60 ? "#d97706" : "#dc2626";
+                const pctColor = c.collection_pct >= 90 ? COLOURS.GREEN : c.collection_pct >= 60 ? COLOURS.AMBER : COLOURS.RED;
                 return (
-                  <div key={c.contractor_id} style={{ border: "1px solid var(--border-color,#e2e8f0)", borderRadius: "10px", backgroundColor: "var(--bg-card,#fff)", padding: "14px 16px" }}>
-                    {/* Header row */}
+                  <div key={c.contractor_id} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, padding: "14px 16px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
                       <div>
-                        <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary,#1e293b)" }}>{c.contractor_name}</div>
+                        <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{c.contractor_name}</div>
                         {c.contractor_phone && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>{c.contractor_phone}</div>}
                       </div>
-                      {/* Collection % badge */}
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: "22px", fontWeight: 800, color: pctColor }}>{c.collection_pct}%</div>
+                      <div style={{ textAlign: "right" as const }}>
+                        <div style={{ fontSize: "22px", fontWeight: 800, color: pctColor, fontFamily: "var(--font-mono)" }}>{c.collection_pct}%</div>
                         <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>collected</div>
                       </div>
                     </div>
 
                     {/* Progress bar */}
-                    <div style={{ height: "6px", borderRadius: "3px", backgroundColor: "#e2e8f0", marginBottom: "12px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${Math.min(100, c.collection_pct)}%`, backgroundColor: pctColor, borderRadius: "3px", transition: "width 0.3s" }} />
+                    <div style={{ height: "6px", borderRadius: RADII.PILL, backgroundColor: COLOURS.HAIRLINE, marginBottom: "12px", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.min(100, c.collection_pct)}%`, backgroundColor: pctColor, borderRadius: RADII.PILL, transition: "width 0.3s" }} />
                     </div>
 
                     {/* Stats grid */}
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: "10px", marginBottom: "10px" }}>
                       {[
-                        { label: "Letters issued", value: c.letters_issued, color: "var(--text-primary,#1e293b)" },
+                        { label: "Letters issued", value: c.letters_issued, color: COLOURS.NAVY },
                         { label: "Total authorised", value: c.total_authorised.toLocaleString(), color: COLOURS.SLATE },
-                        { label: "Total collected", value: c.total_collected.toLocaleString(), color: "#2563eb" },
-                        { label: "Still outstanding", value: Math.max(0, c.total_authorised - c.total_collected).toLocaleString(), color: c.total_authorised > c.total_collected ? "#dc2626" : "#16a34a" },
+                        { label: "Total collected", value: c.total_collected.toLocaleString(), color: COLOURS.BLUE },
+                        { label: "Still outstanding", value: Math.max(0, c.total_authorised - c.total_collected).toLocaleString(), color: c.total_authorised > c.total_collected ? COLOURS.RED : COLOURS.GREEN },
                       ].map((s) => (
-                        <div key={s.label} style={{ padding: "8px 10px", borderRadius: "8px", backgroundColor: "var(--bg-card-hover,#f8fafc)", border: "1px solid var(--border-light,#f1f5f9)" }}>
+                        <div key={s.label} style={{ padding: "8px 10px", borderRadius: RADII.SM, backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}` }}>
                           <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "2px" }}>{s.label}</div>
-                          <div style={{ fontSize: "16px", fontWeight: 700, color: s.color }}>{s.value}</div>
+                          <div style={{ fontSize: "16px", fontWeight: 700, color: s.color, fontFamily: "var(--font-mono)" }}>{s.value}</div>
                         </div>
                       ))}
                     </div>
@@ -852,30 +863,30 @@ export default function StockManagePage() {
                     {/* Letter status breakdown */}
                     <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: c.avg_days_to_full_collection !== null ? "10px" : "0" }}>
                       {[
-                        { label: "Fully collected", value: c.letters_fully_collected, bg: "#f0fdf4", color: "#16a34a" },
-                        { label: "Partial", value: c.letters_partial, bg: "#fffbeb", color: "#d97706" },
-                        { label: "Not started", value: c.letters_not_started, bg: "#f8fafc", color: COLOURS.SLATE },
+                        { label: "Fully collected", value: c.letters_fully_collected, bg: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN },
+                        { label: "Partial", value: c.letters_partial, bg: COLOURS.WARNING_SOFT, color: COLOURS.AMBER },
+                        { label: "Not started", value: c.letters_not_started, bg: COLOURS.CARD_ALT, color: COLOURS.SLATE },
                       ].map((s) => (
-                        <span key={s.label} style={{ fontSize: "12px", padding: "3px 10px", borderRadius: "10px", backgroundColor: s.bg, color: s.color, fontWeight: 600 }}>
+                        <span key={s.label} style={{ fontSize: "12px", padding: "3px 10px", borderRadius: RADII.PILL, backgroundColor: s.bg, color: s.color, fontWeight: 600 }}>
                           {s.value} {s.label}
                         </span>
                       ))}
                     </div>
 
-                    {/* Speed metrics — only shown once at least one letter is fully collected */}
+                    {/* Speed metrics */}
                     {c.avg_days_to_full_collection !== null && (
-                      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", padding: "8px 10px", borderRadius: "8px", backgroundColor: "#eff6ff", border: "1px solid #bfdbfe" }}>
-                        <span style={{ fontSize: "12px", color: "#1d4ed8" }}>
-                          Avg days to collect: <strong>{c.avg_days_to_full_collection}d</strong>
+                      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", padding: "8px 10px", borderRadius: RADII.SM, backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                        <span style={{ fontSize: "12px", color: COLOURS.BLUE }}>
+                          Avg days to collect: <strong style={{ fontFamily: "var(--font-mono)" }}>{c.avg_days_to_full_collection}d</strong>
                         </span>
                         {c.fastest_days !== null && (
-                          <span style={{ fontSize: "12px", color: "#16a34a" }}>
-                            Fastest: <strong>{c.fastest_days}d</strong>
+                          <span style={{ fontSize: "12px", color: COLOURS.GREEN }}>
+                            Fastest: <strong style={{ fontFamily: "var(--font-mono)" }}>{c.fastest_days}d</strong>
                           </span>
                         )}
                         {c.slowest_days !== null && (
-                          <span style={{ fontSize: "12px", color: "#dc2626" }}>
-                            Slowest: <strong>{c.slowest_days}d</strong>
+                          <span style={{ fontSize: "12px", color: COLOURS.RED }}>
+                            Slowest: <strong style={{ fontFamily: "var(--font-mono)" }}>{c.slowest_days}d</strong>
                           </span>
                         )}
                       </div>
