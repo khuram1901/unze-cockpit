@@ -134,6 +134,14 @@ export function canViewGuaranteeFinancials(u: UserCtx) {
   return u.role === "Manager" && u.department === "Finance";
 }
 
+export function canManageGuarantees(u: UserCtx): boolean {
+  const o = ov(u, "can_manage_guarantees");
+  if (o !== null) return o;
+  if (isPA(u)) return false;
+  if (isAdminTier(u)) return true;
+  return u.role === "Manager" && u.department === "Finance";
+}
+
 export function canManageStock(u: UserCtx) {
   const o = ov(u, "can_manage_stock");
   if (o !== null) return o;
@@ -173,6 +181,12 @@ export function canManageCalendarRequests(u: UserCtx) {
 
 export function canSeeAllMinutes(u: UserCtx) {
   const o = ov(u, "can_see_all_minutes");
+  if (o !== null) return o;
+  return isPrivileged(u);
+}
+
+export function canManageMeetings(u: UserCtx): boolean {
+  const o = ov(u, "can_manage_meetings");
   if (o !== null) return o;
   return isPrivileged(u);
 }

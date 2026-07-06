@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import AuthWrapper from "../../lib/AuthWrapper";
 import { useRequireCapability, loadUserCtx } from "../../lib/useRouteGuard";
 import { supabase } from "../../lib/supabase";
-import { canViewGuaranteeFinancials } from "../../lib/permissions";
+import { canViewGuaranteeFinancials, canManageGuarantees } from "../../lib/permissions";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, primaryButtonStyle, inputStyle, labelStyle } from "../../lib/SharedUI";
 import { formatDateUK } from "../../lib/dateUtils";
@@ -404,6 +404,7 @@ export default function GuaranteesPage() {
   const { confirm, element: confirmEl } = useConfirm();
 
   const [showFinancials, setShowFinancials] = useState<boolean | null>(null);
+  const [canManage, setCanManage] = useState<boolean>(false);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [banks, setBanks] = useState<BankGroup[]>([]);
   const [guarantees, setGuarantees] = useState<Guarantee[]>([]);
@@ -479,6 +480,7 @@ export default function GuaranteesPage() {
       if (user?.email) {
         loadUserCtx(user.email).then((ctx) => {
           setShowFinancials(canViewGuaranteeFinancials(ctx));
+          setCanManage(canManageGuarantees(ctx));
           load();
         });
       }
@@ -696,7 +698,7 @@ export default function GuaranteesPage() {
         </div>
 
         {/* ── Action bar — both buttons, same size, at the top ── */}
-        {showFinancials && (
+        {canManage && (
           <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
             {(() => {
               const btnBase: React.CSSProperties = {
@@ -721,14 +723,14 @@ export default function GuaranteesPage() {
         )}
 
         {/* ── Inline panel — opens at the top, used for both New Facility and New Guarantee ── */}
-        {showFinancials && showFacilityForm && (
+        {canManage && showFacilityForm && (
           <div style={{ border: `1.5px solid ${COLOURS.NAVY}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>New Bank Facility</div>
             <FacilityForm facilityForm={facilityForm} setFacilityForm={setFacilityForm} saveFacility={saveFacility} savingFacility={savingFacility} isMobile={isMobile} />
           </div>
         )}
 
-        {showFinancials && showAddForm && (
+        {canManage && showAddForm && (
           <div style={{ border: `1.5px solid ${COLOURS.NAVY}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>New Guarantee / Pay Order</div>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: "10px" }}>
@@ -826,7 +828,7 @@ export default function GuaranteesPage() {
         )}
 
         {/* ── Bank facility utilisation ── */}
-        {showFinancials && (
+        {canManage && (
           <div style={{ marginBottom: "18px" }}>
             <SectionTitle title="Bank Facility Utilisation" />
 
@@ -958,8 +960,8 @@ export default function GuaranteesPage() {
                       )}
                     </div>
 
-                    {/* Action buttons — Finance only */}
-                    {showFinancials && !isEditing && !isConverting && !isActioning && (
+                    {/* Action buttons — Finance managers only */}
+                    {canManage && !isEditing && !isConverting && !isActioning && (
                       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "10px" }}>
                         <button onClick={() => startEdit(g)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #e2e8f0", backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Edit</button>
                         {canConvert && (
@@ -987,8 +989,8 @@ export default function GuaranteesPage() {
                     )}
                   </div>
 
-                  {/* ── Edit form — Finance only ── */}
-                  {showFinancials && isEditing && (
+                  {/* ── Edit form — Finance managers only ── */}
+                  {canManage && isEditing && (
                     <div style={{ borderTop: "1px solid #e2e8f0", padding: "14px", backgroundColor: "#f8fafc" }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>Edit Guarantee</div>
                       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
@@ -1051,8 +1053,8 @@ export default function GuaranteesPage() {
                     </div>
                   )}
 
-                  {/* ── Convert to Performance Guarantee form — Finance only ── */}
-                  {showFinancials && isConverting && convertTarget && (
+                  {/* ── Convert to Performance Guarantee form — Finance managers only ── */}
+                  {canManage && isConverting && convertTarget && (
                     <div style={{ borderTop: "1px solid #e2e8f0", padding: "14px", backgroundColor: "#faf5ff" }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: "#7c3aed", marginBottom: "6px" }}>Convert to Performance Guarantee</div>
                       <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>
@@ -1099,8 +1101,8 @@ export default function GuaranteesPage() {
                     </div>
                   )}
 
-                  {/* ── Mark Returned / Released — Finance only ── */}
-                  {showFinancials && isActioning && (
+                  {/* ── Mark Returned / Released — Finance managers only ── */}
+                  {canManage && isActioning && (
                     <div style={{ borderTop: "1px solid #e2e8f0", padding: "14px", backgroundColor: "#f0fdf4" }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a", marginBottom: "10px" }}>
                         {canRelease ? "Mark as Released" : "Mark as Returned to Bank"}

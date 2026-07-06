@@ -25,6 +25,8 @@ const PERM_COLUMNS = [
   { key: "can_view_executive_dashboard", label: "Exec", group: "Dashboards", tip: "Access the Executive command-centre dashboard" },
   { key: "can_view_operations_dashboard", label: "Ops", group: "Dashboards", tip: "Access the Operations/production dashboard" },
   { key: "can_view_pa_dashboard", label: "PA", group: "Dashboards", tip: "Access the PA assistant dashboard" },
+  { key: "can_view_guarantees", label: "BF View", group: "Finance", tip: "View Bank Facilities / guarantee records" },
+  { key: "can_manage_guarantees", label: "BF Mgr", group: "Finance", tip: "Add, edit, convert and release bank guarantees" },
   { key: "can_view_finance", label: "View", group: "Finance", tip: "View cash positions, budgets, forecasts" },
   { key: "can_edit_finance", label: "Edit", group: "Finance", tip: "Create/edit cash entries, plans, budgets" },
   { key: "finance_company_scope", label: "Scope", group: "Finance", tip: "Which companies: UTPL / IFPL / both", type: "select" as const, options: ["both", "UTPL", "IFPL"] },
@@ -36,6 +38,7 @@ const PERM_COLUMNS = [
   { key: "can_manage_recurring_tasks", label: "Recur", group: "Tasks", tip: "Manage recurring task templates" },
   { key: "can_manage_calendar", label: "Cal", group: "Tasks", tip: "Approve/reject calendar requests" },
   { key: "can_see_all_minutes", label: "Mins", group: "Tasks", tip: "See all meeting minutes vs only own" },
+  { key: "can_manage_meetings", label: "Mtg Mgr", group: "Tasks", tip: "Create meetings, upload minutes, manage attendees" },
   { key: "can_view_dept_ops", label: "Ops", group: "Depts", tip: "Access the Unze Trading Ops department dashboard" },
   { key: "can_view_dept_hr", label: "HR", group: "Depts", tip: "Access the HR department dashboard" },
   { key: "can_view_dept_tax", label: "Tax", group: "Depts", tip: "Access the Taxation department dashboard" },
@@ -50,6 +53,8 @@ const PERM_COLUMNS = [
   { key: "can_view_audit_log", label: "Log", group: "Admin", tip: "View the system audit trail" },
   { key: "can_view_exceptions", label: "Exc", group: "Admin", tip: "View escalation/exception alerts" },
   { key: "can_import_export", label: "I/O", group: "Admin", tip: "Import/export member data via CSV" },
+  { key: "can_view_stock", label: "Stock", group: "Prod.", tip: "View stock levels and inventory" },
+  { key: "can_manage_stock", label: "POs", group: "Prod.", tip: "Create, approve and manage purchase orders" },
   { key: "can_access_daily_entry", label: "Entry", group: "Prod.", tip: "Log daily production, dispatch, breakage" },
   { key: "can_edit_operations_targets", label: "Target", group: "Prod.", tip: "Set monthly production/dispatch targets" },
   { key: "can_view_investments", label: "Inv View", group: "Finance", tip: "View the PSX stock portfolio" },
@@ -84,6 +89,8 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_executive_dashboard": return admin;
     case "can_view_operations_dashboard": return admin || exec || dept === "Unze Trading Ops";
     case "can_view_pa_dashboard": return admin || exec;
+    case "can_view_guarantees": return admin || (manager && (dept === "Finance" || dept === "Unze Trading Ops"));
+    case "can_manage_guarantees": return admin || (manager && dept === "Finance");
     case "can_view_finance": return admin || (manager && dept === "Finance");
     case "can_edit_finance": return admin || (manager && dept === "Finance");
     case "finance_company_scope": {
@@ -100,6 +107,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_manage_recurring_tasks": return admin || exec;
     case "can_manage_calendar": return admin || exec;
     case "can_see_all_minutes": return admin || exec;
+    case "can_manage_meetings": return admin || exec;
     case "can_view_dept_ops": return admin || dept === "Unze Trading Ops";
     case "can_view_dept_hr": return admin || dept === "HR";
     case "can_view_dept_tax": return admin || dept === "Tax";
@@ -114,6 +122,8 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_audit_log": return admin || exec;
     case "can_view_exceptions": return admin || exec;
     case "can_import_export": return admin || exec;
+    case "can_view_stock": return admin || dept === "Unze Trading Ops";
+    case "can_manage_stock": return admin || (manager && dept === "Unze Trading Ops");
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
     case "can_edit_operations_targets": return admin || exec || lc(m.email) === OPS_HOD_EMAIL;
     case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com" || exec;
