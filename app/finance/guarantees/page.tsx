@@ -479,6 +479,12 @@ export default function GuaranteesPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) {
         loadUserCtx(user.email).then((ctx) => {
+          console.log("PERMISSIONS DEBUG:", {
+            email: user.email,
+            ctx,
+            canManageResult: canManageGuarantees(ctx),
+            canViewFinancialsResult: canViewGuaranteeFinancials(ctx),
+          });
           setShowFinancials(canViewGuaranteeFinancials(ctx));
           setCanManage(canManageGuarantees(ctx));
           load();
