@@ -51,7 +51,9 @@ const COMPANY_CATS: Record<string, string[]> = {
   "77921705-8a15-4406-847a-b234f84b5ec3": ["Salaries", "Rent/Utilities", "Admin", "Marketing", "Freight", "Travel"],
 };
 
-const { NAVY, SLATE, BORDER, GREEN, RED, BLUE } = COLOURS;
+const { NAVY, SLATE, BORDER, GREEN, RED, BLUE, AMBER, HAIRLINE, CARD, CARD_ALT, TRACK, DANGER_SOFT, WARNING_SOFT } = COLOURS;
+const MONO = "var(--font-mono, 'JetBrains Mono', monospace)";
+const DISPLAY = "var(--font-display, 'Inter Tight', sans-serif)";
 
 function fmt(n: number) {
   return n.toLocaleString();
@@ -485,10 +487,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       {dlg.element}
       {msg && (
         <div style={{
-          border: `1px solid ${BORDER}`,
-          borderLeft: `4px solid ${msg.startsWith("Error") ? RED : GREEN}`,
-          borderRadius: "6px", padding: "10px 14px", marginBottom: "14px",
-          backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: NAVY,
+          border: `1px solid ${HAIRLINE}`,
+          borderLeft: `3px solid ${msg.startsWith("Error") ? RED : GREEN}`,
+          borderRadius: "10px", padding: "10px 14px", marginBottom: "14px",
+          backgroundColor: msg.startsWith("Error") ? DANGER_SOFT : COLOURS.SUCCESS_SOFT,
+          fontSize: "14px", color: NAVY,
         }}>
           {msg}
         </div>
@@ -497,18 +500,18 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       {/* ── ALERT BANNER ── */}
       {hasAlerts && (
         <div style={{
-          border: `1px solid ${staleDays > 1 ? "#fecaca" : BORDER}`,
-          borderLeft: `4px solid ${staleDays > 1 ? RED : "#d97706"}`,
-          borderRadius: "8px", padding: "12px 16px", marginBottom: "14px",
-          backgroundColor: staleDays > 1 ? "#fef2f2" : "#fffbeb",
+          border: `1px solid ${HAIRLINE}`,
+          borderLeft: `3px solid ${staleDays > 1 ? RED : AMBER}`,
+          borderRadius: "10px", padding: "12px 16px", marginBottom: "14px",
+          backgroundColor: staleDays > 1 ? DANGER_SOFT : WARNING_SOFT,
           display: "flex", alignItems: "center", gap: "10px",
         }}>
-          <span style={{ fontSize: "20px", flexShrink: 0 }}>⚠</span>
+          <span style={{ fontSize: "18px", flexShrink: 0 }}>⚠</span>
           <div>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: staleDays > 1 ? "#991b1b" : "#92400e" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: staleDays > 1 ? RED : AMBER }}>
               Setup needed
             </div>
-            <div style={{ fontSize: "13px", color: staleDays > 1 ? "#991b1b" : "#92400e", marginTop: "1px" }}>
+            <div style={{ fontSize: "12px", color: staleDays > 1 ? RED : AMBER, marginTop: "1px" }}>
               {alerts.join(" · ")}
             </div>
           </div>
@@ -520,8 +523,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: "10px",
+          gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+          gap: "12px",
           marginBottom: "8px",
         }}
       >
@@ -529,41 +532,41 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           label="Opening Balance"
           value={opening ? `PKR ${fmt(opening.opening_amount)}` : "Not set"}
           sub={opening ? `as of ${formatDateUK(opening.as_of_date)}` : "Click edit to set"}
-          color={BLUE}
           onEdit={canEditAll ? openOpeningModal : undefined}
         />
         <SummaryCard
           label="Planned Receivables"
           value={plan ? `PKR ${fmt(plan.tentative_receivables)}` : "Not set"}
           sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
-          color={GREEN}
+          valueColor={GREEN}
           onEdit={canEditAll ? openPlanModal : undefined}
         />
         <SummaryCard
           label="Planned Payouts"
           value={plan ? `PKR ${fmt(plan.tentative_payouts)}` : "Not set"}
           sub={plan ? formatMonthUK(plan.plan_month) : "Click edit to set"}
-          color={RED}
+          valueColor={RED}
           onEdit={canEditAll ? openPlanModal : undefined}
         />
         <SummaryCard
           label="Net Position"
           value={latestPosition ? `PKR ${fmt(latestPosition.closing_after_post_dated)}` : "—"}
           sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
-          color={latestPosition && latestPosition.closing_after_post_dated < 0 ? RED : GREEN}
+          isHero
+          valueColor={latestPosition && latestPosition.closing_after_post_dated < 0 ? RED : GREEN}
         />
       </div>
 
       {/* ── ROW: INGESTION + PDF UPLOAD side by side (Admin only) ── */}
       {userIsAdmin && (
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
-            <SectionTitle title="Automatic Ingestion" />
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>
+            <SectionTitle title="Automatic Ingestion" style={{ margin: "0 0 12px" }} />
+            <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "4px" }}>
               Gmail: {gmailConnected ? <span style={{ color: GREEN }}>Connected</span> : <span style={{ color: SLATE }}>Not connected</span>}
             </div>
-            <div style={{ fontSize: "16px", color: SLATE, marginBottom: "10px" }}>
+            <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px", lineHeight: 1.5 }}>
               {gmailConnected ? "Daily statements ingested automatically from your cockpit-cash Gmail label." : "Connect Gmail to auto-ingest daily cash statements. Label: 'cockpit-cash'."}
             </div>
           </div>
@@ -573,15 +576,15 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         </div>
 
         {/* Add Daily Position — Manual or Upload */}
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-          <SectionTitle title="Add Daily Position" />
-          <div style={{ display: "flex", gap: "0", marginBottom: "12px", borderBottom: `2px solid ${BORDER}` }}>
+        <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
+          <SectionTitle title="Add Daily Position" style={{ margin: "0 0 12px" }} />
+          <div style={{ display: "flex", gap: "0", marginBottom: "16px", borderBottom: `1px solid ${HAIRLINE}` }}>
             {([{ key: "upload", label: "Upload PDF" }, { key: "manual", label: "Manual Entry" }] as const).map((tab) => (
               <button key={tab.key} onClick={() => setDailyEntryTab(tab.key)} style={{
-                padding: "8px 16px", fontSize: "16px", fontWeight: dailyEntryTab === tab.key ? 700 : 500,
+                padding: "7px 14px", fontSize: "13px", fontWeight: dailyEntryTab === tab.key ? 600 : 400,
                 color: dailyEntryTab === tab.key ? NAVY : SLATE, backgroundColor: "transparent", border: "none",
-                borderBottom: dailyEntryTab === tab.key ? `3px solid ${NAVY}` : "3px solid transparent",
-                cursor: "pointer", marginBottom: "-2px",
+                borderBottom: dailyEntryTab === tab.key ? `2px solid ${NAVY}` : "2px solid transparent",
+                cursor: "pointer", marginBottom: "-1px",
               }}>{tab.label}</button>
             ))}
           </div>
@@ -594,23 +597,23 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 onDrop={(e) => { e.preventDefault(); setDragOver(false); onDropFiles(e.dataTransfer.files); }}
                 onClick={() => dropInputRef.current?.click()}
                 style={{
-                  border: `2px dashed ${dragOver ? NAVY : BORDER}`,
-                  borderRadius: "8px", padding: "20px 16px", textAlign: "center",
-                  backgroundColor: dragOver ? "#f0f4ff" : "var(--bg-page,#f8fafc)",
-                  cursor: "pointer", transition: "all 0.15s", marginBottom: "10px",
+                  border: `2px dashed ${dragOver ? NAVY : HAIRLINE}`,
+                  borderRadius: "10px", padding: "20px 16px", textAlign: "center",
+                  backgroundColor: dragOver ? CARD_ALT : CARD_ALT,
+                  cursor: "pointer", transition: "border-color 0.15s", marginBottom: "10px",
                 }}
               >
-                <div style={{ fontSize: "24px", marginBottom: "4px" }}>📄</div>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>Drop PDFs here or click to browse</div>
+                <div style={{ fontSize: "22px", marginBottom: "4px" }}>📄</div>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>Drop PDFs here or click to browse</div>
                 <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>Cash flow + bank position — any number of files</div>
                 <input ref={dropInputRef} type="file" accept=".pdf" multiple style={{ display: "none" }}
                   onChange={(e) => e.target.files && onDropFiles(e.target.files)} />
               </div>
 
               {dropFiles.length > 0 && (
-                <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", marginBottom: "10px", overflow: "hidden" }}>
+                <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "10px", marginBottom: "10px", overflow: "hidden" }}>
                   {dropFiles.map((f, i) => (
-                    <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: i < dropFiles.length - 1 ? `1px solid ${BORDER}` : "none", fontSize: "13px", color: NAVY }}>
+                    <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: i < dropFiles.length - 1 ? `1px solid ${HAIRLINE}` : "none", fontSize: "13px", color: NAVY }}>
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{f.name}</span>
                       {!uploading && (
                         <button onClick={() => setDropFiles((p) => p.filter((x) => x.name !== f.name))}
@@ -622,13 +625,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               )}
 
               {uploadResults.length > 0 && (
-                <div style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", marginBottom: "10px", overflow: "hidden" }}>
+                <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "10px", marginBottom: "10px", overflow: "hidden" }}>
                   {uploadResults.map((r, i) => {
                     const ok = r.status.startsWith("saved");
                     return (
-                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: i < uploadResults.length - 1 ? `1px solid ${BORDER}` : "none", fontSize: "13px" }}>
+                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: i < uploadResults.length - 1 ? `1px solid ${HAIRLINE}` : "none", fontSize: "13px" }}>
                         <span style={{ color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{r.filename}</span>
-                        <span style={{ color: ok ? GREEN : RED, fontWeight: 700, marginLeft: "8px", whiteSpace: "nowrap" }}>{ok ? "Saved" : "Error"}</span>
+                        <span style={{ color: ok ? GREEN : RED, fontWeight: 600, marginLeft: "8px", whiteSpace: "nowrap" }}>{ok ? "Saved" : "Error"}</span>
                       </div>
                     );
                   })}
@@ -637,7 +640,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
               <form onSubmit={handlePDFUpload}>
                 <button type="submit" disabled={uploading || dropFiles.length === 0}
-                  style={{ ...btnStyle, fontSize: "14px", padding: "6px 14px", opacity: uploading || dropFiles.length === 0 ? 0.5 : 1 }}>
+                  style={{ ...btnStyle, fontSize: "13px", padding: "7px 16px", opacity: uploading || dropFiles.length === 0 ? 0.5 : 1 }}>
                   {uploading ? "Processing..." : `Upload ${dropFiles.length || ""} file${dropFiles.length !== 1 ? "s" : ""}`}
                 </button>
               </form>
@@ -646,25 +649,25 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
           {dailyEntryTab === "manual" && (
             <>
-              <p style={{ fontSize: "15px", color: SLATE, marginBottom: "8px" }}>Enter today's figures from the accountant's statement.</p>
+              <p style={{ fontSize: "13px", color: SLATE, marginBottom: "12px" }}>Enter today's figures from the accountant's statement.</p>
               <form onSubmit={saveDailyPosition}>
-                <label style={{ ...labelStyle, fontSize: "13px" }}>Date
+                <label style={labelStyle}>Date
                   <DateInput value={dpDate} onChange={(e) => setDpDate(e.target.value)} style={inputStyle} required />
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
-                  <label style={{ ...labelStyle, fontSize: "13px" }}>Opening (PKR)
+                  <label style={labelStyle}>Opening (PKR)
                     <input type="number" value={dpOpening} onChange={(e) => setDpOpening(e.target.value)} placeholder="0" style={inputStyle} />
                   </label>
-                  <label style={{ ...labelStyle, fontSize: "13px" }}>Closing (PKR)
+                  <label style={labelStyle}>Closing (PKR)
                     <input type="number" value={dpClosing} onChange={(e) => setDpClosing(e.target.value)} placeholder="0" style={inputStyle} />
                   </label>
-                  <label style={{ ...labelStyle, fontSize: "13px" }}>Receipts (PKR)
+                  <label style={labelStyle}>Receipts (PKR)
                     <input type="number" min="0" value={dpReceipts} onChange={(e) => setDpReceipts(e.target.value)} placeholder="0" style={inputStyle} />
                   </label>
-                  <label style={{ ...labelStyle, fontSize: "13px" }}>Payments (PKR)
+                  <label style={labelStyle}>Payments (PKR)
                     <input type="number" min="0" value={dpPayments} onChange={(e) => setDpPayments(e.target.value)} placeholder="0" style={inputStyle} />
                   </label>
-                  <label style={{ ...labelStyle, fontSize: "13px", gridColumn: "1 / -1" }}>Post-dated total (PKR)
+                  <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>Post-dated total (PKR)
                     <input type="number" min="0" value={dpPostDated} onChange={(e) => setDpPostDated(e.target.value)} placeholder="0" style={inputStyle} />
                   </label>
                 </div>
@@ -678,15 +681,15 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
       {/* ── FORECAST + DEPARTMENT BUDGETS side by side ── */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px", alignItems: "start" }}>
-      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-        <SectionTitle title="Cash Flow Forecast" />
-        <div style={{ display: "flex", gap: "0", marginBottom: "10px", borderBottom: `2px solid ${BORDER}` }}>
+      <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
+        <SectionTitle title="Cash Flow Forecast" style={{ margin: "0 0 12px" }} />
+        <div style={{ display: "flex", gap: "0", marginBottom: "16px", borderBottom: `1px solid ${HAIRLINE}` }}>
           {([{ key: false, label: "Upload Excel" }, { key: true, label: "Manual Entry" }] as const).map((tab) => (
             <button key={String(tab.key)} onClick={() => setShowManualForecast(tab.key)} style={{
-              padding: "6px 14px", fontSize: "13px", fontWeight: showManualForecast === tab.key ? 700 : 500,
+              padding: "7px 14px", fontSize: "13px", fontWeight: showManualForecast === tab.key ? 600 : 400,
               color: showManualForecast === tab.key ? NAVY : SLATE, backgroundColor: "transparent", border: "none",
-              borderBottom: showManualForecast === tab.key ? `3px solid ${NAVY}` : "3px solid transparent",
-              cursor: "pointer", marginBottom: "-2px",
+              borderBottom: showManualForecast === tab.key ? `2px solid ${NAVY}` : "2px solid transparent",
+              cursor: "pointer", marginBottom: "-1px",
             }}>{tab.label}</button>
           ))}
         </div>
@@ -696,11 +699,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             <div>
               <form onSubmit={handleForecastUpload} style={{ display: "flex", gap: "6px", alignItems: "end", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: "150px" }}>
-                  <label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Forecast Excel (.xlsx)</label>
-                  <input type="file" accept=".xlsx,.xls" onChange={(e) => setForecastFile(e.target.files?.[0] || null)} style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }} />
+                  <label style={kickerLabel}>Forecast Excel (.xlsx)</label>
+                  <input type="file" accept=".xlsx,.xls" onChange={(e) => setForecastFile(e.target.files?.[0] || null)} style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }} />
                 </div>
                 <button type="submit" disabled={forecastUploading || !forecastFile}
-                  style={{ ...btnStyle, fontSize: "13px", padding: "6px 12px", opacity: forecastUploading || !forecastFile ? 0.5 : 1 }}>
+                  style={{ ...btnStyle, fontSize: "13px", padding: "7px 14px", opacity: forecastUploading || !forecastFile ? 0.5 : 1 }}>
                   {forecastUploading ? "Parsing..." : "Upload"}
                 </button>
               </form>
@@ -721,29 +724,29 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         ) : (
           <form onSubmit={saveManualForecast}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr auto", gap: "6px", alignItems: "end" }}>
-              <div><label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Category</label>
-                <input type="text" value={mfCategory} onChange={(e) => setMfCategory(e.target.value)} placeholder="e.g. Salaries" style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }} required />
+              <div><label style={kickerLabel}>Category</label>
+                <input type="text" value={mfCategory} onChange={(e) => setMfCategory(e.target.value)} placeholder="e.g. Salaries" style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }} required />
               </div>
-              <div><label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Type</label>
-                <select value={mfFlowType} onChange={(e) => setMfFlowType(e.target.value as "inflow" | "outflow")} style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }}>
+              <div><label style={kickerLabel}>Type</label>
+                <select value={mfFlowType} onChange={(e) => setMfFlowType(e.target.value as "inflow" | "outflow")} style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }}>
                   <option value="inflow">Inflow</option><option value="outflow">Outflow</option>
                 </select>
               </div>
-              <div><label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Month</label>
-                <input type="month" value={mfMonth} onChange={(e) => setMfMonth(e.target.value)} style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }} required />
+              <div><label style={kickerLabel}>Month</label>
+                <input type="month" value={mfMonth} onChange={(e) => setMfMonth(e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }} required />
               </div>
-              <div><label style={{ fontSize: "12px", fontWeight: 600, color: SLATE }}>Amount (PKR)</label>
-                <input type="number" value={mfAmount} onChange={(e) => setMfAmount(e.target.value)} placeholder="0" style={{ ...inputStyle, padding: "4px 6px", fontSize: "13px" }} required />
+              <div><label style={kickerLabel}>Amount (PKR)</label>
+                <input type="number" value={mfAmount} onChange={(e) => setMfAmount(e.target.value)} placeholder="0" style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }} required />
               </div>
-              <button type="submit" disabled={mfSaving} style={{ ...btnStyle, fontSize: "13px", padding: "5px 10px" }}>{mfSaving ? "..." : "Save"}</button>
+              <button type="submit" disabled={mfSaving} style={{ ...btnStyle, fontSize: "13px", padding: "7px 12px" }}>{mfSaving ? "..." : "Save"}</button>
             </div>
           </form>
         )}
       </div>
 
       {/* RIGHT — Department Budgets */}
-      <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-        <SectionTitle title="Department Budgets" />
+      <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
+        <SectionTitle title="Department Budgets" style={{ margin: "0 0 12px" }} />
         {(() => {
           const validDepts = COMPANY_DEPTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
           const validCats = COMPANY_CATS[companyId] || ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
@@ -753,12 +756,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           for (const b of budgets) { if (!groups.has(b.department)) groups.set(b.department, []); groups.get(b.department)!.push(b); }
           return (
           <>
-            <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "10px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
               <input type="month" value={budgetMonth} onChange={(e) => { setBudgetMonth(e.target.value); loadBudgets(e.target.value); }}
-                style={{ padding: "4px 6px", border: `1px solid ${BORDER}`, borderRadius: "4px", fontSize: "12px" }} />
+                style={{ padding: "5px 8px", border: `1px solid ${HAIRLINE}`, borderRadius: "10px", fontSize: "13px" }} />
               <button onClick={() => setShowBudgetForm(!showBudgetForm)} style={{
-                backgroundColor: NAVY, color: "white", border: "none", borderRadius: "4px",
-                padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                backgroundColor: NAVY, color: "white", border: "none", borderRadius: "999px",
+                padding: "5px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
               }}>{showBudgetForm ? "Cancel" : "+ Add"}</button>
               <ImportExportButtons
                 onExport={() => {
@@ -794,31 +797,31 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             </div>
 
             {showBudgetForm && (
-              <form onSubmit={handleAddBudget} style={{ border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "8px", marginBottom: "10px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "4px", alignItems: "end" }}>
-                  <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Department</label>
-                    <select style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
+              <form onSubmit={handleAddBudget} style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "10px", padding: "12px", marginBottom: "12px", backgroundColor: CARD_ALT }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "6px", alignItems: "end" }}>
+                  <div><label style={kickerLabel}>Department</label>
+                    <select style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
                       <option value="">Select</option>{validDepts.map((d) => <option key={d}>{d}</option>)}
                     </select></div>
-                  <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Category</label>
-                    <select style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required>
+                  <div><label style={kickerLabel}>Category</label>
+                    <select style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }} value={bdCategory} onChange={(e) => setBdCategory(e.target.value)} required>
                       <option value="">Select</option>{validCats.map((c) => <option key={c}>{c}</option>)}
                     </select></div>
-                  <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Budgeted</label>
-                    <input type="number" style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" /></div>
-                  <div><label style={{ fontSize: "10px", fontWeight: 600, color: SLATE }}>Actual</label>
-                    <input type="number" style={{ ...inputStyle, padding: "4px 5px", fontSize: "12px" }} value={bdActual} onChange={(e) => setBdActual(e.target.value)} placeholder="0" /></div>
+                  <div><label style={kickerLabel}>Budgeted</label>
+                    <input type="number" style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }} value={bdBudgeted} onChange={(e) => setBdBudgeted(e.target.value)} required placeholder="0" /></div>
+                  <div><label style={kickerLabel}>Actual</label>
+                    <input type="number" style={{ ...inputStyle, padding: "5px 8px", fontSize: "13px" }} value={bdActual} onChange={(e) => setBdActual(e.target.value)} placeholder="0" /></div>
                 </div>
-                <button type="submit" disabled={bdSaving} style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "4px", padding: "4px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", marginTop: "6px" }}>{bdSaving ? "..." : "Save"}</button>
+                <button type="submit" disabled={bdSaving} style={{ ...btnStyle, fontSize: "13px", padding: "6px 14px", marginTop: "8px" }}>{bdSaving ? "..." : "Save"}</button>
               </form>
             )}
 
             {budgets.length > 0 && (
-              <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
                 {[{ label: "Budgeted", val: totalB, col: BLUE }, { label: "Actual", val: totalA, col: totalA > totalB ? RED : GREEN }, { label: "Variance", val: totalB - totalA, col: totalB - totalA >= 0 ? GREEN : RED }].map((c) => (
-                  <div key={c.label} style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid ${c.col}`, borderRadius: "5px", padding: "4px 10px" }}>
-                    <div style={{ fontSize: "10px", color: SLATE }}>{c.label}</div>
-                    <div style={{ fontSize: "13px", fontWeight: 800, color: c.col }}>PKR {c.val.toLocaleString()}</div>
+                  <div key={c.label} style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "10px", padding: "6px 12px", backgroundColor: CARD_ALT }}>
+                    <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>{c.label}</div>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: c.col, fontFamily: DISPLAY, fontVariantNumeric: "tabular-nums" }}>PKR {c.val.toLocaleString()}</div>
                   </div>
                 ))}
               </div>
@@ -829,24 +832,24 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               const dA = items.reduce((s, i) => s + i.actual_amount, 0);
               const over = dA > dB;
               return (
-                <div key={deptName} style={{ border: `1px solid ${BORDER}`, borderTop: `2px solid ${over ? RED : GREEN}`, borderRadius: "5px", overflow: "hidden", marginBottom: "6px" }}>
-                  <div style={{ padding: "4px 10px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${BORDER}` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                      <span style={{ fontSize: "12px", fontWeight: 700, color: NAVY }}>{deptName}</span>
-                      <span style={{ fontSize: "10px", fontWeight: 700, color: over ? RED : GREEN }}>PKR {dA.toLocaleString()} / {dB.toLocaleString()} ({dB > 0 ? Math.round((dA / dB) * 100) : 0}%)</span>
+                <div key={deptName} style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "10px", overflow: "hidden", marginBottom: "8px" }}>
+                  <div style={{ padding: "8px 12px", backgroundColor: CARD_ALT, borderBottom: `1px solid ${HAIRLINE}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: NAVY }}>{deptName}</span>
+                      <span style={{ fontSize: "10.5px", fontWeight: 600, color: over ? RED : GREEN, fontFamily: MONO }}>PKR {dA.toLocaleString()} / {dB.toLocaleString()} ({dB > 0 ? Math.round((dA / dB) * 100) : 0}%)</span>
                     </div>
-                    <div style={{ height: "4px", backgroundColor: "#e2e8f0", borderRadius: "2px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${Math.min((dA / Math.max(dB, 1)) * 100, 100)}%`, backgroundColor: over ? RED : (dA / Math.max(dB, 1)) > 0.8 ? "#d97706" : GREEN, borderRadius: "2px", transition: "width 0.3s" }} />
+                    <div style={{ height: "3px", backgroundColor: TRACK, borderRadius: "2px", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.min((dA / Math.max(dB, 1)) * 100, 100)}%`, backgroundColor: over ? RED : (dA / Math.max(dB, 1)) > 0.8 ? AMBER : GREEN, borderRadius: "2px", transition: "width 0.3s" }} />
                     </div>
                   </div>
                   {items.map((b) => (
-                    <div key={b.id} style={{ padding: "3px 10px", borderBottom: `1px solid ${COLOURS.LIGHT}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "4px" }}>
-                      <span style={{ fontSize: "12px", fontWeight: 600, color: NAVY }}>{b.category}</span>
-                      <div style={{ display: "flex", gap: "4px", alignItems: "center", fontSize: "11px", flexShrink: 0 }}>
-                        <span style={{ color: SLATE }}>PKR {b.budgeted_amount.toLocaleString()}</span>
+                    <div key={b.id} style={{ padding: "5px 12px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "4px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 500, color: NAVY }}>{b.category}</span>
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", flexShrink: 0 }}>
+                        <span style={{ color: SLATE, fontFamily: MONO }}>PKR {b.budgeted_amount.toLocaleString()}</span>
                         <input type="number" defaultValue={b.actual_amount} onBlur={(e) => { const v = Number(e.target.value); if (v !== b.actual_amount) updateBudgetActual(b.id, v); }}
-                          style={{ width: "70px", padding: "1px 4px", border: `1px solid ${BORDER}`, borderRadius: "3px", fontSize: "11px" }} />
-                        {canEditAll && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: RED, fontSize: "12px", cursor: "pointer" }}>×</button>}
+                          style={{ width: "70px", padding: "2px 5px", border: `1px solid ${HAIRLINE}`, borderRadius: "6px", fontSize: "12px", fontFamily: MONO }} />
+                        {canEditAll && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: RED, fontSize: "14px", cursor: "pointer", lineHeight: 1 }}>×</button>}
                       </div>
                     </div>
                   ))}
@@ -855,7 +858,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             })}
 
             {budgets.length === 0 && (
-              <div style={{ padding: "10px", color: SLATE, textAlign: "center", fontSize: "13px" }}>No budget entries for {budgetMonth}.</div>
+              <div style={{ padding: "12px", color: SLATE, textAlign: "center", fontSize: "13px" }}>No budget entries for {budgetMonth}.</div>
             )}
           </>
           );
@@ -871,36 +874,36 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           gap: "14px",
           marginBottom: "14px",
         }}>
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
+            <div style={{ fontSize: "13px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "16px" }}>
               Cash Balance — Last 30 Days
             </div>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={[...positions].reverse().map((p) => ({ date: p.position_date.slice(5), closing: p.closing_balance, net: p.closing_after_post_dated }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light, #f1f5f9)" />
+                <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
                 <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
                 <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
-                <Legend iconType="plainline" wrapperStyle={{ fontSize: "13px" }} />
-                <Line type="monotone" dataKey="closing" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} name="Closing Balance (solid blue)" />
-                <Line type="monotone" dataKey="net" stroke={NAVY} strokeWidth={2} dot={{ r: 3, strokeDasharray: "" }} name="After Post-dated (dashed)" strokeDasharray="5 3" />
+                <Legend iconType="plainline" wrapperStyle={{ fontSize: "12px" }} />
+                <Line type="monotone" dataKey="closing" stroke={BLUE} strokeWidth={2} dot={{ r: 3 }} name="Closing Balance" />
+                <Line type="monotone" dataKey="net" stroke={NAVY} strokeWidth={2} dot={{ r: 3 }} name="After Post-dated" strokeDasharray="5 3" />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
-          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>
+          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
+            <div style={{ fontSize: "13px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "16px" }}>
               Daily Receipts vs Payments
             </div>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={[...positions].reverse().map((p) => ({ date: p.position_date.slice(5), receipts: p.total_receipts, payments: p.total_payments }))}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light, #f1f5f9)" />
+                <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: SLATE }} />
                 <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
                 <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
-                <Legend iconType="square" wrapperStyle={{ fontSize: "13px" }} />
-                <Bar dataKey="receipts" fill="#16a34a" name="Money In" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="payments" fill="#dc2626" name="Money Out" radius={[3, 3, 0, 0]} />
+                <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
+                <Bar dataKey="receipts" fill={GREEN} name="Money In" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="payments" fill={RED} name="Money Out" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -916,29 +919,29 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             const headers = ["Date", "Opening", "Receipts", "Payments", "Closing", "Post-dated", "Net"];
             const rows = positions.map((p) => [formatDateUK(p.position_date), String(p.opening_balance), String(p.total_receipts), String(p.total_payments), String(p.closing_balance), String(p.post_dated_total), String(p.closing_after_post_dated)]);
             downloadCSV(`cash-positions-${companyName.replace(/ /g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-          }} style={{ backgroundColor: "var(--bg-card, #ffffff)", color: NAVY, border: `1px solid ${BORDER}`, borderRadius: "6px", padding: "6px 12px", fontSize: "15px", fontWeight: 600, cursor: "pointer" }}>
+          }} style={{ backgroundColor: CARD, color: NAVY, border: `1px solid ${HAIRLINE}`, borderRadius: "999px", padding: "6px 16px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
             Export CSV
           </button>
         )}
       </div>
       <div
         style={{
-          border: `1px solid ${BORDER}`,
-          borderRadius: "8px",
-          padding: "14px",
-          backgroundColor: "var(--bg-card, #ffffff)",
+          border: `1px solid ${HAIRLINE}`,
+          borderRadius: "14px",
+          overflow: "hidden",
+          backgroundColor: CARD,
           marginBottom: "16px",
         }}
       >
         {positions.length === 0 ? (
-          <p style={{ fontSize: "16px", color: SLATE }}>
+          <p style={{ fontSize: "14px", color: SLATE, padding: "24px" }}>
             No daily positions recorded yet.
           </p>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "collapse", width: "100%" }}>
               <thead>
-                <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                <tr style={{ backgroundColor: CARD_ALT }}>
                   <th style={th}>Date</th>
                   <th style={th}>Opening</th>
                   <th style={th}>Receipts</th>
@@ -961,16 +964,16 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                     && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01
                     && Math.abs(Math.abs(p.opening_balance) - Math.abs(prevDay.closing_balance)) > 0.01;
                   return (
-                    <tr key={p.id} style={mismatch ? { backgroundColor: "#fef2f2" } : undefined}>
+                    <tr key={p.id} style={mismatch ? { backgroundColor: DANGER_SOFT } : undefined}>
                       <td style={tdBold}>
                         {formatDateUK(p.position_date)}
                         {mismatch && (
-                          <div style={{ fontSize: "12px", color: RED, fontWeight: 700, marginTop: "2px" }}>
-                            Opening != prev closing ({fmt(prevDay.closing_balance)})
+                          <div style={{ fontSize: "11px", color: RED, fontWeight: 600, marginTop: "2px", fontFamily: MONO }}>
+                            Opening ≠ prev closing ({fmt(prevDay.closing_balance)})
                           </div>
                         )}
                       </td>
-                      <td style={{ ...td, color: mismatch ? RED : undefined, fontWeight: mismatch ? 700 : undefined }}>
+                      <td style={{ ...td, color: mismatch ? RED : undefined, fontWeight: mismatch ? 600 : undefined }}>
                         {fmt(p.opening_balance)}
                       </td>
                       <td style={{ ...td, color: GREEN, fontWeight: 600 }}>
@@ -979,13 +982,13 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                       <td style={{ ...td, color: RED, fontWeight: 600 }}>
                         {fmt(p.total_payments)}
                       </td>
-                      <td style={{ ...td, fontWeight: 700, color: NAVY }}>
+                      <td style={{ ...td, fontWeight: 600, color: NAVY }}>
                         {fmt(p.closing_balance)}
                       </td>
                       <td style={{ ...td, color: SLATE }}>
                         {fmt(p.post_dated_total)}
                       </td>
-                      <td style={{ ...td, fontWeight: 700, color: p.closing_after_post_dated < 0 ? RED : GREEN }}>
+                      <td style={{ ...td, fontWeight: 600, color: p.closing_after_post_dated < 0 ? RED : GREEN }}>
                         {fmt(p.closing_after_post_dated)}
                       </td>
                     </tr>
@@ -1002,12 +1005,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       {/* ── MODALS ── */}
       {openModal === "opening" && (
         <Modal title="Opening Balance" onClose={() => setOpenModal(null)}>
-          <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
+          <p style={{ fontSize: "13px", color: SLATE, marginBottom: "16px", lineHeight: 1.5 }}>
             Set the starting cash balance. The system counts forward from here.
           </p>
           <form onSubmit={saveOpeningBalance}>
             <label style={labelStyle}>
-              As of date
+              <span style={kickerLabel}>As of date</span>
               <DateInput
                 value={obDate}
                 onChange={(e) => setObDate(e.target.value)}
@@ -1016,7 +1019,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               />
             </label>
             <label style={labelStyle}>
-              Opening amount (PKR)
+              <span style={kickerLabel}>Opening amount (PKR)</span>
               <input
                 type="number"
                 min="0"
@@ -1027,7 +1030,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 required
               />
             </label>
-            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+            <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
               <button
                 type="button"
                 onClick={() => setOpenModal(null)}
@@ -1045,12 +1048,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
       {openModal === "plan" && (
         <Modal title="Monthly Cash Plan" onClose={() => setOpenModal(null)}>
-          <p style={{ fontSize: "16px", color: SLATE, marginBottom: "12px" }}>
+          <p style={{ fontSize: "13px", color: SLATE, marginBottom: "16px", lineHeight: 1.5 }}>
             Set expected receivables and payouts for the month. Used to calculate cash health on the Executive dashboard.
           </p>
           <form onSubmit={saveMonthlyPlan}>
             <label style={labelStyle}>
-              Plan month
+              <span style={kickerLabel}>Plan month</span>
               <input
                 type="month"
                 value={planMonth}
@@ -1060,7 +1063,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               />
             </label>
             <label style={labelStyle}>
-              Expected receivables (PKR)
+              <span style={kickerLabel}>Expected receivables (PKR)</span>
               <input
                 type="number"
                 min="0"
@@ -1071,7 +1074,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               />
             </label>
             <label style={labelStyle}>
-              Expected payouts (PKR)
+              <span style={kickerLabel}>Expected payouts (PKR)</span>
               <input
                 type="number"
                 min="0"
@@ -1081,7 +1084,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 style={inputStyle}
               />
             </label>
-            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+            <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
               <button
                 type="button"
                 onClick={() => setOpenModal(null)}
@@ -1104,32 +1107,76 @@ function SummaryCard({
   label,
   value,
   sub,
-  color,
+  valueColor,
+  isHero,
   onEdit,
 }: {
   label: string;
   value: string;
   sub?: string;
-  color: string;
+  valueColor?: string;
+  isHero?: boolean;
   onEdit?: () => void;
 }) {
+  if (isHero) {
+    return (
+      <div
+        style={{
+          border: `1px solid ${NAVY}`,
+          borderRadius: "14px",
+          padding: "24px",
+          backgroundColor: NAVY,
+          position: "relative",
+        }}
+      >
+        <div style={{
+          fontSize: "10.5px", fontWeight: 500, color: "rgba(255,255,255,0.55)",
+          textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px",
+          fontFamily: DISPLAY,
+        }}>
+          {label}
+        </div>
+        <div style={{
+          fontSize: "36px", fontWeight: 600, color: valueColor || "#FFFFFF",
+          fontFamily: DISPLAY, lineHeight: 1, letterSpacing: "-0.02em",
+          fontVariantNumeric: "tabular-nums",
+        }}>
+          {value}
+        </div>
+        {sub && (
+          <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", marginTop: "6px" }}>
+            {sub}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
-        border: `1px solid ${BORDER}`,
-        borderTop: `3px solid ${color}`,
-        borderRadius: "7px",
-        padding: "10px 12px",
-        backgroundColor: "var(--bg-card, #ffffff)",
+        border: `1px solid ${HAIRLINE}`,
+        borderRadius: "14px",
+        padding: "20px",
+        backgroundColor: CARD,
         position: "relative",
       }}
     >
-      <div style={{ color: SLATE, fontSize: "13px", marginBottom: "2px", fontWeight: 600 }}>
+      <div style={{
+        fontSize: "10.5px", fontWeight: 500, color: SLATE,
+        textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px",
+      }}>
         {label}
       </div>
-      <div style={{ fontSize: "18px", fontWeight: 800, color }}>{value}</div>
+      <div style={{
+        fontSize: "22px", fontWeight: 600, color: valueColor || NAVY,
+        fontFamily: DISPLAY, lineHeight: 1, letterSpacing: "-0.01em",
+        fontVariantNumeric: "tabular-nums",
+      }}>
+        {value}
+      </div>
       {sub && (
-        <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>
+        <div style={{ fontSize: "12px", color: SLATE, marginTop: "6px" }}>
           {sub}
         </div>
       )}
@@ -1138,15 +1185,15 @@ function SummaryCard({
           onClick={onEdit}
           style={{
             position: "absolute",
-            top: "8px",
-            right: "8px",
-            background: "transparent",
-            border: `1px solid ${BORDER}`,
-            borderRadius: "5px",
-            padding: "2px 8px",
-            fontSize: "16px",
-            fontWeight: 600,
-            color: SLATE,
+            top: "12px",
+            right: "12px",
+            background: CARD,
+            border: `1px solid ${HAIRLINE}`,
+            borderRadius: "999px",
+            padding: "3px 12px",
+            fontSize: "12px",
+            fontWeight: 500,
+            color: NAVY,
             cursor: "pointer",
           }}
         >
@@ -1172,7 +1219,7 @@ function Modal({
       style={{
         position: "fixed",
         inset: 0,
-        backgroundColor: "rgba(15,23,42,0.45)",
+        backgroundColor: "rgba(15,23,32,0.45)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -1183,14 +1230,15 @@ function Modal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundColor: "var(--bg-card, #ffffff)",
-          borderRadius: "10px",
-          padding: "20px",
+          backgroundColor: CARD,
+          borderRadius: "14px",
+          padding: "24px",
           maxWidth: "420px",
           width: "100%",
           maxHeight: "90vh",
           overflowY: "auto",
-          boxShadow: "0 10px 30px rgba(15,23,42,0.20)",
+          boxShadow: "0 20px 60px rgba(15,23,32,0.15)",
+          border: `1px solid ${HAIRLINE}`,
         }}
       >
         <div
@@ -1198,23 +1246,24 @@ function Modal({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "14px",
-            paddingBottom: "10px",
-            borderBottom: `1px solid ${BORDER}`,
+            marginBottom: "20px",
+            paddingBottom: "16px",
+            borderBottom: `1px solid ${HAIRLINE}`,
           }}
         >
-          <h2 style={{ fontSize: "16px", fontWeight: 700, color: NAVY, margin: 0 }}>
+          <h2 style={{ fontSize: "16px", fontWeight: 600, color: NAVY, margin: 0, fontFamily: DISPLAY }}>
             {title}
           </h2>
           <button
             onClick={onClose}
             style={{
-              background: "transparent",
-              border: "none",
-              fontSize: "20px",
+              background: CARD_ALT,
+              border: `1px solid ${HAIRLINE}`,
+              borderRadius: "999px",
+              fontSize: "16px",
               color: SLATE,
               cursor: "pointer",
-              padding: "0 4px",
+              padding: "2px 8px",
               lineHeight: 1,
             }}
             aria-label="Close"
@@ -1228,66 +1277,81 @@ function Modal({
   );
 }
 
+const kickerLabel: React.CSSProperties = {
+  display: "block",
+  fontSize: "10.5px",
+  fontWeight: 500,
+  color: SLATE,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  marginBottom: "6px",
+};
+
 const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: "16px",
-  fontWeight: 600,
-  color: NAVY,
-  marginBottom: "8px",
+  marginBottom: "12px",
 };
 
 const inputStyle: React.CSSProperties = {
   display: "block",
   width: "100%",
-  padding: "7px 9px",
-  marginTop: "3px",
-  border: `1px solid ${BORDER}`,
-  borderRadius: "6px",
-  fontSize: "15px",
+  padding: "8px 10px",
+  marginTop: "4px",
+  border: `1px solid ${HAIRLINE}`,
+  borderRadius: "10px",
+  fontSize: "14px",
   boxSizing: "border-box",
+  color: NAVY,
 };
 
 const btnStyle: React.CSSProperties = {
   backgroundColor: NAVY,
   color: "white",
   border: "none",
-  borderRadius: "6px",
-  padding: "8px 16px",
-  fontSize: "15px",
-  fontWeight: 700,
+  borderRadius: "999px",
+  padding: "8px 20px",
+  fontSize: "14px",
+  fontWeight: 600,
   cursor: "pointer",
   marginTop: "4px",
 };
 
 const cancelBtnStyle: React.CSSProperties = {
-  backgroundColor: "var(--bg-card, #ffffff)",
+  backgroundColor: CARD,
   color: NAVY,
-  border: `1px solid ${BORDER}`,
-  borderRadius: "6px",
-  padding: "8px 16px",
-  fontSize: "15px",
-  fontWeight: 600,
+  border: `1px solid ${HAIRLINE}`,
+  borderRadius: "999px",
+  padding: "8px 20px",
+  fontSize: "14px",
+  fontWeight: 500,
   cursor: "pointer",
   marginTop: "4px",
 };
 
 const th: React.CSSProperties = {
   textAlign: "left",
-  borderBottom: `1px solid ${BORDER}`,
-  padding: "6px 10px",
-  fontSize: "16px",
+  borderBottom: `1px solid ${HAIRLINE}`,
+  padding: "10px 14px",
+  fontSize: "10.5px",
   color: SLATE,
-  fontWeight: 700,
+  fontWeight: 500,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  backgroundColor: CARD_ALT,
 };
 
 const td: React.CSSProperties = {
-  borderBottom: `1px solid ${COLOURS.LIGHT}`,
-  padding: "7px 10px",
-  fontSize: "15px",
+  borderBottom: `1px solid ${HAIRLINE}`,
+  padding: "10px 14px",
+  fontSize: "13px",
+  fontFamily: MONO,
+  fontVariantNumeric: "tabular-nums",
 };
 
 const tdBold: React.CSSProperties = {
   ...td,
-  fontWeight: 700,
+  fontFamily: "var(--font-sans, Inter, sans-serif)",
+  fontWeight: 600,
   color: NAVY,
+  fontSize: "13px",
 };

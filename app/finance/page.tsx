@@ -279,21 +279,18 @@ export default function FinancePage() {
                   href={`/finance/${c.slug}`}
                   style={{
                     textDecoration: "none",
-                    border: `1px solid ${COLOURS.BORDER}`,
-                    borderTop: `3px solid ${COLOURS.NAVY}`,
-                    borderRadius: "8px",
-                    padding: "16px",
-                    backgroundColor: "var(--bg-card, #ffffff)",
+                    border: `1px solid ${COLOURS.HAIRLINE}`,
+                    borderRadius: "14px",
+                    padding: "20px",
+                    backgroundColor: COLOURS.CARD,
                     cursor: "pointer",
-                    transition: "box-shadow 0.15s",
+                    display: "block",
                   }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 2px 10px rgba(0,0,0,0.1)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none"; }}
                 >
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>
+                  <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
                     {c.name}
                   </div>
-                  <div style={{ fontSize: "15px", color: COLOURS.SLATE }}>
+                  <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>
                     View cash position, daily entries &amp; forecasts
                   </div>
                 </a>
@@ -303,54 +300,56 @@ export default function FinancePage() {
             {isAdmin && (
               <>
                 <SectionTitle title="Bulk Upload Cash Flow PDFs" />
-                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", maxWidth: "600px" }}>
-                  <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "10px" }}>
+                <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: COLOURS.CARD, maxWidth: "600px" }}>
+                  <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "14px", lineHeight: 1.5 }}>
                     Select multiple cash flow PDFs — system auto-detects which company each PDF belongs to (Imperial vs Unze Trading) and saves to the correct account.
                   </p>
                   <form onSubmit={handleBulkUpload}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                      <input type="file" accept=".pdf" multiple style={{ fontSize: "14px" }} />
+                      <input type="file" accept=".pdf" multiple style={{ fontSize: "13px" }} />
                       <button type="submit" disabled={uploading} style={{
-                        backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
-                        padding: "7px 14px", fontSize: "14px", fontWeight: 700, cursor: "pointer",
+                        backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "999px",
+                        padding: "7px 18px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
                         opacity: uploading ? 0.5 : 1,
                       }}>{uploading ? "Uploading..." : "Upload All"}</button>
                     </div>
                   </form>
                   {bulkMsg && (
-                    <div style={{ marginTop: "10px", fontSize: "16px", fontWeight: 600, color: bulkMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{bulkMsg}</div>
+                    <div style={{ marginTop: "10px", fontSize: "13px", fontWeight: 600, color: bulkMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{bulkMsg}</div>
                   )}
                 </div>
               </>
             )}
 
             {/* Department Budgets */}
-            <div style={{ marginTop: "20px" }}>
+            <div style={{ marginTop: "20px", maxWidth: "600px" }}>
               <div onClick={() => { setShowBudgets(!showBudgets); if (!showBudgets) loadBudgets(); }} style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
-                border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px 16px",
-                backgroundColor: showBudgets ? COLOURS.NAVY : "var(--bg-card, #ffffff)", maxWidth: "600px",
+                border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: showBudgets ? "14px 14px 0 0" : "14px",
+                padding: "16px 20px",
+                backgroundColor: showBudgets ? COLOURS.NAVY : COLOURS.CARD,
               }}>
                 <div>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: showBudgets ? "white" : COLOURS.NAVY }}>Department Budgets</div>
-                  <div style={{ fontSize: "14px", color: showBudgets ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>Budgeted vs actual spending per department, per company</div>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: showBudgets ? "white" : COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Department Budgets</div>
+                  <div style={{ fontSize: "12px", color: showBudgets ? "rgba(255,255,255,0.6)" : COLOURS.SLATE, marginTop: "2px" }}>Budgeted vs actual spending per department, per company</div>
                 </div>
-                <span style={{ color: showBudgets ? "white" : COLOURS.SLATE, fontSize: "14px" }}>{showBudgets ? "▲" : "▼"}</span>
+                <span style={{ color: showBudgets ? "rgba(255,255,255,0.7)" : COLOURS.SLATE, fontSize: "12px" }}>{showBudgets ? "▲" : "▼"}</span>
               </div>
 
               {showBudgets && (
-                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "14px", maxWidth: "600px" }}>
+                <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: "none", borderRadius: "0 0 14px 14px", backgroundColor: COLOURS.CARD, padding: "20px" }}>
                   {/* Company + Month selector */}
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "14px", flexWrap: "wrap" }}>
                     <select value={budgetCompany} onChange={(e) => { setBudgetCompany(e.target.value); setBdDept(""); loadBudgets(e.target.value); }}
-                      style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px", fontWeight: 600 }}>
+                      style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", fontSize: "13px" }}>
                       {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.shortCode}</option>)}
                     </select>
                     <input type="month" value={budgetMonth} onChange={(e) => { setBudgetMonth(e.target.value); loadBudgets(undefined, e.target.value); }}
-                      style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px" }} />
+                      style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", fontSize: "13px" }} />
                     <button onClick={() => setShowBudgetForm(!showBudgetForm)} style={{
-                      backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "5px",
-                      padding: "5px 12px", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                      backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "999px",
+                      padding: "6px 16px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
                     }}>{showBudgetForm ? "Cancel" : "+ Add"}</button>
                     <ImportExportButtons
                       onExport={() => {
@@ -402,19 +401,19 @@ export default function FinancePage() {
                       importLabel="Import"
                     />
                     <button onClick={downloadBudgetTemplate} style={{
-                      backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`,
-                      borderRadius: "6px", padding: "6px 10px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                      backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, border: `1px solid ${COLOURS.HAIRLINE}`,
+                      borderRadius: "999px", padding: "6px 14px", fontSize: "12px", fontWeight: 500, cursor: "pointer",
                     }} title="Download Excel template with instructions">Template</button>
                   </div>
 
                   {bdMsg && (
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: bdMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, marginBottom: "8px" }}>{bdMsg}</div>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: bdMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, marginBottom: "10px" }}>{bdMsg}</div>
                   )}
 
                   {/* Add form */}
                   {showBudgetForm && (
-                    <form onSubmit={handleAddBudget} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px", marginBottom: "12px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "6px" }}>
+                    <form onSubmit={handleAddBudget} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px", marginBottom: "14px", backgroundColor: COLOURS.CARD_ALT }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "8px" }}>
                         <div><label style={lbl}>Department</label>
                           <select style={inp} value={bdDept} onChange={(e) => setBdDept(e.target.value)} required>
                             <option value="">Select</option>{validDepts.map((d) => <option key={d}>{d}</option>)}
@@ -437,32 +436,32 @@ export default function FinancePage() {
                         </div>
                       </div>
                       <button type="submit" disabled={bdSaving} style={{
-                        backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "5px",
-                        padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", marginTop: "8px",
+                        backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "999px",
+                        padding: "7px 18px", fontSize: "13px", fontWeight: 600, cursor: "pointer", marginTop: "10px",
                         opacity: bdSaving ? 0.5 : 1,
                       }}>{bdSaving ? "Saving..." : "Save"}</button>
                     </form>
                   )}
 
                   {/* Company codes reference */}
-                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "8px" }}>
-                    {COMPANIES.map((c) => <span key={c.id} style={{ marginRight: "10px" }}><strong>{c.shortCode}</strong> = {c.name}</span>)}
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "10px" }}>
+                    {COMPANIES.map((c) => <span key={c.id} style={{ marginRight: "12px" }}><strong>{c.shortCode}</strong> = {c.name}</span>)}
                   </div>
 
                   {/* Summary cards */}
                   {budgets.length > 0 && (
-                    <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.BLUE}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                        <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Budgeted</div>
-                        <div style={{ fontSize: "15px", fontWeight: 800, color: COLOURS.BLUE }}>PKR {totalBudgeted.toLocaleString()}</div>
+                    <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
+                      <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "8px 14px", backgroundColor: COLOURS.CARD_ALT }}>
+                        <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Budgeted</div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.BLUE, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontVariantNumeric: "tabular-nums" }}>PKR {totalBudgeted.toLocaleString()}</div>
                       </div>
-                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${totalActual > totalBudgeted ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                        <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Actual</div>
-                        <div style={{ fontSize: "15px", fontWeight: 800, color: totalActual > totalBudgeted ? COLOURS.RED : COLOURS.GREEN }}>PKR {totalActual.toLocaleString()}</div>
+                      <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "8px 14px", backgroundColor: COLOURS.CARD_ALT }}>
+                        <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Actual</div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: totalActual > totalBudgeted ? COLOURS.RED : COLOURS.GREEN, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontVariantNumeric: "tabular-nums" }}>PKR {totalActual.toLocaleString()}</div>
                       </div>
-                      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${variance >= 0 ? COLOURS.GREEN : COLOURS.RED}`, borderRadius: "6px", padding: "6px 12px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                        <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>Variance</div>
-                        <div style={{ fontSize: "15px", fontWeight: 800, color: variance >= 0 ? COLOURS.GREEN : COLOURS.RED }}>PKR {variance.toLocaleString()}</div>
+                      <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "8px 14px", backgroundColor: COLOURS.CARD_ALT }}>
+                        <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Variance</div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: variance >= 0 ? COLOURS.GREEN : COLOURS.RED, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontVariantNumeric: "tabular-nums" }}>PKR {variance.toLocaleString()}</div>
                       </div>
                     </div>
                   )}
@@ -473,24 +472,24 @@ export default function FinancePage() {
                     const dA = items.reduce((s, i) => s + i.actual_amount, 0);
                     const over = dA > dB;
                     return (
-                      <div key={deptName} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${over ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", overflow: "hidden", marginBottom: "8px" }}>
-                        <div style={{ padding: "6px 12px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{deptName}</span>
+                      <div key={deptName} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", marginBottom: "8px" }}>
+                        <div style={{ padding: "8px 14px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{deptName}</span>
                           <div style={{ fontSize: "11px", display: "flex", gap: "8px" }}>
                             <span style={{ color: COLOURS.SLATE }}>Budget: PKR {dB.toLocaleString()}</span>
-                            <span style={{ fontWeight: 700, color: over ? COLOURS.RED : COLOURS.GREEN }}>Actual: PKR {dA.toLocaleString()}</span>
+                            <span style={{ fontWeight: 600, color: over ? COLOURS.RED : COLOURS.GREEN }}>Actual: PKR {dA.toLocaleString()}</span>
                           </div>
                         </div>
                         {items.map((b) => (
-                          <div key={b.id} style={{ padding: "5px 12px", borderBottom: `1px solid var(--border-light, #f1f5f9)`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
+                          <div key={b.id} style={{ padding: "6px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px" }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{b.category}</span>
+                              <span style={{ fontSize: "13px", fontWeight: 500, color: COLOURS.NAVY }}>{b.category}</span>
                               {b.notes && <span style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "4px" }}>({b.notes})</span>}
                             </div>
-                            <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", flexShrink: 0 }}>
+                            <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", flexShrink: 0, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>
                               <span style={{ color: COLOURS.SLATE }}>PKR {b.budgeted_amount.toLocaleString()}</span>
                               <input type="number" defaultValue={b.actual_amount} onBlur={(e) => { const v = Number(e.target.value); if (v !== b.actual_amount) updateBudgetActual(b.id, v); }}
-                                style={{ width: "80px", padding: "2px 5px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "3px", fontSize: "12px" }} title="Update actual" />
+                                style={{ width: "80px", padding: "3px 6px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12px" }} title="Update actual" />
                               {canEdit && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: COLOURS.RED, fontSize: "14px", cursor: "pointer" }} title="Delete">×</button>}
                             </div>
                           </div>
@@ -500,7 +499,7 @@ export default function FinancePage() {
                   })}
 
                   {budgets.length === 0 && (
-                    <div style={{ padding: "12px", color: COLOURS.SLATE, textAlign: "center", fontSize: "16px" }}>No budget entries for {companyShortName(budgetCompany)} — {budgetMonth}.</div>
+                    <div style={{ padding: "14px", color: COLOURS.SLATE, textAlign: "center", fontSize: "13px" }}>No budget entries for {companyShortName(budgetCompany)} — {budgetMonth}.</div>
                   )}
                 </div>
               )}
@@ -512,5 +511,5 @@ export default function FinancePage() {
   );
 }
 
-const inp: React.CSSProperties = { display: "block", width: "100%", padding: "5px 8px", marginTop: "2px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", fontSize: "13px", boxSizing: "border-box" };
-const lbl: React.CSSProperties = { display: "block", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE };
+const inp: React.CSSProperties = { display: "block", width: "100%", padding: "7px 10px", marginTop: "4px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", fontSize: "13px", boxSizing: "border-box" };
+const lbl: React.CSSProperties = { display: "block", fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" } as React.CSSProperties;
