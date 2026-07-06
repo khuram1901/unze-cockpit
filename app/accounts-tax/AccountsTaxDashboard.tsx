@@ -372,18 +372,63 @@ export default function AccountsTaxDashboard() {
   const tableHeaderCell: React.CSSProperties = {
     padding: "6px 10px", fontSize: "11px", fontWeight: 600, color: SLATE,
     textAlign: "center", whiteSpace: "nowrap", backgroundColor: CARD_ALT,
-    borderBottom: `1px solid ${HAIRLINE}`,
+    borderBottom: `1px solid ${HAIRLINE}`, minWidth: "130px",
   };
 
   const tableRowLabel: React.CSSProperties = {
     padding: "8px 12px", fontSize: "12px", color: SLATE, fontWeight: 500,
     minWidth: isMobile ? "140px" : "200px", borderRight: `1px solid ${HAIRLINE}`,
     backgroundColor: CARD_ALT, whiteSpace: "nowrap",
+    position: "sticky", left: 0, zIndex: 1,
   };
 
   const tableCell: React.CSSProperties = {
     padding: "6px 8px", textAlign: "center", borderBottom: `1px solid ${HAIRLINE}`,
+    minWidth: "130px",
   };
+
+  // Fix 2 — styled status select (pill, coloured, no browser arrow)
+  const statusSelectStyle = (bg: string, text: string, saving: boolean): React.CSSProperties => ({
+    fontSize: "12px", fontWeight: 600,
+    padding: "4px 24px 4px 8px",
+    borderRadius: RADII.PILL,
+    border: `1px solid ${HAIRLINE}`,
+    backgroundColor: bg, color: text,
+    cursor: saving ? "wait" : "pointer",
+    opacity: saving ? 0.6 : 1,
+    appearance: "none" as const,
+    WebkitAppearance: "none" as const,
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748B'/%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 8px center",
+    minWidth: "120px",
+    fontFamily: "var(--font-sans, Inter, sans-serif)",
+  });
+
+  // Fix 3 — filing chip (read-only)
+  const filingChipStyle = (filed: boolean, overdue: boolean): React.CSSProperties => ({
+    fontSize: "11px", fontWeight: 600,
+    padding: "3px 9px",
+    borderRadius: RADII.PILL,
+    border: `1px solid ${filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : HAIRLINE}`,
+    backgroundColor: filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : CARD_ALT,
+    color: filed ? GREEN : overdue ? RED : SLATE,
+    whiteSpace: "nowrap" as const,
+    display: "inline-block",
+  });
+
+  // Fix 3 — filing button (canManage)
+  const filingButtonStyle = (filed: boolean, overdue: boolean, saving: boolean): React.CSSProperties => ({
+    fontSize: "11px", fontWeight: 600,
+    padding: "3px 9px",
+    borderRadius: RADII.PILL,
+    border: `1px solid ${filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : HAIRLINE}`,
+    backgroundColor: filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : CARD_ALT,
+    color: filed ? GREEN : overdue ? RED : SLATE,
+    cursor: saving ? "wait" : "pointer",
+    opacity: saving ? 0.6 : 1,
+    whiteSpace: "nowrap" as const,
+  });
 
   if (!userCtx && !loading) return null;
 
@@ -450,9 +495,9 @@ export default function AccountsTaxDashboard() {
                       {summary.inProgress > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: WARNING_SOFT, color: AMBER }}>{summary.inProgress} in progress</span>}
                       {summary.notStarted > 0 && <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: CARD_ALT, color: SLATE }}>{summary.notStarted} not started</span>}
                     </div>
-                    {/* Progress bar */}
-                    <div style={{ flex: 1, minWidth: "80px", height: "3px", backgroundColor: TRACK, borderRadius: "2px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${summary.pct}%`, backgroundColor: GREEN, borderRadius: "2px", transition: "width 0.3s" }} />
+                    {/* Progress bar — TRACK always visible, GREEN fill on top */}
+                    <div style={{ flex: 1, minWidth: "80px", height: "3px", backgroundColor: TRACK, borderRadius: "2px", position: "relative" }}>
+                      {summary.pct > 0 && <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${summary.pct}%`, backgroundColor: GREEN, borderRadius: "2px", transition: "width 0.3s" }} />}
                     </div>
                     <span style={{ fontSize: "11px", color: SLATE }}>{summary.pct}%</span>
                   </div>
@@ -489,18 +534,12 @@ export default function AccountsTaxDashboard() {
                                           value={status}
                                           disabled={saving}
                                           onChange={(ev) => handleStatusChange(sec.key, stepIndex, e.key, ev.target.value as ScheduleStatus)}
-                                          style={{
-                                            fontSize: "11px", fontWeight: 600, padding: "3px 6px",
-                                            borderRadius: RADII.XS, border: "none",
-                                            backgroundColor: bg, color: text,
-                                            cursor: "pointer", width: "100%",
-                                            opacity: saving ? 0.6 : 1,
-                                          }}
+                                          style={statusSelectStyle(bg, text, saving)}
                                         >
                                           {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                                         </select>
                                       ) : (
-                                        <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: RADII.XS, backgroundColor: bg, color: text, whiteSpace: "nowrap", display: "inline-block" }}>
+                                        <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 8px", borderRadius: RADII.PILL, border: `1px solid ${HAIRLINE}`, backgroundColor: bg, color: text, whiteSpace: "nowrap", display: "inline-block" }}>
                                           {status}
                                         </span>
                                       )}
@@ -577,18 +616,12 @@ export default function AccountsTaxDashboard() {
                                           value={status}
                                           disabled={saving}
                                           onChange={(ev) => handleStatusChange(sectionKey, stepIndex, e.key, ev.target.value as ScheduleStatus)}
-                                          style={{
-                                            fontSize: "11px", fontWeight: 600, padding: "3px 6px",
-                                            borderRadius: RADII.XS, border: "none",
-                                            backgroundColor: bg, color: text,
-                                            cursor: "pointer", width: "100%",
-                                            opacity: saving ? 0.6 : 1,
-                                          }}
+                                          style={statusSelectStyle(bg, text, saving)}
                                         >
                                           {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                                         </select>
                                       ) : (
-                                        <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: RADII.XS, backgroundColor: bg, color: text, whiteSpace: "nowrap", display: "inline-block" }}>
+                                        <span style={{ fontSize: "12px", fontWeight: 600, padding: "4px 8px", borderRadius: RADII.PILL, border: `1px solid ${HAIRLINE}`, backgroundColor: bg, color: text, whiteSpace: "nowrap", display: "inline-block" }}>
                                           {status}
                                         </span>
                                       )}
@@ -666,14 +699,7 @@ export default function AccountsTaxDashboard() {
                     <button
                       disabled={saving}
                       onClick={() => handleFilingToggle(returnType, entityKey, periodKey)}
-                      style={{
-                        fontSize: "11px", fontWeight: 600, padding: "4px 10px",
-                        borderRadius: RADII.PILL, border: "none", cursor: saving ? "wait" : "pointer",
-                        backgroundColor: filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : CARD_ALT,
-                        color: filed ? GREEN : overdue ? RED : SLATE,
-                        opacity: saving ? 0.6 : 1,
-                        whiteSpace: "nowrap",
-                      }}
+                      style={filingButtonStyle(filed, overdue, saving)}
                     >
                       {filed ? "✓ Filed" : overdue ? "⚠ Overdue" : "Not filed"}
                     </button>
@@ -681,13 +707,7 @@ export default function AccountsTaxDashboard() {
                 }
 
                 return (
-                  <span style={{
-                    fontSize: "11px", fontWeight: 600, padding: "4px 10px",
-                    borderRadius: RADII.PILL, display: "inline-block",
-                    backgroundColor: filed ? SUCCESS_SOFT : overdue ? DANGER_SOFT : CARD_ALT,
-                    color: filed ? GREEN : overdue ? RED : SLATE,
-                    whiteSpace: "nowrap",
-                  }}>
+                  <span style={filingChipStyle(filed, overdue)}>
                     {filed ? "✓ Filed" : overdue ? "⚠ Overdue" : "Not filed"}
                   </span>
                 );
