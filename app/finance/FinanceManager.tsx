@@ -1136,7 +1136,7 @@ function SummaryCard({
           {label}
         </div>
         <div style={{
-          fontSize: "36px", fontWeight: 600, color: valueColor || "#FFFFFF",
+          fontSize: "40px", fontWeight: 600, color: valueColor || "#FFFFFF",
           fontFamily: DISPLAY, lineHeight: 1, letterSpacing: "-0.02em",
           fontVariantNumeric: "tabular-nums",
         }}>

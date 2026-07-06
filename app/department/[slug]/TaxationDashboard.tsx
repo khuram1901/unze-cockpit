@@ -6,7 +6,7 @@ import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
@@ -41,12 +41,55 @@ function daysUntil(dateStr: string | null): number {
   return Math.floor((new Date(dateStr + "T00:00:00").getTime() - Date.now()) / 86400000);
 }
 
+// Soft-background badge colours per notice type
+const TYPE_BADGE: Record<string, { bg: string; text: string }> = {
+  "income tax":      { bg: COLOURS.DANGER_SOFT, text: COLOURS.RED },
+  "sales tax":       { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
+  "withholding tax": { bg: "#EEF1FC", text: COLOURS.BLUE },
+  "FBR notice":      { bg: "#F0EEFB", text: COLOURS.PURPLE },
+  "provincial tax":  { bg: COLOURS.SUCCESS_SOFT, text: COLOURS.GREEN },
+  "customs":         { bg: COLOURS.HAIRLINE, text: COLOURS.NAVY },
+  "other":           { bg: COLOURS.HAIRLINE, text: COLOURS.SLATE },
+};
+
+// Chart colours per notice type (solid, for recharts)
+const TYPE_COLOURS: Record<string, string> = {
+  "income tax":      COLOURS.RED,
+  "sales tax":       COLOURS.AMBER,
+  "withholding tax": COLOURS.BLUE,
+  "FBR notice":      COLOURS.PURPLE,
+  "provincial tax":  COLOURS.GREEN,
+  "customs":         COLOURS.NAVY,
+  "other":           COLOURS.SLATE,
+};
+
+// Company colours (solid, for recharts)
+const COMPANY_COLOURS: Record<string, string> = {
+  "Unze Trading PVT Limited":      COLOURS.BLUE,
+  "Imperial Footwear PVT Limited": COLOURS.AMBER,
+  "Haute Dolci":                   COLOURS.GREEN,
+  "Barahn PVT Limited":            COLOURS.PURPLE,
+  "K&K Jhang":                     COLOURS.SLATE,
+};
+
+function NoticeTypeBadge({ type }: { type: string | null }) {
+  if (!type) return null;
+  const { bg, text } = TYPE_BADGE[type] || { bg: COLOURS.HAIRLINE, text: COLOURS.SLATE };
+  return (
+    <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.XS, backgroundColor: bg, color: text, whiteSpace: "nowrap", textTransform: "capitalize" }}>
+      {type}
+    </span>
+  );
+}
+
 const inp: React.CSSProperties = {
   display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-  border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+  border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, fontSize: "14px", boxSizing: "border-box",
+  color: COLOURS.NAVY,
 };
 const lbl: React.CSSProperties = {
-  display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "4px",
+  display: "block", fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE,
+  textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px",
 };
 
 export default function TaxationDashboard() {
@@ -122,12 +165,12 @@ export default function TaxationDashboard() {
   const resolved = items.filter((i) => i.resolution_status !== "pending").length;
 
   // Exposure by company chart
-  const companyExposure = new Map<string, number>();
+  const companyExposureMap = new Map<string, number>();
   for (const i of pending) {
     const c = i.company_name || "Unknown";
-    companyExposure.set(c, (companyExposure.get(c) || 0) + (i.financial_exposure || 0));
+    companyExposureMap.set(c, (companyExposureMap.get(c) || 0) + (i.financial_exposure || 0));
   }
-  const exposureData = Array.from(companyExposure.entries())
+  const exposureData = Array.from(companyExposureMap.entries())
     .map(([company, amount]) => ({ company: company.replace(" PVT Limited", ""), amount }))
     .sort((a, b) => b.amount - a.amount);
 
@@ -139,7 +182,7 @@ export default function TaxationDashboard() {
       </div>
 
       {message && (
-        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>{message}</div>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px", backgroundColor: COLOURS.CARD, fontSize: "14px", color: COLOURS.NAVY }}>{message}</div>
       )}
 
       {/* Alert Banner */}
@@ -149,23 +192,23 @@ export default function TaxationDashboard() {
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ fontSize: "20px" }}>⚠</span>
               <div>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{hearingSoon.length} hearing{hearingSoon.length > 1 ? "s" : ""} within 7 days</div>
-                <div style={{ fontSize: "13px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>{hearingSoon.map((i) => `${i.title} (${formatDateUK(i.hearing_deadline)})`).join(" · ")}</div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{hearingSoon.length} hearing{hearingSoon.length > 1 ? "s" : ""} within 7 days</div>
+                <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>{hearingSoon.map((i) => `${i.title} (${formatDateUK(i.hearing_deadline)})`).join(" · ")}</div>
               </div>
             </div>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
           </div>
           {bannerOpen && (
             <div style={WARNING_BANNER_INNER}>
               {hearingSoon.map((i) => (
-                <div key={i.id} onClick={() => { setExpandedId(i.id); setBannerOpen(false); }} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div key={i.id} onClick={() => { setExpandedId(i.id); setBannerOpen(false); }} style={{ padding: "8px 16px 8px 48px", borderBottom: `1px solid ${COLOURS.TRACK}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{i.title}</div>
-                    <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{i.company_name || "—"} · {i.consultant_name || "No consultant"}</div>
+                    <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{i.title}</div>
+                    <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>{i.company_name || "—"} · {i.consultant_name || "No consultant"}</div>
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontSize: "15px", fontWeight: 700, color: "#dc2626" }}>{formatDateUK(i.hearing_deadline)}</div>
-                    {i.financial_exposure && <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>PKR {i.financial_exposure.toLocaleString()}</div>}
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.RED }}>{formatDateUK(i.hearing_deadline)}</div>
+                    {i.financial_exposure && <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>PKR {i.financial_exposure.toLocaleString()}</div>}
                   </div>
                 </div>
               ))}
@@ -174,26 +217,25 @@ export default function TaxationDashboard() {
         </div>
       )}
 
-      {/* KPI Row */}
+      {/* KPI Row — last card is dark hero */}
       {!loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-          <CountCard label="Pending" value={pending.length} color="#d97706" />
+          <CountCard label="Pending" value={pending.length} color={COLOURS.AMBER} />
           <CountCard label="Hearing Soon" value={hearingSoon.length} color={COLOURS.RED} />
           <CountCard label="High Exposure" value={highExposure.length} color={COLOURS.RED} />
           <CountCard label="Resolved" value={resolved} color={COLOURS.GREEN} />
-          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${totalExposure > 0 ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "7px", padding: "8px 10px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-            <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "1px" }}>Total Exposure</div>
-            <div style={{ fontSize: "18px", fontWeight: 800, color: totalExposure > 0 ? COLOURS.RED : COLOURS.GREEN }}>PKR {totalExposure.toLocaleString()}</div>
+          {/* Total Exposure — dark hero card */}
+          <div style={{ background: COLOURS.NAVY, border: `1px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, padding: "16px 20px" }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 500, color: "rgba(255,255,255,0.55)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px" }}>Total Exposure</div>
+            <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "40px", fontWeight: 600, color: "#FFFFFF", letterSpacing: "-0.025em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+              PKR {(totalExposure / 1000000).toFixed(1)}M
+            </div>
           </div>
         </div>
       )}
 
       {/* Three chart panels */}
       {!loading && items.length > 0 && (() => {
-        const companyColors: Record<string, string> = {
-          "Unze Trading PVT Limited": "#1e293b", "Imperial Footwear PVT Limited": "#2563eb",
-          "Haute Dolci": "#7c3aed", "Barahn PVT Limited": "#059669", "K&K Jhang": "#d97706",
-        };
         const companyDonut = Array.from(
           pending.reduce((map, n) => {
             const c = n.company_name || "Unknown";
@@ -201,13 +243,9 @@ export default function TaxationDashboard() {
             return map;
           }, new Map<string, number>())
         ).map(([name, value]) => ({
-          name: name.replace(" PVT Limited", ""), value, color: companyColors[name] || COLOURS.SLATE,
+          name: name.replace(" PVT Limited", ""), value, color: COMPANY_COLOURS[name] || COLOURS.SLATE,
         })).sort((a, b) => b.value - a.value);
 
-        const typeColors: Record<string, string> = {
-          "income tax": "#dc2626", "sales tax": "#d97706", "withholding tax": "#2563eb",
-          "FBR notice": "#7c3aed", "provincial tax": "#059669", "customs": "#1e293b", "other": COLOURS.SLATE,
-        };
         const typeDonut = Array.from(
           pending.reduce((map, n) => {
             const t = n.notice_type || "other";
@@ -215,15 +253,15 @@ export default function TaxationDashboard() {
             return map;
           }, new Map<string, number>())
         ).map(([name, value]) => ({
-          name, value, color: typeColors[name] || COLOURS.SLATE,
+          name, value, color: TYPE_COLOURS[name] || COLOURS.SLATE,
         })).sort((a, b) => b.value - a.value);
 
         return (
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
             {/* Notices by Company donut */}
             {companyDonut.length > 0 && (
-              <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "6px" }}>Pending by Company</div>
+              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "16px 20px", backgroundColor: COLOURS.CARD }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px" }}>Pending by Company</div>
                 <ResponsiveContainer width="100%" height={150}>
                   <PieChart>
                     <Pie data={companyDonut} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
@@ -234,7 +272,7 @@ export default function TaxationDashboard() {
                 </ResponsiveContainer>
                 <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
                   {companyDonut.map((d) => (
-                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>
+                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "12px", color: COLOURS.SLATE }}>
                       <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                     </div>
                   ))}
@@ -244,8 +282,8 @@ export default function TaxationDashboard() {
 
             {/* Notices by Type donut */}
             {typeDonut.length > 0 && (
-              <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "6px" }}>Pending by Type</div>
+              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "16px 20px", backgroundColor: COLOURS.CARD }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px" }}>Pending by Type</div>
                 <ResponsiveContainer width="100%" height={150}>
                   <PieChart>
                     <Pie data={typeDonut} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
@@ -256,7 +294,7 @@ export default function TaxationDashboard() {
                 </ResponsiveContainer>
                 <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
                   {typeDonut.map((d) => (
-                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>
+                    <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "12px", color: COLOURS.SLATE }}>
                       <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                     </div>
                   ))}
@@ -266,11 +304,11 @@ export default function TaxationDashboard() {
 
             {/* Exposure by Company bar */}
             {exposureData.length > 0 && (
-              <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "8px" }}>Exposure by Company</div>
+              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "16px 20px", backgroundColor: COLOURS.CARD }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px" }}>Exposure by Company</div>
                 <ResponsiveContainer width="100%" height={Math.max(140, exposureData.length * 32)}>
                   <BarChart data={exposureData} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} horizontal={false} />
                     <XAxis type="number" tick={{ fontSize: 10, fill: COLOURS.SLATE }} tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
                     <YAxis dataKey="company" type="category" tick={{ fontSize: 11, fill: COLOURS.NAVY, fontWeight: 600 }} width={90} />
                     <Tooltip formatter={(value) => `PKR ${Number(value).toLocaleString()}`} />
@@ -331,7 +369,7 @@ export default function TaxationDashboard() {
           importLabel="Import notices from CSV"
         />
         <button onClick={() => setShowForm(!showForm)} style={{
-          backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
+          backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: "50%",
           width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           boxShadow: SHADOWS.MODAL,
@@ -339,8 +377,8 @@ export default function TaxationDashboard() {
       </div>
 
       {showForm && (
-        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "10px" }}>New Notice</div>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, marginBottom: "14px" }}>
+          <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "10px" }}>New Notice</div>
           <form onSubmit={handleAdd}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
               <label style={lbl}>Notice Title <input style={inp} value={formData.title || ""} onChange={(e) => setField("title", e.target.value)} required placeholder="e.g. Income Tax Notice FY2025" /></label>
@@ -353,7 +391,7 @@ export default function TaxationDashboard() {
               <label style={lbl}>Our Action Required <textarea style={{ ...inp, height: "50px" }} value={formData.our_action_required || ""} onChange={(e) => setField("our_action_required", e.target.value)} /></label>
               <label style={lbl}>Consultant Action <textarea style={{ ...inp, height: "50px" }} value={formData.consultant_action_required || ""} onChange={(e) => setField("consultant_action_required", e.target.value)} /></label>
             </div>
-            <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Add Notice"}</button>
+            <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL, padding: "8px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Add Notice"}</button>
           </form>
         </div>
       )}
@@ -363,7 +401,7 @@ export default function TaxationDashboard() {
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
           <button
             onClick={() => setShowTaskForm(!showTaskForm)}
-            style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "15px", fontWeight: 700, cursor: "pointer" }}
+            style={{ backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL, padding: "8px 16px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
           >
             {showTaskForm ? "Cancel" : "+ Issue Task"}
           </button>
@@ -371,14 +409,14 @@ export default function TaxationDashboard() {
       )}
 
       {showTaskForm && (
-        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", marginBottom: "14px", overflow: "hidden" }}>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, marginBottom: "14px", overflow: "hidden" }}>
           <NewTaskForm onCreated={() => { setShowTaskForm(false); loadData(); }} />
         </div>
       )}
 
       {/* Notices grouped by company */}
-      {loading ? <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading…</p> : items.length === 0 ? (
-        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)" }}>No notices yet.</div>
+      {loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : items.length === 0 ? (
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, color: COLOURS.SLATE }}>No notices yet.</div>
       ) : (() => {
         const groups = new Map<string, Notice[]>();
         for (const item of items) {
@@ -397,14 +435,14 @@ export default function TaxationDashboard() {
               const companyHearingSoon = companyPending.filter((n) => { const d = daysUntil(n.hearing_deadline); return d >= 0 && d <= 7; }).length;
 
               return (
-                <div key={company} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "10px" }}>
+                <div key={company} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "10px" }}>
                   {/* Company header */}
-                  <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: "1px solid var(--border-color, #e2e8f0)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
-                    <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{company.replace(" PVT Limited", "")}</span>
-                    <div style={{ display: "flex", gap: "10px", fontSize: "14px" }}>
+                  <div style={{ padding: "10px 16px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{company.replace(" PVT Limited", "")}</span>
+                    <div style={{ display: "flex", gap: "10px", fontSize: "13px" }}>
                       {companyHearingSoon > 0 && <span style={{ fontWeight: 700, color: COLOURS.RED }}>{companyHearingSoon} hearing soon</span>}
                       {companyExposure > 0 && <span style={{ fontWeight: 700, color: COLOURS.RED }}>PKR {companyExposure.toLocaleString()}</span>}
-                      <span style={{ color: "var(--text-secondary, #64748b)" }}>{companyPending.length} pending · {notices.length} total</span>
+                      <span style={{ color: COLOURS.SLATE }}>{companyPending.length} pending · {notices.length} total</span>
                     </div>
                   </div>
 
@@ -414,34 +452,35 @@ export default function TaxationDashboard() {
                     const hearingDays = daysUntil(item.hearing_deadline);
                     const isUrgent = item.resolution_status === "pending" && hearingDays >= 0 && hearingDays <= 7;
                     return (
-                      <div key={item.id} style={{ borderBottom: "1px solid var(--border-color, #e2e8f0)" }}>
+                      <div key={item.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
                         <div onClick={() => setExpandedId(isOpen ? null : item.id)} style={{
-                          padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                          backgroundColor: isUrgent ? "#fef2f2" : isOpen ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
+                          padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+                          backgroundColor: isUrgent ? COLOURS.DANGER_SOFT : isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
                         }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{item.title}</div>
-                            <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>
-                              {item.notice_type || "—"} · {item.consultant_name || "No consultant"}
-                              {item.hearing_deadline && <span style={{ color: isUrgent ? COLOURS.RED : "var(--text-secondary, #64748b)", fontWeight: isUrgent ? 700 : 400 }}> · Hearing: {formatDateUK(item.hearing_deadline)}{isUrgent ? ` (${hearingDays}d)` : ""}</span>}
+                            <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{item.title}</div>
+                            <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                              <NoticeTypeBadge type={item.notice_type} />
+                              <span>{item.consultant_name || "No consultant"}</span>
+                              {item.hearing_deadline && <span style={{ color: isUrgent ? COLOURS.RED : COLOURS.SLATE, fontWeight: isUrgent ? 700 : 400 }}>Hearing: {formatDateUK(item.hearing_deadline)}{isUrgent ? ` (${hearingDays}d)` : ""}</span>}
                             </div>
                           </div>
                           <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
-                            {item.financial_exposure ? <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.RED }}>PKR {item.financial_exposure.toLocaleString()}</span> : null}
+                            {item.financial_exposure ? <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.RED }}>PKR {item.financial_exposure.toLocaleString()}</span> : null}
                             <StatusBadge status={item.resolution_status} />
-                            <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>{isOpen ? "▼" : "▶"}</span>
+                            <span style={{ color: COLOURS.SLATE, fontSize: "14px" }}>{isOpen ? "▼" : "▶"}</span>
                           </div>
                         </div>
                         {isOpen && (
-                          <div style={{ padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderTop: "1px solid var(--border-color, #e2e8f0)", fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>
-                            {item.hearing_deadline && <div style={{ marginBottom: "4px" }}>Hearing: <strong style={{ color: isUrgent ? COLOURS.RED : "var(--text-primary, #1e293b)" }}>{formatDateUK(item.hearing_deadline)}{isUrgent ? ` (${hearingDays}d away)` : ""}</strong></div>}
+                          <div style={{ padding: "12px 16px", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "14px", color: COLOURS.SLATE }}>
+                            {item.hearing_deadline && <div style={{ marginBottom: "4px" }}>Hearing: <strong style={{ color: isUrgent ? COLOURS.RED : COLOURS.NAVY }}>{formatDateUK(item.hearing_deadline)}{isUrgent ? ` (${hearingDays}d away)` : ""}</strong></div>}
                             {item.received_date && <div style={{ marginBottom: "4px" }}>Received: {formatDateUK(item.received_date)}</div>}
                             {item.our_action_required && <div style={{ marginBottom: "4px" }}>Our action: {item.our_action_required}</div>}
                             {item.consultant_action_required && <div style={{ marginBottom: "4px" }}>Consultant action: {item.consultant_action_required}</div>}
                             {item.notes && <div style={{ marginBottom: "6px" }}>Notes: {item.notes}</div>}
                             <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "6px" }}>
-                              <span style={{ fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>Status:</span>
-                              <select value={item.resolution_status} onChange={(e) => updateStatus(item.id, e.target.value)} style={{ padding: "5px 8px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px" }}>
+                              <span style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Status:</span>
+                              <select value={item.resolution_status} onChange={(e) => updateStatus(item.id, e.target.value)} style={{ padding: "5px 8px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, fontSize: "14px" }}>
                                 {STATUSES.map((s) => <option key={s}>{s}</option>)}
                               </select>
                             </div>

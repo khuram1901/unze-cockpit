@@ -6,7 +6,7 @@ import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
@@ -26,9 +26,23 @@ const AUDIT_STAGES: { label: string; pct: number }[] = [
 
 const STATUSES = ["Planned", "In Progress", "Completed", "Cancelled"];
 const AUDIT_TYPES = ["Financial", "Operational", "Compliance", "IT", "Other"];
+
+// Soft-background badge colours per audit type
+const TYPE_BADGE: Record<string, { bg: string; text: string }> = {
+  Financial:   { bg: "#EEF1FC", text: COLOURS.BLUE },
+  Operational: { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
+  Compliance:  { bg: COLOURS.SUCCESS_SOFT, text: COLOURS.GREEN },
+  IT:          { bg: COLOURS.HAIRLINE, text: COLOURS.SLATE },
+  Other:       { bg: COLOURS.HAIRLINE, text: COLOURS.SLATE },
+};
+
+// Chart fill colours (solid, for recharts)
 const TYPE_COLOURS: Record<string, string> = {
-  Financial: "#2563eb", Operational: "#d97706", Compliance: "#7c3aed",
-  IT: "#059669", Other: COLOURS.SLATE,
+  Financial:   COLOURS.BLUE,
+  Operational: COLOURS.AMBER,
+  Compliance:  COLOURS.GREEN,
+  IT:          COLOURS.SLATE,
+  Other:       COLOURS.SLATE,
 };
 
 type AuditItem = {
@@ -61,10 +75,12 @@ function stageToCompletion(stage: string | null): number {
 
 const inp: React.CSSProperties = {
   display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-  border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+  border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, fontSize: "14px", boxSizing: "border-box",
+  color: COLOURS.NAVY,
 };
 const lbl: React.CSSProperties = {
-  display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "4px",
+  display: "block", fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE,
+  textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px",
 };
 
 export default function AuditDashboard() {
@@ -158,7 +174,7 @@ export default function AuditDashboard() {
     count: active.filter((i) => i.audit_stage === s.label).length,
     pct: s.pct,
   }));
-  const stageColors = [COLOURS.SLATE, "#2563eb", "#2563eb", "#d97706", "#7c3aed", "#059669", COLOURS.GREEN];
+  const stageColors = [COLOURS.SLATE, COLOURS.BLUE, COLOURS.BLUE, COLOURS.AMBER, COLOURS.PURPLE, COLOURS.GREEN, COLOURS.GREEN];
 
   // Chart data: by audit type (donut)
   const typeDonut = AUDIT_TYPES.map((t) => ({
@@ -188,14 +204,25 @@ export default function AuditDashboard() {
   }
 
   function completionBar(pct: number, small?: boolean) {
-    const color = pct === 100 ? COLOURS.GREEN : pct >= 60 ? "#d97706" : COLOURS.BLUE;
+    const color = pct === 100 ? COLOURS.GREEN : pct >= 60 ? COLOURS.AMBER : COLOURS.BLUE;
     return (
       <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-        <div style={{ flex: 1, height: small ? "6px" : "8px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "4px", minWidth: small ? "40px" : "60px" }}>
-          <div style={{ width: `${pct}%`, height: "100%", backgroundColor: color, borderRadius: "4px", transition: "width 0.3s" }} />
+        <div style={{ flex: 1, height: small ? "6px" : "8px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, minWidth: small ? "40px" : "60px" }}>
+          <div style={{ width: `${pct}%`, height: "100%", backgroundColor: color, borderRadius: RADII.PILL, transition: "width 0.3s" }} />
         </div>
-        <span style={{ fontSize: small ? "11px" : "13px", fontWeight: 700, color, minWidth: "28px" }}>{pct}%</span>
+        <span style={{ fontSize: small ? "11px" : "13px", fontWeight: 600, color, minWidth: "28px", fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{pct}%</span>
       </div>
+    );
+  }
+
+  // Soft audit type badge
+  function AuditTypeBadge({ type }: { type: string | null }) {
+    if (!type) return null;
+    const { bg, text } = TYPE_BADGE[type] || { bg: COLOURS.HAIRLINE, text: COLOURS.SLATE };
+    return (
+      <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.XS, backgroundColor: bg, color: text, whiteSpace: "nowrap" }}>
+        {type}
+      </span>
     );
   }
 
@@ -206,7 +233,7 @@ export default function AuditDashboard() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
         <PageHeader />
         <button onClick={() => setShowForm(!showForm)} style={{
-          backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
+          backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: "50%",
           width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
           boxShadow: SHADOWS.MODAL,
@@ -214,15 +241,15 @@ export default function AuditDashboard() {
       </div>
 
       {message && (
-        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>{message}</div>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px", backgroundColor: COLOURS.CARD, fontSize: "14px", color: COLOURS.NAVY }}>{message}</div>
       )}
 
       {/* Collapsible add form */}
       {showForm && (
-        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "14px" }}>
-          <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "10px" }}>New Audit</div>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, marginBottom: "14px" }}>
+          <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "12px" }}>New Audit</div>
           <form onSubmit={handleAdd}>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px" }}>
               <label style={lbl}>Audit Area <input style={inp} value={auditArea} onChange={(e) => setAuditArea(e.target.value)} required placeholder="e.g. Procurement Process" /></label>
               <label style={lbl}>Audit Type <select style={inp} value={auditType} onChange={(e) => setAuditType(e.target.value)} required><option value="">Select</option>{AUDIT_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
               <label style={lbl}>Assigned To <input style={inp} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder="Auditor name" required /></label>
@@ -230,7 +257,7 @@ export default function AuditDashboard() {
               <label style={lbl}>Target Date <DateInput style={inp} value={targetDate} onChange={(e) => setTargetDate(e.target.value)} required /></label>
               <label style={lbl}>Scope <textarea style={{ ...inp, height: "50px" }} value={scope} onChange={(e) => setScope(e.target.value)} placeholder="What will be audited" /></label>
             </div>
-            <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Add Audit"}</button>
+            <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL, padding: "8px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", marginTop: "10px" }}>{saving ? "Saving…" : "Add Audit"}</button>
           </form>
         </div>
       )}
@@ -240,7 +267,7 @@ export default function AuditDashboard() {
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
           <button
             onClick={() => setShowTaskForm(!showTaskForm)}
-            style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px", padding: "8px 16px", fontSize: "15px", fontWeight: 700, cursor: "pointer" }}
+            style={{ backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL, padding: "8px 16px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
           >
             {showTaskForm ? "Cancel" : "+ Issue Task"}
           </button>
@@ -248,7 +275,7 @@ export default function AuditDashboard() {
       )}
 
       {showTaskForm && (
-        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", marginBottom: "14px", overflow: "hidden" }}>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, marginBottom: "14px", overflow: "hidden" }}>
           <NewTaskForm onCreated={() => { setShowTaskForm(false); loadData(); }} />
         </div>
       )}
@@ -260,21 +287,21 @@ export default function AuditDashboard() {
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ fontSize: "20px" }}>⚠</span>
               <div>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{overdue} audit{overdue > 1 ? "s" : ""} past target date</div>
-                <div style={{ fontSize: "13px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>{overdueItems.slice(0, 3).map((i) => `${i.audit_area} (${overdueDays(i.target_date)}d)`).join(" · ")}</div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{overdue} audit{overdue > 1 ? "s" : ""} past target date</div>
+                <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>{overdueItems.slice(0, 3).map((i) => `${i.audit_area} (${overdueDays(i.target_date)}d)`).join(" · ")}</div>
               </div>
             </div>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
           </div>
           {bannerOpen && (
             <div style={WARNING_BANNER_INNER}>
               {overdueItems.sort((a, b) => overdueDays(b.target_date) - overdueDays(a.target_date)).map((i) => (
-                <div key={i.id} onClick={() => { setExpandedId(i.id); setBannerOpen(false); }} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div key={i.id} onClick={() => { setExpandedId(i.id); setBannerOpen(false); }} style={{ padding: "8px 16px 8px 48px", borderBottom: `1px solid ${COLOURS.TRACK}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{i.audit_area}</div>
-                    <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{i.assigned_to || "Unassigned"} · {i.audit_stage || "Not started"}</div>
+                    <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{i.audit_area}</div>
+                    <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>{i.assigned_to || "Unassigned"} · {i.audit_stage || "Not started"}</div>
                   </div>
-                  <span style={{ fontSize: "15px", fontWeight: 700, color: "#dc2626" }}>{overdueDays(i.target_date)}d overdue</span>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.RED }}>{overdueDays(i.target_date)}d overdue</span>
                 </div>
               ))}
             </div>
@@ -285,7 +312,7 @@ export default function AuditDashboard() {
       {!loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
           <CountCard label="Planned" value={planned} color={COLOURS.BLUE} />
-          <CountCard label="In Progress" value={inProgress} color="#d97706" />
+          <CountCard label="In Progress" value={inProgress} color={COLOURS.AMBER} />
           <CountCard label="Completed" value={completed} color={COLOURS.GREEN} />
           <CountCard label="Overdue" value={overdue} color={COLOURS.RED} />
           <CountCard label="Avg %" value={avgPct} color={COLOURS.PURPLE} />
@@ -296,11 +323,11 @@ export default function AuditDashboard() {
       {!loading && items.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
           {/* Stage Pipeline — horizontal bars */}
-          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-            <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "8px" }}>Stage Pipeline</div>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "14px" }}>Stage Pipeline</div>
             <ResponsiveContainer width="100%" height={AUDIT_STAGES.length * 28 + 10}>
               <BarChart data={stagePipelineData} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 10, fill: COLOURS.SLATE }} allowDecimals={false} />
                 <YAxis dataKey="stage" type="category" tick={{ fontSize: 11, fill: COLOURS.NAVY }} width={95} />
                 <Tooltip formatter={(value, _n, props) => [`${value} (${props.payload.pct}%)`, "Audits"]} />
@@ -313,8 +340,8 @@ export default function AuditDashboard() {
 
           {/* By Audit Type — donut */}
           {typeDonut.length > 0 && (
-            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "6px" }}>By Type</div>
+            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD }}>
+              <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "14px" }}>By Type</div>
               <ResponsiveContainer width="100%" height={150}>
                 <PieChart>
                   <Pie data={typeDonut} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
@@ -323,10 +350,10 @@ export default function AuditDashboard() {
                   <Tooltip formatter={(value, name) => [`${value} audit${Number(value) > 1 ? "s" : ""}`, name]} />
                 </PieChart>
               </ResponsiveContainer>
-              <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap", marginTop: "6px" }}>
                 {typeDonut.map((d) => (
-                  <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>
-                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
+                  <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: COLOURS.SLATE }}>
+                    <span style={{ width: "7px", height: "7px", borderRadius: "2px", backgroundColor: d.color }} /> {d.name} ({d.value})
                   </div>
                 ))}
               </div>
@@ -335,17 +362,17 @@ export default function AuditDashboard() {
 
           {/* Auditor Workload — stacked horizontal bars */}
           {auditorData.length > 0 && (
-            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "8px" }}>Auditor Workload</div>
+            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD }}>
+              <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "14px" }}>Auditor Workload</div>
               <ResponsiveContainer width="100%" height={Math.max(120, auditorData.length * 32)}>
                 <BarChart data={auditorData} layout="vertical" margin={{ left: 0, right: 10, top: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 10, fill: COLOURS.SLATE }} allowDecimals={false} />
                   <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: COLOURS.NAVY }} width={80} />
                   <Tooltip />
-                  <Bar dataKey="overdue" stackId="a" fill={COLOURS.RED} name="Overdue (red)" />
-                  <Bar dataKey="active" stackId="a" fill={COLOURS.BLUE} name="Active (blue)" />
-                  <Bar dataKey="completed" stackId="a" fill={COLOURS.GREEN} name="Done (green)" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="overdue" stackId="a" fill={COLOURS.RED} name="Overdue" />
+                  <Bar dataKey="active" stackId="a" fill={COLOURS.BLUE} name="Active" />
+                  <Bar dataKey="completed" stackId="a" fill={COLOURS.GREEN} name="Done" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -402,20 +429,20 @@ export default function AuditDashboard() {
         />
       </div>
 
-      {loading ? <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading…</p> : items.length === 0 ? (
-        <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)" }}>No audit records yet.</div>
+      {loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : items.length === 0 ? (
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, color: COLOURS.SLATE }}>No audit records yet.</div>
       ) : (
         statusOrder.filter((s) => statusGroups.has(s)).map((status) => {
           const group = statusGroups.get(status)!;
-          const statusColor = status === "In Progress" ? "#d97706" : status === "Completed" ? COLOURS.GREEN : status === "Cancelled" ? COLOURS.SLATE : COLOURS.BLUE;
+          const statusColor = status === "In Progress" ? COLOURS.AMBER : status === "Completed" ? COLOURS.GREEN : status === "Cancelled" ? COLOURS.SLATE : COLOURS.BLUE;
           return (
-            <div key={status} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "10px" }}>
-              <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: "1px solid var(--border-color, #e2e8f0)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div key={status} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "10px" }}>
+              <div style={{ padding: "10px 18px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: statusColor }} />
-                  <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{status}</span>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: statusColor }} />
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.INK_700, textTransform: "uppercase", letterSpacing: "0.08em" }}>{status}</span>
                 </div>
-                <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>{group.length} audit{group.length > 1 ? "s" : ""}</span>
+                <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>{group.length} audit{group.length > 1 ? "s" : ""}</span>
               </div>
 
               {group.map((item) => {
@@ -425,55 +452,55 @@ export default function AuditDashboard() {
                 const pct = item.completion_pct || 0;
 
                 return (
-                  <div key={item.id} style={{ borderBottom: "1px solid var(--border-color, #e2e8f0)" }}>
+                  <div key={item.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
                     <div onClick={() => setExpandedId(isOpen ? null : item.id)} style={{
-                      padding: "9px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                      backgroundColor: isOverdue ? "#fef2f2" : isOpen ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
+                      padding: "12px 18px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+                      backgroundColor: isOverdue ? COLOURS.DANGER_SOFT : isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
                     }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.audit_area}</div>
-                        <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-                          {item.audit_type && <span style={{ fontSize: "13px", fontWeight: 600, padding: "1px 5px", borderRadius: "4px", backgroundColor: TYPE_COLOURS[item.audit_type] || COLOURS.SLATE, color: "white" }}>{item.audit_type}</span>}
+                        <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.audit_area}</div>
+                        <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                          {item.audit_type && <AuditTypeBadge type={item.audit_type} />}
                           <span>{item.assigned_to || "Unassigned"}</span>
-                          {item.target_date && <span style={{ color: isOverdue ? COLOURS.RED : "var(--text-secondary, #64748b)", fontWeight: isOverdue ? 700 : 400 }}>Target: {formatDateUK(item.target_date)}{isOverdue ? ` (${od}d late)` : ""}</span>}
+                          {item.target_date && <span style={{ color: isOverdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue ? 600 : 400 }}>Target: {formatDateUK(item.target_date)}{isOverdue ? ` (${od}d late)` : ""}</span>}
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0, minWidth: isMobile ? "60px" : "120px" }}>
                         {completionBar(pct, true)}
-                        <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>{isOpen ? "▼" : "▶"}</span>
+                        <span style={{ color: COLOURS.SLATE, fontSize: "14px" }}>{isOpen ? "▼" : "▶"}</span>
                       </div>
                     </div>
 
                     {isOpen && (
-                      <div style={{ padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderTop: "1px solid var(--border-color, #e2e8f0)" }}>
+                      <div style={{ padding: "16px 18px", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
                         {/* Audit Area — editable */}
-                        <div style={{ marginBottom: "8px" }}>
-                          <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-secondary, #64748b)", marginBottom: "3px" }}>Audit Area</div>
+                        <div style={{ marginBottom: "10px" }}>
+                          <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "3px" }}>Audit Area</div>
                           <input style={inp} defaultValue={item.audit_area}
                             onBlur={(e) => { if (e.target.value.trim() !== item.audit_area) updateField(item.id, "audit_area", e.target.value.trim()); }} />
                         </div>
-                        <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "8px" }}>
+                        <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "10px" }}>
                           {item.scope && <div style={{ marginBottom: "4px" }}><strong>Scope:</strong> {item.scope}</div>}
                           {item.notes && <div style={{ marginBottom: "4px" }}><strong>Notes:</strong> {item.notes}</div>}
                           {item.planned_date && <div>Planned: {formatDateUK(item.planned_date)}</div>}
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px" }}>
                           <div>
-                            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-secondary, #64748b)", marginBottom: "3px" }}>Status</div>
+                            <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "3px" }}>Status</div>
                             <select style={inp} value={item.status} onChange={(e) => updateField(item.id, "status", e.target.value)}>
                               {STATUSES.map((s) => <option key={s}>{s}</option>)}
                             </select>
                           </div>
                           <div>
-                            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-secondary, #64748b)", marginBottom: "3px" }}>Audit Stage</div>
+                            <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "3px" }}>Audit Stage</div>
                             <select style={inp} value={item.audit_stage || ""} onChange={(e) => updateField(item.id, "audit_stage", e.target.value)}>
                               <option value="">Select</option>
                               {AUDIT_STAGES.map((s) => <option key={s.label} value={s.label}>{s.label} ({s.pct}%)</option>)}
                             </select>
                           </div>
                           <div>
-                            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-secondary, #64748b)", marginBottom: "3px" }}>Target Date</div>
+                            <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "3px" }}>Target Date</div>
                             <DateInput style={inp} value={item.target_date || ""} onChange={(e) => updateField(item.id, "target_date", e.target.value || null)} />
                           </div>
                         </div>

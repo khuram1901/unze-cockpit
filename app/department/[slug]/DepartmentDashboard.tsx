@@ -7,6 +7,7 @@ import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
 import {
   COLOURS,
+  RADII,
   SectionTitle,
   PageHeader,
   CountCard,
@@ -152,14 +153,14 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
 
       {message && (
         <div style={{
-          border: "1px solid var(--border-color, #e2e8f0)",
+          border: `1px solid ${COLOURS.HAIRLINE}`,
           borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`,
-          borderRadius: "6px",
+          borderRadius: RADII.SM,
           padding: "10px 14px",
           marginBottom: "14px",
-          backgroundColor: "var(--bg-card, #ffffff)",
-          fontSize: "16px",
-          color: "var(--text-primary, #1e293b)",
+          backgroundColor: COLOURS.CARD,
+          fontSize: "15px",
+          color: COLOURS.NAVY,
         }}>
           {message}
         </div>
@@ -189,9 +190,9 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
         <>
           <SectionTitle title={`Your Tasks (${myTasks.length})`} />
           <div style={{
-            border: "1px solid var(--border-color, #e2e8f0)",
-            borderRadius: "8px",
-            backgroundColor: "var(--bg-card, #ffffff)",
+            border: `1px solid ${COLOURS.HAIRLINE}`,
+            borderRadius: RADII.CARD,
+            backgroundColor: COLOURS.CARD,
             overflow: "hidden",
             marginBottom: "14px",
             maxWidth: isMobile ? "100%" : "500px",
@@ -199,13 +200,13 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
             {myTasks.map((t) => {
               const overdue = t.due_date && t.due_date < new Date().toISOString().slice(0, 10) && t.status !== "Completed";
               return (
-                <div key={t.id} style={{ borderBottom: "1px solid var(--border-color, #e2e8f0)", padding: "7px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", backgroundColor: overdue ? "#fef2f2" : undefined }}>
-                  <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)", minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div key={t.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}`, padding: "7px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", backgroundColor: overdue ? COLOURS.DANGER_SOFT : undefined }}>
+                  <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, minWidth: 0, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {t.description}
                   </div>
                   <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
                     {t.due_date && (
-                      <span style={{ fontSize: "15px", color: overdue ? COLOURS.RED : "var(--text-secondary, #64748b)", fontWeight: overdue ? 700 : 400 }}>
+                      <span style={{ fontSize: "15px", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 400 }}>
                         {formatDateUK(t.due_date)}
                       </span>
                     )}
@@ -226,12 +227,12 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
             onClick={() => setShowTaskForm(!showTaskForm)}
             style={{
               backgroundColor: COLOURS.NAVY,
-              color: "white",
+              color: COLOURS.CARD,
               border: "none",
-              borderRadius: "6px",
+              borderRadius: RADII.PILL,
               padding: "8px 16px",
-              fontSize: "15px",
-              fontWeight: 700,
+              fontSize: "13px",
+              fontWeight: 600,
               cursor: "pointer",
             }}
           >
@@ -242,9 +243,9 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
 
       {showTaskForm && (
         <div style={{
-          border: "1px solid var(--border-color, #e2e8f0)",
+          border: `1px solid ${COLOURS.HAIRLINE}`,
           borderTop: `3px solid ${COLOURS.NAVY}`,
-          borderRadius: "8px",
+          borderRadius: RADII.CARD,
           marginBottom: "14px",
           overflow: "hidden",
         }}>
@@ -260,12 +261,12 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
             onClick={() => setShowForm(!showForm)}
             style={{
               backgroundColor: COLOURS.NAVY,
-              color: "white",
+              color: COLOURS.CARD,
               border: "none",
-              borderRadius: "6px",
+              borderRadius: RADII.PILL,
               padding: "8px 16px",
-              fontSize: "15px",
-              fontWeight: 700,
+              fontSize: "13px",
+              fontWeight: 600,
               cursor: "pointer",
             }}
           >
@@ -276,10 +277,10 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
 
       {showForm && config.table !== "tasks" && (
         <div style={{
-          border: "1px solid var(--border-color, #e2e8f0)",
-          borderRadius: "8px",
-          padding: "16px",
-          backgroundColor: "var(--bg-card, #ffffff)",
+          border: `1px solid ${COLOURS.HAIRLINE}`,
+          borderRadius: RADII.CARD,
+          padding: "24px",
+          backgroundColor: COLOURS.CARD,
           marginBottom: "14px",
         }}>
           <form onSubmit={handleSubmit}>
@@ -291,9 +292,11 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
               {config.formFields.map((field) => (
                 <label key={field.key} style={{
                   display: "block",
-                  fontSize: "15px",
-                  fontWeight: 600,
-                  color: "var(--text-primary, #1e293b)",
+                  fontSize: "10.5px",
+                  fontWeight: 500,
+                  color: COLOURS.SLATE,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
                   marginBottom: "4px",
                 }}>
                   {field.label}
@@ -328,12 +331,12 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
             </div>
             <button type="submit" disabled={saving} style={{
               backgroundColor: COLOURS.NAVY,
-              color: "white",
+              color: COLOURS.CARD,
               border: "none",
-              borderRadius: "6px",
+              borderRadius: RADII.PILL,
               padding: "10px 20px",
-              fontSize: "16px",
-              fontWeight: 700,
+              fontSize: "13px",
+              fontWeight: 600,
               cursor: "pointer",
               marginTop: "10px",
             }}>
@@ -345,15 +348,15 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
 
       {/* Data Table / Cards */}
       {loading ? (
-        <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "16px" }}>Loading…</p>
+        <p style={{ color: COLOURS.SLATE, fontSize: "15px" }}>Loading…</p>
       ) : rows.length === 0 ? (
         <div style={{
-          border: "1px solid var(--border-color, #e2e8f0)",
-          borderRadius: "8px",
-          padding: "14px",
-          backgroundColor: "var(--bg-card, #ffffff)",
-          color: "var(--text-secondary, #64748b)",
-          fontSize: "16px",
+          border: `1px solid ${COLOURS.HAIRLINE}`,
+          borderRadius: RADII.CARD,
+          padding: "24px",
+          backgroundColor: COLOURS.CARD,
+          color: COLOURS.SLATE,
+          fontSize: "15px",
         }}>
           No records yet. Click &ldquo;+ Add&rdquo; to create the first one.
         </div>
@@ -361,21 +364,21 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
         <div>
           {rows.map((row) => (
             <div key={row.id as string} style={{
-              border: "1px solid var(--border-color, #e2e8f0)",
-              borderRadius: "8px",
-              padding: "10px 12px",
-              backgroundColor: "var(--bg-card, #ffffff)",
-              marginBottom: "6px",
+              border: `1px solid ${COLOURS.HAIRLINE}`,
+              borderRadius: RADII.CARD,
+              padding: "16px 18px",
+              backgroundColor: COLOURS.CARD,
+              marginBottom: "8px",
             }}>
               {config.columns.map((col) => (
                 <div key={col.key} style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  padding: "2px 0",
-                  fontSize: "15px",
+                  padding: "3px 0",
+                  fontSize: "14px",
                 }}>
-                  <span style={{ color: "var(--text-secondary, #64748b)" }}>{col.label}</span>
-                  <span style={{ fontWeight: col.bold ? 700 : 400, color: col.bold ? "var(--text-primary, #1e293b)" : undefined }}>
+                  <span style={{ color: COLOURS.SLATE }}>{col.label}</span>
+                  <span style={{ fontWeight: col.bold ? 600 : 400, color: col.bold ? COLOURS.NAVY : undefined }}>
                     {col.key === config.statusField ? (
                       <StatusBadge status={String(row[col.key] || "")} />
                     ) : (
@@ -385,15 +388,15 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
                 </div>
               ))}
               {config.statusOptions.length > 0 && (
-                <div style={{ marginTop: "6px" }}>
+                <div style={{ marginTop: "8px" }}>
                   <select
                     value={String(row[config.statusField] || "")}
                     onChange={(e) => updateStatus(row.id as string, e.target.value)}
                     style={{
                       padding: "5px 8px",
-                      border: "1px solid var(--border-color, #e2e8f0)",
-                      borderRadius: "6px",
-                      fontSize: "16px",
+                      border: `1px solid ${COLOURS.HAIRLINE}`,
+                      borderRadius: RADII.SM,
+                      fontSize: "14px",
                       width: "100%",
                     }}
                   >
@@ -407,13 +410,13 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
       ) : (
         <div style={{
           overflowX: "auto",
-          border: "1px solid var(--border-color, #e2e8f0)",
-          borderRadius: "8px",
-          backgroundColor: "var(--bg-card, #ffffff)",
+          border: `1px solid ${COLOURS.HAIRLINE}`,
+          borderRadius: RADII.CARD,
+          backgroundColor: COLOURS.CARD,
         }}>
           <table style={{ borderCollapse: "collapse", width: "100%" }}>
             <thead>
-              <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+              <tr style={{ backgroundColor: COLOURS.CARD_ALT }}>
                 {config.columns.map((col) => (
                   <th key={col.key} style={thStyle}>{col.label}</th>
                 ))}
@@ -426,8 +429,8 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
                   {config.columns.map((col) => (
                     <td key={col.key} style={{
                       ...tdStyle,
-                      fontWeight: col.bold ? 700 : 400,
-                      color: col.bold ? "var(--text-primary, #1e293b)" : undefined,
+                      fontWeight: col.bold ? 600 : 400,
+                      color: col.bold ? COLOURS.NAVY : undefined,
                     }}>
                       {col.key === config.statusField ? (
                         <StatusBadge status={String(row[col.key] || "")} />
@@ -443,9 +446,9 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
                         onChange={(e) => updateStatus(row.id as string, e.target.value)}
                         style={{
                           padding: "5px 8px",
-                          border: "1px solid var(--border-color, #e2e8f0)",
-                          borderRadius: "6px",
-                          fontSize: "15px",
+                          border: `1px solid ${COLOURS.HAIRLINE}`,
+                          borderRadius: RADII.SM,
+                          fontSize: "14px",
                         }}
                       >
                         {config.statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -466,24 +469,27 @@ const inputStyle: React.CSSProperties = {
   display: "block",
   width: "100%",
   padding: "8px 10px",
-  marginTop: "3px",
-  border: "1px solid var(--border-color, #e2e8f0)",
-  borderRadius: "6px",
-  fontSize: "16px",
+  marginTop: "6px",
+  border: `1px solid ${COLOURS.HAIRLINE}`,
+  borderRadius: RADII.SM,
+  fontSize: "14px",
   boxSizing: "border-box",
+  color: COLOURS.NAVY,
 };
 
 const thStyle: React.CSSProperties = {
   textAlign: "left",
-  borderBottom: "1px solid var(--border-color, #e2e8f0)",
-  padding: "6px 10px",
-  fontSize: "15px",
-  color: "var(--text-secondary, #64748b)",
-  fontWeight: 700,
+  borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+  padding: "8px 14px",
+  fontSize: "10.5px",
+  color: COLOURS.SLATE,
+  fontWeight: 500,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
 };
 
 const tdStyle: React.CSSProperties = {
-  borderBottom: "1px solid var(--border-light, #f1f5f9)",
-  padding: "7px 10px",
-  fontSize: "16px",
+  borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+  padding: "10px 14px",
+  fontSize: "14px",
 };
