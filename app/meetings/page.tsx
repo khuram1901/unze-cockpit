@@ -10,7 +10,9 @@ import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import {
   COLOURS,
+  RADII,
   SHADOWS,
+  cardStyle,
   SectionTitle,
   PageHeader,
   PriorityBadge,
@@ -563,7 +565,7 @@ export default function MeetingsPage() {
     return true;
   });
 
-  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions...</p></main></AuthWrapper>;
 
   return (
     <AuthWrapper>
@@ -572,19 +574,19 @@ export default function MeetingsPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
           <PageHeader />
           <button onClick={() => setShowMinutesFlow(!showMinutesFlow)} style={{
-            backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
-            width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            boxShadow: SHADOWS.MODAL,
-          }} title="Add minutes">{showMinutesFlow ? "×" : "+"}</button>
+            ...primaryButtonStyle,
+            display: "flex", alignItems: "center", gap: "6px", flexShrink: 0,
+          }} title="Add minutes">
+            {showMinutesFlow ? "✕ Close" : "+ Add Minutes"}
+          </button>
         </div>
 
         {message && (
           <div style={{
-            border: `1px solid ${COLOURS.BORDER}`,
-            borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`,
-            borderRadius: "6px", padding: "10px 14px", marginBottom: "14px",
-            backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: COLOURS.NAVY,
+            border: `1px solid ${COLOURS.HAIRLINE}`,
+            borderRadius: RADII.CARD, padding: "10px 14px", marginBottom: "14px",
+            backgroundColor: message.startsWith("Error") ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT,
+            fontSize: "13px", color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN,
           }}>
             {message}
           </div>
@@ -593,7 +595,7 @@ export default function MeetingsPage() {
         {/* Summary strip */}
         {!showMinutesFlow && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-            <CountCard label="Pending Review" value={pendingMinutes.length} color={pendingMinutes.length > 0 ? "#d97706" : COLOURS.SLATE} />
+            <CountCard label="Pending Review" value={pendingMinutes.length} color={pendingMinutes.length > 0 ? COLOURS.AMBER : COLOURS.SLATE} />
             <CountCard label="This Month" value={thisMonthMeetings.length} color={COLOURS.NAVY} />
             <CountCard label="Open Tasks" value={openTasks.length} color={openTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
             <CountCard label="Total Meetings" value={meetings.length} color={COLOURS.BLUE} />
@@ -606,29 +608,29 @@ export default function MeetingsPage() {
             <SectionTitle title={`Pending Review (${pendingMinutes.length})`} />
             {pendingMinutes.map((p) => (
               <div key={p.id} style={{
-                border: `1px solid ${COLOURS.BORDER}`,
-                borderLeft: `4px solid #d97706`,
-                borderRadius: "8px", padding: "12px 14px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "8px",
+                ...cardStyle,
+                backgroundColor: COLOURS.WARNING_SOFT,
+                padding: "12px 14px", marginBottom: "8px",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.NAVY }}>
+                    <div style={{ fontWeight: 600, fontSize: "14px", color: COLOURS.NAVY }}>
                       {p.subject || "Untitled Minutes"}
                     </div>
-                    <div style={{ fontSize: "15px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
                       From: {p.from_address || "Unknown"}{p.email_date ? ` · ${p.email_date}` : ""}
                     </div>
-                    <div style={{ fontSize: "16px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>
                       {p.raw_text.slice(0, 150)}{p.raw_text.length > 150 ? "..." : ""}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
                     <button onClick={() => handleReviewPending(p)} style={{
-                      ...primaryButtonStyle, padding: "6px 14px", fontSize: "16px",
+                      ...primaryButtonStyle, padding: "6px 14px",
                     }}>Review</button>
                     <button onClick={() => handleDismissPending(p.id)} style={{
-                      ...primaryButtonStyle, padding: "6px 14px", fontSize: "16px",
-                      backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.SLATE, border: `1px solid ${COLOURS.BORDER}`,
+                      ...primaryButtonStyle, padding: "6px 14px",
+                      backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, border: `1px solid ${COLOURS.BORDER}`,
                     }}>Dismiss</button>
                   </div>
                 </div>
@@ -639,10 +641,10 @@ export default function MeetingsPage() {
 
         {/* Step 1: Input */}
         {showMinutesFlow && step === "input" && (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "16px" }}>
+          <div style={{ ...cardStyle, padding: "16px", marginBottom: "16px" }}>
             <SectionTitle title="Step 1: Add Minutes" />
 
-            <div style={{ display: "flex", gap: "0", marginBottom: "16px", borderBottom: `2px solid ${COLOURS.BORDER}` }}>
+            <div style={{ display: "inline-flex", backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "3px", gap: "2px", marginBottom: "16px" }}>
               {([
                 { key: "paste" as const, label: "Paste Text" },
                 { key: "upload" as const, label: "Upload File" },
@@ -652,15 +654,14 @@ export default function MeetingsPage() {
                   key={tab.key}
                   onClick={() => setInputMethod(tab.key)}
                   style={{
-                    padding: "10px 20px",
-                    fontSize: "15px",
-                    fontWeight: inputMethod === tab.key ? 700 : 500,
-                    color: inputMethod === tab.key ? COLOURS.NAVY : COLOURS.SLATE,
-                    backgroundColor: "transparent",
+                    padding: "6px 14px",
+                    fontSize: "12px",
+                    fontWeight: inputMethod === tab.key ? 600 : 400,
+                    color: inputMethod === tab.key ? COLOURS.CARD : COLOURS.SLATE,
+                    backgroundColor: inputMethod === tab.key ? COLOURS.NAVY : "transparent",
                     border: "none",
-                    borderBottom: inputMethod === tab.key ? `3px solid ${COLOURS.NAVY}` : "3px solid transparent",
+                    borderRadius: RADII.PILL,
                     cursor: "pointer",
-                    marginBottom: "-2px",
                   }}
                 >
                   {tab.label}
@@ -692,8 +693,8 @@ export default function MeetingsPage() {
                   textAlign: "center",
                   padding: "40px 20px",
                   border: `2px dashed ${dragging ? COLOURS.NAVY : COLOURS.BORDER}`,
-                  borderRadius: "10px",
-                  backgroundColor: dragging ? "var(--bg-card-hover, #f0f4ff)" : "var(--bg-card-hover, #fafbfc)",
+                  borderRadius: RADII.CARD,
+                  backgroundColor: dragging ? COLOURS.TRACK : COLOURS.CARD_ALT,
                   transition: "all 0.2s ease",
                   cursor: uploading ? "wait" : "pointer",
                 }}
@@ -701,10 +702,10 @@ export default function MeetingsPage() {
                 <div style={{ fontSize: "36px", marginBottom: "10px", opacity: 0.5 }}>
                   {uploading ? "..." : ""}
                 </div>
-                <p style={{ fontSize: "17px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "6px" }}>
+                <p style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "6px" }}>
                   {uploading ? "Reading file..." : dragging ? "Drop your file here" : "Drag & drop your file here"}
                 </p>
-                <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "16px" }}>
+                <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "16px" }}>
                   or
                 </p>
                 <label style={{
@@ -723,7 +724,7 @@ export default function MeetingsPage() {
                     style={{ display: "none" }}
                   />
                 </label>
-                <p style={{ fontSize: "16px", color: COLOURS.SLATE, marginTop: "14px" }}>
+                <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "14px" }}>
                   Supported: PDF, Word (.docx), Plain text (.txt)
                 </p>
               </div>
@@ -731,11 +732,11 @@ export default function MeetingsPage() {
 
             {inputMethod === "email" && (
               <div style={{ padding: "8px 0" }}>
-                <div style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "14px", marginBottom: "16px" }}>
-                  <p style={{ fontSize: "15px", color: COLOURS.NAVY, fontWeight: 700, marginBottom: "6px" }}>
+                <div style={{ backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, padding: "14px", marginBottom: "16px" }}>
+                  <p style={{ fontSize: "13px", color: COLOURS.NAVY, fontWeight: 600, marginBottom: "6px" }}>
                     How it works
                   </p>
-                  <ol style={{ fontSize: "15px", color: COLOURS.SLATE, margin: 0, paddingLeft: "20px", lineHeight: 1.8 }}>
+                  <ol style={{ fontSize: "13px", color: COLOURS.SLATE, margin: 0, paddingLeft: "20px", lineHeight: 1.8 }}>
                     <li>Forward your minutes email to <strong>k.saleem@unzegroup.com</strong></li>
                     <li>In Gmail, create a label called <strong>minutes-of-meeting</strong> and set up a filter to auto-label these emails</li>
                     <li>Click the button below to check for new minutes</li>
@@ -749,23 +750,23 @@ export default function MeetingsPage() {
 
                 {emailResults.length > 0 && (
                   <div style={{ marginTop: "14px" }}>
-                    <p style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>
+                    <p style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "8px" }}>
                       Select an email to extract:
                     </p>
                     {emailResults.map((email) => (
                       <div key={email.id} style={{
-                        border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px 12px",
-                        marginBottom: "6px", backgroundColor: "var(--bg-card, #ffffff)", cursor: "pointer",
+                        border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, padding: "10px 12px",
+                        marginBottom: "6px", backgroundColor: COLOURS.CARD, cursor: "pointer",
                       }}
                         onClick={() => selectEmailMinutes(email.text)}
                         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = COLOURS.NAVY; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = COLOURS.BORDER; }}
                       >
-                        <div style={{ fontWeight: 700, fontSize: "15px", color: COLOURS.NAVY }}>{email.subject}</div>
-                        <div style={{ fontSize: "16px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                        <div style={{ fontWeight: 600, fontSize: "13px", color: COLOURS.NAVY }}>{email.subject}</div>
+                        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
                           From: {email.from} · {email.date}
                         </div>
-                        <div style={{ fontSize: "16px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>
                           {email.text.slice(0, 150)}{email.text.length > 150 ? "..." : ""}
                         </div>
                       </div>
@@ -790,12 +791,12 @@ export default function MeetingsPage() {
           const addActionItem = () => {
             setExtracted({ ...extracted, action_items: [...extracted.action_items, { description: "", owner_name: "", priority: "Medium", due_date: "", department: "" }] });
           };
-          const smallField: React.CSSProperties = { ...inputStyle, fontSize: "16px", padding: "6px 8px" };
+          const smallField: React.CSSProperties = { ...inputStyle, fontSize: "12px", padding: "6px 8px" };
 
           return (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "16px" }}>
+          <div style={{ ...cardStyle, padding: "16px", marginBottom: "16px" }}>
             <SectionTitle title="Step 2: Review & Approve" />
-            <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "12px" }}>
+            <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "12px" }}>
               Review and edit everything below. Change task owners, descriptions, priorities — then approve.
             </p>
 
@@ -887,16 +888,13 @@ export default function MeetingsPage() {
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", padding: "8px 0", borderTop: `2px solid ${COLOURS.NAVY}`, marginTop: "12px" }}>
               <SectionTitle title={`Action Items (${extracted.action_items.length})`} />
-              <button onClick={addActionItem} style={{
-                backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
-                padding: "8px 16px", fontSize: "16px", fontWeight: 700, cursor: "pointer",
-              }}>
+              <button onClick={addActionItem} style={{ ...primaryButtonStyle, padding: "8px 16px" }}>
                 + Add Task
               </button>
             </div>
 
             {extracted.action_items.map((item, i) => (
-              <div key={i} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "12px", marginBottom: "8px", backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+              <div key={i} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, padding: "12px", marginBottom: "8px", backgroundColor: COLOURS.CARD_ALT }}>
                 <div style={{ marginBottom: "8px" }}>
                   <input value={item.description} onChange={(e) => updateActionItem(i, { description: e.target.value })}
                     placeholder="Task description *" required style={{ ...inputStyle, fontWeight: 600, borderColor: !item.description.trim() ? COLOURS.RED : undefined }} />
@@ -936,7 +934,7 @@ export default function MeetingsPage() {
                     </select>
                   </div>
                   <button onClick={() => removeActionItem(i)}
-                    style={{ backgroundColor: "var(--bg-card, #ffffff)", border: `1px solid #dc2626`, color: "#dc2626", borderRadius: "6px", padding: "6px 10px", fontSize: "16px", cursor: "pointer", height: "fit-content" }}>
+                    style={{ backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.RED}`, color: COLOURS.RED, borderRadius: RADII.XS, padding: "6px 10px", fontSize: "13px", cursor: "pointer", height: "fit-content" }}>
                     Remove
                   </button>
                 </div>
@@ -947,14 +945,14 @@ export default function MeetingsPage() {
               <label style={labelStyle}>External Attendee Emails (comma-separated, optional)</label>
               <input value={externalEmails} onChange={(e) => setExternalEmails(e.target.value)}
                 placeholder="e.g. john@external.com, jane@supplier.com" style={inputStyle} />
-              <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginTop: "-6px" }}>
+              <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>
                 These people will receive the minutes email but no tasks will be created for them.
               </p>
             </div>
 
             <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
               <button onClick={() => { setStep("input"); setMessage(""); }}
-                style={{ ...primaryButtonStyle, backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, flex: 1 }}>
+                style={{ ...primaryButtonStyle, backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, flex: 1 }}>
                 Back
               </button>
               <button onClick={handleApprove} disabled={saving}
@@ -988,13 +986,13 @@ export default function MeetingsPage() {
           const deselectAll = () => setSelectedRecipients(new Set());
 
           return (
-          <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "16px" }}>
+          <div style={{ ...cardStyle, padding: "16px", marginBottom: "16px" }}>
             <SectionTitle title="Step 3: Notify Attendees" />
 
             <div style={{
-              border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`,
-              borderRadius: "6px", padding: "10px 14px", marginBottom: "14px",
-              backgroundColor: "var(--bg-card-hover, #f0fdf4)", fontSize: "14px", color: COLOURS.NAVY,
+              border: `1px solid ${COLOURS.HAIRLINE}`,
+              borderRadius: RADII.CARD, padding: "10px 14px", marginBottom: "14px",
+              backgroundColor: COLOURS.SUCCESS_SOFT, fontSize: "13px", color: COLOURS.GREEN,
             }}>
               Company attendees will see these minutes in <strong>My Minutes</strong> within the app. Only check people below if you also want to send an email copy (typically for external attendees who don't have app access).
             </div>
@@ -1003,8 +1001,8 @@ export default function MeetingsPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <label style={labelStyle}>Email Recipients ({selectedRecipients.size} selected)</label>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={selectAll} style={{ fontSize: "14px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Select All</button>
-                  <button onClick={deselectAll} style={{ fontSize: "14px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Deselect All</button>
+                  <button onClick={selectAll} style={{ fontSize: "12px", color: COLOURS.BLUE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Select All</button>
+                  <button onClick={deselectAll} style={{ fontSize: "12px", color: COLOURS.SLATE, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Deselect All</button>
                 </div>
               </div>
 
@@ -1012,12 +1010,12 @@ export default function MeetingsPage() {
               {extracted.attendees.map((a) => {
                 const match = bestMatch(a, memberEmails);
                 if (!match?.email) return (
-                  <div key={a} style={{ padding: "4px 0", fontSize: "14px", color: COLOURS.SLATE }}>
-                    {a} <span style={{ fontSize: "12px", color: "#d97706" }}>(no email match)</span>
+                  <div key={a} style={{ padding: "4px 0", fontSize: "13px", color: COLOURS.SLATE }}>
+                    {a} <span style={{ fontSize: "12px", color: COLOURS.AMBER }}>(no email match)</span>
                   </div>
                 );
                 return (
-                  <label key={a} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                  <label key={a} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "13px", color: COLOURS.NAVY, cursor: "pointer" }}>
                     <input type="checkbox" checked={selectedRecipients.has(match.email)}
                       onChange={() => toggleRecipient(match.email)} style={{ width: "16px", height: "16px" }} />
                     <span style={{ fontWeight: 600 }}>{a}</span>
@@ -1030,7 +1028,7 @@ export default function MeetingsPage() {
                 <>
                   <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px", marginTop: "10px" }}>External Attendees (email only)</div>
                   {externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).map((ext) => (
-                    <label key={ext} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "14px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                    <label key={ext} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0", fontSize: "13px", color: COLOURS.NAVY, cursor: "pointer" }}>
                       <input type="checkbox" checked={selectedRecipients.has(ext)}
                         onChange={() => toggleRecipient(ext)} style={{ width: "16px", height: "16px" }} />
                       <span style={{ fontWeight: 600 }}>{ext}</span>
@@ -1066,7 +1064,7 @@ export default function MeetingsPage() {
                 </button>
               ) : null}
               <button onClick={resetAll}
-                style={{ ...primaryButtonStyle, backgroundColor: selectedRecipients.size === 0 ? COLOURS.GREEN : "var(--bg-card, #ffffff)", color: selectedRecipients.size === 0 ? "white" : COLOURS.NAVY, border: selectedRecipients.size === 0 ? "none" : `1px solid ${COLOURS.BORDER}`, flex: selectedRecipients.size === 0 ? 2 : 1 }}>
+                style={{ ...primaryButtonStyle, backgroundColor: selectedRecipients.size === 0 ? COLOURS.GREEN : COLOURS.CARD, color: selectedRecipients.size === 0 ? "white" : COLOURS.NAVY, border: selectedRecipients.size === 0 ? "none" : `1px solid ${COLOURS.BORDER}`, flex: selectedRecipients.size === 0 ? 2 : 1 }}>
                 {selectedRecipients.size === 0 ? "Done — Attendees Notified in App" : "Skip Email & Done"}
               </button>
             </div>
@@ -1078,13 +1076,13 @@ export default function MeetingsPage() {
         {!showMinutesFlow && (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
-              <div style={{ display: "flex", gap: "0", borderBottom: `2px solid ${COLOURS.BORDER}` }}>
+              <div style={{ display: "inline-flex", backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "3px", gap: "2px" }}>
                 {(["meetings", "decisions"] as const).map((v) => (
                   <button key={v} onClick={() => setView(v)} style={{
-                    padding: "8px 16px", fontSize: "15px", fontWeight: view === v ? 700 : 500,
-                    color: view === v ? COLOURS.NAVY : COLOURS.SLATE, backgroundColor: "transparent",
-                    border: "none", borderBottom: view === v ? `3px solid ${COLOURS.NAVY}` : "3px solid transparent",
-                    cursor: "pointer", marginBottom: "-2px",
+                    padding: "6px 14px", fontSize: "12px", fontWeight: view === v ? 600 : 400,
+                    color: view === v ? COLOURS.CARD : COLOURS.SLATE,
+                    backgroundColor: view === v ? COLOURS.NAVY : "transparent",
+                    border: "none", borderRadius: RADII.PILL, cursor: "pointer",
                   }}>
                     {v === "meetings" ? "Past Meetings" : `Decision Log (${allDecisions.length})`}
                   </button>
@@ -1094,9 +1092,9 @@ export default function MeetingsPage() {
                 <div style={{ display: "flex", gap: "4px" }}>
                   {(["date", "department"] as const).map((g) => (
                     <button key={g} onClick={() => { setGroupBy(g); setExpandedGroups(new Set()); }} style={{
-                      padding: "4px 12px", fontSize: "13px", fontWeight: groupBy === g ? 700 : 500, borderRadius: "14px",
+                      padding: "4px 12px", fontSize: "12px", fontWeight: groupBy === g ? 600 : 400, borderRadius: RADII.PILL,
                       border: `1px solid ${groupBy === g ? COLOURS.NAVY : COLOURS.BORDER}`,
-                      backgroundColor: groupBy === g ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
+                      backgroundColor: groupBy === g ? COLOURS.NAVY : COLOURS.CARD,
                       color: groupBy === g ? "white" : COLOURS.SLATE, cursor: "pointer",
                     }}>
                       {g === "date" ? "By Date" : "By Department"}
@@ -1126,26 +1124,26 @@ export default function MeetingsPage() {
                 </div>
 
                 {filteredDecisions.length === 0 ? (
-                  <p style={{ color: COLOURS.SLATE, fontSize: "16px" }}>
+                  <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>
                     {allDecisions.length === 0 ? "No decisions recorded yet." : "No decisions match your filters."}
                   </p>
                 ) : (
-                  <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", overflow: "hidden" }}>
+                  <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
                     {filteredDecisions.map((d, i) => (
                       <div key={`${d.meetingId}-${i}`} style={{
                         padding: "10px 14px",
                         borderBottom: i < filteredDecisions.length - 1 ? `1px solid ${COLOURS.LIGHT}` : "none",
-                        backgroundColor: "var(--bg-card, #ffffff)",
+                        backgroundColor: COLOURS.CARD,
                       }}>
-                        <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "3px" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "3px" }}>
                           {d.text}
                         </div>
                         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: "13px", color: COLOURS.SLATE }}>
                           <span>{formatDateUK(d.meetingDate)}</span>
                           <span style={{ fontWeight: 600 }}>{d.meetingTitle}</span>
                           <span style={{
-                            padding: "1px 8px", borderRadius: "8px",
-                            backgroundColor: COLOURS.LIGHT, color: COLOURS.NAVY, fontWeight: 600,
+                            padding: "1px 8px", borderRadius: RADII.XS,
+                            backgroundColor: COLOURS.HAIRLINE, color: COLOURS.NAVY, fontWeight: 600,
                           }}>{d.department}</span>
                         </div>
                       </div>
@@ -1161,7 +1159,7 @@ export default function MeetingsPage() {
             )}
 
             {view === "meetings" && meetings.length === 0 ? (
-              <p style={{ color: COLOURS.SLATE, fontSize: "16px" }}>No meetings recorded yet.</p>
+              <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No meetings recorded yet.</p>
             ) : view === "meetings" ? (
               groupedMeetings.map(([groupKey, groupMeetings]) => {
                 const isGroupOpen = expandedGroups.has(groupKey);
@@ -1171,22 +1169,22 @@ export default function MeetingsPage() {
 
                 return (
                 <div key={groupKey} style={{
-                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "10px", backgroundColor: "var(--bg-card, #ffffff)",
+                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD,
                   overflow: "hidden", marginBottom: "10px",
                 }}>
                   <div onClick={() => toggleGroup(groupKey)} style={{
                     padding: "12px 16px", cursor: "pointer",
                     display: "flex", justifyContent: "space-between", alignItems: "center",
-                    backgroundColor: isGroupOpen ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
+                    backgroundColor: isGroupOpen ? COLOURS.NAVY : COLOURS.CARD,
                     borderBottom: isGroupOpen ? `1px solid ${COLOURS.BORDER}` : "none",
                   }}>
                     <div>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color: isGroupOpen ? "white" : COLOURS.NAVY }}>
+                      <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "15px", fontWeight: 600, color: isGroupOpen ? "white" : COLOURS.NAVY }}>
                         {groupLabel}
                       </div>
-                      <div style={{ fontSize: "14px", color: isGroupOpen ? "rgba(255,255,255,0.7)" : COLOURS.SLATE, marginTop: "1px" }}>
+                      <div style={{ fontSize: "12px", color: isGroupOpen ? "rgba(255,255,255,0.6)" : COLOURS.SLATE, marginTop: "1px" }}>
                         {groupMeetings.length} meeting{groupMeetings.length !== 1 ? "s" : ""}
-                        {groupOpen > 0 && <span style={{ color: isGroupOpen ? "#fbbf24" : "#d97706", fontWeight: 700 }}> · {groupOpen} open task{groupOpen !== 1 ? "s" : ""}</span>}
+                        {groupOpen > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {groupOpen} open task{groupOpen !== 1 ? "s" : ""}</span>}
                       </div>
                     </div>
                     <span style={{ color: isGroupOpen ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{isGroupOpen ? "▲" : "▼"}</span>
@@ -1199,31 +1197,31 @@ export default function MeetingsPage() {
                     const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
 
                     return (
-                      <div key={m.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "6px" }}>
+                      <div key={m.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "6px" }}>
                         <div onClick={() => setExpandedId(isOpen ? null : m.id)} style={{
                           padding: "10px 14px", cursor: "pointer",
                           display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                          backgroundColor: isOpen ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
+                          backgroundColor: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
                         }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                              <span style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.SLATE, minWidth: "80px" }}>{formatDateUK(m.meeting_date)}</span>
-                              <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{m.title}</span>
+                              <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "12px", color: COLOURS.SLATE, minWidth: "80px" }}>{formatDateUK(m.meeting_date)}</span>
+                              <span style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{m.title}</span>
                               {m.department && (
-                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: COLOURS.LIGHT, color: COLOURS.NAVY, fontWeight: 600 }}>{m.department}</span>
+                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.NAVY, fontWeight: 600 }}>{m.department}</span>
                               )}
                               {m.company && (
-                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", backgroundColor: "#dbeafe", color: "#1e40af", fontWeight: 600 }}>{m.company}</span>
+                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.BLUE, fontWeight: 600 }}>{m.company}</span>
                               )}
                             </div>
                             {mTasks.length > 0 && (
                               <div style={{ marginTop: "4px", display: "flex", alignItems: "center", gap: "8px" }}>
-                                <div style={{ flex: 1, maxWidth: "120px", height: "6px", backgroundColor: "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${(completedTasks / mTasks.length) * 100}%`, backgroundColor: completedTasks === mTasks.length ? COLOURS.GREEN : openTaskCount > 0 ? "#d97706" : COLOURS.BLUE, borderRadius: "3px", transition: "width 0.3s" }} />
+                                <div style={{ flex: 1, maxWidth: "120px", height: "6px", backgroundColor: COLOURS.TRACK, borderRadius: "3px", overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${(completedTasks / mTasks.length) * 100}%`, backgroundColor: completedTasks === mTasks.length ? COLOURS.GREEN : openTaskCount > 0 ? COLOURS.AMBER : COLOURS.BLUE, borderRadius: "3px", transition: "width 0.3s" }} />
                                 </div>
                                 <span style={{ fontSize: "13px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>
                                   {completedTasks}/{mTasks.length}
-                                  {openTaskCount > 0 && <span style={{ color: "#d97706", fontWeight: 700 }}> · {openTaskCount} open</span>}
+                                  {openTaskCount > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {openTaskCount} open</span>}
                                 </span>
                               </div>
                             )}
@@ -1234,24 +1232,21 @@ export default function MeetingsPage() {
                         {isOpen && (
                           <div style={{ padding: "14px", borderTop: `1px solid ${COLOURS.BORDER}` }}>
                             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px" }}>
-                              <button onClick={() => downloadMinutesPDF(m, mTasks)} style={{
-                                backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
-                                padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
-                              }}>PDF Download</button>
+                              <button onClick={() => downloadMinutesPDF(m, mTasks)} style={{ ...primaryButtonStyle, padding: "6px 14px" }}>PDF Download</button>
                             </div>
                             {m.executive_summary && (
                               <div style={{ marginBottom: "12px" }}>
-                                <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Summary</div>
-                                <div style={{ fontSize: "16px", color: COLOURS.SLATE, lineHeight: 1.6 }}>{m.executive_summary}</div>
+                                <div style={{ fontSize: "10.5px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500, color: COLOURS.SLATE, marginBottom: "6px" }}>Summary</div>
+                                <div style={{ fontSize: "13px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{m.executive_summary}</div>
                               </div>
                             )}
 
                             {m.attendees && m.attendees.length > 0 && (
                               <div style={{ marginBottom: "12px" }}>
-                                <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Attendees</div>
+                                <div style={{ fontSize: "10.5px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500, color: COLOURS.SLATE, marginBottom: "6px" }}>Attendees</div>
                                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
                                   {m.attendees.map((a, i) => (
-                                    <span key={i} style={{ fontSize: "12px", padding: "2px 8px", backgroundColor: COLOURS.LIGHT, borderRadius: "10px", color: COLOURS.NAVY }}>{a}</span>
+                                    <span key={i} style={{ fontSize: "11.5px", padding: "4px 10px", backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, color: COLOURS.INK_700 }}>{a}</span>
                                   ))}
                                 </div>
                               </div>
@@ -1260,45 +1255,51 @@ export default function MeetingsPage() {
                             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
                               {m.decisions && m.decisions.length > 0 && (
                                 <div>
-                                  <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.GREEN, marginBottom: "4px" }}>Decisions ({m.decisions.length})</div>
+                                  <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.GREEN, marginBottom: "8px", paddingLeft: "8px" }}>Decisions ({m.decisions.length})</div>
                                   {m.decisions.map((d, i) => (
-                                    <div key={i} style={{ fontSize: "15px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {d}</div>
+                                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                                      <span style={{ color: COLOURS.GREEN, flexShrink: 0, marginTop: "2px" }}>•</span>{d}
+                                    </div>
                                   ))}
                                 </div>
                               )}
                               {m.risks && m.risks.length > 0 && (
                                 <div>
-                                  <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.RED, marginBottom: "4px" }}>Risks ({m.risks.length})</div>
+                                  <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.RED, marginBottom: "8px", paddingLeft: "8px" }}>Risks ({m.risks.length})</div>
                                   {m.risks.map((r, i) => (
-                                    <div key={i} style={{ fontSize: "15px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {r}</div>
+                                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                                      <span style={{ color: COLOURS.RED, flexShrink: 0, marginTop: "2px" }}>•</span>{r}
+                                    </div>
                                   ))}
                                 </div>
                               )}
                               {m.opportunities && m.opportunities.length > 0 && (
                                 <div>
-                                  <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.BLUE, marginBottom: "4px" }}>Opportunities ({m.opportunities.length})</div>
+                                  <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.BLUE, marginBottom: "8px", paddingLeft: "8px" }}>Opportunities ({m.opportunities.length})</div>
                                   {m.opportunities.map((o, i) => (
-                                    <div key={i} style={{ fontSize: "15px", color: COLOURS.NAVY, padding: "3px 0", borderBottom: `1px solid ${COLOURS.LIGHT}` }}>• {o}</div>
+                                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                                      <span style={{ color: COLOURS.BLUE, flexShrink: 0, marginTop: "2px" }}>•</span>{o}
+                                    </div>
                                   ))}
                                 </div>
                               )}
                             </div>
 
                             <div>
-                              <div style={{ fontSize: "15px", fontWeight: 700, color: "#d97706", marginBottom: "6px" }}>
+                              <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.AMBER, marginBottom: "6px" }}>
                                 Action Items ({mTasks.length})
                               </div>
                               {mTasks.length > 0 ? (
-                                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", overflow: "hidden" }}>
+                                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
                                   {mTasks.map((t) => (
                                     <a key={t.id} href={`/tasks?task=${t.id}`} style={{
                                       display: "flex", justifyContent: "space-between", alignItems: "center",
-                                      padding: "8px 12px", borderBottom: `1px solid ${COLOURS.LIGHT}`,
+                                      padding: "10px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
                                       textDecoration: "none", color: "inherit",
                                     }}>
                                       <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
-                                        <div style={{ fontSize: "14px", color: COLOURS.SLATE }}>
+                                        <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
+                                        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
                                           {t.assigned_to || "Unassigned"}{t.due_date ? ` · Due: ${formatDateUK(t.due_date)}` : ""}
                                         </div>
                                       </div>
@@ -1307,7 +1308,7 @@ export default function MeetingsPage() {
                                   ))}
                                 </div>
                               ) : (
-                                <div style={{ fontSize: "16px", color: COLOURS.SLATE }}>No action items recorded.</div>
+                                <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>No action items recorded.</div>
                               )}
                             </div>
                           </div>

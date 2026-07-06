@@ -7,13 +7,18 @@ import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import {
   COLOURS,
+  RADII,
   SHADOWS,
+  cardStyle,
   SectionTitle,
   PageHeader,
   StatusBadge,
   PriorityBadge,
   tableHeaderStyle,
   tableCellStyle,
+  labelStyle,
+  inputStyle,
+  primaryButtonStyle,
   WARNING_BANNER_STYLE,
   WARNING_TITLE_COLOR,
 } from "../lib/SharedUI";
@@ -288,125 +293,127 @@ export default function CalendarPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
           <PageHeader />
           <button onClick={() => setShowForm(!showForm)} style={{
-            backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "50%",
-            width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            boxShadow: SHADOWS.MODAL,
-          }} title="Request meeting">{showForm ? "×" : "+"}</button>
+            ...primaryButtonStyle,
+            display: "flex", alignItems: "center", gap: "6px", flexShrink: 0,
+          }} title="Request meeting">
+            {showForm ? "✕ Close" : "+ Request Meeting"}
+          </button>
         </div>
 
         {/* ── REQUEST FORM (collapsible) ── */}
         {showForm && (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 500px) minmax(200px, 1fr)",
-          gap: "16px",
-          alignItems: "start",
-          marginBottom: "14px",
-        }}>
-          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-            <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "10px" }}>Request a Meeting</div>
-            <form onSubmit={submitRequest}>
-              <label style={labelStyle}>
-                Meeting title
-                <input style={inputStyle} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Dispatch recovery discussion" required />
-              </label>
-
-              <label style={labelStyle}>
-                Purpose
-                <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" }} value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Why do you need this meeting?" />
-              </label>
-
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-                <label style={labelStyle}>
-                  Type
-                  <select style={inputStyle} value={meetingType} onChange={(e) => setMeetingType(e.target.value)}>
-                    {MEETING_TYPES.map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </label>
-
-                <label style={labelStyle}>
-                  Date
-                  <DateInput style={inputStyle} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} />
-                </label>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 500px) minmax(200px, 1fr)",
+            gap: "16px",
+            alignItems: "start",
+            marginBottom: "14px",
+          }}>
+            <div style={{ ...cardStyle }}>
+              <div style={{
+                fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "16px",
+              }}>
+                Request a Meeting
               </div>
-
-              {requestedDate && (
-                <p style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginTop: "-6px", marginBottom: "10px" }}>
-                  Selected: <strong>{formatDateUK(requestedDate)}</strong>
-                </p>
-              )}
-
-              <label style={labelStyle}>
-                Preferred time
-                <input type="time" style={inputStyle} value={preferredTime} onChange={(e) => setPreferredTime(e.target.value)} />
-              </label>
-
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
-                <label style={labelStyle}>
-                  Duration
-                  <select style={inputStyle} value={duration} onChange={(e) => setDuration(e.target.value)}>
-                    <option value="15">15 min</option>
-                    <option value="30">30 min</option>
-                    <option value="45">45 min</option>
-                    <option value="60">60 min</option>
-                  </select>
-                </label>
-
-                <label style={labelStyle}>
-                  Priority
-                  <select style={inputStyle} value={priority} onChange={(e) => setPriority(e.target.value)}>
-                    <option>Low</option>
-                    <option>Normal</option>
-                    <option>High</option>
-                    <option>Urgent</option>
-                  </select>
-                </label>
-              </div>
-
-              <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: "8px" }}>
-                <input type="checkbox" checked={decisionRequired} onChange={(e) => setDecisionRequired(e.target.checked)} style={{ width: "16px", height: "16px" }} />
-                Decision required from CEO
-              </label>
-
-              {/* Attendees multi-select */}
-              <div style={{ ...labelStyle, marginBottom: "12px" }}>
-                Attendees
-                <div style={{
-                  border: "1px solid var(--border-color, #e2e8f0)",
-                  borderRadius: "6px",
-                  padding: "6px",
-                  marginTop: "3px",
-                  maxHeight: "120px",
-                  overflowY: "auto",
-                }}>
-                  {allMembers.filter((m) => m.email && m.email !== email).map((m) => (
-                    <label key={m.email} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "2px 4px", fontSize: "16px", cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedAttendees.includes(m.email || "")}
-                        onChange={() => toggleAttendee(m.email || "")}
-                        style={{ width: "14px", height: "14px" }}
-                      />
-                      {displayMemberName(m, m.email)}
-                      {m.department && <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "14px" }}>({m.department})</span>}
-                    </label>
-                  ))}
+              <form onSubmit={submitRequest}>
+                <div style={{ marginBottom: "12px" }}>
+                  <label style={labelStyle}>Meeting title</label>
+                  <input style={inputStyle} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Dispatch recovery discussion" required />
                 </div>
-              </div>
 
-              <button type="submit" disabled={saving} style={btnStyle}>
-                {saving ? "Submitting…" : "Submit Meeting Request"}
-              </button>
+                <div style={{ marginBottom: "12px" }}>
+                  <label style={labelStyle}>Purpose</label>
+                  <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" }} value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Why do you need this meeting?" />
+                </div>
 
-              {message && (
-                <p style={{ marginTop: "10px", fontSize: "17px", color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, fontWeight: 600 }}>
-                  {message}
-                </p>
-              )}
-            </form>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+                  <div>
+                    <label style={labelStyle}>Type</label>
+                    <select style={inputStyle} value={meetingType} onChange={(e) => setMeetingType(e.target.value)}>
+                      {MEETING_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Date</label>
+                    <DateInput style={inputStyle} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} />
+                  </div>
+                </div>
+
+                {requestedDate && (
+                  <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "-8px", marginBottom: "12px" }}>
+                    Selected: <strong style={{ color: COLOURS.NAVY }}>{formatDateUK(requestedDate)}</strong>
+                  </p>
+                )}
+
+                <div style={{ marginBottom: "12px" }}>
+                  <label style={labelStyle}>Preferred time</label>
+                  <input type="time" style={inputStyle} value={preferredTime} onChange={(e) => setPreferredTime(e.target.value)} />
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+                  <div>
+                    <label style={labelStyle}>Duration</label>
+                    <select style={inputStyle} value={duration} onChange={(e) => setDuration(e.target.value)}>
+                      <option value="15">15 min</option>
+                      <option value="30">30 min</option>
+                      <option value="45">45 min</option>
+                      <option value="60">60 min</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Priority</label>
+                    <select style={inputStyle} value={priority} onChange={(e) => setPriority(e.target.value)}>
+                      <option>Low</option>
+                      <option>Normal</option>
+                      <option>High</option>
+                      <option>Urgent</option>
+                    </select>
+                  </div>
+                </div>
+
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", fontSize: "13px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                  <input type="checkbox" checked={decisionRequired} onChange={(e) => setDecisionRequired(e.target.checked)} style={{ width: "15px", height: "15px" }} />
+                  Decision required from CEO
+                </label>
+
+                <div style={{ marginBottom: "12px" }}>
+                  <label style={labelStyle}>Attendees</label>
+                  <div style={{
+                    border: `1px solid ${COLOURS.HAIRLINE}`,
+                    borderRadius: RADII.SM,
+                    padding: "6px",
+                    marginTop: "3px",
+                    maxHeight: "120px",
+                    overflowY: "auto",
+                  }}>
+                    {allMembers.filter((m) => m.email && m.email !== email).map((m) => (
+                      <label key={m.email} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "3px 4px", fontSize: "13px", cursor: "pointer", color: COLOURS.NAVY }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedAttendees.includes(m.email || "")}
+                          onChange={() => toggleAttendee(m.email || "")}
+                          style={{ width: "14px", height: "14px" }}
+                        />
+                        {displayMemberName(m, m.email)}
+                        {m.department && <span style={{ color: COLOURS.SLATE, fontSize: "12px" }}>({m.department})</span>}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <button type="submit" disabled={saving} style={{ ...primaryButtonStyle, width: "100%", marginTop: "4px", opacity: saving ? 0.6 : 1 }}>
+                  {saving ? "Submitting…" : "Submit Meeting Request"}
+                </button>
+
+                {message && (
+                  <p style={{ marginTop: "10px", fontSize: "13px", color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN, fontWeight: 600 }}>
+                    {message}
+                  </p>
+                )}
+              </form>
+            </div>
           </div>
-        </div>
         )}
 
         {/* ── Calendar Connection Status ── */}
@@ -414,40 +421,44 @@ export default function CalendarPage() {
           <div style={{ ...WARNING_BANNER_STYLE, padding: "12px 16px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", justifyContent: "space-between", flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1 }}>
-                <span style={{ fontSize: "18px" }}>⚠</span>
+                <span style={{ fontSize: "16px" }}>⚠</span>
                 <div>
-                  <div style={{ fontSize: "15px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>Google Calendar Not Syncing</div>
-                  <div style={{ fontSize: "13px", color: WARNING_TITLE_COLOR, marginTop: "3px" }}>{calendarError}</div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: WARNING_TITLE_COLOR }}>Google Calendar Not Syncing</div>
+                  <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "3px" }}>{calendarError}</div>
                 </div>
               </div>
               {isAdmin && (
                 <a href="/api/google/auth?returnTo=/calendar" style={{
-                  backgroundColor: "#dc2626", color: "white", border: "none", borderRadius: "8px",
-                  padding: "8px 18px", fontSize: "14px", fontWeight: 700, textDecoration: "none",
+                  backgroundColor: COLOURS.RED, color: "white", border: "none", borderRadius: RADII.PILL,
+                  padding: "7px 16px", fontSize: "12px", fontWeight: 600, textDecoration: "none",
                   whiteSpace: "nowrap", flexShrink: 0,
                 }}>
                   Reconnect Google Calendar
                 </a>
               )}
             </div>
-            <div style={{ fontSize: "12px", color: "#b91c1c", marginTop: "8px", paddingLeft: "28px" }}>
+            <div style={{ fontSize: "11px", color: COLOURS.AMBER, marginTop: "8px", paddingLeft: "26px" }}>
               Sign in with k.saleem@unzegroup.com to reconnect your calendar.
             </div>
           </div>
         )}
         {!calendarError && !busyLoading && calendarAccounts.length > 0 && (
           <div style={{
-            border: "1px solid #bbf7d0", borderLeft: "4px solid #16a34a", borderRadius: "8px",
-            backgroundColor: "#f0fdf4", padding: "8px 16px", marginBottom: "12px",
-            display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "13px", color: "#166534",
+            border: `1px solid ${COLOURS.HAIRLINE}`,
+            borderRadius: RADII.CARD,
+            backgroundColor: COLOURS.SUCCESS_SOFT,
+            padding: "10px 16px",
+            marginBottom: "16px",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            fontSize: "12px", color: COLOURS.GREEN,
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "14px" }}>✓</span>
-              Showing calendar for {calendarAccounts.map((a) => a.email).join(", ")} · {busySlots.length} event{busySlots.length !== 1 ? "s" : ""} this week
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontWeight: 700 }}>✓</span>
+              Showing calendar for <strong>{calendarAccounts.map((a) => a.email).join(", ")}</strong> · {busySlots.length} event{busySlots.length !== 1 ? "s" : ""} this week
             </div>
             {isAdmin && (
               <a href="/api/google/auth?returnTo=/calendar" style={{
-                fontSize: "12px", color: "#166534", textDecoration: "underline", whiteSpace: "nowrap",
+                fontSize: "12px", color: COLOURS.GREEN, textDecoration: "underline", whiteSpace: "nowrap", fontWeight: 500,
               }}>
                 Reconnect Google
               </a>
@@ -458,72 +469,101 @@ export default function CalendarPage() {
         {/* ── WEEK VIEW ── */}
         <SectionTitle title="Weekly Availability" />
         <div style={{
-          border: "1px solid var(--border-color, #e2e8f0)",
-          borderRadius: "8px",
-          backgroundColor: "var(--bg-card, #ffffff)",
-          padding: "12px",
-          marginBottom: "16px",
+          ...cardStyle,
+          padding: 0,
+          overflow: "hidden",
+          marginBottom: "24px",
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-            <button onClick={prevWeek} style={navBtn}>← Prev</button>
-            <span style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>
+          {/* Toolbar */}
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "14px 20px",
+            borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+            backgroundColor: COLOURS.CARD_ALT,
+          }}>
+            <button onClick={prevWeek} style={navBtnStyle}>← Prev</button>
+            <span style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
               {dayLabel(weekDates[0])} — {dayLabel(weekDates[6])}
-              {busyLoading && <span style={{ color: "var(--text-secondary, #64748b)", fontWeight: 400 }}> (loading…)</span>}
+              {busyLoading && <span style={{ color: COLOURS.SLATE, fontWeight: 400 }}> (loading…)</span>}
             </span>
-            <button onClick={nextWeek} style={navBtn}>Next →</button>
+            <button onClick={nextWeek} style={navBtnStyle}>Next →</button>
           </div>
 
+          {/* Grid */}
           <div style={{ overflowX: "auto" }}>
             <div style={{
               display: "grid",
               gridTemplateColumns: `50px repeat(7, 1fr)`,
               minWidth: "700px",
             }}>
-              <div style={headerCell} />
-              {weekDates.map((d) => (
-                <div key={d} style={{
-                  ...headerCell,
-                  fontWeight: 700,
-                  color: d === new Date().toISOString().slice(0, 10) ? COLOURS.BLUE : "var(--text-primary, #1e293b)",
-                }}>
-                  {dayLabel(d)}
-                </div>
-              ))}
+              {/* Corner */}
+              <div style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }} />
+              {/* Day headers */}
+              {weekDates.map((d) => {
+                const isToday = d === new Date().toISOString().slice(0, 10);
+                return (
+                  <div key={d} style={{
+                    padding: "10px 6px",
+                    textAlign: "center",
+                    borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+                    borderLeft: `1px solid ${COLOURS.HAIRLINE}`,
+                  }}>
+                    <div style={{ fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, fontWeight: 500 }}>
+                      {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][new Date(d + "T00:00:00").getDay()]}
+                    </div>
+                    <div style={{
+                      fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                      fontSize: "17px", fontWeight: 600, marginTop: "2px",
+                      color: isToday ? COLOURS.BLUE : COLOURS.NAVY,
+                    }}>
+                      {d.slice(8, 10)}
+                    </div>
+                  </div>
+                );
+              })}
 
+              {/* Hour rows */}
               {HOURS.map((hour) => (
                 <>
                   <div key={`h-${hour}`} style={{
-                    padding: "2px 4px",
-                    fontSize: "14px",
-                    color: "var(--text-secondary, #64748b)",
+                    padding: "6px 6px 0 0",
+                    fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
+                    fontSize: "10px",
+                    color: COLOURS.INK_400,
                     textAlign: "right",
-                    borderTop: "1px solid var(--border-color, #e2e8f0)",
+                    height: "44px",
+                    borderRight: `1px solid ${COLOURS.HAIRLINE}`,
                   }}>
                     {String(hour).padStart(2, "0")}:00
                   </div>
                   {weekDates.map((d) => {
                     const busyEvent = getBusyEvent(d, hour);
                     const req = hasRequest(d, hour);
+                    let bgColor = COLOURS.CARD;
+                    if (busyEvent) bgColor = COLOURS.DANGER_SOFT;
+                    else if (req) bgColor = req.status === "Approved" ? COLOURS.SUCCESS_SOFT : COLOURS.WARNING_SOFT;
                     return (
                       <div
                         key={`${d}-${hour}`}
                         onClick={() => !busyEvent && clickSlot(d, hour)}
                         style={{
-                          borderTop: "1px solid var(--border-color, #e2e8f0)",
-                          borderLeft: "1px solid var(--border-color, #e2e8f0)",
-                          height: "28px",
-                          backgroundColor: busyEvent ? "#fee2e2" : req ? (req.status === "Approved" ? "#dcfce7" : "#fef3c7") : "var(--bg-card, #ffffff)",
+                          borderTop: `1px solid ${COLOURS.HAIRLINE}`,
+                          borderLeft: `1px solid ${COLOURS.HAIRLINE}`,
+                          height: "44px",
+                          backgroundColor: bgColor,
                           cursor: busyEvent ? "not-allowed" : "pointer",
                           position: "relative",
-                          fontSize: "13px",
+                          fontSize: "10.5px",
                           padding: "2px 3px",
                           overflow: "hidden",
                         }}
                         title={busyEvent ? `${busyEvent.title || "Busy"} (${busyEvent.account || ""})` : req ? `${req.meeting_title} (${req.status})` : "Click to request"}
                       >
-                        {busyEvent && <span style={{ color: "#dc2626", fontWeight: 600 }}>{(busyEvent.title || "Busy").slice(0, 14)}</span>}
+                        {busyEvent && (
+                          <span style={{ color: COLOURS.RED, fontWeight: 600 }}>{(busyEvent.title || "Busy").slice(0, 14)}</span>
+                        )}
                         {!busyEvent && req && (
-                          <span style={{ color: req.status === "Approved" ? "#16a34a" : "#d97706", fontWeight: 600 }}>
+                          <span style={{ color: req.status === "Approved" ? COLOURS.GREEN : COLOURS.AMBER, fontWeight: 600 }}>
                             {req.meeting_title.slice(0, 12)}
                           </span>
                         )}
@@ -535,11 +575,28 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          <div style={{ marginTop: "8px", display: "flex", gap: "12px", fontSize: "14px", color: "var(--text-secondary, #64748b)", flexWrap: "wrap" }}>
-            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#fee2e2", border: "1px solid #fca5a5", borderRadius: "2px", marginRight: "4px" }} />Google Calendar Event</span>
-            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#dcfce7", border: "1px solid #86efac", borderRadius: "2px", marginRight: "4px" }} />Approved</span>
-            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#fef3c7", border: "1px solid #fde68a", borderRadius: "2px", marginRight: "4px" }} />Pending</span>
-            <span><span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "var(--bg-card, #ffffff)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "2px", marginRight: "4px" }} />Free — click to request</span>
+          {/* Legend */}
+          <div style={{
+            display: "flex", gap: "16px", padding: "12px 20px",
+            backgroundColor: COLOURS.CARD_ALT,
+            borderTop: `1px solid ${COLOURS.HAIRLINE}`,
+            fontSize: "11px", color: COLOURS.SLATE, flexWrap: "wrap",
+          }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: COLOURS.DANGER_SOFT, borderLeft: `3px solid ${COLOURS.RED}`, display: "inline-block" }} />
+              Google Calendar Event
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: COLOURS.SUCCESS_SOFT, borderLeft: `3px solid ${COLOURS.GREEN}`, display: "inline-block" }} />
+              Approved
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: COLOURS.WARNING_SOFT, borderLeft: `3px solid ${COLOURS.AMBER}`, display: "inline-block" }} />
+              Pending
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginLeft: "auto" }}>
+              Free — click to request
+            </span>
           </div>
         </div>
 
@@ -547,16 +604,16 @@ export default function CalendarPage() {
         <SectionTitle title="Pending Meeting Requests" />
 
         {loading ? (
-          <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "17px" }}>Loading requests…</p>
+          <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Loading requests…</p>
         ) : requests.filter((r) => r.status === "Pending").length === 0 ? (
-          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)", fontSize: "17px" }}>
+          <div style={{ ...cardStyle, color: COLOURS.SLATE, fontSize: "13px", textAlign: "center", padding: "32px 24px" }}>
             No pending meeting requests.
           </div>
         ) : (
-          <div style={{ overflowX: "auto", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+          <div style={{ overflowX: "auto", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD }}>
             <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
               <thead>
-                <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                <tr>
                   <th style={tableHeaderStyle}>Title</th>
                   <th style={tableHeaderStyle}>Type</th>
                   <th style={tableHeaderStyle}>Requested By</th>
@@ -571,24 +628,28 @@ export default function CalendarPage() {
                 {requests.filter((r) => r.status === "Pending").map((r) => (
                   <tr key={r.id}>
                     <td style={tableCellStyle}>
-                      <div style={{ fontWeight: 700, color: "var(--text-primary, #1e293b)", fontSize: "16px" }}>
+                      <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "13px" }}>
                         {r.meeting_title}
-                        {r.decision_required && <span style={{ color: COLOURS.RED, fontSize: "14px", marginLeft: "6px" }}>DECISION</span>}
+                        {r.decision_required && <span style={{ color: COLOURS.RED, fontSize: "11px", marginLeft: "6px", fontWeight: 700 }}>DECISION</span>}
                       </div>
-                      {r.meeting_purpose && <div style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", marginTop: "2px" }}>{r.meeting_purpose}</div>}
+                      {r.meeting_purpose && <div style={{ color: COLOURS.SLATE, fontSize: "12px", marginTop: "2px" }}>{r.meeting_purpose}</div>}
                       {r.attendees && r.attendees.length > 0 && (
-                        <div style={{ color: "var(--text-secondary, #64748b)", fontSize: "14px", marginTop: "2px" }}>
+                        <div style={{ color: COLOURS.SLATE, fontSize: "12px", marginTop: "2px" }}>
                           {r.attendees.length} attendee{r.attendees.length > 1 ? "s" : ""}
                         </div>
                       )}
                     </td>
-                    <td style={tableCellStyle}><span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>{r.meeting_type || "Ad-hoc"}</span></td>
+                    <td style={tableCellStyle}><span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{r.meeting_type || "Ad-hoc"}</span></td>
                     <td style={tableCellStyle}>
-                      <div style={{ fontWeight: 600, color: "var(--text-primary, #1e293b)", fontSize: "16px" }}>{r.requested_by_name || "—"}</div>
-                      {r.requested_by_department && <div style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>{r.requested_by_department}</div>}
+                      <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "13px" }}>{r.requested_by_name || "—"}</div>
+                      {r.requested_by_department && <div style={{ color: COLOURS.SLATE, fontSize: "12px" }}>{r.requested_by_department}</div>}
                     </td>
-                    <td style={tableCellStyle}>{r.requested_date ? formatDateUK(r.requested_date) : "—"}</td>
-                    <td style={tableCellStyle}>{r.preferred_time || "—"}</td>
+                    <td style={{ ...tableCellStyle, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "12px", color: COLOURS.SLATE }}>
+                      {r.requested_date ? formatDateUK(r.requested_date) : "—"}
+                    </td>
+                    <td style={{ ...tableCellStyle, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "12px", color: COLOURS.SLATE }}>
+                      {r.preferred_time || "—"}
+                    </td>
                     <td style={tableCellStyle}><PriorityBadge priority={r.priority} /></td>
                     <td style={tableCellStyle}><StatusBadge status={r.status} /></td>
                     {canManageRequests && (
@@ -596,13 +657,13 @@ export default function CalendarPage() {
                         <div style={{ display: "flex", gap: "6px" }}>
                           <button
                             onClick={() => updateStatus(r.id, "Approved")}
-                            style={{ padding: "5px 12px", border: "none", borderRadius: "6px", fontSize: "14px", fontWeight: 700, cursor: "pointer", backgroundColor: "#dcfce7", color: "#166534" }}
+                            style={{ padding: "5px 12px", border: `1px solid ${COLOURS.GREEN}`, borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, cursor: "pointer", backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }}
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => updateStatus(r.id, "Rejected")}
-                            style={{ padding: "5px 12px", border: "none", borderRadius: "6px", fontSize: "14px", fontWeight: 700, cursor: "pointer", backgroundColor: "#fee2e2", color: "#991b1b" }}
+                            style={{ padding: "5px 12px", border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, cursor: "pointer", backgroundColor: COLOURS.DANGER_SOFT, color: COLOURS.RED }}
                           >
                             Reject
                           </button>
@@ -619,13 +680,11 @@ export default function CalendarPage() {
         {/* ── PAST REQUESTS (Approved / Rejected / Completed) ── */}
         {requests.filter((r) => r.status !== "Pending").length > 0 && (
           <>
-            <div style={{ marginTop: "20px" }}>
-              <SectionTitle title={`Past Requests (${requests.filter((r) => r.status !== "Pending").length})`} />
-            </div>
-            <div style={{ overflowX: "auto", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+            <SectionTitle title={`Past Requests (${requests.filter((r) => r.status !== "Pending").length})`} />
+            <div style={{ overflowX: "auto", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "0" }}>
                 <thead>
-                  <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                  <tr>
                     <th style={tableHeaderStyle}>Title</th>
                     <th style={tableHeaderStyle}>Requested By</th>
                     <th style={tableHeaderStyle}>Date</th>
@@ -637,12 +696,14 @@ export default function CalendarPage() {
                   {requests.filter((r) => r.status !== "Pending").map((r) => (
                     <tr key={r.id} style={{ opacity: 0.7 }}>
                       <td style={tableCellStyle}>
-                        <span style={{ fontWeight: 600, color: "var(--text-primary, #1e293b)", fontSize: "15px" }}>{r.meeting_title}</span>
+                        <span style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "13px" }}>{r.meeting_title}</span>
                       </td>
-                      <td style={tableCellStyle}><span style={{ fontSize: "15px" }}>{r.requested_by_name || "—"}</span></td>
-                      <td style={tableCellStyle}>{r.requested_date ? formatDateUK(r.requested_date) : "—"}</td>
+                      <td style={tableCellStyle}><span style={{ fontSize: "13px", color: COLOURS.NAVY }}>{r.requested_by_name || "—"}</span></td>
+                      <td style={{ ...tableCellStyle, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "12px", color: COLOURS.SLATE }}>
+                        {r.requested_date ? formatDateUK(r.requested_date) : "—"}
+                      </td>
                       <td style={tableCellStyle}><StatusBadge status={r.status} /></td>
-                      <td style={tableCellStyle}><span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>{r.approved_by || "—"}</span></td>
+                      <td style={tableCellStyle}><span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{r.approved_by || "—"}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -655,52 +716,13 @@ export default function CalendarPage() {
   );
 }
 
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "16px",
-  fontWeight: 600,
-  color: "var(--text-primary, #1e293b)",
-  marginBottom: "10px",
-};
-
-const inputStyle: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  padding: "7px 9px",
-  marginTop: "3px",
-  border: "1px solid var(--border-color, #e2e8f0)",
-  borderRadius: "6px",
-  fontSize: "17px",
-  boxSizing: "border-box",
-};
-
-const btnStyle: React.CSSProperties = {
-  backgroundColor: COLOURS.NAVY,
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  padding: "9px 18px",
-  fontSize: "17px",
-  fontWeight: 700,
+const navBtnStyle: React.CSSProperties = {
+  backgroundColor: COLOURS.CARD,
+  border: `1px solid ${COLOURS.HAIRLINE}`,
+  borderRadius: RADII.PILL,
+  padding: "5px 14px",
+  fontSize: "12px",
+  fontWeight: 500,
+  color: COLOURS.NAVY,
   cursor: "pointer",
-  marginTop: "4px",
-  width: "100%",
-};
-
-const navBtn: React.CSSProperties = {
-  backgroundColor: "var(--bg-card, #ffffff)",
-  border: "1px solid var(--border-color, #e2e8f0)",
-  borderRadius: "6px",
-  padding: "5px 12px",
-  fontSize: "16px",
-  fontWeight: 600,
-  color: "var(--text-primary, #1e293b)",
-  cursor: "pointer",
-};
-
-const headerCell: React.CSSProperties = {
-  padding: "4px 6px",
-  fontSize: "15px",
-  textAlign: "center",
-  color: "var(--text-secondary, #64748b)",
 };
