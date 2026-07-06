@@ -179,6 +179,14 @@ export function canManageCalendarRequests(u: UserCtx) {
   return isPrivileged(u);
 }
 
+export function canManageTaxNotices(u: UserCtx): boolean {
+  const o = ov(u, "can_manage_tax_notices");
+  if (o !== null) return o;
+  if (isPA(u)) return false;
+  if (isAdminTier(u)) return true;
+  return false;
+}
+
 export function canSeeAllMinutes(u: UserCtx) {
   const o = ov(u, "can_see_all_minutes");
   if (o !== null) return o;

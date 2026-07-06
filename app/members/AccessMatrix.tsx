@@ -42,6 +42,7 @@ const PERM_COLUMNS = [
   { key: "can_view_dept_ops", label: "Ops", group: "Depts", tip: "Access the Unze Trading Ops department dashboard" },
   { key: "can_view_dept_hr", label: "HR", group: "Depts", tip: "Access the HR department dashboard" },
   { key: "can_view_dept_tax", label: "Tax", group: "Depts", tip: "Access the Taxation department dashboard" },
+  { key: "can_manage_tax_notices", label: "Edit", group: "Tax", tip: "Add, edit, delete and manage tax notices — Active/Inactive, Status, Stage" },
   { key: "can_view_dept_audit", label: "Aud", group: "Depts", tip: "Access the Audit department dashboard" },
   { key: "can_view_dept_admin", label: "Adm", group: "Depts", tip: "Access the Admin department dashboard" },
   { key: "can_view_dept_it", label: "IT", group: "Depts", tip: "Access the IT department dashboard" },
@@ -74,6 +75,7 @@ const GROUP_COLOURS: Record<string, string> = {
   Members: COLOURS.TEAL,
   Admin: COLOURS.NAVY,
   "Prod.": "#ea580c",
+  Tax: COLOURS.AMBER,
 };
 
 function lc(s: string | null | undefined) { return (s || "").toLowerCase(); }
@@ -122,6 +124,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_audit_log": return admin || exec;
     case "can_view_exceptions": return admin || exec;
     case "can_import_export": return admin || exec;
+    case "can_manage_tax_notices": return admin;
     case "can_view_stock": return admin || dept === "Unze Trading Ops";
     case "can_manage_stock": return admin || (manager && dept === "Unze Trading Ops");
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
