@@ -5,7 +5,27 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, PageHeader, SectionTitle, displayRole, useConfirm, SkeletonRows } from "../lib/SharedUI";
+import {
+  COLOURS, RADII,
+  cardStyle, inputStyle, labelStyle, primaryButtonStyle,
+  PageHeader, SectionTitle, displayRole, useConfirm, SkeletonRows,
+} from "../lib/SharedUI";
+
+// ── role chip — mirrors MembersManager pattern ───────────────────
+function roleChip(r: string, email?: string): React.CSSProperties {
+  if (email === "k.saleem@unzegroup.com") return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.BLUE, border: `1px solid ${COLOURS.BLUE}` };
+  if (r === "Admin")     return { backgroundColor: COLOURS.NAVY, color: "#FFFFFF", border: `1px solid ${COLOURS.NAVY}` };
+  if (r === "Executive") return { backgroundColor: "#EEE8F9", color: COLOURS.PURPLE, border: `1px solid ${COLOURS.PURPLE}` };
+  if (r === "Manager")   return { backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, border: `1px solid ${COLOURS.GREEN}` };
+  return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.INK_700, border: `1px solid ${COLOURS.HAIRLINE}` };
+}
+
+// ── avatar initials ──────────────────────────────────────────────
+function avatarInitials(email: string): string {
+  if (email === "k.saleem@unzegroup.com") return "KS";
+  const parts = email.split("@")[0].split(/[._-]/);
+  return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
+}
 
 export default function ProfilePage() {
   const isMobile = useMobile();
@@ -258,22 +278,26 @@ export default function ProfilePage() {
     setChangingPw(false);
   }
 
+  // ── derived display values ───────────────────────────────────────
+  const displayName = email === "k.saleem@unzegroup.com" ? "Khuram Saleem" : email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const roleLabel = displayRole(userRole, email) || userRole || "Member";
+  const initials = avatarInitials(email);
+
   return (
     <AuthWrapper>
       {dlg.element}
-      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: 760, minWidth: 0 }}>
         <PageHeader />
 
+        {/* Feedback message */}
         {message && (
           <div style={{
-            border: "1px solid var(--border-color, #e2e8f0)",
+            ...cardStyle,
+            padding: "10px 16px",
+            marginBottom: "16px",
             borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`,
-            borderRadius: "6px",
-            padding: "10px 14px",
-            marginBottom: "14px",
-            backgroundColor: "var(--bg-card, #ffffff)",
-            fontSize: "16px",
-            color: "var(--text-primary, #1e293b)",
+            fontSize: "13px",
+            color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN,
           }}>
             {message}
           </div>
@@ -283,8 +307,78 @@ export default function ProfilePage() {
           <SkeletonRows count={3} height="56px" />
         ) : (
           <>
-            {/* Jump links */}
-            <div style={{ display: "flex", gap: "6px", marginBottom: "14px", flexWrap: "wrap" }}>
+            {/* ── Profile header card ─────────────────────────────── */}
+            <div style={{
+              ...cardStyle,
+              display: "flex",
+              alignItems: "center",
+              gap: "20px",
+              marginBottom: "20px",
+              flexWrap: isMobile ? "wrap" : "nowrap",
+            }}>
+              {/* Gradient avatar */}
+              <div style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
+                display: "grid",
+                placeItems: "center",
+                color: "#fff",
+                fontSize: "22px",
+                fontWeight: 600,
+                fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                flexShrink: 0,
+              }}>
+                {initials}
+              </div>
+
+              {/* Name + role + email */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                  fontSize: "24px",
+                  fontWeight: 600,
+                  letterSpacing: "-0.015em",
+                  color: COLOURS.NAVY,
+                  lineHeight: 1.2,
+                }}>
+                  {displayName}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "6px", flexWrap: "wrap" }}>
+                  <span style={{
+                    ...roleChip(userRole, email),
+                    fontSize: "11px",
+                    fontWeight: 500,
+                    padding: "3px 10px",
+                    borderRadius: RADII.PILL,
+                    display: "inline-block",
+                  }}>
+                    {roleLabel}
+                  </span>
+                  <span style={{
+                    fontSize: "12px",
+                    color: COLOURS.SLATE,
+                    fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
+                  }}>
+                    {email}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Jump links (tab strip) ───────────────────────────── */}
+            <div style={{
+              display: "flex",
+              gap: "6px",
+              marginBottom: "20px",
+              flexWrap: "wrap",
+              backgroundColor: COLOURS.CARD_ALT,
+              border: `1px solid ${COLOURS.HAIRLINE}`,
+              borderRadius: RADII.PILL,
+              padding: "4px",
+              width: "fit-content",
+            }}>
               {[
                 { id: "2fa", label: "2FA" },
                 { id: "password", label: "Password" },
@@ -292,51 +386,78 @@ export default function ProfilePage() {
                 ...(pushSupported ? [{ id: "push", label: "Push" }] : []),
               ].map((s) => (
                 <a key={s.id} href={`#${s.id}`} style={{
-                  padding: "6px 14px", borderRadius: "6px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${COLOURS.BORDER}`, backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.NAVY,
+                  padding: "5px 14px",
+                  borderRadius: RADII.PILL,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  color: COLOURS.INK_700,
                   textDecoration: "none",
-                }}>{s.label}</a>
+                  backgroundColor: "transparent",
+                  transition: "background 120ms",
+                }}>
+                  {s.label}
+                </a>
               ))}
             </div>
 
-            <div style={{
-              border: "1px solid var(--border-color, #e2e8f0)",
-              borderRadius: "8px",
-              padding: "16px",
-              backgroundColor: "var(--bg-card, #ffffff)",
-              marginBottom: "16px",
-            }}>
-              <div style={{ fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "4px" }}>Email</div>
-              <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{email}</div>
+            {/* ── Email card ───────────────────────────────────────── */}
+            <div style={{ ...cardStyle, marginBottom: "16px" }}>
+              <div style={{ ...settingCardHead }}>
+                <div style={settingCardTitle}>
+                  <span style={iconMark}>✉</span>
+                  Email address
+                </div>
+              </div>
+              <div style={{ ...labelStyle, marginBottom: "6px" }}>Primary email (used to sign in)</div>
+              <div style={{
+                ...inputStyle,
+                fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
+                fontSize: "13px",
+                color: COLOURS.NAVY,
+                cursor: "default",
+              }}>
+                {email}
+              </div>
+              <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "6px", lineHeight: 1.5 }}>
+                Contact your Unze Group administrator to change this address.
+              </div>
             </div>
 
-            <div id="2fa"><SectionTitle title="Two-Factor Authentication (2FA)" /></div>
-            <div style={{
-              border: "1px solid var(--border-color, #e2e8f0)",
-              borderRadius: "8px",
-              padding: "16px",
-              backgroundColor: "var(--bg-card, #ffffff)",
-            }}>
+            {/* ── 2FA ─────────────────────────────────────────────── */}
+            <div id="2fa">
+              <SectionTitle title="Two-Factor Authentication (2FA)" />
+            </div>
+            <div style={{ ...cardStyle, marginBottom: "16px" }}>
+              <div style={settingCardHead}>
+                <div style={settingCardTitle}>
+                  <span style={iconMark}>🛡</span>
+                  Two-Factor Authentication
+                </div>
+                <span style={{
+                  ...statusPill,
+                  ...(mfaEnabled
+                    ? { backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }
+                    : { backgroundColor: COLOURS.WARNING_SOFT, color: COLOURS.AMBER }),
+                }}>
+                  {mfaEnabled ? "Enabled" : "Not enabled"}
+                </span>
+              </div>
+
               {mfaEnabled ? (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                    <span style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: COLOURS.GREEN, display: "inline-block" }} />
-                    <span style={{ fontSize: "17px", fontWeight: 700, color: COLOURS.GREEN }}>2FA is enabled</span>
+                  <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY, marginBottom: "4px" }}>
+                    Your account is protected with TOTP authentication.
                   </div>
-                  <p style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
-                    Your account is protected with TOTP authentication. You will be asked for a code from your authenticator app when signing in.
+                  <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "16px", lineHeight: 1.5 }}>
+                    You will be asked for a code from your authenticator app when signing in.
                   </p>
                   <button
                     onClick={disableMFA}
                     style={{
-                      backgroundColor: "var(--bg-card, #ffffff)",
+                      ...primaryButtonStyle,
+                      backgroundColor: COLOURS.CARD,
                       color: COLOURS.RED,
                       border: `1px solid ${COLOURS.RED}`,
-                      borderRadius: "6px",
-                      padding: "8px 16px",
-                      fontSize: "15px",
-                      fontWeight: 700,
-                      cursor: "pointer",
                     }}
                   >
                     Disable 2FA
@@ -344,40 +465,36 @@ export default function ProfilePage() {
                 </>
               ) : !enrolling ? (
                 <>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                    <span style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: COLOURS.AMBER, display: "inline-block" }} />
-                    <span style={{ fontSize: "17px", fontWeight: 700, color: COLOURS.AMBER }}>2FA is not enabled</span>
+                  <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY, marginBottom: "4px" }}>
+                    Add an extra layer of security to your account.
                   </div>
-                  <p style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
-                    Add an extra layer of security to your account. You will need an authenticator app like Google Authenticator or Authy.
+                  <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "16px", lineHeight: 1.5 }}>
+                    You will need an authenticator app like Google Authenticator or Authy. Recommended for all admin-role users.
                   </p>
-                  <button
-                    onClick={startEnroll}
-                    style={{
-                      backgroundColor: COLOURS.NAVY,
-                      color: "white",
-                      border: "none",
-                      borderRadius: "6px",
-                      padding: "10px 20px",
-                      fontSize: "16px",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
+                  <button onClick={startEnroll} style={primaryButtonStyle}>
                     Enable 2FA
                   </button>
                 </>
               ) : (
                 <>
-                  <p style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "12px" }}>
+                  <p style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "12px" }}>
                     Step 1: Scan this QR code with your authenticator app
                   </p>
                   {qrCode && (
                     <div style={{ textAlign: "center", marginBottom: "16px" }}>
-                      <img src={qrCode} alt="2FA QR Code" style={{ maxWidth: "200px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "8px" }} />
+                      <img
+                        src={qrCode}
+                        alt="2FA QR Code"
+                        style={{
+                          maxWidth: "200px",
+                          border: `1px solid ${COLOURS.HAIRLINE}`,
+                          borderRadius: RADII.CARD,
+                          padding: "8px",
+                        }}
+                      />
                     </div>
                   )}
-                  <p style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "8px" }}>
+                  <p style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "8px" }}>
                     Step 2: Enter the 6-digit code from your app
                   </p>
                   <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
@@ -388,38 +505,38 @@ export default function ProfilePage() {
                       placeholder="000000"
                       maxLength={6}
                       style={{
-                        padding: "10px 14px",
-                        border: "1px solid var(--border-color, #e2e8f0)",
-                        borderRadius: "6px",
+                        ...inputStyle,
                         fontSize: "20px",
                         fontWeight: 700,
                         letterSpacing: "8px",
                         textAlign: "center",
                         width: "100%",
                         maxWidth: "160px",
+                        fontVariantNumeric: "tabular-nums",
                       }}
                     />
                     <button
                       onClick={verifyEnroll}
                       disabled={verifyCode.length !== 6}
                       style={{
-                        backgroundColor: COLOURS.NAVY,
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        padding: "10px 20px",
-                        fontSize: "16px",
-                        fontWeight: 700,
-                        cursor: verifyCode.length === 6 ? "pointer" : "not-allowed",
+                        ...primaryButtonStyle,
                         opacity: verifyCode.length === 6 ? 1 : 0.5,
+                        cursor: verifyCode.length === 6 ? "pointer" : "not-allowed",
                       }}
                     >
-                      Verify & Enable
+                      Verify &amp; Enable
                     </button>
                   </div>
                   <button
                     onClick={() => { setEnrolling(false); setQrCode(null); setVerifyCode(""); }}
-                    style={{ marginTop: "12px", background: "transparent", border: "none", color: "var(--text-secondary, #64748b)", fontSize: "15px", cursor: "pointer" }}
+                    style={{
+                      marginTop: "12px",
+                      background: "transparent",
+                      border: "none",
+                      color: COLOURS.SLATE,
+                      fontSize: "13px",
+                      cursor: "pointer",
+                    }}
                   >
                     Cancel
                   </button>
@@ -427,49 +544,52 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div id="password"><SectionTitle title="Change Password" /></div>
-            <div style={{
-              border: "1px solid var(--border-color, #e2e8f0)",
-              borderRadius: "8px",
-              padding: "16px",
-              backgroundColor: "var(--bg-card, #ffffff)",
-            }}>
-              <p style={{ fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
+            {/* ── Change Password ──────────────────────────────────── */}
+            <div id="password">
+              <SectionTitle title="Change Password" />
+            </div>
+            <div style={{ ...cardStyle, marginBottom: "16px" }}>
+              <div style={settingCardHead}>
+                <div style={settingCardTitle}>
+                  <span style={iconMark}>🔒</span>
+                  Change password
+                </div>
+              </div>
+              <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "16px", lineHeight: 1.5 }}>
                 Enter your current password and choose a new one. Minimum 6 characters.
               </p>
               <form onSubmit={changePassword}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
-                  <label style={{ display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
-                    Current Password
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr",
+                  gap: "12px",
+                  marginBottom: "12px",
+                }}>
+                  <label style={{ display: "block" }}>
+                    <span style={labelStyle}>Current password</span>
                     <input
                       type="password"
                       value={currentPw}
                       onChange={(e) => setCurrentPw(e.target.value)}
                       required
                       placeholder="Enter current password"
-                      style={{
-                        display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-                        border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
-                      }}
+                      style={inputStyle}
                     />
                   </label>
-                  <label style={{ display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
-                    New Password
+                  <label style={{ display: "block" }}>
+                    <span style={labelStyle}>New password</span>
                     <input
                       type="password"
                       value={newPw}
                       onChange={(e) => setNewPw(e.target.value)}
                       required
                       minLength={6}
-                      placeholder="Min 6 characters"
-                      style={{
-                        display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-                        border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
-                      }}
+                      placeholder="Minimum 6 characters"
+                      style={inputStyle}
                     />
                   </label>
-                  <label style={{ display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
-                    Confirm New Password
+                  <label style={{ display: "block" }}>
+                    <span style={labelStyle}>Confirm new password</span>
                     <input
                       type="password"
                       value={confirmPw}
@@ -478,45 +598,55 @@ export default function ProfilePage() {
                       minLength={6}
                       placeholder="Repeat new password"
                       style={{
-                        display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-                        border: `1px solid ${newPw && confirmPw && newPw !== confirmPw ? COLOURS.RED : "var(--border-color, #e2e8f0)"}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
+                        ...inputStyle,
+                        border: `1px solid ${newPw && confirmPw && newPw !== confirmPw ? COLOURS.RED : COLOURS.HAIRLINE}`,
                       }}
                     />
                   </label>
                 </div>
                 {newPw && confirmPw && newPw !== confirmPw && (
-                  <div style={{ fontSize: "15px", color: COLOURS.RED, marginBottom: "8px" }}>Passwords do not match</div>
+                  <div style={{ fontSize: "12px", color: COLOURS.RED, marginBottom: "10px" }}>Passwords do not match</div>
                 )}
-                <button
-                  type="submit"
-                  disabled={changingPw || !currentPw || newPw.length < 6 || newPw !== confirmPw}
-                  style={{
-                    backgroundColor: COLOURS.NAVY,
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    padding: "8px 18px",
-                    fontSize: "15px",
-                    fontWeight: 700,
-                    cursor: changingPw || !currentPw || newPw.length < 6 || newPw !== confirmPw ? "not-allowed" : "pointer",
-                    opacity: changingPw || !currentPw || newPw.length < 6 || newPw !== confirmPw ? 0.5 : 1,
-                  }}
-                >
-                  {changingPw ? "Changing..." : "Change Password"}
-                </button>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, lineHeight: 1.4 }}>
+                    Passwords are hashed with argon2 and never stored in plain text.
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={changingPw || !currentPw || newPw.length < 6 || newPw !== confirmPw}
+                    style={{
+                      ...primaryButtonStyle,
+                      opacity: changingPw || !currentPw || newPw.length < 6 || newPw !== confirmPw ? 0.5 : 1,
+                      cursor: changingPw || !currentPw || newPw.length < 6 || newPw !== confirmPw ? "not-allowed" : "pointer",
+                      whiteSpace: "nowrap",
+                      marginLeft: "16px",
+                    }}
+                  >
+                    {changingPw ? "Changing..." : "Change password"}
+                  </button>
+                </div>
               </form>
             </div>
-            <div id="notifications"><SectionTitle title="Notification Preferences" /></div>
-            <div style={{
-              border: "1px solid var(--border-color, #e2e8f0)",
-              borderRadius: "8px",
-              padding: "16px",
-              backgroundColor: "var(--bg-card, #ffffff)",
-            }}>
-              <p style={{ fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
-                Choose which notifications you receive. {userRole !== "Admin" ? "At least one must stay on." : "Admin can disable all."}
-              </p>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
+
+            {/* ── Notification Preferences ─────────────────────────── */}
+            <div id="notifications">
+              <SectionTitle title="Notification Preferences" />
+            </div>
+            <div style={{ ...cardStyle, marginBottom: "16px" }}>
+              <div style={settingCardHead}>
+                <div style={settingCardTitle}>
+                  <span style={iconMark}>🔔</span>
+                  Notification preferences
+                </div>
+                <div style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>
+                  {userRole !== "Admin" ? "At least one must stay on." : "Admin can disable all."}
+                </div>
+              </div>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                gap: "10px",
+              }}>
                 {([
                   { key: "notif_task_assigned" as const, label: "Task assigned to me", desc: "When someone assigns you a new task" },
                   { key: "notif_task_overdue" as const, label: "Overdue task reminders", desc: "When your tasks pass their due date" },
@@ -530,93 +660,162 @@ export default function ProfilePage() {
                   const canTurnOff = userRole === "Admin" || otherOn;
                   return (
                     <label key={pref.key} style={{
-                      display: "flex", gap: "10px", alignItems: "flex-start", padding: "8px 10px",
-                      border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", cursor: canTurnOff || !isOn ? "pointer" : "not-allowed",
-                      backgroundColor: isOn ? "var(--bg-card, #ffffff)" : "var(--bg-card-hover, #f8fafc)", opacity: canTurnOff || !isOn ? 1 : 0.6,
+                      display: "flex",
+                      gap: "12px",
+                      alignItems: "flex-start",
+                      padding: "14px 16px",
+                      border: `1px solid ${COLOURS.HAIRLINE}`,
+                      borderRadius: RADII.CARD,
+                      cursor: canTurnOff || !isOn ? "pointer" : "not-allowed",
+                      backgroundColor: isOn ? COLOURS.CARD : COLOURS.CARD_ALT,
+                      opacity: canTurnOff || !isOn ? 1 : 0.6,
                     }}>
-                      <input type="checkbox" checked={isOn} disabled={!canTurnOff && isOn}
-                        onChange={async () => {
+                      {/* Checkbox */}
+                      <div style={{
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "6px",
+                        backgroundColor: isOn ? COLOURS.NAVY : COLOURS.CARD,
+                        border: `1.5px solid ${isOn ? COLOURS.NAVY : COLOURS.INK_300}`,
+                        display: "grid",
+                        placeItems: "center",
+                        flexShrink: 0,
+                        marginTop: "1px",
+                      }}>
+                        {isOn && (
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                        <input
+                          type="checkbox"
+                          checked={isOn}
+                          disabled={!canTurnOff && isOn}
+                          onChange={async () => {
+                            if (!canTurnOff && isOn) return;
+                            const updated = { ...notifPrefs, [pref.key]: !isOn };
+                            setNotifPrefs(updated);
+                            setSavingNotif(true);
+                            await supabase.from("members").update({ [pref.key]: !isOn }).eq("email", email);
+                            logAction("Updated", "members", `Notification: ${pref.key} = ${!isOn}`);
+                            setSavingNotif(false);
+                          }}
+                          style={{ position: "absolute", opacity: 0, width: 0, height: 0 }}
+                        />
+                      </div>
+                      {/* Labels */}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY }}>{pref.label}</div>
+                        <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "2px" }}>{pref.desc}</div>
+                      </div>
+                      {/* Toggle */}
+                      <div
+                        onClick={(e) => {
+                          e.preventDefault();
                           if (!canTurnOff && isOn) return;
                           const updated = { ...notifPrefs, [pref.key]: !isOn };
                           setNotifPrefs(updated);
                           setSavingNotif(true);
-                          await supabase.from("members").update({ [pref.key]: !isOn }).eq("email", email);
-                          logAction("Updated", "members", `Notification: ${pref.key} = ${!isOn}`);
-                          setSavingNotif(false);
+                          supabase.from("members").update({ [pref.key]: !isOn }).eq("email", email).then(() => {
+                            logAction("Updated", "members", `Notification: ${pref.key} = ${!isOn}`);
+                            setSavingNotif(false);
+                          });
                         }}
-                        style={{ marginTop: "2px", width: "16px", height: "16px" }} />
-                      <div>
-                        <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{pref.label}</div>
-                        <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{pref.desc}</div>
+                        style={{
+                          width: "40px",
+                          height: "22px",
+                          borderRadius: "999px",
+                          backgroundColor: isOn ? COLOURS.NAVY : COLOURS.INK_300,
+                          position: "relative",
+                          flexShrink: 0,
+                          cursor: canTurnOff || !isOn ? "pointer" : "not-allowed",
+                          transition: "background 120ms",
+                        }}
+                      >
+                        <div style={{
+                          position: "absolute",
+                          top: "2px",
+                          left: isOn ? "20px" : "2px",
+                          width: "18px",
+                          height: "18px",
+                          borderRadius: "50%",
+                          backgroundColor: COLOURS.CARD,
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                          transition: "left 120ms",
+                        }} />
                       </div>
                     </label>
                   );
                 })}
               </div>
-              {savingNotif && <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginTop: "8px" }}>Saving...</div>}
+              {savingNotif && (
+                <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "10px" }}>Saving...</div>
+              )}
             </div>
 
+            {/* ── Push Notifications ───────────────────────────────── */}
             {pushSupported && (
               <>
-                <div id="push"><SectionTitle title="Push Notifications" /></div>
-                <div style={{
-                  border: "1px solid var(--border-color, #e2e8f0)",
-                  borderRadius: "8px",
-                  padding: "16px",
-                  backgroundColor: "var(--bg-card, #ffffff)",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                <div id="push">
+                  <SectionTitle title="Push Notifications" />
+                </div>
+                <div style={{ ...cardStyle, marginBottom: "16px" }}>
+                  <div style={settingCardHead}>
+                    <div style={settingCardTitle}>
+                      <span style={iconMark}>🔔</span>
+                      Push notifications
+                    </div>
                     <span style={{
-                      width: "12px", height: "12px", borderRadius: "50%",
-                      backgroundColor: pushEnabled ? COLOURS.GREEN : COLOURS.AMBER,
-                      display: "inline-block",
-                    }} />
-                    <span style={{ fontSize: "17px", fontWeight: 700, color: pushEnabled ? COLOURS.GREEN : COLOURS.AMBER }}>
-                      Push Notifications: {pushEnabled ? "Enabled" : "Disabled"}
+                      ...statusPill,
+                      ...(pushEnabled
+                        ? { backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }
+                        : { backgroundColor: COLOURS.WARNING_SOFT, color: COLOURS.AMBER }),
+                    }}>
+                      {pushEnabled ? "Enabled" : "Disabled"}
                     </span>
                   </div>
-                  <p style={{ fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "12px" }}>
-                    {pushEnabled
-                      ? "You will receive push notifications on this device for tasks, escalations and other alerts."
-                      : "Enable push notifications to receive instant alerts on this device, even when the browser is in the background."}
-                  </p>
-                  {pushEnabled ? (
-                    <button
-                      onClick={disablePush}
-                      disabled={pushLoading}
-                      style={{
-                        backgroundColor: "var(--bg-card, #ffffff)",
-                        color: COLOURS.RED,
-                        border: `1px solid ${COLOURS.RED}`,
-                        borderRadius: "6px",
-                        padding: "8px 16px",
-                        fontSize: "15px",
-                        fontWeight: 700,
-                        cursor: pushLoading ? "not-allowed" : "pointer",
-                        opacity: pushLoading ? 0.5 : 1,
-                      }}
-                    >
-                      {pushLoading ? "Disabling..." : "Disable Push Notifications"}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={enablePush}
-                      disabled={pushLoading}
-                      style={{
-                        backgroundColor: COLOURS.NAVY,
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        padding: "10px 20px",
-                        fontSize: "16px",
-                        fontWeight: 700,
-                        cursor: pushLoading ? "not-allowed" : "pointer",
-                        opacity: pushLoading ? 0.5 : 1,
-                      }}
-                    >
-                      {pushLoading ? "Enabling..." : "Enable Push Notifications"}
-                    </button>
-                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "20px" }}>
+                    <div>
+                      <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY, marginBottom: "4px" }}>
+                        {pushEnabled ? "Receive instant alerts on this device" : "Receive instant alerts on this device"}
+                      </div>
+                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, lineHeight: 1.5 }}>
+                        {pushEnabled
+                          ? "You will receive push notifications for tasks, escalations and other alerts."
+                          : "Even when the browser is in the background. Only used for urgent alerts, never marketing."}
+                      </div>
+                    </div>
+                    {pushEnabled ? (
+                      <button
+                        onClick={disablePush}
+                        disabled={pushLoading}
+                        style={{
+                          ...primaryButtonStyle,
+                          backgroundColor: COLOURS.CARD,
+                          color: COLOURS.RED,
+                          border: `1px solid ${COLOURS.RED}`,
+                          opacity: pushLoading ? 0.5 : 1,
+                          cursor: pushLoading ? "not-allowed" : "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {pushLoading ? "Disabling..." : "Disable push"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={enablePush}
+                        disabled={pushLoading}
+                        style={{
+                          ...primaryButtonStyle,
+                          opacity: pushLoading ? 0.5 : 1,
+                          cursor: pushLoading ? "not-allowed" : "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {pushLoading ? "Enabling..." : "Enable push"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </>
             )}
@@ -626,3 +825,48 @@ export default function ProfilePage() {
     </AuthWrapper>
   );
 }
+
+// ── Local style constants ────────────────────────────────────────
+
+const settingCardHead: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: "16px",
+  paddingBottom: "16px",
+  borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+};
+
+const settingCardTitle: React.CSSProperties = {
+  fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+  fontSize: "15px",
+  fontWeight: 600,
+  letterSpacing: "-0.005em",
+  color: COLOURS.NAVY,
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const iconMark: React.CSSProperties = {
+  width: "30px",
+  height: "30px",
+  borderRadius: "8px",
+  backgroundColor: COLOURS.CARD_ALT,
+  border: `1px solid ${COLOURS.HAIRLINE}`,
+  display: "inline-grid",
+  placeItems: "center",
+  color: COLOURS.INK_700,
+  fontSize: "13px",
+  flexShrink: 0,
+};
+
+const statusPill: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  padding: "3px 10px",
+  borderRadius: "999px",
+  fontSize: "11px",
+  fontWeight: 500,
+};
