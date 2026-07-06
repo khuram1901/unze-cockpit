@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, SectionTitle } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle, SectionTitle } from "../lib/SharedUI";
 import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
 import DateInput from "../lib/DateInput";
 
@@ -11,7 +11,11 @@ type Plant = { id: string; name: string; type: string };
 type PO = { id: string; customer_name: string; po_number: string; po_label: string; is_system_unallocated: boolean };
 type AllocRow = { po_id: string; qty_31: string; qty_36: string; qty_40: string; qty_45: string; qty_meter: string };
 
-const { NAVY, SLATE, BORDER } = COLOURS;
+const inputStyle: React.CSSProperties = {
+  ...sharedInputStyle,
+  marginTop: "4px",
+  marginBottom: "8px",
+};
 
 export default function OpeningBalancesForm() {
   const [plants, setPlants] = useState<Plant[]>([]);
@@ -188,7 +192,7 @@ export default function OpeningBalancesForm() {
 
   if (!canEdit) {
     return (
-      <p style={{ color: "#dc2626", fontSize: "17px" }}>
+      <p style={{ color: COLOURS.RED, fontSize: "14px" }}>
         You don&apos;t have permission to set opening balances.
       </p>
     );
@@ -207,7 +211,7 @@ export default function OpeningBalancesForm() {
     <div style={{ maxWidth: "600px" }}>
       {/* ── Section 1: Plant-level opening stock ── */}
       <form onSubmit={handleSubmit}>
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "12px" }}>
+        <div style={{ ...cardStyle, marginBottom: "12px" }}>
           <label style={labelStyle}>
             Plant
             <select style={inputStyle} value={plantId} onChange={(e) => setPlantId(e.target.value)} required>
@@ -221,24 +225,26 @@ export default function OpeningBalancesForm() {
           <label style={labelStyle}>
             As of date
             <DateInput style={inputStyle} value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} required />
-            {asOfDate && <span style={{ fontSize: "15px", color: SLATE }}>{asOfDateUK}</span>}
+            {asOfDate && <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px", display: "block" }}>{asOfDateUK}</span>}
           </label>
         </div>
 
         {plantId && (
           <>
-            <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid #16a34a`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "12px" }}>
+            {/* Good stock — left green rule */}
+            <div style={{ ...cardStyle, borderLeft: `3px solid ${COLOURS.GREEN}`, marginBottom: "12px" }}>
               <SectionTitle title="Good pole opening stock" />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "10px", marginTop: "12px" }}>
                 <label style={labelStyle}>31 ft<input type="number" min="0" style={inputStyle} value={g31} onChange={(e) => setG31(e.target.value)} placeholder="0" /></label>
                 <label style={labelStyle}>36 ft<input type="number" min="0" style={inputStyle} value={g36} onChange={(e) => setG36(e.target.value)} placeholder="0" /></label>
                 <label style={labelStyle}>45 ft<input type="number" min="0" style={inputStyle} value={g45} onChange={(e) => setG45(e.target.value)} placeholder="0" /></label>
               </div>
             </div>
 
-            <div style={{ border: `1px solid ${BORDER}`, borderTop: `3px solid #d97706`, borderRadius: "8px", padding: "16px", backgroundColor: "var(--bg-card, #ffffff)", marginBottom: "16px" }}>
+            {/* Broken stock — left amber rule */}
+            <div style={{ ...cardStyle, borderLeft: `3px solid ${COLOURS.AMBER}`, marginBottom: "16px" }}>
               <SectionTitle title="Broken pole opening stock" />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "10px", marginTop: "12px" }}>
                 <label style={labelStyle}>31 ft<input type="number" min="0" style={inputStyle} value={b31} onChange={(e) => setB31(e.target.value)} placeholder="0" /></label>
                 <label style={labelStyle}>36 ft<input type="number" min="0" style={inputStyle} value={b36} onChange={(e) => setB36(e.target.value)} placeholder="0" /></label>
                 <label style={labelStyle}>45 ft<input type="number" min="0" style={inputStyle} value={b45} onChange={(e) => setB45(e.target.value)} placeholder="0" /></label>
@@ -250,13 +256,13 @@ export default function OpeningBalancesForm() {
         <button
           type="submit"
           disabled={saving || !plantId}
-          style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "6px", padding: "9px 20px", fontSize: "17px", fontWeight: 700, cursor: saving || !plantId ? "not-allowed" : "pointer", opacity: !plantId ? 0.5 : 1 }}
+          style={{ ...primaryButtonStyle, opacity: !plantId ? 0.5 : saving ? 0.7 : 1, cursor: saving || !plantId ? "not-allowed" : "pointer" }}
         >
           {saving ? "Saving…" : "Save Opening Balances"}
         </button>
 
         {message && (
-          <p style={{ marginTop: "12px", fontSize: "17px", fontWeight: 600, color: message.startsWith("Error") ? "#dc2626" : "#16a34a" }}>
+          <p style={{ marginTop: "12px", fontSize: "13px", fontWeight: 600, color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>
             {message}
           </p>
         )}
@@ -265,9 +271,9 @@ export default function OpeningBalancesForm() {
       {/* ── Section 2: Allocate opening stock to POs ── */}
       {plantId && pos.length > 0 && (
         <div style={{ marginTop: "32px" }}>
-          <div style={{ borderBottom: `2px solid ${BORDER}`, marginBottom: "16px", paddingBottom: "8px" }}>
-            <div style={{ fontSize: "18px", fontWeight: 700, color: NAVY }}>Allocate Opening Stock to POs</div>
-            <div style={{ fontSize: "13px", color: SLATE, marginTop: "4px" }}>
+          <div style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}`, marginBottom: "16px", paddingBottom: "8px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Allocate Opening Stock to POs</div>
+            <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "4px" }}>
               Split the good-pole opening stock across your active POs so the Stock page shows correct per-PO balances.
               Enter how many poles of each size belong to each PO.
             </div>
@@ -276,10 +282,10 @@ export default function OpeningBalancesForm() {
           {/* Validation banner — only shown once user has entered a plant-level total */}
           {totalGood > 0 && (
             <div style={{
-              padding: "10px 14px", borderRadius: "6px", marginBottom: "14px", fontSize: "13px", fontWeight: 600,
-              backgroundColor: allocDiff === 0 ? "#f0fdf4" : allocDiff < 0 ? "#fef2f2" : "#fffbeb",
-              color: allocDiff === 0 ? "#16a34a" : allocDiff < 0 ? "#dc2626" : "#d97706",
-              border: `1px solid ${allocDiff === 0 ? "#bbf7d0" : allocDiff < 0 ? "#fecaca" : "#fde68a"}`,
+              padding: "10px 14px", borderRadius: RADII.SM, marginBottom: "14px", fontSize: "13px", fontWeight: 600,
+              backgroundColor: allocDiff === 0 ? COLOURS.SUCCESS_SOFT : allocDiff < 0 ? COLOURS.DANGER_SOFT : COLOURS.WARNING_SOFT,
+              color: allocDiff === 0 ? COLOURS.GREEN : allocDiff < 0 ? COLOURS.RED : COLOURS.AMBER,
+              border: `1px solid ${allocDiff === 0 ? COLOURS.GREEN : allocDiff < 0 ? COLOURS.RED : COLOURS.AMBER}`,
             }}>
               {allocDiff === 0
                 ? `All ${totalGood.toLocaleString()} poles allocated — totals match.`
@@ -296,31 +302,31 @@ export default function OpeningBalancesForm() {
               if (!row) return null;
               const poTotal = (Number(row.qty_31) || 0) + (Number(row.qty_36) || 0) + (Number(row.qty_45) || 0) + (Number(row.qty_meter) || 0);
               return (
-                <div key={po.id} style={{ border: `1px solid ${BORDER}`, borderLeft: `4px solid ${po.is_system_unallocated ? "#f59e0b" : NAVY}`, borderRadius: "8px", padding: "14px 16px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                <div key={po.id} style={{ ...cardStyle, borderLeft: `3px solid ${po.is_system_unallocated ? COLOURS.AMBER : COLOURS.NAVY}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px", flexWrap: "wrap", gap: "4px" }}>
                     <div>
-                      <span style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>
+                      <span style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
                         {po.is_system_unallocated ? "Unze Unallocated Stock" : `${po.customer_name} — PO #${po.po_number}`}
                       </span>
                       {po.po_label && !po.is_system_unallocated && (
-                        <span style={{ marginLeft: "8px", fontSize: "12px", padding: "1px 7px", borderRadius: "10px", backgroundColor: "#eff6ff", color: "#2563eb", fontWeight: 600 }}>
+                        <span style={{ marginLeft: "8px", fontSize: "11px", padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: COLOURS.INK_700, fontWeight: 600, border: `1px solid ${COLOURS.HAIRLINE}` }}>
                           {po.po_label}
                         </span>
                       )}
                     </div>
                     {poTotal > 0 && (
-                      <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{poTotal.toLocaleString()} poles</span>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, fontFamily: "var(--font-mono)" }}>{poTotal.toLocaleString()} poles</span>
                     )}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
                     {(["qty_31", "qty_36", "qty_40", "qty_45", "qty_meter"] as const).map((field) => (
-                      <label key={field} style={{ ...labelStyle, fontSize: "13px" }}>
+                      <label key={field} style={labelStyle}>
                         {field === "qty_31" ? "31 ft" : field === "qty_36" ? "36 ft" : field === "qty_40" ? "40 ft" : field === "qty_45" ? "45 ft" : "Meter"}
                         <input
                           type="number" min="0" placeholder="0"
                           value={row[field]}
                           onChange={(e) => updateAlloc(po.id, field, e.target.value)}
-                          style={{ ...inputStyle, fontSize: "15px" }}
+                          style={inputStyle}
                         />
                       </label>
                     ))}
@@ -334,12 +340,12 @@ export default function OpeningBalancesForm() {
             <button
               onClick={handleAllocSave}
               disabled={allocSaving}
-              style={{ backgroundColor: NAVY, color: "white", border: "none", borderRadius: "6px", padding: "9px 20px", fontSize: "17px", fontWeight: 700, cursor: allocSaving ? "not-allowed" : "pointer", opacity: allocSaving ? 0.7 : 1 }}
+              style={{ ...primaryButtonStyle, opacity: allocSaving ? 0.7 : 1, cursor: allocSaving ? "not-allowed" : "pointer" }}
             >
               {allocSaving ? "Saving…" : "Save PO Allocations"}
             </button>
             {allocMessage && (
-              <span style={{ fontSize: "15px", fontWeight: 600, color: allocMessage.startsWith("Error") ? "#dc2626" : "#16a34a" }}>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: allocMessage.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>
                 {allocMessage}
               </span>
             )}
@@ -349,22 +355,3 @@ export default function OpeningBalancesForm() {
     </div>
   );
 }
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: "16px",
-  fontWeight: 600,
-  color: COLOURS.NAVY,
-  marginBottom: "0",
-};
-
-const inputStyle: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  padding: "7px 9px",
-  marginTop: "3px",
-  border: `1px solid ${COLOURS.BORDER}`,
-  borderRadius: "6px",
-  fontSize: "17px",
-  boxSizing: "border-box",
-};

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import DateInput from "../lib/DateInput";
+import { COLOURS, RADII, cardStyle, tableHeaderStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle } from "../lib/SharedUI";
 
 type Stage = {
   id: string;
@@ -28,10 +29,6 @@ type Receivable = {
   received_date: string | null;
   notes: string | null;
 };
-
-const NAVY = "var(--text-primary, #1e293b)";
-const SLATE = "var(--text-secondary, #64748b)";
-const BORDER = "var(--border-color, #e2e8f0)";
 
 // Per-plant customer list. First entry is the default.
 // Plants not listed here fall back to using the plant name itself.
@@ -66,35 +63,30 @@ function fmtMoney(n: number) {
   return n.toLocaleString();
 }
 
-const inputStyle = {
-  display: "block",
-  width: "100%",
-  padding: "7px 9px",
-  marginTop: "3px",
+const inputStyle: React.CSSProperties = {
+  ...sharedInputStyle,
+  padding: "11px 12px",
+  fontSize: "15px",
   marginBottom: "10px",
-  border: `1px solid ${BORDER}`,
-  borderRadius: "6px",
-  fontSize: "17px",
 };
 
-const sectionStyle = {
-  border: `1px solid ${BORDER}`,
-  borderRadius: "8px",
-  padding: "14px",
+const sectionStyle: React.CSSProperties = {
+  ...cardStyle,
+  padding: "20px 22px",
   marginBottom: "14px",
-  backgroundColor: "var(--bg-card, #ffffff)",
 };
 
-const hint = { fontSize: "16px", color: SLATE, marginBottom: "10px" };
+const hint: React.CSSProperties = { fontSize: "13px", color: COLOURS.SLATE, marginBottom: "12px", lineHeight: "1.4" };
 
-const h3 = {
-  fontSize: "17px",
-  fontWeight: 700 as const,
-  color: NAVY,
+const h3: React.CSSProperties = {
+  fontSize: "15px",
+  fontWeight: 600,
+  color: COLOURS.NAVY,
   marginBottom: "4px",
-  paddingLeft: "9px",
-  borderLeft: `3px solid ${NAVY}`,
+  fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
 };
+
+const statusColor = { green: COLOURS.GREEN, amber: COLOURS.AMBER, red: COLOURS.RED };
 
 export default function ReceivablesSection({
   plantId,
@@ -158,8 +150,6 @@ export default function ReceivablesSection({
     if (elapsed >= budget - 1) return "amber";
     return "green";
   }
-
-  const statusColor = { green: "#16a34a", amber: "#d97706", red: "#dc2626" };
 
   async function addBill() {
     setMsg("");
@@ -234,19 +224,17 @@ export default function ReceivablesSection({
   }
 
   const th: React.CSSProperties = {
+    ...tableHeaderStyle,
     textAlign: "left",
-    borderBottom: `1px solid ${BORDER}`,
-    padding: "6px 8px",
-    fontSize: "15px",
-    color: SLATE,
-    fontWeight: 700,
+    borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+    padding: "8px 10px",
     whiteSpace: "nowrap",
   };
 
   const td: React.CSSProperties = {
-    borderBottom: "1px solid var(--border-light, #f1f5f9)",
-    padding: "6px 8px",
-    fontSize: "16px",
+    borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+    padding: "8px 10px",
+    fontSize: "13px",
     verticalAlign: "middle",
   };
 
@@ -262,9 +250,10 @@ export default function ReceivablesSection({
       {msg && (
         <p
           style={{
-            color: msg.startsWith("Error") ? "#c0392b" : "#16a34a",
-            fontWeight: 700,
-            fontSize: "17px",
+            color: msg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN,
+            fontWeight: 600,
+            fontSize: "13px",
+            marginBottom: "10px",
           }}
         >
           {msg}
@@ -281,12 +270,12 @@ export default function ReceivablesSection({
         }}
       >
         {/* LEFT: add a new bill */}
-        <div style={{ borderRight: `1px solid ${BORDER}`, paddingRight: "16px" }}>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
+        <div style={{ borderRight: `1px solid ${COLOURS.HAIRLINE}`, paddingRight: "16px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "12px", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
             Add a new bill
           </div>
           {customers.length > 1 ? (
-            <label>
+            <label style={labelStyle}>
               Customer
               <select
                 value={customer}
@@ -299,12 +288,12 @@ export default function ReceivablesSection({
               </select>
             </label>
           ) : (
-            <div style={{ marginBottom: "10px" }}>
-              <div style={{ fontSize: "15px", color: SLATE }}>Customer</div>
-              <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY }}>{customers[0]}</div>
+            <div style={{ marginBottom: "12px" }}>
+              <div style={labelStyle}>Customer</div>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{customers[0]}</div>
             </div>
           )}
-          <label>
+          <label style={labelStyle}>
             Invoice reference
             <input
               type="text"
@@ -314,7 +303,7 @@ export default function ReceivablesSection({
               placeholder="Invoice no."
             />
           </label>
-          <label>
+          <label style={labelStyle}>
             IC reference (optional)
             <input
               type="text"
@@ -324,7 +313,7 @@ export default function ReceivablesSection({
               placeholder="Inspection Certificate no."
             />
           </label>
-          <label>
+          <label style={labelStyle}>
             GRN reference (optional)
             <input
               type="text"
@@ -334,7 +323,7 @@ export default function ReceivablesSection({
               placeholder="Goods Receive Note no."
             />
           </label>
-          <label>
+          <label style={labelStyle}>
             Amount (PKR)
             <input
               type="number"
@@ -345,7 +334,7 @@ export default function ReceivablesSection({
               placeholder="0"
             />
           </label>
-          <label>
+          <label style={labelStyle}>
             Date submitted
             <DateInput
               style={inputStyle}
@@ -358,14 +347,8 @@ export default function ReceivablesSection({
             onClick={addBill}
             disabled={saving}
             style={{
-              backgroundColor: NAVY,
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              padding: "8px 18px",
-              fontSize: "17px",
-              cursor: "pointer",
-              fontWeight: 700,
+              ...primaryButtonStyle,
+              opacity: saving ? 0.7 : 1,
               marginTop: "4px",
             }}
           >
@@ -375,13 +358,13 @@ export default function ReceivablesSection({
 
         {/* RIGHT: tracking table */}
         <div>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: NAVY, marginBottom: "8px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "12px", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
             Open bills ({bills.length})
           </div>
           {loading ? (
-            <p style={{ color: SLATE, fontSize: "17px" }}>Loading receivables…</p>
+            <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Loading receivables…</p>
           ) : bills.length === 0 ? (
-            <p style={{ color: SLATE, fontSize: "17px" }}>No open bills for this plant yet.</p>
+            <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No open bills for this plant yet.</p>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -403,11 +386,11 @@ export default function ReceivablesSection({
                     const budget = stageBudget(bill.current_stage_order);
                     return (
                       <tr key={bill.id}>
-                        <td style={{ ...td, fontWeight: 700, color: NAVY }}>{bill.utility}</td>
-                        <td style={td}>
+                        <td style={{ ...td, fontWeight: 600, color: COLOURS.NAVY }}>{bill.utility}</td>
+                        <td style={{ ...td, fontFamily: "var(--font-mono)", color: COLOURS.INK_700 }}>
                           {fmtMoney(bill.amount)} {bill.currency}
                         </td>
-                        <td style={{ ...td, color: SLATE }}>
+                        <td style={{ ...td, color: COLOURS.SLATE }}>
                           {bill.invoice_ref || "—"} / {bill.ic_ref || "—"} / {bill.grn_ref || "—"}
                         </td>
                         <td style={td}>
@@ -415,11 +398,13 @@ export default function ReceivablesSection({
                             value={bill.current_stage_order}
                             onChange={(e) => moveStage(bill, Number(e.target.value))}
                             style={{
-                              padding: "4px 6px",
-                              border: `1px solid ${BORDER}`,
-                              borderRadius: "6px",
-                              fontSize: "16px",
+                              padding: "6px 8px",
+                              border: `1px solid ${COLOURS.HAIRLINE}`,
+                              borderRadius: RADII.SM,
+                              fontSize: "13px",
                               minWidth: "150px",
+                              backgroundColor: COLOURS.CARD,
+                              color: COLOURS.NAVY,
                             }}
                           >
                             {stages.map((s) => (
@@ -429,22 +414,22 @@ export default function ReceivablesSection({
                             ))}
                           </select>
                         </td>
-                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                        <td style={{ ...td, fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>
                           {elapsed} / {budget}
                         </td>
-                        <td style={{ ...td, color: statusColor[st], fontWeight: 700 }}>
+                        <td style={{ ...td, color: statusColor[st], fontWeight: 600 }}>
                           {st.toUpperCase()}
                         </td>
                         <td style={td}>
                           <button
                             onClick={() => markCollected(bill)}
                             style={{
-                              backgroundColor: "#16a34a",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
+                              backgroundColor: COLOURS.SUCCESS_SOFT,
+                              color: COLOURS.GREEN,
+                              border: `1px solid ${COLOURS.GREEN}`,
+                              borderRadius: RADII.PILL,
                               padding: "5px 10px",
-                              fontSize: "16px",
+                              fontSize: "12px",
                               cursor: "pointer",
                               fontWeight: 600,
                               whiteSpace: "nowrap",

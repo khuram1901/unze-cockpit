@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
-import { COLOURS, SHADOWS, PageHeader, SectionTitle, inputStyle, labelStyle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, SectionTitle, inputStyle, labelStyle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import AccessMatrix from "./AccessMatrix";
@@ -71,9 +71,12 @@ function isValidEmail(e: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.tr
 function fullName(f: string | null, l: string | null, n?: string | null) {
   return `${f || ""} ${l || ""}`.trim() || n || "Unnamed";
 }
-function roleBg(r: string, email?: string | null) {
-  if (email === "k.saleem@unzegroup.com") return COLOURS.BLUE;
-  return r === "Admin" ? "#111827" : r === "Executive" ? COLOURS.PURPLE : r === "Manager" ? COLOURS.GREEN : COLOURS.SLATE;
+function roleChip(r: string, email?: string | null): React.CSSProperties {
+  if (email === "k.saleem@unzegroup.com") return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.BLUE, border: `1px solid ${COLOURS.BLUE}` };
+  if (r === "Admin")     return { backgroundColor: COLOURS.NAVY, color: "#FFFFFF", border: `1px solid ${COLOURS.NAVY}` };
+  if (r === "Executive") return { backgroundColor: "#EEE8F9", color: COLOURS.PURPLE, border: `1px solid ${COLOURS.PURPLE}` };
+  if (r === "Manager")   return { backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, border: `1px solid ${COLOURS.GREEN}` };
+  return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.INK_700, border: `1px solid ${COLOURS.HAIRLINE}` };
 }
 
 const inp: React.CSSProperties = { ...inputStyle, padding: "6px 8px", fontSize: "16px" };
@@ -352,9 +355,9 @@ export default function MembersManager() {
           { label: "Managers", value: counts.manager, color: COLOURS.GREEN },
           { label: "Members", value: counts.member, color: COLOURS.SLATE },
         ].map((c) => (
-          <div key={c.label} style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${c.color}`, borderRadius: "7px", padding: "6px 14px", backgroundColor: "var(--bg-card, #ffffff)", minWidth: "80px" }}>
-            <div style={{ color: COLOURS.SLATE, fontSize: "14px" }}>{c.label}</div>
-            <div style={{ fontSize: "18px", fontWeight: 800, color: c.color }}>{c.value}</div>
+          <div key={c.label} style={{ ...cardStyle, padding: "6px 14px", minWidth: "80px" }}>
+            <div style={{ color: COLOURS.SLATE, fontSize: "11px", textTransform: "uppercase" as const, letterSpacing: "0.06em", fontWeight: 500 }}>{c.label}</div>
+            <div style={{ fontSize: "18px", fontWeight: 700, color: c.color, fontFamily: "var(--font-mono)" }}>{c.value}</div>
           </div>
         ))}
       </div>
@@ -415,10 +418,7 @@ export default function MembersManager() {
 
       {/* ── Add form ──────────────────────────────────── */}
       {isAdmin && showAddForm && (
-        <form onSubmit={addMember} style={{
-          border: `1px solid ${COLOURS.BORDER}`, borderTop: `3px solid ${COLOURS.NAVY}`,
-          borderRadius: "8px", padding: "14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)",
-        }}>
+        <form onSubmit={addMember} style={{ ...cardStyle, marginBottom: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1.5fr 0.8fr", gap: "8px" }}>
             <div><label style={lbl}>First Name</label><input style={inp} value={firstName} onChange={(e) => setFirstName(e.target.value)} required /></div>
             <div><label style={lbl}>Last Name</label><input style={inp} value={lastName} onChange={(e) => setLastName(e.target.value)} required /></div>
@@ -449,7 +449,7 @@ export default function MembersManager() {
           </div>
           {/* Permissions preview */}
           {(role || department) && (
-            <div style={{ marginTop: "12px", padding: "10px 12px", backgroundColor: COLOURS.LIGHT, borderRadius: "6px", border: `1px solid ${COLOURS.BORDER}` }}>
+            <div style={{ marginTop: "12px", padding: "10px 12px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}>
               <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>
                 Permissions Preview — this member will automatically get:
               </div>
@@ -513,14 +513,15 @@ export default function MembersManager() {
       )}
 
       {/* ── Members table ─────────────────────────────── */}
-      <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
+      <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
         {/* Header */}
         <div style={{
-          display: "grid",
+          ...tableHeaderStyle,
+          display: "grid" as const,
           gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
-          gap: "8px", padding: "8px 12px",
-          backgroundColor: COLOURS.LIGHT, borderBottom: `1px solid ${COLOURS.BORDER}`,
-          fontSize: "14px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.5px",
+          gap: "8px",
+          padding: "8px 12px",
+          borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
         }}>
           <div>Name</div>
           {!isMobile && <div>Dept / BU</div>}
@@ -537,7 +538,7 @@ export default function MembersManager() {
           const showsDept = roleHasDeptAndBU(m.role);
 
           return (
-            <div key={m.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+            <div key={m.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
               {/* ── Row ──────────────────────────────── */}
               <div
                 onClick={() => isAdmin ? setEditingId(isEditing ? null : m.id) : undefined}
@@ -546,7 +547,7 @@ export default function MembersManager() {
                   gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
                   gap: "8px", padding: "10px 12px", alignItems: "center",
                   cursor: isAdmin ? "pointer" : "default",
-                  backgroundColor: isEditing ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
+                  backgroundColor: isEditing ? COLOURS.CARD_ALT : COLOURS.CARD,
                 }}
               >
                 {/* Name + email */}
@@ -562,7 +563,7 @@ export default function MembersManager() {
                 {!isMobile && (
                   <div style={{ fontSize: "15px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {showsDept ? (m.department || "—") : "All"}
-                    {showsDept && m.business_unit && <span style={{ color: "#94a3b8" }}> · {m.business_unit}</span>}
+                    {showsDept && m.business_unit && <span style={{ color: COLOURS.INK_400 }}> · {m.business_unit}</span>}
                   </div>
                 )}
 
@@ -575,9 +576,9 @@ export default function MembersManager() {
 
                 {/* Role badge */}
                 <span style={{
-                  fontSize: "14px", fontWeight: 700, padding: "2px 8px", borderRadius: "8px",
-                  color: "white", backgroundColor: roleBg(m.role, m.email), width: "fit-content",
-                  justifySelf: isMobile ? "end" : "start",
+                  fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: RADII.PILL,
+                  width: "fit-content", justifySelf: isMobile ? "end" : "start",
+                  ...roleChip(m.role, m.email),
                 }}>{m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role}</span>
               </div>
 
@@ -590,7 +591,7 @@ export default function MembersManager() {
 
               {/* ── Edit panel (compact) ────────────────────────── */}
               {isAdmin && isEditing && (
-                <div style={{ padding: "8px 12px", borderTop: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.LIGHT }}>
+                <div style={{ padding: "8px 12px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT }}>
                   <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(120px, 1fr))", gap: "6px", marginBottom: "6px", alignItems: "end" }}>
                     <div><label style={lblC}>First Name</label><input style={inpC} value={m.first_name || ""} onChange={(e) => updateMember(m.id, { first_name: e.target.value })} /></div>
                     <div><label style={lblC}>Last Name</label><input style={inpC} value={m.last_name || ""} onChange={(e) => updateMember(m.id, { last_name: e.target.value })} /></div>
@@ -619,7 +620,7 @@ export default function MembersManager() {
                             </label>
                           );
                         })}
-                        <span style={{ color: COLOURS.BORDER }}>|</span>
+                        <span style={{ color: COLOURS.HAIRLINE }}>|</span>
                       </>
                     )}
                     <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Notify:</span>
@@ -635,7 +636,7 @@ export default function MembersManager() {
                     )}
                     {canChangePasswordFor(me, { email: m.email, role: m.role }) && (
                       <>
-                        <span style={{ color: COLOURS.BORDER }}>|</span>
+                        <span style={{ color: COLOURS.HAIRLINE }}>|</span>
                         <button onClick={() => sendPwReset(m.email || "", dn)} disabled={!m.email || resettingPw === m.email}
                           style={{ ...smallBtn(COLOURS.BLUE), fontSize: "11px", padding: "3px 8px", opacity: resettingPw === m.email ? 0.5 : 1 }}>
                           {resettingPw === m.email ? "..." : "Reset PW"}
@@ -668,7 +669,7 @@ export default function MembersManager() {
         })}
 
         {filtered.length === 0 && (
-          <div style={{ padding: "20px 12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "16px" }}>No members found.</div>
+          <div style={{ padding: "20px 12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>No members found.</div>
         )}
       </div>
 
@@ -680,8 +681,8 @@ export default function MembersManager() {
         <div style={{ marginTop: "16px" }}>
           <div onClick={() => setShowDeptOwners(!showDeptOwners)} style={{
             display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
-            border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px 16px",
-            backgroundColor: showDeptOwners ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
+            border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "12px 16px",
+            backgroundColor: showDeptOwners ? COLOURS.NAVY : COLOURS.CARD,
           }}>
             <div>
               <div style={{ fontSize: "16px", fontWeight: 700, color: showDeptOwners ? "white" : COLOURS.NAVY }}>Department Ownership</div>
@@ -694,10 +695,10 @@ export default function MembersManager() {
           </div>
 
           {showDeptOwners && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "12px" }}>
+            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: "none", borderRadius: `0 0 ${RADII.CARD} ${RADII.CARD}`, backgroundColor: COLOURS.CARD, padding: "12px" }}>
               {departments.map((dept) => (
-                <div key={dept.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", padding: "10px 12px", marginBottom: "8px" }}>
-                  <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px", paddingBottom: "6px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                <div key={dept.id} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "10px 12px", marginBottom: "8px" }}>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "8px", paddingBottom: "6px", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
                     {dept.department_name}
                     {!dept.primary_owner_member_id && <span style={{ fontSize: "11px", color: COLOURS.RED, marginLeft: "8px", fontWeight: 600 }}>NO PRIMARY OWNER</span>}
                   </div>
@@ -739,8 +740,8 @@ export default function MembersManager() {
         <div style={{ marginTop: "12px" }}>
           <div onClick={() => setShowReassign(!showReassign)} style={{
             display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
-            border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", padding: "12px 16px",
-            backgroundColor: showReassign ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
+            border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "12px 16px",
+            backgroundColor: showReassign ? COLOURS.NAVY : COLOURS.CARD,
           }}>
             <div>
               <div style={{ fontSize: "16px", fontWeight: 700, color: showReassign ? "white" : COLOURS.NAVY }}>Reassign Open Tasks</div>
@@ -752,7 +753,7 @@ export default function MembersManager() {
           </div>
 
           {showReassign && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "14px" }}>
+            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: "none", borderRadius: `0 0 ${RADII.CARD} ${RADII.CARD}`, backgroundColor: COLOURS.CARD, padding: "14px" }}>
               <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "10px" }}>
                 Moves Not Started, In Progress, and Waiting Reply tasks only. Completed tasks stay with the original owner.
               </p>
@@ -792,8 +793,8 @@ export default function MembersManager() {
 }
 
 const inpC: React.CSSProperties = {
-  width: "100%", padding: "4px 6px", border: `1px solid ${COLOURS.BORDER}`,
-  borderRadius: "4px", fontSize: "15px", boxSizing: "border-box",
+  width: "100%", padding: "4px 6px", border: `1px solid ${COLOURS.HAIRLINE}`,
+  borderRadius: RADII.XS, fontSize: "13px", boxSizing: "border-box",
 };
 const lblC: React.CSSProperties = {
   display: "block", fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "1px",

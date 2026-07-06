@@ -6,6 +6,7 @@ import { logAction } from "../lib/audit-log";
 import { formatDateUK } from "../lib/dateUtils";
 import { canAccessDailyEntry, type UserCtx, type PermOverrides } from "../lib/permissions";
 import DateInput from "../lib/DateInput";
+import { COLOURS, RADII, cardStyle, tableHeaderStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle } from "../lib/SharedUI";
 
 type Plant = {
   id: string;
@@ -526,33 +527,43 @@ export default function ProductionForm() {
   }
 
   // ---- Styles ----
-  const inputStyle = {
-    display: "block", width: "100%", padding: "7px 9px",
-    marginTop: "3px", marginBottom: "10px", border: "1px solid var(--border-color, #e2e8f0)",
-    borderRadius: "6px", fontSize: "17px",
+  const inputStyle: React.CSSProperties = {
+    ...sharedInputStyle,
+    padding: "11px 12px",
+    fontSize: "15px",
+    marginBottom: "10px",
   };
-  const sectionStyle = {
-    border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px",
-    padding: "14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)",
+  const sectionStyle: React.CSSProperties = {
+    ...cardStyle,
+    borderRadius: RADII.CARD,
+    padding: "20px 22px",
+    marginBottom: "14px",
   };
-  const hint = { fontSize: "16px", color: "var(--text-secondary, #64748b)", marginBottom: "10px" };
-  const h3 = { fontSize: "17px", fontWeight: 700 as const, color: "var(--text-primary, #1e293b)", marginBottom: "4px" };
+  const hint: React.CSSProperties = { fontSize: "13px", color: COLOURS.SLATE, marginBottom: "10px", lineHeight: "1.4" };
+  const h3: React.CSSProperties = { fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "4px", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" };
 
   const submitBtn = (section: string): React.CSSProperties => ({
-    backgroundColor: "var(--text-primary, #1e293b)", color: "white", border: "none", borderRadius: "6px",
-    padding: "7px 14px", fontSize: "16px", cursor: "pointer", fontWeight: 700,
+    ...primaryButtonStyle,
+    padding: "10px 18px",
+    fontSize: "13px",
     opacity: savingSection === section ? 0.7 : 1,
   });
   const nothingBtn: React.CSSProperties = {
-    backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px",
-    padding: "7px 12px", fontSize: "16px", cursor: "pointer", fontWeight: 600,
+    backgroundColor: COLOURS.CARD,
+    color: COLOURS.SLATE,
+    border: `1px solid ${COLOURS.HAIRLINE}`,
+    borderRadius: RADII.PILL,
+    padding: "10px 14px",
+    fontSize: "13px",
+    cursor: "pointer",
+    fontWeight: 500,
   };
-  const btnRow: React.CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" };
+  const btnRow: React.CSSProperties = { display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" };
 
   function SectionMessage({ section }: { section: string }) {
     if (!sectionMsg || sectionMsg.section !== section) return null;
     return (
-      <p style={{ marginTop: "8px", fontSize: "16px", fontWeight: 700, color: sectionMsg.ok ? "#16a34a" : "#dc2626" }}>
+      <p style={{ marginTop: "8px", fontSize: "13px", fontWeight: 600, color: sectionMsg.ok ? COLOURS.GREEN : COLOURS.RED }}>
         {sectionMsg.text}
       </p>
     );
@@ -571,13 +582,13 @@ export default function ProductionForm() {
     );
   }
 
-  if (loadingPlants) return <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading your plant…</p>;
+  if (loadingPlants) return <p style={{ color: COLOURS.SLATE }}>Loading your plant…</p>;
 
   if (noAccess) {
     return (
       <div style={{ ...sectionStyle, maxWidth: "520px" }}>
-        <p style={{ color: "#dc2626", fontWeight: "bold" }}>You are not assigned to any plant yet.</p>
-        <p style={{ color: "#666", fontSize: "16px" }}>
+        <p style={{ color: COLOURS.RED, fontWeight: 600 }}>You are not assigned to any plant yet.</p>
+        <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>
           Please ask an administrator to assign you to a plant on the Members page before entering data.
         </p>
       </div>
@@ -591,34 +602,36 @@ export default function ProductionForm() {
   return (
     <div>
       {/* Plant & date */}
-      <div style={{ ...sectionStyle, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "16px" }}>
+      <div style={{ ...sectionStyle, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "16px", marginBottom: "20px" }}>
         {plants.length === 1 ? (
           <div>
-            <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "2px" }}>Plant</div>
-            <div style={{ fontSize: "17px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{plants[0].name}</div>
+            <div style={{ ...labelStyle }}>Plant</div>
+            <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{plants[0].name}</div>
           </div>
         ) : (
           <div style={{ minWidth: "150px" }}>
-            <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "2px" }}>Plant</div>
-            <select
-              style={{ ...inputStyle, marginBottom: 0, width: "auto", minWidth: "150px" }}
-              value={plantId}
-              onChange={(e) => setPlantId(e.target.value)}
-              required
-            >
-              <option value="">-- Select your plant --</option>
-              {plants.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
-            </select>
+            <label style={labelStyle}>Plant
+              <select
+                style={{ ...inputStyle, marginBottom: 0, width: "auto", minWidth: "150px" }}
+                value={plantId}
+                onChange={(e) => setPlantId(e.target.value)}
+                required
+              >
+                <option value="">-- Select your plant --</option>
+                {plants.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+              </select>
+            </label>
           </div>
         )}
         <div>
-          <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginBottom: "2px" }}>Date</div>
-          <DateInput
-            style={{ ...inputStyle, marginBottom: 0, width: "auto" }}
-            value={entryDate}
-            onChange={(e) => setEntryDate(e.target.value)}
-            required
-          />
+          <label style={labelStyle}>Date
+            <DateInput
+              style={{ ...inputStyle, marginBottom: 0, width: "auto" }}
+              value={entryDate}
+              onChange={(e) => setEntryDate(e.target.value)}
+              required
+            />
+          </label>
         </div>
       </div>
 
@@ -630,20 +643,20 @@ export default function ProductionForm() {
         const hasBrk = todayEntries.some((e) => e.type === "Breakage");
         const allDone = hasProd && hasDisp;
         return (
-          <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasProd ? "#16a34a" : "var(--border-color, #e2e8f0)"}`, backgroundColor: hasProd ? "#dcfce7" : "var(--bg-card, #ffffff)", color: hasProd ? "#16a34a" : "var(--text-secondary, #64748b)", fontWeight: 600 }}>
-              {hasProd ? "✓" : "○"} Production
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasDisp ? "#16a34a" : "var(--border-color, #e2e8f0)"}`, backgroundColor: hasDisp ? "#dcfce7" : "var(--bg-card, #ffffff)", color: hasDisp ? "#16a34a" : "var(--text-secondary, #64748b)", fontWeight: 600 }}>
-              {hasDisp ? "✓" : "○"} Dispatch
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", padding: "4px 10px", borderRadius: "6px", border: `1px solid ${hasBrk ? "#16a34a" : "var(--border-color, #e2e8f0)"}`, backgroundColor: hasBrk ? "#dcfce7" : "var(--bg-card, #ffffff)", color: hasBrk ? "#16a34a" : "var(--text-secondary, #64748b)", fontWeight: 600 }}>
-              {hasBrk ? "✓" : "○"} Breakage
-            </div>
+          <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+            {[
+              { label: "Production", done: hasProd },
+              { label: "Dispatch", done: hasDisp },
+              { label: "Breakage", done: hasBrk },
+            ].map(({ label, done }) => (
+              <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 500, padding: "6px 12px", borderRadius: RADII.PILL, border: `1px solid ${done ? COLOURS.GREEN : COLOURS.HAIRLINE}`, backgroundColor: done ? COLOURS.SUCCESS_SOFT : COLOURS.CARD, color: done ? COLOURS.GREEN : COLOURS.SLATE }}>
+                {done ? "✓" : "○"} {label}
+              </div>
+            ))}
             {allDone ? (
-              <span style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a", padding: "4px 0", display: "flex", alignItems: "center" }}>All submitted for today</span>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.GREEN, padding: "6px 0", display: "flex", alignItems: "center" }}>All submitted for today</span>
             ) : (
-              <span style={{ fontSize: "13px", fontWeight: 600, color: "#d97706", padding: "4px 0", display: "flex", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", fontWeight: 500, color: COLOURS.AMBER, padding: "6px 0", display: "flex", alignItems: "center" }}>
                 {!hasProd && !hasDisp ? "Production and Dispatch needed" : !hasProd ? "Production needed" : "Dispatch needed"}
               </span>
             )}
@@ -659,21 +672,21 @@ export default function ProductionForm() {
             <p style={hint}>Count ALL poles produced, including any that broke. Required daily.</p>
             {!isMeter ? (
               <>
-                <label>31 ft produced<input type="number" min="0" style={inputStyle} value={prod31} onChange={(e) => setProd31(e.target.value)} placeholder="0" /></label>
-                <label>36 ft produced<input type="number" min="0" style={inputStyle} value={prod36} onChange={(e) => setProd36(e.target.value)} placeholder="0" /></label>
-                <label>45 ft produced<input type="number" min="0" style={inputStyle} value={prod45} onChange={(e) => setProd45(e.target.value)} placeholder="0" /></label>
+                <label style={labelStyle}>31 ft produced<input type="number" min="0" style={inputStyle} value={prod31} onChange={(e) => setProd31(e.target.value)} placeholder="0" /></label>
+                <label style={labelStyle}>36 ft produced<input type="number" min="0" style={inputStyle} value={prod36} onChange={(e) => setProd36(e.target.value)} placeholder="0" /></label>
+                <label style={labelStyle}>45 ft produced<input type="number" min="0" style={inputStyle} value={prod45} onChange={(e) => setProd45(e.target.value)} placeholder="0" /></label>
               </>
             ) : (
-              <label>Single-phase meters produced<input type="number" min="0" style={inputStyle} value={prodMeter} onChange={(e) => setProdMeter(e.target.value)} placeholder="0" /></label>
+              <label style={labelStyle}>Single-phase meters produced<input type="number" min="0" style={inputStyle} value={prodMeter} onChange={(e) => setProdMeter(e.target.value)} placeholder="0" /></label>
             )}
 
             {/* PO allocation */}
             {plantPOs.length > 0 && (
               <div style={{ marginTop: "10px" }}>
-                <label style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-secondary, #64748b)" }}>
+                <label style={labelStyle}>
                   Which PO is this production for?
                   {loadingPOs ? (
-                    <p style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "4px" }}>Loading POs…</p>
+                    <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "4px" }}>Loading POs…</p>
                   ) : (
                     <select
                       value={selectedPOId}
@@ -713,14 +726,14 @@ export default function ProductionForm() {
           <div style={sectionStyle}>
             <h3 style={h3}>Breakage today</h3>
             <p style={hint}>Of the production above, how many broke? Pick a reason for each size that broke.</p>
-            <label>31 ft broken<input type="number" min="0" style={inputStyle} value={brk31} onChange={(e) => setBrk31(e.target.value)} placeholder="0" /></label>
+            <label style={labelStyle}>31 ft broken<input type="number" min="0" style={inputStyle} value={brk31} onChange={(e) => setBrk31(e.target.value)} placeholder="0" /></label>
             {Number(brk31) > 0 && <ReasonSelect value={reason31} onChange={setReason31} size="31 ft" />}
-            <label>36 ft broken<input type="number" min="0" style={inputStyle} value={brk36} onChange={(e) => setBrk36(e.target.value)} placeholder="0" /></label>
+            <label style={labelStyle}>36 ft broken<input type="number" min="0" style={inputStyle} value={brk36} onChange={(e) => setBrk36(e.target.value)} placeholder="0" /></label>
             {Number(brk36) > 0 && <ReasonSelect value={reason36} onChange={setReason36} size="36 ft" />}
-            <label>45 ft broken<input type="number" min="0" style={inputStyle} value={brk45} onChange={(e) => setBrk45(e.target.value)} placeholder="0" /></label>
+            <label style={labelStyle}>45 ft broken<input type="number" min="0" style={inputStyle} value={brk45} onChange={(e) => setBrk45(e.target.value)} placeholder="0" /></label>
             {Number(brk45) > 0 && <ReasonSelect value={reason45} onChange={setReason45} size="45 ft" />}
             {(reason31 === "Other" || reason36 === "Other" || reason45 === "Other") && (
-              <label>Other — please specify<input type="text" style={inputStyle} value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} placeholder="Describe the other reason" /></label>
+              <label style={labelStyle}>Other — please specify<input type="text" style={inputStyle} value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} placeholder="Describe the other reason" /></label>
             )}
             <div style={btnRow}>
               <button type="button" onClick={() => submitBreakage(false)} disabled={savingSection === "breakage"} style={submitBtn("breakage")}>
@@ -741,7 +754,7 @@ export default function ProductionForm() {
             <p style={hint}>Enter the authority letter number to look up the contractor and remaining balance.</p>
 
             {/* Letter number lookup */}
-            <label style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>
+            <label style={labelStyle}>
               Authority letter number
               <input
                 type="text"
@@ -752,19 +765,19 @@ export default function ProductionForm() {
               />
             </label>
 
-            {lookingUpLetter && <p style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginBottom: "8px" }}>Looking up letter…</p>}
-            {letterError && <p style={{ fontSize: "14px", color: "#dc2626", marginBottom: "8px", fontWeight: 600 }}>{letterError}</p>}
+            {lookingUpLetter && <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "8px" }}>Looking up letter…</p>}
+            {letterError && <p style={{ fontSize: "13px", color: COLOURS.RED, marginBottom: "8px", fontWeight: 600 }}>{letterError}</p>}
 
             {letterLookup && (
-              <div style={{ border: "1px solid #bbf7d0", borderRadius: "8px", padding: "10px 12px", backgroundColor: "#f0fdf4", marginBottom: "10px" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: "#15803d", marginBottom: "4px" }}>Letter found ✓</div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>
+              <div style={{ border: `1px solid ${COLOURS.GREEN}`, borderRadius: RADII.CARD, padding: "12px 14px", backgroundColor: COLOURS.SUCCESS_SOFT, marginBottom: "10px" }}>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.GREEN, marginBottom: "4px" }}>Letter found ✓</div>
+                <div style={{ fontSize: "13.5px", fontWeight: 600, color: COLOURS.NAVY }}>
                   {letterLookup.customer_name} — PO #{letterLookup.po_number}
                 </div>
-                <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>
+                <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
                   Contractor: {letterLookup.contractor_name}
                 </div>
-                <div style={{ marginTop: "6px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                <div style={{ marginTop: "8px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
                   {[
                     { size: "31ft", authorized: letterLookup.qty_31, remaining: letterLookup.remaining_31 },
                     { size: "36ft", authorized: letterLookup.qty_36, remaining: letterLookup.remaining_36 },
@@ -772,12 +785,12 @@ export default function ProductionForm() {
                     { size: "45ft", authorized: letterLookup.qty_45, remaining: letterLookup.remaining_45 },
                     { size: "Mtr", authorized: letterLookup.qty_meter, remaining: letterLookup.remaining_meter },
                   ].filter((s) => s.authorized > 0).map((s) => (
-                    <div key={s.size} style={{ padding: "4px 10px", borderRadius: "6px", backgroundColor: s.remaining > 0 ? "#dcfce7" : "#fef2f2", border: `1px solid ${s.remaining > 0 ? "#86efac" : "#fecaca"}` }}>
-                      <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-secondary, #64748b)" }}>{s.size}</div>
-                      <div style={{ fontSize: "13px", fontWeight: 700, color: s.remaining > 0 ? "#15803d" : "#dc2626" }}>
+                    <div key={s.size} style={{ padding: "6px 10px", borderRadius: RADII.SM, backgroundColor: s.remaining > 0 ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, border: `1px solid ${s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED}` }}>
+                      <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.size}</div>
+                      <div style={{ fontSize: "14px", fontWeight: 600, color: s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED, fontVariantNumeric: "tabular-nums" }}>
                         {s.remaining} left
                       </div>
-                      <div style={{ fontSize: "11px", color: "var(--text-secondary, #64748b)" }}>of {s.authorized}</div>
+                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>of {s.authorized}</div>
                     </div>
                   ))}
                 </div>
@@ -802,11 +815,11 @@ export default function ProductionForm() {
             {/* Released by + vehicle — show when dispatch qty entered */}
             {letterLookup && dispatchHasQty && (
               <>
-                <label style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>
+                <label style={labelStyle}>
                   Released by *
                   <input type="text" style={inputStyle} value={releasedBy} onChange={(e) => setReleasedBy(e.target.value)} placeholder="Name of person who released from store" />
                 </label>
-                <label style={{ fontWeight: 600, fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>
+                <label style={labelStyle}>
                   Vehicle number (optional)
                   <input type="text" style={inputStyle} value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} placeholder="e.g. ABX-123" />
                 </label>
@@ -830,9 +843,9 @@ export default function ProductionForm() {
           <div style={sectionStyle}>
             <h3 style={h3}>Broken poles processed for scrap today</h3>
             <p style={hint}>Broken poles removed/processed. (Reduces broken-pole stock.)</p>
-            <label>31 ft processed<input type="number" min="0" style={inputStyle} value={scr31} onChange={(e) => setScr31(e.target.value)} placeholder="0" /></label>
-            <label>36 ft processed<input type="number" min="0" style={inputStyle} value={scr36} onChange={(e) => setScr36(e.target.value)} placeholder="0" /></label>
-            <label>45 ft processed<input type="number" min="0" style={inputStyle} value={scr45} onChange={(e) => setScr45(e.target.value)} placeholder="0" /></label>
+            <label style={labelStyle}>31 ft processed<input type="number" min="0" style={inputStyle} value={scr31} onChange={(e) => setScr31(e.target.value)} placeholder="0" /></label>
+            <label style={labelStyle}>36 ft processed<input type="number" min="0" style={inputStyle} value={scr36} onChange={(e) => setScr36(e.target.value)} placeholder="0" /></label>
+            <label style={labelStyle}>45 ft processed<input type="number" min="0" style={inputStyle} value={scr45} onChange={(e) => setScr45(e.target.value)} placeholder="0" /></label>
             <div style={btnRow}>
               <button type="button" onClick={() => submitScrap(false)} disabled={savingSection === "scrap"} style={submitBtn("scrap")}>
                 {savingSection === "scrap" ? "Saving…" : "Submit Scrap"}
@@ -850,15 +863,15 @@ export default function ProductionForm() {
           <div style={sectionStyle}>
             <h3 style={h3}>Machine status today</h3>
             <p style={hint}>Report any machine that is down or partially working today. If everything is running normally, click "Nothing to report".</p>
-            <label>Machine name<input type="text" style={inputStyle} value={machineName} onChange={(e) => setMachineName(e.target.value)} placeholder="e.g. Spinning Machine #2" /></label>
-            <label>Status
+            <label style={labelStyle}>Machine name<input type="text" style={inputStyle} value={machineName} onChange={(e) => setMachineName(e.target.value)} placeholder="e.g. Spinning Machine #2" /></label>
+            <label style={labelStyle}>Status
               <select style={inputStyle} value={machineStatus} onChange={(e) => setMachineStatus(e.target.value)}>
                 {MACHINE_STATUSES.map((s) => (<option key={s}>{s}</option>))}
               </select>
             </label>
-            <label>Expected resolution<input type="text" style={inputStyle} value={machineExpectedResolution} onChange={(e) => setMachineExpectedResolution(e.target.value)} placeholder="e.g. Today 5pm / Tomorrow / Waiting for part" /></label>
-            <label>Issue description<textarea style={{ ...inputStyle, height: "80px" }} value={machineDescription} onChange={(e) => setMachineDescription(e.target.value)} placeholder="What happened?" /></label>
-            <label>Action taken<textarea style={{ ...inputStyle, height: "70px" }} value={machineActionTaken} onChange={(e) => setMachineActionTaken(e.target.value)} placeholder="What has been done so far?" /></label>
+            <label style={labelStyle}>Expected resolution<input type="text" style={inputStyle} value={machineExpectedResolution} onChange={(e) => setMachineExpectedResolution(e.target.value)} placeholder="e.g. Today 5pm / Tomorrow / Waiting for part" /></label>
+            <label style={labelStyle}>Issue description<textarea style={{ ...inputStyle, height: "80px", resize: "vertical" as const }} value={machineDescription} onChange={(e) => setMachineDescription(e.target.value)} placeholder="What happened?" /></label>
+            <label style={labelStyle}>Action taken<textarea style={{ ...inputStyle, height: "70px", resize: "vertical" as const }} value={machineActionTaken} onChange={(e) => setMachineActionTaken(e.target.value)} placeholder="What has been done so far?" /></label>
             <div style={btnRow}>
               <button type="button" onClick={() => submitMachine(false)} disabled={savingSection === "machine"} style={submitBtn("machine")}>
                 {savingSection === "machine" ? "Saving…" : "Submit Machine Issue"}
@@ -874,48 +887,47 @@ export default function ProductionForm() {
 
       {/* General notes */}
       {plantId && (
-        <div style={sectionStyle}>
-          <label>General notes (optional)<textarea style={{ ...inputStyle, height: "60px" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any issues, e.g. half day, machine down" /></label>
+        <div style={{ ...sectionStyle, marginTop: "20px" }}>
+          <label style={labelStyle}>General notes (optional)
+            <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" as const }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any issues, e.g. half day, machine down" />
+          </label>
         </div>
       )}
 
       {/* My Past Entries */}
       {plantId && pastEntries.length > 0 && (
         <div style={{ marginTop: "20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary, #1e293b)", margin: 0, paddingLeft: "9px", borderLeft: "3px solid var(--text-primary, #1e293b)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <h2 style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "18px", fontWeight: 600, color: COLOURS.NAVY, margin: 0, letterSpacing: "-0.01em" }}>
               My Past Entries (Last 14 Days)
             </h2>
             <button
               onClick={() => setShowHistory(!showHistory)}
-              style={{
-                backgroundColor: "var(--bg-card, #ffffff)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px",
-                padding: "6px 14px", fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)", cursor: "pointer",
-              }}
+              style={{ backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "6px 14px", fontSize: "12px", fontWeight: 500, color: COLOURS.NAVY, cursor: "pointer" }}
             >
               {showHistory ? "Hide" : `Show (${pastEntries.length})`}
             </button>
           </div>
 
           {sectionMsg?.section === "history" && (
-            <div style={{ padding: "8px 12px", marginBottom: "8px", borderRadius: "6px", fontSize: "14px", fontWeight: 600, backgroundColor: sectionMsg.ok ? "#dcfce7" : "#fef2f2", color: sectionMsg.ok ? "#16a34a" : "#dc2626" }}>
+            <div style={{ padding: "10px 14px", marginBottom: "8px", borderRadius: RADII.CARD, fontSize: "13px", fontWeight: 600, backgroundColor: sectionMsg.ok ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, color: sectionMsg.ok ? COLOURS.GREEN : COLOURS.RED, border: `1px solid ${sectionMsg.ok ? COLOURS.GREEN : COLOURS.RED}` }}>
               {sectionMsg.text}
             </div>
           )}
           {showHistory && (
-            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
+            <div style={{ ...cardStyle, borderRadius: RADII.CARD, padding: 0, overflow: "hidden" }}>
               <div style={{ overflowX: "auto" }}>
                 <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "640px" }}>
                   <thead>
-                    <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
-                      <th style={histTh}>Plant</th>
-                      <th style={histTh}>Date</th>
-                      <th style={histTh}>Type</th>
-                      <th style={{ ...histTh, textAlign: "center" }} colSpan={selectedPlant?.type === "meter" ? 4 : 3}>Pole size (qty)</th>
-                      <th style={{ ...histTh, textAlign: "right" }}>Total</th>
-                      {canDelete && <th style={histTh}></th>}
+                    <tr>
+                      <th style={tableHeaderStyle}>Plant</th>
+                      <th style={tableHeaderStyle}>Date</th>
+                      <th style={tableHeaderStyle}>Type</th>
+                      <th style={{ ...tableHeaderStyle, textAlign: "center" }} colSpan={selectedPlant?.type === "meter" ? 4 : 3}>Pole size (qty)</th>
+                      <th style={{ ...tableHeaderStyle, textAlign: "right" }}>Total</th>
+                      {canDelete && <th style={tableHeaderStyle}></th>}
                     </tr>
-                    <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                    <tr>
                       <th style={histThSub}></th>
                       <th style={histThSub}></th>
                       <th style={histThSub}></th>
@@ -930,38 +942,36 @@ export default function ProductionForm() {
                   <tbody>
                     {pastEntries.map((e, i) => {
                       const total = (e.qty_31 || 0) + (e.qty_36 || 0) + (e.qty_45 || 0) + (e.qty_meter || 0);
-                      const typeColor = e.type === "Production" ? "#16a34a" : e.type === "Dispatch" ? "#2563eb" : "#dc2626";
+                      const typeColor = e.type === "Production" ? COLOURS.GREEN : e.type === "Dispatch" ? COLOURS.BLUE : COLOURS.RED;
+                      const typeSoft = e.type === "Production" ? COLOURS.SUCCESS_SOFT : e.type === "Dispatch" ? "#EEF1FC" : COLOURS.DANGER_SOFT;
                       const isToday = e.entry_date === new Date().toISOString().slice(0, 10);
                       return (
                         <tr
                           key={`${e.entry_date}-${e.type}-${i}`}
-                          style={{
-                            backgroundColor: i % 2 === 1 ? "var(--bg-card-hover, #f8fafc)" : "transparent",
-                            borderLeft: `3px solid ${typeColor}`,
-                          }}
+                          style={{ backgroundColor: i % 2 === 1 ? COLOURS.CARD_ALT : "transparent" }}
                         >
-                          <td style={{ ...histTd, fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{selectedPlant?.name || "—"}</td>
+                          <td style={{ ...histTd, fontWeight: 600, color: COLOURS.NAVY }}>{selectedPlant?.name || "—"}</td>
                           <td style={histTd}>
                             {formatDateUK(e.entry_date)}
-                            {isToday && <span style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 700, color: "#2563eb" }}>Today</span>}
+                            {isToday && <span style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 600, color: COLOURS.BLUE }}>Today</span>}
                           </td>
                           <td style={histTd}>
-                            <span style={{ fontSize: "13px", fontWeight: 700, color: "white", backgroundColor: typeColor, padding: "2px 8px", borderRadius: "8px" }}>
+                            <span style={{ fontSize: "11px", fontWeight: 600, color: typeColor, backgroundColor: typeSoft, padding: "3px 8px", borderRadius: RADII.PILL }}>
                               {e.type}
                             </span>
                           </td>
-                          <td style={{ ...histTd, textAlign: "center", color: e.qty_31 ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #94a3b8)" }}>{e.qty_31 || "–"}</td>
-                          <td style={{ ...histTd, textAlign: "center", color: e.qty_36 ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #94a3b8)" }}>{e.qty_36 || "–"}</td>
-                          <td style={{ ...histTd, textAlign: "center", color: e.qty_45 ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #94a3b8)" }}>{e.qty_45 || "–"}</td>
+                          <td style={{ ...histTd, textAlign: "center", fontFamily: "var(--font-mono)", color: e.qty_31 ? COLOURS.NAVY : COLOURS.INK_400 }}>{e.qty_31 || "–"}</td>
+                          <td style={{ ...histTd, textAlign: "center", fontFamily: "var(--font-mono)", color: e.qty_36 ? COLOURS.NAVY : COLOURS.INK_400 }}>{e.qty_36 || "–"}</td>
+                          <td style={{ ...histTd, textAlign: "center", fontFamily: "var(--font-mono)", color: e.qty_45 ? COLOURS.NAVY : COLOURS.INK_400 }}>{e.qty_45 || "–"}</td>
                           {selectedPlant?.type === "meter" && (
-                            <td style={{ ...histTd, textAlign: "center", color: e.qty_meter ? "var(--text-primary, #1e293b)" : "var(--text-secondary, #94a3b8)" }}>{e.qty_meter || "–"}</td>
+                            <td style={{ ...histTd, textAlign: "center", fontFamily: "var(--font-mono)", color: e.qty_meter ? COLOURS.NAVY : COLOURS.INK_400 }}>{e.qty_meter || "–"}</td>
                           )}
-                          <td style={{ ...histTd, fontWeight: 700, color: "var(--text-primary, #1e293b)", textAlign: "right" }}>{total}</td>
+                          <td style={{ ...histTd, fontWeight: 700, color: COLOURS.NAVY, textAlign: "right", fontFamily: "var(--font-mono)" }}>{total}</td>
                           {canDelete && (
                             <td style={histTd}>
                               <button onClick={() => deleteEntry(e)} style={{
-                                backgroundColor: "transparent", border: "1px solid #dc2626", color: "#dc2626",
-                                borderRadius: "4px", padding: "2px 8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+                                backgroundColor: "transparent", border: `1px solid ${COLOURS.RED}`, color: COLOURS.RED,
+                                borderRadius: RADII.XS, padding: "2px 8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
                               }}>×</button>
                             </td>
                           )}
@@ -979,14 +989,10 @@ export default function ProductionForm() {
   );
 }
 
-const histTh: React.CSSProperties = {
-  textAlign: "left", borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "6px 10px 2px",
-  fontSize: "16px", color: "var(--text-secondary, #64748b)", fontWeight: 700,
-};
 const histThSub: React.CSSProperties = {
-  textAlign: "left", borderBottom: "1px solid var(--border-color, #e2e8f0)", padding: "0 10px 6px",
-  fontSize: "12px", color: "var(--text-secondary, #94a3b8)", fontWeight: 600,
+  textAlign: "left", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, padding: "0 12px 8px",
+  fontSize: "11px", color: COLOURS.INK_400, fontWeight: 500, backgroundColor: COLOURS.CARD_ALT,
 };
 const histTd: React.CSSProperties = {
-  borderBottom: "1px solid var(--border-light, #f1f5f9)", padding: "7px 10px", fontSize: "15px",
+  borderBottom: `1px solid ${COLOURS.HAIRLINE}`, padding: "10px 12px", fontSize: "13px",
 };
