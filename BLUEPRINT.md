@@ -90,9 +90,15 @@ app/
 │
 ├── finance/
 │   ├── page.tsx                      Finance index — company picker, dept budgets, bulk upload
+│   │                                 Restyled to Genspark design system (2026-07-06):
+│   │                                 hairline cards, kicker labels, pill buttons, no accent strips
 │   ├── FinanceManager.tsx            Per-company finance dashboard: daily position, opening balance,
 │   │                                 cash plan, monthly budgets, charts. "Reconnect Google" button
 │   │                                 returns user to company page after OAuth
+│   │                                 Restyled to Genspark design system (2026-07-06):
+│   │                                 Net Position = dark hero card (NAVY bg, Inter Tight 44px);
+│   │                                 daily table uses JetBrains Mono; all hex → COLOURS tokens;
+│   │                                 modals: RADII.CARD + kicker labels; hairline-only borders
 │   ├── [company]/page.tsx            Dynamic route — passes slug to FinanceManager
 │   └── upload/page.tsx               Manual PDF upload — drag-and-drop cash flow + bank position
 │                                     PDFs, auto-detects company, shows per-file save status
@@ -272,7 +278,8 @@ api/
 ## 3. Design System
 
 **Source:** Genspark design system v1 (`designs/Design System.html` + 22 page designs in `designs/`).
-**Installed:** 2026-07-05. Foundation only — tokens and shared components updated. Individual pages not yet restyled.
+**Installed:** 2026-07-05. Foundation only — tokens and shared components updated.
+**Pages restyled:** /home (2026-07-05), /dashboard (2026-07-05), /finance (2026-07-06).
 **Design map:** `designs/DESIGN_MAP.md` — maps every Genspark HTML file to its code file.
 
 ### Colours (SharedUI.tsx — COLOURS constant)

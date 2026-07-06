@@ -4,6 +4,30 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-06 — Restyle Finance page to Genspark design system
+
+**Files changed:** `app/finance/FinanceManager.tsx`, `app/finance/page.tsx`
+
+### What changed (visual only — no logic, queries, or data flows touched)
+
+- **15 hardcoded hex values replaced** with `COLOURS.*` tokens (`#2563eb`, `#16a34a`, `#dc2626`, `#d97706`, alert palette, etc.)
+- **Net Position hero card** — dark NAVY background, white text, Inter Tight 36px tabular-nums; signals the primary CEO cash figure
+- **3 other summary cards** — hairline borders (no colour accent strips), Inter Tight 22px numbers, uppercase kicker labels (10.5px), 20px padding
+- **Edit buttons on summary cards** — secondary style: white bg, hairline border, `RADII.PILL` radius, NAVY text
+- **Daily position table** — JetBrains Mono for all amount columns, tabular-nums, kicker-style headers, HAIRLINE row dividers; DANGER_SOFT bg on mismatch rows
+- **Charts** — grid lines use `COLOURS.HAIRLINE`; bar/line fills use `COLOURS.BLUE`, `COLOURS.GREEN`, `COLOURS.RED`
+- **Alert banner** — `COLOURS.DANGER_SOFT` / `COLOURS.WARNING_SOFT` backgrounds, `COLOURS.RED` / `COLOURS.AMBER` for text and border
+- **All card containers** — `borderRadius: "14px"`, `24px` padding, `COLOURS.HAIRLINE` borders, no drop shadows, no top-accent colour strips
+- **Modals (Opening Balance, Monthly Cash Plan)** — `RADII.CARD` (14px), 24px padding, hairline border, kicker labels on fields, pill close button
+- **Tabs (Upload PDF / Manual Entry, Upload Excel / Manual Entry)** — 1px hairline underline, weight 600 active state
+- **PDF drop zone** — `CARD_ALT` background, `HAIRLINE` dashed border, no accent colour on drag-over
+- **Budget mini-cards** — `CARD_ALT` bg, kicker labels, Inter Tight numbers, no accent strips
+- **Department budget rows** — JetBrains Mono for amounts, `COLOURS.AMBER` for 80% threshold progress bar
+- **`page.tsx` company picker cards** — 14px radius, hairline border, no top accent strip, no hover shadow
+- **`page.tsx` bulk upload + budget sections** — matching card treatment, pill buttons
+
+---
+
 ## 2026-07-05 — Restyle Operations Dashboard to Genspark design system
 
 **Files changed:** `app/dashboard/DashboardView.tsx`, `app/dashboard/MonthlyTargets.tsx`
