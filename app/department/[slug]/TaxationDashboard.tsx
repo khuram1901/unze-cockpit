@@ -53,7 +53,13 @@ type EditForm = {
 
 const STATUSES = ["pending", "won", "lost", "settled"];
 const NOTICE_TYPES = ["income tax", "sales tax", "withholding tax", "FBR notice", "provincial tax", "customs", "other"];
-const COMPANIES = ["Unze Trading PVT Limited", "Imperial Footwear PVT Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang"];
+const COMPANIES = ["Unze Trading PVT Limited", "Imperial Footwear Pvt Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang"];
+
+function normaliseCompanyName(name: string): string {
+  const n = name.trim();
+  if (n.toLowerCase().startsWith("imperial footwear")) return "Imperial Footwear Pvt Limited";
+  return n;
+}
 const CONSULTANTS = ["Rana Munir", "Rana Shehbaz", "Hashim Butt", "Others"];
 const NOTICE_STATUSES = ["Order", "Notice", "Show Cause"] as const;
 const LEGAL_STAGES = ["Authority", "Department", "CIR Appeal", "Tribunal", "High Court", "Supreme Court"] as const;
@@ -281,7 +287,7 @@ export default function TaxationDashboard() {
 
   const companyExposureMap = new Map<string, number>();
   for (const i of pending) {
-    const c = i.company_name || "Unknown";
+    const c = normaliseCompanyName(i.company_name || "Unknown");
     companyExposureMap.set(c, (companyExposureMap.get(c) || 0) + (i.financial_exposure || 0));
   }
   const exposureData = Array.from(companyExposureMap.entries())
@@ -363,7 +369,7 @@ export default function TaxationDashboard() {
       {!loading && items.length > 0 && (() => {
         const companyDonut = Array.from(
           pending.reduce((map, n) => {
-            const c = n.company_name || "Unknown";
+            const c = normaliseCompanyName(n.company_name || "Unknown");
             map.set(c, (map.get(c) || 0) + 1);
             return map;
           }, new Map<string, number>())
@@ -550,7 +556,7 @@ export default function TaxationDashboard() {
       ) : (() => {
         const groups = new Map<string, Notice[]>();
         for (const item of filteredItems) {
-          const c = item.company_name || "Unassigned";
+          const c = normaliseCompanyName(item.company_name || "Unassigned");
           if (!groups.has(c)) groups.set(c, []);
           groups.get(c)!.push(item);
         }
