@@ -148,11 +148,12 @@ function TrafficDot({ color, title, onClick }: { color: string; title: string; o
   );
 }
 
-function BankFacilityCard({ bank, allGuarantees, onEdit, onDelete }: {
+function BankFacilityCard({ bank, allGuarantees, onEdit, onDelete, canManage }: {
   bank: BankGroup;
   allGuarantees: Guarantee[];
   onEdit: (f: Facility) => void;
   onDelete: (f: Facility) => void;
+  canManage: boolean;
 }) {
   const pct = bank.bank_utilisation_pct;
   const barColor = pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#16a34a";
@@ -188,16 +189,18 @@ function BankFacilityCard({ bank, allGuarantees, onEdit, onDelete }: {
             const sfGuarantees = allGuarantees.filter((g) => g.facility_id === sf.id && g.status === "Active");
             return (
               <div key={sf.id} style={{ padding: "12px 14px", backgroundColor: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
-                {/* Traffic light controls + name */}
+                {/* Facility header: name + edit/delete buttons */}
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
-                  <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-                    <TrafficDot color="#ff5f57" title="Delete this facility" onClick={() => onDelete(sf)} />
-                    <TrafficDot color="#ffbd2e" title="Edit this facility" onClick={() => onEdit(sf)} />
-                  </div>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary,#1e293b)", marginLeft: "4px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary,#1e293b)", flex: 1 }}>
                     {sf.facility_name || sf.facility_type}
                   </div>
-                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "auto" }}>{sf.facility_type}</div>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{sf.facility_type}</div>
+                  {canManage && (
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <button onClick={() => onEdit(sf)} style={{ fontSize: "12px", fontWeight: 600, padding: "3px 10px", borderRadius: "6px", border: `1px solid ${COLOURS.NAVY}`, backgroundColor: "transparent", color: COLOURS.NAVY, cursor: "pointer" }}>Edit</button>
+                      <button onClick={() => onDelete(sf)} style={{ fontSize: "12px", fontWeight: 600, padding: "3px 10px", borderRadius: "6px", border: "1px solid #dc2626", backgroundColor: "transparent", color: "#dc2626", cursor: "pointer" }}>Delete</button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Utilisation bar */}
@@ -479,12 +482,6 @@ export default function GuaranteesPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) {
         loadUserCtx(user.email).then((ctx) => {
-          console.log("PERMISSIONS DEBUG:", {
-            email: user.email,
-            ctx,
-            canManageResult: canManageGuarantees(ctx),
-            canViewFinancialsResult: canViewGuaranteeFinancials(ctx),
-          });
           setShowFinancials(canViewGuaranteeFinancials(ctx));
           setCanManage(canManageGuarantees(ctx));
           load();
@@ -874,7 +871,7 @@ export default function GuaranteesPage() {
 
             {banks.length > 0 ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} allGuarantees={guarantees} onEdit={startEditFacility} onDelete={deleteFacility} />)}
+                {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} allGuarantees={guarantees} onEdit={startEditFacility} onDelete={deleteFacility} canManage={canManage} />)}
               </div>
             ) : !loading && (
               <div style={{ padding: "18px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px", border: "1px dashed #e2e8f0", borderRadius: "8px" }}>
