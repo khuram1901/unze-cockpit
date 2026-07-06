@@ -6,7 +6,7 @@ import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
@@ -161,10 +161,17 @@ export default function HRDashboard() {
       {!loading && (
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px" }}>
-            <CountCard label="Open Positions" value={open.length} color={COLOURS.AMBER} />
-            <CountCard label="Filled" value={filled} color={COLOURS.GREEN} />
-            <CountCard label="Open 60+ Days" value={longOpen.length} color={COLOURS.RED} />
-            <CountCard label="Total" value={items.length} color={COLOURS.BLUE} />
+            {[
+              { label: "Open Positions", value: open.length },
+              { label: "Filled",         value: filled },
+              { label: "Open 60+ Days",  value: longOpen.length },
+              { label: "Total",          value: items.length },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ ...cardStyle, padding: "16px 20px" }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "10px" }}>{label}</div>
+                <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY }}>{value.toLocaleString()}</div>
+              </div>
+            ))}
           </div>
           {donutData.length > 0 && (
             <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "16px 20px", backgroundColor: COLOURS.CARD }}>

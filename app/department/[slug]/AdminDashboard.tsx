@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useConfirm } from "../../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useConfirm } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { canReviewTasks, canCreateAssignments, canDeleteTask, isTaskProtected, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
@@ -188,10 +188,17 @@ export default function AdminDashboard() {
       {/* KPI Cards */}
       {!loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-          <CountCard label="Open" value={openTasks.length} color={COLOURS.AMBER} />
-          <CountCard label="Overdue" value={overdueTasks.length} color={COLOURS.RED} />
-          <CountCard label="Urgent/High" value={urgentCount} color={COLOURS.RED} />
-          <CountCard label="Completed" value={completed} color={COLOURS.GREEN} />
+          {[
+            { label: "Open",        value: openTasks.length },
+            { label: "Overdue",     value: overdueTasks.length },
+            { label: "Urgent/High", value: urgentCount },
+            { label: "Completed",   value: completed },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ ...cardStyle, padding: "16px 20px" }}>
+              <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "10px" }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY }}>{value.toLocaleString()}</div>
+            </div>
+          ))}
         </div>
       )}
 
