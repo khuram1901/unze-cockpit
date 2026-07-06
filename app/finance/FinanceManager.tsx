@@ -1136,14 +1136,14 @@ function SummaryCard({
           {label}
         </div>
         <div style={{
-          fontSize: "40px", fontWeight: 600, color: valueColor || "#FFFFFF",
+          fontSize: "40px", fontWeight: 600, color: "white",
           fontFamily: DISPLAY, lineHeight: 1, letterSpacing: "-0.02em",
           fontVariantNumeric: "tabular-nums",
         }}>
           {value}
         </div>
         {sub && (
-          <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", marginTop: "6px" }}>
+          <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "6px" }}>
             {sub}
           </div>
         )}
