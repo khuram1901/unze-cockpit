@@ -8,7 +8,6 @@ import DateInput from "../lib/DateInput";
 import {
   COLOURS,
   RADII,
-  SHADOWS,
   cardStyle,
   SectionTitle,
   PageHeader,
@@ -481,12 +480,12 @@ export default function CalendarPage() {
             borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
             backgroundColor: COLOURS.CARD_ALT,
           }}>
-            <button onClick={prevWeek} style={navBtnStyle}>← Prev</button>
+            <button onClick={prevWeek} style={{ backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "5px 14px", fontSize: "12px", fontWeight: 500, color: COLOURS.NAVY, cursor: "pointer" }}>← Prev</button>
             <span style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
               {dayLabel(weekDates[0])} — {dayLabel(weekDates[6])}
               {busyLoading && <span style={{ color: COLOURS.SLATE, fontWeight: 400 }}> (loading…)</span>}
             </span>
-            <button onClick={nextWeek} style={navBtnStyle}>Next →</button>
+            <button onClick={nextWeek} style={{ backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "5px 14px", fontSize: "12px", fontWeight: 500, color: COLOURS.NAVY, cursor: "pointer" }}>Next →</button>
           </div>
 
           {/* Grid */}
@@ -657,13 +656,13 @@ export default function CalendarPage() {
                         <div style={{ display: "flex", gap: "6px" }}>
                           <button
                             onClick={() => updateStatus(r.id, "Approved")}
-                            style={{ padding: "5px 12px", border: `1px solid ${COLOURS.GREEN}`, borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, cursor: "pointer", backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }}
+                            style={{ padding: "5px 12px", border: "none", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, cursor: "pointer", backgroundColor: COLOURS.GREEN, color: "white" }}
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => updateStatus(r.id, "Rejected")}
-                            style={{ padding: "5px 12px", border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, cursor: "pointer", backgroundColor: COLOURS.DANGER_SOFT, color: COLOURS.RED }}
+                            style={{ padding: "5px 12px", border: "none", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, cursor: "pointer", backgroundColor: COLOURS.RED, color: "white" }}
                           >
                             Reject
                           </button>
@@ -716,13 +715,3 @@ export default function CalendarPage() {
   );
 }
 
-const navBtnStyle: React.CSSProperties = {
-  backgroundColor: COLOURS.CARD,
-  border: `1px solid ${COLOURS.HAIRLINE}`,
-  borderRadius: RADII.PILL,
-  padding: "5px 14px",
-  fontSize: "12px",
-  fontWeight: 500,
-  color: COLOURS.NAVY,
-  cursor: "pointer",
-};
