@@ -97,7 +97,7 @@ export default function RecurringTasksPage() {
     e.preventDefault();
     setSaving(true);
     const member = members.find((m) => memberName(m) === assignTo);
-    await supabase.from("recurring_tasks").insert({
+    const { error } = await supabase.from("recurring_tasks").insert({
       description: desc, assigned_to: assignTo || null,
       assigned_to_email: member?.email || null, assigned_to_department: member?.department || null,
       assigned_by: "Recurring Template", priority, project: project || null,
@@ -105,8 +105,12 @@ export default function RecurringTasksPage() {
       day_of_month: frequency === "monthly" ? dayOfMonth : null,
       due_days_after: Number(dueDays) || 3, active: true,
     });
-    logAction("Created", "recurring_tasks", `${desc} (${frequency})`);
     setSaving(false);
+    if (error) {
+      alert("Error saving recurring task: " + error.message);
+      return;
+    }
+    logAction("Created", "recurring_tasks", `${desc} (${frequency})`);
     setDesc(""); setAssignTo(""); setPriority("Normal"); setProject(""); setFrequency("weekly"); setDueDays("3");
     setShowForm(false);
     loadData();
