@@ -35,10 +35,75 @@ export async function GET(request: NextRequest) {
   const poId = searchParams.get("poId");
   const contractorId = searchParams.get("contractorId");
   const letterNumber = searchParams.get("letterNumber");
+  const plantId = searchParams.get("plantId");
+  const listAll = searchParams.get("listAll") === "true";
+
+  // List all active letters for a plant (dispatch dropdown flow)
+  if (listAll && plantId) {
+    // Fetch all letters whose linked PO belongs to this plant
+    const { data: letters, error: lettersErr } = await supabase
+      .from("authority_letters")
+      .select("*, purchase_orders!inner(id, po_number, customer_name, plant_id), contractors(id, name)")
+      .eq("purchase_orders.plant_id", plantId)
+      .order("created_at", { ascending: false });
+
+    if (lettersErr) return Response.json({ error: lettersErr.message }, { status: 500 });
+
+    // Fetch all dispatch_records for these letters in one query
+    const letterIds = (letters || []).map((l) => l.id);
+    const { data: allRecords } = letterIds.length > 0
+      ? await supabase.from("dispatch_records").select("authority_letter_id, qty_31, qty_36, qty_45, qty_meter").in("authority_letter_id", letterIds)
+      : { data: [] };
+
+    const recordsByLetter: Record<string, { qty_31: number; qty_36: number; qty_45: number; qty_meter: number }> = {};
+    for (const r of allRecords || []) {
+      if (!recordsByLetter[r.authority_letter_id]) {
+        recordsByLetter[r.authority_letter_id] = { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
+      }
+      recordsByLetter[r.authority_letter_id].qty_31 += r.qty_31 || 0;
+      recordsByLetter[r.authority_letter_id].qty_36 += r.qty_36 || 0;
+      recordsByLetter[r.authority_letter_id].qty_45 += r.qty_45 || 0;
+      recordsByLetter[r.authority_letter_id].qty_meter += r.qty_meter || 0;
+    }
+
+    const result = (letters || []).map((data) => {
+      const po = data.purchase_orders as { id: string; po_number: string; customer_name: string } | null;
+      const contractor = data.contractors as { id: string; name: string } | null;
+      const dispatched = recordsByLetter[data.id] || { qty_31: 0, qty_36: 0, qty_45: 0, qty_meter: 0 };
+      const opening = {
+        qty_31: data.opening_dispatched_31 || 0,
+        qty_36: data.opening_dispatched_36 || 0,
+        qty_45: data.opening_dispatched_45 || 0,
+        qty_meter: data.opening_dispatched_meter || 0,
+      };
+      return {
+        id: data.id,
+        letter_number: data.letter_number,
+        expiry_date: data.expiry_date || null,
+        issued_by: data.issued_by || "",
+        po_id: po?.id || data.po_id,
+        contractor_id: contractor?.id || data.contractor_id,
+        po_number: po?.po_number || "",
+        customer_name: po?.customer_name || "",
+        contractor_name: contractor?.name || "",
+        qty_31: data.qty_31 || 0,
+        qty_36: data.qty_36 || 0,
+        qty_40: 0,
+        qty_45: data.qty_45 || 0,
+        qty_meter: data.qty_meter || 0,
+        remaining_31: Math.max(0, (data.qty_31 || 0) - opening.qty_31 - dispatched.qty_31),
+        remaining_36: Math.max(0, (data.qty_36 || 0) - opening.qty_36 - dispatched.qty_36),
+        remaining_40: 0,
+        remaining_45: Math.max(0, (data.qty_45 || 0) - opening.qty_45 - dispatched.qty_45),
+        remaining_meter: Math.max(0, (data.qty_meter || 0) - opening.qty_meter - dispatched.qty_meter),
+      };
+    });
+
+    return Response.json({ letters: result });
+  }
 
   // Lookup by letter number (plant member dispatch flow) — returns single letter with remaining balances
   if (letterNumber) {
-    const plantId = searchParams.get("plantId");
     let q = supabase
       .from("authority_letters")
       .select("*, purchase_orders(id, po_number, customer_name, plant_id), contractors(id, name)")

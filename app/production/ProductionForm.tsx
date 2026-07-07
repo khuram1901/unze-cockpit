@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK } from "../lib/dateUtils";
@@ -93,17 +93,16 @@ export default function ProductionForm() {
   const [loadingPOs, setLoadingPOs] = useState(false);
 
   // Dispatch — authority letter mode
-  const [letterNumber, setLetterNumber] = useState("");
-  const [lookingUpLetter, setLookingUpLetter] = useState(false);
+  const [availableLetters, setAvailableLetters] = useState<LetterLookup[]>([]);
+  const [loadingLetters, setLoadingLetters] = useState(false);
+  const [selectedLetterId, setSelectedLetterId] = useState("");
   const [letterLookup, setLetterLookup] = useState<LetterLookup | null>(null);
-  const [letterError, setLetterError] = useState("");
   const [disp31, setDisp31] = useState("");
   const [disp36, setDisp36] = useState("");
   const [disp45, setDisp45] = useState("");
   const [dispMeter, setDispMeter] = useState("");
   const [releasedBy, setReleasedBy] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
-  const letterLookupTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Breakage
   const [brk31, setBrk31] = useState("");
@@ -220,6 +219,27 @@ export default function ProductionForm() {
     loadPOs();
   }, [plantId]);
 
+  // Load available authority letters when plant changes
+  useEffect(() => {
+    if (!plantId) { setAvailableLetters([]); setSelectedLetterId(""); setLetterLookup(null); return; }
+    setLoadingLetters(true);
+    setSelectedLetterId("");
+    setLetterLookup(null);
+    authedFetch(`/api/stock/authority-letters?plantId=${plantId}&listAll=true`)
+      .then((r) => r.json())
+      .then((json) => {
+        const today = new Date().toISOString().slice(0, 10);
+        const active = (json.letters || []).filter((l: LetterLookup) => {
+          const hasBalance = (l.remaining_31 + l.remaining_36 + l.remaining_45 + l.remaining_meter) > 0;
+          const notExpired = !l.expiry_date || l.expiry_date >= today;
+          return hasBalance && notExpired;
+        });
+        setAvailableLetters(active);
+      })
+      .catch(() => setAvailableLetters([]))
+      .finally(() => setLoadingLetters(false));
+  }, [plantId]);
+
   async function loadHistory() {
     if (!plantId) { setPastEntries([]); return; }
     const fourteenAgo = new Date();
@@ -242,36 +262,6 @@ export default function ProductionForm() {
   }
 
   useEffect(() => { loadHistory(); }, [plantId, entryDate]);
-
-  // Debounced authority letter lookup
-  useEffect(() => {
-    if (letterLookupTimeout.current) clearTimeout(letterLookupTimeout.current);
-    if (!letterNumber.trim() || !plantId) {
-      setLetterLookup(null); setLetterError("");
-      return;
-    }
-    letterLookupTimeout.current = setTimeout(() => lookupLetter(letterNumber.trim()), 600);
-    return () => { if (letterLookupTimeout.current) clearTimeout(letterLookupTimeout.current); };
-  }, [letterNumber, plantId]);
-
-  async function lookupLetter(num: string) {
-    setLookingUpLetter(true);
-    setLetterLookup(null);
-    setLetterError("");
-    try {
-      const res = await authedFetch(`/api/stock/authority-letters?letterNumber=${encodeURIComponent(num)}&plantId=${plantId}`);
-      const json = await res.json();
-      if (json.error || !json.letter) {
-        setLetterError("Letter not found. Check the number and try again.");
-      } else {
-        setLetterLookup(json.letter);
-      }
-    } catch {
-      setLetterError("Could not look up letter. Check your connection.");
-    } finally {
-      setLookingUpLetter(false);
-    }
-  }
 
   const selectedPlant = plants.find((p) => p.id === plantId);
   const isMeter = selectedPlant?.type === "meter";
@@ -448,7 +438,7 @@ export default function ProductionForm() {
         setSavingSection("");
         showMsg("dispatch", `Dispatch saved to daily log but stock record failed: ${recJson.error}`, false);
         setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter("");
-        setLetterNumber(""); setLetterLookup(null); setReleasedBy(""); setVehicleNumber("");
+        setSelectedLetterId(""); setLetterLookup(null); setReleasedBy(""); setVehicleNumber("");
         logAction("Created", "dispatch_entries", `Dispatch entry for ${entryDate}`);
         loadHistory();
         return;
@@ -459,7 +449,7 @@ export default function ProductionForm() {
     logAction("Created", "dispatch_entries", `Dispatch entry for ${entryDate}`);
     showMsg("dispatch", nothing ? "Logged: nothing to report ✓" : "Dispatch saved ✓", true);
     setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter("");
-    setLetterNumber(""); setLetterLookup(null); setLetterError("");
+    setSelectedLetterId(""); setLetterLookup(null);
     setReleasedBy(""); setVehicleNumber("");
     loadHistory();
   }
@@ -777,22 +767,41 @@ export default function ProductionForm() {
         {plantId && (
           <div style={sectionStyle}>
             <h3 style={h3}>Dispatch today</h3>
-            <p style={hint}>Enter the authority letter number to look up the contractor and remaining balance.</p>
+            <p style={hint}>Select an authority letter to see the contractor and remaining balance.</p>
 
-            {/* Letter number lookup */}
+            {/* Authority letter dropdown */}
             <label style={labelStyle}>
-              Authority letter number
-              <input
-                type="text"
-                style={inputStyle}
-                value={letterNumber}
-                onChange={(e) => { setLetterNumber(e.target.value); setLetterLookup(null); setLetterError(""); }}
-                placeholder="e.g. MEPCO-LT-2291"
-              />
+              Authority letter
+              {loadingLetters ? (
+                <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>Loading letters for this plant…</p>
+              ) : availableLetters.length === 0 ? (
+                <div style={{ backgroundColor: COLOURS.WARNING_SOFT, border: `1px solid ${COLOURS.AMBER}`, borderRadius: RADII.SM, padding: "8px 12px", fontSize: "12px", color: COLOURS.AMBER, fontWeight: 500, marginTop: "4px" }}>
+                  No active authority letters with remaining balance for this plant. Add letters in Stock → Manage POs.
+                </div>
+              ) : (
+                <select
+                  style={inputStyle}
+                  value={selectedLetterId}
+                  onChange={(e) => {
+                    setSelectedLetterId(e.target.value);
+                    const letter = availableLetters.find((l) => l.id === e.target.value);
+                    setLetterLookup(letter || null);
+                  }}
+                >
+                  <option value="">— Select authority letter —</option>
+                  {availableLetters.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      #{l.letter_number} · {l.customer_name} · {[
+                        l.remaining_31 > 0 ? `${l.remaining_31}×31ft` : null,
+                        l.remaining_36 > 0 ? `${l.remaining_36}×36ft` : null,
+                        l.remaining_45 > 0 ? `${l.remaining_45}×45ft` : null,
+                        l.remaining_meter > 0 ? `${l.remaining_meter}×Mtr` : null,
+                      ].filter(Boolean).join(", ")} remaining{l.expiry_date ? ` · exp ${l.expiry_date}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
-
-            {lookingUpLetter && <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "8px" }}>Looking up letter…</p>}
-            {letterError && <p style={{ fontSize: "13px", color: COLOURS.RED, marginBottom: "8px", fontWeight: 600 }}>{letterError}</p>}
 
             {letterLookup && (
               <>
@@ -835,8 +844,8 @@ export default function ProductionForm() {
               </>
             )}
 
-            {/* Qty fields — show when letter found OR when entering "nothing" */}
-            {(letterLookup || !letterNumber) && (
+            {/* Qty fields — show when letter found OR when no letters exist (nothing to report flow) */}
+            {(letterLookup || availableLetters.length === 0) && (
               <>
                 {!isMeter ? (
                   <>
