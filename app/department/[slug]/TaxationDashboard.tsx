@@ -53,7 +53,7 @@ type EditForm = {
 
 const STATUSES = ["pending", "won", "lost", "settled"];
 const NOTICE_TYPES = ["income tax", "sales tax", "withholding tax", "FBR notice", "provincial tax", "customs", "other"];
-const COMPANIES = ["Unze Trading PVT Limited", "Imperial Footwear Pvt Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang"];
+const COMPANIES = ["Unze Trading PVT Limited", "Imperial Footwear Pvt Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang", "Directors"];
 
 function normaliseCompanyName(name: string): string {
   const n = name.trim();

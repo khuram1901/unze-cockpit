@@ -5,7 +5,7 @@ import { COLOURS, RADII, SHADOWS, PageHeader } from "../lib/SharedUI";
 import { useUserCtx } from "../lib/useUserCtx";
 import {
   canCreateAssignments as checkCanCreate,
-  canSeeAllTasks, canReviewTasks, canImportExport,
+  canSeeAllTasks, canReviewTasks, canImportExport, canDeleteTask,
 } from "../lib/permissions";
 import NewTaskForm from "./NewTaskForm";
 import TasksList from "./TasksList";
@@ -20,6 +20,7 @@ export default function TasksPageClient() {
   const canCreate = ctx ? checkCanCreate(ctx) : false;
   const seeAll = ctx ? canSeeAllTasks(ctx) : false;
   const review = ctx ? canReviewTasks(ctx) : false;
+  const canDelete = ctx ? canDeleteTask(ctx, null) : false;
   const impExp = ctx ? canImportExport(ctx) : false;
 
   return (
@@ -42,7 +43,7 @@ export default function TasksPageClient() {
         </div>
       )}
 
-      <TasksList currentRole={role} canSeeAll={seeAll} canReview={review} canDelete={review} canImport={impExp} />
+      <TasksList currentRole={role} canSeeAll={seeAll} canReview={review} canDelete={canDelete} canImport={impExp} />
     </>
   );
 }

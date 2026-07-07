@@ -69,6 +69,12 @@ const STATUS_COLOURS: Record<ScheduleStatus, { bg: string; text: string; border:
 
 const STATUS_OPTIONS: ScheduleStatus[] = ["Not Started","In Progress","External Auditors","Completed"];
 
+function getAvailableStatuses(currentStatus: ScheduleStatus, canManage: boolean): ScheduleStatus[] {
+  if (canManage) return STATUS_OPTIONS;
+  if (currentStatus === "Not Started") return STATUS_OPTIONS;
+  return STATUS_OPTIONS.filter((s) => s !== "Not Started");
+}
+
 // ── Fiscal year helpers ────────────────────────────────────────────
 
 function getCurrentTaxYear(): string {
@@ -653,9 +659,7 @@ export default function AccountsTaxDashboard() {
                                   const { bg, text, border } = STATUS_COLOURS[status];
                                   const cellKey = `${selectedYear}:${sec.key}:${stepIndex}:${e.key}`;
                                   const saving = savingSchedule.has(cellKey);
-                                  const availableStatuses = (!canManage && status !== "Not Started")
-                                    ? STATUS_OPTIONS.filter((s) => s !== "Not Started")
-                                    : STATUS_OPTIONS;
+                                  const availableStatuses = getAvailableStatuses(status, canManage);
                                   return (
                                     <td key={e.key} style={tableCell(even)}>
                                       <select
@@ -733,9 +737,7 @@ export default function AccountsTaxDashboard() {
                                   const { bg, text, border } = STATUS_COLOURS[status];
                                   const cellKey = `${selectedYear}:${sectionKey}:${stepIndex}:${e.key}`;
                                   const saving = savingSchedule.has(cellKey);
-                                  const availableStatuses = (!canManage && status !== "Not Started")
-                                    ? STATUS_OPTIONS.filter((s) => s !== "Not Started")
-                                    : STATUS_OPTIONS;
+                                  const availableStatuses = getAvailableStatuses(status, canManage);
                                   return (
                                     <td key={e.key} style={tableCell(even)}>
                                       <select
