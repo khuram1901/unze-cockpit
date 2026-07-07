@@ -466,7 +466,7 @@ export default function HomePage() {
   const [investmentData, setInvestmentData] = useState<InvestmentSummary | null>(null);
   const [dailyOpsData, setDailyOpsData] = useState<DailyOpsPoint[]>([]);
   const [taxOverdueCount, setTaxOverdueCount] = useState(0);
-  const [taxTier2Alerts, setTaxTier2Alerts] = useState<{ alert_message: string; overdue_count: number }[]>([]);
+  const [taxTier2Alerts, setTaxTier2Alerts] = useState<{ alert_type: string; period_key: string; overdue_count: number; alert_message: string; tax_year: string }[]>([]);
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -988,20 +988,16 @@ export default function HomePage() {
       setInvestmentData(computedInvestmentData);
     }
 
-    // Tax deadline alerts — pre-computed tier 2 (CEO view, escalated past HOD deadline)
-    const taxYearNow = (() => {
-      const m = new Date().getMonth() + 1;
-      const y = new Date().getFullYear();
-      return m >= 7 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`;
-    })();
+    // Tax deadline alerts — read pre-computed tier 2 across all years (no client-side calculation)
     const { data: tier2AlertData } = await supabase
       .from("tax_deadline_alerts")
-      .select("alert_message, overdue_count")
+      .select("alert_type, period_key, overdue_count, alert_message, tax_year")
       .eq("tier", 2)
       .eq("resolved", false)
-      .eq("tax_year", taxYearNow);
+      .order("tax_year", { ascending: false });
     const tier2Alerts = tier2AlertData ?? [];
-    setTaxOverdueCount(tier2Alerts.length);
+    const computedTaxOverdue = tier2Alerts.reduce((sum, a) => sum + a.overdue_count, 0);
+    setTaxOverdueCount(computedTaxOverdue);
     setTaxTier2Alerts(tier2Alerts);
 
     try {
@@ -2057,7 +2053,7 @@ function ExecutiveDashboardBody({
   isMobile: boolean;
   facilitySynopsis: { bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[];
   taxOverdueCount: number;
-  taxTier2Alerts: { alert_message: string; overdue_count: number }[];
+  taxTier2Alerts: { alert_type: string; period_key: string; overdue_count: number; alert_message: string; tax_year: string }[];
   quickTaskAction: (taskId: string, newStatus: string) => Promise<void>;
   quickMachineResolve: (issueId: string) => Promise<void>;
 }) {
@@ -2714,9 +2710,21 @@ function ExecutiveDashboardBody({
             <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "36px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", marginBottom: "6px" }}>
               {taxOverdueCount}
             </div>
-            <div style={{ fontSize: "12px", color: SLATE, marginBottom: taxTier2Alerts.length > 0 ? "12px" : "0" }}>
-              deadline{taxOverdueCount > 1 ? "s" : ""} unresolved — passed HOD deadline without action
+            <div style={{ fontSize: "12px", color: SLATE, marginBottom: "8px" }}>
+              overdue item{taxOverdueCount !== 1 ? "s" : ""} — passed HOD deadline without action
             </div>
+            {(() => {
+              const byYear = taxTier2Alerts.reduce<Record<string, number>>((acc, a) => {
+                acc[a.tax_year] = (acc[a.tax_year] ?? 0) + a.overdue_count;
+                return acc;
+              }, {});
+              const yearEntries = Object.entries(byYear).sort((a, b) => b[0].localeCompare(a[0]));
+              return yearEntries.length > 0 ? (
+                <div style={{ fontSize: "11px", color: SLATE, marginBottom: taxTier2Alerts.length > 0 ? "12px" : "0" }}>
+                  {yearEntries.map(([yr, cnt]) => `${yr}: ${cnt} item${cnt !== 1 ? "s" : ""}`).join(" · ")}
+                </div>
+              ) : null;
+            })()}
             {taxTier2Alerts.map((alert, i) => (
               <div key={i} style={{ fontSize: "12px", color: NAVY, padding: "4px 0", borderTop: i === 0 ? `1px solid ${HAIRLINE}` : "none" }}>
                 ⚠ {alert.alert_message}
