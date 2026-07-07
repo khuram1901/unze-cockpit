@@ -996,8 +996,7 @@ export default function HomePage() {
       .eq("resolved", false)
       .order("tax_year", { ascending: false });
     const tier2Alerts = tier2AlertData ?? [];
-    const computedTaxOverdue = tier2Alerts.reduce((sum, a) => sum + a.overdue_count, 0);
-    setTaxOverdueCount(computedTaxOverdue);
+    setTaxOverdueCount(tier2Alerts.length);
     setTaxTier2Alerts(tier2Alerts);
 
     try {
@@ -2705,31 +2704,17 @@ function ExecutiveDashboardBody({
             cursor: "pointer",
           }}>
             <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
-              Tax deadlines — escalated to CEO
+              Tax deadlines overdue
             </div>
             <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "36px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", marginBottom: "6px" }}>
-              {taxOverdueCount}
+              {taxTier2Alerts.length}
             </div>
             <div style={{ fontSize: "12px", color: SLATE, marginBottom: "8px" }}>
-              overdue item{taxOverdueCount !== 1 ? "s" : ""} — passed HOD deadline without action
+              deadline{taxTier2Alerts.length !== 1 ? "s" : ""} missed — {taxTier2Alerts.reduce((sum, a) => sum + a.overdue_count, 0)} item{taxTier2Alerts.reduce((sum, a) => sum + a.overdue_count, 0) !== 1 ? "s" : ""} pending
             </div>
-            {(() => {
-              const byYear = taxTier2Alerts.reduce<Record<string, number>>((acc, a) => {
-                acc[a.tax_year] = (acc[a.tax_year] ?? 0) + a.overdue_count;
-                return acc;
-              }, {});
-              const yearEntries = Object.entries(byYear).sort((a, b) => b[0].localeCompare(a[0]));
-              return yearEntries.length > 0 ? (
-                <div style={{ fontSize: "11px", color: SLATE, marginBottom: taxTier2Alerts.length > 0 ? "12px" : "0" }}>
-                  {yearEntries.map(([yr, cnt]) => `${yr}: ${cnt} item${cnt !== 1 ? "s" : ""}`).join(" · ")}
-                </div>
-              ) : null;
-            })()}
-            {taxTier2Alerts.map((alert, i) => (
-              <div key={i} style={{ fontSize: "12px", color: NAVY, padding: "4px 0", borderTop: i === 0 ? `1px solid ${HAIRLINE}` : "none" }}>
-                ⚠ {alert.alert_message}
-              </div>
-            ))}
+            <div style={{ fontSize: "11px", color: RED, fontWeight: 500 }}>
+              View Accounts (Tax) →
+            </div>
           </div>
         </a>
       )}
