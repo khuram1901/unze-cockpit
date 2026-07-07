@@ -603,6 +603,14 @@ export default function HomePage() {
           setDeptHealth(payload.deptHealth);
           setInvestmentData(payload.investmentData);
           setDailyOpsData(payload.dailyOpsData);
+          if (payload.taxSummaryYear) {
+            setTaxScheduleEntries(new Map(payload.taxScheduleEntries));
+            setTaxReturnFilings(new Map(payload.taxReturnFilings));
+            setTaxSummaryYear(payload.taxSummaryYear);
+            setTaxScheduleEntries2(new Map(payload.taxScheduleEntries2));
+            setTaxReturnFilings2(new Map(payload.taxReturnFilings2));
+            setTaxSummaryYear2(payload.taxSummaryYear2 ?? "");
+          }
           setExecLoading(false);
           return;
         }
@@ -1132,6 +1140,12 @@ export default function HomePage() {
           deptHealth: healthResults,
           investmentData: computedInvestmentData ?? undefined,
           dailyOpsData: computedDailyOpsData,
+          taxSummaryYear: prevComplete ? taxNow : taxPrevYear,
+          taxScheduleEntries: Array.from((prevComplete ? smCurr : smPrev).entries()),
+          taxReturnFilings: Array.from((prevComplete ? fmCurr : fmPrev).entries()),
+          taxScheduleEntries2: Array.from(((!prevComplete && currHasItems) ? smCurr : new Map()).entries()),
+          taxReturnFilings2: Array.from(((!prevComplete && currHasItems) ? fmCurr : new Map()).entries()),
+          taxSummaryYear2: (!prevComplete && currHasItems) ? taxNow : "",
         },
       }));
     } catch {
