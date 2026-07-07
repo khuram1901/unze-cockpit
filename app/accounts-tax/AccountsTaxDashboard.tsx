@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabase, loadMyPermissions } from "../lib/supabase";
+import { supabase, authFetch, loadMyPermissions } from "../lib/supabase";
 import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, useToast } from "../lib/SharedUI";
 import { canManageTaxSchedule, isPA, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { useMobile } from "../lib/useMobile";
@@ -235,6 +235,8 @@ export default function AccountsTaxDashboard() {
     if (error) {
       toast.show("Save failed — " + error.message, "error");
       setScheduleEntries((prev) => { const m = new Map(prev); m.delete(key); return m; });
+    } else {
+      triggerAlertRecompute();
     }
   }
 
@@ -259,7 +261,15 @@ export default function AccountsTaxDashboard() {
     if (error) {
       toast.show("Save failed — " + error.message, "error");
       setReturnFilings((prev) => new Map(prev).set(key, current));
+    } else {
+      triggerAlertRecompute();
     }
+  }
+
+  // ── Fire-and-forget alert recompute after each save ──
+
+  function triggerAlertRecompute() {
+    authFetch("/api/cron/tax-alerts", { method: "POST" }).catch(() => {/* intentionally ignored */});
   }
 
   // ── Helpers ──

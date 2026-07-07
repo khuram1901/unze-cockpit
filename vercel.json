@@ -51,6 +51,10 @@
     {
       "path": "/api/investments/fetch-dividends",
       "schedule": "0 6 * * 1-5"
+    },
+    {
+      "path": "/api/cron/tax-alerts",
+      "schedule": "0 0,6 * * *"
     }
   ]
 }

@@ -466,6 +466,7 @@ export default function HomePage() {
   const [investmentData, setInvestmentData] = useState<InvestmentSummary | null>(null);
   const [dailyOpsData, setDailyOpsData] = useState<DailyOpsPoint[]>([]);
   const [taxOverdueCount, setTaxOverdueCount] = useState(0);
+  const [taxTier2Alerts, setTaxTier2Alerts] = useState<{ alert_message: string; overdue_count: number }[]>([]);
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -987,58 +988,21 @@ export default function HomePage() {
       setInvestmentData(computedInvestmentData);
     }
 
-    // Tax return overdue count — current fiscal year
+    // Tax deadline alerts — pre-computed tier 2 (CEO view, escalated past HOD deadline)
     const taxYearNow = (() => {
       const m = new Date().getMonth() + 1;
       const y = new Date().getFullYear();
       return m >= 7 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`;
     })();
-    const { data: taxFilings } = await supabase
-      .from("tax_return_filings")
-      .select("return_type, entity_key, period_key, filed")
+    const { data: tier2AlertData } = await supabase
+      .from("tax_deadline_alerts")
+      .select("alert_message, overdue_count")
+      .eq("tier", 2)
+      .eq("resolved", false)
       .eq("tax_year", taxYearNow);
-
-    const todayForTax = new Date();
-    const taxYearStart = parseInt(taxYearNow.split("-")[0], 10);
-    const taxYearNext = taxYearStart + 1;
-    const MONTHLY_RT_ENTITIES: Record<string, string[]> = {
-      FBR_SALES_TAX: ["UT","IMP","ALMAHAR"],
-      PRA_TAX:       ["UT","IMP","BARANH","HD","ALMAHAR"],
-    };
-    const QUARTERLY_RT_ENTITIES = ["UT","IMP","BARANH","HD","ALMAHAR"];
-    const monthlyPeriods = [
-      `${taxYearStart}-07`,`${taxYearStart}-08`,`${taxYearStart}-09`,
-      `${taxYearStart}-10`,`${taxYearStart}-11`,`${taxYearStart}-12`,
-      `${taxYearNext}-01`,`${taxYearNext}-02`,`${taxYearNext}-03`,
-      `${taxYearNext}-04`,`${taxYearNext}-05`,`${taxYearNext}-06`,
-    ];
-    const quarterlyDueDates: Record<string, Date> = {
-      Q1: new Date(`${taxYearStart}-10-15T00:00:00`),
-      Q2: new Date(`${taxYearNext}-01-15T00:00:00`),
-      Q3: new Date(`${taxYearNext}-04-15T00:00:00`),
-      Q4: new Date(`${taxYearNext}-07-15T00:00:00`),
-    };
-
-    const filedSet = new Set((taxFilings || []).filter((r) => r.filed).map((r) => `${r.return_type}:${r.entity_key}:${r.period_key}`));
-
-    let computedTaxOverdue = 0;
-    for (const [rtKey, entities] of Object.entries(MONTHLY_RT_ENTITIES)) {
-      for (const period of monthlyPeriods) {
-        const dueDate = new Date(`${period}-15T00:00:00`);
-        if (todayForTax <= dueDate) continue;
-        for (const ek of entities) {
-          if (!filedSet.has(`${rtKey}:${ek}:${period}`)) computedTaxOverdue++;
-        }
-      }
-    }
-    for (const q of ["Q1","Q2","Q3","Q4"]) {
-      const dueDate = quarterlyDueDates[q];
-      if (todayForTax <= dueDate) continue;
-      for (const ek of QUARTERLY_RT_ENTITIES) {
-        if (!filedSet.has(`INCOME_TAX:${ek}:${q}`)) computedTaxOverdue++;
-      }
-    }
-    setTaxOverdueCount(computedTaxOverdue);
+    const tier2Alerts = tier2AlertData ?? [];
+    setTaxOverdueCount(tier2Alerts.length);
+    setTaxTier2Alerts(tier2Alerts);
 
     try {
       sessionStorage.setItem(cacheKey, JSON.stringify({
@@ -1377,6 +1341,27 @@ export default function HomePage() {
         const finOverdue = finOverdueRes.count ?? 0;
         items.push({ label: "Finance tasks", value: `${finOpen} open${finOverdue > 0 ? `, ${finOverdue} overdue` : ""}`, rag: finOverdue === 0 ? "GREEN" : finOverdue <= 3 ? "AMBER" : "RED" });
 
+        // Tax deadline alerts — Tier 1 (HOD alert)
+        const taxYearForBriefing = (() => {
+          const m = new Date().getMonth() + 1;
+          const y = new Date().getFullYear();
+          return m >= 7 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`;
+        })();
+        const { data: tier1AlertData } = await supabase
+          .from("tax_deadline_alerts")
+          .select("alert_message, overdue_count")
+          .eq("tier", 1)
+          .eq("resolved", false)
+          .eq("tax_year", taxYearForBriefing);
+        if (tier1AlertData && tier1AlertData.length > 0) {
+          const totalItems = tier1AlertData.reduce((s, a) => s + a.overdue_count, 0);
+          items.push({
+            label: "Tax deadlines overdue",
+            value: `${tier1AlertData.length} deadline${tier1AlertData.length > 1 ? "s" : ""} missed — ${totalItems} item${totalItems > 1 ? "s" : ""} pending`,
+            rag: "RED",
+          });
+        }
+
         setManagerBriefing(items);
         setManagerBriefingTitle(`Finance Briefing${companyLabel !== "All" ? ` · ${companyLabel}` : ""}`);
       }
@@ -1485,6 +1470,7 @@ export default function HomePage() {
             dailyOpsData={dailyOpsData}
             facilitySynopsis={facilitySynopsis}
             taxOverdueCount={taxOverdueCount}
+            taxTier2Alerts={taxTier2Alerts}
             isMobile={isMobile}
             quickTaskAction={quickTaskAction}
             quickMachineResolve={quickMachineResolve}
@@ -2046,7 +2032,7 @@ function ExecutiveDashboardBody({
   ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, dailyOpsData,
-  facilitySynopsis, taxOverdueCount, isMobile, quickTaskAction, quickMachineResolve,
+  facilitySynopsis, taxOverdueCount, taxTier2Alerts, isMobile, quickTaskAction, quickMachineResolve,
 }: {
   ctx: UserCtx | null;
   selectedDate: string;
@@ -2071,6 +2057,7 @@ function ExecutiveDashboardBody({
   isMobile: boolean;
   facilitySynopsis: { bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[];
   taxOverdueCount: number;
+  taxTier2Alerts: { alert_message: string; overdue_count: number }[];
   quickTaskAction: (taskId: string, newStatus: string) => Promise<void>;
   quickMachineResolve: (issueId: string) => Promise<void>;
 }) {
@@ -2710,7 +2697,7 @@ function ExecutiveDashboardBody({
         </>
       )}
 
-      {/* ── TAX RETURNS OVERDUE ── */}
+      {/* ── TAX DEADLINE ALERTS (tier 2 — escalated to CEO) ── */}
       {taxOverdueCount > 0 && (
         <a href="/accounts-tax" style={{ textDecoration: "none", display: "block", marginBottom: "12px" }}>
           <div style={{
@@ -2722,12 +2709,19 @@ function ExecutiveDashboardBody({
             cursor: "pointer",
           }}>
             <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
-              Tax returns overdue
+              Tax deadlines — escalated to CEO
             </div>
             <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "36px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", marginBottom: "6px" }}>
               {taxOverdueCount}
             </div>
-            <div style={{ fontSize: "12px", color: RED }}>past 15th — filing required</div>
+            <div style={{ fontSize: "12px", color: SLATE, marginBottom: taxTier2Alerts.length > 0 ? "12px" : "0" }}>
+              deadline{taxOverdueCount > 1 ? "s" : ""} unresolved — passed HOD deadline without action
+            </div>
+            {taxTier2Alerts.map((alert, i) => (
+              <div key={i} style={{ fontSize: "12px", color: NAVY, padding: "4px 0", borderTop: i === 0 ? `1px solid ${HAIRLINE}` : "none" }}>
+                ⚠ {alert.alert_message}
+              </div>
+            ))}
           </div>
         </a>
       )}
