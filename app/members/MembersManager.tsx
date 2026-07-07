@@ -65,6 +65,16 @@ const DEPT_BUSINESS_UNITS: Record<string, string[]> = {
   "S&M Investment": ["Property"], BINC: ["Nursing College"],
 };
 
+const AVATAR_GRADIENTS = [
+  "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
+  "linear-gradient(135deg, #0F7B5F, #4CB58F)",
+  "linear-gradient(135deg, #B4791F, #E1B860)",
+  "linear-gradient(135deg, #6E45B8, #A17DDD)",
+  "linear-gradient(135deg, #64748B, #A5B0BF)",
+];
+
+const PAGE_SIZE = 10;
+
 function roleHasDeptAndBU(r: string) { return r === "Manager" || r === "Member"; }
 function businessUnitsFor(d: string | null) { return d ? DEPT_BUSINESS_UNITS[d] || ALL_BUSINESS_UNITS : []; }
 function isValidEmail(e: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()); }
@@ -79,6 +89,16 @@ function roleChip(r: string, email?: string | null): React.CSSProperties {
   return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.INK_700, border: `1px solid ${COLOURS.HAIRLINE}` };
 }
 
+function getInitials(firstName: string | null, lastName: string | null, name?: string | null): string {
+  const f = firstName?.trim() || "";
+  const l = lastName?.trim() || "";
+  if (f && l) return (f[0] + l[0]).toUpperCase();
+  if (f) return f.slice(0, 2).toUpperCase();
+  const n = name?.trim() || "";
+  if (n) return n.slice(0, 2).toUpperCase();
+  return "??";
+}
+
 const inp: React.CSSProperties = { ...inputStyle, padding: "6px 8px", fontSize: "16px" };
 const lbl: React.CSSProperties = { ...labelStyle, fontSize: "14px", marginBottom: "3px" };
 const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
@@ -87,6 +107,8 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
   color: solid ? "white" : c,
   borderRadius: "5px", padding: "4px 10px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
 });
+
+type ActiveTab = "people" | "matrix" | "ownership" | "reassign";
 
 export default function MembersManager() {
   const isMobile = useMobile();
@@ -117,11 +139,12 @@ export default function MembersManager() {
   const [newPw, setNewPw] = useState("");
   const [savingPw, setSavingPw] = useState(false);
   const [filter, setFilter] = useState("");
+  const [page, setPage] = useState(0);
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>("people");
 
   const [departments, setDepartments] = useState<DepartmentOwner[]>([]);
   const [openTasks, setOpenTasks] = useState<TaskSummary[]>([]);
-  const [showDeptOwners, setShowDeptOwners] = useState(false);
-  const [showReassign, setShowReassign] = useState(false);
   const [fromMemberId, setFromMemberId] = useState("");
   const [toMemberId, setToMemberId] = useState("");
   const [reassigning, setReassigning] = useState(false);
@@ -264,7 +287,7 @@ export default function MembersManager() {
   }
 
   const me: UserCtx = { email: myEmail, role: myRole, overrides: myOverrides };
-  const isAdmin = myRole === "Admin" || myRole === "Executive"; // can access this page (privileged)
+  const isAdmin = myRole === "Admin" || myRole === "Executive";
   const myAssignableRoles = assignableRoles(me);
 
   async function updateDeptOwner(deptId: string, field: "primary" | "secondary" | "escalation", memberId: string) {
@@ -324,6 +347,9 @@ export default function MembersManager() {
       })
     : members;
 
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedMembers = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   const counts = { total: members.length, admin: 0, manager: 0, member: 0 };
   members.forEach((m) => {
     if (m.role === "Admin" || m.role === "Executive") counts.admin++;
@@ -331,10 +357,24 @@ export default function MembersManager() {
     else counts.member++;
   });
 
+  function handleTabChange(tab: ActiveTab) {
+    setActiveTab(tab);
+    if (tab === "matrix") window.scrollTo(0, 0);
+  }
+
+  const tabs: { key: ActiveTab; label: string; count?: number }[] = [
+    { key: "people",    label: "People",        count: members.length },
+    { key: "matrix",    label: "Access matrix", count: members.length },
+    { key: "ownership", label: "Dept. ownership" },
+    { key: "reassign",  label: "Reassign tasks" },
+  ];
+
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%" }}>
       {toast.element}
       {dialog.element}
+
+      {/* ── Page header ─────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
         <PageHeader />
         {isAdmin && (
@@ -347,445 +387,571 @@ export default function MembersManager() {
         )}
       </div>
 
-      {/* ── Summary cards ─────────────────────────────── */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
-        {[
-          { label: "Total", value: counts.total, color: COLOURS.NAVY },
-          { label: "Admin/Exec", value: counts.admin, color: COLOURS.PURPLE },
-          { label: "Managers", value: counts.manager, color: COLOURS.GREEN },
-          { label: "Members", value: counts.member, color: COLOURS.SLATE },
-        ].map((c) => (
-          <div key={c.label} style={{ ...cardStyle, padding: "6px 14px", minWidth: "80px" }}>
-            <div style={{ color: COLOURS.SLATE, fontSize: "11px", textTransform: "uppercase" as const, letterSpacing: "0.06em", fontWeight: 500 }}>{c.label}</div>
-            <div style={{ fontSize: "18px", fontWeight: 700, color: c.color, fontFamily: "var(--font-mono)" }}>{c.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Search + Import/Export ───────────────────────────────────── */}
-      <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "14px", flexWrap: "wrap" }}>
-        <input
-          type="text" placeholder="Search by name, email, role, department..." value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          style={{ ...inp, flex: "1 1 200px", maxWidth: "400px" }}
-        />
-        {isAdmin && (
-          <ImportExportButtons
-            onExport={() => {
-              const headers = ["First Name", "Last Name", "Email", "Role", "Department", "Business Unit", "Company"];
-              const rows = members.map((m) => [m.first_name || "", m.last_name || "", m.email || "", m.role, m.department || "", m.business_unit || "", m.company || ""]);
-              downloadCSV(`members-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
-            }}
-            onImport={async (rows) => {
-              const errors: string[] = [];
-              const validRows: Record<string, string>[] = [];
-              rows.forEach((row, i) => {
-                const line = i + 2;
-                if (!row["First Name"]?.trim()) { errors.push(`Row ${line}: First Name is required`); return; }
-                if (!row["Last Name"]?.trim()) { errors.push(`Row ${line}: Last Name is required`); return; }
-                if (!row["Email"]?.trim()) { errors.push(`Row ${line}: Email is required`); return; }
-                if (!row["Role"]?.trim()) { errors.push(`Row ${line}: Role is required`); return; }
-                validRows.push(row);
-              });
-              if (errors.length > 0) {
-                toast.show(`Import validation failed:\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`, "error");
-                return;
-              }
-              let count = 0;
-              for (const row of validRows) {
-                await supabase.from("members").insert({
-                  first_name: row["First Name"].trim(),
-                  last_name: row["Last Name"].trim(),
-                  name: `${row["First Name"].trim()} ${row["Last Name"].trim()}`,
-                  email: row["Email"].trim(),
-                  role: row["Role"].trim(),
-                  department: row["Department"]?.trim() || null,
-                  business_unit: row["Business Unit"]?.trim() || null,
-                  company: row["Company"]?.trim() || null,
-                });
-                count++;
-              }
-              toast.show(`Successfully imported ${count} member${count !== 1 ? "s" : ""}.`, "success");
-              loadData();
-            }}
-            templateHeaders={["First Name", "Last Name", "Email", "Role", "Department", "Business Unit", "Company"]}
-            templateFilename="members-import-template.csv"
-            exportLabel="Export members as CSV"
-            importLabel="Import members from CSV"
-          />
-        )}
-      </div>
-
-      {/* ── Add form ──────────────────────────────────── */}
-      {isAdmin && showAddForm && (
-        <form onSubmit={addMember} style={{ ...cardStyle, marginBottom: "14px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1.5fr 0.8fr", gap: "8px" }}>
-            <div><label style={lbl}>First Name</label><input style={inp} value={firstName} onChange={(e) => setFirstName(e.target.value)} required /></div>
-            <div><label style={lbl}>Last Name</label><input style={inp} value={lastName} onChange={(e) => setLastName(e.target.value)} required /></div>
-            <div><label style={lbl}>Email</label><input style={inp} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
-            <div><label style={lbl}>Role</label>
-              <select style={inp} value={role} onChange={(e) => setRole(e.target.value)}>
-                {myAssignableRoles.map((r) => <option key={r}>{r}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", marginTop: "8px" }}>
-            <div><label style={lbl}>Department</label>
-              <select style={inp} value={department} onChange={(e) => { setDepartment(e.target.value); setBusinessUnit(""); }}>
-                <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
-              </select>
-            </div>
-            <div><label style={lbl}>Business Unit</label>
-              <select style={inp} value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value)} disabled={!department}>
-                <option value="">{department ? "Select" : "Dept first"}</option>
-                {businessUnitsFor(department).map((b) => <option key={b}>{b}</option>)}
-              </select>
-            </div>
-            <div><label style={lbl}>Company</label>
-              <select style={inp} value={company} onChange={(e) => setCompany(e.target.value)}>
-                <option value="">Select</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-          {/* Permissions preview */}
-          {(role || department) && (
-            <div style={{ marginTop: "12px", padding: "10px 12px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>
-                Permissions Preview — this member will automatically get:
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                {(() => {
-                  const isA = role === "Admin";
-                  const isE = role === "Executive";
-                  const isM = role === "Manager";
-                  const d = department;
-                  const perms: { label: string; on: boolean }[] = [
-                    { label: "Exec Dashboard", on: isA },
-                    { label: "Ops Dashboard", on: isA || isE || d === "Unze Trading Ops" },
-                    { label: "PA Dashboard", on: isA || isE },
-                    { label: "View Finance", on: isA || (isM && d === "Finance") },
-                    { label: "Edit Finance", on: isA || (isM && d === "Finance") },
-                    { label: "View Receivables", on: isA || (isM && (d === "Finance" || d === "Unze Trading Ops")) },
-                    { label: "All Tasks", on: isA || isE },
-                    { label: "Create Tasks", on: isA || isE },
-                    { label: "Review Tasks", on: isA || isE },
-                    { label: "Recurring Tasks", on: isA || isE },
-                    { label: "Calendar Mgmt", on: isA || isE },
-                    { label: "All Minutes", on: isA || isE },
-                    { label: "Ops Dept", on: isA || d === "Unze Trading Ops" },
-                    { label: "HR Dept", on: isA || d === "HR" },
-                    { label: "Tax Dept", on: isA || d === "Tax" },
-                    { label: "Audit Dept", on: isA || d === "Audit" },
-                    { label: "Admin Dept", on: isA || isE || d === "Admin" },
-                    { label: "IT Dept", on: isA || d === "IT" },
-                    { label: "View Members", on: isA || isE },
-                    { label: "Add Members", on: isA || isE },
-                    { label: "Edit Members", on: isA || isE },
-                    { label: "Delete Members", on: isA || isE },
-                    { label: "Reset Others' PWs", on: isA || isE },
-                    { label: "Audit Log", on: isA || isE },
-                    { label: "Exceptions", on: isA || isE },
-                    { label: "Import/Export", on: isA || isE },
-                    { label: "Daily Entry", on: isA || d === "Unze Trading Ops" },
-                  ];
-                  return perms.filter((p) => p.on).map((p) => (
-                    <span key={p.label} style={{
-                      fontSize: "11px", fontWeight: 600, color: "white",
-                      backgroundColor: COLOURS.GREEN, borderRadius: "6px", padding: "2px 8px",
-                    }}>{p.label}</span>
-                  ));
-                })()}
-                {role === "Member" && !department && (
-                  <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontStyle: "italic" }}>
-                    Members get own-task access only. Select a department for department-specific rights.
-                  </span>
-                )}
-              </div>
-              <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "6px", fontStyle: "italic" }}>
-                You can adjust individual permissions in the Access Control Matrix after adding.
-              </div>
-            </div>
-          )}
-          <div style={{ marginTop: "10px" }}>
-            <button type="submit" disabled={saving} style={smallBtn(COLOURS.NAVY, true)}>{saving ? "Adding..." : "Add Member"}</button>
-          </div>
-        </form>
-      )}
-
-      {/* ── Members table ─────────────────────────────── */}
-      <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-        {/* Header */}
-        <div style={{
-          ...tableHeaderStyle,
-          display: "grid" as const,
-          gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
-          gap: "8px",
-          padding: "8px 12px",
-          borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
-        }}>
-          <div>Name</div>
-          {!isMobile && <div>Dept / BU</div>}
-          {!isMobile && <div>Company</div>}
-          <div>Role</div>
-        </div>
-
-        {/* Rows */}
-        {filtered.map((m) => {
-          const dn = fullName(m.first_name, m.last_name, m.name);
-          const isEditing = editingId === m.id;
-          const memberPlants = assignments[m.id] || new Set<string>();
-          const plantNames = plants.filter((p) => memberPlants.has(p.id)).map((p) => p.name);
-          const showsDept = roleHasDeptAndBU(m.role);
-
+      {/* ── Tab strip ───────────────────────────────── */}
+      <div style={{
+        display: "flex", gap: "4px",
+        backgroundColor: COLOURS.CARD_ALT,
+        border: `1px solid ${COLOURS.HAIRLINE}`,
+        borderRadius: RADII.PILL,
+        padding: "4px",
+        width: "fit-content",
+        marginBottom: "20px",
+        flexWrap: "wrap",
+      }}>
+        {tabs.map((t) => {
+          const isActive = activeTab === t.key;
           return (
-            <div key={m.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-              {/* ── Row ──────────────────────────────── */}
-              <div
-                onClick={() => isAdmin ? setEditingId(isEditing ? null : m.id) : undefined}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
-                  gap: "8px", padding: "10px 12px", alignItems: "center",
-                  cursor: isAdmin ? "pointer" : "default",
-                  backgroundColor: isEditing ? COLOURS.CARD_ALT : COLOURS.CARD,
-                }}
-              >
-                {/* Name + email */}
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {dn}
-                    {m.is_hod && <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.AMBER, marginLeft: "5px" }}>HOD</span>}
-                  </div>
-                  <div style={{ fontSize: "15px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.email || "—"}</div>
-                </div>
-
-                {/* Dept / BU (desktop) */}
-                {!isMobile && (
-                  <div style={{ fontSize: "15px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {showsDept ? (m.department || "—") : "All"}
-                    {showsDept && m.business_unit && <span style={{ color: COLOURS.INK_400 }}> · {m.business_unit}</span>}
-                  </div>
-                )}
-
-                {/* Company */}
-                {!isMobile && (
-                  <div style={{ fontSize: "15px", color: COLOURS.NAVY, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {m.company || <span style={{ color: COLOURS.SLATE }}>—</span>}
-                  </div>
-                )}
-
-                {/* Role badge */}
+            <button
+              key={t.key}
+              onClick={() => handleTabChange(t.key)}
+              style={{
+                padding: "7px 16px",
+                fontSize: "12.5px",
+                borderRadius: RADII.PILL,
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                backgroundColor: isActive ? COLOURS.CARD : "transparent",
+                color: isActive ? COLOURS.NAVY : COLOURS.SLATE,
+                fontWeight: isActive ? 500 : 400,
+                boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                transition: "all 0.15s",
+              }}
+            >
+              {t.label}
+              {t.count !== undefined && (
                 <span style={{
-                  fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: RADII.PILL,
-                  width: "fit-content", justifySelf: isMobile ? "end" : "start",
-                  ...roleChip(m.role, m.email),
-                }}>{m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role}</span>
-              </div>
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "10.5px",
+                  color: isActive ? COLOURS.SLATE : COLOURS.INK_400,
+                }}>
+                  {t.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-              {/* ── Mobile sub-row ────────────────────── */}
-              {isMobile && !isEditing && (
-                <div style={{ padding: "0 12px 8px", fontSize: "14px", color: COLOURS.SLATE }}>
-                  {m.company || "No company"} · {showsDept ? `${m.department || "—"}` : "All depts"}
+      {/* ══════════════════════════════════════════════
+          TAB: PEOPLE
+      ══════════════════════════════════════════════ */}
+      {activeTab === "people" && (
+        <>
+          {/* ── Stats cards ─────────────────────────── */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+            gap: "10px",
+            marginBottom: "20px",
+          }}>
+            {[
+              { label: "Total",        value: counts.total   },
+              { label: "Admin / Exec", value: counts.admin   },
+              { label: "Managers",     value: counts.manager },
+              { label: "Members",      value: counts.member  },
+            ].map((c) => (
+              <div key={c.label} style={{
+                backgroundColor: COLOURS.CARD_ALT,
+                border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: RADII.CARD,
+                padding: "12px 16px",
+              }}>
+                <div style={{
+                  fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE,
+                  textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px",
+                }}>{c.label}</div>
+                <div style={{
+                  fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                  fontSize: "22px", fontWeight: 600, color: COLOURS.NAVY,
+                  fontVariantNumeric: "tabular-nums",
+                }}>{c.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Toolbar: search + export/import + add form ─ */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
+            <input
+              type="text"
+              placeholder="Search by name, email, role, department..."
+              value={filter}
+              onChange={(e) => { setFilter(e.target.value); setPage(0); }}
+              style={{ ...inp, flex: "1 1 200px", maxWidth: "320px" }}
+            />
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {isAdmin && (
+                <ImportExportButtons
+                  onExport={() => {
+                    const headers = ["First Name", "Last Name", "Email", "Role", "Department", "Business Unit", "Company"];
+                    const rows = members.map((m) => [m.first_name || "", m.last_name || "", m.email || "", m.role, m.department || "", m.business_unit || "", m.company || ""]);
+                    downloadCSV(`members-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
+                  }}
+                  onImport={async (rows) => {
+                    const errors: string[] = [];
+                    const validRows: Record<string, string>[] = [];
+                    rows.forEach((row, i) => {
+                      const line = i + 2;
+                      if (!row["First Name"]?.trim()) { errors.push(`Row ${line}: First Name is required`); return; }
+                      if (!row["Last Name"]?.trim()) { errors.push(`Row ${line}: Last Name is required`); return; }
+                      if (!row["Email"]?.trim()) { errors.push(`Row ${line}: Email is required`); return; }
+                      if (!row["Role"]?.trim()) { errors.push(`Row ${line}: Role is required`); return; }
+                      validRows.push(row);
+                    });
+                    if (errors.length > 0) {
+                      toast.show(`Import validation failed:\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`, "error");
+                      return;
+                    }
+                    let count = 0;
+                    for (const row of validRows) {
+                      await supabase.from("members").insert({
+                        first_name: row["First Name"].trim(),
+                        last_name: row["Last Name"].trim(),
+                        name: `${row["First Name"].trim()} ${row["Last Name"].trim()}`,
+                        email: row["Email"].trim(),
+                        role: row["Role"].trim(),
+                        department: row["Department"]?.trim() || null,
+                        business_unit: row["Business Unit"]?.trim() || null,
+                        company: row["Company"]?.trim() || null,
+                      });
+                      count++;
+                    }
+                    toast.show(`Successfully imported ${count} member${count !== 1 ? "s" : ""}.`, "success");
+                    loadData();
+                  }}
+                  templateHeaders={["First Name", "Last Name", "Email", "Role", "Department", "Business Unit", "Company"]}
+                  templateFilename="members-import-template.csv"
+                  exportLabel="Export members as CSV"
+                  importLabel="Import members from CSV"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* ── Add form ──────────────────────────────── */}
+          {isAdmin && showAddForm && (
+            <form onSubmit={addMember} style={{ ...cardStyle, marginBottom: "14px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1.5fr 0.8fr", gap: "8px" }}>
+                <div><label style={lbl}>First Name</label><input style={inp} value={firstName} onChange={(e) => setFirstName(e.target.value)} required /></div>
+                <div><label style={lbl}>Last Name</label><input style={inp} value={lastName} onChange={(e) => setLastName(e.target.value)} required /></div>
+                <div><label style={lbl}>Email</label><input style={inp} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
+                <div><label style={lbl}>Role</label>
+                  <select style={inp} value={role} onChange={(e) => setRole(e.target.value)}>
+                    {myAssignableRoles.map((r) => <option key={r}>{r}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", marginTop: "8px" }}>
+                <div><label style={lbl}>Department</label>
+                  <select style={inp} value={department} onChange={(e) => { setDepartment(e.target.value); setBusinessUnit(""); }}>
+                    <option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div><label style={lbl}>Business Unit</label>
+                  <select style={inp} value={businessUnit} onChange={(e) => setBusinessUnit(e.target.value)} disabled={!department}>
+                    <option value="">{department ? "Select" : "Dept first"}</option>
+                    {businessUnitsFor(department).map((b) => <option key={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div><label style={lbl}>Company</label>
+                  <select style={inp} value={company} onChange={(e) => setCompany(e.target.value)}>
+                    <option value="">Select</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              {/* Permissions preview */}
+              {(role || department) && (
+                <div style={{ marginTop: "12px", padding: "10px 12px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>
+                    Permissions Preview — this member will automatically get:
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {(() => {
+                      const isA = role === "Admin";
+                      const isE = role === "Executive";
+                      const isM = role === "Manager";
+                      const d = department;
+                      const perms: { label: string; on: boolean }[] = [
+                        { label: "Exec Dashboard", on: isA },
+                        { label: "Ops Dashboard", on: isA || isE || d === "Unze Trading Ops" },
+                        { label: "PA Dashboard", on: isA || isE },
+                        { label: "View Finance", on: isA || (isM && d === "Finance") },
+                        { label: "Edit Finance", on: isA || (isM && d === "Finance") },
+                        { label: "View Receivables", on: isA || (isM && (d === "Finance" || d === "Unze Trading Ops")) },
+                        { label: "All Tasks", on: isA || isE },
+                        { label: "Create Tasks", on: isA || isE },
+                        { label: "Review Tasks", on: isA || isE },
+                        { label: "Recurring Tasks", on: isA || isE },
+                        { label: "Calendar Mgmt", on: isA || isE },
+                        { label: "All Minutes", on: isA || isE },
+                        { label: "Ops Dept", on: isA || d === "Unze Trading Ops" },
+                        { label: "HR Dept", on: isA || d === "HR" },
+                        { label: "Tax Dept", on: isA || d === "Tax" },
+                        { label: "Audit Dept", on: isA || d === "Audit" },
+                        { label: "Admin Dept", on: isA || isE || d === "Admin" },
+                        { label: "IT Dept", on: isA || d === "IT" },
+                        { label: "View Members", on: isA || isE },
+                        { label: "Add Members", on: isA || isE },
+                        { label: "Edit Members", on: isA || isE },
+                        { label: "Delete Members", on: isA || isE },
+                        { label: "Reset Others' PWs", on: isA || isE },
+                        { label: "Audit Log", on: isA || isE },
+                        { label: "Exceptions", on: isA || isE },
+                        { label: "Import/Export", on: isA || isE },
+                        { label: "Daily Entry", on: isA || d === "Unze Trading Ops" },
+                      ];
+                      return perms.filter((p) => p.on).map((p) => (
+                        <span key={p.label} style={{
+                          fontSize: "11px", fontWeight: 600, color: "white",
+                          backgroundColor: COLOURS.GREEN, borderRadius: "6px", padding: "2px 8px",
+                        }}>{p.label}</span>
+                      ));
+                    })()}
+                    {role === "Member" && !department && (
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontStyle: "italic" }}>
+                        Members get own-task access only. Select a department for department-specific rights.
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "6px", fontStyle: "italic" }}>
+                    You can adjust individual permissions in the Access Control Matrix after adding.
+                  </div>
                 </div>
               )}
+              <div style={{ marginTop: "10px" }}>
+                <button type="submit" disabled={saving} style={smallBtn(COLOURS.NAVY, true)}>{saving ? "Adding..." : "Add Member"}</button>
+              </div>
+            </form>
+          )}
 
-              {/* ── Edit panel (compact) ────────────────────────── */}
-              {isAdmin && isEditing && (
-                <div style={{ padding: "8px 12px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT }}>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(120px, 1fr))", gap: "6px", marginBottom: "6px", alignItems: "end" }}>
-                    <div><label style={lblC}>First Name</label><input style={inpC} value={m.first_name || ""} onChange={(e) => updateMember(m.id, { first_name: e.target.value })} /></div>
-                    <div><label style={lblC}>Last Name</label><input style={inpC} value={m.last_name || ""} onChange={(e) => updateMember(m.id, { last_name: e.target.value })} /></div>
-                    <div><label style={lblC}>Email</label><input style={inpC} defaultValue={m.email || ""} onBlur={(e) => { if (e.target.value.trim() !== (m.email || "")) updateMember(m.id, { email: e.target.value }); }} /></div>
-                    <div><label style={lblC}>Role</label><select style={inpC} value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })} disabled={!canEditMember(me, { email: m.email, role: m.role })}>{Array.from(new Set([m.role, ...myAssignableRoles])).map((r) => <option key={r}>{r}</option>)}</select></div>
-                    <div><label style={lblC}>Department</label><select style={inpC} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}><option value="">—</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></div>
-                    <div><label style={lblC}>Business Unit</label><select style={inpC} value={m.business_unit || ""} onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })} disabled={!m.department}><option value="">—</option>{businessUnitsFor(m.department).map((b) => <option key={b}>{b}</option>)}</select></div>
-                    <div><label style={lblC}>Company</label><select style={inpC} value={m.company || ""} onChange={(e) => updateMember(m.id, { company: e.target.value || null })}><option value="">—</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></div>
-                    <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }}>
-                      <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} /> HOD
-                    </label>
+          {/* ── Members table ─────────────────────────── */}
+          <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{
+              ...tableHeaderStyle,
+              display: "grid" as const,
+              gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
+              gap: "8px",
+              padding: "8px 12px",
+              borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+            }}>
+              <div>Name</div>
+              {!isMobile && <div>Dept / BU</div>}
+              {!isMobile && <div>Company</div>}
+              <div>Role</div>
+            </div>
+
+            {/* Rows */}
+            {paginatedMembers.map((m, idx) => {
+              const dn = fullName(m.first_name, m.last_name, m.name);
+              const isEditing = editingId === m.id;
+              const memberPlants = assignments[m.id] || new Set<string>();
+              const showsDept = roleHasDeptAndBU(m.role);
+              const avatarGradient = AVATAR_GRADIENTS[(page * PAGE_SIZE + idx) % 5];
+              const initials = getInitials(m.first_name, m.last_name, m.name);
+
+              return (
+                <div key={m.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                  {/* ── Row ──────────────────────────────── */}
+                  <div
+                    onClick={() => isAdmin ? setEditingId(isEditing ? null : m.id) : undefined}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
+                      gap: "8px", padding: "10px 12px", alignItems: "center",
+                      cursor: isAdmin ? "pointer" : "default",
+                      backgroundColor: isEditing ? COLOURS.CARD_ALT : COLOURS.CARD,
+                    }}
+                  >
+                    {/* Name + avatar + email */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                      <div style={{
+                        width: "32px", height: "32px", borderRadius: "50%",
+                        background: avatarGradient,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0,
+                        color: "#fff",
+                        fontSize: "11px", fontWeight: 600,
+                        fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                      }}>
+                        {initials}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
+                          {dn}
+                          {m.is_hod && <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.AMBER }}>HOD</span>}
+                        </div>
+                        <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>{m.email || "—"}</div>
+                      </div>
+                    </div>
+
+                    {/* Dept / BU (desktop) */}
+                    {!isMobile && (
+                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {showsDept ? (m.department || "—") : "All"}
+                        {showsDept && m.business_unit && <span style={{ color: COLOURS.INK_400 }}> · {m.business_unit}</span>}
+                      </div>
+                    )}
+
+                    {/* Company */}
+                    {!isMobile && (
+                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {m.company || <span style={{ color: COLOURS.INK_400 }}>—</span>}
+                      </div>
+                    )}
+
+                    {/* Role badge */}
+                    <span style={{
+                      fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: RADII.PILL,
+                      width: "fit-content", justifySelf: isMobile ? "end" : "start",
+                      ...roleChip(m.role, m.email),
+                    }}>{m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role}</span>
                   </div>
 
-                  {/* Plants + Notifications in one row */}
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "6px", fontSize: "14px" }}>
-                    {showsDept && plants.length > 0 && (
-                      <>
-                        <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Plants:</span>
-                        {plants.map((p) => {
-                          const on = memberPlants.has(p.id);
-                          const key = `${m.id}-${p.id}`;
-                          return (
-                            <label key={p.id} style={{ display: "flex", alignItems: "center", gap: "2px", color: COLOURS.NAVY, cursor: savingAssignment === key ? "wait" : "pointer", opacity: savingAssignment === key ? 0.5 : 1 }}>
-                              <input type="checkbox" checked={on} disabled={savingAssignment === key} onChange={() => togglePlant(m.id, p.id, on)} style={{ width: "13px", height: "13px" }} />
-                              {p.name}
-                            </label>
-                          );
-                        })}
-                        <span style={{ color: COLOURS.HAIRLINE }}>|</span>
-                      </>
-                    )}
-                    <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Notify:</span>
-                    <label style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
-                      <input type="checkbox" checked={m.notify_email} onChange={(e) => updateMember(m.id, { notify_email: e.target.checked })} style={{ width: "13px", height: "13px" }} /> Email
-                    </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
-                      <input type="checkbox" checked={m.notify_whatsapp || false} onChange={(e) => updateMember(m.id, { notify_whatsapp: e.target.checked })} style={{ width: "13px", height: "13px" }} /> WA
-                    </label>
-                    {m.notify_whatsapp && (
-                      <input placeholder="+92..." defaultValue={m.phone_e164 || ""} onBlur={(e) => { if (e.target.value !== (m.phone_e164 || "")) updateMember(m.id, { phone_e164: e.target.value || null }); }}
-                        style={{ ...inpC, width: "110px" }} />
-                    )}
-                    {canChangePasswordFor(me, { email: m.email, role: m.role }) && (
-                      <>
-                        <span style={{ color: COLOURS.HAIRLINE }}>|</span>
-                        <button onClick={() => sendPwReset(m.email || "", dn)} disabled={!m.email || resettingPw === m.email}
-                          style={{ ...smallBtn(COLOURS.BLUE), fontSize: "11px", padding: "3px 8px", opacity: resettingPw === m.email ? 0.5 : 1 }}>
-                          {resettingPw === m.email ? "..." : "Reset PW"}
-                        </button>
-                        <button onClick={() => { setSettingPwFor(settingPwFor === m.id ? null : m.id); setNewPw(""); }}
-                          style={{ ...smallBtn(COLOURS.PURPLE), fontSize: "11px", padding: "3px 8px" }}>Set PW</button>
-                      </>
-                    )}
-                    {canDeleteMember(me, { email: m.email, role: m.role }) && (
-                      <button onClick={() => deleteMember(m.id, dn)} style={{ ...smallBtn(COLOURS.RED), fontSize: "11px", padding: "3px 8px" }}>Remove</button>
-                    )}
-                  </div>
+                  {/* ── Mobile sub-row ────────────────────── */}
+                  {isMobile && !isEditing && (
+                    <div style={{ padding: "0 12px 8px", paddingLeft: "54px", fontSize: "12px", color: COLOURS.SLATE }}>
+                      {m.company || "No company"} · {showsDept ? `${m.department || "—"}` : "All depts"}
+                    </div>
+                  )}
 
-                  {/* Set password inline */}
-                  {settingPwFor === m.id && (
-                    <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "8px", flexWrap: "wrap" }}>
-                      <input type="text" placeholder="Min 6 characters" value={newPw} onChange={(e) => setNewPw(e.target.value)}
-                        style={{ ...inp, flex: "1 1 150px", maxWidth: "200px" }} />
-                      <button onClick={() => setPwDirectly(m.email || "", dn)} disabled={savingPw || newPw.length < 6}
-                        style={{ ...smallBtn(COLOURS.PURPLE, true), opacity: savingPw || newPw.length < 6 ? 0.5 : 1 }}>
-                        {savingPw ? "Saving..." : "Save"}
-                      </button>
-                      <button onClick={() => { setSettingPwFor(null); setNewPw(""); }} style={smallBtn(COLOURS.SLATE)}>Cancel</button>
+                  {/* ── Edit panel ──────────────────────────────────── */}
+                  {isAdmin && isEditing && (
+                    <div style={{ padding: "8px 12px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT }}>
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(120px, 1fr))", gap: "6px", marginBottom: "6px", alignItems: "end" }}>
+                        <div><label style={lblC}>First Name</label><input style={inpC} value={m.first_name || ""} onChange={(e) => updateMember(m.id, { first_name: e.target.value })} /></div>
+                        <div><label style={lblC}>Last Name</label><input style={inpC} value={m.last_name || ""} onChange={(e) => updateMember(m.id, { last_name: e.target.value })} /></div>
+                        <div><label style={lblC}>Email</label><input style={inpC} defaultValue={m.email || ""} onBlur={(e) => { if (e.target.value.trim() !== (m.email || "")) updateMember(m.id, { email: e.target.value }); }} /></div>
+                        <div><label style={lblC}>Role</label><select style={inpC} value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })} disabled={!canEditMember(me, { email: m.email, role: m.role })}>{Array.from(new Set([m.role, ...myAssignableRoles])).map((r) => <option key={r}>{r}</option>)}</select></div>
+                        <div><label style={lblC}>Department</label><select style={inpC} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}><option value="">—</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></div>
+                        <div><label style={lblC}>Business Unit</label><select style={inpC} value={m.business_unit || ""} onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })} disabled={!m.department}><option value="">—</option>{businessUnitsFor(m.department).map((b) => <option key={b}>{b}</option>)}</select></div>
+                        <div><label style={lblC}>Company</label><select style={inpC} value={m.company || ""} onChange={(e) => updateMember(m.id, { company: e.target.value || null })}><option value="">—</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></div>
+                        <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }}>
+                          <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} /> HOD
+                        </label>
+                      </div>
+
+                      {/* Plants + Notifications */}
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "6px", fontSize: "14px" }}>
+                        {showsDept && plants.length > 0 && (
+                          <>
+                            <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Plants:</span>
+                            {plants.map((p) => {
+                              const on = memberPlants.has(p.id);
+                              const key = `${m.id}-${p.id}`;
+                              return (
+                                <label key={p.id} style={{ display: "flex", alignItems: "center", gap: "2px", color: COLOURS.NAVY, cursor: savingAssignment === key ? "wait" : "pointer", opacity: savingAssignment === key ? 0.5 : 1 }}>
+                                  <input type="checkbox" checked={on} disabled={savingAssignment === key} onChange={() => togglePlant(m.id, p.id, on)} style={{ width: "13px", height: "13px" }} />
+                                  {p.name}
+                                </label>
+                              );
+                            })}
+                            <span style={{ color: COLOURS.HAIRLINE }}>|</span>
+                          </>
+                        )}
+                        <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Notify:</span>
+                        <label style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
+                          <input type="checkbox" checked={m.notify_email} onChange={(e) => updateMember(m.id, { notify_email: e.target.checked })} style={{ width: "13px", height: "13px" }} /> Email
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
+                          <input type="checkbox" checked={m.notify_whatsapp || false} onChange={(e) => updateMember(m.id, { notify_whatsapp: e.target.checked })} style={{ width: "13px", height: "13px" }} /> WA
+                        </label>
+                        {m.notify_whatsapp && (
+                          <input placeholder="+92..." defaultValue={m.phone_e164 || ""} onBlur={(e) => { if (e.target.value !== (m.phone_e164 || "")) updateMember(m.id, { phone_e164: e.target.value || null }); }}
+                            style={{ ...inpC, width: "110px" }} />
+                        )}
+                        {canChangePasswordFor(me, { email: m.email, role: m.role }) && (
+                          <>
+                            <span style={{ color: COLOURS.HAIRLINE }}>|</span>
+                            <button onClick={() => sendPwReset(m.email || "", dn)} disabled={!m.email || resettingPw === m.email}
+                              style={{ ...smallBtn(COLOURS.BLUE), fontSize: "11px", padding: "3px 8px", opacity: resettingPw === m.email ? 0.5 : 1 }}>
+                              {resettingPw === m.email ? "..." : "Reset PW"}
+                            </button>
+                            <button onClick={() => { setSettingPwFor(settingPwFor === m.id ? null : m.id); setNewPw(""); }}
+                              style={{ ...smallBtn(COLOURS.PURPLE), fontSize: "11px", padding: "3px 8px" }}>Set PW</button>
+                          </>
+                        )}
+                        {canDeleteMember(me, { email: m.email, role: m.role }) && (
+                          <button onClick={() => deleteMember(m.id, dn)} style={{ ...smallBtn(COLOURS.RED), fontSize: "11px", padding: "3px 8px" }}>Remove</button>
+                        )}
+                      </div>
+
+                      {/* Set password inline */}
+                      {settingPwFor === m.id && (
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "8px", flexWrap: "wrap" }}>
+                          <input type="text" placeholder="Min 6 characters" value={newPw} onChange={(e) => setNewPw(e.target.value)}
+                            style={{ ...inp, flex: "1 1 150px", maxWidth: "200px" }} />
+                          <button onClick={() => setPwDirectly(m.email || "", dn)} disabled={savingPw || newPw.length < 6}
+                            style={{ ...smallBtn(COLOURS.PURPLE, true), opacity: savingPw || newPw.length < 6 ? 0.5 : 1 }}>
+                            {savingPw ? "Saving..." : "Save"}
+                          </button>
+                          <button onClick={() => { setSettingPwFor(null); setNewPw(""); }} style={smallBtn(COLOURS.SLATE)}>Cancel</button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+              );
+            })}
+
+            {filtered.length === 0 && (
+              <div style={{ padding: "20px 12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>No members found.</div>
+            )}
+          </div>
+
+          {/* ── Pagination ────────────────────────────── */}
+          {filtered.length > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", flexWrap: "wrap", gap: "8px" }}>
+              <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length} member{filtered.length !== 1 ? "s" : ""}
+              </div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  style={{
+                    ...smallBtn(COLOURS.NAVY), padding: "6px 14px", fontSize: "12px",
+                    opacity: page === 0 ? 0.4 : 1,
+                    cursor: page === 0 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  style={{
+                    ...smallBtn(COLOURS.NAVY), padding: "6px 14px", fontSize: "12px",
+                    opacity: page >= totalPages - 1 ? 0.4 : 1,
+                    cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
             </div>
-          );
-        })}
+          )}
+        </>
+      )}
 
-        {filtered.length === 0 && (
-          <div style={{ padding: "20px 12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>No members found.</div>
-        )}
-      </div>
+      {/* ══════════════════════════════════════════════
+          TAB: ACCESS MATRIX
+      ══════════════════════════════════════════════ */}
+      {activeTab === "matrix" && isAdmin && (
+        <AccessMatrix members={members} isMobile={isMobile} />
+      )}
 
-      {/* ── Access Control Matrix ────────────────────── */}
-      {isAdmin && <AccessMatrix members={members} isMobile={isMobile} />}
-
-      {/* ── Department Ownership ─────────────────────── */}
-      {isAdmin && departments.length > 0 && (
-        <div style={{ marginTop: "16px" }}>
-          <div onClick={() => setShowDeptOwners(!showDeptOwners)} style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
-            border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "12px 16px",
-            backgroundColor: showDeptOwners ? COLOURS.NAVY : COLOURS.CARD,
+      {/* ══════════════════════════════════════════════
+          TAB: DEPT. OWNERSHIP
+      ══════════════════════════════════════════════ */}
+      {activeTab === "ownership" && isAdmin && departments.length > 0 && (
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
+          <div style={{
+            backgroundColor: COLOURS.NAVY,
+            padding: "14px 18px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}>
             <div>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: showDeptOwners ? "white" : COLOURS.NAVY }}>Department Ownership</div>
-              <div style={{ fontSize: "14px", color: showDeptOwners ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: "white", fontFamily: "var(--font-display)" }}>
+                Department Ownership
+              </div>
+              <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
                 Primary, backup, and escalation owners
                 {(() => { const v = departments.filter((d) => !d.primary_owner_member_id).length; return v > 0 ? ` · ${v} vacant` : ""; })()}
               </div>
             </div>
-            <span style={{ color: showDeptOwners ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{showDeptOwners ? "▲" : "▼"}</span>
           </div>
-
-          {showDeptOwners && (
-            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: "none", borderRadius: `0 0 ${RADII.CARD} ${RADII.CARD}`, backgroundColor: COLOURS.CARD, padding: "12px" }}>
-              {departments.map((dept) => (
-                <div key={dept.id} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "10px 12px", marginBottom: "8px" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "8px", paddingBottom: "6px", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                    {dept.department_name}
-                    {!dept.primary_owner_member_id && <span style={{ fontSize: "11px", color: COLOURS.RED, marginLeft: "8px", fontWeight: 600 }}>NO PRIMARY OWNER</span>}
+          <div style={{ padding: "12px" }}>
+            {departments.map((dept) => (
+              <div key={dept.id} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "10px 12px", marginBottom: "8px" }}>
+                <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "8px", paddingBottom: "6px", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                  {dept.department_name}
+                  {!dept.primary_owner_member_id && <span style={{ fontSize: "11px", color: COLOURS.RED, marginLeft: "8px", fontWeight: 600 }}>NO PRIMARY OWNER</span>}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", alignItems: "end" }}>
+                  <div>
+                    <label style={lblC}>Primary Owner</label>
+                    <select style={inpC} value={dept.primary_owner_member_id || ""}
+                      onChange={(e) => updateDeptOwner(dept.id, "primary", e.target.value)}>
+                      <option value="">— None —</option>
+                      {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                    </select>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", alignItems: "end" }}>
-                    <div>
-                      <label style={lblC}>Primary Owner</label>
-                      <select style={inpC} value={dept.primary_owner_member_id || ""}
-                        onChange={(e) => updateDeptOwner(dept.id, "primary", e.target.value)}>
-                        <option value="">— None —</option>
-                        {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={lblC}>Backup Owner</label>
-                      <select style={inpC} value={dept.secondary_owner_member_id || ""}
-                        onChange={(e) => updateDeptOwner(dept.id, "secondary", e.target.value)}>
-                        <option value="">— None —</option>
-                        {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={lblC}>Escalation</label>
-                      <select style={inpC} value={dept.escalation_owner_member_id || ""}
-                        onChange={(e) => updateDeptOwner(dept.id, "escalation", e.target.value)}>
-                        <option value="">— None —</option>
-                        {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
-                      </select>
-                    </div>
+                  <div>
+                    <label style={lblC}>Backup Owner</label>
+                    <select style={inpC} value={dept.secondary_owner_member_id || ""}
+                      onChange={(e) => updateDeptOwner(dept.id, "secondary", e.target.value)}>
+                      <option value="">— None —</option>
+                      {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lblC}>Escalation</label>
+                    <select style={inpC} value={dept.escalation_owner_member_id || ""}
+                      onChange={(e) => updateDeptOwner(dept.id, "escalation", e.target.value)}>
+                      <option value="">— None —</option>
+                      {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                    </select>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ── Reassign Open Tasks ──────────────────────── */}
-      {isAdmin && (
-        <div style={{ marginTop: "12px" }}>
-          <div onClick={() => setShowReassign(!showReassign)} style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer",
-            border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "12px 16px",
-            backgroundColor: showReassign ? COLOURS.NAVY : COLOURS.CARD,
+      {/* ══════════════════════════════════════════════
+          TAB: REASSIGN TASKS
+      ══════════════════════════════════════════════ */}
+      {activeTab === "reassign" && isAdmin && (
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
+          <div style={{
+            backgroundColor: COLOURS.NAVY,
+            padding: "14px 18px",
           }}>
-            <div>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: showReassign ? "white" : COLOURS.NAVY }}>Reassign Open Tasks</div>
-              <div style={{ fontSize: "14px", color: showReassign ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
-                Transfer tasks when a member leaves or changes role
-              </div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "white", fontFamily: "var(--font-display)" }}>
+              Reassign Open Tasks
             </div>
-            <span style={{ color: showReassign ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{showReassign ? "▲" : "▼"}</span>
+            <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
+              Transfer tasks when a member leaves or changes role
+            </div>
           </div>
-
-          {showReassign && (
-            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: "none", borderRadius: `0 0 ${RADII.CARD} ${RADII.CARD}`, backgroundColor: COLOURS.CARD, padding: "14px" }}>
-              <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "10px" }}>
-                Moves Not Started, In Progress, and Waiting Reply tasks only. Completed tasks stay with the original owner.
-              </p>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "10px", maxWidth: "500px" }}>
-                <div>
-                  <label style={lblC}>Current owner</label>
-                  <select style={inpC} value={fromMemberId} onChange={(e) => setFromMemberId(e.target.value)}>
-                    <option value="">— Select —</option>
-                    {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)} ({openTaskCounts.get(m.name || "") || 0} open)</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={lblC}>New owner</label>
-                  <select style={inpC} value={toMemberId} onChange={(e) => setToMemberId(e.target.value)}>
-                    <option value="">— Select —</option>
-                    {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
-                  </select>
-                </div>
+          <div style={{ padding: "14px" }}>
+            <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "10px" }}>
+              Moves Not Started, In Progress, and Waiting Reply tasks only. Completed tasks stay with the original owner.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "10px", maxWidth: "500px" }}>
+              <div>
+                <label style={lblC}>Current owner</label>
+                <select style={inpC} value={fromMemberId} onChange={(e) => setFromMemberId(e.target.value)}>
+                  <option value="">— Select —</option>
+                  {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)} ({openTaskCounts.get(m.name || "") || 0} open)</option>)}
+                </select>
               </div>
-              {fromMemberId && (() => {
-                const fm = members.find((m) => m.id === fromMemberId);
-                const count = fm ? openTaskCounts.get(fm.name || "") || 0 : 0;
-                return <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "8px" }}>{fm?.name} has <strong>{count}</strong> open task(s).</p>;
-              })()}
-              <button onClick={reassignOpenTasks} disabled={reassigning} style={{ ...smallBtn(COLOURS.RED, true), fontSize: "15px", padding: "6px 14px" }}>
-                {reassigning ? "Reassigning..." : "Move Open Tasks"}
-              </button>
-              {reassignMsg && (
-                <p style={{ marginTop: "8px", fontSize: "15px", fontWeight: 600, color: reassignMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{reassignMsg}</p>
-              )}
+              <div>
+                <label style={lblC}>New owner</label>
+                <select style={inpC} value={toMemberId} onChange={(e) => setToMemberId(e.target.value)}>
+                  <option value="">— Select —</option>
+                  {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                </select>
+              </div>
             </div>
-          )}
+            {fromMemberId && (() => {
+              const fm = members.find((m) => m.id === fromMemberId);
+              const count = fm ? openTaskCounts.get(fm.name || "") || 0 : 0;
+              return <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "8px" }}>{fm?.name} has <strong>{count}</strong> open task(s).</p>;
+            })()}
+            <button onClick={reassignOpenTasks} disabled={reassigning} style={{ ...smallBtn(COLOURS.RED, true), fontSize: "15px", padding: "6px 14px" }}>
+              {reassigning ? "Reassigning..." : "Move Open Tasks"}
+            </button>
+            {reassignMsg && (
+              <p style={{ marginTop: "8px", fontSize: "15px", fontWeight: 600, color: reassignMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{reassignMsg}</p>
+            )}
+          </div>
         </div>
       )}
     </main>
