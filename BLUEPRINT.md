@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 05/07/2026 (Dividend tracking, daily portfolio summary, PSX auto-fetch, DB-side aggregation overhaul).
+> **This is the source of truth.** Read before touching any code. Last updated: 07/07/2026 (Sidebar restructure, Accounts & Returns, Tax Notices, Tax Compliance summary, tax deadline alerts).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -12,9 +12,10 @@
 | Field | Value |
 |-------|-------|
 | Project name | business-cockpit (package.json), Unze Group Dashboard |
-| Live URL | Deployed on Vercel (URL varies by environment) |
+| Live URL | https://pulse.unze.co.uk |
 | Staging URL | Vercel preview deployments on every PR |
 | Deployment | Vercel (automatic on push to main) |
+| GitHub | khuram1901/unze-cockpit |
 | Node version | Not pinned in package.json; Vercel default |
 
 ### Tech Stack (exact versions from package.json)
@@ -53,6 +54,7 @@
 | `VAPID_PRIVATE_KEY` | Web push notifications | Yes |
 | `VAPID_EMAIL` | Web push contact email | Yes |
 | `ENCRYPTION_KEY` | 32-byte key for encrypting OAuth tokens in DB | Yes |
+| `NEXT_PUBLIC_APP_URL` | Used by taxAlertEngine for email links | Yes |
 
 ---
 
@@ -70,21 +72,31 @@ app/
 ├── reset-password/page.tsx           Confirm new password from email link
 │
 ├── home/page.tsx                     Home dashboard — page registry cards, CEO/admin briefing,
-│                                     Manager briefing (ops/finance), cron health panel (admin)
+│                                     Manager briefing (ops/finance), Tax Compliance summary card,
+│                                     Investments card, cron health panel (admin only)
 ├── my-dashboard/page.tsx             Personal task summary for logged-in user
 ├── profile/page.tsx                  User profile — name, email, password change, notification prefs
 │
+├── pa/page.tsx                       PA Dashboard — tasks, notes, calendar events, delegations,
+│                                     dividend calendar (confirmed only, no financial figures)
 │
-├── pa/page.tsx                       PA Dashboard — tasks, notes, calendar events, delegations
+├── accounts-tax/
+│   ├── page.tsx                      Accounts & Returns page shell
+│   ├── AccountsTaxDashboard.tsx      Full dashboard: quarterly accounts schedule (5 entities × 5 steps),
+│   │                                 annual accounts schedule (10 entities × 6 steps),
+│   │                                 monthly/quarterly return filings (FBR Sales Tax, PRA Tax, Income Tax),
+│   │                                 fiscal-year navigation, overdue detection per deadline
+│   └── TaxComplianceSummary.tsx      Summary card component — shows filing %, schedule completion
+│                                     per quarter. Used on home page as a clickable summary tile.
 │
 ├── dashboard/
 │   ├── page.tsx                      Operations Dashboard shell — loads DashboardView
 │   ├── DashboardView.tsx             Full ops dashboard: plant KPIs, charts, stock by PO,
-│                                     tasks, machine issues, breakage pareto.
-│                                     Restyled to Genspark design system (2026-07-05):
-│                                     dark hero card (Good Stock), 5 compact KPI cards,
-│                                     pill tabstrip, COLOURS tokens throughout, JetBrains
-│                                     Mono for tabular numbers, soft status badges.
+│   │                                 tasks, machine issues, breakage pareto.
+│   │                                 Restyled to Genspark design system (2026-07-05):
+│   │                                 dark hero card (Good Stock), 5 compact KPI cards,
+│   │                                 pill tabstrip, COLOURS tokens throughout, JetBrains
+│   │                                 Mono for tabular numbers, soft status badges.
 │   └── MonthlyTargets.tsx            Monthly targets edit form. Restyled (2026-07-05):
 │                                     COLOURS tokens, pill buttons, TRACK progress bars.
 │
@@ -94,18 +106,21 @@ app/
 │   │                                 hairline cards, kicker labels, pill buttons, no accent strips
 │   ├── FinanceManager.tsx            Per-company finance dashboard: daily position, opening balance,
 │   │                                 cash plan, monthly budgets, charts. "Reconnect Google" button
-│   │                                 returns user to company page after OAuth
+│   │                                 returns user to company page after OAuth.
 │   │                                 Restyled to Genspark design system (2026-07-06):
 │   │                                 Net Position = dark hero card (NAVY bg, Inter Tight 44px);
 │   │                                 daily table uses JetBrains Mono; all hex → COLOURS tokens;
 │   │                                 modals: RADII.CARD + kicker labels; hairline-only borders
 │   ├── [company]/page.tsx            Dynamic route — passes slug to FinanceManager
+│   ├── guarantees/page.tsx           Bank Facilities — guarantee records by bank, facility utilisation,
+│   │                                 pay orders, bill linking, chase urgency, expiry tracking
 │   └── upload/page.tsx               Manual PDF upload — drag-and-drop cash flow + bank position
 │                                     PDFs, auto-detects company, shows per-file save status
 │
 ├── receivables/page.tsx              Receivables kanban — stage pipeline for MEPCO/customer bills
 │
-├── investments/page.tsx              PSX portfolio tracker — holdings, current prices, P&L
+├── investments/page.tsx              PSX portfolio tracker — holdings, current prices, P&L,
+│                                     dividend tracking (confirmed + auto-fetched), Today's Change card
 │
 ├── opening-balances/
 │   ├── page.tsx                      Opening balances page shell
@@ -145,7 +160,12 @@ app/
 │   ├── DepartmentDashboard.tsx       Default department view — tasks, notices
 │   ├── AuditDashboard.tsx            Audit dept — audit plan items, findings
 │   ├── HRDashboard.tsx               HR dept — recruitment, evaluations, strategy goals
-│   ├── TaxationDashboard.tsx         Taxation dept — legal notices, tax deadlines
+│   ├── TaxationDashboard.tsx         Tax Notices — legal notices (notice_type='tax').
+│   │                                 Enhanced: is_active (Active/Inactive toggle), notice_status
+│   │                                 ('Order'/'Notice'/'Show Cause'), legal_stage
+│   │                                 ('Authority'/'Department'/'CIR Appeal'/'Tribunal'/
+│   │                                 'High Court'/'Supreme Court'). Active/inactive filter tabs.
+│   │                                 canManageTaxNotices gates write access.
 │   └── AdminDashboard.tsx            Admin dept — categories, spend tracking
 │
 ├── exceptions/page.tsx               Exception management — surfaced alerts and rule violations
@@ -161,16 +181,17 @@ app/
     ├── api-auth.ts                   requireAuth(req) — validates Bearer token in API routes
     ├── permissions.ts                Central permission functions — SINGLE SOURCE OF TRUTH
     ├── pageRegistry.ts               PAGE_REGISTRY — maps permKeys to home dashboard cards
+    │                                 GROUP_ORDER: Overview → Operations → Departments → Finance →
+    │                                 My Workspace → Settings → Preferences
     ├── useRouteGuard.ts              useRequireCapability() + useRequireDepartment() hooks
     ├── useUserCtx.ts                 useUserCtx() hook — loads user role/dept/overrides
     ├── AuthWrapper.tsx               Wraps app — handles auth state, notification bell, sidebar
     ├── SidebarLayout.tsx             Sidebar nav + mobile header — visibility via PERM_FUNC map.
-│   │                                 SIDEBAR_GROUPS order: Finance → Departments → Operations →
-│   │                                 Tasks & Meetings → Settings. "Command Centre" group removed
-│   │                                 (contained only PA Dashboard, never shown to Admin/CEO).
-│   │                                 Items within each group are sorted A–Z case-insensitively at
-│   │                                 render time via .sort((a,b) => a.title.trim().toLowerCase()
-│   │                                 .localeCompare(b.title.trim().toLowerCase())).
+    │                                 SIDEBAR_GROUPS order: Overview → Operations → Departments →
+    │                                 Finance → My Workspace → Settings.
+    │                                 "Tasks & Meetings" and "Command Centre" groups removed.
+    │                                 Items within each group are sorted A–Z case-insensitively at
+    │                                 render time via .sort().
     ├── ThemeProvider.tsx             Dark/light mode context
     ├── SharedUI.tsx                  Design tokens (COLOURS, RADII, SHADOWS) + shared components
     ├── constants.ts                  COMPANIES array — UTPL and IFPL IDs/slugs
@@ -178,6 +199,14 @@ app/
     ├── DateInput.tsx                 Custom DD/MM/YYYY date input — replaces all <input type="date">
     │                                 Shows DD/MM/YYYY, auto-inserts slashes, validates on blur,
     │                                 calls onChange with YYYY-MM-DD. Fixes Safari MM/DD/YYYY issue.
+    ├── taxAlertEngine.ts             Tax deadline alert engine — called by the nightly cron and
+    │                                 fire-and-forget after each AccountsTaxDashboard save.
+    │                                 computeAndStoreTaxAlerts(supabase, taxYear) → upserts
+    │                                 tax_deadline_alerts rows; sends email to CEO on new alerts.
+    │                                 Two-tier alerts: tier 1 = first warning, tier 2 = overdue.
+    │                                 Covers: quarterly/annual schedules, FBR/PRA monthly returns,
+    │                                 Income Tax quarterly returns, annual personal/company returns.
+    ├── EscalationTrafficLights.tsx   Traffic-light component (moved from app/executive/ in 2026-07-05)
     ├── department-config.ts          Department slug → name mapping
     ├── audit-log.ts                  logAuditEvent() helper
     ├── send-email.ts                 Email sending via Gmail API
@@ -198,7 +227,7 @@ app/
         ├── cash-flow-parser.ts       Parse PDF cash flow documents
         ├── extract-text.ts           Raw text extraction from PDF
         ├── pdf-parse.d.ts            Type declarations for pdf-parse
-        └── reconcile.ts              Reconcile parsed vs existing position data
+        └── reconcile.ts             Reconcile parsed vs existing position data
 
 api/
 ├── admin/
@@ -215,15 +244,16 @@ api/
 ├── calendar/
 │   ├── create-event/route.ts         POST — create Google Calendar event
 │   └── freebusy/route.ts             GET — check calendar free/busy (auth required)
+├── cron/
+│   └── tax-alerts/route.ts           GET (cron Bearer CRON_SECRET) + POST (fire-and-forget,
+│                                     Supabase session auth) — calls computeAndStoreTaxAlerts().
+│                                     Runs twice daily: 00:00 UTC and 06:00 UTC.
 ├── finance/
 │   ├── bulk-upload/route.ts          POST — upload multiple PDF cash flow files (admin only)
-│   ├── upload-pdfs/route.ts          POST — manual drag-and-drop PDF upload (cash flow + bank position pairs)
-│   ├── check-drive/route.ts          GET — cron every 10min; reads PDFs from Google Drive Drop Here folder,
-│   │                                 parses them, saves to daily_cash_position + bank_position_snapshots,
-│   │                                 moves processed files to Processed folder
-│   ├── setup-drive-folder/route.ts   GET — one-time setup; creates Cockpit Cash Sheets/Drop Here/Processed
-│   │                                 folders in Google Drive, saves folder IDs to app_settings table
-│   ├── setup-gmail-filter/route.ts   GET — creates cockpit-cash Gmail label + filter (CRON_SECRET gated)
+│   ├── upload-pdfs/route.ts          POST — manual drag-and-drop PDF upload
+│   ├── check-drive/route.ts          GET — cron every 10min; reads PDFs from Google Drive Drop Here folder
+│   ├── setup-drive-folder/route.ts   GET — one-time setup; creates Google Drive folder structure
+│   ├── setup-gmail-filter/route.ts   GET — creates cockpit-cash Gmail label + filter
 │   ├── check-inbox/route.ts          POST — check Gmail for new finance PDFs (admin only)
 │   ├── parse-cash-flow/route.ts      POST — parse uploaded PDF into daily position data
 │   ├── upload-forecast/route.ts      POST — upload Excel cash flow forecast
@@ -235,15 +265,20 @@ api/
 │   └── guarantee-facilities/route.ts All methods: Admin, CEO, Finance Manager only → 403 otherwise.
 │                                     Server-side role check enforced in addition to UI-level gates.
 ├── google/
-│   ├── auth/route.ts                 GET — initiate Google OAuth2 flow; accepts ?returnTo= param so
-│   │                                 callback redirects back to originating page (finance/calendar)
-│   ├── callback/route.ts             GET — OAuth2 callback; reads state param for returnTo redirect
+│   ├── auth/route.ts                 GET — initiate Google OAuth2 flow
+│   ├── callback/route.ts             GET — OAuth2 callback
 │   ├── auth-notifications/route.ts   GET — initiate OAuth2 flow (Gmail notifications)
 │   ├── callback-notifications/route.ts GET — OAuth2 callback (Gmail notifications)
 │   └── status/route.ts              GET — check connected Google accounts
 ├── health/route.ts                   GET — basic health check endpoint
 ├── investments/
-│   └── update-prices/route.ts        POST — refresh PSX stock prices (admin only)
+│   ├── update-prices/route.ts        POST — refresh PSX stock prices (admin only)
+│   ├── dividends/route.ts            GET/POST/PATCH/DELETE — stock_dividends CRUD. GET?mode=upcoming
+│   │                                 calls get_upcoming_dividends RPC.
+│   ├── daily-summary/route.ts        Weekday cron (05:00 UTC) — calls get_portfolio_daily_summary RPC,
+│   │                                 upserts portfolio_snapshots, emails Khuram.
+│   └── fetch-dividends/route.ts      Weekday cron (06:00 UTC) — POSTs to PSX DPS per holding ticker,
+│                                     parses HTML, inserts unconfirmed dividends. Never overwrites confirmed.
 ├── me/
 │   └── permissions/route.ts          GET — return current user's permission overrides
 ├── meetings/
@@ -256,17 +291,18 @@ api/
 ├── notifications/
 │   ├── digest/route.ts               POST — send digest notification (cron)
 │   ├── password-changed/route.ts     POST — notify admin of password change
-│   ├── push-subscribe/route.ts       POST — register push subscription (server validates email)
+│   ├── push-subscribe/route.ts       POST — register push subscription
 │   ├── push/route.ts                 POST — send push notification to specific user
 │   └── send/route.ts                 POST — send email notification
 ├── reports/
 │   ├── daily-pdf/route.ts            POST — generate and send daily PDF report (cron)
-│   └── weekly/route.ts               POST — generate and send weekly email digest (cron)
+│   ├── weekly/route.ts               POST — generate and send weekly email digest (cron)
+│   └── monthly-po/route.ts           POST — monthly PO progress report (cron, 1st of month)
 ├── stock/
-│   ├── authority-letters/route.ts    GET/POST — list/create authority letters; GET with letterNumber lookup
-│   ├── contractors/route.ts          GET/POST — list/create contractors
-│   ├── dispatch-records/route.ts     GET/POST — list/create dispatch records
-│   ├── production-allocations/route.ts GET/POST — list/replace production allocations
+│   ├── authority-letters/route.ts    GET/POST/PATCH — list/create/edit authority letters
+│   ├── contractors/route.ts          GET/POST/PATCH — list/create/edit contractors
+│   ├── dispatch-records/route.ts     GET/POST/PATCH — list/create/edit dispatch records
+│   ├── production-allocations/route.ts GET/POST/PATCH — list/replace production allocations
 │   ├── purchase-orders/route.ts      GET/POST/PATCH — manage purchase orders
 │   └── summary/route.ts              GET — full stock tree per plant (POs → letters → balances)
 └── tasks/
@@ -326,10 +362,11 @@ api/
 #### Group Colours (pageRegistry.ts — GROUP_COLOURS)
 | Group | Colour |
 |-------|--------|
+| Overview | `#0F1720` (Navy) |
 | Finance | `#0F7B5F` (Success green) |
 | Operations | `#3B4CCA` (Accent blue) |
-| Tasks & Meetings | `#B4791F` (Warning amber) |
-| Departments | `#3B4CCA` (Accent blue) |
+| Departments | `#B4791F` (Amber) |
+| My Workspace | `#64748B` (Slate) |
 | Settings | `#64748B` (Slate) |
 
 ### Fonts
@@ -344,11 +381,11 @@ Three custom fonts loaded via `next/font/google` in `app/layout.tsx`. CSS variab
 **Type scale:**
 | Role | Font | Size / Weight / Tracking |
 |------|------|--------------------------|
-| Display / hero KPI | Inter Tight | 48–56px / 600 / −0.025em |
+| Display / hero KPI | Inter Tight | 48–60px / 600 / −0.025em |
 | Page title (H1) | Inter Tight | 32px / 600 / −0.02em |
 | Section title (H2) | Inter Tight | 20–22px / 600 / −0.01em |
-| Metric large | Inter Tight | 36px / 600 / −0.02em |
-| Metric medium | Inter Tight | 26px / 600 / −0.02em |
+| Metric large | Inter Tight | 36–44px / 600 / −0.02em |
+| Metric medium | Inter Tight | 26–32px / 600 / −0.02em |
 | Metric small | Inter Tight | 22px / 600 / −0.015em |
 | Body | Inter | 14px / 400 |
 | UI text / sidebar | Inter | 13px / 400–500 |
@@ -394,7 +431,7 @@ Cards have **no shadow** by design (Genspark spec). Shadows reserved for overlay
 | `displayRole(role, email?)` | string, string? | Returns "CEO" for k.saleem email, else role |
 | `statusColor(status)` | string\|null | Maps status string to colour hex |
 | `priorityColor(priority)` | string\|null | Maps priority to colour hex |
-| `SectionTitle` | `{ title, style? }` | Inter Tight h2 at 20px/600 |
+| `SectionTitle` | `{ title, style? }` | Inter Tight h2 at 22px/600 |
 | `PageHeader` | `{ hideHome? }` | "← Home" back link pill |
 | `StatusBadge` | `{ status }` | Coloured-text chip on soft background |
 | `PriorityBadge` | `{ priority }` | Coloured-text chip on soft background |
@@ -415,7 +452,6 @@ Cards have **no shadow** by design (Genspark spec). Shadows reserved for overlay
 | `ErrorBanner` | `{ message, onRetry? }` | Danger-soft error banner |
 | `SkeletonCard` | `{ width?, height? }` | Shimmer loading placeholder |
 | `SkeletonRows` | `{ count?, height? }` | Stack of shimmer rows |
-| `SkeletonRows` | `{ count?, height? }` | Multiple skeleton rows for table loading |
 
 ### Date Format Rules
 - **All displayed dates: DD/MM/YYYY** via `formatDateUK()` from `lib/dateUtils.ts`
@@ -427,17 +463,17 @@ Cards have **no shadow** by design (Genspark spec). Shadows reserved for overlay
 ### Status Colour Map
 | Status | Colour |
 |--------|--------|
-| Completed, Closed, Approved, Resolved, Collected | GREEN `#16a34a` |
-| In Progress, Pending, Partially Working | AMBER `#d97706` |
-| Submitted | BLUE `#2563eb` |
-| Waiting Reply, Open, Down, Rejected | RED `#dc2626` |
-| Cancelled | SLATE `#64748b` |
+| Completed, Closed, Approved, Resolved, Collected | GREEN `#0F7B5F` |
+| In Progress, Pending, Partially Working | AMBER `#B4791F` |
+| Submitted | BLUE `#3B4CCA` |
+| Waiting Reply, Open, Down, Rejected | RED `#B3261E` |
+| Cancelled | SLATE `#64748B` |
 
 ---
 
 ## 4. Complete Database Schema
 
-> Source of truth: `supabase/` migration files 001–056. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run.
+> Source of truth: `supabase/` migration files 001–072. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run.
 
 ### Core tables
 
@@ -509,6 +545,12 @@ Per-member boolean overrides for every permission key. NULL = use role default.
 | can_edit_investments | boolean | |
 | can_view_stock | boolean | |
 | can_manage_stock | boolean | |
+| can_view_guarantees | boolean | Added migration 063/068 |
+| can_manage_guarantees | boolean | Added migration 068 |
+| can_manage_meetings | boolean | Added migration 068 |
+| can_view_dept_tax_accounts | boolean | Added migration 070 — NULL defaults to true (all users can view) |
+| can_manage_tax_schedule | boolean | Added migration 070 — NULL defaults to false (manage explicitly granted) |
+| can_manage_tax_notices | boolean | Added migration 069 — NULL defaults to false |
 | created_at | timestamptz | |
 | updated_at | timestamptz | |
 
@@ -588,39 +630,15 @@ UNIQUE(member_id). **RLS:** Admin-tier only can read/write.
 
 #### `bank_position_snapshots`
 Raw bank account breakdown from PDF uploads.
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| company_id | uuid FK → companies | |
-| position_date | date | UNIQUE with company_id |
-| cash_at_office | numeric | |
-| js_bank_unze_trading | numeric | |
-| askari_bank_saving | numeric | |
-| allied_bank_unze_trading | numeric | |
-| dib_bank | numeric | |
-| silk_bank_saving | numeric | |
-| mcb_unze_trading | numeric | |
-| askari_saving_1489 | numeric | |
-| askari_saving_unze_trading | numeric | |
-| hbl_pf_unze_trading | numeric | |
-| meezan_bank_unze_trading | numeric | |
-| hbl_unze_trading | numeric | |
-| hbl_h_unze_trading | numeric | |
-| faysal_bank_unze_trading | numeric | |
-| total_available_balance | numeric | |
-| post_dated_cheques_total | numeric | |
-| post_dated_currency | text | DEFAULT 'PKR' |
-| raw_pdf_filename | text | |
-| uploaded_by | text | |
-| reconciled | boolean | |
-| reconcile_notes | text | |
-| created_at | timestamptz | |
+(all bank account columns — see migration files for full list)
+
+**RLS:** Same as daily_cash_position.
 
 #### `department_budgets`
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid PK | |
-| company_id | uuid FK → companies NOT NULL | Added NOT NULL in migration 014 |
+| company_id | uuid FK → companies NOT NULL | |
 | department_name | text | |
 | budget_month | text | 'YYYY-MM' |
 | budgeted_amount | numeric | |
@@ -629,40 +647,78 @@ Raw bank account breakdown from PDF uploads.
 | created_at | timestamptz | |
 
 #### `opening_balances` / `cash_opening_balance`
-Two related tables — see also `cash_opening_balance` above. `opening_balances` is the older table; `cash_opening_balance` is the newer company-scoped one. See `opening-balances/` page.
+Two related tables — `cash_opening_balance` is the newer company-scoped one. See `opening-balances/` page.
+
+---
+
+### Guarantees / Bank Facilities tables (migrations 060–064)
+
+#### `guarantee_facilities`
+Bank facility limits per bank.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| bank_name | text NOT NULL | |
+| facility_name | text | |
+| facility_type | text | e.g. 'guarantee', 'pay_order' |
+| total_limit | numeric | |
+| notes | text | |
+| active | boolean | DEFAULT true |
+| created_at / updated_at | timestamptz | |
+
+#### `guarantees`
+Individual guarantee/pay-order records.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| facility_id | uuid FK → guarantee_facilities | nullable |
+| guarantee_type | text | |
+| guarantee_number | text | |
+| bank_name | text | |
+| issue_date | date | |
+| expiry_date | date | nullable |
+| amount | numeric | |
+| cash_margin_pct | numeric | |
+| cash_margin_amount | numeric | |
+| bank_charges | numeric | |
+| customer_name | text | |
+| tender_reference | text | nullable |
+| purpose | text | nullable |
+| status | text | |
+| linked_guarantee_id | uuid FK → guarantees | nullable (for Pay Order → Guarantee links) |
+| first_bill_receivable_id | uuid FK → receivables | nullable |
+| linked_bill_date / linked_invoice_ref / linked_bill_amount | various | Bill link fields |
+| performance_bill_date / effective_bill_date / release_due_date / returned_date | date | nullable |
+| days_to_expiry | numeric | computed |
+| chase_urgency | text | |
+| notes | text | nullable |
+| created_by / created_at | text / timestamptz | |
+
+**Access:** GET — Admin, CEO, Finance Manager, Ops Manager; POST/PATCH/DELETE — Admin, CEO, Finance Manager only.
 
 ---
 
 ### Receivables tables
 
 #### `receivable_stages`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| name | text | Stage label |
-| order_index | int | Sort order for kanban |
-| working_day_budget | int | Max working days to spend at this stage |
-| created_at | timestamptz | |
-
-**Seeded:** 9 stages (re-seeded in migration 041). PA cannot view.
+9 stages with `working_day_budget` per stage. Seeded in migration 041.
 
 #### `receivables`
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid PK | |
-| plant_id | uuid FK → plants | Not company-scoped — linked to plant |
+| plant_id | uuid FK → plants | |
 | bill_number | text | |
-| bill_type | text | 'Normal', 'Sales Tax', 'Retention' (added in 041) |
+| bill_type | text | 'Normal', 'Sales Tax', 'Retention' |
 | amount | numeric | |
 | issue_date | date | |
-| stage_id | uuid FK → receivable_stages | Current pipeline stage |
+| stage_id | uuid FK → receivable_stages | |
 | status | text | 'Active', 'Collected' |
 | collected_date | date | |
 | notes | text | |
 | created_at | timestamptz | |
 
 **RLS:** Admin/CEO + Finance managers + Ops managers.
-**Pages:** `receivables/page.tsx` reads and writes.
 
 ---
 
@@ -672,17 +728,13 @@ Two related tables — see also `cash_opening_balance` above. `opening_balances`
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid PK | |
-| name | text | Plant name (e.g. "Plant 1") |
-| type | text | Plant type |
+| name | text | |
+| type | text | |
 | active | boolean | |
 | created_at | timestamptz | |
 
 #### `member_plants`
 Junction: which members are assigned to which plants.
-| Column | Type |
-|--------|------|
-| member_id | uuid FK → members |
-| plant_id | uuid FK → plants |
 
 #### `production_entries`
 | Column | Type | Notes |
@@ -690,96 +742,34 @@ Junction: which members are assigned to which plants.
 | id | uuid PK | |
 | plant_id | uuid FK → plants | |
 | entry_date | date | |
-| produced_31 | numeric | Pipes size 31 |
-| produced_36 | numeric | Pipes size 36 |
-| produced_45 | numeric | Pipes size 45 |
-| produced_meter | numeric | Meters produced |
-| entered_by | text | |
-| created_at | timestamptz | |
-
-**Constraint (migration 044):** UNIQUE(plant_id, entry_date) — one entry per plant per day.
-
-#### `dispatch_entries`
-Legacy dispatch table — keeps ops dashboard working.
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| plant_id | uuid FK → plants | |
-| entry_date | date | |
-| dispatched_31 | numeric | |
-| dispatched_36 | numeric | |
-| dispatched_45 | numeric | |
-| dispatched_meter | numeric | |
+| produced_31 / 36 / 45 / meter | numeric | |
 | entered_by | text | |
 | created_at | timestamptz | |
 
 **Constraint:** UNIQUE(plant_id, entry_date).
 
+#### `dispatch_entries`
+Legacy dispatch table — keeps ops dashboard working.
+Same structure as production_entries but dispatched_ columns. UNIQUE(plant_id, entry_date).
+
 #### `breakage_entries`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| plant_id | uuid FK → plants | |
-| entry_date | date | |
-| broken_31 | numeric | |
-| broken_36 | numeric | |
-| broken_45 | numeric | |
-| entered_by | text | |
-| created_at | timestamptz | |
+Same structure; broken_ columns.
 
 #### `scrap_processed_entries`
-Scrap/recycled material entries.
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| plant_id | uuid FK → plants | |
-| entry_date | date | |
-| scrap_processed | numeric | |
-| entered_by | text | |
-| created_at | timestamptz | |
+Scrap/recycled material. scrap_processed column.
 
 #### `broken_opening_balances`
 Opening broken stock balances per plant.
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| plant_id | uuid FK → plants | |
-| balance_31 | numeric | |
-| balance_36 | numeric | |
-| balance_45 | numeric | |
-| created_at | timestamptz | |
 
 #### `machine_issues`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| plant_name | text | |
-| machine_name | text | |
-| issue_status | text | 'Down', 'Partially Working' |
-| issue_description | text | |
-| action_taken | text | |
-| expected_resolution | date | |
-| created_at | timestamptz | |
+Machine downtime records: plant_name, machine_name, issue_status, issue_description, action_taken, expected_resolution.
 
-#### `monthly_production_targets`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| plant_id | uuid FK → plants | |
-| plant_name | text | |
-| target_month | text | 'YYYY-MM' |
-| target_31 | numeric | |
-| target_36 | numeric | |
-| target_45 | numeric | |
-| target_meter | numeric | |
-| created_at | timestamptz | |
-
-#### `monthly_dispatch_targets`
-Same structure as monthly_production_targets but for dispatch.
+#### `monthly_production_targets` / `monthly_dispatch_targets`
+Per-plant monthly targets. Fields: plant_id, plant_name, target_month, target_31/36/45/meter.
 
 ---
 
-### Stock system tables (migration 048, applied 01/07/2026)
+### Stock system tables (migrations 048–059)
 
 Hierarchy: Plant → PurchaseOrder → Contractor → AuthorityLetter → DispatchRecord
 
@@ -787,106 +777,53 @@ Hierarchy: Plant → PurchaseOrder → Contractor → AuthorityLetter → Dispat
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid PK | |
-| plant_id | uuid FK → plants | ON DELETE RESTRICT |
-| plant_name | text | Denormalised for display |
-| customer_name | text | e.g. 'MEPCO', 'FESCO' |
+| plant_id | uuid FK → plants | |
+| plant_name | text | Denormalised |
+| customer_name | text | |
 | po_number | text | UNIQUE with plant_id |
-| po_label | text | e.g. 'Old PO', '1st Year PO with 15% Repeat' |
-| ordered_31 | numeric | |
-| ordered_36 | numeric | |
-| ordered_45 | numeric | |
-| ordered_meter | numeric | |
-| variance_pct | numeric | DEFAULT 3 — allowed overproduction buffer % |
-| status | text | 'Active' or 'Closed' CHECK constraint |
-| is_system_unallocated | boolean | Auto-created per plant, cannot be deleted/closed |
+| po_label | text | |
+| ordered_31/36/45/meter | numeric | |
+| variance_pct | numeric | DEFAULT 3 |
+| status | text | 'Active' or 'Closed' |
+| is_system_unallocated | boolean | Cannot be deleted/closed |
 | start_date | date | |
-| notes | text | |
-| created_by | text | |
+| opening_produced_31/36/45/meter | numeric | Backfill |
 | created_at / updated_at | timestamptz | |
-| opening_produced_31/36/45/meter | numeric | Backfill for pre-go-live production history |
-
-**Constraint:** UNIQUE(plant_id, po_number).
-**Index:** po_plant_idx on (plant_id, status).
-**RLS:** Read = authenticated; Write = admin/exec OR Manager role.
 
 #### `production_allocations`
-Links a `production_entries` row to one PO.
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| production_entry_id | uuid FK → production_entries | ON DELETE CASCADE |
-| po_id | uuid FK → purchase_orders | ON DELETE RESTRICT |
-| qty_31 | numeric | |
-| qty_36 | numeric | |
-| qty_45 | numeric | |
-| qty_meter | numeric | |
-| created_at | timestamptz | |
-
-**Constraint:** UNIQUE(production_entry_id, po_id).
-**RLS:** Any authenticated user can write (plant member allocations).
+Links a production_entries row to one PO.
 
 #### `contractors`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| name | text NOT NULL | |
-| cnic_or_id | text | |
-| contact_phone | text | |
-| contact_address | text | |
-| notes | text | |
-| created_by | text | |
-| created_at | timestamptz | |
-
-**Index:** contractors_name_idx on lower(name).
-**RLS:** Read = authenticated; Write = admin/exec OR Manager.
+Contractor records: name, cnic_or_id, contact_phone, contact_address, notes.
 
 #### `po_contractors`
-Junction: PO ↔ Contractor (many-to-many).
-| Column | Type |
-|--------|------|
-| id | uuid PK |
-| po_id | uuid FK → purchase_orders ON DELETE CASCADE |
-| contractor_id | uuid FK → contractors ON DELETE RESTRICT |
-| created_at | timestamptz |
-
-**Constraint:** UNIQUE(po_id, contractor_id).
+Junction: PO ↔ Contractor. UNIQUE(po_id, contractor_id).
 
 #### `authority_letters`
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid PK | |
-| po_id | uuid FK → purchase_orders | ON DELETE RESTRICT |
-| contractor_id | uuid FK → contractors | ON DELETE RESTRICT |
+| po_id | uuid FK → purchase_orders | |
+| contractor_id | uuid FK → contractors | |
 | letter_number | text NOT NULL | |
 | issue_date | date NOT NULL | |
-| expiry_date | date | Added in migration 049 |
-| issued_by | text NOT NULL | MEPCO-side person |
+| expiry_date | date | Added migration 049 |
+| issued_by | text NOT NULL | |
 | qty_31/36/45/meter | numeric | Authorised quantities |
-| opening_dispatched_31/36/45/meter | numeric | Backfill for pre-go-live pickups |
-| notes | text | |
-| created_by | text | |
-| created_at | timestamptz | |
-
-**Constraint:** UNIQUE(po_id, letter_number).
-**Indexes:** auth_letters_po_idx, auth_letters_contractor_idx.
-**RLS:** Read = authenticated; Write = admin/exec OR Manager.
+| opening_dispatched_31/36/45/meter | numeric | Backfill |
+| notes / created_by / created_at | various | |
 
 #### `dispatch_records`
-Individual pickups against an authority letter (stock system — separate from `dispatch_entries`).
+Individual pickups against an authority letter.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid PK | |
-| authority_letter_id | uuid FK → authority_letters | ON DELETE RESTRICT |
-| dispatch_date | date | DEFAULT current_date |
+| authority_letter_id | uuid FK → authority_letters | |
+| dispatch_date | date | |
 | qty_31/36/45/meter | numeric | |
-| released_by | text NOT NULL | Plant staff who released stock |
+| released_by | text NOT NULL | |
 | vehicle_number | text | |
-| notes | text | |
-| created_by | text | |
-| created_at | timestamptz | |
-
-**Indexes:** dispatch_records_letter_idx, dispatch_records_date_idx.
-**RLS:** Any authenticated user can write.
+| notes / created_by / created_at | various | |
 
 ---
 
@@ -898,136 +835,45 @@ Individual pickups against an authority letter (stock system — separate from `
 | id | uuid PK | |
 | task_type | text | |
 | description | text NOT NULL | |
-| project | text | Department/project label |
+| project | text | |
 | priority | text | 'Urgent', 'High', 'Medium', 'Normal', 'Low' |
-| due_date | date | **Required** — all tasks must have a due date |
+| due_date | date | **Required** |
 | assigned_date | date | |
-| assigned_to | text | Assignee name |
-| assigned_to_email | text | Assignee email |
-| assigned_to_department | text | |
-| assigned_by | text | Creator name |
-| assigned_by_email | text | Creator email — added migration 042 |
+| assigned_to / assigned_to_email / assigned_to_department | text | |
+| assigned_by / assigned_by_email | text | |
 | status | text | 'Not Started', 'In Progress', 'Waiting Reply', 'Submitted', 'Completed', 'Cancelled' |
 | completion_notes | text | |
-| meeting_id | uuid FK → meetings | If created from meeting |
-| time_spent_minutes | int | DEFAULT 0, added migration 018 |
+| meeting_id | uuid FK → meetings | |
+| time_spent_minutes | int | DEFAULT 0 |
 | created_at | timestamptz | |
-
-**RLS:** See migration 027 — Admin/PA/CEO see all; members see own assigned/created tasks.
 
 #### `recurring_tasks`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| description | text NOT NULL | |
-| assigned_to | text | |
-| assigned_to_email | text | |
-| assigned_to_department | text | |
-| assigned_by | text | |
-| priority | text | DEFAULT 'Normal' |
-| project | text | |
-| frequency | text | 'weekly', 'monthly', 'quarterly' |
-| day_of_week | int | 0=Sun … 6=Sat |
-| day_of_month | int | 1–31 |
-| due_days_after | int | DEFAULT 3 |
-| active | boolean | |
-| last_created_at | timestamptz | |
-| created_at | timestamptz | |
-
-**RLS:** Admin/Exec only read and write.
+Templates for recurring task generation. Fields: description, assigned_to/email/dept, frequency ('weekly'/'monthly'/'quarterly'), day_of_week, day_of_month, due_days_after, active.
+**RLS (migration 072):** Uses `is_privileged()` — PA (Executive role) can read and write. Previously was `is_admin_or_exec()` which blocked PA since migration 027.
 
 #### `meetings`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| meeting_date | date NOT NULL | |
-| title | text NOT NULL | |
-| company | text | Company name |
-| department | text | 'Executive Office' for cross-dept |
-| executive_summary | text | AI-generated |
-| decisions | jsonb | Array of decision strings |
-| risks | jsonb | Array of risk strings |
-| opportunities | jsonb | Array of opportunity strings |
-| attendees | jsonb | Array of attendee objects |
-| raw_transcript | text | Original input |
-| created_by | text | |
-| created_at | timestamptz | |
+fields: meeting_date, title, company, department, executive_summary, decisions, risks, opportunities, attendees (jsonb), raw_transcript, created_by.
 
-#### `meeting_attendees`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| meeting_id | uuid FK → meetings | ON DELETE CASCADE |
-| member_email | text | |
-| member_name | text | |
-| viewed_at | timestamptz | When they read the minutes |
-
-#### `meeting_tasks`
-| Column | Type |
-|--------|------|
-| meeting_id | uuid FK → meetings |
-| task_id | uuid FK → tasks |
-| PRIMARY KEY | (meeting_id, task_id) |
-
-#### `pending_minutes`
-Gmail-ingested raw minutes awaiting admin review.
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| gmail_message_id | text | |
-| subject | text | |
-| from_email | text | |
-| raw_body | text | |
-| created_at | timestamptz | |
-
-**RLS:** Admin/Executive only (migration 038).
+#### `meeting_attendees`, `meeting_tasks`, `pending_minutes`
+Supporting meeting tables. See migration files.
 
 ---
 
 ### Notification tables
 
 #### `notification_log`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| recipient_email | text NOT NULL | |
-| recipient_name | text | |
-| channel | text NOT NULL | 'email', 'whatsapp' |
-| subject | text | |
-| body_preview | text | |
-| trigger_type | text NOT NULL | |
-| trigger_record_id | text | |
-| status | text | DEFAULT 'sent' |
-| created_at | timestamptz | |
+Tracks sent emails and WhatsApp messages: recipient_email, channel, subject, trigger_type, status.
 
 #### `push_subscriptions`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| email | text NOT NULL | |
-| endpoint | text NOT NULL | |
-| p256dh | text | |
-| auth | text | |
-| created_at | timestamptz | |
-
-**RLS:** Own email only (migration 038).
+Web push registration: email, endpoint, p256dh, auth. RLS: own email only.
 
 ---
 
 ### Google OAuth table
 
 #### `google_oauth_tokens`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| email | text | Authorised Google account email |
-| access_token | text | Encrypted (migration 014) |
-| refresh_token | text | Encrypted |
-| expires_at | timestamptz | |
-| scope | text | |
-| created_at | timestamptz | |
-
-**RLS:** Admin-tier only.
+Encrypted tokens for Google integration. Admin-tier only.
+Single account: k.saleem@unzegroup.com handles calendar, Gmail read, outbound notifications, backup.
 
 ---
 
@@ -1040,13 +886,13 @@ Gmail-ingested raw minutes awaiting admin review.
 | ticker | text NOT NULL | PSX ticker |
 | company_name | text | |
 | quantity | numeric NOT NULL | |
-| buy_price | numeric NOT NULL | Per-share cost |
+| buy_price | numeric NOT NULL | |
 | buy_date | date | |
-| target_price | numeric | Sell target |
+| target_price | numeric | |
 | notes | text | |
 | created_at | timestamptz | |
 
-**RLS:** CEO/Admin only for all operations (updated in migration 038).
+**RLS:** CEO/Admin only.
 
 #### `price_history`
 | Column | Type | Notes |
@@ -1064,19 +910,19 @@ Gmail-ingested raw minutes awaiting admin review.
 | Column | Type | Notes |
 |--------|------|-------|
 | id | uuid PK | |
-| ticker | text NOT NULL | PSX ticker |
-| dividend_per_share | numeric(12,4) NOT NULL | Rs per share |
+| ticker | text NOT NULL | |
+| dividend_per_share | numeric(12,4) NOT NULL | |
 | ex_dividend_date | date NOT NULL | |
 | payment_date | date | |
 | announced_date | date | |
 | status | text | 'upcoming', 'paid', 'cancelled' |
 | source | text | 'manual', 'auto-psx', 'auto-company-site' |
-| confirmed | boolean NOT NULL DEFAULT false | true = manual/verified; false = auto-fetched unverified |
-| notes | text | Raw PSX label stored here for traceability |
-| entered_by | text | Email of who added/triggered entry |
+| confirmed | boolean NOT NULL DEFAULT false | true = manual/verified |
+| notes | text | |
+| entered_by | text | |
 | entered_at | timestamptz | |
 
-**Constraint:** UNIQUE(ticker, ex_dividend_date). Manual (confirmed=true) entries are never overwritten by auto-fetch. RLS: authenticated read; Admin/CEO write via service client.
+**Constraint:** UNIQUE(ticker, ex_dividend_date). Confirmed entries never overwritten by auto-fetch.
 
 #### `portfolio_snapshots` — migration 066
 | Column | Type | Notes |
@@ -1084,171 +930,162 @@ Gmail-ingested raw minutes awaiting admin review.
 | id | uuid PK | |
 | snapshot_date | date NOT NULL | |
 | ticker | text NOT NULL | |
-| total_qty | numeric | |
-| total_cost | numeric | |
-| current_price | numeric | |
-| current_value | numeric | |
-| gain_loss | numeric | |
-| gain_loss_pct | numeric | |
+| total_qty / total_cost / current_price / current_value / gain_loss / gain_loss_pct | numeric | |
 | created_at | timestamptz | |
 
-**Constraint:** UNIQUE(snapshot_date, ticker). Written by the daily-summary cron each weekday. Used by `get_portfolio_summary_full` to compute day-on-day change without re-fetching yesterday's prices.
+**Constraint:** UNIQUE(snapshot_date, ticker). Written by daily-summary cron each weekday.
 
-#### Views
-- `current_prices` — latest price per ticker (DISTINCT ON). Legacy view, still exists in DB.
-- `portfolio_summary` — joins holdings with current_prices for P&L view. Legacy view.
+#### Views (legacy — not used by live app)
+- `current_prices` — latest price per ticker
+- `portfolio_summary` — joins holdings with current_prices
 
-**Important:** Neither view is used by the live app. All pages use `get_portfolio_summary_full` RPC (migration 067) which handles today and historical dates and returns everything in one round-trip. `get_portfolio_summary_as_of` (migration 054) still exists in the DB but is no longer called by any page.
+---
+
+### Tax Accounts tables (migrations 069–071)
+
+#### `tax_schedule_entries` — migration 070
+Tracks completion status of each step in the quarterly and annual accounts schedule.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| tax_year | text NOT NULL | e.g. '2025-26' (Pakistan fiscal year Jul–Jun) |
+| section | text NOT NULL | CHECK IN ('Q1','Q2','Q3','Q4','Annual') |
+| step_index | integer NOT NULL | CHECK BETWEEN 1 AND 6 |
+| entity_key | text NOT NULL | e.g. 'UT', 'IMP', 'BARANH', 'HD', 'ALMAHAR', 'K_SALEEM', etc. |
+| status | text NOT NULL DEFAULT 'Not Started' | CHECK IN ('Not Started','In Progress','External Auditors','Completed') |
+| updated_by | text | Email of last editor |
+| updated_at | timestamptz | |
+
+**Constraint:** UNIQUE(tax_year, section, step_index, entity_key).
+**Index:** idx_tax_schedule_year on (tax_year).
+**RLS:** Authenticated read; any authenticated write (rows belong to the organisation, not a user).
+
+**Quarterly entities (Q1–Q4):** UT, IMP, BARANH, HD, ALMAHAR (5 entities × 5 steps = 25 slots per quarter).
+**Annual entities:** UT, IMP, BARANH, HD, ALMAHAR, KK_JHANG, K_SALEEM, KA_SALEEM, W_SALEEM, SH_SALEEM (10 entities × 6 steps = 60 slots).
+
+#### `tax_return_filings` — migration 070
+Tracks whether each monthly or quarterly tax return has been filed.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| tax_year | text NOT NULL | |
+| return_type | text NOT NULL | CHECK IN ('FBR_SALES_TAX','PRA_TAX','INCOME_TAX') |
+| entity_key | text NOT NULL | |
+| period_key | text NOT NULL | 'YYYY-MM' for monthly; 'Q1'–'Q4' for quarterly Income Tax |
+| filed | boolean NOT NULL DEFAULT false | |
+| filed_at | timestamptz | |
+| filed_by | text | |
+| updated_at | timestamptz | |
+
+**Constraint:** UNIQUE(tax_year, return_type, entity_key, period_key).
+**Index:** idx_tax_return_year on (tax_year).
+
+**Return types and entities:**
+- FBR Sales Tax (monthly): UT, IMP, ALMAHAR
+- PRA Tax (monthly): UT, IMP, BARANH, HD, ALMAHAR
+- Income Tax (quarterly): UT, IMP, BARANH, HD, ALMAHAR
+
+#### `tax_deadline_alerts` — migration 071
+Pre-computed two-tier deadline alerts — written by `taxAlertEngine.ts` via the cron.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| tax_year | text NOT NULL | |
+| alert_type | text NOT NULL | e.g. 'schedule_q1', 'monthly_fbr', 'annual_personal' |
+| period_key | text NOT NULL | Quarter or month string |
+| tier | integer NOT NULL | CHECK IN (1, 2) — 1=first warning, 2=overdue |
+| overdue_count | integer NOT NULL DEFAULT 0 | |
+| alert_message | text NOT NULL | |
+| resolved | boolean NOT NULL DEFAULT false | |
+| first_triggered_at | timestamptz | |
+| last_checked_at | timestamptz | |
+| resolved_at | timestamptz | |
+
+**Constraint:** UNIQUE(tax_year, alert_type, period_key, tier).
+**Index:** idx_tax_deadline_alerts_active on (resolved, tier, tax_year).
+**RLS:** Authenticated read; authenticated write (cron writes via service client, but policy allows authenticated).
+
+#### `legal_notices` (enhanced — migration 069)
+Existing table for tax notices and legal notices. New columns added:
+| Column | Type | Notes |
+|--------|------|-------|
+| is_active | boolean NOT NULL DEFAULT true | Active/Inactive filter |
+| notice_status | text | CHECK IN ('Order','Notice','Show Cause') |
+| legal_stage | text | CHECK IN ('Authority','Department','CIR Appeal','Tribunal','High Court','Supreme Court') |
+
+**New permission:** `can_manage_tax_notices` in member_permissions — defaults to NULL (false). Granted to Khuram, Shakeel, Avess/Awais. Gated by `canManageTaxNotices()` in permissions.ts.
 
 ---
 
 ### Postgres RPC Functions (performance layer)
 
-These functions run entirely in Postgres and return pre-aggregated results. **Never replaced by raw table fetches** — they are the correct way to load data on the pages below.
-
-#### `get_portfolio_summary_as_of(as_of date)` — migration 054
-Returns one row per ticker with: ticker, company_name, total_qty, total_cost, avg_cost, current_price, price_date, current_value, gain_loss, gain_loss_pct.
-- Still exists in DB. **No longer called by any page** — superseded by `get_portfolio_summary_full` (067).
+These functions run entirely in Postgres and return pre-aggregated results.
 
 #### `get_portfolio_summary_full(p_as_of date, p_alert_pct numeric, p_div_days int)` — migration 067
-Returns a single JSONB object with everything needed for the investments page and executive dashboard — no JS aggregation required:
-- `totals`: total_cost, total_value, gain_loss, gain_loss_pct, stock_count, price_date, prev_value (from yesterday's snapshots), day_change, day_change_pct, dividend_count (confirmed divs due within p_div_days)
-- `stocks`: array of per-ticker rows (ticker, company_name, total_qty, total_cost, avg_cost, target_price, current_price, price_date, current_value, gain_loss, gain_loss_pct)
-- `losers`: array of stocks where gain_loss_pct ≤ p_alert_pct, ordered worst first
-- **Used by:** `app/investments/page.tsx` (p_alert_pct=-3, p_div_days=7), `app/home/page.tsx` (same params).
+Returns a single JSONB object: totals (total_cost, total_value, gain_loss, gain_loss_pct, stock_count, price_date, prev_value, day_change, day_change_pct, dividend_count), stocks (per-ticker array), losers (stocks below alert threshold).
+**Used by:** `app/investments/page.tsx`, `app/home/page.tsx`.
 
 #### `get_portfolio_daily_summary(p_as_of, p_prev_date, p_alert_pct, p_div_days)` — migration 066
-Returns a full JSONB summary used exclusively by the daily-summary cron:
-- `totals`, `stocks`, `alerts`, `best`, `worst`, `dividends` (confirmed + unconfirmed arrays)
-- **Used by:** `app/api/investments/daily-summary/route.ts` only. Not called from any page.
+Full JSONB summary for the daily-summary cron only. Not called from any page.
 
 #### `get_upcoming_dividends(p_days_ahead int)` — migration 065
-Returns confirmed + unconfirmed dividends joined with holdings (total_qty, estimated_payout, days_to_ex).
-- **Used by:** `app/investments/page.tsx` (via `/api/investments/dividends?mode=upcoming`), `app/pa/page.tsx` (direct RPC, confirmed only).
+Confirmed + unconfirmed dividends joined with holdings (total_qty, estimated_payout, days_to_ex).
+**Used by:** `/api/investments/dividends?mode=upcoming`, `app/pa/page.tsx`.
 
 #### `get_plant_kpis(as_of_date date, month_start date, month_end date)` — migration 055
-Returns one row per active plant with opening balances, cumulative totals since cutoff, on-date totals, MTD totals, and entered_on_date boolean.
-- Replaces 7 raw table fetches: opening_balances, broken_opening_balances, production_entries (90d), dispatch_entries (90d), breakage_entries (90d), scrap_processed_entries (90d).
-- **Used by:** `app/home/page.tsx`, `app/dashboard/DashboardView.tsx`.
-- Monthly production/dispatch/breakage arrays are still fetched separately for the daily ops chart (needs per-day breakdown) and quarterly escalation checks (needs per-quarter cumulative sums).
+Returns one row per active plant with opening balances, cumulative totals, on-date totals, MTD totals. Replaces 7 raw table fetches.
+**Used by:** `app/home/page.tsx`, `app/dashboard/DashboardView.tsx`.
 
 #### `get_receivable_rag_by_customer()` — migration 056
-Returns one row per customer with green_amount, amber_amount, red_amount, total_amount, red_count.
-- RAG status computed in Postgres using working-day arithmetic and stage budgets.
-- **Used by:** `app/home/page.tsx` (receivables section + Finance Manager briefing).
+One row per customer with green/amber/red amounts. RAG computed in Postgres using working-day arithmetic.
+**Used by:** `app/home/page.tsx`.
 
 #### `get_receivable_aging_totals()` — migration 056
-Returns 4 rows (buckets: 0-30, 31-60, 61-90, 90+) with total PKR amount per bucket.
-- **Used by:** `app/home/page.tsx` (receivables aging bar).
+4 rows (0–30, 31–60, 61–90, 90+) with total PKR per bucket.
 
 #### `get_receivable_aging_by_customer()` — migration 056
-Returns one row per customer with b0_30, b31_60, b61_90, b90_plus, total columns.
-- **Used by:** `app/home/page.tsx` (receivables aging by customer chart).
+One row per customer with b0_30, b31_60, b61_90, b90_plus, total columns.
 
-**Security:** All RPCs use `security definer` + `set search_path = public` — they bypass RLS intentionally and are accessible to `authenticated` role only. Raw `receivables` table rows are NOT readable by the browser client directly (RLS blocks anon/authenticated reads) — the RPCs are the only correct read path.
+**Security:** All RPCs use `security definer` + `set search_path = public`. Accessible to `authenticated` role only.
 
 ---
 
 ### Department tables
 
-#### `audit_plan_items`
-| Column | Type |
-|--------|------|
-| id | uuid PK |
-| company_id | uuid FK → companies NOT NULL |
-| audit_area | text NOT NULL |
-| audit_type | text |
-| scope | text |
-| planned_date | date |
-| status | text DEFAULT 'Planned' |
-| findings_count | int DEFAULT 0 |
-| assigned_to | text |
-| notes | text |
-| created_at | timestamptz |
+#### `audit_plan_items` / `audit_findings`
+Audit planning and findings. See migration files.
 
-#### `audit_findings`
-Linked to `audit_plan_items`. Fields: severity, risk_impact, description, owner, due_date, evidence_url, status.
-
-#### `recruitment_positions`
-HR table. Fields: position_title, department, status, date_opened, date_filled, time_to_hire_days.
-
-#### `performance_evaluations`
-HR table. Fields: employee_name, department, evaluation_period, rating, status, completed_date.
-
-#### `hr_strategy_goals`
-HR table. Fields: goal_title, target_date, progress_pct, status.
+#### `recruitment_positions` / `performance_evaluations` / `hr_strategy_goals`
+HR tables. See migration files.
 
 #### `legal_notices`
-Shared Legal/Tax table. Key fields: notice_type ('legal'/'tax'), title, received_date, consultant_name, hearing_deadline, financial_exposure, resolution_status.
+Legal and tax notices. notice_type IN ('legal','tax'). Enhanced with is_active, notice_status, legal_stage (migration 069).
 
 #### `admin_categories` / `admin_spend`
-Admin department budget tracking. Categories define monthly budgets; spend records actual expenditure by month.
+Admin department budget tracking.
 
 ---
 
 ### Other tables
 
 #### `leave_records`
-| Column | Type |
-|--------|------|
-| id | uuid PK |
-| member_email | text NOT NULL |
-| member_name | text |
-| leave_type | text DEFAULT 'Annual' |
-| start_date | date NOT NULL |
-| end_date | date NOT NULL |
-| days | int DEFAULT 1 |
-| reason | text |
-| status | text DEFAULT 'Pending' |
-| approved_by | text |
-| created_at | timestamptz |
+Leave tracking per member.
 
 #### `audit_log`
-| Column | Type |
-|--------|------|
-| id | uuid PK |
-| user_email | text NOT NULL |
-| user_name | text |
-| action | text NOT NULL |
-| table_name | text NOT NULL |
-| record_id | text |
-| details | text |
-| created_at | timestamptz |
-
-Indexes on created_at DESC, user_email, table_name.
+System activity trail: user_email, action, table_name, record_id, details.
 
 #### `app_settings`
-Key/value store for application configuration (migration 052).
-| Column | Type | Notes |
-|--------|------|-------|
-| key | text PK | e.g. 'drive_inbox_folder_id', 'drive_processed_folder_id' |
-| value | text NOT NULL | |
-| updated_at | timestamptz | DEFAULT now() |
-
-**RLS:** Service role only (no direct client access). Written by setup-drive-folder route.
-
----
+Key/value store: e.g. 'drive_inbox_folder_id', 'drive_processed_folder_id'.
+**RLS:** Service role only.
 
 #### `document_archive`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| doc_type | text NOT NULL | 'cash_flow', 'bank_position' |
-| company_id | uuid FK → companies | |
-| position_date | date | |
-| storage_path | text NOT NULL | Path in source-documents bucket |
-| original_filename | text NOT NULL | |
-| source | text | 'manual' or 'gmail-auto' |
-| uploaded_by | text | |
-| created_at | timestamptz | |
-
-**RLS:** Admin-tier only (matches holdings — strictest policy).
+Source document archive: doc_type, company_id, position_date, storage_path, original_filename, source.
 
 #### `department_owners`
-Maps departments to responsible members. Referenced from ops dashboard.
+Maps departments to responsible members.
 
 #### `meeting_requests`
-Calendar/meeting request tracking (referenced in code).
+Calendar/meeting request tracking.
 
 ---
 
@@ -1302,29 +1139,24 @@ Calendar/meeting request tracking (referenced in code).
 | `canEditInvestments` | CEO + Admin by email only | can_edit_investments |
 | `canViewPADashboard` | PA + Admin/CEO | can_view_pa_dashboard |
 | `canViewDepartment(dept)` | Admin/CEO + Manager of that dept (NOT PA) | can_view_dept_* |
+| `canViewGuarantees` | Admin/CEO + Finance Mgr + Ops Mgr (all via override) | can_view_guarantees |
+| `canManageGuarantees` | Admin/CEO + Finance Mgr | can_manage_guarantees |
+| `canViewTaxAccounts` | All authenticated users (NOT PA). Defaults true when NULL | can_view_dept_tax_accounts |
+| `canManageTaxSchedule` | Admin/CEO only. Defaults false when NULL | can_manage_tax_schedule |
+| `canManageTaxNotices` | Admin/CEO + explicitly granted (Shakeel, Avess/Awais). Defaults false | can_manage_tax_notices |
 | `canEditOperationsTargets` | Privileged + Ops HoD (nadeem.khan@unze.co.uk) | — |
 
 ### Finance Company Scoping
-`financeCompanies(ctx)` returns 'UTPL', 'IFPL', 'both', or 'none':
-- Admin/CEO → 'both'
-- Finance Manager with company tagged 'Unze Trading*' → 'UTPL'
-- Finance Manager with company tagged 'Imperial*' → 'IFPL'
-- Finance Manager with no company → 'both'
-- Override `finance_company_scope` in member_permissions → takes precedence
+`financeCompanies(ctx)` returns 'UTPL', 'IFPL', 'both', or 'none' based on company association.
 
 ### Task Ownership Rules
-- `assigned_by_email` column tracks creator
-- **Protected tasks**: created by Admin/CEO/PA email — assignees can only update status and add notes
-- **Self-assigned tasks**: full control — edit, delete, change due date
-- `isTaskProtected(email)` — true if creator is Admin/CEO/PA
-- `canEditTask(ctx, email)` — Admin/PA can always edit; others cannot if task is protected
-- `canDeleteTask(ctx, email)` — same logic as canEditTask
+- **Protected tasks**: created by Admin/CEO/PA — assignees can only update status and add notes
+- **Self-assigned tasks**: full control
+- `isTaskProtected(email)` / `canEditTask(ctx, email)` / `canDeleteTask(ctx, email)`
 
 ### Member Administration Rules
-- `assignableRoles(ctx)`: Admin-tier → all roles; Executive → Manager/Member only; others → none
-- `canEditMember(actor, target)`: LOCKED_EMAILS can only be edited by another Admin-tier
-- `canDeleteMember(actor, target)`: PROTECTED_EMAILS (Admin + CEO) can never be deleted
-- `canChangePasswordFor(actor, target)`: Admin-tier → anyone; Executive → self + Members only
+- `assignableRoles(ctx)`: Admin-tier → all roles; Executive → Manager/Member only
+- `canEditMember` / `canDeleteMember` — LOCKED_EMAILS / PROTECTED_EMAILS constraints
 
 ### RLS Functions (Supabase)
 | Function | Description |
@@ -1337,37 +1169,73 @@ Calendar/meeting request tracking (referenced in code).
 | `can_see_company_finance(uuid)` | Admin-tier OR scoped Finance manager for that company |
 
 ### API-Level Security (Bank Facilities routes — hardened 05/07/2026)
-
-The Bank Facilities page has both UI-level permission gates AND server-side role checks enforced in the API routes. Any authenticated user outside the allowed roles receives `403 Forbidden` immediately, regardless of what the UI shows.
-
 | Route | Method | Allowed roles |
 |-------|--------|---------------|
 | `/api/finance/guarantees` | GET | Admin, CEO, Finance Manager, Ops Manager |
 | `/api/finance/guarantees` | POST / PATCH / DELETE | Admin, CEO, Finance Manager only |
 | `/api/finance/guarantee-facilities` | All methods | Admin, CEO, Finance Manager only |
 
-**Pattern:** After `requireAuth(req)`, each route calls a role check helper and returns `NextResponse.json({ error: "Forbidden" }, { status: 403 })` for any role not in the allowed list. This is defence-in-depth on top of the existing UI gates.
+---
+
+## 6. Sidebar Structure
+
+**SIDEBAR_GROUPS order:** Overview → Operations → Departments → Finance → My Workspace → Settings
+
+Items within each group are sorted A–Z case-insensitively at render time.
+
+### Overview (always visible)
+- Executive Dashboard (`/home`) — or `/pa` for PA users
+
+### Operations
+- Daily Entry (`/production`)
+- Manage POs (`/stock/manage`)
+- Operations Dashboard (`/dashboard`)
+- Stock (`/stock`)
+
+### Departments (A–Z)
+- Admin (`/department/admin`)
+- Audit (`/department/audit`)
+- HR (`/department/hr`)
+- IT (`/department/it`)
+- Tax Notices (`/department/taxation`) — was "Taxation"; sidebar label renamed "Tax Notices"
+- Accounts & Returns (`/accounts-tax`) — NEW: quarterly accounts schedule + return filings
+
+### Finance (A–Z)
+- Bank Facilities (`/finance/guarantees`)
+- Imperial Footwear (`/finance/imperial`)
+- Investments (`/investments`)
+- Opening Balances (`/opening-balances`)
+- Receivables (`/receivables`)
+- Unze Trading (`/finance/unze-trading`)
+
+### My Workspace (was "Tasks & Meetings" — A–Z)
+- Calendar (`/calendar`)
+- Meetings (`/meetings`)
+- My Minutes (`/my-minutes`)
+- Profile (`/profile`)
+- Recurring Tasks (`/recurring-tasks`)
+- Tasks (`/tasks`)
+
+### Settings
+- Members (`/members`)
+- Exceptions (`/exceptions`)
+- Audit Log (`/audit-log`)
+- Data & Backups (`/admin`) — Admin only
+
+### Nav active state
+NAVY background + white text. No blue left-bar. Items collapsed to icon-only when sidebar is collapsed.
 
 ---
 
-## 6. Every Page and Workflow
+## 7. Every Page and Workflow
 
 ### Public pages (no authentication)
 
 #### `/login`
-- **File:** `app/login/page.tsx`
-- **Access:** Public
-- **What it does:** Supabase email + password authentication. Shows time-based greeting (morning/afternoon/evening). Right panel has an image carousel with crossfade transitions. Mobile shows a navy brand strip with rotating slide info. On success, redirects to `/home` (PA redirects to `/pa`).
+Supabase email + password. Time-based greeting, crossfade carousel. On success → `/home` (or `/pa` for PA).
 
-#### `/forgot-password`
-- **File:** `app/forgot-password/page.tsx`
-- **Access:** Public
-- Sends Supabase password reset email.
-
-#### `/reset-password`
-- **File:** `app/reset-password/page.tsx`
-- **Access:** Public (requires valid reset token)
-- Sets new password from email link.
+#### `/forgot-password` / `/reset-password`
+Password reset flow via Supabase.
 
 ---
 
@@ -1377,223 +1245,110 @@ The Bank Facilities page has both UI-level permission gates AND server-side role
 - **File:** `app/home/page.tsx`
 - **Access:** All authenticated users (PA auto-redirects to `/pa`)
 - **What it does:**
-  - Shows PAGE_REGISTRY cards grouped by section (only cards the user has permission for)
-  - CEO/Admin: briefing strip (cash total, production %, stuck bills, sparklines), quick task actions
-  - **Investments card**: shows total cost, current value, gain/loss, return %. If any confirmed dividends are due within 7 days, shows an amber "X dividends due this week" badge. Data from `get_portfolio_summary_full` — zero JS aggregation.
-  - Cron health panel (Admin only) via `/api/admin/cron-health`
-  - Manager briefing (collapsible — starts collapsed):
-    - **Ops Manager**: today's production RAG, MTD production RAG, dispatch ratio, breakage, machines, overdue ops tasks
-    - **Finance Manager**: per-company cash position freshness, cash trend, net flow, outstanding receivables, overdue stages, finance tasks
-  - Notification bell badges update in real-time via Supabase channels
-- **Date selector (CEO/Admin):** Allows viewing the dashboard as of any date up to 90 days back. All data sections respect the selected date:
-  - Production/dispatch/breakage entries: filtered `<= selectedDate`
-  - Investment portfolio: calls `get_portfolio_summary_full(selectedDate, -3, 7)` — returns totals, per-ticker rows, losers, day-change, dividend count in one round-trip. No JS aggregation.
-  - Cash positions: filtered `<= selectedDate` (most recent 30 entries up to that date)
-  - Cash plan and budget month: derived from `selectedDate.slice(0,7)` (not today)
-- **Performance (sessionStorage cache):** `loadExecutiveData` caches the full payload for 2 minutes per date key (`exec_home_YYYY-MM-DD`). Cache is busted on any Supabase Realtime change. Cache not served if `payload.investmentData` is falsy (prevents stale null from hiding the investment section).
-- **Global search (AuthWrapper):** Tasks/members/meetings fetched once per session into `searchCacheRef` (useRef). Subsequent searches filter in memory — no DB queries after first load.
+  - Shows PAGE_REGISTRY cards grouped by section
+  - CEO/Admin: greeting strip, Quick task actions
+  - **Tax Compliance summary card**: shows filing % and schedule completion for current and previous fiscal year. Clickable → navigates to `/accounts-tax`. Only shown when `taxScheduleEntries` / `taxReturnFilings` data exists from DB.
+  - **Investments card**: total cost, current value, gain/loss, return %. Amber "X dividends due this week" badge when confirmed dividends due within 7 days.
+  - Cron health panel (Admin only)
+  - Manager briefings (Ops Manager / Finance Manager — collapsible)
+  - Notification bell badges update in real-time
+- **Date selector (CEO/Admin):** View dashboard as of any date up to 90 days back. All data sections respect selected date.
+- **Performance:** 2-minute sessionStorage cache per date key. Cache busted on Supabase Realtime changes.
 
 #### `/my-dashboard`
-- **File:** `app/my-dashboard/page.tsx`
-- **Access:** All authenticated users
-- Personal task summary — own tasks by status.
+Personal task summary — own tasks by status.
 
 #### `/profile`
-- **File:** `app/profile/page.tsx`
-- **Access:** All authenticated users
-- Change display name, password, notification preferences (email/WhatsApp toggle).
-
-#### `/executive` → redirects permanently to `/home` (308)
-- **Removed 2026-07-05.** Functionality fully merged into `/home` (Executive Dashboard). `EscalationTrafficLights.tsx` moved to `app/lib/`. Redirect added in `next.config.ts` so bookmarks and email links still work.
+Change display name, password, notification preferences.
 
 #### `/pa`
 - **File:** `app/pa/page.tsx`
-- **Access:** PA (Sundas) + Admin/CEO (`useRequireCapability("pa_dashboard")`)
-- **What it does:** PA operating hub — pending tasks, notes, delegations, calendar appointments.
-  - **Dividend calendar** (confirmed only): shows ticker, ex-date, payment date, and coloured days badge (green >7d, amber ≤7d, red ≤3d) for confirmed dividends due in the next 14 days. **No financial figures, no prices, no payout amounts** — dates and tickers only. PA must never see financial data.
+- **Access:** PA (Sundas) + Admin/CEO
+- **What it does:** PA operating hub — tasks, notes, delegations, calendar appointments.
+  - **Dividend calendar** (confirmed only): ticker, ex-date, payment date, days badge. No financial figures.
+
+#### `/accounts-tax` — NEW
+- **File:** `app/accounts-tax/page.tsx` → `AccountsTaxDashboard.tsx`
+- **Access:** All authenticated users (NOT PA). Manage restricted to Admin/CEO + explicitly granted.
+- **What it does:**
+  - **Quarterly Accounts Schedule**: fiscal-year navigation (e.g. '2025-26'). Four quarters (Q1 Jul–Sep, Q2 Oct–Dec, Q3 Jan–Mar, Q4 Apr–Jun). Per-quarter: 5 entities (UT, IMP, BARANH, HD, ALMAHAR) × 5 steps = 25 check boxes. Steps: Record keeping of accounts → Recording in Sage → Record verification by external auditor → Preparation of accounts → Handover to external auditor.
+  - **Annual Accounts Schedule**: 10 entities × 6 steps = 60 checkboxes. Steps: Bookkeeping → Recording in Sage → Preparation of accounts → Handing over to external auditor → Consulting with consultant → Final submission.
+  - **Return Filings grid**: FBR Sales Tax (monthly, 3 entities), PRA Tax (monthly, 5 entities), Income Tax (quarterly, 5 entities). Checkboxes per period. Overdue detection: returns unfiled after the 15th of the following month/quarter are marked overdue.
+  - **Status options**: Not Started (default), In Progress, External Auditors, Completed.
+  - **Fiscal year logic**: Pakistan fiscal year Jul–Jun. Q1 = Jul–Sep, Q4 = Apr–Jun. Fiscal year string format: '2025-26'.
+  - After each save, fires POST to `/api/cron/tax-alerts` to recompute deadline alerts in the background.
+- **Linked to home page:** `TaxComplianceSummary` component on CEO home page shows a clickable summary tile.
 
 #### `/dashboard`
-- **File:** `app/dashboard/page.tsx` → `DashboardView.tsx`
-- **Access:** Admin/CEO + Ops dept (`useRequireCapability("operations")`)
-- **What it does:**
-  - Per-plant KPI cards: today's production/dispatch, month-to-date achievement vs target, breakage rate
-  - Bar charts (Recharts): production by plant, dispatch by plant
-  - Stock by Customer PO section: per-plant PO cards with fulfillment bars and letter exhaustion warnings
-  - Tabbed detail: Tasks (ops dept tasks), Machine Issues, Breakage Pareto (horizontal bars by plant)
-  - Monthly targets editing via MonthlyTargets.tsx
-  - CSV export
+Operations Dashboard — per-plant KPI cards, charts, stock by PO, machine issues, breakage pareto. Full Genspark restyle.
 
 #### `/finance`
-- **File:** `app/finance/page.tsx`
-- **Access:** Admin/CEO + Finance Managers (`useRequireCapability("finance")`)
-- **What it does:**
-  - Company picker cards (UTPL → `/finance/unze-trading`, IFPL → `/finance/imperial`)
-  - Department budgets section — add/delete/import/export
-  - Bulk upload PDFs (Admin/CEO only)
-  - Gmail check inbox (Admin/CEO only)
+Company picker → UTPL / IFPL. Department budgets. Bulk upload. Full Genspark restyle.
 
-#### `/finance/[company]` (unze-trading or imperial)
-- **File:** `app/finance/[company]/page.tsx` → `FinanceManager.tsx`
-- **Access:** Admin/CEO + Finance Managers (scoped by company)
-- **What it does:**
-  - Opening balance display + edit button
-  - Monthly cash plan (planned receivables/payouts) edit
-  - Daily cash position: add manually or via PDF upload / Gmail auto-ingestion
-  - Historical positions table with reconciliation status
-  - Charts: closing balance trend, receipts vs payments
-  - Monthly budgets table with variance progress bars
-  - **Imperial-specific:** closing_after_post_dated = closing_balance + post_dated_total (adds)
-  - **UTPL-specific:** closing_after_post_dated = closing_balance − post_dated_total (subtracts)
+#### `/finance/[company]`
+Per-company finance dashboard: cash position, cash plan, budgets, charts. Full Genspark restyle.
+
+#### `/finance/guarantees`
+Bank Facilities — guarantee records grouped by bank, facility utilisation bars, pay order tracking, bill linking, chase urgency, expiry tracking.
 
 #### `/receivables`
-- **File:** `app/receivables/page.tsx`
-- **Access:** Admin/CEO + Finance Mgrs + Ops Mgrs (view); Ops dept ONLY (edit)
-- **What it does:**
-  - Horizontal pipeline bar showing bills at each stage with RAG colouring
-  - Kanban board: columns = receivable stages, cards = bills
-  - HTML5 drag-and-drop between columns
-  - Add new bill form (Ops dept only)
-  - Collection velocity: average days per stage vs working_day_budget
-  - Bills grouped by plant in collected section
+Kanban pipeline — drag-and-drop bills through collection stages. Inline edit/delete.
 
 #### `/investments`
-- **File:** `app/investments/page.tsx`
-- **Access:** CEO + Admin (edit); PA (view-only)
-- **What it does:**
-  - PSX portfolio holdings table: ticker, qty, avg cost, current price, current value, P&L, P&L %
-  - Add/edit/delete holdings (Admin/CEO only)
-  - Refresh prices via `/api/investments/update-prices` (Admin/CEO only)
-  - Portfolio totals (from DB — no JS aggregation): total cost, total value, total gain/loss, today's change vs yesterday
-  - Alert banner: any stock down more than 3% shown in red (threshold = -3, computed in DB)
-  - **Dividends section** (collapsible, Admin/CEO only to edit):
-    - Confirmed upcoming dividends table: ticker, Rs/share, ex-date, payment date, days countdown, estimated payout
-    - Unconfirmed review queue: auto-fetched PSX entries shown amber with Confirm/Dismiss buttons
-    - Add/edit dividend form: ticker dropdown (from holdings), Rs/share, ex-date, payment date, notes
-    - All manual entries saved as confirmed=true, source='manual'
-  - **Today's Change card**: appears in summary grid once the daily cron has run and populated yesterday's snapshot
-- **Data loading:** Single call to `get_portfolio_summary_full` RPC returns all totals, per-ticker rows, losers, and day-change. Holdings table fetched separately for lot-level edit/delete UI. Price history fetched separately for the chart only.
-- **Price updates:** Automated via cron — 04:30 UTC (9:30am PKT) and 11:00 UTC (4:00pm PKT), Monday–Friday. Prices stored in `price_history`. Source: PSX DPS API (`/timeseries/eod/{ticker}`), Yahoo Finance as fallback.
-- **Historical portfolio value:** Investments page has a date picker — selecting a past date calls `get_portfolio_summary_full` with that date, showing the portfolio as it was then.
+PSX portfolio. Holdings table, P&L, dividend tracking (confirmed + unconfirmed), Today's Change card, price history chart. Historical date picker.
 
 #### `/opening-balances`
-- **File:** `app/opening-balances/page.tsx` + `OpeningBalancesForm.tsx`
-- **Access:** Finance viewers (`useRequireCapability("finance")`)
-- **What it does:** Set starting balances per company (cash_opening_balance table).
+Set starting cash balances per company.
 
 #### `/production`
-- **File:** `app/production/page.tsx` + `ProductionForm.tsx`
-- **Access:** Admin/CEO + Ops dept (`useRequireCapability("daily_entry")`)
-- **What it does:**
-  - Daily production entry: sizes 31, 36, 45, meter — with PO allocation card picker
-  - Dispatch entry: authority letter number lookup (600ms debounce) → shows contractor, PO, remaining balances → enter qty + released_by + vehicle_number
-  - Dual-write on dispatch: `dispatch_entries` (legacy) AND `dispatch_records` (stock system)
-  - Breakage entry
-  - Machine issue logging
-  - Quick-add receivable bill (ReceivablesSection.tsx)
-  - UNIQUE per plant per day — existing entry loads for editing
+Daily entry: production qty + PO allocation, dispatch (authority letter lookup → dual write), breakage, machine issues, quick-add receivables.
 
 #### `/stock`
-- **File:** `app/stock/page.tsx`
-- **Access:** Admin/CEO + Ops dept (`useRequireCapability("stock")`)
-- **What it does:**
-  - Plant selector buttons
-  - Stats strip: total in stock, active POs, all POs
-  - Collapsible tree: PO → Contractor → Letter → balances
-  - Per-PO: ordered/produced/dispatched/in-stock, fulfillment %
-  - Authority letter exhaustion warnings (< 10% remaining → red badge)
-  - Closed POs shown at 0.55 opacity
+Collapsible tree: Plant → PO → Contractor → Letter → balances. PO delivery forecast badges. Letter expiry badges.
 
 #### `/stock/manage`
-- **File:** `app/stock/manage/page.tsx`
-- **Access:** Admin/CEO + Ops dept (view); Ops Managers + Admin (write)
-- **What it does:**
-  - Create POs: customer name, PO number, label, ordered qty per size, opening produced (backfill), start date, notes
-  - Issue authority letters: pick PO → pick contractor → letter number, date, issued_by, qty, opening dispatched (backfill), expiry date
-  - Add contractors: name, CNIC, phone, address
-  - Close PO action
+Create POs, authority letters, contractors. Close PO action. Edit permissions for Ops Managers.
 
 #### `/tasks`
-- **File:** `app/tasks/page.tsx` → `TasksPageClient.tsx` + `TasksList.tsx`
-- **Access:** All authenticated users
-- **What it does:**
-  - View switcher: Department (default), Weekly, Monthly, Quarterly, Timeline
-  - **Department view**: tasks grouped by `assigned_to_department` with person breakdown chips, overdue highlighting
-  - **Timeline view**: SVG Gantt-style visualisation of tasks by due date
-  - New task form: description, owner, due_date (required), priority, department, project
-  - Task ownership: protected tasks show limited edit options for assignees
-  - `canSeeAllTasks` determines if all tasks are shown or just own
+All users. Department / Weekly / Monthly / Quarterly / Timeline view switcher. Protected task ownership rules.
 
 #### `/calendar`
-- **File:** `app/calendar/page.tsx`
-- **Access:** All authenticated users
-- Shows tasks by due date in a calendar layout.
+Tasks by due date in calendar layout.
 
 #### `/meetings`
-- **File:** `app/meetings/page.tsx`
-- **Access:** Privileged users only (`useRequireCapability("meetings_admin")`)
-- **What it does:**
-  - **Past Meetings tab**: all meetings with attendees, summary, decisions, tasks. Expandable cards sorted newest first. PDF download for Admin/CEO/PA.
-  - **Decision Log tab**: aggregated decisions from all meetings, searchable by department.
-  - Create meeting: paste transcript / upload PDF or DOCX / check Gmail inbox
-  - AI extraction via Claude API: title, date, company, dept, attendees, summary, decisions, risks, action items
-  - Review & edit step: amend all fields, add action items (description, owner, due date all required)
-  - Approve: saves meeting, creates tasks, sends in-app notifications; email option per attendee
-  - Meeting Action Tracker: progress bar per meeting (completed/total tasks)
+Past Meetings tab + Decision Log tab. AI extraction via Claude. Meeting Action Tracker.
 
 #### `/my-minutes`
-- **File:** `app/my-minutes/page.tsx`
-- **Access:** All authenticated users
-- **What it does:** Personal meeting minutes — meetings where user is attendee OR has tasks. Sort: newest first. Copy protection for non-privileged users (user-select: none + onCopy blocked). PDF download for Admin/CEO/PA.
+Personal meeting minutes. Copy protection for non-privileged users.
 
 #### `/recurring-tasks`
-- **File:** `app/recurring-tasks/page.tsx`
-- **Access:** Privileged (`useRequireCapability("recurring_tasks")`)
-- Manage recurring task templates: frequency (weekly/monthly/quarterly), day, assignee, due_days_after.
+Recurring task templates. PA (Executive) can read/write since migration 072 fixed RLS.
 
 #### `/members`
-- **File:** `app/members/page.tsx` + `MembersManager.tsx` + `AccessMatrix.tsx`
-- **Access:** Privileged (`useRequireCapability("members")`)
-- **What it does:**
-  - Members list with role, department, company
-  - Invite new member (sends email)
-  - Edit role, department, company, name
-  - Delete member (protected emails cannot be deleted)
-  - Access Matrix tab: per-member boolean permission overrides (toggle grid)
+Members list, invite, edit, delete. Access Matrix tab (per-member boolean overrides). New columns in Access Matrix: can_view_guarantees, can_manage_guarantees, can_view_stock, can_manage_stock, can_manage_meetings (migration 068).
 
 #### `/audit-log`
-- **File:** `app/audit-log/page.tsx`
-- **Access:** Privileged (`useRequireCapability("audit_log")`)
-- System activity trail from `audit_log` table — who did what and when.
+System activity trail.
 
 #### `/exceptions`
-- **File:** `app/exceptions/page.tsx`
-- **Access:** Privileged (`useRequireCapability("exceptions")`)
-- Exception management and alerts — surfaced rule violations.
+Exception management.
 
 #### `/admin`
-- **File:** `app/admin/page.tsx`
-- **Access:** `khuram1901@gmail.com` ONLY (`isMainAdmin`) — not even other Admins/CEO
-- **What it does:** Source document archive, manual and list backups, restore from backup, wipe selected data.
+Source document archive, backups, restore, wipe. khuram1901@gmail.com ONLY.
 
 #### `/monthly-operations-targets`
-- **File:** `app/monthly-operations-targets/page.tsx`
-- **Access:** Privileged + Ops HoD (nadeem.khan@unze.co.uk)
-- Set monthly production/dispatch targets per plant.
+Monthly production/dispatch targets per plant.
 
 #### `/department/[slug]`
-- **File:** `app/department/[slug]/page.tsx` + sub-dashboards
-- **Access:** Admin/CEO + Manager of that specific department (`useRequireDepartment(dept)`)
-- Slugs and dashboards:
-  - `hr` → `HRDashboard.tsx` — recruitment positions, performance evaluations, strategy goals
-  - `taxation` → `TaxationDashboard.tsx` — legal notices (notice_type='tax')
-  - `audit` → `AuditDashboard.tsx` — audit plan items, findings
-  - `admin` → `AdminDashboard.tsx` — admin categories and spend
-  - `it` → `DepartmentDashboard.tsx` (default) — department tasks and notices
-  - `legal` → `DepartmentDashboard.tsx` + legal_notices (notice_type='legal')
+- `hr` → HRDashboard
+- `taxation` → TaxationDashboard (Tax Notices — enhanced with is_active, notice_status, legal_stage)
+- `audit` → AuditDashboard
+- `admin` → AdminDashboard
+- `it` → DepartmentDashboard
 
 ---
 
-## 7. Business Rules
+## 8. Business Rules
 
 ### Traffic Light Thresholds
 
@@ -1620,11 +1375,24 @@ The Bank Facilities page has both UI-level permission gates AND server-side role
 #### Stock System
 | Rule | Detail |
 |------|--------|
-| Production cap per PO | Produced ≤ ordered × 1.03 (3% buffer). Excess goes to "Unze Owned / Unallocated" PO |
-| Letter cap | Sum of all authority letters for a PO ≤ ordered qty exactly (no buffer) |
+| Production cap per PO | Produced ≤ ordered × 1.03 (3% buffer) |
+| Letter cap | Sum of all authority letters for a PO ≤ ordered qty exactly |
 | Dispatch hard block | Cannot dispatch more than letter's remaining balance |
 | Letter exhaustion warning | Remaining < 10% of authorised qty → red badge |
 | PO auto-close trigger | After each dispatch_record insert, if dispatched ≥ ordered for ALL sizes → PO status = 'Closed' |
+
+#### Tax Deadline Alert Tiers
+| Tier | Meaning | Action |
+|------|---------|--------|
+| 1 | First warning — deadline approaching but not past | Email sent to CEO; alert stored with resolved=false |
+| 2 | Overdue — deadline passed with outstanding items | Email sent to CEO; alert stored with resolved=false |
+
+Deadlines (Pakistan fiscal year Jul–Jun):
+- Quarterly schedule deadlines: 15th of the month following each quarter end
+- Monthly FBR/PRA returns: 15th of the following month
+- Quarterly Income Tax: 15th of the month following each quarter (Q1→Oct 15, Q2→Jan 15, Q3→Apr 15, Q4→Jul 15)
+- Annual personal returns: 31 Aug (internal), 30 Sep (legal)
+- Annual company returns: based on fiscal year end
 
 #### KPI Fulfilment Bars (Stock)
 | Fulfillment % | Colour |
@@ -1634,137 +1402,85 @@ The Bank Facilities page has both UI-level permission gates AND server-side role
 | <60% | RED |
 
 ### Auto-Task Creation Rules
-1. **Recurring tasks cron** (`/api/tasks/recurring`) — creates tasks on schedule per `recurring_tasks.frequency` and `day_of_week` / `day_of_month`. `assigned_by_email` = admin email → always protected.
-2. **Meeting approval** — creates tasks from action items. `assigned_by_email` = approver email → always protected.
+1. **Recurring tasks cron** — creates tasks on schedule. `assigned_by_email` = admin email → always protected.
+2. **Meeting approval** — creates tasks from action items.
 
 ### Receivables Business Rules
-- **Bill types**: Normal, Sales Tax, Retention
-  - Sales Tax and Retention bills **skip** the IC & GRN stage
-- **Stage budget**: `working_day_budget` days per stage. Bills past this are overdue.
-- **Editing stages**: Ops dept only (`canEditReceivables`). Finance managers view-only.
-- **Moving stages**: forward and backward both permitted via drag or buttons.
+- Bill types: Normal, Sales Tax, Retention. Sales Tax and Retention skip IC & GRN stage.
+- Stage budget: `working_day_budget` days. Bills past this are overdue.
+- Editing: Ops dept only. Finance managers view-only.
 
 ### Finance Rules
 - **IFPL post-dated**: `closing_after_post_dated = closing_balance + post_dated_total`
 - **UTPL post-dated**: `closing_after_post_dated = closing_balance − post_dated_total`
-- **Cash burn rate**: "X days runway at current burn rate" shown when 7-day net outflows persist
-- **Budget variance bars**: Amber threshold at 80% spent, Red at 100%+
 
 ### Meeting Rules
-- "General" label renamed "Executive Office" everywhere — never use "General"
-- AI extraction from Claude API: required fields per action item = description, owner, due date
-- Red highlight on missing required fields before approval
-- Company attendees get in-app minutes (My Minutes) by default — email opt-in
-- External attendees pre-checked for email
+- "General" label → "Executive Office" everywhere — never use "General"
+- Required per action item: description, owner, due date
 
 ### Task Rules
-- **Due date is REQUIRED** on every task — no open-ended tasks
-- Protected task (created by Admin/CEO/PA) — assignee can only update status, add completion notes; cannot edit description, change due date, reassign, or delete
-- `canSeeAllTasks`: Privileged → all tasks; Manager → own department tasks + own; Member → own only
+- Due date REQUIRED on every task
+- Protected task — assignee can only update status + notes
 
 ### Dual-Write for Dispatch
-**NEVER remove either write.** Daily entry dispatch form writes to BOTH:
-1. `dispatch_entries` — legacy ops dashboard calculations depend on this
-2. `dispatch_records` (via `/api/stock/dispatch-records`) — stock system PO/letter balance calculations
+**NEVER remove either write.** Daily entry dispatch writes to BOTH `dispatch_entries` AND `dispatch_records`.
 
 ---
 
-## 8. Data Flows
+## 9. Data Flows
 
 ### Finance Data Flow
 Three ingestion paths — all end in `daily_cash_position` + `bank_position_snapshots`:
 
 **Path 1 — Google Drive (primary, fully automated)**
-1. Gmail receives cash sheet email with PDF attachments
-2. Google Apps Script (runs hourly at script.google.com under k.saleem@unzegroup.com) picks up unread PDFs → drops into Google Drive folder **Cockpit Cash Sheets/Drop Here** (folder ID: `140RkdEgn0JSi67gpjswr1L-lidClriJ1`)
-3. `/api/finance/check-drive` cron (every 10 min) reads PDFs from Drop Here, pairs cash flow + bank position by date/company prefix, parses both, saves to DB, moves files to **Processed** folder
-4. Company detected from PDF content by `detectCompany()` — checks Unze markers BEFORE Imperial (Unze sheets list Imperial as payee)
+1. Gmail receives cash sheet PDF → Google Apps Script drops to Drive `Cockpit Cash Sheets/Drop Here`
+2. `/api/finance/check-drive` cron (every 10 min) parses, saves, moves to Processed
 
-**Path 2 — Manual upload**
-1. Admin goes to `/finance/upload` (Upload Cash Sheets page)
-2. Drag-and-drops PDFs → POST to `/api/finance/upload-pdfs` → same parsing + save logic
+**Path 2 — Manual upload** via `/finance/upload`
 
-**Path 3 — Gmail direct (legacy)**
-1. `/api/finance/check-inbox` cron checks k.saleem@unzegroup.com inbox for cockpit-cash label
-
-**All paths:**
-- Source PDFs archived → `document_archive` table + Supabase Storage `source-documents` bucket
-- Finance Manager views via `/finance/[company]` — data scoped by `company_id`
-- Forecast entered manually or via Excel upload → `monthly_cash_plan`
-- Department budgets: admin enters per-department monthly budgets → `department_budgets`
-
-**PDF parsing rules:**
-- `detectCompany()` checks Unze markers first (`opening balance total`, `closing balance unze trading`, `unze trading pvt`) then Imperial (`today opening balance` + `today closing balance`, `imperial footwear`)
-- `parseImperial()` uses `extractInlineAmount()` for values glued directly to labels e.g. `Today Opening Balance(16,333,132)`
-- Imperial: splits at `DatePayments` / `DateReceipts` to extract correct section totals
-- UTPL `closing_after_post_dated = closing_balance − post_dated_total`; IFPL `closing_after_post_dated = closing_balance + post_dated_total`
-
-**Google Drive folder setup (one-time):**
-Run: `curl -H 'Authorization: Bearer unze-cockpit-cron-2026' https://pulse.unze.co.uk/api/finance/setup-drive-folder`
-Requires: `app_settings` table (migration 052) + Google reconnected with Drive scope
+**Path 3 — Gmail direct (legacy)** via `/api/finance/check-inbox`
 
 ### Production/Stock Data Flow
-1. Plant member opens `/production` → selects plant
-2. Enters production qty → picks PO card → saves to `production_entries` + `production_allocations`
-3. Enters dispatch qty → types authority letter number → lookup debounce → shows remaining balances → saves to `dispatch_entries` (legacy) AND `dispatch_records` (stock system)
-4. API `/api/stock/dispatch-records` POST validates cap → auto-closes PO if fulfilled
-5. `/stock` page fetches `/api/stock/summary?plantId=X` → shows full tree with running balances
-6. Ops Dashboard fetches summary for all plants → shows "Stock by Customer PO" section
+Daily entry → `production_entries` + `production_allocations`; dispatch → `dispatch_entries` + `dispatch_records` (dual write); PO auto-close on fulfillment.
+
+### Tax Accounts Data Flow
+1. User opens `/accounts-tax`, edits schedule steps or return filing checkboxes
+2. Each save calls POST `/api/cron/tax-alerts` (fire-and-forget)
+3. `computeAndStoreTaxAlerts(supabase, taxYear)` in `taxAlertEngine.ts`:
+   - Reads `tax_schedule_entries` and `tax_return_filings` for the current year
+   - Computes whether each deadline has been missed (tier 1 = approaching, tier 2 = overdue)
+   - Upserts rows to `tax_deadline_alerts`
+   - Sends email to CEO (k.saleem@unzegroup.com) for new alerts
+4. Nightly cron at 00:00 UTC and 06:00 UTC runs the same engine via GET `/api/cron/tax-alerts`
+5. Home page reads `tax_schedule_entries` and `tax_return_filings` for the current + previous fiscal year and renders the Tax Compliance summary card
 
 ### Meeting Minutes Data Flow
-1. Admin pastes transcript or uploads PDF/DOCX or checks Gmail
-2. `/api/meetings/extract` sends to Claude API → returns structured JSON
-3. Admin reviews, edits action items on step 2
-4. Approve → saves to `meetings`, creates `tasks`, links via `meeting_tasks`, saves `meeting_attendees`
-5. Notification sent to attendees (in-app via My Minutes; email optional)
-6. Company attendees see minutes in `/my-minutes`; privileged users see all in `/meetings`
+Paste/upload → Claude extraction → review & edit → approve → tasks created + notifications sent.
 
 ### Task Data Flow
-1. Task created (form / meeting approval / recurring cron)
-2. Assignee sees task in `/tasks` or `/my-dashboard`
-3. Notification bell updates (Supabase real-time channel on `tasks`)
-4. Assignee updates status → if protected task, only status + notes allowed
-5. Manager/Admin reviews via `/tasks` or ops dashboard
-6. Weekly digest email aggregates task stats
+Task created → assignee notified → status updates → weekly digest.
 
 ### Exception Escalation Flow
-1. Cron jobs run daily/weekly reports
-2. Metrics checked against thresholds (production, dispatch, breakage, cash)
-3. Exceptions surfaced on `/exceptions` page and in manager briefings on home page
-4. EscalationTrafficLights component (now in `app/lib/`) shows count by metric type on the Executive Dashboard (`/home`)
+Cron runs → metrics vs thresholds → `/exceptions` page + manager briefings.
 
 ### Notification Flow
-1. Task creation → `/api/notifications/send` → email to assignee
-2. Meeting approval → minutes notification to attendees
-3. Push subscription registered via `/api/notifications/push-subscribe` → stored in `push_subscriptions`
-4. Push sent via `/api/notifications/push` using VAPID/web-push
+Task creation → `/api/notifications/send` → email. Push via VAPID/web-push.
 
 ---
 
-## 9. Integration Points
+## 10. Integration Points
 
 ### Google / Gmail
-| What | Flow |
-|------|------|
-| Gmail finance PDF ingestion | Admin connects Google account via `/api/google/auth` → OAuth2 callback stores encrypted tokens in `google_oauth_tokens` → `/api/finance/check-inbox` polls Gmail for PDFs |
-| Google Calendar events | `/api/calendar/create-event` creates events; `/api/calendar/freebusy` checks availability |
-| Meeting minutes from Gmail | `/api/meetings/check-inbox` reads meeting emails → stores in `pending_minutes` → admin reviews |
-| Token storage | Encrypted (AES via `lib/crypto.ts`, key from ENCRYPTION_KEY env var) in `google_oauth_tokens` |
-| Token refresh | Optimistic lock via `updated_at` to prevent race conditions |
-| Two OAuth apps | One for finance Gmail; separate `GOOGLE_NOTIFICATION_*` credentials for push notifications |
+Single account: k.saleem@unzegroup.com for calendar, Gmail read, outbound notifications, backup.
+`GOOGLE_REDIRECT_URI` on Vercel = `https://unze-cockpit.vercel.app/api/google/callback`
 
 ### Anthropic / Claude API
-- **Endpoint:** `/api/meetings/extract`
-- **Used for:** Extracting structured meeting data (title, date, attendees, decisions, risks, opportunities, action items) from raw transcript or parsed PDF text
-- **Model:** Configured in route; key from `ANTHROPIC_API_KEY`
-- **Guard:** Requires Supabase auth session (prevents abuse)
+`/api/meetings/extract` — structured meeting extraction. Key from `ANTHROPIC_API_KEY`.
 
 ### Web Push Notifications
-- **Library:** `web-push` (^3.6.7)
-- **Keys:** VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL
-- **Flow:** Browser registers → `/api/notifications/push-subscribe` validates email from session → stores in `push_subscriptions` → server sends via `/api/notifications/push`
+Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 
-### Cron Jobs (all routes protected by `CRON_SECRET` header)
+### Cron Jobs (all protected by `CRON_SECRET` Bearer header)
 | Route | Schedule (UTC) | Purpose |
 |-------|------|---------|
 | `/api/finance/check-inbox` | Every 10 min | Check Gmail for cash sheet emails |
@@ -1775,87 +1491,79 @@ Requires: `app_settings` table (migration 052) + Google reconnected with Drive s
 | `/api/reports/daily-pdf` | 03:30 daily | Generate and email daily PDF report |
 | `/api/reports/weekly` | 05:00 Fridays | Generate and email weekly digest |
 | `/api/backup` | 18:00 daily | Database backup |
-| `/api/investments/update-prices` | 04:30 Mon–Fri | PSX market open (9:30am PKT) — opening prices |
-| `/api/investments/update-prices` | 11:00 Mon–Fri | PSX market close (4:00pm PKT) — closing prices |
-| `/api/investments/daily-summary` | 05:00 Mon–Fri | Portfolio summary: calls `get_portfolio_daily_summary` RPC, upserts to `portfolio_snapshots`, emails Khuram |
-| `/api/investments/fetch-dividends` | 06:00 Mon–Fri | PSX dividend auto-fetch: scrapes `/payouts` per holding ticker, inserts unconfirmed entries to `stock_dividends` |
-| `/api/reports/monthly-po` | 06:00 1st of month | Monthly PO progress report email |
-
-> If `CRON_SECRET` env var is missing, ALL cron requests are blocked (migration 001-era security fix).
+| `/api/investments/update-prices` | 04:30 Mon–Fri | PSX opening prices (9:30am PKT) |
+| `/api/investments/update-prices` | 11:00 Mon–Fri | PSX closing prices (4:00pm PKT) |
+| `/api/investments/daily-summary` | 05:00 Mon–Fri | Portfolio summary email + snapshot |
+| `/api/investments/fetch-dividends` | 06:00 Mon–Fri | PSX dividend auto-fetch |
+| `/api/reports/monthly-po` | 06:00 1st of month | Monthly PO progress report |
+| `/api/cron/tax-alerts` | 00:00 and 06:00 daily | Tax deadline alert computation |
 
 ### Supabase Storage
-- **Bucket:** `source-documents` — stores uploaded PDFs
-- **Backups:** Separate bucket for database backups (managed via `/api/backup`)
+- Bucket: `source-documents` — uploaded PDFs
+- Backups: separate bucket (managed via `/api/backup`)
 
 ---
 
-## 10. Decisions Locked In
+## 11. Decisions Locked In
 
-1. **Inline styles, not Tailwind** — the codebase is intentionally inline-styled. Tailwind is installed as a dev dependency but not used at runtime.
-2. **NEVER auto-run SQL migrations** — all `.sql` files in `supabase/` are applied manually via Supabase SQL Editor.
-3. **PA (Executive role) never sees financial data** — this is enforced at the permission function level (isPA returns false for canViewFinance), at the RLS level (is_admin_or_exec now excludes Executive), and in the sidebar (finance cards hidden).
-4. **Multi-company: UTPL and IFPL are separate** — never mix their `company_id` data. Finance pages always filter by company_id.
-5. **Management by exception** — dashboards show status and exceptions, not raw data. KPI cards with RAG colouring, not raw tables.
-6. **Dual-write for dispatch** — production dispatch writes to BOTH `dispatch_entries` (legacy) AND `dispatch_records` (stock system). Both writes must always remain.
-7. **`isAdminTier` vs `canEditFinance`** — system/infrastructure features (Gmail connect, bulk upload) gated behind `isAdminTier`. Data entry features gated behind `canEditFinance`. Never swap these.
-8. **"General" → "Executive Office"** — all department/company labels use "Executive Office" for cross-department/cross-company items. "General" is banned.
-9. **Dates always DD/MM/YYYY** — via `formatDateUK()`. Never inline format dates.
-10. **British English** — all user-facing copy uses British English.
-11. **`overflowX: hidden` banned on `<main>` tags** — clips kanban scroll containers. Use `overflowX: auto` with `minWidth: 0`.
-12. **Due date required on all tasks** — no open-ended tasks. Enforced in NewTaskForm.
-13. **Protected tasks cannot be edited by assignees** — only status + notes updates allowed on tasks created by Admin/CEO/PA.
-14. **`useToast()` returns `{ show, element }`** — not `{ toast, element }`. Do not break this API.
-15. **`createServiceClient()`** for all API route DB writes — bypasses RLS; never use anon client for writes in server routes.
-16. **`requireAuth(req)`** called first in every API route — validates Bearer token before any logic.
-17. **Ops HoD (nadeem.khan@unze.co.uk)** can edit operations targets even without Admin/Executive role.
-18. **Never use `<input type="date">`** — Safari ignores `lang="en-GB"` and always shows MM/DD/YYYY. Always use `<DateInput>` from `app/lib/DateInput.tsx`. It has an identical interface to native date inputs (value: YYYY-MM-DD, onChange fires YYYY-MM-DD) but displays in DD/MM/YYYY.
-19. **Sidebar group order is fixed: OVERVIEW → FINANCE → DEPARTMENTS → OPERATIONS → SETTINGS → PREFERENCES.** "Tasks & Meetings" and "Command Centre" groups are removed. OVERVIEW always shows first (Executive Dashboard + My Minutes + My Profile + PA Dashboard for PA users). PREFERENCES contains Dark Mode toggle only. Sign Out and Collapse are at the bottom below the user card. Items within each group are sorted A–Z at render time. Do not change this order without a deliberate decision.
-20. **Sidebar active item: NAVY background + white text.** No blue left-bar accent. This is the Genspark nav style. The `NavItem` component applies `COLOURS.NAVY` bg when active.
-21. **Executive Dashboard number scale (Genspark second pass):** Hero (Good Stock) = 60px Inter Tight on dark NAVY card. KPI cards (Card, KPICard) = 44px. Finance summary cards (CompanyFinancePanel.summaryCard) = 36px. Bank Facilities hero figures = 36px. Investment tiles = 28px. Mini component = 32px. All use -0.02em tracking and tabular-nums. SectionTitle = 22px Inter Tight/600/-0.01em.
-20. **All sensitive API routes must have server-side role checks in addition to UI gates** — defence-in-depth. Pattern: call `requireAuth(req)` first, then check role and return 403 immediately if not in the allowed list. The Bank Facilities routes (`/api/finance/guarantees` and `/api/finance/guarantee-facilities`) are the reference implementation.
+1. **Inline styles, not Tailwind** — intentionally inline-styled. Tailwind installed dev-only, not used at runtime.
+2. **NEVER auto-run SQL migrations** — all `.sql` files in `supabase/` applied manually via Supabase SQL Editor.
+3. **PA (Executive role) never sees financial data** — enforced at permission, RLS, and UI levels.
+4. **Multi-company: UTPL and IFPL are separate** — never mix their `company_id` data.
+5. **Management by exception** — dashboards show status and exceptions, not raw data.
+6. **Dual-write for dispatch** — always write to both `dispatch_entries` AND `dispatch_records`.
+7. **`isAdminTier` vs `canEditFinance`** — system features gated behind isAdminTier; data entry behind canEditFinance.
+8. **"General" → "Executive Office"** — banned.
+9. **Dates always DD/MM/YYYY** — via `formatDateUK()`. Never inline.
+10. **British English** — all user-facing copy.
+11. **`overflowX: hidden` banned on `<main>` tags** — clips kanban scroll containers.
+12. **Due date required on all tasks** — enforced in NewTaskForm.
+13. **Protected tasks cannot be edited by assignees** — only status + notes.
+14. **`useToast()` returns `{ show, element }`** — not `{ toast, element }`.
+15. **`createServiceClient()`** for all API route DB writes — bypasses RLS.
+16. **`requireAuth(req)`** called first in every API route.
+17. **Ops HoD (nadeem.khan@unze.co.uk)** can edit operations targets.
+18. **Never use `<input type="date">`** — always use `<DateInput>` from `app/lib/DateInput.tsx`.
+19. **Sidebar group order is fixed: Overview → Operations → Departments → Finance → My Workspace → Settings.** "Tasks & Meetings" and "Command Centre" groups are removed. My Workspace replaced Tasks & Meetings. Items within each group are sorted A–Z at render time. Do not change this order without a deliberate decision.
+20. **Sidebar active item: NAVY background + white text.** No blue left-bar accent. Genspark nav style.
+21. **Executive Dashboard number scale:** Hero (Good Stock) = 60px Inter Tight on dark NAVY card. KPI cards = 44px. Finance summary = 36px. Bank Facilities hero = 36px. Investments tiles = 28px. Mini = 32px. All −0.02em tracking and tabular-nums. SectionTitle = 22px Inter Tight/600/−0.01em.
+22. **All sensitive API routes must have server-side role checks** — defence-in-depth. Pattern: `requireAuth(req)` first, then role check → 403. Bank Facilities routes are the reference implementation.
+23. **Tax data is all-users visible (except PA)** — `canViewTaxAccounts()` defaults to true for all authenticated non-PA users. Manage access (`canManageTaxSchedule`) defaults to false and must be explicitly granted.
+24. **Tax alert engine runs after every schedule/filing save** — POST to `/api/cron/tax-alerts` is fire-and-forget from AccountsTaxDashboard. Never block the UI on this call.
+25. **Recurring tasks RLS uses `is_privileged()`** — not `is_admin_or_exec()`. Migration 072 fixed this so PA (Executive) can create and read recurring tasks.
 
 ---
 
-## 11. Known Issues and Open Questions
+## 12. Known Issues and Open Questions
 
 | # | Issue | Status |
 |---|-------|--------|
 | 19 | No server-side middleware.ts for route protection | Open — all guards are client-side only |
 | 20 | In-memory rate limiter resets on Vercel cold starts | Open — needs Redis/KV for persistence |
 | 50–64 | 15 low-priority upgrade items from June 2026 audit | Not started |
-| — | `isAdmin` in `finance/page.tsx` vs `userIsAdmin` in `FinanceManager.tsx` confusingly use different underlying permission checks | Tech debt — functional but confusing |
+| — | `isAdmin` in `finance/page.tsx` vs `userIsAdmin` in `FinanceManager.tsx` — confusingly different checks | Tech debt — functional but confusing |
 | — | Section spacing not standardised across all pages | 14px dominant; bulk replace deferred pending visual QA |
 | — | Ops dashboard missing stale-data banner | Home and finance have it; ops dashboard deferred |
 
 ---
 
-## 12. Recovery Instructions
+## 13. Recovery Instructions
 
 If the entire project disappeared tomorrow, rebuild it as follows:
 
 ### Step 1: Restore the code
 ```
-git clone <repo-url>
+git clone https://github.com/khuram1901/unze-cockpit
 npm install
 ```
 
 ### Step 2: Restore the database
 1. Log in to Supabase dashboard → create a new project
-2. Note the project URL and keys
-3. Run all SQL migration files in order (001 through 049) via the Supabase SQL Editor
-4. Restore data from the most recent backup (available in Supabase Storage or via the `/admin` page backup list)
+2. Run all SQL migration files in order (001 through 072) via the Supabase SQL Editor
+3. Restore data from the most recent backup (available in Supabase Storage or via the `/admin` page backup list)
 
 ### Step 3: Configure environment
-Set all environment variables in Vercel (see Section 1):
-- NEXT_PUBLIC_SUPABASE_URL
-- NEXT_PUBLIC_SUPABASE_ANON_KEY
-- SUPABASE_SERVICE_ROLE_KEY
-- ANTHROPIC_API_KEY
-- CRON_SECRET (generate a random secret)
-- GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
-- GOOGLE_NOTIFICATION_* equivalents
-- VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL (regenerate via web-push)
-- ENCRYPTION_KEY (32-byte hex string — **if changed, existing OAuth tokens cannot be decrypted**)
+Set all environment variables in Vercel (see Section 1).
 
 ### Step 4: Deploy
 ```
@@ -1864,16 +1572,13 @@ vercel deploy --prod
 
 ### Step 5: Reconnect integrations
 1. Log in as khuram1901@gmail.com
-2. Go to Finance page → reconnect Gmail account via Google OAuth
+2. Finance page → reconnect Gmail account via Google OAuth
 3. Verify cron routes respond correctly to CRON_SECRET
-4. Verify push notifications work
 
 ### Step 6: Seed data
-The database backup should restore all existing data. If starting fresh:
-- Run `supabase/035_seed_investments.sql` for investment seed data
-- Run `supabase/041_receivable_stages_seed.sql` to seed receivable stages
-- Create initial members via `/members` page
-- Set company data manually in `/admin`
+- `supabase/035_seed_investments.sql` — investment seed data
+- `supabase/041_receivable_stages_seed.sql` — receivable stages
+- Create initial members via `/members`
 
 ### Key files to understand the app
 1. `BLUEPRINT.md` — this document
@@ -1881,8 +1586,9 @@ The database backup should restore all existing data. If starting fresh:
 3. `app/lib/pageRegistry.ts` — all pages and their permission keys
 4. `app/lib/SharedUI.tsx` — all design tokens and components
 5. `app/lib/constants.ts` — company IDs
-6. `supabase/` migration files — complete database schema
+6. `app/lib/taxAlertEngine.ts` — tax deadline alert logic
+7. `supabase/` migration files — complete database schema
 
 ---
 
-*Blueprint created: 01/07/2026. Maintained by the blueprint-keeper agent. Always keep this accurate — it is the rebuilding guide.*
+*Blueprint created: 01/07/2026. Last full refresh: 07/07/2026. Maintained by the blueprint-keeper agent. Always keep this accurate — it is the rebuilding guide.*

@@ -4,6 +4,70 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-07 — Sidebar restructure, Accounts & Returns, Tax Notices enhancements, Tax Compliance summary, tax deadline alerts
+
+### Sidebar restructured
+**File:** `app/lib/SidebarLayout.tsx`, `app/lib/pageRegistry.ts`
+
+- Group order changed to: **Overview → Operations → Departments → Finance → My Workspace → Settings**
+- "Tasks & Meetings" group renamed **My Workspace** — same items (Calendar, Meetings, My Minutes, Profile, Recurring Tasks, Tasks), just renamed group
+- "Command Centre" group removed entirely
+- Items within each group sorted A–Z case-insensitively at render time
+- GROUP_COLOURS updated: Overview = NAVY, Departments = AMBER (was BLUE)
+
+### Accounts & Returns — NEW page (`/accounts-tax`)
+**Files:** `app/accounts-tax/page.tsx`, `app/accounts-tax/AccountsTaxDashboard.tsx`, `app/accounts-tax/TaxComplianceSummary.tsx`
+
+- Full quarterly accounts schedule tracker: 4 quarters × 5 entities (UT, IMP, BARANH, HD, ALMAHAR) × 5 steps = 25 checkboxes per quarter
+- Annual accounts schedule: 10 entities × 6 steps = 60 checkboxes
+- Return filings grid: FBR Sales Tax (monthly, 3 entities), PRA Tax (monthly, 5 entities), Income Tax (quarterly, 5 entities)
+- Fiscal-year navigation (Pakistan fiscal year Jul–Jun, format '2025-26')
+- Overdue detection: returns unfiled after the 15th are marked red
+- Status options: Not Started / In Progress / External Auditors / Completed
+- After every save, fires POST to `/api/cron/tax-alerts` to recompute deadline alerts in the background
+- Access: all authenticated users can view (except PA). Manage access (editing) requires `canManageTaxSchedule` — defaults false, explicitly granted to Admin/CEO/Shakeel/Avess/Awais
+- Sidebar entry: "Accounts & Returns" in the Departments group (permKey: `can_view_dept_tax_accounts`)
+
+### Tax Notices — sidebar label renamed + enhanced filters
+**File:** `app/department/[slug]/TaxationDashboard.tsx`
+
+- Sidebar label changed from "Taxation" to **"Tax Notices"** for clarity
+- Three new columns on `legal_notices` (migration 069):
+  - `is_active` (boolean, default true) — Active/Inactive toggle per notice
+  - `notice_status` — 'Order', 'Notice', or 'Show Cause' dropdown
+  - `legal_stage` — 'Authority', 'Department', 'CIR Appeal', 'Tribunal', 'High Court', 'Supreme Court'
+- Filter tabs: All / Active / Inactive
+- New permission: `can_manage_tax_notices` (migration 069) — defaults false, granted to Admin/CEO/Shakeel/Avess/Awais
+
+### Tax Compliance summary card on home page
+**File:** `app/home/page.tsx`, `app/accounts-tax/TaxComplianceSummary.tsx`
+
+- CEO/Admin home page now shows a Tax Compliance summary tile between the Ops section and Investments
+- Shows filing % and schedule completion chips for current fiscal year (and previous if data exists)
+- Clicking the card navigates to `/accounts-tax`
+- Data loaded from `tax_schedule_entries` and `tax_return_filings` for current + previous fiscal year (4 parallel queries)
+
+### Tax deadline alert engine
+**Files:** `app/lib/taxAlertEngine.ts` (NEW), `app/api/cron/tax-alerts/route.ts` (NEW)
+
+- `computeAndStoreTaxAlerts(supabase, taxYear)` — reads schedule and filing data, computes which deadlines have been missed, upserts `tax_deadline_alerts` rows, emails CEO on new alerts
+- Two-tier alert system: tier 1 = first warning (approaching), tier 2 = overdue
+- Covers: quarterly/annual schedule deadlines, FBR/PRA monthly returns, Income Tax quarterly returns, annual personal returns (31 Aug internal / 30 Sep legal), annual company returns
+- Cron runs twice daily at 00:00 UTC and 06:00 UTC via GET `/api/cron/tax-alerts` (CRON_SECRET Bearer auth)
+- Also called fire-and-forget from AccountsTaxDashboard via POST after each save (Supabase session auth)
+
+### Database migrations applied
+- **Migration 068** — `can_view_guarantees`, `can_manage_guarantees`, `can_view_stock`, `can_manage_stock`, `can_manage_meetings` columns added to `member_permissions` (Access Matrix new columns)
+- **Migration 069** — `is_active`, `notice_status`, `legal_stage` columns on `legal_notices`; `can_manage_tax_notices` permission column
+- **Migration 070** — `tax_schedule_entries` table, `tax_return_filings` table, `can_view_dept_tax_accounts` and `can_manage_tax_schedule` permission columns
+- **Migration 071** — `tax_deadline_alerts` table
+- **Migration 072** — Recurring tasks RLS fix: changed from `is_admin_or_exec()` to `is_privileged()` so PA (Executive role) can read and write recurring tasks
+
+### BLUEPRINT.md
+Fully rewritten to reflect all changes since the last update (sidebar, accounts & returns, tax notices, tax compliance summary, tax alert engine, all new DB tables, updated permission functions, updated cron schedule).
+
+---
+
 ## 2026-07-06 — Restyle Finance page to Genspark design system
 
 **Files changed:** `app/finance/FinanceManager.tsx`, `app/finance/page.tsx`
