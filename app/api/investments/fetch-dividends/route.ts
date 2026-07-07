@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
 
   // ── 3. Filter to dividends in the future or within the last 30 days ─────────
   const today = new Date().toISOString().slice(0, 10);
-  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+  const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
   const relevant = results.filter((r) => r.ex_dividend_date >= cutoff);
 
   // ── 4. Upsert — only insert if no row exists for (ticker, ex_dividend_date).
