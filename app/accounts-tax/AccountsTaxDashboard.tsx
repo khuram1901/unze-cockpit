@@ -106,6 +106,11 @@ function nextFiscalYear(current: string): string {
   return `${s}-${String(s + 1).slice(2)}`;
 }
 
+function prevFiscalYear(current: string): string {
+  const s = fiscalYearStart(current) - 1;
+  return `${s}-${String(s + 1).slice(2)}`;
+}
+
 // ── Overdue logic (pure function) ──────────────────────────────────
 
 export function isOverdue(
@@ -194,9 +199,11 @@ export default function AccountsTaxDashboard() {
   const loadData = useCallback(async (year: string) => {
     setLoading(true);
 
-    const [schedRes, filingRes] = await Promise.all([
+    const [schedRes, filingRes, schedYearsRes, filingYearsRes] = await Promise.all([
       supabase.from("tax_schedule_entries").select("tax_year, section, step_index, entity_key, status").eq("tax_year", year),
       supabase.from("tax_return_filings").select("tax_year, return_type, entity_key, period_key, filed").eq("tax_year", year),
+      supabase.from("tax_schedule_entries").select("tax_year").order("tax_year"),
+      supabase.from("tax_return_filings").select("tax_year").order("tax_year"),
     ]);
 
     const sm = new Map<string, ScheduleStatus>();
@@ -210,6 +217,22 @@ export default function AccountsTaxDashboard() {
       fm.set(`${r.tax_year}:${r.return_type}:${r.entity_key}:${r.period_key}`, r.filed);
     }
     setReturnFilings(fm);
+
+    const dbYears = Array.from(new Set([
+      ...(schedYearsRes.data || []).map((r) => r.tax_year),
+      ...(filingYearsRes.data || []).map((r) => r.tax_year),
+    ])).sort();
+
+    const currentYear = getCurrentTaxYear();
+    const prev = prevFiscalYear(currentYear);
+    const allYears = Array.from(new Set([prev, ...dbYears, currentYear])).sort();
+    setAvailableYears(allYears);
+
+    authFetch("/api/cron/tax-alerts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taxYear: prev }),
+    }).catch(() => {});
 
     setLoading(false);
   }, []);

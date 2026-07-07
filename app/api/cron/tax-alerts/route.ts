@@ -33,8 +33,9 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   try {
+    const body    = await request.json().catch(() => ({}));
+    const taxYear = body.taxYear || currentFiscalYear();
     const supabase = createServiceClient();
-    const taxYear  = currentFiscalYear();
     const result   = await computeAndStoreTaxAlerts(supabase, taxYear);
     return Response.json({ success: true, taxYear, ...result });
   } catch (err) {
