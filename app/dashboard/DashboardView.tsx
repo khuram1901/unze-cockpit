@@ -819,14 +819,21 @@ export default function DashboardView() {
                   return auth > 0 && rem / auth < 0.1;
                 });
                 const today_str = new Date().toISOString().slice(0, 10);
-                const expiringLetters = allLetters.filter(l => {
+                const expiredWithBalance = allLetters.filter(l => {
+                  if (!l.expiry_date || l.expiry_date >= today_str) return false;
+                  return (l.remaining_31 + l.remaining_36 + l.remaining_45 + l.remaining_meter) > 0;
+                }).map(l => ({
+                  ...l,
+                  diffDays: Math.ceil((new Date(l.expiry_date!).getTime() - new Date(today_str).getTime()) / 86400000),
+                }));
+                const expiringSoon = allLetters.filter(l => {
                   if (!l.expiry_date) return false;
-                  const diffDays = Math.ceil((new Date(l.expiry_date).getTime() - new Date(today_str).getTime()) / 86400000);
-                  return diffDays <= 14;
-                }).map(l => {
-                  const diffDays = Math.ceil((new Date(l.expiry_date!).getTime() - new Date(today_str).getTime()) / 86400000);
-                  return { ...l, diffDays };
-                });
+                  const diff = Math.ceil((new Date(l.expiry_date).getTime() - new Date(today_str).getTime()) / 86400000);
+                  return diff >= 0 && diff <= 14 && (l.remaining_31 + l.remaining_36 + l.remaining_45 + l.remaining_meter) > 0;
+                }).map(l => ({
+                  ...l,
+                  diffDays: Math.ceil((new Date(l.expiry_date!).getTime() - new Date(today_str).getTime()) / 86400000),
+                }));
 
                 return (
                   <div key={item.po.id} style={{
@@ -882,23 +889,54 @@ export default function DashboardView() {
                       <div style={{ fontSize: "12px", color: SLATE }}>{isExpanded ? "▲" : "▼"}</div>
                     </div>
 
-                    {(nearlyExhausted.length > 0 || expiringLetters.length > 0) && (
-                      <div style={{ padding: "4px 18px 10px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                        {nearlyExhausted.map(l => (
-                          <span key={l.id} style={{ fontSize: "11px", fontWeight: 600, padding: "2px 10px", borderRadius: RADII.PILL, background: DANGER_SOFT, color: RED, border: `1px solid #EDB5B2` }}>
-                            ⚠ Letter {l.letter_number} nearly exhausted
-                          </span>
-                        ))}
-                        {expiringLetters.map(l => (
-                          <span key={`exp-${l.id}`} style={{
-                            fontSize: "11px", fontWeight: 600, padding: "2px 10px", borderRadius: RADII.PILL,
-                            background: l.diffDays < 0 ? DANGER_SOFT : WARNING_SOFT,
-                            color: l.diffDays < 0 ? RED : AMBER,
-                            border: `1px solid ${l.diffDays < 0 ? "#EDB5B2" : "#F1D9A9"}`,
-                          }}>
-                            {l.diffDays < 0 ? "EXPIRED" : `Expires in ${l.diffDays}d`}: Letter {l.letter_number}
-                          </span>
-                        ))}
+                    {(nearlyExhausted.length > 0 || expiredWithBalance.length > 0 || expiringSoon.length > 0) && (
+                      <div style={{ padding: "4px 18px 10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {nearlyExhausted.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                            {nearlyExhausted.map(l => (
+                              <span key={l.id} style={{ fontSize: "11px", fontWeight: 600, padding: "2px 10px", borderRadius: RADII.PILL, background: DANGER_SOFT, color: RED, border: `1px solid #EDB5B2` }}>
+                                ⚠ Letter {l.letter_number} nearly exhausted
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {expiredWithBalance.length > 0 && (
+                          <div style={{ backgroundColor: DANGER_SOFT, border: `1px solid ${RED}`, borderLeft: `4px solid ${RED}`, borderRadius: RADII.SM, padding: "10px 14px" }}>
+                            <div style={{ fontSize: "12px", fontWeight: 700, color: RED, marginBottom: "6px" }}>
+                              ⛔ {expiredWithBalance.length} expired letter{expiredWithBalance.length > 1 ? "s" : ""} with uncollected balance — dispatch now blocked
+                            </div>
+                            {expiredWithBalance.map((l, i) => (
+                              <div key={i} style={{ fontSize: "11px", color: RED, marginBottom: "2px" }}>
+                                Letter #{l.letter_number} · {l.contractor_name} · Expired {formatDateUK(l.expiry_date!)} ·{" "}
+                                {[
+                                  l.remaining_31 > 0 ? `${l.remaining_31}×31ft` : null,
+                                  l.remaining_36 > 0 ? `${l.remaining_36}×36ft` : null,
+                                  l.remaining_45 > 0 ? `${l.remaining_45}×45ft` : null,
+                                  l.remaining_meter > 0 ? `${l.remaining_meter}×Mtr` : null,
+                                ].filter(Boolean).join(", ")} uncollected
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {expiringSoon.length > 0 && (
+                          <div style={{ backgroundColor: WARNING_SOFT, border: `1px solid ${AMBER}`, borderLeft: `4px solid ${AMBER}`, borderRadius: RADII.SM, padding: "10px 14px" }}>
+                            <div style={{ fontSize: "12px", fontWeight: 700, color: AMBER, marginBottom: "6px" }}>
+                              ⚠ {expiringSoon.length} letter{expiringSoon.length > 1 ? "s" : ""} expiring within 14 days — action required
+                            </div>
+                            {expiringSoon.map((l, i) => (
+                              <div key={i} style={{ fontSize: "11px", color: AMBER, marginBottom: "2px" }}>
+                                Letter #{l.letter_number} · {l.contractor_name} · Expires {formatDateUK(l.expiry_date!)}{" "}
+                                ({l.diffDays === 0 ? "today" : `${l.diffDays} day${l.diffDays > 1 ? "s" : ""}`}) ·{" "}
+                                {[
+                                  l.remaining_31 > 0 ? `${l.remaining_31}×31ft` : null,
+                                  l.remaining_36 > 0 ? `${l.remaining_36}×36ft` : null,
+                                  l.remaining_45 > 0 ? `${l.remaining_45}×45ft` : null,
+                                  l.remaining_meter > 0 ? `${l.remaining_meter}×Mtr` : null,
+                                ].filter(Boolean).join(", ")} remaining
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 
