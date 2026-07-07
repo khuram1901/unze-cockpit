@@ -471,6 +471,9 @@ export default function HomePage() {
   const [taxScheduleEntries, setTaxScheduleEntries] = useState<Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">>(new Map());
   const [taxReturnFilings, setTaxReturnFilings] = useState<Map<string, boolean>>(new Map());
   const [taxSummaryYear, setTaxSummaryYear] = useState("");
+  const [taxScheduleEntries2, setTaxScheduleEntries2] = useState<Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">>(new Map());
+  const [taxReturnFilings2, setTaxReturnFilings2] = useState<Map<string, boolean>>(new Map());
+  const [taxSummaryYear2, setTaxSummaryYear2] = useState("");
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -1003,7 +1006,7 @@ export default function HomePage() {
     setTaxOverdueCount(tier2Alerts.length);
     setTaxTier2Alerts(tier2Alerts);
 
-    // Tax compliance summary — schedule entries + return filings for current fiscal year
+    // Tax compliance summary — fetch both current and previous fiscal year
     const taxNow = (() => {
       const now = new Date();
       const m = now.getMonth() + 1;
@@ -1011,21 +1014,107 @@ export default function HomePage() {
       if (m >= 7) return `${y}-${String(y + 1).slice(2)}`;
       return `${y - 1}-${String(y).slice(2)}`;
     })();
-    const [{ data: schedData }, { data: filingData }] = await Promise.all([
+    const taxPrevYear = (() => {
+      const s = parseInt(taxNow.split("-")[0], 10);
+      return `${s - 1}-${String(s).slice(2)}`;
+    })();
+
+    const [{ data: schedCurr }, { data: schedPrev }, { data: filingCurr }, { data: filingPrev }] = await Promise.all([
       supabase.from("tax_schedule_entries").select("section, step_index, entity_key, status").eq("tax_year", taxNow),
+      supabase.from("tax_schedule_entries").select("section, step_index, entity_key, status").eq("tax_year", taxPrevYear),
       supabase.from("tax_return_filings").select("return_type, entity_key, period_key, filed").eq("tax_year", taxNow),
+      supabase.from("tax_return_filings").select("return_type, entity_key, period_key, filed").eq("tax_year", taxPrevYear),
     ]);
-    const sm = new Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">();
-    for (const r of schedData ?? []) {
-      sm.set(`${taxNow}:${r.section}:${r.step_index}:${r.entity_key}`, r.status as "Not Started" | "In Progress" | "External Auditors" | "Completed");
+
+    function buildSchedMap(rows: { section: string; step_index: number; entity_key: string; status: string }[] | null, year: string) {
+      const m = new Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">();
+      for (const r of rows ?? []) {
+        m.set(`${year}:${r.section}:${r.step_index}:${r.entity_key}`, r.status as "Not Started" | "In Progress" | "External Auditors" | "Completed");
+      }
+      return m;
     }
-    const fm = new Map<string, boolean>();
-    for (const r of filingData ?? []) {
-      fm.set(`${taxNow}:${r.return_type}:${r.entity_key}:${r.period_key}`, r.filed);
+    function buildFilingMap(rows: { return_type: string; entity_key: string; period_key: string; filed: boolean }[] | null, year: string) {
+      const m = new Map<string, boolean>();
+      for (const r of rows ?? []) {
+        m.set(`${year}:${r.return_type}:${r.entity_key}:${r.period_key}`, r.filed);
+      }
+      return m;
     }
-    setTaxScheduleEntries(sm);
-    setTaxReturnFilings(fm);
-    setTaxSummaryYear(taxNow);
+
+    const smCurr = buildSchedMap(schedCurr, taxNow);
+    const smPrev = buildSchedMap(schedPrev, taxPrevYear);
+    const fmCurr = buildFilingMap(filingCurr, taxNow);
+    const fmPrev = buildFilingMap(filingPrev, taxPrevYear);
+
+    function countFiled(fm: Map<string, boolean>): number {
+      let n = 0;
+      fm.forEach((v) => { if (v) n++; });
+      return n;
+    }
+
+    function schedCompletePct(sm: Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">): number {
+      // 4 quarters × 5 steps × 5 entities = 100 slots
+      const TOTAL_SCHED = 4 * 5 * 5;
+      let done = 0;
+      sm.forEach((v) => { if (v === "Completed") done++; });
+      return TOTAL_SCHED > 0 ? Math.round((done / TOTAL_SCHED) * 100) : 0;
+    }
+
+    function hasPendingItems(sm: Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">, fm: Map<string, boolean>, year: string): boolean {
+      const MONTHLY_ENTITIES: Record<string, string[]> = {
+        FBR_SALES_TAX: ["UT", "IMP", "ALMAHAR"],
+        PRA_TAX: ["UT", "IMP", "BARANH", "HD", "ALMAHAR"],
+      };
+      const start = parseInt(year.split("-")[0], 10);
+      const months = [
+        `${start}-07`, `${start}-08`, `${start}-09`,
+        `${start}-10`, `${start}-11`, `${start}-12`,
+        `${start + 1}-01`, `${start + 1}-02`, `${start + 1}-03`,
+        `${start + 1}-04`, `${start + 1}-05`, `${start + 1}-06`,
+      ];
+      const todayNow = new Date();
+      for (const [rt, entities] of Object.entries(MONTHLY_ENTITIES)) {
+        for (const period of months) {
+          const due = new Date(`${period}-15T00:00:00`);
+          if (todayNow <= due) continue;
+          for (const ek of entities) {
+            if (!fm.get(`${year}:${rt}:${ek}:${period}`)) return true;
+          }
+        }
+      }
+      // Also check if any schedule entry is not Completed
+      let anyIncomplete = false;
+      sm.forEach((v) => { if (v !== "Completed") anyIncomplete = true; });
+      return anyIncomplete;
+    }
+
+    const TOTAL_FILINGS = 116; // 36 FBR + 60 PRA + 20 Income Tax
+    const prevComplete = countFiled(fmPrev) >= TOTAL_FILINGS && schedCompletePct(smPrev) === 100;
+    const currHasItems = hasPendingItems(smCurr, fmCurr, taxNow);
+
+    if (prevComplete) {
+      setTaxScheduleEntries(smCurr);
+      setTaxReturnFilings(fmCurr);
+      setTaxSummaryYear(taxNow);
+      setTaxScheduleEntries2(new Map());
+      setTaxReturnFilings2(new Map());
+      setTaxSummaryYear2("");
+    } else if (!currHasItems) {
+      setTaxScheduleEntries(smPrev);
+      setTaxReturnFilings(fmPrev);
+      setTaxSummaryYear(taxPrevYear);
+      setTaxScheduleEntries2(new Map());
+      setTaxReturnFilings2(new Map());
+      setTaxSummaryYear2("");
+    } else {
+      // Both years have pending items — show prev first, current second
+      setTaxScheduleEntries(smPrev);
+      setTaxReturnFilings(fmPrev);
+      setTaxSummaryYear(taxPrevYear);
+      setTaxScheduleEntries2(smCurr);
+      setTaxReturnFilings2(fmCurr);
+      setTaxSummaryYear2(taxNow);
+    }
 
     try {
       sessionStorage.setItem(cacheKey, JSON.stringify({
@@ -1497,6 +1586,9 @@ export default function HomePage() {
             taxScheduleEntries={taxScheduleEntries}
             taxReturnFilings={taxReturnFilings}
             taxSummaryYear={taxSummaryYear}
+            taxScheduleEntries2={taxScheduleEntries2}
+            taxReturnFilings2={taxReturnFilings2}
+            taxSummaryYear2={taxSummaryYear2}
             isMobile={isMobile}
             quickTaskAction={quickTaskAction}
             quickMachineResolve={quickMachineResolve}
@@ -2059,7 +2151,7 @@ function ExecutiveDashboardBody({
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, dailyOpsData,
   facilitySynopsis, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
-  isMobile, quickTaskAction, quickMachineResolve,
+  taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, isMobile, quickTaskAction, quickMachineResolve,
 }: {
   ctx: UserCtx | null;
   selectedDate: string;
@@ -2088,6 +2180,9 @@ function ExecutiveDashboardBody({
   taxScheduleEntries: Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">;
   taxReturnFilings: Map<string, boolean>;
   taxSummaryYear: string;
+  taxScheduleEntries2: Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">;
+  taxReturnFilings2: Map<string, boolean>;
+  taxSummaryYear2: string;
   quickTaskAction: (taskId: string, newStatus: string) => Promise<void>;
   quickMachineResolve: (issueId: string) => Promise<void>;
 }) {
@@ -2733,6 +2828,9 @@ function ExecutiveDashboardBody({
           scheduleEntries={taxScheduleEntries}
           returnFilings={taxReturnFilings}
           selectedYear={taxSummaryYear}
+          scheduleEntries2={taxScheduleEntries2.size > 0 ? taxScheduleEntries2 : undefined}
+          returnFilings2={taxReturnFilings2.size > 0 ? taxReturnFilings2 : undefined}
+          selectedYear2={taxSummaryYear2 || undefined}
           onClick={() => { window.location.href = "/accounts-tax"; }}
         />
       )}
