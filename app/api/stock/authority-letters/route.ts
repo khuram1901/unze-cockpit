@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
       letter: {
         id: data.id,
         letter_number: data.letter_number,
+        expiry_date: data.expiry_date || null,
         po_id: po?.id || data.po_id,
         contractor_id: contractor?.id || data.contractor_id,
         po_number: po?.po_number || "",

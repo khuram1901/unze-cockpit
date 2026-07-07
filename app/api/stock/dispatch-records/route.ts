@@ -46,11 +46,19 @@ export async function POST(request: NextRequest) {
   // Fetch letter to validate dispatch cap
   const { data: letter } = await supabase
     .from("authority_letters")
-    .select("qty_31, qty_36, qty_40, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_40, opening_dispatched_45, opening_dispatched_meter")
+    .select("qty_31, qty_36, qty_40, qty_45, qty_meter, opening_dispatched_31, opening_dispatched_36, opening_dispatched_40, opening_dispatched_45, opening_dispatched_meter, expiry_date")
     .eq("id", authority_letter_id)
     .single();
 
   if (!letter) return Response.json({ error: "Authority letter not found" }, { status: 404 });
+
+  // Hard block: expired letter
+  if (letter.expiry_date) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (letter.expiry_date < today) {
+      return Response.json({ error: `Authority letter expired on ${letter.expiry_date.split("-").reverse().join("/")} — dispatch not allowed` }, { status: 422 });
+    }
+  }
 
   // Sum existing dispatch records for this letter
   const { data: existing } = await supabase

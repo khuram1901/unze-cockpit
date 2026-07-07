@@ -27,6 +27,7 @@ type PO = {
 type LetterLookup = {
   id: string;
   letter_number: string;
+  expiry_date: string | null;
   po_id: string;
   contractor_id: string;
   po_number: string;
@@ -35,6 +36,12 @@ type LetterLookup = {
   qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number;
   remaining_31: number; remaining_36: number; remaining_40: number; remaining_45: number; remaining_meter: number;
 };
+
+function isLetterExpired(letter: LetterLookup): boolean {
+  if (!letter.expiry_date) return false;
+  // Compare YYYY-MM-DD strings directly — no time component, no timezone issue
+  return letter.expiry_date < new Date().toISOString().slice(0, 10);
+}
 
 const REASONS = [
   "Cracked in curing",
@@ -378,6 +385,25 @@ export default function ProductionForm() {
     if (!nothing && !letterLookup) {
       showMsg("dispatch", "Find an authority letter first by entering the letter number.", false);
       return;
+    }
+    if (!nothing && letterLookup && isLetterExpired(letterLookup)) {
+      showMsg("dispatch", "Cannot dispatch: this authority letter has expired.", false);
+      return;
+    }
+    if (!nothing && letterLookup) {
+      const overages: string[] = [];
+      if (qty31 > (letterLookup.remaining_31 ?? 0))
+        overages.push(`31ft (entered ${qty31}, only ${letterLookup.remaining_31} remaining)`);
+      if (qty36 > (letterLookup.remaining_36 ?? 0))
+        overages.push(`36ft (entered ${qty36}, only ${letterLookup.remaining_36} remaining)`);
+      if (qty45 > (letterLookup.remaining_45 ?? 0))
+        overages.push(`45ft (entered ${qty45}, only ${letterLookup.remaining_45} remaining)`);
+      if (qtyMeter > (letterLookup.remaining_meter ?? 0))
+        overages.push(`Meters (entered ${qtyMeter}, only ${letterLookup.remaining_meter} remaining)`);
+      if (overages.length > 0) {
+        showMsg("dispatch", `Dispatch exceeds authority letter balance:\n${overages.join("\n")}\n\nDispatch has NOT been saved.`, false);
+        return;
+      }
     }
     if (!nothing && !releasedBy.trim()) {
       showMsg("dispatch", "Enter the name of who released/approved the dispatch.", false);
@@ -769,32 +795,44 @@ export default function ProductionForm() {
             {letterError && <p style={{ fontSize: "13px", color: COLOURS.RED, marginBottom: "8px", fontWeight: 600 }}>{letterError}</p>}
 
             {letterLookup && (
-              <div style={{ border: `1px solid ${COLOURS.GREEN}`, borderRadius: RADII.CARD, padding: "12px 14px", backgroundColor: COLOURS.SUCCESS_SOFT, marginBottom: "10px" }}>
-                <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.GREEN, marginBottom: "4px" }}>Letter found ✓</div>
-                <div style={{ fontSize: "13.5px", fontWeight: 600, color: COLOURS.NAVY }}>
-                  {letterLookup.customer_name} — PO #{letterLookup.po_number}
-                </div>
-                <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                  Contractor: {letterLookup.contractor_name}
-                </div>
-                <div style={{ marginTop: "8px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                  {[
-                    { size: "31ft", authorized: letterLookup.qty_31, remaining: letterLookup.remaining_31 },
-                    { size: "36ft", authorized: letterLookup.qty_36, remaining: letterLookup.remaining_36 },
-                    { size: "40ft", authorized: letterLookup.qty_40 || 0, remaining: letterLookup.remaining_40 || 0 },
-                    { size: "45ft", authorized: letterLookup.qty_45, remaining: letterLookup.remaining_45 },
-                    { size: "Mtr", authorized: letterLookup.qty_meter, remaining: letterLookup.remaining_meter },
-                  ].filter((s) => s.authorized > 0).map((s) => (
-                    <div key={s.size} style={{ padding: "6px 10px", borderRadius: RADII.SM, backgroundColor: s.remaining > 0 ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, border: `1px solid ${s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED}` }}>
-                      <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.size}</div>
-                      <div style={{ fontSize: "14px", fontWeight: 600, color: s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED, fontVariantNumeric: "tabular-nums" }}>
-                        {s.remaining} left
+              <>
+                <div style={{ border: `1px solid ${isLetterExpired(letterLookup) ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: RADII.CARD, padding: "12px 14px", backgroundColor: isLetterExpired(letterLookup) ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT, marginBottom: "10px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: isLetterExpired(letterLookup) ? COLOURS.RED : COLOURS.GREEN, marginBottom: "4px" }}>
+                    {isLetterExpired(letterLookup) ? "Letter found — EXPIRED" : "Letter found ✓"}
+                  </div>
+                  <div style={{ fontSize: "13.5px", fontWeight: 600, color: COLOURS.NAVY }}>
+                    {letterLookup.customer_name} — PO #{letterLookup.po_number}
+                  </div>
+                  <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                    Contractor: {letterLookup.contractor_name}
+                  </div>
+                  <div style={{ marginTop: "8px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    {[
+                      { size: "31ft", authorized: letterLookup.qty_31, remaining: letterLookup.remaining_31 },
+                      { size: "36ft", authorized: letterLookup.qty_36, remaining: letterLookup.remaining_36 },
+                      { size: "40ft", authorized: letterLookup.qty_40 || 0, remaining: letterLookup.remaining_40 || 0 },
+                      { size: "45ft", authorized: letterLookup.qty_45, remaining: letterLookup.remaining_45 },
+                      { size: "Mtr", authorized: letterLookup.qty_meter, remaining: letterLookup.remaining_meter },
+                    ].filter((s) => s.authorized > 0).map((s) => (
+                      <div key={s.size} style={{ padding: "6px 10px", borderRadius: RADII.SM, backgroundColor: s.remaining > 0 ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, border: `1px solid ${s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED}` }}>
+                        <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.size}</div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED, fontVariantNumeric: "tabular-nums" }}>
+                          {s.remaining} left
+                        </div>
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>of {s.authorized}</div>
                       </div>
-                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>of {s.authorized}</div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+                {isLetterExpired(letterLookup) && (
+                  <div style={{ backgroundColor: COLOURS.DANGER_SOFT, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "10px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.RED }}>EXPIRED — dispatch not allowed.</span>
+                    <span style={{ fontSize: "12px", color: COLOURS.RED }}>
+                      This letter expired on {formatDateUK(letterLookup.expiry_date!)}. No further dispatches can be made against it.
+                    </span>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Qty fields — show when letter found OR when entering "nothing" */}
@@ -802,18 +840,18 @@ export default function ProductionForm() {
               <>
                 {!isMeter ? (
                   <>
-                    <label>31 ft dispatched<input type="number" min="0" style={inputStyle} value={disp31} onChange={(e) => setDisp31(e.target.value)} placeholder="0" /></label>
-                    <label>36 ft dispatched<input type="number" min="0" style={inputStyle} value={disp36} onChange={(e) => setDisp36(e.target.value)} placeholder="0" /></label>
-                    <label>45 ft dispatched<input type="number" min="0" style={inputStyle} value={disp45} onChange={(e) => setDisp45(e.target.value)} placeholder="0" /></label>
+                    <label>31 ft dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(disp31) > (letterLookup.remaining_31 ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={disp31} onChange={(e) => setDisp31(e.target.value)} placeholder="0" /></label>
+                    <label>36 ft dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(disp36) > (letterLookup.remaining_36 ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={disp36} onChange={(e) => setDisp36(e.target.value)} placeholder="0" /></label>
+                    <label>45 ft dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(disp45) > (letterLookup.remaining_45 ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={disp45} onChange={(e) => setDisp45(e.target.value)} placeholder="0" /></label>
                   </>
                 ) : (
-                  <label>Single-phase meters dispatched<input type="number" min="0" style={inputStyle} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
+                  <label>Single-phase meters dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(dispMeter) > (letterLookup.remaining_meter ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
                 )}
               </>
             )}
 
             {/* Released by + vehicle — show when dispatch qty entered */}
-            {letterLookup && dispatchHasQty && (
+            {letterLookup && dispatchHasQty && !isLetterExpired(letterLookup) && (
               <>
                 <label style={labelStyle}>
                   Released by *
@@ -827,7 +865,7 @@ export default function ProductionForm() {
             )}
 
             <div style={btnRow}>
-              <button type="button" onClick={() => submitDispatch(false)} disabled={savingSection === "dispatch"} style={submitBtn("dispatch")}>
+              <button type="button" onClick={() => submitDispatch(false)} disabled={savingSection === "dispatch" || !!(letterLookup && isLetterExpired(letterLookup))} style={{ ...submitBtn("dispatch"), opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : savingSection === "dispatch" ? 0.7 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "pointer" }}>
                 {savingSection === "dispatch" ? "Saving…" : "Submit Dispatch"}
               </button>
               <button type="button" onClick={() => submitDispatch(true)} disabled={savingSection === "dispatch"} style={nothingBtn}>
