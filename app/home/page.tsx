@@ -2345,42 +2345,74 @@ function ExecutiveDashboardBody({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "stretch", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
         {hasAttention ? (
           <div
-            onClick={() => setBannerOpen(!bannerOpen)}
             style={{
-              flex: 1, minWidth: "260px", cursor: "pointer",
+              flex: 1, minWidth: "260px",
               border: `1px solid ${hasCritical ? DANGER_SOFT : WARNING_SOFT}`,
               borderLeft: `4px solid ${hasCritical ? RED : AMBER}`,
               borderRadius: "8px",
               backgroundColor: hasCritical ? DANGER_SOFT : WARNING_SOFT,
-              padding: "9px 14px",
-              display: "flex", alignItems: "center", gap: "10px",
+              overflow: "hidden",
             }}
           >
-            <span style={{ fontSize: "17px", flexShrink: 0 }}>⚠</span>
-            <span style={{ fontSize: "15px", fontWeight: 700, color: hasCritical ? RED : AMBER, flexShrink: 0 }}>
-              {totalAttentionCount} item{totalAttentionCount > 1 ? "s" : ""} need attention
-            </span>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", flex: 1, minWidth: 0 }}>
-              {attentionRows.slice(0, 3).map((row) => {
-                const isRed = row.color === RED;
-                const softBg = isRed ? COLOURS.DANGER_SOFT : COLOURS.WARNING_SOFT;
-                return (
-                <span key={`chip-${row.id}`} style={{
-                  display: "inline-flex", alignItems: "center", gap: "4px",
-                  fontSize: "12px", fontWeight: 600, color: row.color,
-                  backgroundColor: softBg, borderRadius: "999px", padding: "2px 8px",
-                }}>
-                  {row.count} {row.label}
-                </span>
-                );
-              })}
-              {attentionRows.length > 3 && (
-                <span style={{ fontSize: "12px", color: hasCritical ? RED : AMBER, fontWeight: 600, alignSelf: "center" }}>
-                  +{attentionRows.length - 3} more
-                </span>
-              )}
+            {/* Row 1 — alerts */}
+            <div
+              onClick={() => setBannerOpen(!bannerOpen)}
+              style={{
+                padding: "9px 14px", cursor: "pointer",
+                display: "flex", alignItems: "center", gap: "10px",
+              }}
+            >
+              <span style={{ fontSize: "17px", flexShrink: 0 }}>⚠</span>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: hasCritical ? RED : AMBER, flexShrink: 0 }}>
+                {totalAttentionCount} item{totalAttentionCount > 1 ? "s" : ""} need attention
+              </span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "5px", flex: 1, minWidth: 0 }}>
+                {attentionRows.slice(0, 3).map((row) => {
+                  const isRed = row.color === RED;
+                  const softBg = isRed ? COLOURS.DANGER_SOFT : COLOURS.WARNING_SOFT;
+                  return (
+                  <span key={`chip-${row.id}`} style={{
+                    display: "inline-flex", alignItems: "center", gap: "4px",
+                    fontSize: "12px", fontWeight: 600, color: row.color,
+                    backgroundColor: softBg, borderRadius: "999px", padding: "2px 8px",
+                  }}>
+                    {row.count} {row.label}
+                  </span>
+                  );
+                })}
+                {attentionRows.length > 3 && (
+                  <span style={{ fontSize: "12px", color: hasCritical ? RED : AMBER, fontWeight: 600, alignSelf: "center" }}>
+                    +{attentionRows.length - 3} more
+                  </span>
+                )}
+              </div>
+              <span style={{ fontSize: "13px", color: hasCritical ? RED : AMBER, fontWeight: 700, flexShrink: 0 }}>{bannerOpen ? "▲ Hide" : "▼ Show"}</span>
             </div>
-            <span style={{ fontSize: "13px", color: hasCritical ? RED : AMBER, fontWeight: 700, flexShrink: 0 }}>{bannerOpen ? "▲ Hide" : "▼ Show"}</span>
+            {/* Row 2 — ops strip */}
+            <div style={{
+              borderTop: `1px solid ${HAIRLINE}`,
+              backgroundColor: CARD_ALT,
+              padding: "8px 16px",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 0 }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: SLATE, marginRight: "14px", flexShrink: 0 }}>OPS TODAY</span>
+                <span style={{ fontSize: "11px", color: SLATE }}>Good stock</span>
+                <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-mono)", color: NAVY, marginLeft: "4px" }}>{closingGoodStock.toLocaleString()}</span>
+                <span style={{ fontSize: "11px", color: HAIRLINE, marginLeft: "12px", marginRight: "4px" }}>·</span>
+                <span style={{ fontSize: "11px", color: SLATE }}>Produced</span>
+                <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-mono)", color: NAVY, marginLeft: "4px" }}>{produced.toLocaleString()}</span>
+                <span style={{ fontSize: "11px", color: HAIRLINE, marginLeft: "12px", marginRight: "4px" }}>·</span>
+                <span style={{ fontSize: "11px", color: SLATE }}>Dispatched</span>
+                <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-mono)", color: NAVY, marginLeft: "4px" }}>{dispatched.toLocaleString()}</span>
+                <span style={{ fontSize: "11px", color: HAIRLINE, marginLeft: "12px", marginRight: "4px" }}>·</span>
+                <span style={{ fontSize: "11px", color: SLATE }}>Breakage</span>
+                <span style={{ fontSize: "14px", fontWeight: 600, fontFamily: "var(--font-mono)", color: broken > 0 ? RED : NAVY, marginLeft: "4px" }}>{broken.toLocaleString()}</span>
+              </div>
+              <a href="/dashboard" style={{ fontSize: "11px", color: BLUE, fontWeight: 500, textDecoration: "none", cursor: "pointer", flexShrink: 0, marginLeft: "16px" }}>
+                View dashboard →
+              </a>
+            </div>
           </div>
         ) : (
           <p style={{ color: SLATE, fontSize: "15px", margin: 0, maxWidth: "640px" }}>
@@ -2483,42 +2515,6 @@ function ExecutiveDashboardBody({
           </div>
         </div>
       ) : null}
-
-      {/* ── SECTION 2: OPERATIONS STATUS ── */}
-      <SectionTitle title="Operations Status — Today" />
-      {/* Hero tile: Good Stock — dark NAVY card */}
-      <a href="/dashboard" style={{ textDecoration: "none", display: "block", marginBottom: "10px" }}>
-        <div style={{
-          borderRadius: "14px",
-          backgroundColor: NAVY,
-          padding: "24px",
-          cursor: "pointer",
-          transition: "opacity 0.15s",
-          display: "flex", flexDirection: "column", gap: "4px",
-        }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.opacity = "0.93"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.opacity = "1"; }}
-        >
-          <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)", fontFamily: "var(--font-sans, Inter, sans-serif)", marginBottom: "6px" }}>Good Stock — Closing Inventory</div>
-          <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: isMobile ? "44px" : "60px", fontWeight: 600, color: "#FFFFFF", lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{closingGoodStock.toLocaleString()}</div>
-          <div style={{ marginTop: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", fontWeight: 500, color: "rgba(255,255,255,0.55)", letterSpacing: "0.04em" }}>pairs · all plants combined</span>
-            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", fontWeight: 500 }}>View dashboard →</span>
-          </div>
-        </div>
-      </a>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
-        gap: "12px", marginBottom: "12px",
-      }}>
-        <Card title="Produced" value={produced} color={GREEN} href="/dashboard" muted={produced === 0} caption="No data submitted yet today" />
-        <Card title="Dispatched" value={dispatched} color={GREEN} href="/dashboard" muted={dispatched === 0} caption="No data submitted yet today" />
-        <Card title="Broken" value={broken} color={RED} href="/dashboard" muted={broken === 0} caption="No data submitted yet today" />
-        <Card title="Machine Issues" value={machineIssues.length} color={RED} href="/dashboard" muted={machineIssues.length === 0} caption="No issues reported" />
-        <Card title="Broken Stock" value={closingBrokenStock} color={RED} href="/dashboard" muted={closingBrokenStock === 0} />
-        <Card title="Completed (Month)" value={completedThisMonth.length} color={GREEN} href="/tasks" muted={completedThisMonth.length === 0} caption="Nothing completed yet this month" />
-      </div>
 
       {/* ── CHARTS ROW (exactly 2 items so the grid never wraps to a half-empty row) ── */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
