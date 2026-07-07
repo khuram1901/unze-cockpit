@@ -2824,7 +2824,9 @@ function ExecutiveDashboardBody({
 
       {/* ── TAX COMPLIANCE SUMMARY ── */}
       {taxSummaryYear !== "" && (
-        <TaxComplianceSummary
+        <>
+          <SectionTitle title="Tax Compliance" />
+          <TaxComplianceSummary
           scheduleEntries={taxScheduleEntries}
           returnFilings={taxReturnFilings}
           selectedYear={taxSummaryYear}
@@ -2833,6 +2835,7 @@ function ExecutiveDashboardBody({
           selectedYear2={taxSummaryYear2 || undefined}
           onClick={() => { window.location.href = "/accounts-tax"; }}
         />
+        </>
       )}
 
       {/* ── INVESTMENTS ── */}

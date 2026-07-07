@@ -213,9 +213,11 @@ export default function TaxComplianceSummary({
     >
       {/* ── Card header: title + year pills ── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", letterSpacing: "-0.01em" }}>
-          Tax Compliance
-        </div>
+        {!onClick && (
+          <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", letterSpacing: "-0.01em" }}>
+            Tax Compliance
+          </div>
+        )}
         <div style={{ display: "flex", gap: "6px" }}>
           <span style={yearPill(selectedYear)}>{selectedYear}</span>
           {hasTwoYears && (
