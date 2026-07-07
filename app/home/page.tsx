@@ -15,6 +15,7 @@ import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import DateInput from "../lib/DateInput";
+import TaxComplianceSummary from "../accounts-tax/TaxComplianceSummary";
 
 const { NAVY, SLATE, BORDER, CANVAS, HAIRLINE, CARD_ALT, INK_700, INK_400, GREEN, AMBER, RED, BLUE, SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT } = COLOURS;
 
@@ -467,6 +468,9 @@ export default function HomePage() {
   const [dailyOpsData, setDailyOpsData] = useState<DailyOpsPoint[]>([]);
   const [taxOverdueCount, setTaxOverdueCount] = useState(0);
   const [taxTier2Alerts, setTaxTier2Alerts] = useState<{ alert_type: string; period_key: string; overdue_count: number; alert_message: string; tax_year: string }[]>([]);
+  const [taxScheduleEntries, setTaxScheduleEntries] = useState<Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">>(new Map());
+  const [taxReturnFilings, setTaxReturnFilings] = useState<Map<string, boolean>>(new Map());
+  const [taxSummaryYear, setTaxSummaryYear] = useState("");
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -999,6 +1003,30 @@ export default function HomePage() {
     setTaxOverdueCount(tier2Alerts.length);
     setTaxTier2Alerts(tier2Alerts);
 
+    // Tax compliance summary — schedule entries + return filings for current fiscal year
+    const taxNow = (() => {
+      const now = new Date();
+      const m = now.getMonth() + 1;
+      const y = now.getFullYear();
+      if (m >= 7) return `${y}-${String(y + 1).slice(2)}`;
+      return `${y - 1}-${String(y).slice(2)}`;
+    })();
+    const [{ data: schedData }, { data: filingData }] = await Promise.all([
+      supabase.from("tax_schedule_entries").select("section, step_index, entity_key, status").eq("tax_year", taxNow),
+      supabase.from("tax_return_filings").select("return_type, entity_key, period_key, filed").eq("tax_year", taxNow),
+    ]);
+    const sm = new Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">();
+    for (const r of schedData ?? []) {
+      sm.set(`${taxNow}:${r.section}:${r.step_index}:${r.entity_key}`, r.status as "Not Started" | "In Progress" | "External Auditors" | "Completed");
+    }
+    const fm = new Map<string, boolean>();
+    for (const r of filingData ?? []) {
+      fm.set(`${taxNow}:${r.return_type}:${r.entity_key}:${r.period_key}`, r.filed);
+    }
+    setTaxScheduleEntries(sm);
+    setTaxReturnFilings(fm);
+    setTaxSummaryYear(taxNow);
+
     try {
       sessionStorage.setItem(cacheKey, JSON.stringify({
         ts: Date.now(),
@@ -1466,6 +1494,9 @@ export default function HomePage() {
             facilitySynopsis={facilitySynopsis}
             taxOverdueCount={taxOverdueCount}
             taxTier2Alerts={taxTier2Alerts}
+            taxScheduleEntries={taxScheduleEntries}
+            taxReturnFilings={taxReturnFilings}
+            taxSummaryYear={taxSummaryYear}
             isMobile={isMobile}
             quickTaskAction={quickTaskAction}
             quickMachineResolve={quickMachineResolve}
@@ -2027,7 +2058,8 @@ function ExecutiveDashboardBody({
   ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, dailyOpsData,
-  facilitySynopsis, taxOverdueCount, taxTier2Alerts, isMobile, quickTaskAction, quickMachineResolve,
+  facilitySynopsis, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
+  isMobile, quickTaskAction, quickMachineResolve,
 }: {
   ctx: UserCtx | null;
   selectedDate: string;
@@ -2053,6 +2085,9 @@ function ExecutiveDashboardBody({
   facilitySynopsis: { bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[];
   taxOverdueCount: number;
   taxTier2Alerts: { alert_type: string; period_key: string; overdue_count: number; alert_message: string; tax_year: string }[];
+  taxScheduleEntries: Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">;
+  taxReturnFilings: Map<string, boolean>;
+  taxSummaryYear: string;
   quickTaskAction: (taskId: string, newStatus: string) => Promise<void>;
   quickMachineResolve: (issueId: string) => Promise<void>;
 }) {
@@ -2692,31 +2727,14 @@ function ExecutiveDashboardBody({
         </>
       )}
 
-      {/* ── TAX DEADLINE ALERTS (tier 2 — escalated to CEO) ── */}
-      {taxOverdueCount > 0 && (
-        <a href="/accounts-tax" style={{ textDecoration: "none", display: "block", marginBottom: "12px" }}>
-          <div style={{
-            backgroundColor: DANGER_SOFT,
-            border: `1px solid ${HAIRLINE}`,
-            borderTop: `3px solid ${RED}`,
-            borderRadius: RADII.CARD,
-            padding: "16px 20px",
-            cursor: "pointer",
-          }}>
-            <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
-              Tax deadlines overdue
-            </div>
-            <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "36px", fontWeight: 600, color: RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", marginBottom: "6px" }}>
-              {taxTier2Alerts.length}
-            </div>
-            <div style={{ fontSize: "12px", color: SLATE, marginBottom: "8px" }}>
-              deadline{taxTier2Alerts.length !== 1 ? "s" : ""} missed — {taxTier2Alerts.reduce((sum, a) => sum + a.overdue_count, 0)} item{taxTier2Alerts.reduce((sum, a) => sum + a.overdue_count, 0) !== 1 ? "s" : ""} pending
-            </div>
-            <div style={{ fontSize: "11px", color: RED, fontWeight: 500 }}>
-              View Accounts (Tax) →
-            </div>
-          </div>
-        </a>
+      {/* ── TAX COMPLIANCE SUMMARY ── */}
+      {taxSummaryYear !== "" && (
+        <TaxComplianceSummary
+          scheduleEntries={taxScheduleEntries}
+          returnFilings={taxReturnFilings}
+          selectedYear={taxSummaryYear}
+          onClick={() => { window.location.href = "/accounts-tax"; }}
+        />
       )}
 
       {/* ── INVESTMENTS ── */}

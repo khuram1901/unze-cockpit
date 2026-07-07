@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase, authFetch, loadMyPermissions } from "../lib/supabase";
 import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, useToast } from "../lib/SharedUI";
 import { canManageTaxSchedule, isPA, type UserCtx, type PermOverrides } from "../lib/permissions";
+import TaxComplianceSummary from "./TaxComplianceSummary";
 import { useMobile } from "../lib/useMobile";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -289,6 +290,41 @@ export default function AccountsTaxDashboard() {
     }
   }
 
+  // ── Unlock a filed return (canManage only) ──
+
+  async function handleUnlockFiling(entityKey: string, returnType: ReturnType, periodKey: string) {
+    const confirmed = window.confirm(
+      `Unlock filing for ${entityKey} — ${returnType} — ${periodKey}?\n\nThis will revert to "Not Filed" and be logged in the audit trail.`
+    );
+    if (!confirmed) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const email = user?.email || "unknown";
+
+    const { error } = await supabase.from("tax_return_filings").upsert({
+      tax_year: selectedYear, return_type: returnType, entity_key: entityKey, period_key: periodKey,
+      filed: false, filed_at: null, filed_by: null,
+    }, { onConflict: "tax_year,return_type,entity_key,period_key" });
+
+    if (error) { alert("Error unlocking: " + error.message); return; }
+
+    await supabase.from("audit_log").insert({
+      user_email: email,
+      action: "UNLOCK_TAX_FILING",
+      table_name: "tax_return_filings",
+      details: JSON.stringify({
+        tax_year: selectedYear, return_type: returnType, entity_key: entityKey,
+        period_key: periodKey, reverted_to: "not_filed",
+      }),
+      created_at: new Date().toISOString(),
+    });
+
+    const key = `${selectedYear}:${returnType}:${entityKey}:${periodKey}`;
+    setReturnFilings((prev) => { const next = new Map(prev); next.set(key, false); return next; });
+
+    triggerAlertRecompute();
+  }
+
   // ── Fire-and-forget alert recompute after each save ──
 
   function triggerAlertRecompute() {
@@ -530,6 +566,15 @@ export default function AccountsTaxDashboard() {
         </div>
       </div>
 
+      {/* ── Tax Compliance Summary ── */}
+      {!loading && (
+        <TaxComplianceSummary
+          scheduleEntries={scheduleEntries}
+          returnFilings={returnFilings}
+          selectedYear={selectedYear}
+        />
+      )}
+
       {loading ? (
         <div style={{ color: SLATE, fontSize: "14px", padding: "40px 0" }}>Loading…</div>
       ) : (
@@ -608,20 +653,19 @@ export default function AccountsTaxDashboard() {
                                   const { bg, text, border } = STATUS_COLOURS[status];
                                   const cellKey = `${selectedYear}:${sec.key}:${stepIndex}:${e.key}`;
                                   const saving = savingSchedule.has(cellKey);
+                                  const availableStatuses = (!canManage && status !== "Not Started")
+                                    ? STATUS_OPTIONS.filter((s) => s !== "Not Started")
+                                    : STATUS_OPTIONS;
                                   return (
                                     <td key={e.key} style={tableCell(even)}>
-                                      {canManage ? (
-                                        <select
-                                          value={status}
-                                          disabled={saving}
-                                          onChange={(ev) => handleStatusChange(sec.key, stepIndex, e.key, ev.target.value as ScheduleStatus)}
-                                          style={statusSelectStyle(bg, text, border, saving)}
-                                        >
-                                          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                                        </select>
-                                      ) : (
-                                        <span style={statusChipStyle(bg, text, border)}>{status}</span>
-                                      )}
+                                      <select
+                                        value={status}
+                                        disabled={saving}
+                                        onChange={(ev) => handleStatusChange(sec.key, stepIndex, e.key, ev.target.value as ScheduleStatus)}
+                                        style={statusSelectStyle(bg, text, border, saving)}
+                                      >
+                                        {availableStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                                      </select>
                                     </td>
                                   );
                                 })}
@@ -689,20 +733,19 @@ export default function AccountsTaxDashboard() {
                                   const { bg, text, border } = STATUS_COLOURS[status];
                                   const cellKey = `${selectedYear}:${sectionKey}:${stepIndex}:${e.key}`;
                                   const saving = savingSchedule.has(cellKey);
+                                  const availableStatuses = (!canManage && status !== "Not Started")
+                                    ? STATUS_OPTIONS.filter((s) => s !== "Not Started")
+                                    : STATUS_OPTIONS;
                                   return (
                                     <td key={e.key} style={tableCell(even)}>
-                                      {canManage ? (
-                                        <select
-                                          value={status}
-                                          disabled={saving}
-                                          onChange={(ev) => handleStatusChange(sectionKey, stepIndex, e.key, ev.target.value as ScheduleStatus)}
-                                          style={statusSelectStyle(bg, text, border, saving)}
-                                        >
-                                          {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                                        </select>
-                                      ) : (
-                                        <span style={statusChipStyle(bg, text, border)}>{status}</span>
-                                      )}
+                                      <select
+                                        value={status}
+                                        disabled={saving}
+                                        onChange={(ev) => handleStatusChange(sectionKey, stepIndex, e.key, ev.target.value as ScheduleStatus)}
+                                        style={statusSelectStyle(bg, text, border, saving)}
+                                      >
+                                        {availableStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                                      </select>
                                     </td>
                                   );
                                 })}
@@ -786,21 +829,42 @@ export default function AccountsTaxDashboard() {
                 const fKey = `${selectedYear}:${returnType}:${entityKey}:${periodKey}`;
                 const saving = savingFiling.has(fKey);
 
+                if (filed) {
+                  if (canManage) {
+                    return (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <span style={filingChipStyle(true, false)}>✓ Filed</span>
+                        <span
+                          onClick={() => handleUnlockFiling(entityKey, returnType, periodKey)}
+                          style={{ cursor: "pointer", fontSize: "11px", color: SLATE, textDecoration: "underline", whiteSpace: "nowrap" }}
+                        >
+                          ↩ Unlock
+                        </span>
+                      </span>
+                    );
+                  }
+                  return (
+                    <span style={{ ...filingChipStyle(true, false), cursor: "not-allowed" }}>
+                      ✓ Filed 🔒
+                    </span>
+                  );
+                }
+
                 if (canManage) {
                   return (
                     <button
                       disabled={saving}
                       onClick={() => handleFilingToggle(returnType, entityKey, periodKey)}
-                      style={filingButtonStyle(filed, overdue, saving)}
+                      style={filingButtonStyle(false, overdue, saving)}
                     >
-                      {filed ? "✓ Filed" : overdue ? "⚠ Overdue" : "Not filed"}
+                      {overdue ? "⚠ Overdue" : "Not filed"}
                     </button>
                   );
                 }
 
                 return (
-                  <span style={filingChipStyle(filed, overdue)}>
-                    {filed ? "✓ Filed" : overdue ? "⚠ Overdue" : "Not filed"}
+                  <span style={{ ...filingChipStyle(false, overdue), cursor: "not-allowed" }}>
+                    {overdue ? "⚠ Overdue" : "Not filed"}
                   </span>
                 );
               }
