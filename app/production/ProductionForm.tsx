@@ -886,7 +886,7 @@ export default function ProductionForm() {
               </p>
             )}
             <div style={btnRow}>
-              <button type="button" onClick={() => submitDispatch(false)} disabled={savingSection === "dispatch" || !!(letterLookup && isLetterExpired(letterLookup)) || (!letterLookup && (Number(disp31||0) + Number(disp36||0) + Number(disp45||0) + Number(dispMeter||0)) > 0)} style={{ ...submitBtn("dispatch"), opacity: (letterLookup && isLetterExpired(letterLookup)) || (!letterLookup && (Number(disp31||0) + Number(disp36||0) + Number(disp45||0) + Number(dispMeter||0)) > 0) ? 0.4 : savingSection === "dispatch" ? 0.7 : 1, cursor: (letterLookup && isLetterExpired(letterLookup)) || (!letterLookup && (Number(disp31||0) + Number(disp36||0) + Number(disp45||0) + Number(dispMeter||0)) > 0) ? "not-allowed" : "pointer" }}>
+              <button type="button" onClick={() => submitDispatch(false)} disabled={savingSection === "dispatch" || !letterLookup || !!(letterLookup && isLetterExpired(letterLookup))} style={{ ...submitBtn("dispatch"), opacity: (!letterLookup || (letterLookup && isLetterExpired(letterLookup))) ? 0.4 : savingSection === "dispatch" ? 0.7 : 1, cursor: (!letterLookup || (letterLookup && isLetterExpired(letterLookup))) ? "not-allowed" : "pointer" }}>
                 {savingSection === "dispatch" ? "Saving…" : "Submit Dispatch"}
               </button>
               <button type="button" onClick={() => submitDispatch(true)} disabled={savingSection === "dispatch"} style={nothingBtn}>
