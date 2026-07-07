@@ -2237,7 +2237,7 @@ function ExecutiveDashboardBody({
   const recTotal = receivableRows.reduce((s, r) => s + r.totalAmount, 0);
   const recRedCount = receivableRows.reduce((s, r) => s + r.redCount, 0);
 
-  /* Tax urgent-attention: tasks in the Taxation department that are overdue or due this week */
+  /* Tax urgent-attention: tasks in the Tax Notices department that are overdue or due this week */
   const taxTasks = tasks.filter((t) => (t.assigned_to_department || "") === "Taxation");
   const taxOverdue = taxTasks.filter((t) => isOverdueTask(t));
   const taxDueThisWeek = taxTasks.filter((t) => isDueThisWeekTask(t));

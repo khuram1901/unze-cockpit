@@ -554,7 +554,7 @@ export default function AccountsTaxDashboard() {
         <div>
           <PageHeader />
           <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "22px", fontWeight: 600, color: NAVY, letterSpacing: "-0.01em", marginTop: "4px" }}>
-            Accounts (Tax)
+            Accounts & Returns
           </div>
           <div style={{ fontSize: "13px", color: SLATE, marginTop: "3px" }}>
             Quarterly accounts schedule and monthly return filings

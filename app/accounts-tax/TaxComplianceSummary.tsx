@@ -263,7 +263,7 @@ export default function TaxComplianceSummary({
           <QuarterRow chips={quarterChips2} year={selectedYear2!} />
           {onClick && (
             <span style={{ fontSize: "11px", color: SLATE, marginTop: "2px" }}>
-              View Accounts (Tax) →
+              View Accounts & Returns →
             </span>
           )}
         </div>
@@ -288,7 +288,7 @@ export default function TaxComplianceSummary({
           ))}
           {onClick && (
             <span style={{ fontSize: "11px", color: SLATE, alignSelf: "center", marginLeft: "auto" }}>
-              View Accounts (Tax) →
+              View Accounts & Returns →
             </span>
           )}
         </div>

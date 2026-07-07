@@ -421,7 +421,7 @@ export async function computeAndStoreTaxAlerts(
               Internal completion target was <strong>${internalDateLabel}</strong>.<br/>
               Legal deadline: <strong>${legalDateLabel}</strong>.
             </p>
-            <p>Please update the Accounts (Tax) schedule before this is escalated to the CEO.</p>
+            <p>Please update the Accounts &amp; Returns schedule before this is escalated to the CEO.</p>
           `,
         });
         if (sent) emailsSent++;
@@ -562,7 +562,7 @@ async function notifyShakeel(
       <p style="background:#fef2f2;padding:12px;border-radius:6px;border-left:3px solid #dc2626">
         ${alertMessage}
       </p>
-      <p>Please review the Accounts (Tax) page and take action before this is escalated to the CEO.</p>
+      <p>Please review the Accounts &amp; Returns page and take action before this is escalated to the CEO.</p>
     `;
 
     await sendNotificationEmail({
@@ -571,7 +571,7 @@ async function notifyShakeel(
       heading: "Tax Deadline Overdue",
       body,
       linkUrl:   `${APP_URL}/accounts-tax`,
-      linkLabel: "Open Accounts (Tax)",
+      linkLabel: "Open Accounts & Returns",
       triggerType: "tax_deadline_alert",
       recipientName,
     });
@@ -604,7 +604,7 @@ async function notifyCEO(
         Legal deadline: <strong>${opts.legalDateLabel}</strong><br/>
         Days remaining: <strong>${opts.daysRemainingLabel}</strong>
       </p>
-      <p>Please review and update the Accounts (Tax) schedule.</p>
+      <p>Please review and update the Accounts &amp; Returns schedule.</p>
     `;
 
     await sendNotificationEmail({
@@ -613,7 +613,7 @@ async function notifyCEO(
       heading: "Annual Returns — CEO Escalation",
       body,
       linkUrl:   `${APP_URL}/accounts-tax`,
-      linkLabel: "View and update Accounts (Tax)",
+      linkLabel: "View and update Accounts & Returns",
       triggerType: "tax_deadline_alert",
       recipientName: "Khuram",
     });

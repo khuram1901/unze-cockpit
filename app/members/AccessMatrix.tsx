@@ -41,7 +41,7 @@ const PERM_COLUMNS = [
   { key: "can_manage_meetings", label: "Mtg Mgr", group: "Tasks", tip: "Create meetings, upload minutes, manage attendees" },
   { key: "can_view_dept_ops", label: "Ops", group: "Depts", tip: "Access the Unze Trading Ops department dashboard" },
   { key: "can_view_dept_hr", label: "HR", group: "Depts", tip: "Access the HR department dashboard" },
-  { key: "can_view_dept_tax", label: "Tax", group: "Depts", tip: "Access the Taxation department dashboard" },
+  { key: "can_view_dept_tax", label: "Tax", group: "Depts", tip: "Access the Tax Notices department dashboard" },
   { key: "can_manage_tax_notices", label: "Edit", group: "Tax", tip: "Add, edit, delete and manage tax notices — Active/Inactive, Status, Stage" },
   { key: "can_manage_tax_schedule", label: "Accts", group: "Tax", tip: "Update the tax accounts schedule and monthly return filings" },
   { key: "can_view_dept_audit", label: "Aud", group: "Depts", tip: "Access the Audit department dashboard" },

@@ -82,12 +82,13 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   return false;
 }
 
-// ── Sidebar nav groups — Genspark order ──────────────────────────
+// ── Sidebar nav groups ────────────────────────────────────────────
 const SIDEBAR_GROUPS = [
   "Overview",
-  "Finance",
-  "Departments",
   "Operations",
+  "Departments",
+  "Finance",
+  "My Workspace",
   "Settings",
 ] as const;
 
@@ -257,7 +258,7 @@ export default function SidebarLayout({
             {alwaysItems.map((item) => (
               <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
             ))}
-            {/* Overview-group permission-gated items (My Minutes, My Profile, PA Dashboard) */}
+            {/* Overview-group permission-gated items (PA Dashboard) */}
             {visibleCards
               .filter((c) => c.group === "Overview")
               .sort((a, b) => a.title.localeCompare(b.title))
