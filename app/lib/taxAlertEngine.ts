@@ -15,7 +15,8 @@ type ScheduleStatus = "Not Started" | "In Progress" | "External Auditors" | "Com
 type AlertType =
   | "schedule_q1" | "schedule_q2" | "schedule_q3" | "schedule_q4" | "schedule_annual"
   | "monthly_fbr" | "monthly_pra"
-  | "quarterly_income_tax";
+  | "quarterly_income_tax"
+  | "annual_personal" | "annual_company";
 
 // ── Constants (mirrors AccountsTaxDashboard) ───────────────────────
 
@@ -27,6 +28,12 @@ const ANNUAL_STEP_COUNT    = 6;
 const FBR_ENTITIES = ["UT","IMP","ALMAHAR"];
 const PRA_ENTITIES = ["UT","IMP","BARANH","HD","ALMAHAR"];
 const INCOME_TAX_ENTITIES = ["UT","IMP","BARANH","HD","ALMAHAR"];
+
+// Annual Returns — split by group
+const PERSONAL_ENTITIES       = ["K_SALEEM","KA_SALEEM","W_SALEEM","SH_SALEEM","KK_JHANG"];
+const ANNUAL_COMPANY_ENTITIES = ["UT","IMP","BARANH","HD","ALMAHAR"];
+
+const CEO_EMAIL = "k.saleem@unzegroup.com";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://unze-cockpit.vercel.app";
 
@@ -47,6 +54,30 @@ function deadlineDate(year: number, month: number, day: number): Date {
   return new Date(`${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}T00:00:00`);
 }
 
+function fiscalYearEndYear(taxYear: string): number {
+  // "2025-26" → 2026, "2026-27" → 2027
+  const parts = taxYear.split("-");
+  const startYear = parseInt(parts[0], 10);
+  const suffix = parts[1];
+  // suffix may be 2-digit ("26") or 4-digit ("2026")
+  if (suffix.length === 4) return parseInt(suffix, 10);
+  return startYear + 1;
+}
+
+function daysSince(isoTimestamp: string): number {
+  const then = new Date(isoTimestamp);
+  then.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.floor((today.getTime() - then.getTime()) / 86400000);
+}
+
+function datesEqual(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
 // ── Deadlines ─────────────────────────────────────────────────────
 
 function scheduleDeadlines(taxYear: string): Record<string, { tier1: Date; tier2: Date; entities: string[]; stepCount: number }> {
@@ -58,6 +89,22 @@ function scheduleDeadlines(taxYear: string): Record<string, { tier1: Date; tier2
     schedule_q3:     { tier1: deadlineDate(n,   4, 15), tier2: deadlineDate(n,   5, 15), entities: QUARTERLY_ENTITIES, stepCount: QUARTERLY_STEP_COUNT },
     schedule_q4:     { tier1: deadlineDate(n,   7, 15), tier2: deadlineDate(n,   8, 15), entities: QUARTERLY_ENTITIES, stepCount: QUARTERLY_STEP_COUNT },
     schedule_annual: { tier1: deadlineDate(n,   7, 15), tier2: deadlineDate(n,   8, 15), entities: ANNUAL_ENTITIES,    stepCount: ANNUAL_STEP_COUNT    },
+  };
+}
+
+function annualPersonalDeadlines(taxYear: string): { internal: Date; legal: Date } {
+  const endYear = fiscalYearEndYear(taxYear);
+  return {
+    internal: deadlineDate(endYear, 8, 31),   // 31 Aug
+    legal:    deadlineDate(endYear, 9, 30),   // 30 Sep
+  };
+}
+
+function annualCompanyDeadlines(taxYear: string): { internal: Date; legal: Date } {
+  const endYear = fiscalYearEndYear(taxYear);
+  return {
+    internal: deadlineDate(endYear, 10, 31),  // 31 Oct
+    legal:    deadlineDate(endYear, 12, 21),  // 21 Dec
   };
 }
 
@@ -299,6 +346,140 @@ export async function computeAndStoreTaxAlerts(
     }
   }
 
+  // ── 4. Annual Returns deadline alerts ──────────────────────────
+
+  const annualGroups: {
+    alertType: AlertType;
+    entities: string[];
+    deadlines: { internal: Date; legal: Date };
+    label: string;
+    legalDateLabel: string;
+    internalDateLabel: string;
+  }[] = [
+    {
+      alertType:        "annual_personal",
+      entities:         PERSONAL_ENTITIES,
+      deadlines:        annualPersonalDeadlines(taxYear),
+      label:            "Personal",
+      legalDateLabel:   "30 Sep",
+      internalDateLabel:"31 Aug",
+    },
+    {
+      alertType:        "annual_company",
+      entities:         ANNUAL_COMPANY_ENTITIES,
+      deadlines:        annualCompanyDeadlines(taxYear),
+      label:            "Company",
+      legalDateLabel:   "21 Dec",
+      internalDateLabel:"31 Oct",
+    },
+  ];
+
+  for (const group of annualGroups) {
+    const { alertType, entities, deadlines, label, legalDateLabel, internalDateLabel } = group;
+
+    // Count incomplete steps across all entities in this group
+    let incompleteCount = 0;
+    for (const ek of entities) {
+      for (let i = 1; i <= ANNUAL_STEP_COUNT; i++) {
+        const status = schedMap.get(`Annual:${i}:${ek}`) ?? "Not Started";
+        if (status !== "Completed") incompleteCount++;
+      }
+    }
+
+    if (incompleteCount === 0) {
+      // All done — resolve any open alerts for this group
+      const result = await supabase.from("tax_deadline_alerts")
+        .update({ resolved: true, resolved_at: new Date().toISOString() })
+        .eq("tax_year", taxYear)
+        .eq("alert_type", alertType)
+        .eq("resolved", false)
+        .select("id");
+      resolved += result?.data?.length ?? 0;
+      continue;
+    }
+
+    const entityList = entities.join(", ");
+
+    // ── Tier 1: internal target passed ──────────────────────────
+    if (today >= deadlines.internal) {
+      const tier1Message = `${incompleteCount} ${label.toLowerCase()} return steps overdue — internal target ${internalDateLabel} was missed`;
+
+      const tier1Result = await upsertAlert(supabase, {
+        taxYear, alertType, periodKey: "Annual",
+        tier: 1, overdueCount: incompleteCount, message: tier1Message,
+      });
+
+      if (tier1Result.inserted) {
+        upserted++;
+        // Shakeel email fires ONCE — only on first insert
+        const sent = await notifyShakeel(supabase, tier1Message, {
+          subject: `Annual returns internal target missed — action required`,
+          body: `
+            <p>The internal completion target for <strong>${label} Annual Returns</strong> has been missed.</p>
+            <p style="background:#fef2f2;padding:12px;border-radius:6px;border-left:3px solid #dc2626">
+              <strong>${incompleteCount} step${incompleteCount !== 1 ? "s" : ""} still incomplete</strong> across: ${entityList}.<br/>
+              Internal completion target was <strong>${internalDateLabel}</strong>.<br/>
+              Legal deadline: <strong>${legalDateLabel}</strong>.
+            </p>
+            <p>Please update the Accounts (Tax) schedule before this is escalated to the CEO.</p>
+          `,
+        });
+        if (sent) emailsSent++;
+      } else if (tier1Result.updated) {
+        upserted++;
+      }
+    }
+
+    // ── Tier 2: CEO escalation zone (internal target → legal deadline, and beyond) ──
+    if (today >= deadlines.internal) {
+      const isLegalDeadlineDay = datesEqual(today, deadlines.legal);
+      const daysRemaining = Math.ceil(
+        (deadlines.legal.getTime() - today.getTime()) / 86400000
+      );
+      const daysRemainingLabel = isLegalDeadlineDay ? "TODAY" : `${Math.max(0, daysRemaining)} day${daysRemaining !== 1 ? "s" : ""}`;
+
+      const tier2Message = isLegalDeadlineDay
+        ? `${incompleteCount} ${label.toLowerCase()} return steps overdue — legal deadline ${legalDateLabel} is TODAY`
+        : `${incompleteCount} ${label.toLowerCase()} return steps overdue — ${daysRemainingLabel} to legal deadline ${legalDateLabel}`;
+
+      const tier2Result = await upsertAlert(supabase, {
+        taxYear, alertType, periodKey: "Annual",
+        tier: 2, overdueCount: incompleteCount, message: tier2Message,
+      });
+
+      if (tier2Result.inserted || tier2Result.updated) {
+        upserted++;
+
+        // 3-day cadence CEO email — always send on legal deadline day
+        const shouldEmail =
+          isLegalDeadlineDay ||
+          tier2Result.existingLastEmailSentAt === null ||
+          daysSince(tier2Result.existingLastEmailSentAt) >= 3;
+
+        if (shouldEmail) {
+          const sent = await notifyCEO(supabase, {
+            alertType,
+            incompleteCount,
+            label,
+            legalDateLabel,
+            daysRemainingLabel,
+            isLegalDeadlineDay,
+          });
+          if (sent) {
+            emailsSent++;
+            // Record the send time so the 3-day gap is tracked
+            await supabase.from("tax_deadline_alerts")
+              .update({ last_email_sent_at: new Date().toISOString() })
+              .eq("tax_year", taxYear)
+              .eq("alert_type", alertType)
+              .eq("period_key", "Annual")
+              .eq("tier", 2);
+          }
+        }
+      }
+    }
+  }
+
   return { upserted, resolved, emailsSent };
 }
 
@@ -314,13 +495,12 @@ async function upsertAlert(
     overdueCount: number;
     message: string;
   }
-): Promise<{ inserted: boolean; updated: boolean }> {
+): Promise<{ inserted: boolean; updated: boolean; existingLastEmailSentAt: string | null }> {
   const now = new Date().toISOString();
 
-  // Try insert first — if it already exists, update the count and last_checked_at
   const { data: existing } = await supabase
     .from("tax_deadline_alerts")
-    .select("id, first_triggered_at")
+    .select("id, first_triggered_at, last_email_sent_at")
     .eq("tax_year", opts.taxYear)
     .eq("alert_type", opts.alertType)
     .eq("period_key", opts.periodKey)
@@ -340,7 +520,7 @@ async function upsertAlert(
       first_triggered_at: now,
       last_checked_at:    now,
     });
-    return { inserted: true, updated: false };
+    return { inserted: true, updated: false, existingLastEmailSentAt: null };
   }
 
   // Existing — update count and mark unresolved if it was resolved
@@ -354,15 +534,19 @@ async function upsertAlert(
     })
     .eq("id", existing.id);
 
-  return { inserted: false, updated: true };
+  return {
+    inserted: false,
+    updated: true,
+    existingLastEmailSentAt: existing.last_email_sent_at as string | null,
+  };
 }
 
 async function notifyShakeel(
   supabase: SupabaseClient,
-  alertMessage: string
+  alertMessage: string,
+  overrides?: { subject?: string; body?: string }
 ): Promise<boolean> {
   try {
-    // Resolve Shakeel's email dynamically — don't hardcode
     const { data: shakeelMember } = await supabase
       .from("members")
       .select("email, first_name, name, notify_email")
@@ -371,21 +555,67 @@ async function notifyShakeel(
 
     if (!shakeelMember?.email) return false;
 
+    const recipientName = shakeelMember.first_name || shakeelMember.name || "Shakeel";
+    const subject = overrides?.subject ?? "Tax deadline overdue — action required";
+    const body = overrides?.body ?? `
+      <p><strong>${recipientName}</strong>, a tax deadline has been missed and requires your attention:</p>
+      <p style="background:#fef2f2;padding:12px;border-radius:6px;border-left:3px solid #dc2626">
+        ${alertMessage}
+      </p>
+      <p>Please review the Accounts (Tax) page and take action before this is escalated to the CEO.</p>
+    `;
+
     await sendNotificationEmail({
       to:      shakeelMember.email,
-      subject: "Tax deadline overdue — action required",
+      subject,
       heading: "Tax Deadline Overdue",
-      body: `
-        <p><strong>${shakeelMember.first_name || shakeelMember.name || "Shakeel"}</strong>, a tax deadline has been missed and requires your attention:</p>
-        <p style="background:#fef2f2;padding:12px;border-radius:6px;border-left:3px solid #dc2626">
-          ${alertMessage}
-        </p>
-        <p>Please review the Accounts (Tax) page and take action before this is escalated to the CEO.</p>
-      `,
+      body,
       linkUrl:   `${APP_URL}/accounts-tax`,
       linkLabel: "Open Accounts (Tax)",
       triggerType: "tax_deadline_alert",
-      recipientName: shakeelMember.first_name || shakeelMember.name || "Shakeel",
+      recipientName,
+    });
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function notifyCEO(
+  supabase: SupabaseClient,
+  opts: {
+    alertType: string;
+    incompleteCount: number;
+    label: string;
+    legalDateLabel: string;
+    daysRemainingLabel: string;
+    isLegalDeadlineDay: boolean;
+  }
+): Promise<boolean> {
+  try {
+    const subject = opts.isLegalDeadlineDay
+      ? `Annual returns — LEGAL DEADLINE TODAY (${opts.label})`
+      : `Annual returns overdue — ${opts.daysRemainingLabel} to legal deadline`;
+
+    const body = `
+      <p><strong>${opts.incompleteCount} step${opts.incompleteCount !== 1 ? "s" : ""} incomplete</strong> for ${opts.label} Annual Returns.</p>
+      <p style="background:#fef2f2;padding:12px;border-radius:6px;border-left:3px solid #dc2626">
+        Legal deadline: <strong>${opts.legalDateLabel}</strong><br/>
+        Days remaining: <strong>${opts.daysRemainingLabel}</strong>
+      </p>
+      <p>Please review and update the Accounts (Tax) schedule.</p>
+    `;
+
+    await sendNotificationEmail({
+      to:      CEO_EMAIL,
+      subject,
+      heading: "Annual Returns — CEO Escalation",
+      body,
+      linkUrl:   `${APP_URL}/accounts-tax`,
+      linkLabel: "View and update Accounts (Tax)",
+      triggerType: "tax_deadline_alert",
+      recipientName: "Khuram",
     });
 
     return true;
