@@ -692,7 +692,10 @@ export default function HomePage() {
     const lastYearMonth = `${nowForHist.getFullYear() - 1}-${String(nowForHist.getMonth() + 1).padStart(2, "0")}`;
 
     const allCompanyFinance: CompanyFinanceData[] = [];
-    for (const company of COMPANIES) {
+    const FINANCE_COMPANIES = COMPANIES.filter(c =>
+      c.shortCode === "UTPL" || c.shortCode === "IFPL"
+    );
+    for (const company of FINANCE_COMPANIES) {
       const [cashOpenRes, cashPlanRes, cashPosRes, lyRes, forecastRes, deptBudgetRes] = await Promise.all([
         supabase.from("cash_opening_balance").select("*").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
         supabase.from("monthly_cash_plan").select("*").eq("company_id", company.id).eq("plan_month", currentMonthForCash).maybeSingle(),
