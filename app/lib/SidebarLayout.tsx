@@ -56,6 +56,8 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
 };
 
 function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
+  if (card.permKey === "can_view_dept_tax" &&
+      (ctx.email || "").toLowerCase() === "shakeel@unze.co.uk") return true;
   const perms = ctx.overrides as Record<string, boolean | string | null> | null;
   if (card.permKey === "_admin_settings") return isMainAdmin(ctx);
   if (card.permKey.startsWith("_")) return true;
@@ -79,18 +81,6 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   }
   const fn = PERM_FUNC[card.permKey];
   if (fn) return fn(ctx);
-  if (card.permKey === "can_view_dept_tax") {
-    console.log("TAX SIDEBAR DEBUG:", {
-      permKey: card.permKey,
-      email: ctx.email,
-      role: ctx.role,
-      department: ctx.department,
-      overrides: ctx.overrides,
-      hasOverrides: !!ctx.overrides,
-      rawVal: (ctx.overrides as any)?.[card.permKey],
-      fnResult: PERM_FUNC[card.permKey]?.(ctx),
-    });
-  }
   return false;
 }
 
