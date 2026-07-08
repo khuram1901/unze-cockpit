@@ -79,6 +79,18 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   }
   const fn = PERM_FUNC[card.permKey];
   if (fn) return fn(ctx);
+  if (card.permKey === "can_view_dept_tax") {
+    console.log("TAX SIDEBAR DEBUG:", {
+      permKey: card.permKey,
+      email: ctx.email,
+      role: ctx.role,
+      department: ctx.department,
+      overrides: ctx.overrides,
+      hasOverrides: !!ctx.overrides,
+      rawVal: (ctx.overrides as any)?.[card.permKey],
+      fnResult: PERM_FUNC[card.permKey]?.(ctx),
+    });
+  }
   return false;
 }
 
