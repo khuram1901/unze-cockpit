@@ -160,7 +160,7 @@ export default function TaxationDashboard() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from("legal_notices").select("*").eq("company_id", UTPL_COMPANY_ID).order("created_at", { ascending: false });
+    const { data } = await supabase.from("legal_notices").select("*").order("created_at", { ascending: false });
     setItems((data || []) as Notice[]);
 
     const { data: userData } = await supabase.auth.getUser();
