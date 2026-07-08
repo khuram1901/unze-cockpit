@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
-import { UTPL_COMPANY_ID } from "../../lib/constants";
+import { COMPANIES } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
 import { canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
@@ -27,7 +27,6 @@ const AUDIT_STAGES: { label: string; pct: number }[] = [
 const STATUSES = ["Planned", "In Progress", "Completed", "Cancelled"];
 const AUDIT_TYPES = ["Financial", "Operational", "Compliance", "IT", "Other"];
 
-// Soft-background badge colours per audit type
 const TYPE_BADGE: Record<string, { bg: string; text: string }> = {
   Financial:   { bg: "#EEF1FC", text: COLOURS.BLUE },
   Operational: { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
@@ -36,7 +35,6 @@ const TYPE_BADGE: Record<string, { bg: string; text: string }> = {
   Other:       { bg: COLOURS.HAIRLINE, text: COLOURS.SLATE },
 };
 
-// Chart fill colours (solid, for recharts)
 const TYPE_COLOURS: Record<string, string> = {
   Financial:   COLOURS.BLUE,
   Operational: COLOURS.AMBER,
@@ -45,8 +43,18 @@ const TYPE_COLOURS: Record<string, string> = {
   Other:       COLOURS.SLATE,
 };
 
+const COMPANY_BADGE_STYLES: Record<string, { bg: string; text: string }> = {
+  UTPL: { bg: "#EEF1FC",              text: COLOURS.BLUE },
+  IFPL: { bg: COLOURS.SUCCESS_SOFT,   text: COLOURS.GREEN },
+  BRNH: { bg: COLOURS.WARNING_SOFT,   text: COLOURS.AMBER },
+  HD:   { bg: "#F3EEF9",             text: "#6E45B8" },
+  ALM:  { bg: COLOURS.CARD_ALT,      text: COLOURS.SLATE },
+  DIR:  { bg: COLOURS.CARD_ALT,      text: COLOURS.NAVY },
+};
+
 type AuditItem = {
   id: string;
+  company_id: string | null;
   audit_area: string;
   audit_type: string | null;
   scope: string | null;
@@ -83,6 +91,21 @@ const lbl: React.CSSProperties = {
   textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px",
 };
 
+function CompanyBadge({ companyId }: { companyId: string | null }) {
+  const company = COMPANIES.find((c) => c.id === companyId);
+  if (!company) return null;
+  const s = COMPANY_BADGE_STYLES[company.shortCode] || { bg: COLOURS.CARD_ALT, text: COLOURS.SLATE };
+  return (
+    <span style={{
+      fontSize: "10px", fontWeight: 600, padding: "2px 6px",
+      borderRadius: RADII.PILL, backgroundColor: s.bg, color: s.text,
+      border: `1px solid ${s.text}22`, marginRight: "4px", whiteSpace: "nowrap",
+    }}>
+      {company.shortCode}
+    </span>
+  );
+}
+
 export default function AuditDashboard() {
   const isMobile = useMobile();
   const toast = useToast();
@@ -95,7 +118,10 @@ export default function AuditDashboard() {
   const [message, setMessage] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
+  const [companyFilter, setCompanyFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
+  // Add form state
   const [auditArea, setAuditArea] = useState("");
   const [auditType, setAuditType] = useState("");
   const [scope, setScope] = useState("");
@@ -103,12 +129,15 @@ export default function AuditDashboard() {
   const [targetDate, setTargetDate] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [notes, setNotes] = useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
+
+  // CSV import company selector
+  const [importCompanyId, setImportCompanyId] = useState(COMPANIES[0]?.id || "");
 
   async function loadData() {
     setLoading(true);
     const { data } = await supabase
       .from("audit_plan_items").select("*")
-      .eq("company_id", UTPL_COMPANY_ID)
       .order("created_at", { ascending: false });
     setItems(data || []);
 
@@ -132,9 +161,10 @@ export default function AuditDashboard() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
+    if (!selectedCompanyId) { showMsg("Please select a company."); return; }
     setSaving(true);
     const { error } = await supabase.from("audit_plan_items").insert({
-      company_id: UTPL_COMPANY_ID, audit_area: auditArea, audit_type: auditType || null,
+      company_id: selectedCompanyId, audit_area: auditArea, audit_type: auditType || null,
       scope: scope || null, planned_date: plannedDate || null, target_date: targetDate || null,
       assigned_to: assignedTo || null, notes: notes || null,
       status: "Planned", audit_stage: "Audit Planning", completion_pct: 0,
@@ -144,7 +174,7 @@ export default function AuditDashboard() {
     logAction("Created", "audit_plan_items", auditArea);
     showMsg("Audit item added.");
     setAuditArea(""); setAuditType(""); setScope(""); setPlannedDate("");
-    setTargetDate(""); setAssignedTo(""); setNotes("");
+    setTargetDate(""); setAssignedTo(""); setNotes(""); setSelectedCompanyId("");
     setShowForm(false);
     loadData();
   }
@@ -160,6 +190,7 @@ export default function AuditDashboard() {
     loadData();
   }
 
+  // KPI calcs always over ALL items
   const active = items.filter((i) => i.status !== "Cancelled");
   const planned = items.filter((i) => i.status === "Planned").length;
   const inProgress = items.filter((i) => i.status === "In Progress").length;
@@ -168,22 +199,30 @@ export default function AuditDashboard() {
   const overdue = overdueItems.length;
   const avgPct = active.length > 0 ? Math.round(active.reduce((s, i) => s + (i.completion_pct || 0), 0) / active.length) : 0;
 
-  // Chart data: stage pipeline (horizontal)
+  // Filtered items for records list + charts
+  const filteredByCompany = companyFilter === "all" ? items : items.filter((i) => i.company_id === companyFilter);
+  const filteredItems = statusFilter === "all"
+    ? filteredByCompany
+    : statusFilter === "overdue"
+      ? filteredByCompany.filter((i) => i.status !== "Completed" && i.status !== "Cancelled" && overdueDays(i.target_date) > 0)
+      : filteredByCompany.filter((i) => i.status === statusFilter);
+
+  const filteredActive = filteredItems.filter((i) => i.status !== "Cancelled");
+
+  // Chart data (uses filteredActive)
   const stagePipelineData = AUDIT_STAGES.map((s) => ({
     stage: s.label.replace("Communication to Process Owner", "Comm. to Owner").replace("Submission to Senior Management", "Submit to Mgmt").replace("Draft Audit Findings", "Draft Findings").replace("Review of IA Report", "Review Report"),
-    count: active.filter((i) => i.audit_stage === s.label).length,
+    count: filteredActive.filter((i) => i.audit_stage === s.label).length,
     pct: s.pct,
   }));
   const stageColors = [COLOURS.SLATE, COLOURS.BLUE, COLOURS.BLUE, COLOURS.AMBER, COLOURS.PURPLE, COLOURS.GREEN, COLOURS.GREEN];
 
-  // Chart data: by audit type (donut)
   const typeDonut = AUDIT_TYPES.map((t) => ({
-    name: t, value: active.filter((i) => i.audit_type === t).length, color: TYPE_COLOURS[t] || COLOURS.SLATE,
+    name: t, value: filteredActive.filter((i) => i.audit_type === t).length, color: TYPE_COLOURS[t] || COLOURS.SLATE,
   })).filter((d) => d.value > 0);
 
-  // Chart data: auditor workload
   const auditorMap = new Map<string, { total: number; overdue: number; completed: number }>();
-  for (const i of active) {
+  for (const i of filteredActive) {
     const a = i.assigned_to || "Unassigned";
     if (!auditorMap.has(a)) auditorMap.set(a, { total: 0, overdue: 0, completed: 0 });
     const row = auditorMap.get(a)!;
@@ -195,13 +234,29 @@ export default function AuditDashboard() {
     .map(([name, d]) => ({ name: name.length > 14 ? name.slice(0, 12) + "…" : name, ...d, active: d.total - d.completed - d.overdue }))
     .sort((a, b) => b.overdue - a.overdue || b.total - a.total);
 
-  // Group records by status
+  // Group filtered records by status
   const statusOrder = ["In Progress", "Planned", "Completed", "Cancelled"];
   const statusGroups = new Map<string, AuditItem[]>();
-  for (const i of items) {
+  for (const i of filteredItems) {
     if (!statusGroups.has(i.status)) statusGroups.set(i.status, []);
     statusGroups.get(i.status)!.push(i);
   }
+
+  // Company filter tabs with counts
+  const companyTabs = [
+    { id: "all", label: "All", count: items.length },
+    ...COMPANIES.map((c) => ({ id: c.id, label: c.shortCode, count: items.filter((i) => i.company_id === c.id).length })),
+  ];
+
+  // Status filter tabs with counts (based on company-filtered items)
+  const overdueCount = filteredByCompany.filter((i) => i.status !== "Completed" && i.status !== "Cancelled" && overdueDays(i.target_date) > 0).length;
+  const statusTabs = [
+    { id: "all",         label: "All",         count: filteredByCompany.length },
+    { id: "Planned",     label: "Planned",     count: filteredByCompany.filter((i) => i.status === "Planned").length },
+    { id: "In Progress", label: "In Progress", count: filteredByCompany.filter((i) => i.status === "In Progress").length },
+    { id: "overdue",     label: "Overdue",     count: overdueCount },
+    { id: "Completed",   label: "Completed",   count: filteredByCompany.filter((i) => i.status === "Completed").length },
+  ];
 
   function completionBar(pct: number, small?: boolean) {
     const color = pct === 100 ? COLOURS.GREEN : pct >= 60 ? COLOURS.AMBER : COLOURS.BLUE;
@@ -215,7 +270,6 @@ export default function AuditDashboard() {
     );
   }
 
-  // Soft audit type badge
   function AuditTypeBadge({ type }: { type: string | null }) {
     if (!type) return null;
     const { bg, text } = TYPE_BADGE[type] || { bg: COLOURS.HAIRLINE, text: COLOURS.SLATE };
@@ -226,10 +280,39 @@ export default function AuditDashboard() {
     );
   }
 
+  function PillTabs({ tabs, active: activeId, onChange }: { tabs: { id: string; label: string; count: number }[]; active: string; onChange: (id: string) => void }) {
+    return (
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        {tabs.map((t) => {
+          const isActive = t.id === activeId;
+          return (
+            <button key={t.id} onClick={() => onChange(t.id)} style={{
+              padding: "5px 12px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600,
+              cursor: "pointer", border: `1px solid ${isActive ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+              backgroundColor: isActive ? COLOURS.NAVY : COLOURS.CARD,
+              color: isActive ? "#FFFFFF" : COLOURS.NAVY,
+              display: "flex", alignItems: "center", gap: "5px",
+            }}>
+              {t.label}
+              <span style={{
+                fontSize: "10px", fontWeight: 700, minWidth: "16px", height: "16px",
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                borderRadius: RADII.PILL,
+                backgroundColor: isActive ? "rgba(255,255,255,0.2)" : COLOURS.HAIRLINE,
+                color: isActive ? "#FFFFFF" : COLOURS.SLATE,
+                padding: "0 4px",
+              }}>{t.count}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
       {toast.element}
-      {/* Header with + button */}
+      {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
         <PageHeader />
         <button onClick={() => setShowForm(!showForm)} style={{
@@ -244,12 +327,18 @@ export default function AuditDashboard() {
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px", backgroundColor: COLOURS.CARD, fontSize: "14px", color: COLOURS.NAVY }}>{message}</div>
       )}
 
-      {/* Collapsible add form */}
+      {/* Add Audit form */}
       {showForm && (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, marginBottom: "14px" }}>
           <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "12px" }}>New Audit</div>
           <form onSubmit={handleAdd}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px" }}>
+              <label style={lbl}>Company / Entity
+                <select style={inp} value={selectedCompanyId} onChange={(e) => setSelectedCompanyId(e.target.value)} required>
+                  <option value="">— Select company —</option>
+                  {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
               <label style={lbl}>Audit Area <input style={inp} value={auditArea} onChange={(e) => setAuditArea(e.target.value)} required placeholder="e.g. Procurement Process" /></label>
               <label style={lbl}>Audit Type <select style={inp} value={auditType} onChange={(e) => setAuditType(e.target.value)} required><option value="">Select</option>{AUDIT_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
               <label style={lbl}>Assigned To <input style={inp} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder="Auditor name" required /></label>
@@ -262,7 +351,7 @@ export default function AuditDashboard() {
         </div>
       )}
 
-      {/* Issue Task — independent of the audit plan items above */}
+      {/* Issue Task */}
       {userCtx && canCreateAssignments(userCtx) && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
           <button
@@ -280,7 +369,7 @@ export default function AuditDashboard() {
         </div>
       )}
 
-      {/* ═══ ZONE 1: ALERT BANNER + KPIs ═══ */}
+      {/* ═══ ZONE 1: ALERT BANNER ═══ */}
       {!loading && overdue > 0 && (
         <div style={WARNING_BANNER_STYLE}>
           <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -309,6 +398,7 @@ export default function AuditDashboard() {
         </div>
       )}
 
+      {/* ═══ ZONE 2: KPI CARDS (always all items) ═══ */}
       {!loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
           <CountCard label="Planned" value={planned} color={COLOURS.BLUE} />
@@ -319,10 +409,10 @@ export default function AuditDashboard() {
         </div>
       )}
 
-      {/* ═══ ZONE 2: THREE CHART PANELS ═══ */}
-      {!loading && items.length > 0 && (
+      {/* ═══ ZONE 3: THREE CHART PANELS (filtered) ═══ */}
+      {!loading && filteredActive.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-          {/* Stage Pipeline — horizontal bars */}
+          {/* Stage Pipeline */}
           <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD }}>
             <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "14px" }}>Stage Pipeline</div>
             <ResponsiveContainer width="100%" height={AUDIT_STAGES.length * 28 + 10}>
@@ -338,7 +428,7 @@ export default function AuditDashboard() {
             </ResponsiveContainer>
           </div>
 
-          {/* By Audit Type — donut */}
+          {/* By Audit Type */}
           {typeDonut.length > 0 && (
             <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD }}>
               <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "14px" }}>By Type</div>
@@ -360,7 +450,7 @@ export default function AuditDashboard() {
             </div>
           )}
 
-          {/* Auditor Workload — stacked horizontal bars */}
+          {/* Auditor Workload */}
           {auditorData.length > 0 && (
             <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD }}>
               <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "14px" }}>Auditor Workload</div>
@@ -380,13 +470,16 @@ export default function AuditDashboard() {
         </div>
       )}
 
-      {/* ═══ ZONE 3: RECORDS GROUPED BY STATUS ═══ */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+      {/* ═══ ZONE 4: RECORDS ═══ */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
         <SectionTitle title="Audit Records" />
         <ImportExportButtons
           onExport={() => {
-            const headers = ["Audit Area", "Type", "Stage", "Completion %", "Status", "Assigned To", "Target Date", "Planned Date"];
-            const rows = items.map((i) => [i.audit_area, i.audit_type || "—", i.audit_stage || "—", String(i.completion_pct || 0), i.status, i.assigned_to || "—", i.target_date || "—", i.planned_date || "—"]);
+            const headers = ["Company", "Audit Area", "Type", "Stage", "Completion %", "Status", "Assigned To", "Target Date", "Planned Date"];
+            const rows = filteredItems.map((i) => {
+              const co = COMPANIES.find((c) => c.id === i.company_id);
+              return [co?.shortCode || "—", i.audit_area, i.audit_type || "—", i.audit_stage || "—", String(i.completion_pct || 0), i.status, i.assigned_to || "—", i.target_date || "—", i.planned_date || "—"];
+            });
             downloadCSV(`audit-records-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
           }}
           onImport={async (rows) => {
@@ -410,7 +503,7 @@ export default function AuditDashboard() {
               const createdBy = row["Created By"].trim();
               const userNotes = row["Notes"]?.trim() || "";
               await supabase.from("audit_plan_items").insert({
-                company_id: UTPL_COMPANY_ID, audit_area: row["Audit Area"].trim(),
+                company_id: importCompanyId, audit_area: row["Audit Area"].trim(),
                 audit_type: row["Type"].trim(), assigned_to: row["Assigned To"].trim(),
                 target_date: row["Target Date"].trim(), planned_date: row["Planned Date"]?.trim() || null,
                 scope: row["Scope"]?.trim() || null,
@@ -429,8 +522,32 @@ export default function AuditDashboard() {
         />
       </div>
 
-      {loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : items.length === 0 ? (
-        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, color: COLOURS.SLATE }}>No audit records yet.</div>
+      {/* Company selector for CSV import */}
+      {!loading && (
+        <div style={{ marginBottom: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ fontSize: "11px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Import company:</span>
+          <select style={{ ...inp, width: "auto", marginTop: 0 }} value={importCompanyId} onChange={(e) => setImportCompanyId(e.target.value)}>
+            {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {/* Company filter tabs */}
+      {!loading && (
+        <div style={{ marginBottom: "8px" }}>
+          <PillTabs tabs={companyTabs} active={companyFilter} onChange={(id) => { setCompanyFilter(id); setStatusFilter("all"); }} />
+        </div>
+      )}
+
+      {/* Status filter tabs */}
+      {!loading && (
+        <div style={{ marginBottom: "14px" }}>
+          <PillTabs tabs={statusTabs} active={statusFilter} onChange={setStatusFilter} />
+        </div>
+      )}
+
+      {loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : filteredItems.length === 0 ? (
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, color: COLOURS.SLATE }}>No audit records match the selected filters.</div>
       ) : (
         statusOrder.filter((s) => statusGroups.has(s)).map((status) => {
           const group = statusGroups.get(status)!;
@@ -460,6 +577,7 @@ export default function AuditDashboard() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.audit_area}</div>
                         <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                          <CompanyBadge companyId={item.company_id} />
                           {item.audit_type && <AuditTypeBadge type={item.audit_type} />}
                           <span>{item.assigned_to || "Unassigned"}</span>
                           {item.target_date && <span style={{ color: isOverdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue ? 600 : 400 }}>Target: {formatDateUK(item.target_date)}{isOverdue ? ` (${od}d late)` : ""}</span>}
@@ -473,7 +591,6 @@ export default function AuditDashboard() {
 
                     {isOpen && (
                       <div style={{ padding: "16px 18px", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
-                        {/* Audit Area — editable */}
                         <div style={{ marginBottom: "10px" }}>
                           <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "3px" }}>Audit Area</div>
                           <input style={inp} defaultValue={item.audit_area}
