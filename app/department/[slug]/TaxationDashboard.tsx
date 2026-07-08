@@ -172,7 +172,13 @@ export default function TaxationDashboard() {
         if (p) overrides = p as PermOverrides;
         const ctx: UserCtx = { email: userData.user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
         setUserCtx(ctx);
-        setCanManage(canManageTaxNotices(ctx));
+        const SHAKEEL_EMAIL = "shakeel@unze.co.uk";
+        const AWAIS_EMAIL = "taxation@unze.co.uk";
+        const isTaxManager =
+          userData.user.email?.toLowerCase() === SHAKEEL_EMAIL ||
+          userData.user.email?.toLowerCase() === AWAIS_EMAIL ||
+          canManageTaxNotices(ctx);
+        setCanManage(isTaxManager);
       }
     }
     setLoading(false);
