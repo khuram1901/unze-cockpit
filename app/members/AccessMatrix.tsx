@@ -123,7 +123,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_receivables": return admin || (manager && (dept === "Finance" || dept === "Unze Trading Ops"));
     case "can_edit_receivables": return admin || dept === "Unze Trading Ops";
     case "can_see_all_tasks": return admin || exec;
-    case "can_create_tasks": return admin || exec || (manager && dept === "Unze Trading Ops");
+    case "can_create_tasks": return admin || exec || manager;
     case "can_review_tasks": return admin || exec;
     case "can_manage_recurring_tasks": return admin || exec;
     case "can_manage_calendar": return admin || exec;
@@ -143,8 +143,8 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_audit_log": return admin || exec;
     case "can_view_exceptions": return admin || exec;
     case "can_import_export": return admin || exec;
-    case "can_manage_tax_notices": return admin;
-    case "can_manage_tax_schedule": return admin;
+    case "can_manage_tax_notices": return admin || (manager && (dept === "Tax" || dept === "Finance"));
+    case "can_manage_tax_schedule": return admin || (manager && (dept === "Tax" || dept === "Finance"));
     case "can_view_dept_tax_accounts": return !exec;
     case "can_view_stock": return admin || dept === "Unze Trading Ops";
     case "can_manage_stock": return admin || (manager && dept === "Unze Trading Ops");
