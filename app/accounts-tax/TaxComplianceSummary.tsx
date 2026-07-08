@@ -30,26 +30,26 @@ function fiscalMonths(year: string): string[] {
   ];
 }
 
-const QUARTERLY_ENTITIES = ["UT", "IMP", "BARANH", "HD", "ALMAHAR"];
+const QUARTERLY_ENTITIES = ["UT", "IMP", "BARANH", "HD"];
 const QUARTERLY_STEPS_COUNT = 5;
 
 const RETURN_ROWS = [
   {
     key: "FBR_SALES_TAX" as const,
     label: "FBR Sales Tax",
-    entities: ["UT", "IMP", "ALMAHAR"],
+    entities: ["UT", "IMP"],
     frequency: "monthly" as const,
   },
   {
     key: "PRA_TAX" as const,
     label: "PRA Tax",
-    entities: ["UT", "IMP", "BARANH", "HD", "ALMAHAR"],
+    entities: ["UT", "IMP", "BARANH", "HD"],
     frequency: "monthly" as const,
   },
   {
     key: "INCOME_TAX" as const,
     label: "Income Tax",
-    entities: ["UT", "IMP", "BARANH", "HD", "ALMAHAR"],
+    entities: ["UT", "IMP", "BARANH", "HD"],
     frequency: "quarterly" as const,
   },
 ];

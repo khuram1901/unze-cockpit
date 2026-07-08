@@ -20,14 +20,14 @@ type AlertType =
 
 // ── Constants (mirrors AccountsTaxDashboard) ───────────────────────
 
-const QUARTERLY_ENTITIES = ["UT","IMP","BARANH","HD","ALMAHAR"];
+const QUARTERLY_ENTITIES = ["UT","IMP","BARANH","HD"];
 const ANNUAL_ENTITIES    = ["UT","IMP","BARANH","HD","ALMAHAR","KK_JHANG","K_SALEEM","KA_SALEEM","W_SALEEM","SH_SALEEM"];
 const QUARTERLY_STEP_COUNT = 5;
 const ANNUAL_STEP_COUNT    = 6;
 
-const FBR_ENTITIES = ["UT","IMP","ALMAHAR"];
-const PRA_ENTITIES = ["UT","IMP","BARANH","HD","ALMAHAR"];
-const INCOME_TAX_ENTITIES = ["UT","IMP","BARANH","HD","ALMAHAR"];
+const FBR_ENTITIES = ["UT","IMP"];
+const PRA_ENTITIES = ["UT","IMP","BARANH","HD"];
+const INCOME_TAX_ENTITIES = ["UT","IMP","BARANH","HD"];
 
 // Annual Returns — split by group
 const PERSONAL_ENTITIES       = ["K_SALEEM","KA_SALEEM","W_SALEEM","SH_SALEEM","KK_JHANG"];

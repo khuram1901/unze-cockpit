@@ -1061,8 +1061,8 @@ export default function HomePage() {
     }
 
     function schedCompletePct(sm: Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">): number {
-      // 4 quarters × 5 steps × 5 entities = 100 slots
-      const TOTAL_SCHED = 4 * 5 * 5;
+      // 4 quarters × 5 steps × 4 entities = 80 slots
+      const TOTAL_SCHED = 4 * 5 * 4;
       let done = 0;
       sm.forEach((v) => { if (v === "Completed") done++; });
       return TOTAL_SCHED > 0 ? Math.round((done / TOTAL_SCHED) * 100) : 0;
@@ -1070,8 +1070,8 @@ export default function HomePage() {
 
     function hasPendingItems(sm: Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">, fm: Map<string, boolean>, year: string): boolean {
       const MONTHLY_ENTITIES: Record<string, string[]> = {
-        FBR_SALES_TAX: ["UT", "IMP", "ALMAHAR"],
-        PRA_TAX: ["UT", "IMP", "BARANH", "HD", "ALMAHAR"],
+        FBR_SALES_TAX: ["UT", "IMP"],
+        PRA_TAX: ["UT", "IMP", "BARANH", "HD"],
       };
       const start = parseInt(year.split("-")[0], 10);
       const months = [
@@ -1096,7 +1096,7 @@ export default function HomePage() {
       return anyIncomplete;
     }
 
-    const TOTAL_FILINGS = 116; // 36 FBR + 60 PRA + 20 Income Tax
+    const TOTAL_FILINGS = 88; // 24 FBR + 48 PRA + 16 Income Tax
     const prevComplete = countFiled(fmPrev) >= TOTAL_FILINGS && schedCompletePct(smPrev) === 100;
     const currHasItems = hasPendingItems(smCurr, fmCurr, taxNow);
 

@@ -291,7 +291,12 @@ export function canViewDepartment(u: UserCtx, departmentName: string): boolean {
   }
   if (isAdminTier(u)) return true;
   if (u.role === "Executive") return false;
-  if (u.role === "Manager") return u.department === departmentName;
+  if (u.role === "Manager") {
+    if (u.department === departmentName) return true;
+    // Finance HODs can view Tax Notices (closely related)
+    if (departmentName === "Tax" && u.department === "Finance") return true;
+    return false;
+  }
   return false;
 }
 

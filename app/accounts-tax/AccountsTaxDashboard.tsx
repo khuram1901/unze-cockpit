@@ -17,11 +17,10 @@ type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 // ── Constants ──────────────────────────────────────────────────────
 
 const QUARTERLY_ENTITIES = [
-  { key: "UT",      label: "Unze Trading" },
-  { key: "IMP",     label: "Imperial" },
-  { key: "BARANH",  label: "Baranh" },
-  { key: "HD",      label: "Haute Dolci" },
-  { key: "ALMAHAR", label: "Almahar" },
+  { key: "UT",     label: "Unze Trading" },
+  { key: "IMP",    label: "Imperial" },
+  { key: "BARANH", label: "Baranh" },
+  { key: "HD",     label: "Haute Dolci" },
 ];
 
 const ANNUAL_ENTITIES = [
@@ -55,9 +54,9 @@ const ANNUAL_STEPS = [
 ];
 
 const RETURN_TYPES = [
-  { key: "FBR_SALES_TAX" as ReturnType, label: "FBR Sales Tax",  frequency: "monthly"   as const, entities: ["UT","IMP","ALMAHAR"],              dueDay: 15 },
-  { key: "PRA_TAX"       as ReturnType, label: "PRA Tax",        frequency: "monthly"   as const, entities: ["UT","IMP","BARANH","HD","ALMAHAR"], dueDay: 15 },
-  { key: "INCOME_TAX"    as ReturnType, label: "Income Tax",     frequency: "quarterly" as const, entities: ["UT","IMP","BARANH","HD","ALMAHAR"], dueDay: 15 },
+  { key: "FBR_SALES_TAX" as ReturnType, label: "FBR Sales Tax",  frequency: "monthly"   as const, entities: ["UT","IMP"],              dueDay: 15 },
+  { key: "PRA_TAX"       as ReturnType, label: "PRA Tax",        frequency: "monthly"   as const, entities: ["UT","IMP","BARANH","HD"], dueDay: 15 },
+  { key: "INCOME_TAX"    as ReturnType, label: "Income Tax",     frequency: "quarterly" as const, entities: ["UT","IMP","BARANH","HD"], dueDay: 15 },
 ];
 
 const STATUS_COLOURS: Record<ScheduleStatus, { bg: string; text: string; border: string }> = {
