@@ -9,9 +9,11 @@ interface TaxComplianceSummaryProps {
   scheduleEntries: Map<string, ScheduleStatus>;
   returnFilings: Map<string, boolean>;
   selectedYear: string;
+  signoffs?: Map<string, boolean>;
   scheduleEntries2?: Map<string, ScheduleStatus>;
   returnFilings2?: Map<string, boolean>;
   selectedYear2?: string;
+  signoffs2?: Map<string, boolean>;
   onClick?: () => void;
 }
 
@@ -71,7 +73,11 @@ function computeFilingRows(returnFilings: Map<string, boolean>, year: string) {
   });
 }
 
-function computeQuarterChips(scheduleEntries: Map<string, ScheduleStatus>, year: string) {
+function computeQuarterChips(
+  scheduleEntries: Map<string, ScheduleStatus>,
+  year: string,
+  signoffs?: Map<string, boolean>
+) {
   return QUARTERS.map((q) => {
     const total = QUARTERLY_ENTITIES.length * QUARTERLY_STEPS_COUNT;
     let completed = 0;
@@ -80,7 +86,11 @@ function computeQuarterChips(scheduleEntries: Map<string, ScheduleStatus>, year:
         if (scheduleEntries.get(`${year}:${q}:${i}:${ek}`) === "Completed") completed++;
       }
     }
-    return { q, completed, total };
+    const allStepsDone = completed === total;
+    const signedOff = !signoffs ? undefined : QUARTERLY_ENTITIES.every(
+      (ek) => signoffs.get(`${year}:${q}:${ek}`) === true
+    );
+    return { q, completed, total, allStepsDone, signedOff };
   });
 }
 
@@ -88,9 +98,11 @@ export default function TaxComplianceSummary({
   scheduleEntries,
   returnFilings,
   selectedYear,
+  signoffs,
   scheduleEntries2,
   returnFilings2,
   selectedYear2,
+  signoffs2,
   onClick,
 }: TaxComplianceSummaryProps) {
   const { NAVY, GREEN, SLATE, AMBER, HAIRLINE, CARD, CARD_ALT, TRACK, SUCCESS_SOFT, WARNING_SOFT } = COLOURS;
@@ -98,15 +110,15 @@ export default function TaxComplianceSummary({
   const hasTwoYears = !!(scheduleEntries2 && returnFilings2 && selectedYear2);
 
   const filingRows1 = computeFilingRows(returnFilings, selectedYear);
-  const quarterChips1 = computeQuarterChips(scheduleEntries, selectedYear);
+  const quarterChips1 = computeQuarterChips(scheduleEntries, selectedYear, signoffs);
 
   const filingRows2 = hasTwoYears ? computeFilingRows(returnFilings2!, selectedYear2!) : [];
-  const quarterChips2 = hasTwoYears ? computeQuarterChips(scheduleEntries2!, selectedYear2!) : [];
+  const quarterChips2 = hasTwoYears ? computeQuarterChips(scheduleEntries2!, selectedYear2!, signoffs2) : [];
 
   const allFilingsFiled1 = filingRows1.every((r) => r.filed === r.total);
-  const allScheduleDone1 = quarterChips1.every((c) => c.completed === c.total);
+  const allScheduleDone1 = quarterChips1.every((c) => c.completed === c.total && c.signedOff !== false);
   const allFilingsFiled2 = hasTwoYears ? filingRows2.every((r) => r.filed === r.total) : true;
-  const allScheduleDone2 = hasTwoYears ? quarterChips2.every((c) => c.completed === c.total) : true;
+  const allScheduleDone2 = hasTwoYears ? quarterChips2.every((c) => c.completed === c.total && c.signedOff !== false) : true;
   const allClear = allFilingsFiled1 && allScheduleDone1 && allFilingsFiled2 && allScheduleDone2;
 
   function barColour(filed: number, total: number): string {
@@ -115,7 +127,11 @@ export default function TaxComplianceSummary({
     return AMBER;
   }
 
-  function chipStyle(completed: number, total: number): React.CSSProperties {
+  function chipStyle(completed: number, total: number, allStepsDone?: boolean, signedOff?: boolean): React.CSSProperties {
+    if (completed === total && signedOff === false) {
+      // All steps done but sign-off pending
+      return { backgroundColor: WARNING_SOFT, color: AMBER, border: `1px solid #F6D28A` };
+    }
     if (completed === total) {
       return { backgroundColor: SUCCESS_SOFT, color: GREEN, border: `1px solid #9ED4A3` };
     }
@@ -125,7 +141,8 @@ export default function TaxComplianceSummary({
     return { backgroundColor: WARNING_SOFT, color: AMBER, border: `1px solid #F6D28A` };
   }
 
-  function chipLabel(completed: number, total: number): string {
+  function chipLabel(completed: number, total: number, allStepsDone?: boolean, signedOff?: boolean): string {
+    if (completed === total && signedOff === false) return "⏳ Sign-off";
     if (completed === total) return "✓ Done";
     if (completed === 0) return "—";
     return `⚠ ${completed}/${total}`;
@@ -172,16 +189,16 @@ export default function TaxComplianceSummary({
     );
   }
 
-  function QuarterRow({ chips, year }: { chips: { q: string; completed: number; total: number }[]; year: string }) {
+  function QuarterRow({ chips, year }: { chips: { q: string; completed: number; total: number; allStepsDone: boolean; signedOff: boolean | undefined }[]; year: string }) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
         <span style={{ ...yearPill(year), marginRight: "2px" }}>{year}</span>
-        {chips.map(({ q, completed, total }) => (
+        {chips.map(({ q, completed, total, allStepsDone, signedOff }) => (
           <div key={q} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
             <span style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>{q}</span>
             <span
               style={{
-                ...chipStyle(completed, total),
+                ...chipStyle(completed, total, allStepsDone, signedOff),
                 fontSize: "11px",
                 fontWeight: 600,
                 padding: "3px 9px",
@@ -189,7 +206,7 @@ export default function TaxComplianceSummary({
                 whiteSpace: "nowrap",
               }}
             >
-              {chipLabel(completed, total)}
+              {chipLabel(completed, total, allStepsDone, signedOff)}
             </span>
           </div>
         ))}
@@ -271,12 +288,12 @@ export default function TaxComplianceSummary({
         </div>
       ) : (
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          {quarterChips1.map(({ q, completed, total }) => (
+          {quarterChips1.map(({ q, completed, total, allStepsDone, signedOff }) => (
             <div key={q} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
               <span style={{ fontSize: "11px", fontWeight: 600, color: SLATE }}>{q}</span>
               <span
                 style={{
-                  ...chipStyle(completed, total),
+                  ...chipStyle(completed, total, allStepsDone, signedOff),
                   fontSize: "11px",
                   fontWeight: 600,
                   padding: "3px 9px",
@@ -284,7 +301,7 @@ export default function TaxComplianceSummary({
                   whiteSpace: "nowrap",
                 }}
               >
-                {chipLabel(completed, total)}
+                {chipLabel(completed, total, allStepsDone, signedOff)}
               </span>
             </div>
           ))}

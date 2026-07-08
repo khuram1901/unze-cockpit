@@ -474,6 +474,8 @@ export default function HomePage() {
   const [taxScheduleEntries2, setTaxScheduleEntries2] = useState<Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">>(new Map());
   const [taxReturnFilings2, setTaxReturnFilings2] = useState<Map<string, boolean>>(new Map());
   const [taxSummaryYear2, setTaxSummaryYear2] = useState("");
+  const [taxSignoffs, setTaxSignoffs] = useState<Map<string, boolean>>(new Map());
+  const [taxSignoffs2, setTaxSignoffs2] = useState<Map<string, boolean>>(new Map());
 
   async function autoCreateEscalationTask(
     esc: Escalation,
@@ -607,9 +609,11 @@ export default function HomePage() {
             setTaxScheduleEntries(new Map(payload.taxScheduleEntries));
             setTaxReturnFilings(new Map(payload.taxReturnFilings));
             setTaxSummaryYear(payload.taxSummaryYear);
+            setTaxSignoffs(new Map(payload.taxSignoffs ?? []));
             setTaxScheduleEntries2(new Map(payload.taxScheduleEntries2));
             setTaxReturnFilings2(new Map(payload.taxReturnFilings2));
             setTaxSummaryYear2(payload.taxSummaryYear2 ?? "");
+            setTaxSignoffs2(new Map(payload.taxSignoffs2 ?? []));
           }
           setExecLoading(false);
           return;
@@ -1027,11 +1031,13 @@ export default function HomePage() {
       return `${s - 1}-${String(s).slice(2)}`;
     })();
 
-    const [{ data: schedCurr }, { data: schedPrev }, { data: filingCurr }, { data: filingPrev }] = await Promise.all([
+    const [{ data: schedCurr }, { data: schedPrev }, { data: filingCurr }, { data: filingPrev }, { data: signoffCurr }, { data: signoffPrev }] = await Promise.all([
       supabase.from("tax_schedule_entries").select("section, step_index, entity_key, status").eq("tax_year", taxNow),
       supabase.from("tax_schedule_entries").select("section, step_index, entity_key, status").eq("tax_year", taxPrevYear),
       supabase.from("tax_return_filings").select("return_type, entity_key, period_key, filed").eq("tax_year", taxNow),
       supabase.from("tax_return_filings").select("return_type, entity_key, period_key, filed").eq("tax_year", taxPrevYear),
+      supabase.from("tax_accounts_signoffs").select("section, entity_key, signed_off").eq("tax_year", taxNow),
+      supabase.from("tax_accounts_signoffs").select("section, entity_key, signed_off").eq("tax_year", taxPrevYear),
     ]);
 
     function buildSchedMap(rows: { section: string; step_index: number; entity_key: string; status: string }[] | null, year: string) {
@@ -1048,11 +1054,20 @@ export default function HomePage() {
       }
       return m;
     }
+    function buildSignoffMap(rows: { section: string; entity_key: string; signed_off: boolean }[] | null, year: string) {
+      const m = new Map<string, boolean>();
+      for (const r of rows ?? []) {
+        m.set(`${year}:${r.section}:${r.entity_key}`, r.signed_off);
+      }
+      return m;
+    }
 
     const smCurr = buildSchedMap(schedCurr, taxNow);
     const smPrev = buildSchedMap(schedPrev, taxPrevYear);
     const fmCurr = buildFilingMap(filingCurr, taxNow);
     const fmPrev = buildFilingMap(filingPrev, taxPrevYear);
+    const sofCurr = buildSignoffMap(signoffCurr, taxNow);
+    const sofPrev = buildSignoffMap(signoffPrev, taxPrevYear);
 
     function countFiled(fm: Map<string, boolean>): number {
       let n = 0;
@@ -1104,24 +1119,30 @@ export default function HomePage() {
       setTaxScheduleEntries(smCurr);
       setTaxReturnFilings(fmCurr);
       setTaxSummaryYear(taxNow);
+      setTaxSignoffs(sofCurr);
       setTaxScheduleEntries2(new Map());
       setTaxReturnFilings2(new Map());
       setTaxSummaryYear2("");
+      setTaxSignoffs2(new Map());
     } else if (!currHasItems) {
       setTaxScheduleEntries(smPrev);
       setTaxReturnFilings(fmPrev);
       setTaxSummaryYear(taxPrevYear);
+      setTaxSignoffs(sofPrev);
       setTaxScheduleEntries2(new Map());
       setTaxReturnFilings2(new Map());
       setTaxSummaryYear2("");
+      setTaxSignoffs2(new Map());
     } else {
       // Both years have pending items — show prev first, current second
       setTaxScheduleEntries(smPrev);
       setTaxReturnFilings(fmPrev);
       setTaxSummaryYear(taxPrevYear);
+      setTaxSignoffs(sofPrev);
       setTaxScheduleEntries2(smCurr);
       setTaxReturnFilings2(fmCurr);
       setTaxSummaryYear2(taxNow);
+      setTaxSignoffs2(sofCurr);
     }
 
     try {
@@ -1143,9 +1164,11 @@ export default function HomePage() {
           taxSummaryYear: prevComplete ? taxNow : taxPrevYear,
           taxScheduleEntries: Array.from((prevComplete ? smCurr : smPrev).entries()),
           taxReturnFilings: Array.from((prevComplete ? fmCurr : fmPrev).entries()),
+          taxSignoffs: Array.from((prevComplete ? sofCurr : sofPrev).entries()),
           taxScheduleEntries2: Array.from(((!prevComplete && currHasItems) ? smCurr : new Map()).entries()),
           taxReturnFilings2: Array.from(((!prevComplete && currHasItems) ? fmCurr : new Map()).entries()),
           taxSummaryYear2: (!prevComplete && currHasItems) ? taxNow : "",
+          taxSignoffs2: Array.from(((!prevComplete && currHasItems) ? sofCurr : new Map()).entries()),
         },
       }));
     } catch {
@@ -1603,6 +1626,8 @@ export default function HomePage() {
             taxScheduleEntries2={taxScheduleEntries2}
             taxReturnFilings2={taxReturnFilings2}
             taxSummaryYear2={taxSummaryYear2}
+            taxSignoffs={taxSignoffs}
+            taxSignoffs2={taxSignoffs2}
             isMobile={isMobile}
             quickTaskAction={quickTaskAction}
             quickMachineResolve={quickMachineResolve}
@@ -2165,7 +2190,7 @@ function ExecutiveDashboardBody({
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, dailyOpsData,
   facilitySynopsis, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
-  taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, isMobile, quickTaskAction, quickMachineResolve,
+  taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve,
 }: {
   ctx: UserCtx | null;
   selectedDate: string;
@@ -2197,6 +2222,8 @@ function ExecutiveDashboardBody({
   taxScheduleEntries2: Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">;
   taxReturnFilings2: Map<string, boolean>;
   taxSummaryYear2: string;
+  taxSignoffs: Map<string, boolean>;
+  taxSignoffs2: Map<string, boolean>;
   quickTaskAction: (taskId: string, newStatus: string) => Promise<void>;
   quickMachineResolve: (issueId: string) => Promise<void>;
 }) {
@@ -2840,9 +2867,11 @@ function ExecutiveDashboardBody({
           scheduleEntries={taxScheduleEntries}
           returnFilings={taxReturnFilings}
           selectedYear={taxSummaryYear}
+          signoffs={taxSignoffs.size > 0 ? taxSignoffs : undefined}
           scheduleEntries2={taxScheduleEntries2.size > 0 ? taxScheduleEntries2 : undefined}
           returnFilings2={taxReturnFilings2.size > 0 ? taxReturnFilings2 : undefined}
           selectedYear2={taxSummaryYear2 || undefined}
+          signoffs2={taxSignoffs2.size > 0 ? taxSignoffs2 : undefined}
           onClick={() => { window.location.href = "/accounts-tax"; }}
         />
         </>

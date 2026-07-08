@@ -7,12 +7,17 @@ import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, useToast } from ".
 import { canManageTaxSchedule, isPA, type UserCtx, type PermOverrides } from "../lib/permissions";
 import TaxComplianceSummary from "./TaxComplianceSummary";
 import { useMobile } from "../lib/useMobile";
+import { formatDateUK } from "../lib/dateUtils";
 
 // ── Types ──────────────────────────────────────────────────────────
 
 type ScheduleStatus = "Not Started" | "In Progress" | "External Auditors" | "Completed";
 type ReturnType = "FBR_SALES_TAX" | "PRA_TAX" | "INCOME_TAX";
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
+
+// ── Sign-off constant ──────────────────────────────────────────────
+
+const SHAKEEL_EMAIL = "shakeel@unze.co.uk";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -173,6 +178,11 @@ export default function AccountsTaxDashboard() {
 
   const [userEmail, setUserEmail] = useState("");
 
+  const [signoffs, setSignoffs] = useState<Map<string, boolean>>(new Map());
+  const [signoffMeta, setSignoffMeta] = useState<Map<string, { by: string; at: string }>>(new Map());
+  const [isShakeel, setIsShakeel] = useState(false);
+  // signoff key: "${year}:${section}:${entityKey}"
+
   // ── Auth + permissions ──
 
   useEffect(() => {
@@ -205,11 +215,12 @@ export default function AccountsTaxDashboard() {
   const loadData = useCallback(async (year: string) => {
     setLoading(true);
 
-    const [schedRes, filingRes, schedYearsRes, filingYearsRes] = await Promise.all([
+    const [schedRes, filingRes, schedYearsRes, filingYearsRes, signoffRes] = await Promise.all([
       supabase.from("tax_schedule_entries").select("tax_year, section, step_index, entity_key, status").eq("tax_year", year),
       supabase.from("tax_return_filings").select("tax_year, return_type, entity_key, period_key, filed").eq("tax_year", year),
       supabase.from("tax_schedule_entries").select("tax_year").order("tax_year"),
       supabase.from("tax_return_filings").select("tax_year").order("tax_year"),
+      supabase.from("tax_accounts_signoffs").select("section, entity_key, signed_off, signed_off_by, signed_off_at").eq("tax_year", year),
     ]);
 
     const sm = new Map<string, ScheduleStatus>();
@@ -223,6 +234,21 @@ export default function AccountsTaxDashboard() {
       fm.set(`${r.tax_year}:${r.return_type}:${r.entity_key}:${r.period_key}`, r.filed);
     }
     setReturnFilings(fm);
+
+    const sofm = new Map<string, boolean>();
+    const sofmeta = new Map<string, { by: string; at: string }>();
+    for (const r of signoffRes.data || []) {
+      const k = `${year}:${r.section}:${r.entity_key}`;
+      sofm.set(k, r.signed_off);
+      if (r.signed_off && r.signed_off_by && r.signed_off_at) {
+        sofmeta.set(k, { by: r.signed_off_by, at: r.signed_off_at });
+      }
+    }
+    setSignoffs(sofm);
+    setSignoffMeta(sofmeta);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    setIsShakeel(user?.email?.toLowerCase() === SHAKEEL_EMAIL.toLowerCase());
 
     const dbYears = Array.from(new Set([
       ...(schedYearsRes.data || []).map((r) => r.tax_year),
@@ -334,6 +360,64 @@ export default function AccountsTaxDashboard() {
 
   function triggerAlertRecompute() {
     authFetch("/api/cron/tax-alerts", { method: "POST" }).catch(() => {/* intentionally ignored */});
+  }
+
+  // ── Sign-off helpers ──
+
+  function allStepsComplete(section: string, entityKey: string, entries: Map<string, ScheduleStatus>): boolean {
+    for (let i = 1; i <= 5; i++) {
+      if (entries.get(`${selectedYear}:${section}:${i}:${entityKey}`) !== "Completed") return false;
+    }
+    return true;
+  }
+
+  async function handleSignoff(section: string, entityKey: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email || user.email.toLowerCase() !== SHAKEEL_EMAIL.toLowerCase()) {
+      alert("Only Shakeel can sign off accounts.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Finalise ${section} accounts for ${entityKey}?\n\nThis confirms all steps are complete and accounts are finalised. This action will be logged.`
+    );
+    if (!confirmed) return;
+
+    const k = `${selectedYear}:${section}:${entityKey}`;
+    const now = new Date().toISOString();
+
+    setSignoffs((prev) => new Map(prev).set(k, true));
+    setSignoffMeta((prev) => new Map(prev).set(k, { by: user.email!, at: now }));
+
+    const { error } = await supabase.from("tax_accounts_signoffs").upsert({
+      tax_year: selectedYear,
+      section,
+      entity_key: entityKey,
+      signed_off: true,
+      signed_off_by: user.email,
+      signed_off_at: now,
+    }, { onConflict: "tax_year,section,entity_key" });
+
+    if (error) {
+      setSignoffs((prev) => { const m = new Map(prev); m.delete(k); return m; });
+      setSignoffMeta((prev) => { const m = new Map(prev); m.delete(k); return m; });
+      alert("Error saving sign-off: " + error.message);
+      return;
+    }
+
+    await supabase.from("audit_log").insert({
+      user_email: user.email,
+      action: "ACCOUNTS_FINALISED",
+      table_name: "tax_accounts_signoffs",
+      details: JSON.stringify({ tax_year: selectedYear, section, entity_key: entityKey }),
+      created_at: now,
+    });
+
+    fetch("/api/cron/tax-alerts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ taxYear: selectedYear }),
+    }).catch(() => {});
   }
 
   // ── Helpers ──
@@ -577,6 +661,7 @@ export default function AccountsTaxDashboard() {
           scheduleEntries={scheduleEntries}
           returnFilings={returnFilings}
           selectedYear={selectedYear}
+          signoffs={signoffs.size > 0 ? signoffs : undefined}
         />
       )}
 
@@ -675,6 +760,100 @@ export default function AccountsTaxDashboard() {
                               </tr>
                             );
                           })}
+                          {/* Row 6 — Accounts Finalised sign-off (Q1–Q4 only) */}
+                          <tr>
+                            <td style={{
+                              ...tableRowLabel(true),
+                              fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
+                              fontWeight: 600,
+                              color: NAVY,
+                              fontSize: "13px",
+                            }}>
+                              ★ 6. Accounts Finalised
+                            </td>
+                            {entities.map((e) => {
+                              const k = `${selectedYear}:${sec.key}:${e.key}`;
+                              const done = signoffs.get(k) ?? false;
+                              const meta = signoffMeta.get(k);
+                              const allComplete = allStepsComplete(sec.key, e.key, scheduleEntries);
+
+                              if (done) {
+                                return (
+                                  <td key={e.key} style={{ ...tableCell(true), verticalAlign: "middle" }}>
+                                    <div style={{ textAlign: "center" }}>
+                                      <span style={{
+                                        display: "inline-flex", alignItems: "center", gap: "4px",
+                                        backgroundColor: SUCCESS_SOFT, color: GREEN,
+                                        border: `1px solid ${GREEN}33`, borderRadius: RADII.PILL,
+                                        padding: "3px 10px", fontSize: "11px", fontWeight: 600,
+                                      }}>
+                                        ✓ Finalised
+                                      </span>
+                                      {meta && (
+                                        <div style={{ fontSize: "10px", color: SLATE, marginTop: "2px" }}>
+                                          {meta.by.split("@")[0]} · {formatDateUK(meta.at.slice(0, 10))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              }
+
+                              if (!allComplete) {
+                                return (
+                                  <td key={e.key} style={{ ...tableCell(true), verticalAlign: "middle" }}>
+                                    <div style={{ textAlign: "center" }}>
+                                      <span style={{
+                                        display: "inline-flex", alignItems: "center", gap: "4px",
+                                        backgroundColor: CARD_ALT, color: SLATE,
+                                        border: `1px solid ${HAIRLINE}`, borderRadius: RADII.PILL,
+                                        padding: "3px 10px", fontSize: "11px", fontWeight: 500,
+                                        cursor: "not-allowed", opacity: 0.6,
+                                      }}>
+                                        🔒 Pending steps
+                                      </span>
+                                    </div>
+                                  </td>
+                                );
+                              }
+
+                              if (!isShakeel) {
+                                return (
+                                  <td key={e.key} style={{ ...tableCell(true), verticalAlign: "middle" }}>
+                                    <div style={{ textAlign: "center" }}>
+                                      <span style={{
+                                        display: "inline-flex", alignItems: "center", gap: "4px",
+                                        backgroundColor: WARNING_SOFT, color: AMBER,
+                                        border: `1px solid ${AMBER}33`, borderRadius: RADII.PILL,
+                                        padding: "3px 10px", fontSize: "11px", fontWeight: 500,
+                                      }}>
+                                        ⏳ Awaiting sign-off
+                                      </span>
+                                    </div>
+                                  </td>
+                                );
+                              }
+
+                              return (
+                                <td key={e.key} style={{ ...tableCell(true), verticalAlign: "middle" }}>
+                                  <div style={{ textAlign: "center" }}>
+                                    <button
+                                      onClick={() => handleSignoff(sec.key, e.key)}
+                                      style={{
+                                        backgroundColor: NAVY, color: "white",
+                                        border: "none", borderRadius: RADII.PILL,
+                                        padding: "4px 12px", fontSize: "11px", fontWeight: 600,
+                                        cursor: "pointer", display: "inline-flex",
+                                        alignItems: "center", gap: "4px",
+                                      }}
+                                    >
+                                      ★ Finalise
+                                    </button>
+                                  </div>
+                                </td>
+                              );
+                            })}
+                          </tr>
                         </tbody>
                       </table>
                     </div>

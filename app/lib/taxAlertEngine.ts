@@ -16,7 +16,8 @@ type AlertType =
   | "schedule_q1" | "schedule_q2" | "schedule_q3" | "schedule_q4" | "schedule_annual"
   | "monthly_fbr" | "monthly_pra"
   | "quarterly_income_tax"
-  | "annual_personal" | "annual_company";
+  | "annual_personal" | "annual_company"
+  | "signoff_q1" | "signoff_q2" | "signoff_q3" | "signoff_q4";
 
 // ── Constants (mirrors AccountsTaxDashboard) ───────────────────────
 
@@ -156,17 +157,21 @@ export async function computeAndStoreTaxAlerts(
   today.setHours(0, 0, 0, 0);
 
   // Load data
-  const [schedRes, filingRes] = await Promise.all([
+  const [schedRes, filingRes, signoffRes] = await Promise.all([
     supabase.from("tax_schedule_entries")
       .select("section, step_index, entity_key, status")
       .eq("tax_year", taxYear),
     supabase.from("tax_return_filings")
       .select("return_type, entity_key, period_key, filed")
       .eq("tax_year", taxYear),
+    supabase.from("tax_accounts_signoffs")
+      .select("section, entity_key, signed_off")
+      .eq("tax_year", taxYear),
   ]);
 
   const scheduleRows = schedRes.data ?? [];
   const filingRows   = filingRes.data ?? [];
+  const signoffRows  = signoffRes.data ?? [];
 
   // Index for fast lookup
   const schedMap = new Map<string, ScheduleStatus>();
@@ -177,6 +182,12 @@ export async function computeAndStoreTaxAlerts(
   const filedSet = new Set<string>();
   for (const r of filingRows) {
     if (r.filed) filedSet.add(`${r.return_type}:${r.entity_key}:${r.period_key}`);
+  }
+
+  // signoffMap: "Q1:UT" → true/false
+  const signoffMap = new Map<string, boolean>();
+  for (const r of signoffRows) {
+    signoffMap.set(`${r.section}:${r.entity_key}`, r.signed_off);
   }
 
   let upserted = 0;
@@ -234,10 +245,72 @@ export async function computeAndStoreTaxAlerts(
     }
   }
 
-  // ── 2. Monthly return alerts ────────────────────────────────────
+  // ── 1b. Sign-off alerts (Q1–Q4) ────────────────────────────────
 
   const s = fiscalYearStart(taxYear);
   const n = s + 1;
+
+  const signoffDeadlines: { quarter: string; alertType: AlertType; tier1: Date; tier2: Date }[] = [
+    { quarter: "Q1", alertType: "signoff_q1", tier1: deadlineDate(s,  10, 15), tier2: deadlineDate(s,  11, 15) },
+    { quarter: "Q2", alertType: "signoff_q2", tier1: deadlineDate(n,   1, 15), tier2: deadlineDate(n,   2, 15) },
+    { quarter: "Q3", alertType: "signoff_q3", tier1: deadlineDate(n,   4, 15), tier2: deadlineDate(n,   5, 15) },
+    { quarter: "Q4", alertType: "signoff_q4", tier1: deadlineDate(n,   7, 15), tier2: deadlineDate(n,   8, 15) },
+  ];
+
+  for (const sd of signoffDeadlines) {
+    // Only raise sign-off alerts when ALL 5 steps are Completed for ALL 4 quarterly entities
+    const allStepsDone = QUARTERLY_ENTITIES.every((ek) => {
+      for (let i = 1; i <= QUARTERLY_STEP_COUNT; i++) {
+        if ((schedMap.get(`${sd.quarter}:${i}:${ek}`) ?? "Not Started") !== "Completed") return false;
+      }
+      return true;
+    });
+
+    const allSignedOff = QUARTERLY_ENTITIES.every(
+      (ek) => signoffMap.get(`${sd.quarter}:${ek}`) === true
+    );
+
+    if (allSignedOff) {
+      // Resolve both tiers
+      for (const tier of [1, 2] as const) {
+        const res = await supabase.from("tax_deadline_alerts")
+          .update({ resolved: true, resolved_at: new Date().toISOString() })
+          .eq("tax_year", taxYear)
+          .eq("alert_type", sd.alertType)
+          .eq("tier", tier)
+          .eq("resolved", false)
+          .select("id");
+        resolved += res?.data?.length ?? 0;
+      }
+      continue;
+    }
+
+    if (!allStepsDone) continue; // Steps incomplete — step alerts handle that, not sign-off alerts
+
+    const message = `${sd.quarter} Accounts Finalised sign-off overdue — all steps complete but accounts not yet finalised`;
+
+    for (const tier of [1, 2] as const) {
+      const deadline = tier === 1 ? sd.tier1 : sd.tier2;
+      if (today < deadline) continue;
+
+      const result = await upsertAlert(supabase, {
+        taxYear, alertType: sd.alertType, periodKey: sd.quarter,
+        tier, overdueCount: 1, message,
+      });
+      if (result.inserted) {
+        upserted++;
+        if (tier === 1) {
+          const sent = await notifyShakeel(supabase, message);
+          if (sent) emailsSent++;
+        }
+      } else if (result.updated) {
+        upserted++;
+      }
+    }
+  }
+
+  // ── 2. Monthly return alerts ────────────────────────────────────
+
   const allMonths = [
     `${s}-07`,`${s}-08`,`${s}-09`,
     `${s}-10`,`${s}-11`,`${s}-12`,
