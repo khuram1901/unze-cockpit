@@ -22,46 +22,63 @@ export type MatrixMember = {
 type PermRow = Record<string, boolean | string | null>;
 
 const PERM_COLUMNS = [
+  // ── Dashboards ──────────────────────────────────────────────
   { key: "can_view_executive_dashboard", label: "Exec", group: "Dashboards", tip: "Access the Executive command-centre dashboard" },
   { key: "can_view_operations_dashboard", label: "Ops", group: "Dashboards", tip: "Access the Operations/production dashboard" },
   { key: "can_view_pa_dashboard", label: "PA", group: "Dashboards", tip: "Access the PA assistant dashboard" },
+
+  // ── Finance ─────────────────────────────────────────────────
+  { key: "can_view_finance", label: "Cash", group: "Finance", tip: "View cash positions, budgets, forecasts" },
+  { key: "can_edit_finance", label: "Cash Edit", group: "Finance", tip: "Create/edit cash entries, plans, budgets" },
+  { key: "finance_company_scope", label: "Scope", group: "Finance", tip: "Which companies: UTPL / IFPL / both", type: "select" as const, options: ["both", "UTPL", "IFPL"] },
   { key: "can_view_guarantees", label: "BF View", group: "Finance", tip: "View Bank Facilities / guarantee records" },
   { key: "can_manage_guarantees", label: "BF Mgr", group: "Finance", tip: "Add, edit, convert and release bank guarantees" },
-  { key: "can_view_finance", label: "View", group: "Finance", tip: "View cash positions, budgets, forecasts" },
-  { key: "can_edit_finance", label: "Edit", group: "Finance", tip: "Create/edit cash entries, plans, budgets" },
-  { key: "finance_company_scope", label: "Scope", group: "Finance", tip: "Which companies: UTPL / IFPL / both", type: "select" as const, options: ["both", "UTPL", "IFPL"] },
+  { key: "can_view_investments", label: "Inv", group: "Finance", tip: "View the PSX stock portfolio" },
+  { key: "can_edit_investments", label: "Inv Edit", group: "Finance", tip: "Add/edit/delete holdings and refresh prices" },
+
+  // ── Receivables ─────────────────────────────────────────────
   { key: "can_view_receivables", label: "View", group: "Recv.", tip: "View receivable bills and stages" },
   { key: "can_edit_receivables", label: "Edit", group: "Recv.", tip: "Move bills, mark collected, add new" },
-  { key: "can_see_all_tasks", label: "All", group: "Tasks", tip: "See all tasks vs only own" },
+
+  // ── Tasks ────────────────────────────────────────────────────
+  { key: "can_see_all_tasks", label: "All Tasks", group: "Tasks", tip: "See all tasks vs only own" },
   { key: "can_create_tasks", label: "Create", group: "Tasks", tip: "Create and assign tasks to others" },
   { key: "can_review_tasks", label: "Review", group: "Tasks", tip: "Edit due dates, close, reassign" },
   { key: "can_manage_recurring_tasks", label: "Recur", group: "Tasks", tip: "Manage recurring task templates" },
   { key: "can_manage_calendar", label: "Cal", group: "Tasks", tip: "Approve/reject calendar requests" },
   { key: "can_see_all_minutes", label: "Mins", group: "Tasks", tip: "See all meeting minutes vs only own" },
-  { key: "can_manage_meetings", label: "Mtg Mgr", group: "Tasks", tip: "Create meetings, upload minutes, manage attendees" },
+  { key: "can_manage_meetings", label: "Meetings", group: "Tasks", tip: "Create meetings, upload minutes, manage attendees" },
+
+  // ── Departments ──────────────────────────────────────────────
   { key: "can_view_dept_ops", label: "Ops", group: "Depts", tip: "Access the Unze Trading Ops department dashboard" },
   { key: "can_view_dept_hr", label: "HR", group: "Depts", tip: "Access the HR department dashboard" },
+  { key: "can_view_dept_audit", label: "Audit", group: "Depts", tip: "Access the Audit department dashboard" },
+  { key: "can_view_dept_admin", label: "Admin", group: "Depts", tip: "Access the Admin department dashboard" },
+  { key: "can_view_dept_it", label: "IT", group: "Depts", tip: "Access the IT department dashboard" },
   { key: "can_view_dept_tax", label: "Tax", group: "Depts", tip: "Access the Tax Notices department dashboard" },
   { key: "can_view_dept_tax_accounts", label: "A&R", group: "Depts", tip: "Access Accounts & Returns page" },
-  { key: "can_manage_tax_notices", label: "Edit", group: "Tax Mgmt", tip: "Add, edit, delete and manage tax notices — Active/Inactive, Status, Stage" },
-  { key: "can_manage_tax_schedule", label: "Accts", group: "Tax Mgmt", tip: "Update the tax accounts schedule and monthly return filings" },
-  { key: "can_view_dept_audit", label: "Aud", group: "Depts", tip: "Access the Audit department dashboard" },
-  { key: "can_view_dept_admin", label: "Adm", group: "Depts", tip: "Access the Admin department dashboard" },
-  { key: "can_view_dept_it", label: "IT", group: "Depts", tip: "Access the IT department dashboard" },
+
+  // ── Tax Management ───────────────────────────────────────────
+  { key: "can_manage_tax_notices", label: "Notices", group: "Tax Mgmt", tip: "Add, edit, delete and manage tax notices" },
+  { key: "can_manage_tax_schedule", label: "Schedule", group: "Tax Mgmt", tip: "Update the tax accounts schedule and return filings" },
+
+  // ── Production ───────────────────────────────────────────────
+  { key: "can_access_daily_entry", label: "Entry", group: "Prod.", tip: "Log daily production, dispatch, breakage" },
+  { key: "can_view_stock", label: "Stock", group: "Prod.", tip: "View stock levels and inventory" },
+  { key: "can_manage_stock", label: "POs", group: "Prod.", tip: "Create, approve and manage purchase orders" },
+  { key: "can_edit_operations_targets", label: "Targets", group: "Prod.", tip: "Set monthly production/dispatch targets" },
+
+  // ── Members ──────────────────────────────────────────────────
   { key: "can_view_members", label: "View", group: "Members", tip: "Access the members management page" },
   { key: "can_add_members", label: "Add", group: "Members", tip: "Create new team members" },
   { key: "can_edit_members", label: "Edit", group: "Members", tip: "Edit member profiles, roles, departments" },
   { key: "can_delete_members", label: "Del", group: "Members", tip: "Remove members from the system" },
   { key: "can_reset_passwords", label: "PW", group: "Members", tip: "Reset/set passwords for other users" },
+
+  // ── Admin ────────────────────────────────────────────────────
   { key: "can_view_audit_log", label: "Log", group: "Admin", tip: "View the system audit trail" },
   { key: "can_view_exceptions", label: "Exc", group: "Admin", tip: "View escalation/exception alerts" },
   { key: "can_import_export", label: "I/O", group: "Admin", tip: "Import/export member data via CSV" },
-  { key: "can_view_stock", label: "Stock", group: "Prod.", tip: "View stock levels and inventory" },
-  { key: "can_manage_stock", label: "POs", group: "Prod.", tip: "Create, approve and manage purchase orders" },
-  { key: "can_access_daily_entry", label: "Entry", group: "Prod.", tip: "Log daily production, dispatch, breakage" },
-  { key: "can_edit_operations_targets", label: "Target", group: "Prod.", tip: "Set monthly production/dispatch targets" },
-  { key: "can_view_investments", label: "Inv View", group: "Finance", tip: "View the PSX stock portfolio" },
-  { key: "can_edit_investments", label: "Inv Edit", group: "Finance", tip: "Add/edit/delete holdings and refresh prices" },
 ] as const;
 
 type ColDef = (typeof PERM_COLUMNS)[number];
@@ -91,7 +108,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
 
   switch (col.key) {
     case "can_view_executive_dashboard": return admin;
-    case "can_view_operations_dashboard": return admin || exec || dept === "Unze Trading Ops";
+    case "can_view_operations_dashboard": return admin || dept === "Unze Trading Ops";
     case "can_view_pa_dashboard": return admin || exec;
     case "can_view_guarantees": return admin || (manager && (dept === "Finance" || dept === "Unze Trading Ops"));
     case "can_manage_guarantees": return admin || (manager && dept === "Finance");
@@ -104,9 +121,9 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
       return "both";
     }
     case "can_view_receivables": return admin || (manager && (dept === "Finance" || dept === "Unze Trading Ops"));
-    case "can_edit_receivables": return admin || (manager && (dept === "Finance" || dept === "Unze Trading Ops"));
+    case "can_edit_receivables": return admin || dept === "Unze Trading Ops";
     case "can_see_all_tasks": return admin || exec;
-    case "can_create_tasks": return admin || exec || manager;
+    case "can_create_tasks": return admin || exec || (manager && dept === "Unze Trading Ops");
     case "can_review_tasks": return admin || exec;
     case "can_manage_recurring_tasks": return admin || exec;
     case "can_manage_calendar": return admin || exec;
@@ -116,7 +133,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_dept_hr": return admin || dept === "HR";
     case "can_view_dept_tax": return admin || dept === "Tax" || (manager && dept === "Finance");
     case "can_view_dept_audit": return admin || dept === "Audit";
-    case "can_view_dept_admin": return admin || exec || dept === "Admin";
+    case "can_view_dept_admin": return admin || dept === "Admin";
     case "can_view_dept_it": return admin || dept === "IT";
     case "can_view_members": return admin || exec;
     case "can_add_members": return admin || exec;
@@ -126,9 +143,9 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_audit_log": return admin || exec;
     case "can_view_exceptions": return admin || exec;
     case "can_import_export": return admin || exec;
-    case "can_manage_tax_notices": return admin || (manager && (dept === "Tax" || dept === "Finance"));
-    case "can_manage_tax_schedule": return admin || (manager && (dept === "Tax" || dept === "Finance"));
-    case "can_view_dept_tax_accounts": return true;
+    case "can_manage_tax_notices": return admin;
+    case "can_manage_tax_schedule": return admin;
+    case "can_view_dept_tax_accounts": return !exec;
     case "can_view_stock": return admin || dept === "Unze Trading Ops";
     case "can_manage_stock": return admin || (manager && dept === "Unze Trading Ops");
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
