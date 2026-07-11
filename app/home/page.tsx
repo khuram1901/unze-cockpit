@@ -465,7 +465,7 @@ export default function HomePage() {
 
   const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[]>([]);
   const [investmentData, setInvestmentData] = useState<InvestmentSummary | null>(null);
-  const [pensionSummary, setPensionSummary] = useState<{ gbp: number; pkr: number } | null>(null);
+  const [pensionSummary, setPensionSummary] = useState<{ gbp: number; pkr: number; netGain: number; totalReturn: number; contributed: number; feesPaid: number } | null>(null);
   const [dailyOpsData, setDailyOpsData] = useState<DailyOpsPoint[]>([]);
   const [taxOverdueCount, setTaxOverdueCount] = useState(0);
   const [taxTier2Alerts, setTaxTier2Alerts] = useState<{ alert_type: string; period_key: string; overdue_count: number; alert_message: string; tax_year: string }[]>([]);
@@ -1009,10 +1009,10 @@ export default function HomePage() {
     }
 
     // UK Pension summary for Executive Dashboard — aggregation done in Postgres
-    let computedPensionSummary: { gbp: number; pkr: number } | null = null;
+    let computedPensionSummary: { gbp: number; pkr: number; netGain: number; totalReturn: number; contributed: number; feesPaid: number } | null = null;
     try {
       const { data: pensionData } = await supabase.rpc("get_pension_summary");
-      const pensionRow = (pensionData as { total_value_gbp: number }[] | null)?.[0];
+      const pensionRow = (pensionData as { total_value_gbp: number; net_gain_gbp: number; return_pct: number; contributed_gbp: number; fees_gbp: number }[] | null)?.[0];
       if (pensionRow && pensionRow.total_value_gbp > 0) {
         let pkrRate = 356;
         try {
@@ -1020,7 +1020,14 @@ export default function HomePage() {
           const fxData = await fxRes.json();
           pkrRate = fxData?.rate ?? 356;
         } catch { /* non-fatal */ }
-        computedPensionSummary = { gbp: pensionRow.total_value_gbp, pkr: pensionRow.total_value_gbp * pkrRate };
+        computedPensionSummary = {
+          gbp: pensionRow.total_value_gbp,
+          pkr: pensionRow.total_value_gbp * pkrRate,
+          netGain: pensionRow.net_gain_gbp ?? 0,
+          totalReturn: pensionRow.return_pct ?? 0,
+          contributed: pensionRow.contributed_gbp ?? 0,
+          feesPaid: pensionRow.fees_gbp ?? 0,
+        };
         setPensionSummary(computedPensionSummary);
       }
     } catch { /* non-fatal — pension card is additive */ }
@@ -2230,7 +2237,7 @@ function ExecutiveDashboardBody({
   setBannerOpen: (v: boolean) => void;
   deptHealth: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[];
   investmentData: InvestmentSummary | null;
-  pensionSummary: { gbp: number; pkr: number } | null;
+  pensionSummary: { gbp: number; pkr: number; netGain: number; totalReturn: number; contributed: number; feesPaid: number } | null;
   dailyOpsData: DailyOpsPoint[];
   isMobile: boolean;
   facilitySynopsis: { bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[];
@@ -2977,8 +2984,39 @@ function ExecutiveDashboardBody({
           <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "28px", fontWeight: 600, color: NAVY, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1, marginBottom: "4px" }}>
             £{pensionSummary.gbp.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </div>
-          <div style={{ fontSize: "13px", color: SLATE }}>
-            PKR {Math.round(pensionSummary.pkr).toLocaleString("en-PK")} · 2 Aviva funds · Click to view →
+          <div style={{ fontSize: "12px", color: SLATE, marginBottom: "12px" }}>
+            PKR {Math.round(pensionSummary.pkr).toLocaleString("en-PK")} · 2 Aviva funds
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "10px" }}>
+            {/* Row 1: Net gain */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: SLATE }}>Net gain</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", color: pensionSummary.netGain >= 0 ? COLOURS.GREEN : COLOURS.RED }}>
+                {pensionSummary.netGain >= 0 ? "+" : ""}£{Math.abs(pensionSummary.netGain).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </div>
+            </div>
+            {/* Row 2: Total return */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: SLATE }}>Total return</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", color: pensionSummary.totalReturn >= 0 ? COLOURS.GREEN : COLOURS.RED }}>
+                {pensionSummary.totalReturn >= 0 ? "+" : ""}{pensionSummary.totalReturn.toLocaleString("en-GB", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+              </div>
+            </div>
+            {/* Row 3: Contributed */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: SLATE }}>Contributed</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", color: COLOURS.NAVY }}>
+                £{pensionSummary.contributed.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </div>
+            </div>
+            {/* Row 4: Fees paid */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "11px", color: SLATE }}>Fees paid</div>
+              <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", color: COLOURS.RED }}>
+                £{pensionSummary.feesPaid.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </div>
+            </div>
           </div>
         </div>
       )}
