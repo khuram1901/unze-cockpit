@@ -1014,13 +1014,11 @@ export default function HomePage() {
       const { data: pensionData } = await supabase.rpc("get_pension_summary");
       const pensionRow = (pensionData as { total_value_gbp: number }[] | null)?.[0];
       if (pensionRow && pensionRow.total_value_gbp > 0) {
-        let pkrRate = 0;
+        let pkrRate = 356;
         try {
-          const fxRes = await fetch("https://api.frankfurter.app/latest?from=GBP&to=PKR");
-          if (fxRes.ok) {
-            const fxData = await fxRes.json();
-            pkrRate = fxData?.rates?.PKR ?? 0;
-          }
+          const fxRes = await fetch("/api/fx/gbp-pkr");
+          const fxData = await fxRes.json();
+          pkrRate = fxData?.rate ?? 356;
         } catch { /* non-fatal */ }
         computedPensionSummary = { gbp: pensionRow.total_value_gbp, pkr: pensionRow.total_value_gbp * pkrRate };
         setPensionSummary(computedPensionSummary);
