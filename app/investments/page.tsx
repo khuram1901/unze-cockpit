@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
-import { COLOURS, SectionTitle, PageHeader, useConfirm } from "../lib/SharedUI";
+import { COLOURS, RADII, SectionTitle, PageHeader, useConfirm } from "../lib/SharedUI";
 import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
@@ -64,6 +64,39 @@ type Holding = {
   buy_date: string | null;
   target_price: number | null;
   notes: string | null;
+};
+
+type PensionMovementRow = {
+  isin: string;
+  price_today: number;
+  price_yesterday: number | null;
+  price_1w: number | null;
+  price_1m: number | null;
+  change_1d_pct: number;
+  change_1w_pct: number;
+  change_1m_pct: number;
+};
+
+type PsxMovementRow = {
+  ticker: string;
+  company_name: string;
+  price_today: number;
+  price_yesterday: number | null;
+  change_1d_pkr: number;
+  change_1d_pct: number;
+  direction: "up" | "down" | "flat";
+};
+
+type ComparisonFundRow = {
+  fund_name: string;
+  isin: string;
+  risk_level: string | null;
+  style: string | null;
+  price_today: number | null;
+  change_1m_pct: number | null;
+  change_1y_pct: number | null;
+  price_date: string | null;
+  your_avg_1m_pct: number | null;
 };
 
 type PriceRow = {
@@ -152,8 +185,15 @@ export default function InvestmentsPage() {
   // UK Pension state
   const [pensionSummary, setPensionSummary] = useState<PensionSummary | null>(null);
   const [pensionBreakdown, setPensionBreakdown] = useState<PensionFundBreakdown[]>([]);
+  const [pensionMovement, setPensionMovement] = useState<PensionMovementRow[]>([]);
   const [gbpPkrRate, setGbpPkrRate] = useState<number>(0);
   const [pensionLoading, setPensionLoading] = useState(true);
+
+  // PSX movement state
+  const [psxMovement, setPsxMovement] = useState<PsxMovementRow[]>([]);
+
+  // Comparison funds state
+  const [comparisonFunds, setComparisonFunds] = useState<ComparisonFundRow[]>([]);
 
   const [formTicker, setFormTicker] = useState("");
   const [formCompany, setFormCompany] = useState("");
@@ -196,7 +236,7 @@ export default function InvestmentsPage() {
   }, []);
 
   const load = useCallback(async (asOf: string) => {
-    const [summaryRes, hRes, histRes, latestRes] = await Promise.all([
+    const [summaryRes, hRes, histRes, latestRes, psxMoveRes] = await Promise.all([
       // Single RPC: totals, per-ticker rows, losers, day-change, dividend count — all in DB
       supabase.rpc("get_portfolio_summary_full", { p_as_of: asOf, p_alert_pct: -3, p_div_days: 7 }),
       // Holdings still needed for individual lot edit/delete UI
@@ -204,6 +244,8 @@ export default function InvestmentsPage() {
       // Chart history — for the portfolio value graph only
       supabase.from("price_history").select("ticker, price, as_of_date").order("as_of_date", { ascending: true }),
       supabase.from("price_history").select("created_at").order("created_at", { ascending: false }).limit(1).single(),
+      // PSX daily movement
+      supabase.rpc("get_psx_stock_movement"),
     ]);
 
     const summary = summaryRes.data as {
@@ -218,6 +260,7 @@ export default function InvestmentsPage() {
     setLastPriceUpdate(latestRes.data?.created_at ?? null);
     setPortfolioTotals(summary?.totals ?? null);
     setLosersDB(summary?.losers ?? []);
+    setPsxMovement((psxMoveRes.data as PsxMovementRow[] | null) ?? []);
     setDayChange(
       summary?.totals?.day_change != null && summary?.totals?.day_change_pct != null
         ? { value: summary.totals.day_change, pct: summary.totals.day_change_pct }
@@ -229,10 +272,12 @@ export default function InvestmentsPage() {
   const loadPensionData = useCallback(async () => {
     setPensionLoading(true);
     try {
-      const [summaryRes, breakdownRes, fxRes] = await Promise.all([
+      const [summaryRes, breakdownRes, fxRes, movementRes, compRes] = await Promise.all([
         supabase.rpc("get_pension_summary"),
         supabase.rpc("get_pension_fund_breakdown"),
         fetch("/api/fx/gbp-pkr"),
+        supabase.rpc("get_pension_fund_movement"),
+        supabase.rpc("get_pension_comparison_performance"),
       ]);
 
       let pkrRate = 356;
@@ -249,6 +294,8 @@ export default function InvestmentsPage() {
           value_pkr: f.value_gbp * pkrRate,
         }))
       );
+      setPensionMovement((movementRes.data as PensionMovementRow[] | null) ?? []);
+      setComparisonFunds((compRes.data as ComparisonFundRow[] | null) ?? []);
       setGbpPkrRate(pkrRate);
     } catch { /* non-fatal — pension section is additive */ }
     setPensionLoading(false);
@@ -703,6 +750,7 @@ export default function InvestmentsPage() {
                     <Th align="right">Qty</Th>
                     <Th align="right">Avg Cost</Th>
                     <Th align="right">Current</Th>
+                    <Th align="right">Today</Th>
                     <Th align="right">Value</Th>
                     <Th align="right">Gain/Loss</Th>
                     <Th align="right">%</Th>
@@ -722,6 +770,26 @@ export default function InvestmentsPage() {
                       <td style={{ ...td, textAlign: "right" }}>{fmtPrice(s.avgCost)}</td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 600 }}>
                         {s.currentPrice !== null ? fmtPrice(s.currentPrice) : "—"}
+                      </td>
+                      <td style={{ ...td, textAlign: "right" }}>
+                        {(() => {
+                          const m = psxMovement.find((r) => r.ticker === s.ticker);
+                          if (!m || m.direction === "flat" || m.price_yesterday === null) {
+                            return <span style={{ color: SLATE, fontSize: "13px" }}>—</span>;
+                          }
+                          const up = m.direction === "up";
+                          return (
+                            <span style={{
+                              fontSize: "12px", fontWeight: 700,
+                              padding: "2px 7px", borderRadius: RADII.PILL,
+                              color: up ? COLOURS.GREEN : COLOURS.RED,
+                              backgroundColor: up ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT,
+                              whiteSpace: "nowrap",
+                            }}>
+                              {up ? "▲" : "▼"} {Math.abs(m.change_1d_pct).toFixed(2)}%
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 600 }}>
                         {s.currentValue !== null ? fmtRs(s.currentValue) : "—"}
@@ -772,7 +840,7 @@ export default function InvestmentsPage() {
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: `2px solid ${NAVY}`, fontWeight: 700 }}>
-                    <td style={td} colSpan={5}>TOTAL</td>
+                    <td style={td} colSpan={6}>TOTAL</td>
                     <td style={{ ...td, textAlign: "right" }}>{fmtRs(totalValue)}</td>
                     <td style={{ ...td, textAlign: "right", color: glColor(totalGL) }}>{fmtRs(totalGL)}</td>
                     <td style={{ ...td, textAlign: "right" }}>
@@ -1193,7 +1261,7 @@ export default function InvestmentsPage() {
                       </span>
 
                       {/* Allocation bar — percentage computed by DB */}
-                      <div style={{ marginBottom: "12px" }}>
+                      <div style={{ marginBottom: "10px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: SLATE, marginBottom: "4px" }}>
                           <span>{Number(fund.allocation_pct).toFixed(1)}% of pension</span>
                         </div>
@@ -1201,6 +1269,39 @@ export default function InvestmentsPage() {
                           <div style={{ height: "100%", width: `${Number(fund.allocation_pct)}%`, backgroundColor: BLUE, borderRadius: "999px" }} />
                         </div>
                       </div>
+
+                      {/* Daily movement chips */}
+                      {(() => {
+                        const mv = pensionMovement.find((m) => m.isin === fund.isin);
+                        if (!mv) return null;
+                        const periods: { label: string; pct: number }[] = [
+                          { label: "1D", pct: Number(mv.change_1d_pct) },
+                          { label: "1W", pct: Number(mv.change_1w_pct) },
+                          { label: "1M", pct: Number(mv.change_1m_pct) },
+                        ];
+                        return (
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "12px" }}>
+                            {periods.map(({ label, pct }) => {
+                              const up = pct > 0;
+                              const flat = pct === 0;
+                              return (
+                                <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                  <span style={{ fontSize: "10px", color: SLATE, fontWeight: 600, marginRight: "1px" }}>{label}</span>
+                                  <span style={{
+                                    fontSize: "11px", fontWeight: 700,
+                                    padding: "2px 7px", borderRadius: RADII.PILL,
+                                    color: flat ? SLATE : up ? COLOURS.GREEN : COLOURS.RED,
+                                    backgroundColor: flat ? COLOURS.CARD_ALT : up ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT,
+                                    whiteSpace: "nowrap",
+                                  }}>
+                                    {flat ? "—" : up ? "▲" : "▼"} {flat ? "0.000%" : `${Math.abs(pct).toFixed(3)}%`}
+                                  </span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
 
                       {/* 4-metric mini grid — all values from DB */}
                       <div style={{
@@ -1245,6 +1346,102 @@ export default function InvestmentsPage() {
               )}
             </>
           )}
+        </div>
+
+        {/* ── AVIVA FUND COMPARISON ── */}
+        <div style={{ borderTop: `2px solid ${HAIRLINE}`, marginTop: "24px", paddingTop: "24px" }}>
+          <SectionTitle title="Aviva Fund Comparison" />
+          <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px" }}>
+            Top performing Aviva pension funds — updated daily
+          </div>
+
+          {comparisonFunds.length === 0 ? (
+            <div style={{
+              border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD,
+              padding: "24px", backgroundColor: COLOURS.CARD_ALT,
+              fontSize: "14px", color: SLATE, textAlign: "center",
+            }}>
+              No comparison data yet — fund ISINs are pending verification.
+              Once confirmed, prices will be fetched automatically each night.
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto", marginBottom: "12px" }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "700px" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                    <Th>Fund Name</Th>
+                    <Th>Risk</Th>
+                    <Th>Style</Th>
+                    <Th align="right">Today's Price</Th>
+                    <Th align="right">1 Month</Th>
+                    <Th align="right">1 Year</Th>
+                    <Th align="right">vs Your Funds</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparisonFunds.map((cf) => {
+                    const hasPct = cf.change_1m_pct !== null && cf.your_avg_1m_pct !== null;
+                    const outperforms = hasPct && cf.change_1m_pct! > cf.your_avg_1m_pct!;
+                    const diff = hasPct ? (cf.change_1m_pct! - cf.your_avg_1m_pct!).toFixed(2) : null;
+                    return (
+                      <tr key={cf.isin} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
+                        <td style={{ ...td, fontWeight: 600, color: NAVY, maxWidth: "220px" }}>{cf.fund_name}</td>
+                        <td style={{ ...td, fontSize: "13px", color: SLATE }}>{cf.risk_level ?? "—"}</td>
+                        <td style={{ ...td, fontSize: "13px", color: SLATE }}>{cf.style ?? "—"}</td>
+                        <td style={{ ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                          {cf.price_today !== null ? `£${Number(cf.price_today).toFixed(4)}` : "—"}
+                        </td>
+                        <td style={{ ...td, textAlign: "right" }}>
+                          {cf.change_1m_pct !== null ? (
+                            <span style={{
+                              fontSize: "12px", fontWeight: 700,
+                              padding: "2px 7px", borderRadius: RADII.PILL,
+                              color: cf.change_1m_pct >= 0 ? COLOURS.GREEN : COLOURS.RED,
+                              backgroundColor: cf.change_1m_pct >= 0 ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT,
+                            }}>
+                              {cf.change_1m_pct >= 0 ? "▲" : "▼"} {Math.abs(cf.change_1m_pct).toFixed(2)}%
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td style={{ ...td, textAlign: "right" }}>
+                          {cf.change_1y_pct !== null ? (
+                            <span style={{
+                              fontSize: "12px", fontWeight: 700,
+                              padding: "2px 7px", borderRadius: RADII.PILL,
+                              color: cf.change_1y_pct >= 0 ? COLOURS.GREEN : COLOURS.RED,
+                              backgroundColor: cf.change_1y_pct >= 0 ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT,
+                            }}>
+                              {cf.change_1y_pct >= 0 ? "▲" : "▼"} {Math.abs(cf.change_1y_pct).toFixed(2)}%
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td style={{ ...td, textAlign: "right" }}>
+                          {hasPct ? (
+                            <span style={{
+                              fontSize: "12px", fontWeight: 700,
+                              padding: "2px 7px", borderRadius: RADII.PILL,
+                              color: outperforms ? COLOURS.GREEN : COLOURS.RED,
+                              backgroundColor: outperforms ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT,
+                            }}>
+                              {outperforms ? "Better ▲" : "Lower ▼"} {diff && Math.abs(Number(diff)).toFixed(2)}%
+                            </span>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div style={{
+            fontSize: "12px", color: SLATE,
+            borderLeft: `3px solid ${HAIRLINE}`,
+            paddingLeft: "10px", marginTop: "8px",
+          }}>
+            Performance data for reference only. Consult an Aviva adviser before switching funds.
+          </div>
         </div>
       </main>
     </AuthWrapper>

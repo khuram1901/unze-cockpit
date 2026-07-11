@@ -116,7 +116,55 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 4. Fetch live GBP/PKR rate
+  // 4. Fetch comparison fund prices from Morningstar
+  // ISINs are placeholders until verified — skip any fund whose ISIN starts with "PLACEHOLDER"
+  const compResults: { isin: string; price: number; date: string }[] = [];
+  const { data: compFunds } = await db
+    .from("pension_comparison_funds")
+    .select("isin, fund_name, morningstar_id")
+    .eq("active", true);
+
+  for (const cf of compFunds ?? []) {
+    if (!cf.morningstar_id || cf.isin.startsWith("PLACEHOLDER")) continue;
+
+    let compPrice: number | null = null;
+    try {
+      const url = `https://lt.morningstar.com/api/rest.svc/timeseries_price/9vehuxllxs?id=${cf.morningstar_id}&currencyId=GBP&idtype=Morningstar&frequency=daily&startDate=${yesterday}&outputType=COMPACTJSON`;
+      const res = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; UnzeDashboard/1.0)" },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const detail = json?.TimeSeries?.Security?.[0]?.HistoryDetail;
+        if (Array.isArray(detail) && detail.length > 0) {
+          const latest = detail[detail.length - 1];
+          const val = parseFloat(latest?.Value ?? "");
+          if (!isNaN(val) && val > 0) {
+            compPrice = val > 10 ? val / 100 : val;
+          }
+        }
+      }
+    } catch (e) {
+      errors.push(`comp ${cf.isin}: fetch error — ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    if (compPrice !== null) {
+      const { error: compErr } = await db
+        .from("pension_comparison_prices")
+        .upsert(
+          { isin: cf.isin, price_date: today, price_gbp: compPrice, source: "morningstar" },
+          { onConflict: "isin,price_date" }
+        );
+      if (compErr) {
+        errors.push(`comp ${cf.isin}: upsert error — ${compErr.message}`);
+      } else {
+        compResults.push({ isin: cf.isin, price: compPrice, date: today });
+      }
+    }
+  }
+
+  // 5. Fetch live GBP/PKR rate
   let gbpPkrRate: number | null = null;
   try {
     const fxRes = await fetch("https://api.frankfurter.app/latest?from=GBP&to=PKR", {
@@ -133,6 +181,7 @@ export async function GET(request: NextRequest) {
   return Response.json({
     ok: true,
     funds: results,
+    comparison_funds: compResults,
     gbp_pkr_rate: gbpPkrRate,
     errors: errors.length > 0 ? errors : undefined,
   });
