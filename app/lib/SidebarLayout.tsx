@@ -184,8 +184,7 @@ export default function SidebarLayout({
     .slice(0, 2) || "U";
 
   function isActive(href: string) {
-    if (href === "/home") return pathname === "/home";
-    return pathname === href || pathname.startsWith(href + "/");
+    return pathname === href;
   }
 
   // ── Sidebar content (shared between mobile overlay and desktop fixed) ──
