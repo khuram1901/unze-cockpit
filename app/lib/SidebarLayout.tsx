@@ -199,10 +199,10 @@ export default function SidebarLayout({
       backgroundColor: active ? COLOURS.NAVY : "transparent",
       color: active ? "#FFFFFF" : "var(--text-sidebar)",
       textDecoration: "none",
-      fontSize: "13px",
+      fontSize: "13.5px",
       fontWeight: active ? 500 : 400,
       fontFamily: "var(--font-sans, Inter, sans-serif)",
-      transition: "background-color 0.12s",
+      transition: "background-color 0.15s ease",
       marginBottom: "2px",
       cursor: "pointer",
       border: "none",
@@ -250,7 +250,7 @@ export default function SidebarLayout({
           <div style={{ marginBottom: "4px" }}>
             {!collapsed && (
               <div style={{
-                fontSize: "10px", fontWeight: 500, color: "var(--text-muted)",
+                fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
                 textTransform: "uppercase", letterSpacing: "0.12em",
                 padding: "16px 10px 6px",
               }}>Overview</div>
@@ -303,7 +303,7 @@ export default function SidebarLayout({
           <div style={{ marginBottom: "4px" }}>
             {!collapsed && (
               <div style={{
-                fontSize: "10px", fontWeight: 500, color: "var(--text-muted)",
+                fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
                 textTransform: "uppercase", letterSpacing: "0.12em",
                 padding: "16px 10px 6px",
               }}>Preferences</div>
@@ -404,10 +404,10 @@ export default function SidebarLayout({
           borderLeft: active && !isCollapsed ? `3px solid ${COLOURS.BLUE}` : "3px solid transparent",
           color: active ? "#FFFFFF" : "var(--text-sidebar)",
           textDecoration: "none",
-          fontSize: "13px",
+          fontSize: "13.5px",
           fontWeight: active ? 500 : 400,
           fontFamily: "var(--font-sans, Inter, sans-serif)",
-          transition: "background-color 0.12s",
+          transition: "background-color 0.15s ease",
           marginBottom: "2px",
         }}
         onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}

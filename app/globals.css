@@ -2,7 +2,7 @@
 
 :root {
   --bg-page: #f4f6f9;
-  --bg-sidebar: #ffffff;
+  --bg-sidebar: #edeae4;
   --bg-card: #ffffff;
   --bg-card-hover: #f8fafc;
   --bg-input: #ffffff;
@@ -17,8 +17,8 @@
   --shadow-sm: 0 1px 3px rgba(15,23,42,0.06);
   --shadow-md: 0 4px 14px rgba(15,23,42,0.08);
   --sidebar-active-bg: #f1f5f9;
-  --sidebar-hover-bg: #f8fafc;
-  --sidebar-border: #e2e8f0;
+  --sidebar-hover-bg: #d8d4cc;
+  --sidebar-border: #ccc8c0;
 }
 
 @theme inline {
