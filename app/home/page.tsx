@@ -606,6 +606,7 @@ export default function HomePage() {
           setDeptHealth(payload.deptHealth);
           setInvestmentData(payload.investmentData);
           setDailyOpsData(payload.dailyOpsData);
+          if (payload.pensionSummary) setPensionSummary(payload.pensionSummary);
           if (payload.taxSummaryYear) {
             setTaxScheduleEntries(new Map(payload.taxScheduleEntries));
             setTaxReturnFilings(new Map(payload.taxReturnFilings));
@@ -1008,6 +1009,7 @@ export default function HomePage() {
     }
 
     // UK Pension summary for Executive Dashboard — aggregation done in Postgres
+    let computedPensionSummary: { gbp: number; pkr: number } | null = null;
     try {
       const { data: pensionData } = await supabase.rpc("get_pension_summary");
       const pensionRow = (pensionData as { total_value_gbp: number }[] | null)?.[0];
@@ -1020,7 +1022,8 @@ export default function HomePage() {
             pkrRate = fxData?.rates?.PKR ?? 0;
           }
         } catch { /* non-fatal */ }
-        setPensionSummary({ gbp: pensionRow.total_value_gbp, pkr: pensionRow.total_value_gbp * pkrRate });
+        computedPensionSummary = { gbp: pensionRow.total_value_gbp, pkr: pensionRow.total_value_gbp * pkrRate };
+        setPensionSummary(computedPensionSummary);
       }
     } catch { /* non-fatal — pension card is additive */ }
 
@@ -1177,6 +1180,7 @@ export default function HomePage() {
           showFinance: showFinanceForUser,
           deptHealth: healthResults,
           investmentData: computedInvestmentData ?? undefined,
+          pensionSummary: computedPensionSummary ?? undefined,
           dailyOpsData: computedDailyOpsData,
           taxSummaryYear: prevComplete ? taxNow : taxPrevYear,
           taxScheduleEntries: Array.from((prevComplete ? smCurr : smPrev).entries()),
