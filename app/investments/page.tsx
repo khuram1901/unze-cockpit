@@ -14,7 +14,15 @@ import {
   XAxis, YAxis, Tooltip, CartesianGrid, Cell,
 } from "recharts";
 
-const { NAVY, SLATE, BORDER, GREEN, RED, AMBER } = COLOURS;
+const { NAVY, SLATE, BORDER, GREEN, RED, AMBER, BLUE, HAIRLINE } = COLOURS;
+
+type PensionFund = {
+  id: string;
+  fund_name: string;
+  isin: string;
+  units_held: number;
+  currency: string;
+};
 
 type DividendRow = {
   id: string;
@@ -128,6 +136,14 @@ export default function InvestmentsPage() {
   const [manualPrice, setManualPrice] = useState("");
   const [chartRange, setChartRange] = useState<"1M" | "3M" | "6M" | "ALL">("3M");
 
+  // UK Pension state
+  const [pensionFunds, setPensionFunds] = useState<PensionFund[]>([]);
+  const [pensionPrices, setPensionPrices] = useState<Map<string, number>>(new Map());
+  const [pensionPriceDates, setPensionPriceDates] = useState<Map<string, string>>(new Map());
+  const [gbpPkrRate, setGbpPkrRate] = useState<number>(0);
+  const [pensionContrib, setPensionContrib] = useState<{ contributed: number; fees: number } | null>(null);
+  const [pensionLoading, setPensionLoading] = useState(true);
+
   const [formTicker, setFormTicker] = useState("");
   const [formCompany, setFormCompany] = useState("");
   const [formQty, setFormQty] = useState("");
@@ -199,10 +215,56 @@ export default function InvestmentsPage() {
     setLoading(false);
   }, []);
 
+  const loadPensionData = useCallback(async () => {
+    setPensionLoading(true);
+    try {
+      const [{ data: funds }, fxRes, { data: contrib }] = await Promise.all([
+        supabase.from("pension_funds").select("*").eq("active", true).order("created_at"),
+        fetch("https://api.frankfurter.app/latest?from=GBP&to=PKR"),
+        supabase
+          .from("pension_contributions")
+          .select("total_contributed_gbp, total_fees_gbp")
+          .order("as_of_date", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      const isins = (funds ?? []).map((f: PensionFund) => f.isin);
+      const { data: prices } = await supabase
+        .from("pension_fund_prices")
+        .select("isin, price_gbp, price_date")
+        .in("isin", isins.length ? isins : ["__none__"])
+        .order("price_date", { ascending: false });
+
+      const priceMap = new Map<string, number>();
+      const dateMap = new Map<string, string>();
+      (prices ?? []).forEach((p: { isin: string; price_gbp: number; price_date: string }) => {
+        if (!priceMap.has(p.isin)) {
+          priceMap.set(p.isin, p.price_gbp);
+          dateMap.set(p.isin, p.price_date);
+        }
+      });
+
+      let pkrRate = 0;
+      try {
+        const fxData = await fxRes.json();
+        pkrRate = fxData?.rates?.PKR ?? 0;
+      } catch { /* use 0 */ }
+
+      setPensionFunds(funds ?? []);
+      setPensionPrices(priceMap);
+      setPensionPriceDates(dateMap);
+      setGbpPkrRate(pkrRate);
+      setPensionContrib(contrib ? { contributed: Number(contrib.total_contributed_gbp), fees: Number(contrib.total_fees_gbp) } : null);
+    } catch { /* silent — pension data is additive */ }
+    setPensionLoading(false);
+  }, []);
+
   useEffect(() => {
     if (checking) return;
     load(selectedDate);
     loadDividends();
+    loadPensionData();
     (async () => {
       const { data: userData } = await supabase.auth.getUser();
       const email = userData.user?.email;
@@ -214,7 +276,7 @@ export default function InvestmentsPage() {
       const ctx: UserCtx = { email, role: memberData?.role ?? null, department: memberData?.department ?? null, company: memberData?.company ?? null, overrides };
       setCanEdit(canEditInvestments(ctx));
     })();
-  }, [checking, load, selectedDate]);
+  }, [checking, load, loadPensionData, selectedDate]);
 
   const stocks: PortfolioStock[] = (() => {
     // portfolioPrices from the RPC already has one aggregated row per ticker
@@ -256,6 +318,21 @@ export default function InvestmentsPage() {
   const totalGLPct = portfolioTotals?.gain_loss_pct ?? 0;
   const losers = losersDB;
   const winners = stocks.filter((s) => s.gainLossPct !== null && s.gainLossPct > 20);
+
+  // UK Pension derived calculations (2 multiplications — no DB aggregation)
+  const pensionTotalGbp = pensionFunds.reduce((sum, f) => {
+    return sum + f.units_held * (pensionPrices.get(f.isin) ?? 0);
+  }, 0);
+  const pensionTotalPkr = pensionTotalGbp * gbpPkrRate;
+  const pensionNetGain = pensionTotalGbp - (pensionContrib?.contributed ?? 0);
+  const pensionReturnPct = (pensionContrib?.contributed ?? 0) > 0
+    ? (pensionNetGain / pensionContrib!.contributed) * 100
+    : 0;
+  const pensionLatestDate = (() => {
+    let latest = "";
+    pensionPriceDates.forEach((d) => { if (d > latest) latest = d; });
+    return latest;
+  })();
 
   async function handleRefreshPrices() {
     if (!canEdit) return;
@@ -1023,8 +1100,190 @@ export default function InvestmentsPage() {
             </div>
           </>
         )}
+
+        {/* ── UK PENSION — AVIVA SIPP ── */}
+        <div style={{ borderTop: `2px solid ${HAIRLINE}`, marginTop: "24px", paddingTop: "24px" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", marginBottom: "4px" }}>
+            <SectionTitle title="UK Pension — Aviva SIPP" />
+            {gbpPkrRate > 0 && (
+              <span style={{
+                fontSize: "12px", fontWeight: 600, color: BLUE,
+                backgroundColor: "#EEF2FF", border: `1px solid #C7D2FE`,
+                borderRadius: "999px", padding: "3px 10px",
+              }}>
+                £1 = PKR {gbpPkrRate.toFixed(2)}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px" }}>
+            2 funds · Prices auto-updated daily · GBP
+          </div>
+
+          {pensionLoading ? (
+            <p style={{ color: SLATE, fontSize: "14px" }}>Loading pension data…</p>
+          ) : (
+            <>
+              {/* Hero card */}
+              <div style={{
+                backgroundColor: NAVY,
+                borderRadius: "14px",
+                padding: isMobile ? "20px 18px" : "24px 28px",
+                marginBottom: "16px",
+                color: "white",
+              }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "#94A3B8", marginBottom: "8px" }}>
+                  TOTAL PENSION VALUE
+                </div>
+                <div style={{ fontSize: isMobile ? "32px" : "42px", fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1, marginBottom: "8px" }}>
+                  £{pensionTotalGbp.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: "14px", color: "#CBD5E1" }}>
+                  PKR {Math.round(pensionTotalPkr).toLocaleString("en-PK")}&nbsp;·&nbsp;
+                  <span style={{ color: pensionNetGain >= 0 ? "#4ADE80" : "#F87171" }}>
+                    {pensionNetGain >= 0 ? "+" : ""}£{pensionNetGain.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}&nbsp;
+                    ({pensionReturnPct >= 0 ? "+" : ""}{pensionReturnPct.toFixed(1)}%) vs contributions
+                  </span>
+                </div>
+              </div>
+
+              {/* 4-metric grid */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)",
+                gap: "12px",
+                marginBottom: "20px",
+              }}>
+                <PensionMetricCard
+                  label="Total Paid In"
+                  value={`£${(pensionContrib?.contributed ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  color={NAVY}
+                />
+                <PensionMetricCard
+                  label="Fees Deducted"
+                  value={`£${(pensionContrib?.fees ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  color={RED}
+                />
+                <PensionMetricCard
+                  label="Net Gain"
+                  value={`${pensionNetGain >= 0 ? "+" : ""}£${pensionNetGain.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  color={pensionNetGain >= 0 ? GREEN : RED}
+                />
+                <PensionMetricCard
+                  label="Return"
+                  value={`${pensionReturnPct >= 0 ? "+" : ""}${pensionReturnPct.toFixed(1)}%`}
+                  color={pensionReturnPct >= 0 ? GREEN : RED}
+                />
+              </div>
+
+              {/* Fund breakdown */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+                gap: "14px",
+                marginBottom: "14px",
+              }}>
+                {pensionFunds.map((fund) => {
+                  const price = pensionPrices.get(fund.isin) ?? 0;
+                  const value = fund.units_held * price;
+                  const valuePkr = value * gbpPkrRate;
+                  const allocation = pensionTotalGbp > 0 ? (value / pensionTotalGbp) * 100 : 0;
+
+                  return (
+                    <div key={fund.isin} style={{
+                      border: `1px solid ${HAIRLINE}`,
+                      borderTop: `3px solid ${BLUE}`,
+                      borderRadius: "12px",
+                      padding: "16px",
+                      backgroundColor: "var(--bg-card, #fff)",
+                    }}>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, marginBottom: "6px", lineHeight: 1.4 }}>
+                        {fund.fund_name}
+                      </div>
+                      <span style={{
+                        display: "inline-block",
+                        fontSize: "11px", fontWeight: 600,
+                        backgroundColor: "#EEF2FF", color: BLUE,
+                        border: `1px solid #C7D2FE`,
+                        borderRadius: "6px",
+                        padding: "2px 8px",
+                        marginBottom: "12px",
+                        letterSpacing: "0.02em",
+                      }}>
+                        {fund.isin}
+                      </span>
+
+                      {/* Allocation bar */}
+                      <div style={{ marginBottom: "12px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: SLATE, marginBottom: "4px" }}>
+                          <span>{allocation.toFixed(1)}% of pension</span>
+                        </div>
+                        <div style={{ height: "6px", backgroundColor: HAIRLINE, borderRadius: "999px", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${allocation}%`, backgroundColor: BLUE, borderRadius: "999px" }} />
+                        </div>
+                      </div>
+
+                      {/* 4-metric mini grid */}
+                      <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, 1fr)",
+                        gap: "8px",
+                      }}>
+                        <div>
+                          <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>Units Held</div>
+                          <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, fontVariantNumeric: "tabular-nums" }}>
+                            {fund.units_held.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>Unit Price</div>
+                          <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, fontVariantNumeric: "tabular-nums" }}>
+                            {price > 0 ? `£${price.toFixed(4)}` : "—"}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>Value (GBP)</div>
+                          <div style={{ fontSize: "14px", fontWeight: 600, color: BLUE, fontVariantNumeric: "tabular-nums" }}>
+                            £{value.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>Value (PKR)</div>
+                          <div style={{ fontSize: "14px", fontWeight: 600, color: SLATE, fontVariantNumeric: "tabular-nums" }}>
+                            {gbpPkrRate > 0 ? `PKR ${Math.round(valuePkr).toLocaleString("en-PK")}` : "—"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Last updated */}
+              {pensionLatestDate && (
+                <div style={{ fontSize: "13px", color: SLATE, textAlign: "right" }}>
+                  Prices last updated: {formatDateUK(pensionLatestDate)} · Auto-refreshed daily at 11pm UK time
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </main>
     </AuthWrapper>
+  );
+}
+
+function PensionMetricCard({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{
+      border: `1px solid ${COLOURS.HAIRLINE}`,
+      borderTop: `3px solid ${color}`,
+      borderRadius: "8px",
+      padding: "12px 14px",
+      backgroundColor: "var(--bg-card, #fff)",
+    }}>
+      <div style={{ fontSize: "11px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px", fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: "20px", fontWeight: 700, color, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+    </div>
   );
 }
 

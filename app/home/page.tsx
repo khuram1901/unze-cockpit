@@ -465,6 +465,7 @@ export default function HomePage() {
 
   const [deptHealth, setDeptHealth] = useState<{ slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[]>([]);
   const [investmentData, setInvestmentData] = useState<InvestmentSummary | null>(null);
+  const [pensionSummary, setPensionSummary] = useState<{ gbp: number; pkr: number } | null>(null);
   const [dailyOpsData, setDailyOpsData] = useState<DailyOpsPoint[]>([]);
   const [taxOverdueCount, setTaxOverdueCount] = useState(0);
   const [taxTier2Alerts, setTaxTier2Alerts] = useState<{ alert_type: string; period_key: string; overdue_count: number; alert_message: string; tax_year: string }[]>([]);
@@ -1009,6 +1010,45 @@ export default function HomePage() {
       };
       setInvestmentData(computedInvestmentData);
     }
+
+    // UK Pension summary for Executive Dashboard
+    try {
+      const { data: pensionFunds } = await supabase
+        .from("pension_funds")
+        .select("isin, units_held")
+        .eq("active", true);
+
+      if (pensionFunds?.length) {
+        const isins = pensionFunds.map((f: { isin: string }) => f.isin);
+        const { data: pensionPrices } = await supabase
+          .from("pension_fund_prices")
+          .select("isin, price_gbp")
+          .in("isin", isins)
+          .order("price_date", { ascending: false });
+
+        const priceMap = new Map<string, number>();
+        (pensionPrices ?? []).forEach((p: { isin: string; price_gbp: number }) => {
+          if (!priceMap.has(p.isin)) priceMap.set(p.isin, p.price_gbp);
+        });
+
+        const totalGbp = pensionFunds.reduce((sum: number, f: { isin: string; units_held: number }) => {
+          return sum + f.units_held * (priceMap.get(f.isin) ?? 0);
+        }, 0);
+
+        let pkrRate = 0;
+        try {
+          const fxRes = await fetch("https://api.frankfurter.app/latest?from=GBP&to=PKR");
+          if (fxRes.ok) {
+            const fxData = await fxRes.json();
+            pkrRate = fxData?.rates?.PKR ?? 0;
+          }
+        } catch { /* non-fatal */ }
+
+        if (totalGbp > 0) {
+          setPensionSummary({ gbp: totalGbp, pkr: totalGbp * pkrRate });
+        }
+      }
+    } catch { /* non-fatal — pension card is additive */ }
 
     // Tax deadline alerts — read pre-computed tier 2 across all years (no client-side calculation)
     const { data: tier2AlertData } = await supabase
@@ -1619,6 +1659,7 @@ export default function HomePage() {
             setBannerOpen={setBannerOpen}
             deptHealth={deptHealth}
             investmentData={investmentData}
+            pensionSummary={pensionSummary}
             dailyOpsData={dailyOpsData}
             facilitySynopsis={facilitySynopsis}
             taxOverdueCount={taxOverdueCount}
@@ -2191,7 +2232,7 @@ export default function HomePage() {
 function ExecutiveDashboardBody({
   ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
-  expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, dailyOpsData,
+  expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, pensionSummary, dailyOpsData,
   facilitySynopsis, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
   taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve,
 }: {
@@ -2214,6 +2255,7 @@ function ExecutiveDashboardBody({
   setBannerOpen: (v: boolean) => void;
   deptHealth: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[];
   investmentData: InvestmentSummary | null;
+  pensionSummary: { gbp: number; pkr: number } | null;
   dailyOpsData: DailyOpsPoint[];
   isMobile: boolean;
   facilitySynopsis: { bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[];
@@ -2938,6 +2980,32 @@ function ExecutiveDashboardBody({
             </div>
           </a>
         </>
+      )}
+
+      {/* ── UK PENSION — AVIVA ── */}
+      {pensionSummary && (
+        <div
+          onClick={() => { window.location.href = "/investments"; }}
+          style={{
+            backgroundColor: COLOURS.CARD,
+            border: `1px solid ${HAIRLINE}`,
+            borderTop: `3px solid ${NAVY}`,
+            borderRadius: RADII.CARD,
+            padding: "14px 18px",
+            cursor: "pointer",
+            marginBottom: "12px",
+          }}
+        >
+          <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>
+            UK Pension — Aviva
+          </div>
+          <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "28px", fontWeight: 600, color: NAVY, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1, marginBottom: "4px" }}>
+            £{pensionSummary.gbp.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          </div>
+          <div style={{ fontSize: "13px", color: SLATE }}>
+            PKR {Math.round(pensionSummary.pkr).toLocaleString("en-PK")} · 2 Aviva funds · Click to view →
+          </div>
+        </div>
       )}
 
       {/* ── DEPARTMENT SCORECARD ── */}
