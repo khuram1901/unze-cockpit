@@ -4,40 +4,29 @@ import { useEffect, useState, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useMobile } from "../lib/useMobile";
-import { COLOURS } from "../lib/SharedUI";
+import { COLOURS, RADII } from "../lib/SharedUI";
 
 type MemberProfile = {
   role: string | null;
   department: string | null;
 };
 
-const slides = [
+const SLIDES = [
   {
-    image: "/unze-logo.png",
-    title: "Unze Group",
-    subtitle: "Trusted Since 1989",
-    type: "logo",
-  },
-  {
-    image: "/hero-retail.jpg",
     title: "Retail Division",
-    subtitle: "Footwear, fashion and customer experience",
+    body: "Footwear, fashion and customer experience across all locations.",
   },
   {
-    image: "/hero-hospitality.jpg",
     title: "Hospitality Division",
-    subtitle: "Haute Dolci · Baranh · Elysian",
+    body: "Haute Dolci · Baranh · Elysian — premium dining experiences.",
   },
   {
-    image: "/hero-manufacturing-poles.jpg",
     title: "Manufacturing Division",
-    subtitle: "Production · Dispatch · Stock Control",
+    body: "Production · Dispatch · Stock Control — end-to-end visibility.",
   },
   {
-    image: "/hero-dashboard.jpg",
     title: "Executive Command Centre",
-    subtitle: "Operations · Finance · Tasks · Meetings",
+    body: "Operations · Finance · Tasks · Meetings, all in one place.",
   },
 ];
 
@@ -60,21 +49,29 @@ function getLandingRoute(profile: MemberProfile | null, email: string) {
 
 export default function LoginPage() {
   const router = useRouter();
-  const isMobile = useMobile();
 
   const [active, setActive] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const greeting = useMemo(() => getGreeting(), []);
 
   useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  useEffect(() => {
     const timer = setInterval(() => {
-      setActive((current) => (current + 1) % slides.length);
-    }, 16000);
+      setActive((current) => (current + 1) % SLIDES.length);
+    }, 4000);
     return () => clearInterval(timer);
   }, []);
 
@@ -100,253 +97,428 @@ export default function LoginPage() {
     router.push(getLandingRoute(member, email));
   }
 
-  const slide = slides[active];
+  const slide = SLIDES[active];
+
+  /* ── Left panel (dark) ─────────────────────────────────────── */
+  const leftPanel = (
+    <div style={{
+      width: isMobile ? "100%" : "50%",
+      height: isMobile ? "200px" : "100vh",
+      backgroundColor: "#0D1117",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "space-between",
+      padding: isMobile ? "24px 28px" : "48px 44px",
+      boxSizing: "border-box",
+      flexShrink: 0,
+    }}>
+      {/* Brand mark */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{
+            width: "32px",
+            height: "32px",
+            borderRadius: "8px",
+            backgroundColor: "#ffffff",
+            color: "#0D1117",
+            fontWeight: 700,
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}>U</div>
+          <span style={{ color: "#ffffff", fontSize: "14px", fontWeight: 500 }}>Unze Group</span>
+        </div>
+        <div style={{
+          color: "rgba(255,255,255,0.4)",
+          fontSize: "11px",
+          letterSpacing: "0.06em",
+          textTransform: "uppercase" as const,
+          marginTop: "2px",
+        }}>OPERATIONS · V3.0</div>
+      </div>
+
+      {/* Centre logo — hidden on mobile */}
+      {!isMobile && (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+          <img
+            src="/unze-logo.png"
+            alt="Unze Group"
+            style={{ height: "120px", objectFit: "contain", filter: "brightness(0) invert(1)" }}
+          />
+          <div style={{
+            color: "rgba(255,255,255,0.4)",
+            fontSize: "13px",
+            letterSpacing: "0.25em",
+            textTransform: "uppercase" as const,
+            marginTop: "16px",
+          }}>G R O U P</div>
+          <div style={{
+            color: "rgba(255,255,255,0.2)",
+            fontSize: "11px",
+            letterSpacing: "0.15em",
+            marginTop: "6px",
+          }}>Est · 1989</div>
+        </div>
+      )}
+
+      {/* Bottom — rotating taglines (hidden on mobile) */}
+      {!isMobile && (
+        <div>
+          <div key={`title-${active}`} style={{
+            color: "#ffffff",
+            fontSize: "14px",
+            fontWeight: 500,
+            marginBottom: "6px",
+          }}>{slide.title}</div>
+          <div key={`body-${active}`} style={{
+            color: "rgba(255,255,255,0.7)",
+            fontSize: "13px",
+            lineHeight: 1.6,
+            maxWidth: "280px",
+          }}>{slide.body}</div>
+
+          {/* Dot indicators */}
+          <div style={{ display: "flex", gap: "6px", marginTop: "16px" }}>
+            {SLIDES.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setActive(i)}
+                aria-label={`Go to slide ${i + 1}`}
+                style={{
+                  width: active === i ? "32px" : "24px",
+                  height: "3px",
+                  borderRadius: RADII.PILL,
+                  border: "none",
+                  backgroundColor: active === i ? "#ffffff" : "rgba(255,255,255,0.2)",
+                  cursor: "pointer",
+                  padding: 0,
+                  transition: "all 0.25s ease",
+                }}
+              />
+            ))}
+          </div>
+
+          <div style={{
+            color: "rgba(255,255,255,0.2)",
+            fontSize: "11px",
+            marginTop: "8px",
+          }}>© Unze Group 1989–2026 · v3.0</div>
+        </div>
+      )}
+    </div>
+  );
+
+  /* ── Right panel (light) ───────────────────────────────────── */
+  const rightPanel = (
+    <div style={{
+      width: isMobile ? "100%" : "50%",
+      flex: isMobile ? 1 : undefined,
+      backgroundColor: COLOURS.CARD,
+      padding: isMobile ? "32px 24px" : "48px 44px",
+      display: "flex",
+      flexDirection: "column",
+      justifyContent: "center",
+      boxSizing: "border-box",
+      overflowY: "auto" as const,
+    }}>
+      {/* Greeting */}
+      <div style={{
+        fontSize: "11px",
+        textTransform: "uppercase" as const,
+        letterSpacing: "0.08em",
+        color: COLOURS.SLATE,
+        marginBottom: "6px",
+      }}>{greeting}</div>
+
+      {/* Title */}
+      <h1 style={{
+        fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+        fontSize: "26px",
+        fontWeight: 600,
+        color: COLOURS.NAVY,
+        letterSpacing: "-0.02em",
+        margin: "0 0 4px",
+      }}>Sign in to Unze OS</h1>
+
+      {/* Subtitle */}
+      <p style={{
+        fontSize: "13px",
+        color: COLOURS.SLATE,
+        lineHeight: 1.5,
+        margin: "0 0 32px",
+      }}>
+        Your operations dashboard — cash, receivables, production, and everything else, in one place.
+      </p>
+
+      <form onSubmit={handleSubmit}>
+        {/* Email */}
+        <div style={{ marginBottom: "16px" }}>
+          <label style={{
+            display: "block",
+            fontSize: "12px",
+            fontWeight: 500,
+            color: COLOURS.SLATE,
+            marginBottom: "6px",
+          }}>Email address</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="you@unzegroup.com"
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "10px 12px",
+              border: `0.5px solid ${COLOURS.HAIRLINE}`,
+              borderRadius: RADII.SM,
+              backgroundColor: COLOURS.CARD_ALT,
+              fontSize: "13px",
+              color: COLOURS.NAVY,
+              boxSizing: "border-box",
+              outline: "none",
+              transition: "border-color 0.15s, background-color 0.15s",
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = COLOURS.BLUE;
+              e.currentTarget.style.backgroundColor = COLOURS.CARD;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = COLOURS.HAIRLINE;
+              e.currentTarget.style.backgroundColor = COLOURS.CARD_ALT;
+            }}
+          />
+        </div>
+
+        {/* Password */}
+        <div style={{ marginBottom: "0" }}>
+          <label style={{
+            display: "block",
+            fontSize: "12px",
+            fontWeight: 500,
+            color: COLOURS.SLATE,
+            marginBottom: "6px",
+          }}>Password</label>
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
+              placeholder="••••••••"
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "10px 42px 10px 12px",
+                border: `0.5px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: RADII.SM,
+                backgroundColor: COLOURS.CARD_ALT,
+                fontSize: "13px",
+                color: COLOURS.NAVY,
+                boxSizing: "border-box",
+                outline: "none",
+                transition: "border-color 0.15s, background-color 0.15s",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = COLOURS.BLUE;
+                e.currentTarget.style.backgroundColor = COLOURS.CARD;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = COLOURS.HAIRLINE;
+                e.currentTarget.style.backgroundColor = COLOURS.CARD_ALT;
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                padding: "4px",
+                color: COLOURS.SLATE,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {showPassword ? (
+                  <>
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </>
+                )}
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Forgot password */}
+        <div style={{ textAlign: "right", marginTop: "-8px", marginBottom: "16px", marginRight: "0" }}>
+          <Link href="/forgot-password" style={{ fontSize: "12px", color: COLOURS.BLUE, textDecoration: "none" }}>
+            Forgot password?
+          </Link>
+        </div>
+
+        {/* Keep signed in */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "24px" }}>
+          <input
+            type="checkbox"
+            id="keepSignedIn"
+            checked={keepSignedIn}
+            onChange={(e) => setKeepSignedIn(e.target.checked)}
+            style={{ cursor: "pointer", width: "14px", height: "14px", accentColor: COLOURS.NAVY }}
+          />
+          <label htmlFor="keepSignedIn" style={{ fontSize: "12px", color: COLOURS.SLATE, cursor: "pointer" }}>
+            Keep me signed in for 30 days
+          </label>
+        </div>
+
+        {/* Sign in button */}
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            width: "100%",
+            padding: "11px",
+            backgroundColor: "#0D1117",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: RADII.SM,
+            fontSize: "13px",
+            fontWeight: 500,
+            cursor: loading ? "wait" : "pointer",
+            opacity: loading ? 0.7 : 1,
+            transition: "background-color 0.15s, opacity 0.15s",
+          }}
+          onMouseEnter={(e) => { if (!loading) e.currentTarget.style.backgroundColor = "#1a2332"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#0D1117"; }}
+        >
+          {loading ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+
+      {/* Error message */}
+      {message && (
+        <div style={{
+          marginTop: "16px",
+          padding: "10px 14px",
+          borderRadius: RADII.SM,
+          fontSize: "13px",
+          backgroundColor: message.startsWith("Error") ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT,
+          color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN,
+        }}>
+          {message}
+        </div>
+      )}
+
+      {/* Divider */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        margin: "24px 0 16px",
+      }}>
+        <div style={{ flex: 1, height: "0.5px", backgroundColor: COLOURS.HAIRLINE }} />
+        <span style={{ fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>or continue with</span>
+        <div style={{ flex: 1, height: "0.5px", backgroundColor: COLOURS.HAIRLINE }} />
+      </div>
+
+      {/* Social buttons */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <button
+          type="button"
+          onClick={async () => {
+            const { error } = await supabase.auth.signInWithOAuth({
+              provider: "google",
+              options: { redirectTo: `${window.location.origin}/auth/callback` },
+            });
+            if (error) setMessage("Error: " + error.message);
+          }}
+          style={{
+            width: "100%",
+            padding: "10px 14px",
+            border: `0.5px solid ${COLOURS.HAIRLINE}`,
+            borderRadius: RADII.SM,
+            backgroundColor: COLOURS.CARD,
+            fontSize: "12px",
+            color: COLOURS.SLATE,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          </svg>
+          Google Workspace
+        </button>
+
+        <button
+          type="button"
+          style={{
+            width: "100%",
+            padding: "10px 14px",
+            border: `0.5px solid ${COLOURS.HAIRLINE}`,
+            borderRadius: RADII.SM,
+            backgroundColor: COLOURS.CARD,
+            fontSize: "12px",
+            color: COLOURS.SLATE,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          Single Sign-On (SSO)
+        </button>
+      </div>
+
+      {/* Footer note */}
+      <div style={{
+        marginTop: "24px",
+        fontSize: "11px",
+        color: COLOURS.SLATE,
+        textAlign: "center",
+      }}>
+        New to Unze? Contact your Unze Group administrator.
+      </div>
+    </div>
+  );
 
   return (
     <main style={{
-      minHeight: "100vh",
-      background: "var(--bg-page, #f4f6f9)",
+      height: "100vh",
       display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: isMobile ? "16px" : "32px",
+      flexDirection: isMobile ? "column" : "row",
+      overflow: "hidden",
     }}>
-      <div style={{
-        maxWidth: "960px",
-        width: "100%",
-        display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-        borderRadius: "16px",
-        overflow: "hidden",
-        backgroundColor: "var(--bg-card, #ffffff)",
-        border: "1px solid var(--border-color, #e2e8f0)",
-        boxShadow: "var(--shadow-md, 0 8px 30px rgba(15,23,42,0.08))",
-        animation: "loginFadeIn 0.5s ease-out",
-      }}>
-
-        {/* Mobile brand strip */}
-        {isMobile && (
-          <div style={{
-            background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
-            padding: "14px 18px",
-            display: "flex",
-            alignItems: "center",
-            gap: "14px",
-          }}>
-            <img src="/unze-logo.png" alt="Unze Group" style={{
-              height: "32px", objectFit: "contain",
-              filter: "brightness(0) invert(1)",
-            }} />
-            <div>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.3px" }}>
-                Unze Group
-              </div>
-              <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "1px" }}>
-                {slide.title} · {slide.subtitle}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Left — Form */}
-        <div style={{
-          padding: isMobile ? "28px 24px" : "48px 40px",
-          display: "flex", flexDirection: "column", justifyContent: "center",
-          animation: "loginFadeIn 0.6s ease-out 0.1s both",
-        }}>
-          {!isMobile && (
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "32px" }}>
-              <img src="/unze-logo.png" alt="Unze Group" style={{ height: "36px", objectFit: "contain" }} />
-              <span style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary, #0f172a)", letterSpacing: "-0.3px" }}>Unze Group</span>
-            </div>
-          )}
-
-          <h1 style={{
-            fontSize: isMobile ? "24px" : "28px", fontWeight: 800,
-            color: "var(--text-primary, #0f172a)", margin: "0 0 6px", lineHeight: 1.15,
-          }}>
-            {greeting}
-          </h1>
-          <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", margin: "0 0 28px", lineHeight: 1.5 }}>
-            Sign in to access your dashboard
-          </p>
-
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: "18px" }}>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--text-primary, #334155)", marginBottom: "6px" }}>
-                Email address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@unzegroup.com"
-                style={{
-                  display: "block", width: "100%", padding: "10px 14px",
-                  border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", fontSize: "15px",
-                  boxSizing: "border-box", outline: "none",
-                  transition: "border-color 0.15s, background-color 0.15s",
-                  backgroundColor: "var(--bg-card-hover, #f8fafc)",
-                  color: "var(--text-primary, #0f172a)",
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = COLOURS.BLUE; e.currentTarget.style.backgroundColor = "var(--bg-card, #fff)"; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-color, #e2e8f0)"; e.currentTarget.style.backgroundColor = "var(--bg-card-hover, #f8fafc)"; }}
-              />
-            </div>
-
-            <div style={{ marginBottom: "24px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
-                <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary, #334155)" }}>Password</label>
-                <Link href="/forgot-password" style={{ fontSize: "12px", color: COLOURS.BLUE, textDecoration: "none", fontWeight: 500 }}>
-                  Forgot password?
-                </Link>
-              </div>
-              <div style={{ position: "relative" }}>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  placeholder="Enter your password"
-                  style={{
-                    display: "block", width: "100%", padding: "10px 42px 10px 14px",
-                    border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", fontSize: "15px",
-                    boxSizing: "border-box", outline: "none",
-                    transition: "border-color 0.15s, background-color 0.15s",
-                    backgroundColor: "var(--bg-card-hover, #f8fafc)",
-                    color: "var(--text-primary, #0f172a)",
-                  }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = COLOURS.BLUE; e.currentTarget.style.backgroundColor = "var(--bg-card, #fff)"; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-color, #e2e8f0)"; e.currentTarget.style.backgroundColor = "var(--bg-card-hover, #f8fafc)"; }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((prev) => !prev)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  style={{
-                    position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
-                    border: "none", background: "transparent", cursor: "pointer",
-                    padding: "4px", color: "var(--text-muted, #94a3b8)", display: "flex", alignItems: "center",
-                  }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    {showPassword ? (
-                      <>
-                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                        <line x1="1" y1="1" x2="23" y2="23" />
-                      </>
-                    ) : (
-                      <>
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </>
-                    )}
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <button type="submit" disabled={loading} style={{
-              width: "100%", backgroundColor: "var(--text-primary, #0f172a)", color: "white",
-              border: "none", borderRadius: "8px", padding: "11px 18px",
-              fontSize: "15px", fontWeight: 600, cursor: loading ? "wait" : "pointer",
-              transition: "opacity 0.15s",
-              opacity: loading ? 0.7 : 1,
-            }}>
-              {loading ? "Signing in..." : "Sign in"}
-            </button>
-          </form>
-
-          {message && (
-            <div style={{
-              marginTop: "16px", padding: "10px 14px",
-              borderRadius: "8px", fontSize: "13px", fontWeight: 500,
-              backgroundColor: message.startsWith("Error") ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT,
-              color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN,
-              border: `1px solid ${message.startsWith("Error") ? "#EDB5B2" : "#9ED4A3"}`,
-              animation: "loginFadeIn 0.3s ease-out",
-            }}>
-              {message}
-            </div>
-          )}
-        </div>
-
-        {/* Right — Carousel */}
-        {!isMobile && (
-          <div style={{ position: "relative", minHeight: "520px", overflow: "hidden" }}>
-            {slides.map((s, i) => (
-              <div key={i} style={{
-                position: "absolute", inset: 0,
-                opacity: active === i ? 1 : 0,
-                transition: "opacity 0.8s ease-in-out",
-                pointerEvents: active === i ? "auto" : "none",
-              }}>
-                {s.type === "logo" ? (
-                  <div style={{
-                    height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%)",
-                    padding: "48px",
-                  }}>
-                    <img src={s.image} alt={s.title} style={{
-                      maxWidth: "75%", maxHeight: "200px", objectFit: "contain",
-                      filter: "brightness(0) invert(1) drop-shadow(0 12px 24px rgba(0,0,0,0.3))",
-                    }} />
-                  </div>
-                ) : (
-                  <div style={{
-                    height: "100%",
-                    backgroundImage: `linear-gradient(to bottom, rgba(15,23,42,0.10), rgba(15,23,42,0.55)), url('${s.image}')`,
-                    backgroundSize: "cover", backgroundPosition: "center",
-                  }} />
-                )}
-              </div>
-            ))}
-
-            {/* Caption overlay */}
-            <div style={{
-              position: "absolute", left: "20px", right: "20px", bottom: "20px",
-              backgroundColor: "rgba(15,23,42,0.85)", backdropFilter: "blur(12px)",
-              borderRadius: "12px", padding: "16px 18px",
-              border: "1px solid rgba(255,255,255,0.10)",
-              zIndex: 1,
-            }}>
-              <div key={`title-${active}`} style={{ fontSize: "18px", fontWeight: 700, color: "#ffffff", marginBottom: "3px", animation: "loginSlideFade 0.5s ease-out" }}>
-                {slide.title}
-              </div>
-              <div key={`sub-${active}`} style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)", animation: "loginSlideFade 0.5s ease-out 0.05s both" }}>
-                {slide.subtitle}
-              </div>
-              <div style={{ display: "flex", gap: "6px", marginTop: "12px" }}>
-                {slides.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setActive(index)}
-                    aria-label={`Show slide ${index + 1}`}
-                    style={{
-                      width: active === index ? "24px" : "7px",
-                      height: "7px",
-                      borderRadius: "999px",
-                      border: "none",
-                      backgroundColor: active === index ? "#ffffff" : "rgba(255,255,255,0.35)",
-                      cursor: "pointer",
-                      transition: "all 0.25s ease",
-                      padding: 0,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div style={{ marginTop: "24px", color: "var(--text-muted, #94a3b8)", fontSize: "12px", textAlign: "center" }}>
-        &copy; Unze Group 1989&ndash;2026 &middot; v3.0 &middot; All Rights Reserved
-      </div>
+      {leftPanel}
+      {rightPanel}
     </main>
   );
 }
