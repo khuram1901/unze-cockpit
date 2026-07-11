@@ -4,6 +4,150 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-11 — UI designer audit (7 styling fixes), pension cache fix, pension price cron, AGENTS.md, Audit multi-company, dispatch/letter safety hardening, constants/permissions/AccessMatrix extended
+
+### AGENTS.md added
+**File:** `.claude/AGENTS.md`
+
+Quick-reference table of all 8 custom agents (ui-designer, blueprint-keeper, code-auditor, db-architect, perf-optimizer, security-auditor, api-designer, test-writer) with their `/agents <name>` invocation commands. Committed to the repo.
+
+---
+
+### UI designer audit — 7 styling fixes
+
+**Files changed:** `app/login/page.tsx`, `app/monthly-operations-targets/page.tsx`, `app/admin/page.tsx`, `app/home/page.tsx`, `app/receivables/page.tsx`, `app/lib/SidebarLayout.tsx`, `app/globals.css`
+
+Fix 1 — **Monthly Operations Targets** (`app/monthly-operations-targets/page.tsx`):
+- Full replacement of all `var(--*)` CSS variable references and raw hex with `COLOURS.*` tokens
+- Imported `tableHeaderStyle`, `tableCellStyle`, `tableCellBoldStyle`, `WARNING_BANNER_STYLE`, `WARNING_BANNER_INNER` from SharedUI; removed local `tdS`, `inp`, `lbl` constants
+- Progress bar height `10px → 8px`, track colour `var(--border-light) → COLOURS.TRACK`
+- Font sizes 13–14px body (was 15–16px), submit button `RADII.PILL`, weight 500 (was 700)
+- Chart fills: hardcoded hex → `COLOURS.INK_300`, `COLOURS.GREEN`, `COLOURS.HAIRLINE`, `COLOURS.TEAL`
+
+Fix 2 — **Admin / Data & Backups** (`app/admin/page.tsx`):
+- All `var(--bg-card)`, `var(--border-color)` → `COLOURS.CARD`, `COLOURS.HAIRLINE`
+- `borderRadius: "8px"` → `RADII.CARD`; buttons `→ RADII.PILL`; selects `→ RADII.SM`
+- Status message: `#dcfce7/#fee2e2` → `COLOURS.SUCCESS_SOFT/COLOURS.DANGER_SOFT`
+- Badge backgrounds: `#eff6ff → "#EEF1FC"`, `#f1f5f9 → COLOURS.HAIRLINE`
+- Restore modal: `RADII.CARD`, `RADII.SM`, `RADII.PILL` throughout
+
+Fix 3 — **Login** (`app/login/page.tsx`):
+- Branding corrected: "PulseDesk" → **"Unze Group"** in both mobile strip and desktop header
+- `#3b82f6` → `COLOURS.BLUE` throughout (event handlers and style props)
+- Error/success message banner uses `COLOURS.SUCCESS_SOFT/DANGER_SOFT` and `COLOURS.GREEN/RED`
+
+Fix 4 — **cardStyle dark mode** — **deferred** (too systemic; COLOURS tokens are static and don't adapt to dark mode CSS variables)
+
+Fix 5 — **Home page** (`app/home/page.tsx`):
+- All 9 occurrences of `color: "var(--text-muted)"` → `color: COLOURS.INK_400`
+
+Fix 6 — **Receivables** (`app/receivables/page.tsx`):
+- Stage header: `color: "#fff"` → `color: "white"` (avoids raw hex in inline style)
+
+Fix 7 — **Sidebar active accent** (`app/lib/SidebarLayout.tsx`):
+- Active nav items in expanded state now have a `3px solid COLOURS.BLUE` left border
+- `3px solid transparent` in collapsed state — no layout shift on sidebar toggle
+- Left padding reduced by 3px when expanded to compensate for the border
+
+Fix 8 — **Globals tooltip** (`app/globals.css`):
+- Tooltip CSS rule: `background: #1e293b` → `background: var(--text-primary)` for dark-mode correctness
+
+---
+
+### Pension cache fix
+**File:** `app/home/page.tsx`
+
+- Root cause: `loadExecutiveData()` has a 2-minute `sessionStorage` cache. On a cache hit, it returned early before reaching the pension RPC, and the pension result was never stored in the cache payload.
+- Fix: captured pension result into `computedPensionSummary` variable before setting state; added it to the cache payload write; added restore from cache on cache hit.
+- Result: UK Pension value now displays correctly on the Executive Dashboard whether loading fresh or from cache.
+
+---
+
+### UK Pension — price fetch cron
+**File:** `app/api/investments/fetch-pension-prices/route.ts` (new), `vercel.json`
+
+- Weekday cron at 23:00 UTC — fetches NAV prices for UK pension funds from Morningstar
+- Funds tracked: L&G (ISIN GB00BVRZG281, Morningstar ID F00000VBU2), Vanguard (ISIN GB00BRDCMX84, Morningstar ID VAUSA0P5GL)
+- Upserts to `pension_fund_prices` table. Fallback hardcoded prices for outage resilience.
+- Auth: CRON_SECRET Bearer token OR Admin/CEO Supabase session
+- `vercel.json` updated: new cron entry `{ path: "/api/investments/fetch-pension-prices", schedule: "0 23 * * 1-5" }`
+
+---
+
+### UK Pension — tables and RPCs
+**Database: applied directly (no numbered migration file)**
+
+- `pension_funds` table — active UK pension funds: id, fund_name, isin, morningstar_id, active, notes
+- `pension_fund_prices` table — daily NAV prices: id, fund_id (FK), price_date, price_gbp, source. UNIQUE(fund_id, price_date)
+- `get_pension_summary()` RPC — returns single row: total_value_gbp, net_gain_gbp, return_pct, contributed_gbp, fees_gbp, fund_count, last_price_date
+- `get_pension_fund_breakdown()` RPC — returns per-fund rows: fund_name, isin, units_held, price_gbp, value_gbp, allocation_pct, price_date, value_pkr
+
+---
+
+### Investments page — UK Pension section
+**File:** `app/investments/page.tsx`
+
+- New "UK Pension" section showing: total value (GBP + PKR equivalent), net gain, return %, amount contributed, fees, and a per-fund breakdown table (fund name, ISIN, units, price, value, allocation %)
+- Calls `get_pension_summary` and `get_pension_fund_breakdown` RPCs directly; no sessionStorage cache (always fresh)
+
+---
+
+### Audit Dashboard — multi-company
+**File:** `app/department/[slug]/AuditDashboard.tsx`
+
+- Company filter tabs: All / UTPL / IFPL / BRNH / HD / ALM / DIR — using `PillTabs` component
+- `company_id` column on audit records; filter applied client-side via `filteredByCompany`
+- `CompanyBadge` component added: UTPL = blue (#EEF1FC bg + COLOURS.BLUE text), IFPL = green (SUCCESS_SOFT + COLOURS.GREEN)
+- 6 audit entity types, including Directors
+
+---
+
+### Stock system — dispatch/letter safety hardening
+**Files:** `app/api/stock/authority-letters/route.ts`, `app/api/stock/dispatch-records/route.ts`, `app/production/ProductionForm.tsx`
+
+- Authority letters API: expired letters flagged server-side; dispatch against expired letters blocked at API level
+- Dispatch records API: over-quantity hard block — rejects if dispatch would exceed letter's remaining balance
+- ProductionForm.tsx: client-side expiry and over-quantity validation before submitting dispatch
+
+---
+
+### constants.ts — 6 companies
+**File:** `app/lib/constants.ts`
+
+- COMPANIES array expanded to 6 entities: UTPL, IFPL, BRNH (Baranh), HD (Haute Dolci), ALM (Almahar), DIR (Directors)
+- Each entry: id (UUID), name, shortCode, slug, currency
+- Added helpers: `getCompanyBySlug()`, `getCompanyById()`, `getCompanyByName()`
+- Used by admin page (company filter), audit dashboard (company filter), and any future multi-company feature
+
+---
+
+### permissions.ts — new functions
+**File:** `app/lib/permissions.ts`
+
+- `canEditOperationsTargets(u)` — Privileged + OPS_HOD_EMAIL (nadeem.khan@unze.co.uk)
+- `canViewTaxAccounts(u)` — all authenticated (except PA); NULL defaults true
+- `canManageTaxSchedule(u)` — Admin/CEO only; NULL defaults false
+- `OPS_HOD_EMAIL` constant exported
+- All permission functions fully documented with override key names
+
+---
+
+### AccessMatrix — new permission columns
+**File:** `app/members/AccessMatrix.tsx`
+
+- 38 permission columns across 9 groups (Dashboards, Finance, Recv., Tasks, Depts, Tax Mgmt, Prod., Members, Admin)
+- New columns added (vs previous): `can_view_investments`, `can_edit_investments`, `can_view_dept_tax_accounts`, `can_manage_tax_schedule`, `can_manage_tax_notices`, `can_edit_operations_targets`
+- `finance_company_scope` renders as a `<select>` (UTPL/IFPL/both); only shown when `can_view_finance` is ON for that member
+- Override cells highlighted with blue border (`3px solid #3b82f6`)
+- Protected rows (Admin/CEO/PA) render as locked (border-only cells, no toggle)
+
+---
+
+### BLUEPRINT.md
+Updated to reflect all changes above: login branding, 7 styling fixes, pension cache fix, pension RPCs/tables/cron, audit multi-company, dispatch/letter safety, constants expansion, permissions additions, AccessMatrix columns, sidebar active accent, globals tooltip fix.
+
+---
+
 ## 2026-07-07 — Sidebar restructure, Accounts & Returns, Tax Notices enhancements, Tax Compliance summary, tax deadline alerts
 
 ### Sidebar restructured

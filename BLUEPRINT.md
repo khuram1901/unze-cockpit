@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 07/07/2026 (Sidebar restructure, Accounts & Returns, Tax Notices, Tax Compliance summary, tax deadline alerts).
+> **This is the source of truth.** Read before touching any code. Last updated: 11/07/2026 (UI designer audit: 7 styling fixes; pension cache fix; AGENTS.md added; pension price cron; authority letter expiry/over-quantity dispatch validation; Audit multi-company; pension RPC functions; constants/permissions/AccessMatrix extended).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -64,16 +64,23 @@
 app/
 ├── layout.tsx                        Root layout — wraps all pages in ThemeProvider + AuthWrapper
 ├── page.tsx                          Root redirect — sends / → /home or /login
-├── globals.css                       Global CSS variables (light/dark), login animations
+├── globals.css                       Global CSS variables (light/dark), login animations.
+│                                     Tooltip rule updated: background uses var(--text-primary)
+│                                     instead of raw #1e293b for theme consistency.
 ├── favicon.ico                       App icon
 │
-├── login/page.tsx                    Login page — time-based greeting, crossfade carousel, Supabase auth
+├── login/page.tsx                    Login page — time-based greeting, crossfade carousel, Supabase auth.
+│                                     Branding corrected to "Unze Group" (was "PulseDesk"). All colours
+│                                     now via COLOURS tokens (COLOURS.BLUE replaces raw #3b82f6).
 ├── forgot-password/page.tsx          Request password reset email via Supabase
 ├── reset-password/page.tsx           Confirm new password from email link
 │
 ├── home/page.tsx                     Home dashboard — page registry cards, CEO/admin briefing,
 │                                     Manager briefing (ops/finance), Tax Compliance summary card,
-│                                     Investments card, cron health panel (admin only)
+│                                     Investments card including UK Pension summary (GBP + PKR),
+│                                     cron health panel (admin only).
+│                                     sessionStorage cache (2-min TTL) now includes pension summary
+│                                     so it survives cache hits. var(--text-muted) → COLOURS.INK_400.
 ├── my-dashboard/page.tsx             Personal task summary for logged-in user
 ├── profile/page.tsx                  User profile — name, email, password change, notification prefs
 │
@@ -120,7 +127,11 @@ app/
 ├── receivables/page.tsx              Receivables kanban — stage pipeline for MEPCO/customer bills
 │
 ├── investments/page.tsx              PSX portfolio tracker — holdings, current prices, P&L,
-│                                     dividend tracking (confirmed + auto-fetched), Today's Change card
+│                                     dividend tracking (confirmed + auto-fetched), Today's Change card.
+│                                     UK Pension section: total value (GBP + PKR), net gain, return %,
+│                                     contributed, fees, fund breakdown (fund name, ISIN, units, price,
+│                                     value, allocation %). Calls get_pension_summary and
+│                                     get_pension_fund_breakdown RPCs directly — no sessionStorage cache.
 │
 ├── opening-balances/
 │   ├── page.tsx                      Opening balances page shell
@@ -158,7 +169,11 @@ app/
 ├── department/[slug]/
 │   ├── page.tsx                      Department page router — dispatches to correct dashboard
 │   ├── DepartmentDashboard.tsx       Default department view — tasks, notices
-│   ├── AuditDashboard.tsx            Audit dept — audit plan items, findings
+│   ├── AuditDashboard.tsx            Audit dept — audit plan items, findings.
+│                                     Multi-company: companyFilter state with UTPL/IFPL/BRNH/HD/ALM/DIR
+│                                     tabs via PillTabs. company_id column on audit records.
+│                                     CompanyBadge component: UTPL=blue (#EEF1FC/BLUE), IFPL=green
+│                                     (SUCCESS_SOFT/GREEN). 6 entity types including Directors.
 │   ├── HRDashboard.tsx               HR dept — recruitment, evaluations, strategy goals
 │   ├── TaxationDashboard.tsx         Tax Notices — legal notices (notice_type='tax').
 │   │                                 Enhanced: is_active (Active/Inactive toggle), notice_status
@@ -171,9 +186,13 @@ app/
 ├── exceptions/page.tsx               Exception management — surfaced alerts and rule violations
 ├── audit-log/page.tsx                System audit log — all user actions (timestamped)
 ├── admin/page.tsx                    Data & Backups — source document archive, backup/restore
-│                                     (khuram1901@gmail.com ONLY)
+│                                     (khuram1901@gmail.com ONLY). All colours via COLOURS tokens;
+│                                     RADII.CARD, RADII.PILL, RADII.SM used throughout; no raw hex.
 │
-├── monthly-operations-targets/page.tsx  Monthly production/dispatch targets per plant
+├── monthly-operations-targets/page.tsx  Monthly production/dispatch targets per plant.
+│                                     Full Genspark restyle: all var(--*) and raw hex replaced
+│                                     with COLOURS tokens; shared table styles; RADII.PILL buttons;
+│                                     progress bars use TRACK + RADII.PILL; font sizes 13–14px.
 │
 └── lib/
     ├── supabase.ts                   Supabase browser client + loadMyPermissions helper
@@ -183,7 +202,12 @@ app/
     ├── pageRegistry.ts               PAGE_REGISTRY — maps permKeys to home dashboard cards
     │                                 GROUP_ORDER: Overview → Operations → Departments → Finance →
     │                                 My Workspace → Settings → Preferences
-    ├── useRouteGuard.ts              useRequireCapability() + useRequireDepartment() hooks
+    ├── useRouteGuard.ts              useRequireCapability() + useRequireDepartment() hooks.
+│                                     Capabilities: finance, receivables, executive, operations,
+│                                     minutes, meetings_admin, recurring_tasks, members, audit_log,
+│                                     exceptions, import_export, daily_entry, pa_dashboard,
+│                                     investments, system_backups, stock, guarantees.
+│                                     useRequireDepartment: special-case for Shakeel on Tax dept.
     ├── useUserCtx.ts                 useUserCtx() hook — loads user role/dept/overrides
     ├── AuthWrapper.tsx               Wraps app — handles auth state, notification bell, sidebar
     ├── SidebarLayout.tsx             Sidebar nav + mobile header — visibility via PERM_FUNC map.
@@ -192,14 +216,20 @@ app/
     │                                 "Tasks & Meetings" and "Command Centre" groups removed.
     │                                 Items within each group are sorted A–Z case-insensitively at
     │                                 render time via .sort().
+    │                                 Active item: 3px COLOURS.BLUE left accent bar (expanded);
+    │                                 3px transparent (collapsed) — no layout shift on toggle.
     ├── ThemeProvider.tsx             Dark/light mode context
     ├── SharedUI.tsx                  Design tokens (COLOURS, RADII, SHADOWS) + shared components
-    ├── constants.ts                  COMPANIES array — UTPL and IFPL IDs/slugs
+    ├── constants.ts                  COMPANIES array — 6 entities: UTPL, IFPL, BRNH (Baranh),
+│                                     HD (Haute Dolci), ALM (Almahar), DIR (Directors) with IDs,
+│                                     shortCodes, slugs, currency. getCompanyBySlug / getCompanyById /
+│                                     getCompanyByName helpers. Used by admin, audit, and finance pages.
     ├── dateUtils.ts                  formatDateUK, formatDateTimeUK, todayISO, etc.
     ├── DateInput.tsx                 Custom DD/MM/YYYY date input — replaces all <input type="date">
     │                                 Shows DD/MM/YYYY, auto-inserts slashes, validates on blur,
     │                                 calls onChange with YYYY-MM-DD. Fixes Safari MM/DD/YYYY issue.
     ├── taxAlertEngine.ts             Tax deadline alert engine — called by the nightly cron and
+│                                     fire-and-forget after each AccountsTaxDashboard save.
     │                                 fire-and-forget after each AccountsTaxDashboard save.
     │                                 computeAndStoreTaxAlerts(supabase, taxYear) → upserts
     │                                 tax_deadline_alerts rows; sends email to CEO on new alerts.
@@ -277,8 +307,13 @@ api/
 │   │                                 calls get_upcoming_dividends RPC.
 │   ├── daily-summary/route.ts        Weekday cron (05:00 UTC) — calls get_portfolio_daily_summary RPC,
 │   │                                 upserts portfolio_snapshots, emails Khuram.
-│   └── fetch-dividends/route.ts      Weekday cron (06:00 UTC) — POSTs to PSX DPS per holding ticker,
-│                                     parses HTML, inserts unconfirmed dividends. Never overwrites confirmed.
+│   ├── fetch-dividends/route.ts      Weekday cron (06:00 UTC) — POSTs to PSX DPS per holding ticker,
+│   │                                 parses HTML, inserts unconfirmed dividends. Never overwrites confirmed.
+│   └── fetch-pension-prices/route.ts Weekday cron (23:00 UTC) — fetches UK pension fund prices from
+│   │                                 Morningstar. Funds: GB00BVRZG281 → F00000VBU2 (L&G),
+│   │                                 GB00BRDCMX84 → VAUSA0P5GL (Vanguard). Upserts pension_fund_prices.
+│   │                                 Fallback prices hardcoded for outage resilience.
+│   │                                 Auth: CRON_SECRET Bearer OR Admin/CEO Supabase session.
 ├── me/
 │   └── permissions/route.ts          GET — return current user's permission overrides
 ├── meetings/
@@ -299,9 +334,13 @@ api/
 │   ├── weekly/route.ts               POST — generate and send weekly email digest (cron)
 │   └── monthly-po/route.ts           POST — monthly PO progress report (cron, 1st of month)
 ├── stock/
-│   ├── authority-letters/route.ts    GET/POST/PATCH — list/create/edit authority letters
+│   ├── authority-letters/route.ts    GET/POST/PATCH — list/create/edit authority letters.
+│   │                                 Expiry validation: expired letters are flagged; server enforces
+│   │                                 blocking dispatch against expired letters.
 │   ├── contractors/route.ts          GET/POST/PATCH — list/create/edit contractors
-│   ├── dispatch-records/route.ts     GET/POST/PATCH — list/create/edit dispatch records
+│   ├── dispatch-records/route.ts     GET/POST/PATCH — list/create/edit dispatch records.
+│   │                                 Over-quantity check: rejects if dispatch would exceed letter
+│   │                                 remaining balance (server-side hard block).
 │   ├── production-allocations/route.ts GET/POST/PATCH — list/replace production allocations
 │   ├── purchase-orders/route.ts      GET/POST/PATCH — manage purchase orders
 │   └── summary/route.ts              GET — full stock tree per plant (POs → letters → balances)
@@ -935,6 +974,12 @@ Single account: k.saleem@unzegroup.com handles calendar, Gmail read, outbound no
 
 **Constraint:** UNIQUE(snapshot_date, ticker). Written by daily-summary cron each weekday.
 
+#### `pension_funds` — (applied directly)
+Active UK pension funds tracked. Columns: id, fund_name, isin, morningstar_id, active (boolean), notes.
+
+#### `pension_fund_prices` — (applied directly)
+Daily price records for pension funds. Columns: id, fund_id (FK → pension_funds), price_date, price_gbp, source. UNIQUE(fund_id, price_date). Written by the `fetch-pension-prices` cron.
+
 #### Views (legacy — not used by live app)
 - `current_prices` — latest price per ticker
 - `portfolio_summary` — joins holdings with current_prices
@@ -1046,6 +1091,14 @@ One row per customer with green/amber/red amounts. RAG computed in Postgres usin
 #### `get_receivable_aging_by_customer()` — migration 056
 One row per customer with b0_30, b31_60, b61_90, b90_plus, total columns.
 
+#### `get_pension_summary()` — (no migration number — applied directly)
+Returns a single row: `{ total_value_gbp, net_gain_gbp, return_pct, contributed_gbp, fees_gbp, fund_count, last_price_date }`.
+**Used by:** `app/investments/page.tsx`, `app/home/page.tsx` (via sessionStorage cache).
+
+#### `get_pension_fund_breakdown()` — (no migration number — applied directly)
+Returns one row per fund: `{ fund_name, isin, units_held, price_gbp, value_gbp, allocation_pct, price_date, value_pkr? }`.
+**Used by:** `app/investments/page.tsx`.
+
 **Security:** All RPCs use `security definer` + `set search_path = public`. Accessible to `authenticated` role only.
 
 ---
@@ -1135,8 +1188,8 @@ Calendar/meeting request tracking.
 | `canViewExceptions` | Privileged | can_view_exceptions |
 | `canImportExport` | Privileged | can_import_export |
 | `canAccessDailyEntry` | Admin/CEO + Ops dept | can_access_daily_entry |
-| `canViewInvestments` | CEO + Admin + PA (view-only for PA) | can_view_investments |
-| `canEditInvestments` | CEO + Admin by email only | can_edit_investments |
+| `canViewInvestments` | CEO + Admin (by email) + PA (view-only) | can_view_investments |
+| `canEditInvestments` | CEO + Admin by email only (NOT PA) | can_edit_investments |
 | `canViewPADashboard` | PA + Admin/CEO | can_view_pa_dashboard |
 | `canViewDepartment(dept)` | Admin/CEO + Manager of that dept (NOT PA) | can_view_dept_* |
 | `canViewGuarantees` | Admin/CEO + Finance Mgr + Ops Mgr (all via override) | can_view_guarantees |
@@ -1223,7 +1276,7 @@ Items within each group are sorted A–Z case-insensitively at render time.
 - Data & Backups (`/admin`) — Admin only
 
 ### Nav active state
-NAVY background + white text. No blue left-bar. Items collapsed to icon-only when sidebar is collapsed.
+NAVY background + white text. **Blue left accent bar (3px solid COLOURS.BLUE)** on active items in expanded state (3px transparent when collapsed). Items collapsed to icon-only when sidebar is collapsed.
 
 ---
 
@@ -1292,7 +1345,7 @@ Per-company finance dashboard: cash position, cash plan, budgets, charts. Full G
 Bank Facilities — guarantee records grouped by bank, facility utilisation bars, pay order tracking, bill linking, chase urgency, expiry tracking.
 
 #### `/receivables`
-Kanban pipeline — drag-and-drop bills through collection stages. Inline edit/delete.
+Kanban pipeline — drag-and-drop bills through collection stages. Inline edit/delete. Stage header colour corrected: `color: "#fff"` → `color: "white"` (string literal, not hex — avoid raw values in inline styles).
 
 #### `/investments`
 PSX portfolio. Holdings table, P&L, dividend tracking (confirmed + unconfirmed), Today's Change card, price history chart. Historical date picker.
@@ -1302,6 +1355,13 @@ Set starting cash balances per company.
 
 #### `/production`
 Daily entry: production qty + PO allocation, dispatch (authority letter lookup → dual write), breakage, machine issues, quick-add receivables.
+
+**Dispatch safety rules (as of 2026-07-08):**
+- "Nothing to report" button requires confirmation if active authority letters with remaining balance exist for the plant.
+- Submit Dispatch button is disabled when quantities are entered but no authority letter is selected.
+- Informational message shown when no active letters exist: *"No active authority letters — only 'Nothing to report' can be recorded for this plant today."*
+- Server-side hard block in `/api/stock/dispatch-records`: dispatch rejected if it would exceed the letter's remaining balance (over-quantity check).
+- Server-side expiry check in `/api/stock/authority-letters`: expired letters are flagged; dispatching against expired letters is blocked.
 
 #### `/stock`
 Collapsible tree: Plant → PO → Contractor → Letter → balances. PO delivery forecast badges. Letter expiry badges.
@@ -1325,7 +1385,7 @@ Personal meeting minutes. Copy protection for non-privileged users.
 Recurring task templates. PA (Executive) can read/write since migration 072 fixed RLS.
 
 #### `/members`
-Members list, invite, edit, delete. Access Matrix tab (per-member boolean overrides). New columns in Access Matrix: can_view_guarantees, can_manage_guarantees, can_view_stock, can_manage_stock, can_manage_meetings (migration 068).
+Members list, invite, edit, delete. Access Matrix tab (per-member boolean overrides). 38 permission columns across 9 groups: Dashboards, Finance, Recv., Tasks, Depts, Tax Mgmt, Prod., Members, Admin. Columns added: can_view_guarantees, can_manage_guarantees, can_view_investments, can_edit_investments, can_view_dept_tax_accounts, can_manage_tax_schedule, can_manage_tax_notices, can_view_stock, can_manage_stock, can_edit_operations_targets, can_manage_meetings. finance_company_scope is a select (UTPL/IFPL/both) that only appears when can_view_finance is on. Protected members (Admin/CEO/PA) show locked (border-only) cells. Each override highlights in blue.
 
 #### `/audit-log`
 System activity trail.
@@ -1378,6 +1438,8 @@ Monthly production/dispatch targets per plant.
 | Production cap per PO | Produced ≤ ordered × 1.03 (3% buffer) |
 | Letter cap | Sum of all authority letters for a PO ≤ ordered qty exactly |
 | Dispatch hard block | Cannot dispatch more than letter's remaining balance |
+| Nothing-to-report guard | If active letters exist, confirmation required before recording "nothing dispatched today" |
+| Submit Dispatch disabled | Button disabled when quantities entered but no letter selected |
 | Letter exhaustion warning | Remaining < 10% of authorised qty → red badge |
 | PO auto-close trigger | After each dispatch_record insert, if dispatched ≥ ordered for ALL sizes → PO status = 'Closed' |
 
@@ -1497,6 +1559,7 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 | `/api/investments/fetch-dividends` | 06:00 Mon–Fri | PSX dividend auto-fetch |
 | `/api/reports/monthly-po` | 06:00 1st of month | Monthly PO progress report |
 | `/api/cron/tax-alerts` | 00:00 and 06:00 daily | Tax deadline alert computation |
+| `/api/investments/fetch-pension-prices` | 23:00 Mon–Fri | Fetch UK pension fund NAV prices from Morningstar |
 
 ### Supabase Storage
 - Bucket: `source-documents` — uploaded PDFs
@@ -1525,7 +1588,7 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 17. **Ops HoD (nadeem.khan@unze.co.uk)** can edit operations targets.
 18. **Never use `<input type="date">`** — always use `<DateInput>` from `app/lib/DateInput.tsx`.
 19. **Sidebar group order is fixed: Overview → Operations → Departments → Finance → My Workspace → Settings.** "Tasks & Meetings" and "Command Centre" groups are removed. My Workspace replaced Tasks & Meetings. Items within each group are sorted A–Z at render time. Do not change this order without a deliberate decision.
-20. **Sidebar active item: NAVY background + white text.** No blue left-bar accent. Genspark nav style.
+20. **Sidebar active item: NAVY background + white text + 3px blue left accent bar (COLOURS.BLUE).** Accent bar is transparent (not absent) when the sidebar is collapsed, so no layout shift. Updated 11/07/2026.
 21. **Executive Dashboard number scale:** Hero (Good Stock) = 60px Inter Tight on dark NAVY card. KPI cards = 44px. Finance summary = 36px. Bank Facilities hero = 36px. Investments tiles = 28px. Mini = 32px. All −0.02em tracking and tabular-nums. SectionTitle = 22px Inter Tight/600/−0.01em.
 22. **All sensitive API routes must have server-side role checks** — defence-in-depth. Pattern: `requireAuth(req)` first, then role check → 403. Bank Facilities routes are the reference implementation.
 23. **Tax data is all-users visible (except PA)** — `canViewTaxAccounts()` defaults to true for all authenticated non-PA users. Manage access (`canManageTaxSchedule`) defaults to false and must be explicitly granted.
@@ -1559,7 +1622,7 @@ npm install
 
 ### Step 2: Restore the database
 1. Log in to Supabase dashboard → create a new project
-2. Run all SQL migration files in order (001 through 072) via the Supabase SQL Editor
+2. Run all SQL migration files in order (001 through 072) via the Supabase SQL Editor. Also apply the pension RPCs (`get_pension_summary`, `get_pension_fund_breakdown`) and pension tables (`pension_funds`, `pension_fund_prices`) which were applied directly without a numbered migration file.
 3. Restore data from the most recent backup (available in Supabase Storage or via the `/admin` page backup list)
 
 ### Step 3: Configure environment
@@ -1591,4 +1654,4 @@ vercel deploy --prod
 
 ---
 
-*Blueprint created: 01/07/2026. Last full refresh: 07/07/2026. Maintained by the blueprint-keeper agent. Always keep this accurate — it is the rebuilding guide.*
+*Blueprint created: 01/07/2026. Last full refresh: 11/07/2026. Maintained by the blueprint-keeper agent. Always keep this accurate — it is the rebuilding guide.*
