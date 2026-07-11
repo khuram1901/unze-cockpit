@@ -235,6 +235,9 @@ export default function InvestmentsPage() {
         fetch("https://api.frankfurter.app/latest?from=GBP&to=PKR"),
       ]);
 
+      if (summaryRes.error) console.error("PENSION SUMMARY ERROR:", summaryRes.error);
+      if (breakdownRes.error) console.error("PENSION BREAKDOWN ERROR:", breakdownRes.error);
+
       let pkrRate = 0;
       try {
         const fxData = await fxRes.json();
@@ -250,7 +253,9 @@ export default function InvestmentsPage() {
         }))
       );
       setGbpPkrRate(pkrRate);
-    } catch { /* silent — pension data is additive */ }
+    } catch (err) {
+      console.error("PENSION LOAD ERROR:", err);
+    }
     setPensionLoading(false);
   }, []);
 
