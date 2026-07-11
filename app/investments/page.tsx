@@ -35,6 +35,16 @@ type PensionFundBreakdown = {
   allocation_pct: number;
   price_date: string | null;
   value_pkr?: number;
+  risk_rating: number | null;
+  ongoing_charge_pct: number | null;
+  benchmark: string | null;
+  return_1m_pct: number | null;
+  return_3m_pct: number | null;
+  return_6m_pct: number | null;
+  return_1y_pct: number | null;
+  return_5y_pct: number | null;
+  factsheet_date: string | null;
+  factsheet_notes: string | null;
 };
 
 type DividendRow = {
@@ -1333,6 +1343,81 @@ export default function InvestmentsPage() {
                             {gbpPkrRate > 0 ? `PKR ${Math.round(fund.value_pkr ?? 0).toLocaleString("en-PK")}` : "—"}
                           </div>
                         </div>
+                      </div>
+
+                      {/* ── Factsheet performance table ── */}
+                      <div style={{ borderTop: `1px solid ${HAIRLINE}`, marginTop: "14px", paddingTop: "12px" }}>
+                        <div style={{
+                          fontSize: "10.5px", fontWeight: 700, letterSpacing: "0.08em",
+                          textTransform: "uppercase", color: SLATE, marginBottom: "8px",
+                        }}>
+                          PERFORMANCE{fund.factsheet_date ? ` (as at ${formatDateUK(fund.factsheet_date)})` : ""}
+                        </div>
+
+                        {/* Return row */}
+                        <div style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(5, 1fr)",
+                          gap: "4px",
+                          marginBottom: "4px",
+                        }}>
+                          {(["1M", "3M", "6M", "1Y", "5Y"] as const).map((label) => (
+                            <div key={label} style={{ fontSize: "10px", color: SLATE, textAlign: "center", fontWeight: 600, letterSpacing: "0.05em" }}>
+                              {label}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(5, 1fr)",
+                          gap: "4px",
+                          borderTop: `1px solid ${HAIRLINE}`,
+                          borderBottom: `1px solid ${HAIRLINE}`,
+                          padding: "6px 0",
+                          marginBottom: "10px",
+                        }}>
+                          {([fund.return_1m_pct, fund.return_3m_pct, fund.return_6m_pct, fund.return_1y_pct, fund.return_5y_pct] as (number | null)[]).map((v, i) => (
+                            <div key={i} style={{
+                              textAlign: "center",
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: "13px",
+                              fontWeight: 600,
+                              color: v === null ? SLATE : v > 0 ? GREEN : v < 0 ? RED : SLATE,
+                            }}>
+                              {v === null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Risk pips */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px", flexWrap: "wrap" }}>
+                          {fund.risk_rating !== null && (
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                              <span style={{ fontSize: "10.5px", color: SLATE, fontWeight: 600 }}>Risk</span>
+                              <div style={{ display: "flex", gap: "3px", alignItems: "center" }}>
+                                {Array.from({ length: 7 }, (_, i) => (
+                                  <div key={i} style={{
+                                    width: "8px", height: "8px", borderRadius: "50%",
+                                    backgroundColor: i < fund.risk_rating! ? NAVY : HAIRLINE,
+                                  }} />
+                                ))}
+                              </div>
+                              <span style={{ fontSize: "10.5px", color: SLATE }}>{fund.risk_rating}/7</span>
+                            </div>
+                          )}
+                          {fund.ongoing_charge_pct !== null && (
+                            <span style={{ fontSize: "12px", color: SLATE }}>
+                              · Ongoing charge: {fund.ongoing_charge_pct.toFixed(2)}%
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Benchmark / factsheet notes */}
+                        {fund.factsheet_notes && (
+                          <div style={{ fontSize: "11px", color: SLATE, fontStyle: "italic", lineHeight: 1.5 }}>
+                            {fund.factsheet_notes}
+                          </div>
+                        )}
                       </div>
                     </div>
                 ))}
