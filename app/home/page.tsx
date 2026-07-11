@@ -1011,30 +1011,11 @@ export default function HomePage() {
       setInvestmentData(computedInvestmentData);
     }
 
-    // UK Pension summary for Executive Dashboard
+    // UK Pension summary for Executive Dashboard — aggregation done in Postgres
     try {
-      const { data: pensionFunds } = await supabase
-        .from("pension_funds")
-        .select("isin, units_held")
-        .eq("active", true);
-
-      if (pensionFunds?.length) {
-        const isins = pensionFunds.map((f: { isin: string }) => f.isin);
-        const { data: pensionPrices } = await supabase
-          .from("pension_fund_prices")
-          .select("isin, price_gbp")
-          .in("isin", isins)
-          .order("price_date", { ascending: false });
-
-        const priceMap = new Map<string, number>();
-        (pensionPrices ?? []).forEach((p: { isin: string; price_gbp: number }) => {
-          if (!priceMap.has(p.isin)) priceMap.set(p.isin, p.price_gbp);
-        });
-
-        const totalGbp = pensionFunds.reduce((sum: number, f: { isin: string; units_held: number }) => {
-          return sum + f.units_held * (priceMap.get(f.isin) ?? 0);
-        }, 0);
-
+      const { data: pensionData } = await supabase.rpc("get_pension_summary");
+      const pensionRow = (pensionData as { total_value_gbp: number }[] | null)?.[0];
+      if (pensionRow && pensionRow.total_value_gbp > 0) {
         let pkrRate = 0;
         try {
           const fxRes = await fetch("https://api.frankfurter.app/latest?from=GBP&to=PKR");
@@ -1043,10 +1024,7 @@ export default function HomePage() {
             pkrRate = fxData?.rates?.PKR ?? 0;
           }
         } catch { /* non-fatal */ }
-
-        if (totalGbp > 0) {
-          setPensionSummary({ gbp: totalGbp, pkr: totalGbp * pkrRate });
-        }
+        setPensionSummary({ gbp: pensionRow.total_value_gbp, pkr: pensionRow.total_value_gbp * pkrRate });
       }
     } catch { /* non-fatal — pension card is additive */ }
 

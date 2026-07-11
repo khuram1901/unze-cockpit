@@ -16,12 +16,25 @@ import {
 
 const { NAVY, SLATE, BORDER, GREEN, RED, AMBER, BLUE, HAIRLINE } = COLOURS;
 
-type PensionFund = {
-  id: string;
+type PensionSummary = {
+  total_value_gbp: number;
+  net_gain_gbp: number;
+  return_pct: number;
+  contributed_gbp: number;
+  fees_gbp: number;
+  fund_count: number;
+  last_price_date: string | null;
+};
+
+type PensionFundBreakdown = {
   fund_name: string;
   isin: string;
   units_held: number;
-  currency: string;
+  price_gbp: number;
+  value_gbp: number;
+  allocation_pct: number;
+  price_date: string | null;
+  value_pkr?: number;
 };
 
 type DividendRow = {
@@ -137,11 +150,9 @@ export default function InvestmentsPage() {
   const [chartRange, setChartRange] = useState<"1M" | "3M" | "6M" | "ALL">("3M");
 
   // UK Pension state
-  const [pensionFunds, setPensionFunds] = useState<PensionFund[]>([]);
-  const [pensionPrices, setPensionPrices] = useState<Map<string, number>>(new Map());
-  const [pensionPriceDates, setPensionPriceDates] = useState<Map<string, string>>(new Map());
+  const [pensionSummary, setPensionSummary] = useState<PensionSummary | null>(null);
+  const [pensionBreakdown, setPensionBreakdown] = useState<PensionFundBreakdown[]>([]);
   const [gbpPkrRate, setGbpPkrRate] = useState<number>(0);
-  const [pensionContrib, setPensionContrib] = useState<{ contributed: number; fees: number } | null>(null);
   const [pensionLoading, setPensionLoading] = useState(true);
 
   const [formTicker, setFormTicker] = useState("");
@@ -218,32 +229,11 @@ export default function InvestmentsPage() {
   const loadPensionData = useCallback(async () => {
     setPensionLoading(true);
     try {
-      const [{ data: funds }, fxRes, { data: contrib }] = await Promise.all([
-        supabase.from("pension_funds").select("*").eq("active", true).order("created_at"),
+      const [summaryRes, breakdownRes, fxRes] = await Promise.all([
+        supabase.rpc("get_pension_summary"),
+        supabase.rpc("get_pension_fund_breakdown"),
         fetch("https://api.frankfurter.app/latest?from=GBP&to=PKR"),
-        supabase
-          .from("pension_contributions")
-          .select("total_contributed_gbp, total_fees_gbp")
-          .order("as_of_date", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
       ]);
-
-      const isins = (funds ?? []).map((f: PensionFund) => f.isin);
-      const { data: prices } = await supabase
-        .from("pension_fund_prices")
-        .select("isin, price_gbp, price_date")
-        .in("isin", isins.length ? isins : ["__none__"])
-        .order("price_date", { ascending: false });
-
-      const priceMap = new Map<string, number>();
-      const dateMap = new Map<string, string>();
-      (prices ?? []).forEach((p: { isin: string; price_gbp: number; price_date: string }) => {
-        if (!priceMap.has(p.isin)) {
-          priceMap.set(p.isin, p.price_gbp);
-          dateMap.set(p.isin, p.price_date);
-        }
-      });
 
       let pkrRate = 0;
       try {
@@ -251,11 +241,15 @@ export default function InvestmentsPage() {
         pkrRate = fxData?.rates?.PKR ?? 0;
       } catch { /* use 0 */ }
 
-      setPensionFunds(funds ?? []);
-      setPensionPrices(priceMap);
-      setPensionPriceDates(dateMap);
+      const row = (summaryRes.data as PensionSummary[] | null)?.[0] ?? null;
+      setPensionSummary(row);
+      setPensionBreakdown(
+        ((breakdownRes.data as PensionFundBreakdown[] | null) ?? []).map((f) => ({
+          ...f,
+          value_pkr: f.value_gbp * pkrRate,
+        }))
+      );
       setGbpPkrRate(pkrRate);
-      setPensionContrib(contrib ? { contributed: Number(contrib.total_contributed_gbp), fees: Number(contrib.total_fees_gbp) } : null);
     } catch { /* silent — pension data is additive */ }
     setPensionLoading(false);
   }, []);
@@ -319,20 +313,12 @@ export default function InvestmentsPage() {
   const losers = losersDB;
   const winners = stocks.filter((s) => s.gainLossPct !== null && s.gainLossPct > 20);
 
-  // UK Pension derived calculations (2 multiplications — no DB aggregation)
-  const pensionTotalGbp = pensionFunds.reduce((sum, f) => {
-    return sum + f.units_held * (pensionPrices.get(f.isin) ?? 0);
-  }, 0);
+  // UK Pension values — all aggregation done in Postgres RPCs
+  const pensionTotalGbp = pensionSummary?.total_value_gbp ?? 0;
   const pensionTotalPkr = pensionTotalGbp * gbpPkrRate;
-  const pensionNetGain = pensionTotalGbp - (pensionContrib?.contributed ?? 0);
-  const pensionReturnPct = (pensionContrib?.contributed ?? 0) > 0
-    ? (pensionNetGain / pensionContrib!.contributed) * 100
-    : 0;
-  const pensionLatestDate = (() => {
-    let latest = "";
-    pensionPriceDates.forEach((d) => { if (d > latest) latest = d; });
-    return latest;
-  })();
+  const pensionNetGain = pensionSummary?.net_gain_gbp ?? 0;
+  const pensionReturnPct = pensionSummary?.return_pct ?? 0;
+  const pensionLatestDate = pensionSummary?.last_price_date ?? null;
 
   async function handleRefreshPrices() {
     if (!canEdit) return;
@@ -1155,12 +1141,12 @@ export default function InvestmentsPage() {
               }}>
                 <PensionMetricCard
                   label="Total Paid In"
-                  value={`£${(pensionContrib?.contributed ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  value={`£${(pensionSummary?.contributed_gbp ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                   color={NAVY}
                 />
                 <PensionMetricCard
                   label="Fees Deducted"
-                  value={`£${(pensionContrib?.fees ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  value={`£${(pensionSummary?.fees_gbp ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                   color={RED}
                 />
                 <PensionMetricCard
@@ -1182,13 +1168,7 @@ export default function InvestmentsPage() {
                 gap: "14px",
                 marginBottom: "14px",
               }}>
-                {pensionFunds.map((fund) => {
-                  const price = pensionPrices.get(fund.isin) ?? 0;
-                  const value = fund.units_held * price;
-                  const valuePkr = value * gbpPkrRate;
-                  const allocation = pensionTotalGbp > 0 ? (value / pensionTotalGbp) * 100 : 0;
-
-                  return (
+                {pensionBreakdown.map((fund) => (
                     <div key={fund.isin} style={{
                       border: `1px solid ${HAIRLINE}`,
                       borderTop: `3px solid ${BLUE}`,
@@ -1212,17 +1192,17 @@ export default function InvestmentsPage() {
                         {fund.isin}
                       </span>
 
-                      {/* Allocation bar */}
+                      {/* Allocation bar — percentage computed by DB */}
                       <div style={{ marginBottom: "12px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: SLATE, marginBottom: "4px" }}>
-                          <span>{allocation.toFixed(1)}% of pension</span>
+                          <span>{Number(fund.allocation_pct).toFixed(1)}% of pension</span>
                         </div>
                         <div style={{ height: "6px", backgroundColor: HAIRLINE, borderRadius: "999px", overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${allocation}%`, backgroundColor: BLUE, borderRadius: "999px" }} />
+                          <div style={{ height: "100%", width: `${Number(fund.allocation_pct)}%`, backgroundColor: BLUE, borderRadius: "999px" }} />
                         </div>
                       </div>
 
-                      {/* 4-metric mini grid */}
+                      {/* 4-metric mini grid — all values from DB */}
                       <div style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(2, 1fr)",
@@ -1231,31 +1211,30 @@ export default function InvestmentsPage() {
                         <div>
                           <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>Units Held</div>
                           <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, fontVariantNumeric: "tabular-nums" }}>
-                            {fund.units_held.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {Number(fund.units_held).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
                         </div>
                         <div>
                           <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>Unit Price</div>
                           <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, fontVariantNumeric: "tabular-nums" }}>
-                            {price > 0 ? `£${price.toFixed(4)}` : "—"}
+                            {fund.price_gbp > 0 ? `£${Number(fund.price_gbp).toFixed(4)}` : "—"}
                           </div>
                         </div>
                         <div>
                           <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>Value (GBP)</div>
                           <div style={{ fontSize: "14px", fontWeight: 600, color: BLUE, fontVariantNumeric: "tabular-nums" }}>
-                            £{value.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            £{Number(fund.value_gbp).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
                         </div>
                         <div>
                           <div style={{ fontSize: "10px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>Value (PKR)</div>
                           <div style={{ fontSize: "14px", fontWeight: 600, color: SLATE, fontVariantNumeric: "tabular-nums" }}>
-                            {gbpPkrRate > 0 ? `PKR ${Math.round(valuePkr).toLocaleString("en-PK")}` : "—"}
+                            {gbpPkrRate > 0 ? `PKR ${Math.round(fund.value_pkr ?? 0).toLocaleString("en-PK")}` : "—"}
                           </div>
                         </div>
                       </div>
                     </div>
-                  );
-                })}
+                ))}
               </div>
 
               {/* Last updated */}
