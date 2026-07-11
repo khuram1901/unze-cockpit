@@ -398,8 +398,9 @@ export default function DashboardView() {
       const d = r.entry_date;
       dailyMap.set(d, (dailyMap.get(d) || 0) + (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0));
     }
-    const totalMonthlyTarget = prodTargets.filter((t) => plantIdSet.has(t.plant_id)).reduce((s, t) => s + targetTotal(t), 0);
-    const dailyTarget = totalMonthlyTarget > 0 ? Math.round(totalMonthlyTarget / 26) : 0;
+    const { data: prodSummary } = await supabase.rpc("get_production_summary", { p_month: currentMonth });
+    const totalMonthlyTarget = prodSummary?.[0]?.targ_total_month ?? 0;
+    const dailyTarget = prodSummary?.[0]?.daily_target ?? 0;
     const trendArr = Array.from(dailyMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, produced]) => ({ date: date.slice(5), produced, target: dailyTarget }));

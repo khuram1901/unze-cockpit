@@ -701,18 +701,14 @@ export default function HomePage() {
         supabase.from("cash_opening_balance").select("*").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
         supabase.from("monthly_cash_plan").select("*").eq("company_id", company.id).eq("plan_month", currentMonthForCash).maybeSingle(),
         supabase.from("daily_cash_position").select("*").eq("company_id", company.id).lte("position_date", dateToView).order("position_date", { ascending: false }).limit(30),
-        supabase.from("daily_cash_position").select("total_receipts, total_payments").eq("company_id", company.id).gte("position_date", lastYearMonth + "-01").lte("position_date", lastYearMonth + "-31"),
+        supabase.rpc("get_company_cash_yearly_comparison", { p_company_id: company.id, p_month: currentMonthForCash }),
         supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("company_id", company.id).gte("budget_month", currentMonthForCash).order("budget_month", { ascending: true }),
         supabase.from("department_budgets").select("department, category, budgeted_amount, actual_amount").eq("company_id", company.id).eq("budget_month", currentMonthForCash),
       ]);
 
-      let lyReceipts: number | null = null;
-      let lyPayments: number | null = null;
-      if (lyRes.data && lyRes.data.length > 0) {
-        const lyData = lyRes.data as { total_receipts: number; total_payments: number }[];
-        lyReceipts = lyData.reduce((s, r) => s + (r.total_receipts || 0), 0);
-        lyPayments = lyData.reduce((s, r) => s + (r.total_payments || 0), 0);
-      }
+      const lyRow = (lyRes.data as { last_year_receipts: number; last_year_payments: number }[] | null)?.[0];
+      const lyReceipts: number | null = lyRow ? Number(lyRow.last_year_receipts) : null;
+      const lyPayments: number | null = lyRow ? Number(lyRow.last_year_payments) : null;
 
       allCompanyFinance.push({
         companyId: company.id,
@@ -1327,11 +1323,10 @@ export default function HomePage() {
 
       const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-      const [cashRes, recRes, prodRes, targRes, completedWeekRes] = await Promise.all([
+      const [cashRes, recRes, prodSummaryRes, completedWeekRes] = await Promise.all([
         supabase.from("daily_cash_position").select("closing_balance, position_date").order("position_date", { ascending: false }).limit(2),
         supabase.from("receivables").select("id").in("current_stage", ["Stage 2", "Stage 3"]).eq("status", "In Progress"),
-        supabase.from("production_entries").select("pairs_produced").eq("entry_date", yesterday),
-        supabase.from("monthly_production_targets").select("target_pairs").eq("month", today.slice(0, 7)),
+        supabase.rpc("get_production_summary", { p_date: yesterday, p_month: today.slice(0, 7) }),
         supabase.from("tasks").select("due_date, updated_at, status").gte("due_date", sevenDaysAgo).lte("due_date", today),
       ]);
 
@@ -1340,9 +1335,9 @@ export default function HomePage() {
       const cashDate = cashRows.length > 0 ? cashRows[0].position_date : null;
       const stuckBills = (recRes.data || []).length;
 
-      const prodTotal = (prodRes.data || []).reduce((s, r) => s + (r.pairs_produced || 0), 0);
-      const targTotal = (targRes.data || []).reduce((s, r) => s + (r.target_pairs || 0), 0);
-      const dailyTarget = targTotal > 0 ? Math.round(targTotal / 26) : 0;
+      const prodTotal = prodSummaryRes.data?.[0]?.prod_total_yesterday ?? 0;
+      const targTotal = prodSummaryRes.data?.[0]?.targ_total_month ?? 0;
+      const dailyTarget = prodSummaryRes.data?.[0]?.daily_target ?? 0;
       const prodPct = dailyTarget > 0 ? Math.round((prodTotal / dailyTarget) * 100) : null;
 
       setBriefing({ cashTotal, prodPct, stuckBills, cashDate });
