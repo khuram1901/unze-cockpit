@@ -87,7 +87,7 @@ button[title]:hover::after {
   bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%);
-  background: #1e293b;
+  background: var(--text-primary);
   color: white;
   padding: 4px 10px;
   border-radius: 5px;

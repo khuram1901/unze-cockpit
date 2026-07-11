@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMobile } from "../lib/useMobile";
+import { COLOURS } from "../lib/SharedUI";
 
 type MemberProfile = {
   role: string | null;
@@ -139,7 +140,7 @@ export default function LoginPage() {
             }} />
             <div>
               <div style={{ fontSize: "16px", fontWeight: 700, color: "#ffffff", letterSpacing: "-0.3px" }}>
-                PulseDesk
+                Unze Group
               </div>
               <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", marginTop: "1px" }}>
                 {slide.title} · {slide.subtitle}
@@ -157,7 +158,7 @@ export default function LoginPage() {
           {!isMobile && (
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "32px" }}>
               <img src="/unze-logo.png" alt="Unze Group" style={{ height: "36px", objectFit: "contain" }} />
-              <span style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary, #0f172a)", letterSpacing: "-0.3px" }}>PulseDesk</span>
+              <span style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary, #0f172a)", letterSpacing: "-0.3px" }}>Unze Group</span>
             </div>
           )}
 
@@ -190,7 +191,7 @@ export default function LoginPage() {
                   backgroundColor: "var(--bg-card-hover, #f8fafc)",
                   color: "var(--text-primary, #0f172a)",
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.backgroundColor = "var(--bg-card, #fff)"; }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = COLOURS.BLUE; e.currentTarget.style.backgroundColor = "var(--bg-card, #fff)"; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-color, #e2e8f0)"; e.currentTarget.style.backgroundColor = "var(--bg-card-hover, #f8fafc)"; }}
               />
             </div>
@@ -198,7 +199,7 @@ export default function LoginPage() {
             <div style={{ marginBottom: "24px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "6px" }}>
                 <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary, #334155)" }}>Password</label>
-                <Link href="/forgot-password" style={{ fontSize: "12px", color: "#3b82f6", textDecoration: "none", fontWeight: 500 }}>
+                <Link href="/forgot-password" style={{ fontSize: "12px", color: COLOURS.BLUE, textDecoration: "none", fontWeight: 500 }}>
                   Forgot password?
                 </Link>
               </div>
@@ -218,7 +219,7 @@ export default function LoginPage() {
                     backgroundColor: "var(--bg-card-hover, #f8fafc)",
                     color: "var(--text-primary, #0f172a)",
                   }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.backgroundColor = "var(--bg-card, #fff)"; }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = COLOURS.BLUE; e.currentTarget.style.backgroundColor = "var(--bg-card, #fff)"; }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-color, #e2e8f0)"; e.currentTarget.style.backgroundColor = "var(--bg-card-hover, #f8fafc)"; }}
                 />
                 <button
@@ -264,9 +265,9 @@ export default function LoginPage() {
             <div style={{
               marginTop: "16px", padding: "10px 14px",
               borderRadius: "8px", fontSize: "13px", fontWeight: 500,
-              backgroundColor: message.startsWith("Error") ? "#fef2f2" : "#f0fdf4",
-              color: message.startsWith("Error") ? "#dc2626" : "#16a34a",
-              border: `1px solid ${message.startsWith("Error") ? "#fecaca" : "#bbf7d0"}`,
+              backgroundColor: message.startsWith("Error") ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT,
+              color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN,
+              border: `1px solid ${message.startsWith("Error") ? "#EDB5B2" : "#9ED4A3"}`,
               animation: "loginFadeIn 0.3s ease-out",
             }}>
               {message}

@@ -91,6 +91,11 @@ export default function ReceivablesPage() {
   const [bills, setBills] = useState<Receivable[]>([]);
   const [collectedBills, setCollectedBills] = useState<Receivable[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
+  const [ragSummary, setRagSummary] = useState<{
+    customerRows: { customer: string; greenAmount: number; amberAmount: number; redAmount: number; totalAmount: number; redCount: number }[];
+    totalAmount: number;
+    recGreen: number; recAmber: number; recRed: number; recRedCount: number;
+  }>({ customerRows: [], totalAmount: 0, recGreen: 0, recAmber: 0, recRed: 0, recRedCount: 0 });
   const [loading, setLoading] = useState(true);
   const [canEdit, setCanEdit] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -159,16 +164,37 @@ export default function ReceivablesPage() {
       }
     }
 
-    const [stagesRes, billsRes, collectedRes, plantsRes] = await Promise.all([
+    const [stagesRes, billsRes, collectedRes, plantsRes, ragRes] = await Promise.all([
       supabase.from("receivable_stages").select("*").order("stage_order"),
       supabase.from("receivables").select("*").neq("status", "Collected").order("date_submitted"),
       supabase.from("receivables").select("*").eq("status", "Collected").order("received_date", { ascending: false }).limit(100),
       supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
+      supabase.rpc("get_receivable_rag_by_customer"),
     ]);
     setStages(stagesRes.data || []);
     setBills(billsRes.data || []);
     setCollectedBills(collectedRes.data || []);
     setPlants(plantsRes.data || []);
+
+    const ragRows = ((ragRes.data || []) as { customer: string; green_amount: number; amber_amount: number; red_amount: number; total_amount: number; red_count: number }[])
+      .map((r) => ({
+        customer: r.customer,
+        greenAmount: Number(r.green_amount) || 0,
+        amberAmount: Number(r.amber_amount) || 0,
+        redAmount:   Number(r.red_amount)   || 0,
+        totalAmount: Number(r.total_amount) || 0,
+        redCount:    Number(r.red_count)    || 0,
+      }));
+    const totGreen = ragRows.reduce((s, r) => s + r.greenAmount, 0);
+    const totAmber = ragRows.reduce((s, r) => s + r.amberAmount, 0);
+    const totRed   = ragRows.reduce((s, r) => s + r.redAmount,   0);
+    const totRedCt = ragRows.reduce((s, r) => s + r.redCount,    0);
+    setRagSummary({
+      customerRows: ragRows,
+      totalAmount: ragRows.reduce((s, r) => s + r.totalAmount, 0),
+      recGreen: totGreen, recAmber: totAmber, recRed: totRed, recRedCount: totRedCt,
+    });
+
     setLoading(false);
   }
 
@@ -330,36 +356,14 @@ export default function ReceivablesPage() {
     setDragOverStage(null);
   }
 
-  const totalAmount = bills.reduce((s, b) => s + b.amount, 0);
   const stuckBills = bills.filter((b) => {
     const stage = stages.find((s) => s.stage_order === b.current_stage_order);
     if (!stage || stage.working_day_budget <= 0) return false;
     return workingDaysSince(b.current_stage_entered_date) >= stage.working_day_budget;
   });
 
-  const customerRows = (() => {
-    type CustRow = { customer: string; greenAmount: number; amberAmount: number; redAmount: number; totalAmount: number; redCount: number };
-    const map = new Map<string, CustRow>();
-    for (const bill of bills) {
-      const key = bill.utility || "Unknown";
-      if (!map.has(key)) map.set(key, { customer: key, greenAmount: 0, amberAmount: 0, redAmount: 0, totalAmount: 0, redCount: 0 });
-      const row = map.get(key)!;
-      const stage = stages.find((s) => s.stage_order === bill.current_stage_order);
-      const elapsed = workingDaysSince(bill.current_stage_entered_date);
-      const budget = stage?.working_day_budget || 0;
-      const rag = budget <= 0 ? "green" : elapsed >= budget ? "red" : elapsed >= budget - 1 ? "amber" : "green";
-      const amt = Number(bill.amount) || 0;
-      row.totalAmount += amt;
-      if (rag === "green") row.greenAmount += amt;
-      else if (rag === "amber") row.amberAmount += amt;
-      else { row.redAmount += amt; row.redCount += 1; }
-    }
-    return Array.from(map.values()).sort((a, b) => b.redAmount - a.redAmount || b.totalAmount - a.totalAmount);
-  })();
-  const recGreen = customerRows.reduce((s, r) => s + r.greenAmount, 0);
-  const recAmber = customerRows.reduce((s, r) => s + r.amberAmount, 0);
-  const recRed = customerRows.reduce((s, r) => s + r.redAmount, 0);
-  const recRedCount = customerRows.reduce((s, r) => s + r.redCount, 0);
+  // RAG summary from Postgres RPC — no client-side aggregation
+  const { customerRows, totalAmount, recGreen, recAmber, recRed, recRedCount } = ragSummary;
 
   function calendarDaysSince(dateStr: string): number {
     const start = new Date(dateStr + "T00:00:00");
@@ -769,7 +773,7 @@ export default function ReceivablesPage() {
                 return (
                   <div key={stage.id} title={`${stage.stage_name}: ${count} bill${count !== 1 ? "s" : ""}${stuckInStage > 0 ? ` (${stuckInStage} stuck)` : ""}`} style={{
                     width: `${Math.max(pct, 8)}%`, backgroundColor: bg, display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "11px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap" as const, padding: "0 4px",
+                    fontSize: "11px", fontWeight: 600, color: "white", whiteSpace: "nowrap" as const, padding: "0 4px",
                     borderRight: "1px solid rgba(255,255,255,0.3)",
                   }}>
                     {count}

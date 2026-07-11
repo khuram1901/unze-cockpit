@@ -398,9 +398,10 @@ export default function SidebarLayout({
         style={{
           display: "flex", alignItems: "center", gap: "10px",
           justifyContent: isCollapsed ? "center" : "flex-start",
-          padding: isCollapsed ? "8px" : "8px 10px",
+          padding: isCollapsed ? "8px" : "8px 10px 8px 7px",
           borderRadius: "8px",
           backgroundColor: active ? COLOURS.NAVY : "transparent",
+          borderLeft: active && !isCollapsed ? `3px solid ${COLOURS.BLUE}` : "3px solid transparent",
           color: active ? "#FFFFFF" : "var(--text-sidebar)",
           textDecoration: "none",
           fontSize: "13px",

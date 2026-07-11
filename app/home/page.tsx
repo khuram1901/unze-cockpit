@@ -1818,13 +1818,13 @@ export default function HomePage() {
                     <span style={{ fontSize: "15px" }}>📋</span>
                     <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Today&apos;s Tasks</span>
                   </div>
-                  <span style={{ fontSize: "14px", color: "var(--text-muted)" }}>
+                  <span style={{ fontSize: "14px", color: COLOURS.INK_400 }}>
                     {completedToday}/{todayTasks.length + completedToday} done
                   </span>
                 </div>
 
                 {todayTasks.length === 0 ? (
-                  <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--text-muted)", fontSize: "16px" }}>
+                  <div style={{ padding: "32px 18px", textAlign: "center", color: COLOURS.INK_400, fontSize: "16px" }}>
                     No tasks due today or this week. You&apos;re all clear!
                   </div>
                 ) : (
@@ -1854,7 +1854,7 @@ export default function HomePage() {
                       </span>
                       {task.project && (
                         <span style={{
-                          fontSize: "13px", color: "var(--text-muted)",
+                          fontSize: "13px", color: COLOURS.INK_400,
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                           maxWidth: "120px",
                         }}>
@@ -1877,7 +1877,7 @@ export default function HomePage() {
                 )}
 
                 <div style={{
-                  padding: "10px 18px", fontSize: "14px", color: "var(--text-muted)",
+                  padding: "10px 18px", fontSize: "14px", color: COLOURS.INK_400,
                   borderTop: "1px solid var(--border-light)",
                 }}>
                   Tasks you scheduled for today, plus anything overdue or due this week.
@@ -1966,7 +1966,7 @@ export default function HomePage() {
                   </div>
                   <div style={{ padding: "12px 16px" }}>
                     {meetings.length === 0 ? (
-                      <p style={{ fontSize: "15px", color: "var(--text-muted)", margin: 0 }}>No upcoming meetings scheduled.</p>
+                      <p style={{ fontSize: "15px", color: COLOURS.INK_400, margin: 0 }}>No upcoming meetings scheduled.</p>
                     ) : (
                       meetings.map((m) => (
                         <a key={m.id} href="/meetings" style={{
@@ -1974,7 +1974,7 @@ export default function HomePage() {
                           padding: "6px 0", textDecoration: "none", color: "inherit",
                         }}>
                           <span style={{ fontSize: "15px", color: "var(--text-primary)" }}>{m.title}</span>
-                          <span style={{ fontSize: "13px", color: "var(--text-muted)" }}>{formatDateUK(m.meeting_date)}</span>
+                          <span style={{ fontSize: "13px", color: COLOURS.INK_400 }}>{formatDateUK(m.meeting_date)}</span>
                         </a>
                       ))
                     )}
@@ -1992,7 +1992,7 @@ export default function HomePage() {
                     }}>
                       <span style={{ fontSize: "16px" }}>👥</span>
                       <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)" }}>Team Workload</span>
-                      <span style={{ fontSize: "13px", color: "var(--text-muted)", marginLeft: "auto" }}>open tasks per person</span>
+                      <span style={{ fontSize: "13px", color: COLOURS.INK_400, marginLeft: "auto" }}>open tasks per person</span>
                     </div>
                     <div style={{ padding: "12px 16px" }}>
                       {workload.map((w) => (
@@ -2047,7 +2047,7 @@ export default function HomePage() {
                           transition: "width 0.3s ease",
                         }} />
                       </div>
-                      <div style={{ fontSize: "14px", color: "var(--text-muted)" }}>
+                      <div style={{ fontSize: "14px", color: COLOURS.INK_400 }}>
                         {progressPct}% completed {myOpenTasks.length > 0 ? `· ${myOpenTasks.length} still open` : ""}
                       </div>
                     </div>
@@ -2074,7 +2074,7 @@ export default function HomePage() {
                           borderBottom: i < attention.length - 1 ? "1px solid var(--border-light)" : "none",
                         }}>
                           <div style={{ fontSize: "15px", color: "var(--text-primary)", fontWeight: 500 }}>{a.label}</div>
-                          <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>{a.detail}</div>
+                          <div style={{ fontSize: "13px", color: COLOURS.INK_400 }}>{a.detail}</div>
                         </a>
                       ))}
                     </div>
