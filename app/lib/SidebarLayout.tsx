@@ -279,7 +279,7 @@ export default function SidebarLayout({
               <div key={groupName} style={{ marginBottom: "4px" }}>
                 {!collapsed && (
                   <div style={{
-                    fontSize: "10px", fontWeight: 500, color: "var(--text-muted)",
+                    fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
                     textTransform: "uppercase", letterSpacing: "0.12em",
                     padding: "16px 10px 6px",
                   }}>
