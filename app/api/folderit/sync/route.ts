@@ -15,8 +15,6 @@ type FolderitFile = {
   uid: string;
   name: string;
   createdAt?: number;
-  entityUid?: string;
-  approvalStatus?: "active" | "inProgress" | "approved" | "rejected" | "deleted" | null;
 };
 
 type FolderitResolution = {
@@ -32,9 +30,23 @@ type FolderitResolutionInvite = {
   order?: number;
 };
 
-// How far back to scan for files that might be mid-approval. Keeps the sync
-// job cheap — old, already-resolved documents don't need re-checking.
-const APPROVAL_SCAN_DAYS = 180;
+type AuditEntry = {
+  event: string;
+  entityUid: string; // the file's own uid, per Folderit's audit trail schema
+};
+
+// How many recent audit-trail pages to scan per account for approval
+// activity. Folderit's search/files endpoint does NOT return approvalStatus
+// (confirmed against the OpenAPI schema — the default search result shape
+// has no approval fields, only the "expanded" variant would, and search
+// doesn't support requesting it). The reliable way to discover which files
+// are mid-approval is the account's audit trail, which logs a
+// "fileResolutionNew" event exactly when an approval starts. We scan recent
+// pages of that log to discover candidate files, then ask the live
+// resolutions/invites endpoints for their current status (never trusting
+// the audit log itself for current state, only for discovery).
+const AUDIT_PAGES_TO_SCAN = 3;
+const AUDIT_PER_PAGE = 100;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization") ?? "";
@@ -94,26 +106,34 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── 2. Approval invites: shortlist recently-touched files still mid-approval ──
+    // ── 2. Approval invites: discover candidate files via the audit trail ──
     try {
-      const dateFrom = new Date(Date.now() - APPROVAL_SCAN_DAYS * 86400_000).toISOString().slice(0, 10);
-      const res = await folderitFetch(
-        `/v2/accounts/${account.account_uid}/search/files?dateFrom=${dateFrom}&limit=200`
-      );
-      if (!res.ok) {
-        errors.push(`${account.account_name}: file search ${res.status}`);
-        continue;
+      // Discover entityUids that have started an approval recently by
+      // scanning the account's audit log for "fileResolutionNew" events.
+      const candidateEntityUids = new Set<string>();
+      for (let page = 1; page <= AUDIT_PAGES_TO_SCAN; page++) {
+        const auditRes = await folderitFetch(
+          `/v2/accounts/${account.account_uid}/audit?page=${page}&per-page=${AUDIT_PER_PAGE}`
+        );
+        if (!auditRes.ok) {
+          errors.push(`${account.account_name}: audit fetch page ${page} — ${auditRes.status}`);
+          break;
+        }
+        const entries: AuditEntry[] = await auditRes.json();
+        if (!entries.length) break;
+        for (const entry of entries) {
+          if (entry.event === "fileResolutionNew" && entry.entityUid) {
+            candidateEntityUids.add(entry.entityUid);
+          }
+        }
+        if (entries.length < AUDIT_PER_PAGE) break; // last page
       }
-      const json = await res.json();
-      const files: FolderitFile[] = json.files ?? [];
-      const inProgress = files.filter((f) => f.approvalStatus === "active" || f.approvalStatus === "inProgress");
 
       const currentInviteUids: string[] = [];
 
-      for (const file of inProgress) {
-        if (!file.entityUid) continue;
+      for (const entityUid of candidateEntityUids) {
         const resResolutions = await folderitFetch(
-          `/v2/accounts/${account.account_uid}/entities/${file.entityUid}/resolutions`
+          `/v2/accounts/${account.account_uid}/entities/${entityUid}/resolutions`
         );
         if (!resResolutions.ok) continue;
         const resolutionsJson = await resResolutions.json();
@@ -133,8 +153,8 @@ export async function GET(request: NextRequest) {
             const { error: upsertErr } = await db.from("folderit_resolution_invites").upsert({
               invite_uid: invite.uid,
               resolution_uid: resolution.uid,
-              file_uid: file.uid,
-              entity_uid: file.entityUid,
+              file_uid: entityUid,
+              entity_uid: entityUid,
               account_uid: account.account_uid,
               email: invite.email,
               status: invite.status,
