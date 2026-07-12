@@ -45,7 +45,7 @@ function severityColor(days: number): string {
 const { NAVY, SLATE, HAIRLINE, AMBER, BLUE, GREEN, CARD_ALT } = COLOURS;
 
 const COMPANY_BADGE_STYLES: Record<string, { bg: string; text: string }> = {
-  UTPL: { bg: "#EEF1FC", text: COLOURS.BLUE },
+  UTPL: { bg: COLOURS.INFO_SOFT, text: COLOURS.BLUE },
   IFPL: { bg: COLOURS.SUCCESS_SOFT, text: COLOURS.GREEN },
   BRNH: { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
   HD: { bg: "#F3EEF9", text: "#6E45B8" },
