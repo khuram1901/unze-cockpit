@@ -56,6 +56,13 @@ function CompanyBadge({ shortCode }: { shortCode: string }) {
 type DetailItem = {
   section: "approval" | "company_inbox" | "hr_inbox";
   item_uid: string;
+  // The actual Folderit file id — always the right id to ask for a
+  // preview. For approvals, item_uid is the INVITE's own id (kept for
+  // uniqueness when the same file has more than one pending invite), so
+  // it can't be used to look up the file directly. Falls back to
+  // item_uid when absent (company inbox / HR rows already use the file's
+  // own uid as item_uid, so there's nothing to distinguish there).
+  file_uid?: string | null;
   name: string | null;
   account_name: string;
   status: string | null;
@@ -119,7 +126,7 @@ function FileRow({ item, showTopBorder, indentPx = 40 }: { item: DetailItem; sho
     if (loading) return;
     setLoading(true);
     try {
-      const url = await fetchPreviewBlobUrl(item.item_uid);
+      const url = await fetchPreviewBlobUrl(item.file_uid ?? item.item_uid);
       setPreview({ url, name: item.name });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Couldn't preview this document.");

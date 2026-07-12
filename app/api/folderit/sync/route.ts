@@ -168,8 +168,31 @@ async function syncAccountApprovals(
         const resolutionsJson = await resResolutions.json();
         const resolutions: FolderitResolution[] = resolutionsJson.resolutions ?? resolutionsJson ?? [];
 
-        for (const resolution of resolutions) {
-          if (resolution.status !== "active" && resolution.status !== "inProgress") continue;
+        const activeResolutions = resolutions.filter(
+          (r) => r.status === "active" || r.status === "inProgress"
+        );
+        if (!activeResolutions.length) return;
+
+        // Fetch the file's real name once per entity (not once per invite).
+        // The audit-trail candidate discovery only gives us Folderit's raw
+        // uid — showing that directly ("gibberish") was the bug. Joining
+        // against folderit_inbox_files only works if the file is still
+        // sitting in the inbox; many approval-workflow files have already
+        // been filed elsewhere by the time someone's approval is pending,
+        // so this fetches the name directly from Folderit instead.
+        let fileName: string | null = null;
+        try {
+          const fileRes = await folderitFetch(`/v2/accounts/${account.account_uid}/files/${entityUid}`);
+          if (fileRes.ok) {
+            const fileJson = await fileRes.json();
+            fileName = fileJson?.name ?? null;
+          }
+        } catch {
+          // leave fileName null — get_folderit_details falls back to the
+          // inbox-file join, then finally the raw uid, if this is null.
+        }
+
+        for (const resolution of activeResolutions) {
           const resInvites = await folderitFetch(
             `/v2/accounts/${account.account_uid}/resolutions/${resolution.uid}/invites`
           );
@@ -184,6 +207,7 @@ async function syncAccountApprovals(
               resolution_uid: resolution.uid,
               file_uid: entityUid,
               entity_uid: entityUid,
+              file_name: fileName,
               account_uid: account.account_uid,
               email: invite.email,
               status: invite.status,
