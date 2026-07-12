@@ -4,9 +4,14 @@
 -- Khuram was getting 50-70 individual emails a day from task assignments
 -- (every task/escalation fires its own email — see app/lib/send-email.ts).
 -- This replaces that with a single daily digest: everything he needs —
--- open tasks, escalations, and things waiting on his approval (meetings,
--- leave requests, Folderit) — assembled in one round-trip, per the app's
+-- open tasks, escalations, and things waiting on his approval (meeting
+-- requests, Folderit) — assembled in one round-trip, per the app's
 -- rule that all aggregation happens in Postgres, never in JS.
+--
+-- Note: leave-request approvals were originally planned as a section here,
+-- but the leave_records table (migration 019) was never actually applied
+-- to the live database and nothing in the app references it — dropped
+-- from this digest rather than blocking on an unrelated migration.
 --
 -- Sent by a new cron route (app/api/notifications/ceo-digest/route.ts),
 -- weekdays only, 11:30am Pakistan time.
@@ -68,18 +73,6 @@ as $$
       ) order by m.requested_date nulls last), '[]'::jsonb)
       from meeting_requests m
       where m.status = 'Pending'
-    ),
-    'leave_approvals', (
-      select coalesce(jsonb_agg(jsonb_build_object(
-        'id', l.id,
-        'member_name', l.member_name,
-        'leave_type', l.leave_type,
-        'start_date', l.start_date,
-        'end_date', l.end_date,
-        'days', l.days
-      ) order by l.start_date nulls last), '[]'::jsonb)
-      from leave_records l
-      where l.status = 'Pending'
     ),
     'folderit_approval_count', (
       select count(*)::int

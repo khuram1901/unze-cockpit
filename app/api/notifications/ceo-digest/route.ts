@@ -15,12 +15,10 @@ const CEO_DIGEST_RECIPIENT = "khuram1901@gmail.com";
 type DigestTask = { id: string; description: string | null; priority: string | null; due_date: string | null; assigned_by: string | null; is_overdue: boolean };
 type DigestEscalation = { id: string; description: string | null; exception_type: string | null; due_date: string | null };
 type DigestMeetingApproval = { id: string; meeting_title: string | null; requested_by_name: string | null; requested_date: string | null; preferred_time: string | null };
-type DigestLeaveApproval = { id: string; member_name: string | null; leave_type: string | null; start_date: string | null; end_date: string | null; days: number | null };
 type DigestPayload = {
   tasks_open: DigestTask[]; tasks_open_count: number; tasks_overdue_count: number;
   escalations: DigestEscalation[];
   meeting_approvals: DigestMeetingApproval[];
-  leave_approvals: DigestLeaveApproval[];
   folderit_approval_count: number; folderit_company_inbox_count: number;
 };
 
@@ -148,9 +146,6 @@ export async function GET(request: NextRequest) {
     const meetingRows = digest.meeting_approvals.slice(0, 8).map(
       (m) => `<li>${m.meeting_title ?? "Meeting request"} — requested by ${m.requested_by_name ?? "someone"}${m.requested_date ? `, ${ukDate(m.requested_date)}` : ""}</li>`
     );
-    const leaveRows = digest.leave_approvals.slice(0, 8).map(
-      (l) => `<li>${l.member_name ?? "Team member"} — ${l.leave_type ?? "Leave"}, ${ukDate(l.start_date)} to ${ukDate(l.end_date)} (${l.days ?? "?"} day${l.days === 1 ? "" : "s"})</li>`
-    );
     const folderitRows: string[] = [];
     if (digest.folderit_approval_count > 0) folderitRows.push(`<li>${digest.folderit_approval_count} document${digest.folderit_approval_count > 1 ? "s" : ""} awaiting your approval</li>`);
     if (digest.folderit_company_inbox_count > 0) folderitRows.push(`<li>${digest.folderit_company_inbox_count} unfiled across company inboxes</li>`);
@@ -204,7 +199,7 @@ export async function GET(request: NextRequest) {
     const taxRows = alerts.slice(0, 5).map((a) => `<li style="color:${a.tier === 2 ? "#dc2626" : "#d97706"};font-weight:600">${a.alert_message}</li>`);
 
     // ── Assemble ──
-    const approvalTotal = digest.meeting_approvals.length + digest.leave_approvals.length + digest.folderit_approval_count;
+    const approvalTotal = digest.meeting_approvals.length + digest.folderit_approval_count;
     const summaryLine = `${digest.tasks_open_count} open task${digest.tasks_open_count === 1 ? "" : "s"}` +
       (digest.tasks_overdue_count > 0 ? `, ${digest.tasks_overdue_count} overdue` : "") +
       (digest.escalations.length > 0 ? `, ${digest.escalations.length} escalation${digest.escalations.length > 1 ? "s" : ""}` : "") +
@@ -218,7 +213,6 @@ export async function GET(request: NextRequest) {
       ${digest.tasks_open.length > 8 ? `<p style="font-size:12px;color:#64748b">+ ${digest.tasks_open.length - 8} more — see the dashboard</p>` : ""}
       ${section("Escalations", escalationRows)}
       ${section("Meeting requests awaiting your approval", meetingRows)}
-      ${section("Leave requests awaiting your approval", leaveRows)}
       ${section("Folderit", folderitRows)}
       ${section("Operations — today", opsRows)}
       ${section("This week", weekRows)}
