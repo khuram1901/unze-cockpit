@@ -4,7 +4,7 @@ import { useEffect, useState, useContext, createContext } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
 import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle } from "../lib/SharedUI";
-import { COMPANIES, ALM_COMPANY_ID } from "../lib/constants";
+import { COMPANIES, ALM_COMPANY_ID, DIR_COMPANY_ID } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
 import { useMobile } from "../lib/useMobile";
 import { isAdminTier, canViewFolderitHr } from "../lib/permissions";
@@ -21,8 +21,17 @@ const RESTAURANT_GROUP_KEY = "restaurants";
 // Khuram: "lets remove the company Almahar from this card for now" —
 // hidden from the Folderit page only; Almahar stays in COMPANIES and
 // everywhere else in the app.
+// Khuram: "can we rename just on the card on this page from Directors
+// to Family Documents. so its consistent with folder it" — that's what
+// the Directors account is actually called inside Folderit itself;
+// display-only rename, doesn't touch the company's real name anywhere
+// else in the app.
 const FOLDERIT_DISPLAY_COMPANIES: { id: string; shortCode: string; name: string }[] = [
-  ...COMPANIES.filter((c) => c.id !== BRNH_ID && c.id !== HD_ID && c.id !== ALM_COMPANY_ID).map((c) => ({ id: c.id, shortCode: c.shortCode, name: c.name })),
+  ...COMPANIES.filter((c) => c.id !== BRNH_ID && c.id !== HD_ID && c.id !== ALM_COMPANY_ID).map((c) => ({
+    id: c.id,
+    shortCode: c.shortCode,
+    name: c.id === DIR_COMPANY_ID ? "Family Documents" : c.name,
+  })),
   { id: RESTAURANT_GROUP_KEY, shortCode: "RST", name: "Restaurant" },
 ];
 
