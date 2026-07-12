@@ -3,10 +3,35 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
-import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../lib/SharedUI";
 import { COMPANIES } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
 import { isAdminTier } from "../lib/permissions";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
+
+// Baranh and Haute Dolci share the same Folderit account (Restaurants) —
+// the Folderit page shows them as one merged "Restaurant" card. They
+// remain two separate companies everywhere else in the app (separate
+// cash/budgets, per the project's multi-company rule).
+const BRNH_ID = "6401ba75-f297-4617-84c1-305bcaf35a50";
+const HD_ID = "16a92b7f-b3fa-4271-819b-c6befb534f12";
+const RESTAURANT_GROUP_KEY = "restaurants";
+
+const FOLDERIT_DISPLAY_COMPANIES: { id: string; shortCode: string; name: string }[] = [
+  ...COMPANIES.filter((c) => c.id !== BRNH_ID && c.id !== HD_ID).map((c) => ({ id: c.id, shortCode: c.shortCode, name: c.name })),
+  { id: RESTAURANT_GROUP_KEY, shortCode: "RST", name: "Restaurant" },
+];
+
+function displayGroupFor(realCompanyUuid: string): string {
+  return realCompanyUuid === BRNH_ID || realCompanyUuid === HD_ID ? RESTAURANT_GROUP_KEY : realCompanyUuid;
+}
+
+function severityColor(days: number): string {
+  if (days >= 7) return COLOURS.RED;
+  if (days >= 3) return COLOURS.AMBER;
+  if (days > 0) return COLOURS.SLATE;
+  return COLOURS.GREEN;
+}
 
 const { NAVY, SLATE, HAIRLINE, AMBER, BLUE, GREEN, CARD_ALT } = COLOURS;
 
@@ -276,7 +301,7 @@ function MemberView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[]
 
 // ── CEO/Admin view: every company on one page ───────────────────────
 type CompanyBreakdownRow = {
-  company_uuid: string;
+  group_key: string;
   inbox_count: number;
   inbox_oldest_days: number | null;
   pending_approval_count: number;
@@ -317,20 +342,30 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
     })();
   }, []);
 
-  async function openCompany(companyUuid: string) {
-    setExpandedCompany(companyUuid);
-    if (!detailsByCompany[companyUuid]) {
-      setLoadingCompany(companyUuid);
-      const res = await authFetch(`/api/folderit/details?company=${companyUuid}`);
-      const json = await res.json();
-      setDetailsByCompany((prev) => ({ ...prev, [companyUuid]: json.items ?? [] }));
+  async function openCompany(groupKey: string) {
+    setExpandedCompany(groupKey);
+    if (!detailsByCompany[groupKey]) {
+      setLoadingCompany(groupKey);
+      if (groupKey === RESTAURANT_GROUP_KEY) {
+        // Merged card — fetch both real companies behind it and combine.
+        const [resA, resB] = await Promise.all([
+          authFetch(`/api/folderit/details?company=${BRNH_ID}`),
+          authFetch(`/api/folderit/details?company=${HD_ID}`),
+        ]);
+        const [jsonA, jsonB] = await Promise.all([resA.json(), resB.json()]);
+        setDetailsByCompany((prev) => ({ ...prev, [groupKey]: [...(jsonA.items ?? []), ...(jsonB.items ?? [])] }));
+      } else {
+        const res = await authFetch(`/api/folderit/details?company=${groupKey}`);
+        const json = await res.json();
+        setDetailsByCompany((prev) => ({ ...prev, [groupKey]: json.items ?? [] }));
+      }
       setLoadingCompany(null);
     }
   }
 
-  async function toggleCompany(companyUuid: string) {
-    if (expandedCompany === companyUuid) { setExpandedCompany(null); return; }
-    await openCompany(companyUuid);
+  async function toggleCompany(groupKey: string) {
+    if (expandedCompany === groupKey) { setExpandedCompany(null); return; }
+    await openCompany(groupKey);
   }
 
   if (loading) return <div style={{ color: SLATE }}>Loading…</div>;
@@ -363,7 +398,7 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
                 return (
                   <div
                     key={`${it.section}:${it.item_uid}`}
-                    onClick={() => { openCompany(it.company_uuid); setBannerOpen(false); }}
+                    onClick={() => { openCompany(displayGroupFor(it.company_uuid)); setBannerOpen(false); }}
                     style={{ padding: "8px 16px 8px 48px", borderBottom: `1px solid ${HAIRLINE}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}
                   >
                     <div style={{ minWidth: 0, flex: 1 }}>
@@ -385,85 +420,114 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
       )}
 
       <SectionTitle title="By Company" />
-      <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px" }}>
-        {COMPANIES.map((company, i) => {
-          const row = rows.find((r) => r.company_uuid === company.id);
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+        {FOLDERIT_DISPLAY_COMPANIES.map((company) => {
+          const row = rows.find((r) => r.group_key === company.id);
           const inboxCount = row?.inbox_count ?? 0;
           const inboxOldestDays = row?.inbox_oldest_days ?? null;
           const approvalCount = row?.pending_approval_count ?? 0;
           const approvalOldestDays = row?.approval_oldest_days ?? null;
-          const isOpen = expandedCompany === company.id;
+          const isSelected = expandedCompany === company.id;
           const hasData = inboxCount > 0 || approvalCount > 0;
           return (
-            <div key={company.id} style={{ borderTop: i > 0 ? `1px solid ${HAIRLINE}` : "none" }}>
-              <div
-                onClick={() => hasData && toggleCompany(company.id)}
-                style={{
-                  padding: "13px 16px", cursor: hasData ? "pointer" : "default", display: "flex",
-                  justifyContent: "space-between", alignItems: "center", gap: "10px",
-                  backgroundColor: isOpen ? CARD_ALT : "transparent",
-                }}
-              >
+            <div
+              key={company.id}
+              onClick={() => hasData && toggleCompany(company.id)}
+              style={{
+                ...cardStyle,
+                padding: "16px 18px",
+                cursor: hasData ? "pointer" : "default",
+                border: isSelected ? `1.5px solid ${NAVY}` : `1px solid ${HAIRLINE}`,
+                boxShadow: isSelected ? SHADOWS.HOVER : "none",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <CompanyBadge shortCode={company.shortCode} />
-                  <span style={{ fontSize: "14.5px", fontWeight: 600, color: NAVY }}>{company.name}</span>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>{company.name}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div style={{
-                    textAlign: "right", padding: "4px 10px", borderRadius: RADII.SM,
-                    backgroundColor: inboxCount > 0 ? "#EEF1FC" : "transparent", minWidth: "72px",
-                  }}>
-                    <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Inbox</div>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: inboxCount > 0 ? BLUE : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{inboxCount}</div>
-                    {inboxOldestDays !== null && inboxCount > 0 && (
-                      <div style={{ fontSize: "9.5px", fontWeight: 600, marginTop: "1px", color: inboxOldestDays >= 7 ? COLOURS.RED : SLATE }}>
-                        oldest {inboxOldestDays}d
-                      </div>
-                    )}
-                  </div>
-                  <div style={{
-                    textAlign: "right", padding: "4px 10px", borderRadius: RADII.SM,
-                    backgroundColor: approvalCount > 0 ? COLOURS.WARNING_SOFT : "transparent", minWidth: "72px",
-                  }}>
-                    <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approvals</div>
-                    <div style={{ fontSize: "13px", fontWeight: 700, color: approvalCount > 0 ? AMBER : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{approvalCount}</div>
-                    {approvalOldestDays !== null && approvalCount > 0 && (
-                      <div style={{ fontSize: "9.5px", fontWeight: 600, marginTop: "1px", color: approvalOldestDays >= 7 ? COLOURS.RED : SLATE }}>
-                        oldest {approvalOldestDays}d
-                      </div>
-                    )}
-                  </div>
-                  {hasData && <span style={{ fontSize: "12px", color: SLATE }}>{isOpen ? "▼" : "▶"}</span>}
+                {hasData && <span style={{ fontSize: "12px", color: SLATE }}>{isSelected ? "▼" : "▶"}</span>}
+              </div>
+              <div style={{ display: "flex", gap: "22px" }}>
+                <div>
+                  <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Inbox</div>
+                  <div style={{ fontSize: "24px", fontWeight: 800, color: inboxCount > 0 ? BLUE : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{inboxCount}</div>
+                  {inboxOldestDays !== null && inboxCount > 0 && (
+                    <div style={{ fontSize: "10px", fontWeight: 600, color: inboxOldestDays >= 7 ? COLOURS.RED : SLATE }}>oldest {inboxOldestDays}d</div>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approvals</div>
+                  <div style={{ fontSize: "24px", fontWeight: 800, color: approvalCount > 0 ? AMBER : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{approvalCount}</div>
+                  {approvalOldestDays !== null && approvalCount > 0 && (
+                    <div style={{ fontSize: "10px", fontWeight: 600, color: approvalOldestDays >= 7 ? COLOURS.RED : SLATE }}>oldest {approvalOldestDays}d</div>
+                  )}
                 </div>
               </div>
-              {isOpen && (
-                loadingCompany === company.id ? (
-                  <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Loading…</div>
-                ) : (
-                  <div style={{ backgroundColor: CARD_ALT }}>
-                    {approvalCount > 0 && (
-                      <>
-                        <div style={{ padding: "8px 16px 4px 40px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                          Pending approval
-                        </div>
-                        <FileList items={(detailsByCompany[company.id] ?? []).filter((it) => it.section === "approval")} />
-                      </>
-                    )}
-                    {inboxCount > 0 && (
-                      <>
-                        <div style={{ padding: "8px 16px 4px 40px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                          Inbox — not yet filed
-                        </div>
-                        <FileList items={(detailsByCompany[company.id] ?? []).filter((it) => it.section === "company_inbox")} />
-                      </>
-                    )}
-                  </div>
-                )
-              )}
             </div>
           );
         })}
       </div>
+
+      {(() => {
+        const chartData = FOLDERIT_DISPLAY_COMPANIES.map((company) => {
+          const row = rows.find((r) => r.group_key === company.id);
+          const days = Math.max(row?.inbox_oldest_days ?? 0, row?.approval_oldest_days ?? 0);
+          return { name: company.shortCode, days };
+        });
+        return (
+          <div style={{ ...cardStyle, padding: "22px 24px", marginBottom: "16px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 600, color: NAVY, marginBottom: "14px" }}>Document aging by company</div>
+            <ResponsiveContainer width="100%" height={Math.max(120, chartData.length * 34)}>
+              <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: SLATE }} allowDecimals={false} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: NAVY }} width={48} />
+                <Tooltip formatter={(value) => [`${value} days`, "Oldest outstanding"]} />
+                <Bar dataKey="days" radius={[0, 4, 4, 0]}>
+                  {chartData.map((d, i) => <Cell key={i} fill={severityColor(d.days)} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <div style={{ fontSize: "11px", color: SLATE, marginTop: "10px" }}>
+              Longest a document has sat unfiled or unapproved, per company. Red = 7+ days, amber = 3-6 days.
+            </div>
+          </div>
+        );
+      })()}
+
+      {expandedCompany && (
+        <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px", padding: 0 }}>
+          <div style={{ padding: "13px 16px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: CARD_ALT }}>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>
+              {FOLDERIT_DISPLAY_COMPANIES.find((c) => c.id === expandedCompany)?.name}
+            </span>
+            <span onClick={() => setExpandedCompany(null)} style={{ cursor: "pointer", fontSize: "12px", color: SLATE }}>Close ✕</span>
+          </div>
+          {loadingCompany === expandedCompany ? (
+            <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Loading…</div>
+          ) : (
+            <>
+              {(detailsByCompany[expandedCompany] ?? []).some((it) => it.section === "approval") && (
+                <>
+                  <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Pending approval
+                  </div>
+                  <FileList items={(detailsByCompany[expandedCompany] ?? []).filter((it) => it.section === "approval")} />
+                </>
+              )}
+              {(detailsByCompany[expandedCompany] ?? []).some((it) => it.section === "company_inbox") && (
+                <>
+                  <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Inbox — not yet filed
+                  </div>
+                  <FileList items={(detailsByCompany[expandedCompany] ?? []).filter((it) => it.section === "company_inbox")} />
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <HrSection
         categories={hrCategories}
