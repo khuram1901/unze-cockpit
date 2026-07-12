@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
-// Admin/CEO only — per-company inbox + pending-approval counts for the
-// "all companies on one page" view.
+// Admin/CEO only — per-company inbox counts for the "all companies on one
+// page" view. Approvals are personal (see /api/folderit/summary +
+// /api/folderit/details), not part of this company-wide breakdown.
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;

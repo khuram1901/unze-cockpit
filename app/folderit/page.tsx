@@ -84,15 +84,36 @@ function AgeTag({ days }: { days: number | null }) {
 
 type HrCategory = { category_name: string; file_count: number; sort_order: number };
 
-function FileRow({ item, showTopBorder, indent }: { item: DetailItem; showTopBorder: boolean; indent?: boolean }) {
+// Asks the backend for a live Folderit link and opens it in a new tab.
+// Backend resolves the file's account from just its uid and checks the
+// caller is allowed to see it, so nothing sensitive is exposed here.
+async function openFile(fileUid: string) {
+  try {
+    const res = await authFetch(`/api/folderit/file-url?file=${encodeURIComponent(fileUid)}`);
+    const json = await res.json();
+    if (!res.ok || !json.url) {
+      window.alert(json.error ?? "Couldn't open this document.");
+      return;
+    }
+    window.open(json.url, "_blank", "noopener,noreferrer");
+  } catch {
+    window.alert("Couldn't open this document.");
+  }
+}
+
+function FileRow({ item, showTopBorder, indentPx = 40 }: { item: DetailItem; showTopBorder: boolean; indentPx?: number }) {
   return (
-    <div style={{
-      padding: `8px 16px 8px ${indent ? 56 : 40}px`,
-      borderTop: showTopBorder ? `1px solid ${HAIRLINE}` : "none",
-      display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-    }}>
+    <div
+      onClick={() => openFile(item.item_uid)}
+      style={{
+        padding: `8px 16px 8px ${indentPx}px`,
+        borderTop: showTopBorder ? `1px solid ${HAIRLINE}` : "none",
+        display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+        cursor: "pointer",
+      }}
+    >
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: "13.5px", color: NAVY, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: "13.5px", color: BLUE, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "underline", textDecorationColor: "transparent" }}>
           {item.name ?? "Untitled document"}
         </div>
         <div style={{ fontSize: "11.5px", color: SLATE, marginTop: "1px" }}>{item.account_name}</div>
@@ -109,56 +130,98 @@ function FileRow({ item, showTopBorder, indent }: { item: DetailItem; showTopBor
   );
 }
 
-function FolderHeader({ path, showTopBorder }: { path: string; showTopBorder: boolean }) {
+function FileList({ items }: { items: DetailItem[] }) {
+  if (!items.length) return <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Nothing here.</div>;
   return (
-    <div style={{
-      padding: "8px 16px 4px 40px", fontSize: "11px", fontWeight: 700,
-      color: SLATE, textTransform: "uppercase", letterSpacing: "0.03em",
-      borderTop: showTopBorder ? `1px solid ${HAIRLINE}` : "none",
-    }}>
-      {path}
+    <div>
+      {items.map((item, i) => (
+        <FileRow key={item.item_uid} item={item} showTopBorder={i > 0} />
+      ))}
     </div>
   );
 }
 
-function FileList({ items }: { items: DetailItem[] }) {
-  if (!items.length) return <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Nothing here.</div>;
+// ── HR category files: a real nested folder tree, matching Folderit's own
+// structure, instead of one flat pile or a single-level grouped list. ──
+type FolderNode = {
+  name: string;
+  path: string;
+  files: DetailItem[];
+  children: Map<string, FolderNode>;
+};
 
-  const hasFolders = items.some((it) => it.folder_path);
-  if (!hasFolders) {
-    return (
-      <div>
-        {items.map((item, i) => (
-          <FileRow key={item.item_uid} item={item} showTopBorder={i > 0} />
-        ))}
-      </div>
-    );
+function buildFolderTree(items: DetailItem[]): FolderNode {
+  const root: FolderNode = { name: "", path: "", files: [], children: new Map() };
+  for (const item of items) {
+    if (!item.folder_path) {
+      root.files.push(item);
+      continue;
+    }
+    const segments = item.folder_path.split("/");
+    let node = root;
+    let pathSoFar = "";
+    for (const seg of segments) {
+      pathSoFar = pathSoFar ? `${pathSoFar}/${seg}` : seg;
+      let child = node.children.get(seg);
+      if (!child) {
+        child = { name: seg, path: pathSoFar, files: [], children: new Map() };
+        node.children.set(seg, child);
+      }
+      node = child;
+    }
+    node.files.push(item);
   }
+  return root;
+}
 
-  // Folderit's real subfolder structure — group root-level files first,
-  // then one section per subfolder, so users see the same map/directory
-  // they'd navigate inside Folderit itself instead of one flat pile.
-  const rootItems = items.filter((it) => !it.folder_path);
-  const folderMap = new Map<string, DetailItem[]>();
-  for (const it of items) {
-    if (!it.folder_path) continue;
-    if (!folderMap.has(it.folder_path)) folderMap.set(it.folder_path, []);
-    folderMap.get(it.folder_path)!.push(it);
-  }
-  const sortedFolders = Array.from(folderMap.keys()).sort((a, b) => a.localeCompare(b));
+function FolderNodeRow({ node, depth }: { node: FolderNode; depth: number }) {
+  const [open, setOpen] = useState(depth === 0);
+  const childFolders = Array.from(node.children.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const baseIndent = 40 + depth * 16;
 
   return (
     <div>
-      {rootItems.map((item, i) => (
-        <FileRow key={item.item_uid} item={item} showTopBorder={i > 0} />
-      ))}
-      {sortedFolders.map((folder) => (
-        <div key={folder}>
-          <FolderHeader path={folder} showTopBorder />
-          {folderMap.get(folder)!.map((item) => (
-            <FileRow key={item.item_uid} item={item} showTopBorder={false} indent />
+      <div
+        onClick={() => setOpen(!open)}
+        style={{
+          padding: `7px 16px 7px ${baseIndent}px`, cursor: "pointer",
+          display: "flex", alignItems: "center", gap: "6px",
+          borderTop: `1px solid ${HAIRLINE}`, backgroundColor: CARD_ALT,
+        }}
+      >
+        <span style={{ fontSize: "10px", color: SLATE, width: "10px" }}>{open ? "▼" : "▶"}</span>
+        <span style={{ fontSize: "12px", fontWeight: 700, color: NAVY }}>📁 {node.name}</span>
+      </div>
+      {open && (
+        <div>
+          {node.files.map((item, i) => (
+            <FileRow key={item.item_uid} item={item} showTopBorder={i > 0} indentPx={baseIndent + 16} />
+          ))}
+          {childFolders.map((child) => (
+            <FolderNodeRow key={child.path} node={child} depth={depth + 1} />
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function HrCategoryFileList({ items }: { items: DetailItem[] }) {
+  if (!items.length) return <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Nothing here.</div>;
+
+  const hasFolders = items.some((it) => it.folder_path);
+  if (!hasFolders) return <FileList items={items} />;
+
+  const root = buildFolderTree(items);
+  const topFolders = Array.from(root.children.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div>
+      {root.files.map((item, i) => (
+        <FileRow key={item.item_uid} item={item} showTopBorder={i > 0} />
+      ))}
+      {topFolders.map((node) => (
+        <FolderNodeRow key={node.path} node={node} depth={0} />
       ))}
     </div>
   );
@@ -168,10 +231,11 @@ function FileList({ items }: { items: DetailItem[] }) {
 // right, expands in place to show a FileList. Same interaction as the
 // audit-record rows in AuditDashboard.tsx.
 function CollapsibleRow({
-  label, count, color, sub, isOpen, onToggle, items, loading,
+  label, count, color, sub, isOpen, onToggle, items, loading, asFolderTree,
 }: {
   label: string; count: number; color: string; sub?: string;
   isOpen: boolean; onToggle: () => void; items: DetailItem[] | null; loading: boolean;
+  asFolderTree?: boolean;
 }) {
   return (
     <div style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
@@ -198,6 +262,8 @@ function CollapsibleRow({
       {isOpen && count > 0 && (
         loading || !items ? (
           <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Loading…</div>
+        ) : asFolderTree ? (
+          <HrCategoryFileList items={items} />
         ) : (
           <FileList items={items} />
         )
@@ -277,6 +343,7 @@ function HrSection({
             onToggle={() => toggleCategory(cat.category_name)}
             items={detailsCache[`cat:${cat.category_name}`] ?? null}
             loading={loadingKey === `cat:${cat.category_name}`}
+            asFolderTree
           />
         ))}
         <CollapsibleRow
@@ -355,17 +422,54 @@ function MemberView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[]
   );
 }
 
+// Approvals are always personal — even the CEO/Admin only ever sees their
+// own outstanding approvals here, never everyone else's. Reused at the top
+// of AdminView; MemberView has its own equivalent row inline since it also
+// needs the company inbox row right alongside it.
+function PersonalApprovalsCard() {
+  const [count, setCount] = useState(0);
+  const [items, setItems] = useState<DetailItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [summaryRes, detailsRes] = await Promise.all([
+        authFetch("/api/folderit/summary"),
+        authFetch("/api/folderit/details"),
+      ]);
+      const summaryJson = await summaryRes.json();
+      setCount(summaryJson.pending_approval_count ?? 0);
+      const detailsJson = await detailsRes.json();
+      setItems((detailsJson.items ?? []).filter((d: DetailItem) => d.section === "approval"));
+      setLoading(false);
+    })();
+  }, []);
+
+  return (
+    <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px" }}>
+      <CollapsibleRow
+        label="Pending my approval"
+        count={count}
+        color={AMBER}
+        isOpen={expanded}
+        onToggle={() => setExpanded(!expanded)}
+        items={items}
+        loading={loading}
+      />
+    </div>
+  );
+}
+
 // ── CEO/Admin view: every company on one page ───────────────────────
 type CompanyBreakdownRow = {
   group_key: string;
   inbox_count: number;
   inbox_oldest_days: number | null;
-  pending_approval_count: number;
-  approval_oldest_days: number | null;
 };
 
 type OverdueItem = {
-  section: "approval" | "company_inbox";
+  section: "company_inbox";
   item_uid: string;
   name: string | null;
   account_name: string;
@@ -438,7 +542,7 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
               <span style={{ fontSize: "20px" }}>⚠</span>
               <div>
                 <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
-                  {overdueItems.length} document{overdueItems.length > 1 ? "s" : ""} sitting 7+ days, not yet filed or approved
+                  {overdueItems.length} document{overdueItems.length > 1 ? "s" : ""} sitting 7+ days, not yet filed
                 </div>
                 <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
                   {overdueItems.slice(0, 3).map((it) => `${it.name ?? "Untitled"} (${it.days_pending}d)`).join(" · ")}
@@ -463,7 +567,7 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
                       </div>
                       <div style={{ fontSize: "11.5px", color: SLATE, marginTop: "1px", display: "flex", alignItems: "center", gap: "6px" }}>
                         {company && <CompanyBadge shortCode={company.shortCode} />}
-                        {it.account_name} · {it.section === "approval" ? "pending approval" : "inbox"}
+                        {it.account_name} · inbox
                       </div>
                     </div>
                     <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED, flexShrink: 0 }}>{it.days_pending}d</span>
@@ -475,16 +579,16 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
         </div>
       )}
 
+      <PersonalApprovalsCard />
+
       <SectionTitle title="By Company" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px", marginBottom: "16px" }}>
         {FOLDERIT_DISPLAY_COMPANIES.map((company) => {
           const row = rows.find((r) => r.group_key === company.id);
           const inboxCount = row?.inbox_count ?? 0;
           const inboxOldestDays = row?.inbox_oldest_days ?? null;
-          const approvalCount = row?.pending_approval_count ?? 0;
-          const approvalOldestDays = row?.approval_oldest_days ?? null;
           const isSelected = expandedCompany === company.id;
-          const hasData = inboxCount > 0 || approvalCount > 0;
+          const hasData = inboxCount > 0;
           return (
             <div
               key={company.id}
@@ -504,21 +608,12 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
                 </div>
                 {hasData && <span style={{ fontSize: "12px", color: SLATE }}>{isSelected ? "▼" : "▶"}</span>}
               </div>
-              <div style={{ display: "flex", gap: "22px" }}>
-                <div>
-                  <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Inbox</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, color: inboxCount > 0 ? BLUE : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{inboxCount}</div>
-                  {inboxOldestDays !== null && inboxCount > 0 && (
-                    <div style={{ fontSize: "10px", fontWeight: 600, color: inboxOldestDays >= 7 ? COLOURS.RED : SLATE }}>oldest {inboxOldestDays}d</div>
-                  )}
-                </div>
-                <div>
-                  <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approvals</div>
-                  <div style={{ fontSize: "24px", fontWeight: 800, color: approvalCount > 0 ? AMBER : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{approvalCount}</div>
-                  {approvalOldestDays !== null && approvalCount > 0 && (
-                    <div style={{ fontSize: "10px", fontWeight: 600, color: approvalOldestDays >= 7 ? COLOURS.RED : SLATE }}>oldest {approvalOldestDays}d</div>
-                  )}
-                </div>
+              <div>
+                <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Inbox — not yet filed</div>
+                <div style={{ fontSize: "24px", fontWeight: 800, color: inboxCount > 0 ? BLUE : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{inboxCount}</div>
+                {inboxOldestDays !== null && inboxCount > 0 && (
+                  <div style={{ fontSize: "10px", fontWeight: 600, color: inboxOldestDays >= 7 ? COLOURS.RED : SLATE }}>oldest {inboxOldestDays}d</div>
+                )}
               </div>
             </div>
           );
@@ -539,22 +634,10 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
             <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Nothing here.</div>
           ) : (
             <>
-              {(detailsByCompany[expandedCompany] ?? []).some((it) => it.section === "approval") && (
-                <>
-                  <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    Pending approval
-                  </div>
-                  <FileList items={(detailsByCompany[expandedCompany] ?? []).filter((it) => it.section === "approval")} />
-                </>
-              )}
-              {(detailsByCompany[expandedCompany] ?? []).some((it) => it.section === "company_inbox") && (
-                <>
-                  <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    Inbox — not yet filed
-                  </div>
-                  <FileList items={(detailsByCompany[expandedCompany] ?? []).filter((it) => it.section === "company_inbox")} />
-                </>
-              )}
+              <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Inbox — not yet filed
+              </div>
+              <FileList items={detailsByCompany[expandedCompany] ?? []} />
             </>
           )}
         </div>
@@ -563,7 +646,7 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
       {(() => {
         const chartData = FOLDERIT_DISPLAY_COMPANIES.map((company) => {
           const row = rows.find((r) => r.group_key === company.id);
-          const days = Math.max(row?.inbox_oldest_days ?? 0, row?.approval_oldest_days ?? 0);
+          const days = row?.inbox_oldest_days ?? 0;
           return { name: company.shortCode, days };
         });
         return (

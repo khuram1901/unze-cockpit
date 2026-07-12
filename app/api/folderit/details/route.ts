@@ -33,7 +33,10 @@ export async function GET(request: NextRequest) {
   // override their own scope, regardless of what's in the query string.
   const requestedCompany = request.nextUrl.searchParams.get("company");
   const companyUuid = isAdmin ? (requestedCompany || null) : member?.company_id ?? null;
-  const userEmail = isAdmin ? null : email;
+  // Approvals are always personal — pass the caller's own email
+  // unconditionally, even for Admin/CEO, so nobody's "pending approval"
+  // list ever includes someone else's outstanding approvals.
+  const userEmail = email;
 
   const { data, error } = await db.rpc("get_folderit_details", {
     p_user_email: userEmail,
@@ -41,5 +44,12 @@ export async function GET(request: NextRequest) {
   });
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json({ items: data ?? [] });
+
+  // The per-company drill-down (?company=) is company-wide by design for
+  // the inbox — but approvals are personal, so a company-scoped request
+  // should never surface other people's approvals just because they
+  // happen to belong to that company. Only the caller's own approvals
+  // stay in scope, and only via their personal (no ?company=) request.
+  const items = requestedCompany ? (data ?? []).filter((row: { section: string }) => row.section !== "approval") : data ?? [];
+  return Response.json({ items });
 }

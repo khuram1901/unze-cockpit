@@ -19,10 +19,12 @@ export async function GET(request: NextRequest) {
     member?.role === "Admin" ||
     member?.role === "CEO";
 
-  // Admin/CEO see everything (both params null); everyone else is scoped
-  // to their own approvals + their own company's inbox.
+  // Approvals are always personal — even the CEO/Admin only sees their own
+  // outstanding approvals, never everyone else's. Company inbox stays
+  // org-wide for Admin/CEO (it's a shared inbox, not assigned to a person),
+  // scoped to just their own company for everyone else.
   const { data, error } = await db.rpc("get_folderit_summary", {
-    p_user_email: isAdmin ? null : email,
+    p_user_email: email,
     p_company_uuid: isAdmin ? null : member?.company_id ?? null,
   });
 
