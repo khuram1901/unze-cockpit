@@ -71,13 +71,24 @@ function buildRawEmail(to: string, from: string, subject: string, htmlBody: stri
   return Buffer.from(raw).toString("base64url");
 }
 
-// Task-assignment and escalation emails used to fire once per event —
-// 50-70 emails a day for the CEO. Those two trigger types are now folded
-// into a single daily digest instead (app/api/notifications/ceo-digest/
-// route.ts), so we suppress the individual emails for his addresses only.
-// Every other trigger type (reports, digests, password resets, etc.) and
-// every other recipient are unaffected.
-const DIGEST_COVERED_TRIGGER_TYPES = ["task_assigned", "escalation"];
+// Khuram used to get every one of these as its own separate email —
+// 50-70 a day from task assignments alone, plus separate daily/weekly/
+// monthly reports and alerts. All of it is now folded into a single daily
+// digest instead (app/api/notifications/ceo-digest/route.ts), so each of
+// these trigger types is suppressed for his two addresses only — anyone
+// else on a shared report (PA, Ops Managers, Shakeel on tax alerts, etc.)
+// still gets their email exactly as before. Password resets, account
+// invites, and anything not in this list are never affected.
+const DIGEST_COVERED_TRIGGER_TYPES = [
+  "task_assigned",
+  "escalation",
+  "daily_digest",          // app/api/notifications/digest/route.ts (5am PKT admin/exec digest)
+  "daily_report",          // app/api/reports/daily-pdf/route.ts
+  "weekly_report",         // app/api/reports/weekly/route.ts
+  "monthly_po_report",     // app/api/reports/monthly-po/route.ts
+  "investment_daily_summary", // app/api/investments/daily-summary/route.ts
+  "tax_deadline_alert",    // app/lib/taxAlertEngine.ts — CEO escalation branch only (Shakeel's alerts use a different recipient, so his are unaffected)
+];
 const DIGEST_COVERED_RECIPIENTS = ["k.saleem@unzegroup.com", "khuram1901@gmail.com"];
 
 export async function sendNotificationEmail({

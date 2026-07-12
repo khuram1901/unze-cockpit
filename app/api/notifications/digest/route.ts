@@ -32,14 +32,16 @@ export async function GET(request: NextRequest) {
     );
 
     // Get Admin and Executive members who have email notifications on.
-    // The CEO's two addresses are excluded here — he now gets a single
-    // consolidated digest instead (app/api/notifications/ceo-digest/route.ts).
+    // The CEO no longer receives this — sendNotificationEmail() suppresses
+    // "daily_digest" for his two addresses (see app/lib/send-email.ts),
+    // since he now gets a single consolidated digest instead
+    // (app/api/notifications/ceo-digest/route.ts). Left un-filtered here
+    // so the PA (and anyone else Admin/Executive) is unaffected.
     const { data: admins } = await supabase
       .from("members")
       .select("email, first_name, last_name, name, role, notify_email, phone_e164, notify_whatsapp")
       .in("role", ["Admin", "Executive"])
-      .eq("notify_email", true)
-      .not("email", "in", '("khuram1901@gmail.com","k.saleem@unzegroup.com")');
+      .eq("notify_email", true);
 
     if (!admins || admins.length === 0) {
       return Response.json({ ok: true, message: "No admin/executive with notifications enabled", sent: 0 });
