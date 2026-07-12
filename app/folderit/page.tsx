@@ -469,6 +469,41 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
         })}
       </div>
 
+      {expandedCompany && (
+        <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px", padding: 0 }}>
+          <div style={{ padding: "13px 16px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: CARD_ALT }}>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>
+              {FOLDERIT_DISPLAY_COMPANIES.find((c) => c.id === expandedCompany)?.name}
+            </span>
+            <span onClick={() => setExpandedCompany(null)} style={{ cursor: "pointer", fontSize: "12px", color: SLATE }}>Close ✕</span>
+          </div>
+          {loadingCompany === expandedCompany ? (
+            <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Loading…</div>
+          ) : (detailsByCompany[expandedCompany] ?? []).length === 0 ? (
+            <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Nothing here.</div>
+          ) : (
+            <>
+              {(detailsByCompany[expandedCompany] ?? []).some((it) => it.section === "approval") && (
+                <>
+                  <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Pending approval
+                  </div>
+                  <FileList items={(detailsByCompany[expandedCompany] ?? []).filter((it) => it.section === "approval")} />
+                </>
+              )}
+              {(detailsByCompany[expandedCompany] ?? []).some((it) => it.section === "company_inbox") && (
+                <>
+                  <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    Inbox — not yet filed
+                  </div>
+                  <FileList items={(detailsByCompany[expandedCompany] ?? []).filter((it) => it.section === "company_inbox")} />
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {(() => {
         const chartData = FOLDERIT_DISPLAY_COMPANIES.map((company) => {
           const row = rows.find((r) => r.group_key === company.id);
@@ -495,39 +530,6 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
           </div>
         );
       })()}
-
-      {expandedCompany && (
-        <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px", padding: 0 }}>
-          <div style={{ padding: "13px 16px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: CARD_ALT }}>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>
-              {FOLDERIT_DISPLAY_COMPANIES.find((c) => c.id === expandedCompany)?.name}
-            </span>
-            <span onClick={() => setExpandedCompany(null)} style={{ cursor: "pointer", fontSize: "12px", color: SLATE }}>Close ✕</span>
-          </div>
-          {loadingCompany === expandedCompany ? (
-            <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Loading…</div>
-          ) : (
-            <>
-              {(detailsByCompany[expandedCompany] ?? []).some((it) => it.section === "approval") && (
-                <>
-                  <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    Pending approval
-                  </div>
-                  <FileList items={(detailsByCompany[expandedCompany] ?? []).filter((it) => it.section === "approval")} />
-                </>
-              )}
-              {(detailsByCompany[expandedCompany] ?? []).some((it) => it.section === "company_inbox") && (
-                <>
-                  <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                    Inbox — not yet filed
-                  </div>
-                  <FileList items={(detailsByCompany[expandedCompany] ?? []).filter((it) => it.section === "company_inbox")} />
-                </>
-              )}
-            </>
-          )}
-        </div>
-      )}
 
       <HrSection
         categories={hrCategories}
