@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, Suspense } from "react";
 import { supabase } from "../lib/supabase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { COLOURS, RADII } from "../lib/SharedUI";
 
@@ -48,14 +48,30 @@ function getLandingRoute(profile: MemberProfile | null, email: string) {
 }
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [active, setActive] = useState(0);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [keepSignedIn, setKeepSignedIn] = useState(false);
-  const [message, setMessage] = useState("");
+  // Surfaces a failed/rejected Google sign-in (see app/auth/callback) —
+  // e.g. an unregistered Google account got bounced back here with
+  // ?error=... on the redirect. Read once via a lazy initializer rather
+  // than an effect, since this only ever needs to run on first render.
+  const [message, setMessage] = useState(() => {
+    const err = searchParams.get("error");
+    return err ? "Error: " + err : "";
+  });
   const [loading, setLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
