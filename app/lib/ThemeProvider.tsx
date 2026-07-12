@@ -40,6 +40,12 @@ const LIGHT_VARS: Record<string, string> = {
   "--sidebar-border": COLOURS.HAIRLINE,
 };
 
+// Dark-mode backgrounds (#0c0f1a, #111827, #151926, #1c2135) are dark-theme-only
+// tones with no equivalent in the light-mode COLOURS palette, so they're left as-is.
+// For the structural accents that used to reuse the old NAVY/HAIRLINE hex values,
+// swapping in the *new* NAVY (#0F1720, now near-black) would be invisible against
+// these backgrounds, so INK_700 is used instead to keep the same mid-tone contrast
+// purpose. Text colours use HAIRLINE/SLATE, which still work as light-on-dark text.
 const DARK_VARS: Record<string, string> = {
   "--bg-page": "#0c0f1a",
   "--bg-sidebar": "#111827",
@@ -47,18 +53,18 @@ const DARK_VARS: Record<string, string> = {
   "--bg-card-hover": "#1c2135",
   "--bg-input": "#1c2135",
   "--bg-header": "#151926",
-  "--border-color": "#1e293b",
+  "--border-color": COLOURS.INK_700,
   "--border-light": "#1c2135",
-  "--text-primary": "#e2e8f0",
+  "--text-primary": COLOURS.HAIRLINE,
   "--text-secondary": "#94a3b8",
-  "--text-muted": "#64748b",
+  "--text-muted": COLOURS.SLATE,
   "--text-sidebar": "#94a3b8",
-  "--text-sidebar-active": "#e2e8f0",
+  "--text-sidebar-active": COLOURS.HAIRLINE,
   "--shadow-sm": "0 1px 3px rgba(0,0,0,0.3)",
   "--shadow-md": "0 4px 14px rgba(0,0,0,0.4)",
-  "--sidebar-active-bg": "#1e293b",
+  "--sidebar-active-bg": COLOURS.INK_700,
   "--sidebar-hover-bg": "#1c2135",
-  "--sidebar-border": "#1e293b",
+  "--sidebar-border": COLOURS.INK_700,
 };
 
 function applyVars(vars: Record<string, string>) {

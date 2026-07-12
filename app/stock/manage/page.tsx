@@ -835,7 +835,9 @@ export default function StockManagePage() {
                 </button>
                 <button
                   onClick={handleBulkDelete}
-                  style={{ padding: "5px 14px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, border: "1px solid rgba(239,68,68,0.5)", backgroundColor: "rgba(239,68,68,0.15)", color: "#FCA5A5", cursor: "pointer" }}
+                  // Derived from COLOURS.RED (#B3261E = rgb(179,38,30)), lightened for
+                  // contrast on the dark navy toolbar background.
+                  style={{ padding: "5px 14px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600, border: "1px solid rgba(179,38,30,0.5)", backgroundColor: "rgba(179,38,30,0.15)", color: "#DFA3A0", cursor: "pointer" }}
                 >
                   Delete selected
                 </button>

@@ -1002,7 +1002,7 @@ export default function ProductionForm() {
                     {pastEntries.map((e, i) => {
                       const total = (e.qty_31 || 0) + (e.qty_36 || 0) + (e.qty_45 || 0) + (e.qty_meter || 0);
                       const typeColor = e.type === "Production" ? COLOURS.GREEN : e.type === "Dispatch" ? COLOURS.BLUE : COLOURS.RED;
-                      const typeSoft = e.type === "Production" ? COLOURS.SUCCESS_SOFT : e.type === "Dispatch" ? "#EEF1FC" : COLOURS.DANGER_SOFT;
+                      const typeSoft = e.type === "Production" ? COLOURS.SUCCESS_SOFT : e.type === "Dispatch" ? COLOURS.INFO_SOFT : COLOURS.DANGER_SOFT;
                       const isToday = e.entry_date === new Date().toISOString().slice(0, 10);
                       return (
                         <tr

@@ -16,7 +16,7 @@ import {
 } from "../lib/SharedUI";
 
 const { NAVY, SLATE, HAIRLINE, TRACK, GREEN, AMBER, RED, BLUE, INK_400,
-        SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT, CARD, CARD_ALT } = COLOURS;
+        SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT, INFO_SOFT, CARD, CARD_ALT } = COLOURS;
 
 type Plant = { id: string; name: string; type: string };
 type PlantKpiRow = {
@@ -853,7 +853,7 @@ export default function DashboardView() {
                           {item.po.customer_name}
                           <span style={{ fontWeight: 400, color: SLATE, marginLeft: "6px" }}>PO #{item.po.po_number}</span>
                           {item.po.po_label && (
-                            <span style={{ fontSize: "11px", marginLeft: "6px", padding: "2px 8px", borderRadius: RADII.PILL, background: "#EEF1FC", color: BLUE, fontWeight: 600 }}>
+                            <span style={{ fontSize: "11px", marginLeft: "6px", padding: "2px 8px", borderRadius: RADII.PILL, background: INFO_SOFT, color: BLUE, fontWeight: 600 }}>
                               {item.po.po_label}
                             </span>
                           )}

@@ -34,6 +34,7 @@ export const COLOURS = {
   SUCCESS_SOFT: "#E7F2ED",
   WARNING_SOFT: "#FBF1DE",
   DANGER_SOFT:  "#F8E4E2",
+  INFO_SOFT:    "#EEF1FC",
 
   // Legacy aliases kept for backward compatibility
   BG:     "#F7F5F1", // = CANVAS
