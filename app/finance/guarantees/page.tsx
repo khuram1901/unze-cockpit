@@ -803,7 +803,7 @@ export default function GuaranteesPage() {
               { label: "Overdue", value: String(totals.overdue_count), sub: totals.overdue_count > 0 ? "Needs chasing now" : "None overdue", color: totals.overdue_count > 0 ? COLOURS.RED : COLOURS.GREEN },
               { label: "Due soon", value: String(totals.due_soon_count), sub: totals.due_soon_count > 0 ? "Expiring within 30 days" : "None due soon", color: totals.due_soon_count > 0 ? COLOURS.AMBER : COLOURS.GREEN },
             ].map((c) => (
-              <div key={c.label} style={{ padding: "12px 14px", backgroundColor: "var(--bg-card,#fff)", borderRadius: "10px", border: `1px solid var(--border-color,#e2e8f0)`, borderTop: `3px solid ${c.color}` }}>
+              <div key={c.label} style={{ padding: "12px 14px", backgroundColor: "var(--bg-card,#fff)", borderRadius: "10px", border: `1px solid var(--border-color,${COLOURS.HAIRLINE})`, borderTop: `3px solid ${c.color}` }}>
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>{c.label}</div>
                 <div style={{ fontSize: "28px", fontWeight: 800, color: c.color, marginBottom: "2px" }}>{c.value}</div>
                 <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.sub}</div>

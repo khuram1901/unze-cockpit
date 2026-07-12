@@ -2,7 +2,7 @@
 
 import AuthWrapper from "../lib/AuthWrapper";
 import OpeningBalancesForm from "./OpeningBalancesForm";
-import { PageHeader } from "../lib/SharedUI";
+import { PageHeader, COLOURS } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
 
@@ -10,7 +10,7 @@ export default function OpeningBalancesPage() {
   const { checking } = useRequireCapability("finance");
   const isMobile = useMobile();
 
-  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: `var(--text-secondary, ${COLOURS.SLATE})` }}>Checking permissions...</p></main></AuthWrapper>;
 
   return (
     <AuthWrapper>
