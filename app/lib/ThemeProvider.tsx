@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { COLOURS } from "./SharedUI";
 
 type Theme = "light" | "dark";
 
@@ -25,7 +26,7 @@ const LIGHT_VARS: Record<string, string> = {
   "--bg-card-hover": "#f8fafc",
   "--bg-input": "#ffffff",
   "--bg-header": "#ffffff",
-  "--border-color": "#e2e8f0",
+  "--border-color": COLOURS.HAIRLINE,
   "--border-light": "#f1f5f9",
   "--text-primary": "#0f172a",
   "--text-secondary": "#64748b",
@@ -36,7 +37,7 @@ const LIGHT_VARS: Record<string, string> = {
   "--shadow-md": "0 4px 14px rgba(15,23,42,0.08)",
   "--sidebar-active-bg": "#f1f5f9",
   "--sidebar-hover-bg": "#f8fafc",
-  "--sidebar-border": "#e2e8f0",
+  "--sidebar-border": COLOURS.HAIRLINE,
 };
 
 const DARK_VARS: Record<string, string> = {
