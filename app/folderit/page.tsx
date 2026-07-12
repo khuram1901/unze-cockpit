@@ -605,45 +605,35 @@ function HrSection({
 // scoped server-side to the caller's own company (see
 // /api/folderit/summary + /api/folderit/details) — this just shows
 // which company that is, and keeps the click-to-preview behaviour.
-function MemberView({ hrCategories, hrInboxCount, hasHrAccess, companyName }: { hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean; companyName?: string | null }) {
-  const [summary, setSummary] = useState<{ pending_approval_count: number; company_inbox_count: number } | null>(null);
-  const [details, setDetails] = useState<DetailItem[]>([]);
-  const [loading, setLoading] = useState(true);
+//
+// No fetching happens in here — approvalCount/approvalItems/inboxCount/
+// inboxItems all come from the single parallel fetch in
+// FolderitDashboard, so switching views doesn't trigger yet another
+// round trip. See Khuram: "Folderit is working very slow... takes a
+// while for the page to load."
+function MemberView({
+  hrCategories, hrInboxCount, hasHrAccess, companyName, approvalCount, approvalItems, inboxCount, inboxItems,
+}: {
+  hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean; companyName?: string | null;
+  approvalCount: number; approvalItems: DetailItem[]; inboxCount: number; inboxItems: DetailItem[];
+}) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [hrExpanded, setHrExpanded] = useState<string | null>(null);
   const [hrDetailsCache, setHrDetailsCache] = useState<Record<string, DetailItem[]>>({});
-
-  useEffect(() => {
-    (async () => {
-      const [summaryRes, detailsRes] = await Promise.all([
-        authFetch("/api/folderit/summary"),
-        authFetch("/api/folderit/details"),
-      ]);
-      setSummary(await summaryRes.json());
-      const detailsJson = await detailsRes.json();
-      setDetails(detailsJson.items ?? []);
-      setLoading(false);
-    })();
-  }, []);
-
-  if (loading) return <div style={{ color: SLATE }}>Loading…</div>;
-
-  const approvals = details.filter((d) => d.section === "approval");
-  const companyInbox = details.filter((d) => d.section === "company_inbox");
 
   return (
     <>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px", marginBottom: "12px" }}>
         <StatCard
           label="Pending my approval"
-          count={summary?.pending_approval_count ?? 0}
+          count={approvalCount}
           color={AMBER}
           isOpen={expanded === "approval"}
           onToggle={() => setExpanded(expanded === "approval" ? null : "approval")}
         />
         <StatCard
           label="Not yet filed"
-          count={summary?.company_inbox_count ?? 0}
+          count={inboxCount}
           color={BLUE}
           sub={companyName ?? undefined}
           isOpen={expanded === "inbox"}
@@ -651,10 +641,10 @@ function MemberView({ hrCategories, hrInboxCount, hasHrAccess, companyName }: { 
         />
       </div>
       {expanded === "approval" && (
-        <DetailPanel title="Pending my approval" items={approvals} loading={false} onClose={() => setExpanded(null)} />
+        <DetailPanel title="Pending my approval" items={approvalItems} loading={false} onClose={() => setExpanded(null)} />
       )}
       {expanded === "inbox" && (
-        <DetailPanel title={companyName ? `Not yet filed — ${companyName}` : "Not yet filed"} items={companyInbox} loading={false} onClose={() => setExpanded(null)} />
+        <DetailPanel title={companyName ? `Not yet filed — ${companyName}` : "Not yet filed"} items={inboxItems} loading={false} onClose={() => setExpanded(null)} />
       )}
       {hasHrAccess && (
         <HrSection
@@ -672,27 +662,11 @@ function MemberView({ hrCategories, hrInboxCount, hasHrAccess, companyName }: { 
 
 // Approvals are always personal — even the CEO/Admin only ever sees their
 // own outstanding approvals here, never everyone else's. Reused at the top
-// of AdminView; MemberView has its own equivalent row inline since it also
-// needs the company inbox row right alongside it.
-function PersonalApprovalsCard() {
-  const [count, setCount] = useState(0);
-  const [items, setItems] = useState<DetailItem[]>([]);
-  const [loading, setLoading] = useState(true);
+// of AdminView; MemberView has its own equivalent card inline since it also
+// needs the company inbox card right alongside it. Data comes in as props
+// from FolderitDashboard's single parallel fetch — no fetching in here.
+function PersonalApprovalsCard({ count, items }: { count: number; items: DetailItem[] }) {
   const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      const [summaryRes, detailsRes] = await Promise.all([
-        authFetch("/api/folderit/summary"),
-        authFetch("/api/folderit/details"),
-      ]);
-      const summaryJson = await summaryRes.json();
-      setCount(summaryJson.pending_approval_count ?? 0);
-      const detailsJson = await detailsRes.json();
-      setItems((detailsJson.items ?? []).filter((d: DetailItem) => d.section === "approval"));
-      setLoading(false);
-    })();
-  }, []);
 
   return (
     <div style={{ marginBottom: "16px" }}>
@@ -706,7 +680,7 @@ function PersonalApprovalsCard() {
         />
       </div>
       {expanded && (
-        <DetailPanel title="Pending my approval" items={items} loading={loading} onClose={() => setExpanded(false)} />
+        <DetailPanel title="Pending my approval" items={items} loading={false} onClose={() => setExpanded(false)} />
       )}
     </div>
   );
@@ -719,23 +693,18 @@ type CompanyBreakdownRow = {
   inbox_oldest_days: number | null;
 };
 
-function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean }) {
-  const [rows, setRows] = useState<CompanyBreakdownRow[]>([]);
-  const [loading, setLoading] = useState(true);
+function AdminView({
+  hrCategories, hrInboxCount, hasHrAccess, approvalCount, approvalItems, companyBreakdown,
+}: {
+  hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean;
+  approvalCount: number; approvalItems: DetailItem[]; companyBreakdown: CompanyBreakdownRow[];
+}) {
+  const rows = companyBreakdown;
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
   const [loadingCompany, setLoadingCompany] = useState<string | null>(null);
   const [detailsByCompany, setDetailsByCompany] = useState<Record<string, DetailItem[]>>({});
   const [hrExpanded, setHrExpanded] = useState<string | null>(null);
   const [hrDetailsCache, setHrDetailsCache] = useState<Record<string, DetailItem[]>>({});
-
-  useEffect(() => {
-    (async () => {
-      const res = await authFetch("/api/folderit/company-breakdown");
-      const json = await res.json();
-      setRows(json.companies ?? []);
-      setLoading(false);
-    })();
-  }, []);
 
   async function openCompany(groupKey: string) {
     setExpandedCompany(groupKey);
@@ -763,11 +732,9 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
     await openCompany(groupKey);
   }
 
-  if (loading) return <div style={{ color: SLATE }}>Loading…</div>;
-
   return (
     <>
-      <PersonalApprovalsCard />
+      <PersonalApprovalsCard count={approvalCount} items={approvalItems} />
 
       <SectionTitle title="By Company" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px", marginBottom: "16px" }}>
@@ -882,12 +849,26 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
   );
 }
 
+// Every fetch the initial page needs, in one place, fired in parallel on
+// mount — Khuram: "Folderit is working very slow. When I go into that
+// page, it takes a while for the page to load." Previously this was a
+// waterfall: FolderitDashboard fetched hr-summary + summary, THEN
+// (only once that resolved and AdminView/PersonalApprovalsCard mounted)
+// a second round of fetches fired — company-breakdown, and a duplicate
+// summary + details call that FolderitDashboard had already made once.
+// Consolidating into a single Promise.all here, with the results passed
+// down as props, removes both the extra round trip and the duplicate
+// one. company-breakdown 403s harmlessly for non-admins (cheap role
+// check, fully parallel with everything else, doesn't block anything).
 function FolderitDashboard() {
   const isMobile = useMobile();
   const { ctx, loading: ctxLoading } = useUserCtx();
   const [hrCategories, setHrCategories] = useState<HrCategory[]>([]);
-  const [hrInboxCount, setHrInboxCount] = useState(0);
-  const [hrLoading, setHrLoading] = useState(true);
+  const [summary, setSummary] = useState<{ pending_approval_count: number; company_inbox_count: number; hr_inbox_count: number } | null>(null);
+  const [approvalItems, setApprovalItems] = useState<DetailItem[]>([]);
+  const [memberInboxItems, setMemberInboxItems] = useState<DetailItem[]>([]);
+  const [companyBreakdown, setCompanyBreakdown] = useState<CompanyBreakdownRow[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
   const [preview, setPreview] = useState<PreviewTarget>(null);
 
   // Blob URLs hold the whole PDF in memory — revoke the previous one the
@@ -900,24 +881,34 @@ function FolderitDashboard() {
 
   useEffect(() => {
     (async () => {
-      const [hrRes, summaryRes] = await Promise.all([
+      const [hrRes, summaryRes, detailsRes, breakdownRes] = await Promise.all([
         authFetch("/api/folderit/hr-summary"),
         authFetch("/api/folderit/summary"),
+        authFetch("/api/folderit/details"),
+        authFetch("/api/folderit/company-breakdown"),
       ]);
       const hrJson = await hrRes.json();
       setHrCategories((hrJson.categories ?? []).sort((a: HrCategory, b: HrCategory) => a.sort_order - b.sort_order));
-      const summaryJson = await summaryRes.json();
-      setHrInboxCount(summaryJson.hr_inbox_count ?? 0);
-      setHrLoading(false);
+      setSummary(await summaryRes.json());
+      const detailsJson = await detailsRes.json();
+      const items: DetailItem[] = detailsJson.items ?? [];
+      setApprovalItems(items.filter((d) => d.section === "approval"));
+      setMemberInboxItems(items.filter((d) => d.section === "company_inbox"));
+      if (breakdownRes.ok) {
+        const breakdownJson = await breakdownRes.json();
+        setCompanyBreakdown(breakdownJson.companies ?? []);
+      }
+      setDataLoading(false);
     })();
   }, []);
 
-  if (ctxLoading || hrLoading || !ctx) {
+  if (ctxLoading || dataLoading || !ctx) {
     return <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden", color: SLATE }}>Loading…</main>;
   }
 
   const isAdmin = isAdminTier(ctx);
   const hasHrAccess = canViewFolderitHr(ctx);
+  const hrInboxCount = summary?.hr_inbox_count ?? 0;
 
   return (
     <PreviewContext.Provider value={setPreview}>
@@ -929,9 +920,25 @@ function FolderitDashboard() {
         </div>
 
         {isAdmin ? (
-          <AdminView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
+          <AdminView
+            hrCategories={hrCategories}
+            hrInboxCount={hrInboxCount}
+            hasHrAccess={hasHrAccess}
+            approvalCount={summary?.pending_approval_count ?? 0}
+            approvalItems={approvalItems}
+            companyBreakdown={companyBreakdown}
+          />
         ) : (
-          <MemberView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} companyName={ctx.company} />
+          <MemberView
+            hrCategories={hrCategories}
+            hrInboxCount={hrInboxCount}
+            hasHrAccess={hasHrAccess}
+            companyName={ctx.company}
+            approvalCount={summary?.pending_approval_count ?? 0}
+            approvalItems={approvalItems}
+            inboxCount={summary?.company_inbox_count ?? 0}
+            inboxItems={memberInboxItems}
+          />
         )}
       </main>
       {preview && <PreviewModal url={preview.url} name={preview.name} onClose={() => setPreview(null)} />}

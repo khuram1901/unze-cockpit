@@ -44,9 +44,19 @@ export async function GET(request: NextRequest) {
   // list ever includes someone else's outstanding approvals.
   const userEmail = email;
 
+  // An admin's personal (no ?company=) request only ever wants their own
+  // approvals — never a company_inbox blob. Without this, p_company_uuid
+  // being null for an admin used to mean "no filter", so this call
+  // silently fetched and transferred EVERY company's entire unfiled
+  // inbox on every page load just to discard it client-side. Non-admins
+  // are unaffected — their company_inbox is always meaningfully scoped
+  // to their own company_id, never null.
+  const includeCompanyInbox = !isAdmin || !!requestedCompany;
+
   const { data, error } = await db.rpc("get_folderit_details", {
     p_user_email: userEmail,
     p_company_uuid: companyUuid,
+    p_include_company_inbox: includeCompanyInbox,
   });
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

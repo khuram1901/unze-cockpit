@@ -2,8 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { folderitFetch } from "../../../lib/folderit-auth";
-import { canViewFolderitHr } from "../../../lib/permissions";
-import { loadFolderitUserCtx } from "../_shared";
+import { canViewFolderitHr, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 export const maxDuration = 60; // conversion-heavy files (xlsx, docx) can take a while to render to PDF
 
@@ -105,9 +104,15 @@ export async function GET(request: NextRequest) {
   if (lookupErr) return Response.json({ error: lookupErr.message }, { status: 500 });
   if (!accountUid) return Response.json({ error: "File not found" }, { status: 404 });
 
+  // Select everything permission-checking might need up front (id +
+  // department, on top of role/company_id) so the HR-gated branch below
+  // never has to re-query members a second time — that duplicate lookup
+  // was adding a full extra DB round trip to every single HR "policy"
+  // preview. Khuram: "when we're trying to look up the policies, it
+  // takes a bit of a while to pull up the policy."
   const { data: member } = await db
     .from("members")
-    .select("role, company_id")
+    .select("id, role, department, company_id")
     .eq("email", email)
     .maybeSingle();
 
@@ -128,7 +133,16 @@ export async function GET(request: NextRequest) {
       .maybeSingle();
 
     if (hrMatch) {
-      const ctx = await loadFolderitUserCtx(db, email);
+      let overrides: PermOverrides | null = null;
+      if (member?.id) {
+        const { data: perms } = await db
+          .from("member_permissions")
+          .select("*")
+          .eq("member_id", member.id)
+          .maybeSingle();
+        overrides = (perms as PermOverrides) || null;
+      }
+      const ctx: UserCtx = { email, role: member?.role ?? null, department: member?.department ?? null, overrides };
       if (!canViewFolderitHr(ctx)) return Response.json({ error: "Forbidden" }, { status: 403 });
     } else {
       const { data: companyMatch } = await db
