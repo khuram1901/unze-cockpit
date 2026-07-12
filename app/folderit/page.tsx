@@ -426,16 +426,19 @@ function DetailPanel({
   );
 }
 
-type HrSearchResult = { file_uid: string; name: string | null; category_name: string | null; folder_path: string | null; created_at: string | null };
+type FolderitSearchResult = { file_uid: string; name: string | null; source: "inbox" | "hr"; location: string | null; created_at: string | null };
 
-// Search box at the top of the HR section — Khuram: "I need you to build
-// in the search option where I can search for the policy on the main
-// page." Searches by name across every HR category and the HR inbox in
-// one Postgres query (search_folderit_hr_files), debounced client-side so
-// it doesn't fire on every keystroke.
-function HrSearchBox() {
+// Page-level search box, visible to everyone — Khuram: "one place to log
+// in, and you can search the entire Folder-it and get me that document."
+// Hits /api/folderit/search, which merges two independently-scoped
+// halves: every company's unfiled inbox (scoped to the caller's own
+// company unless they're admin/CEO) and HR documents (only included at
+// all if the caller has HR access — the endpoint returns them silently
+// omitted otherwise, same as everywhere else HR is gated). Debounced
+// client-side so it doesn't fire on every keystroke.
+function FolderitSearchBox() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<HrSearchResult[]>([]);
+  const [results, setResults] = useState<FolderitSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
@@ -453,7 +456,7 @@ function HrSearchBox() {
         return;
       }
       if (!cancelled) setSearching(true);
-      const res = await authFetch(`/api/folderit/hr-search?q=${encodeURIComponent(q)}`);
+      const res = await authFetch(`/api/folderit/search?q=${encodeURIComponent(q)}`);
       const json = await res.json();
       if (!cancelled) { setResults(json.items ?? []); setSearching(false); }
     }, q.length < 2 ? 0 : 300);
@@ -464,12 +467,12 @@ function HrSearchBox() {
   const trimmed = query.trim();
 
   return (
-    <div style={{ marginBottom: "12px" }}>
+    <div style={{ marginBottom: "20px" }}>
       <input
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search HR documents by name…"
+        placeholder="Search documents by name — inbox and HR…"
         style={{
           width: "100%", padding: "10px 12px", fontSize: "13px", borderRadius: RADII.CARD,
           border: `1px solid ${HAIRLINE}`, color: NAVY, outline: "none", boxSizing: "border-box",
@@ -487,12 +490,10 @@ function HrSearchBox() {
               <FileRow
                 key={r.file_uid}
                 item={{
-                  section: "hr_inbox",
+                  section: r.source === "hr" ? "hr_inbox" : "company_inbox",
                   item_uid: r.file_uid,
                   name: r.name,
-                  account_name: r.category_name
-                    ? (r.folder_path ? `${r.category_name} / ${r.folder_path}` : r.category_name)
-                    : "Inbox — not yet filed",
+                  account_name: r.location ?? "",
                   status: null,
                   created_at: r.created_at,
                   days_pending: null,
@@ -567,7 +568,6 @@ function HrSection({
   return (
     <div style={{ marginTop: "24px" }}>
       <SectionTitle title="HR" />
-      <HrSearchBox />
       <div style={{ ...cardStyle, overflow: "hidden" }}>
         {categories.map((cat) => (
           <CollapsibleRow
@@ -918,6 +918,8 @@ function FolderitDashboard() {
         <div style={{ fontSize: "13px", color: SLATE, marginBottom: "20px" }}>
           Documents pending approval &amp; filing — read-only status view. Act on anything by opening Folderit directly.
         </div>
+
+        <FolderitSearchBox />
 
         {isAdmin ? (
           <AdminView
