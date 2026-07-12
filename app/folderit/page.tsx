@@ -3,9 +3,10 @@
 import { useEffect, useState, useContext, createContext } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
-import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../lib/SharedUI";
+import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle } from "../lib/SharedUI";
 import { COMPANIES } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
+import { useMobile } from "../lib/useMobile";
 import { isAdminTier, canViewFolderitHr } from "../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
 
@@ -146,10 +147,10 @@ function FileRow({ item, showTopBorder, indentPx = 40 }: { item: DetailItem; sho
       }}
     >
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: "13.5px", color: BLUE, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "underline", textDecorationColor: "transparent" }}>
+        <div style={{ fontSize: "14px", color: BLUE, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "underline", textDecorationColor: "transparent" }}>
           {item.name ?? "Untitled document"}
         </div>
-        <div style={{ fontSize: "11.5px", color: SLATE, marginTop: "1px" }}>{item.account_name}</div>
+        <div style={{ fontSize: "13px", color: SLATE, marginTop: "1px" }}>{item.account_name}</div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
         <AgeTag days={item.days_pending} />
@@ -268,7 +269,7 @@ function FolderNodeRow({ node, depth }: { node: FolderNode; depth: number }) {
         }}
       >
         <span style={{ fontSize: "10px", color: SLATE, width: "10px" }}>{open ? "▼" : "▶"}</span>
-        <span style={{ fontSize: "12px", fontWeight: 700, color: NAVY }}>📁 {node.name}</span>
+        <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>📁 {node.name}</span>
       </div>
       {open && (
         <div>
@@ -326,8 +327,8 @@ function CollapsibleRow({
         }}
       >
         <div>
-          <div style={{ fontSize: "14.5px", fontWeight: 600, color: NAVY }}>{label}</div>
-          {sub && <div style={{ fontSize: "11.5px", color: SLATE, marginTop: "1px" }}>{sub}</div>}
+          <div style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>{label}</div>
+          {sub && <div style={{ fontSize: "13px", color: SLATE, marginTop: "1px" }}>{sub}</div>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{
@@ -395,7 +396,7 @@ function HrSearchBox() {
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search HR documents by name…"
         style={{
-          width: "100%", padding: "10px 12px", fontSize: "13.5px", borderRadius: RADII.CARD,
+          width: "100%", padding: "10px 12px", fontSize: "13px", borderRadius: RADII.CARD,
           border: `1px solid ${HAIRLINE}`, color: NAVY, outline: "none", boxSizing: "border-box",
           backgroundColor: COLOURS.CARD,
         }}
@@ -630,17 +631,7 @@ type CompanyBreakdownRow = {
   inbox_oldest_days: number | null;
 };
 
-type OverdueItem = {
-  section: "company_inbox";
-  item_uid: string;
-  name: string | null;
-  account_name: string;
-  company_uuid: string;
-  days_pending: number;
-};
-
 function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean }) {
-  const setPreview = useContext(PreviewContext);
   const [rows, setRows] = useState<CompanyBreakdownRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
@@ -648,38 +639,12 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
   const [detailsByCompany, setDetailsByCompany] = useState<Record<string, DetailItem[]>>({});
   const [hrExpanded, setHrExpanded] = useState<string | null>(null);
   const [hrDetailsCache, setHrDetailsCache] = useState<Record<string, DetailItem[]>>({});
-  const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([]);
-  const [bannerOpen, setBannerOpen] = useState(false);
-  const [previewingUid, setPreviewingUid] = useState<string | null>(null);
-
-  // Overdue banner items preview directly now — Khuram: "I can see there
-  // are so many documents outstanding that have not been filed. Can we
-  // click on those documents and preview them to see what they are?"
-  // Previously this just opened the company card below; now it behaves
-  // exactly like every other document row on the page.
-  async function previewOverdueItem(it: OverdueItem) {
-    if (previewingUid) return;
-    setPreviewingUid(it.item_uid);
-    try {
-      const url = await fetchPreviewBlobUrl(it.item_uid);
-      setPreview({ url, name: it.name });
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Couldn't preview this document.");
-    } finally {
-      setPreviewingUid(null);
-    }
-  }
 
   useEffect(() => {
     (async () => {
-      const [breakdownRes, overdueRes] = await Promise.all([
-        authFetch("/api/folderit/company-breakdown"),
-        authFetch("/api/folderit/overdue"),
-      ]);
-      const breakdownJson = await breakdownRes.json();
-      setRows(breakdownJson.companies ?? []);
-      const overdueJson = await overdueRes.json();
-      setOverdueItems(overdueJson.items ?? []);
+      const res = await authFetch("/api/folderit/company-breakdown");
+      const json = await res.json();
+      setRows(json.companies ?? []);
       setLoading(false);
     })();
   }, []);
@@ -714,57 +679,6 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
 
   return (
     <>
-      {overdueItems.length > 0 && (
-        <div style={WARNING_BANNER_STYLE}>
-          <div
-            onClick={() => setBannerOpen(!bannerOpen)}
-            style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "20px" }}>⚠</span>
-              <div>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
-                  {overdueItems.length} document{overdueItems.length > 1 ? "s" : ""} sitting 7+ days, not yet filed
-                </div>
-                <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
-                  {overdueItems.slice(0, 3).map((it) => `${it.name ?? "Untitled"} (${it.days_pending}d)`).join(" · ")}
-                </div>
-              </div>
-            </div>
-            <span style={{ fontSize: "13px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
-          </div>
-          {bannerOpen && (
-            <div style={{ borderTop: "1px solid #F1D9A9", backgroundColor: COLOURS.CARD }}>
-              {overdueItems.map((it) => {
-                const company = COMPANIES.find((c) => c.id === it.company_uuid);
-                return (
-                  <div
-                    key={`${it.section}:${it.item_uid}`}
-                    onClick={() => previewOverdueItem(it)}
-                    style={{
-                      padding: "8px 16px 8px 48px", borderBottom: `1px solid ${HAIRLINE}`, cursor: "pointer",
-                      display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                      opacity: previewingUid === it.item_uid ? 0.6 : 1,
-                    }}
-                  >
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: "13.5px", fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {it.name ?? "Untitled document"}
-                      </div>
-                      <div style={{ fontSize: "11.5px", color: SLATE, marginTop: "1px", display: "flex", alignItems: "center", gap: "6px" }}>
-                        {company && <CompanyBadge shortCode={company.shortCode} />}
-                        {it.account_name} · inbox
-                      </div>
-                    </div>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED, flexShrink: 0 }}>{it.days_pending}d</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
       <PersonalApprovalsCard />
 
       <SectionTitle title="By Company" />
@@ -790,15 +704,15 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <CompanyBadge shortCode={company.shortCode} />
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>{company.name}</span>
+                  <span style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>{company.name}</span>
                 </div>
                 {hasData && <span style={{ fontSize: "12px", color: SLATE }}>{isSelected ? "▼" : "▶"}</span>}
               </div>
               <div>
-                <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Inbox — not yet filed</div>
-                <div style={{ fontSize: "24px", fontWeight: 800, color: inboxCount > 0 ? BLUE : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{inboxCount}</div>
+                <div style={{ fontFamily: "var(--font-sans, Inter, sans-serif)", fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Inbox — not yet filed</div>
+                <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: inboxCount > 0 ? BLUE : SLATE }}>{inboxCount}</div>
                 {inboxOldestDays !== null && inboxCount > 0 && (
-                  <div style={{ fontSize: "10px", fontWeight: 600, color: inboxOldestDays >= 7 ? COLOURS.RED : SLATE }}>oldest {inboxOldestDays}d</div>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: inboxOldestDays >= 7 ? COLOURS.RED : SLATE, marginTop: "2px" }}>oldest {inboxOldestDays}d</div>
                 )}
               </div>
             </div>
@@ -809,7 +723,7 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
       {expandedCompany && (
         <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px", padding: 0 }}>
           <div style={{ padding: "13px 16px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: CARD_ALT }}>
-            <span style={{ fontSize: "14px", fontWeight: 700, color: NAVY }}>
+            <span style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>
               {FOLDERIT_DISPLAY_COMPANIES.find((c) => c.id === expandedCompany)?.name}
             </span>
             <span onClick={() => setExpandedCompany(null)} style={{ cursor: "pointer", fontSize: "12px", color: SLATE }}>Close ✕</span>
@@ -820,7 +734,7 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
             <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Nothing here.</div>
           ) : (
             <>
-              <div style={{ padding: "10px 16px 4px 16px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              <div style={{ padding: "10px 16px 4px 16px", fontSize: "11px", fontWeight: 600, color: COLOURS.INK_700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Inbox — not yet filed
               </div>
               <FileList items={detailsByCompany[expandedCompany] ?? []} />
@@ -837,7 +751,7 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
         });
         return (
           <div style={{ ...cardStyle, padding: "22px 24px", marginBottom: "16px" }}>
-            <div style={{ fontSize: "15px", fontWeight: 600, color: NAVY, marginBottom: "14px" }}>Document aging by company</div>
+            <div style={{ fontFamily: "var(--font-sans, Inter, sans-serif)", fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "14px" }}>Document Aging by Company</div>
             <ResponsiveContainer width="100%" height={Math.max(120, chartData.length * 34)}>
               <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} horizontal={false} />
@@ -871,6 +785,7 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
 }
 
 function FolderitDashboard() {
+  const isMobile = useMobile();
   const { ctx, loading: ctxLoading } = useUserCtx();
   const [hrCategories, setHrCategories] = useState<HrCategory[]>([]);
   const [hrInboxCount, setHrInboxCount] = useState(0);
@@ -900,7 +815,7 @@ function FolderitDashboard() {
   }, []);
 
   if (ctxLoading || hrLoading || !ctx) {
-    return <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px", color: SLATE }}>Loading…</div>;
+    return <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden", color: SLATE }}>Loading…</main>;
   }
 
   const isAdmin = isAdminTier(ctx);
@@ -908,10 +823,10 @@ function FolderitDashboard() {
 
   return (
     <PreviewContext.Provider value={setPreview}>
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
+      <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader />
-        <h1 style={{ fontSize: "22px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>Folderit</h1>
-        <div style={{ fontSize: "13.5px", color: SLATE, marginBottom: "20px" }}>
+        <h1 style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.01em", color: NAVY, marginTop: "8px", marginBottom: "4px" }}>Folderit</h1>
+        <div style={{ fontSize: "13px", color: SLATE, marginBottom: "20px" }}>
           Documents pending approval &amp; filing — read-only status view. Act on anything by opening Folderit directly.
         </div>
 
@@ -920,7 +835,7 @@ function FolderitDashboard() {
         ) : (
           <MemberView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
         )}
-      </div>
+      </main>
       {preview && <PreviewModal url={preview.url} name={preview.name} onClose={() => setPreview(null)} />}
     </PreviewContext.Provider>
   );
