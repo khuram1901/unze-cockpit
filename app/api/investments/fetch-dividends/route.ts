@@ -13,8 +13,10 @@ const FACE_VALUE_OVERRIDES: Record<string, number> = {
 };
 const DEFAULT_FACE_VALUE = 10;
 
-// Vercel Cron: runs at 06:00 UTC Mon–Fri (11:00 PKT), after the daily price update (04:30)
-// and the daily summary (05:00). Can also be triggered manually with the cron secret.
+// Vercel Cron: runs at 06:15 UTC Mon–Fri (11:15 PKT), 15 minutes before the CEO
+// daily digest (06:30 UTC / 11:30 PKT) so dividend data is fresh for it. Also
+// after the 04:30 price update and the 05:00 daily summary. Can also be
+// triggered manually with the cron secret.
 export async function GET(request: NextRequest) {
   // Accept either cron (Bearer secret) or authenticated Admin/CEO user
   const authHeader = request.headers.get("authorization") ?? "";

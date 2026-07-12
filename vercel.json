@@ -41,6 +41,10 @@
       "schedule": "0 11 * * 1-5"
     },
     {
+      "path": "/api/investments/update-prices",
+      "schedule": "15 6 * * 1-5"
+    },
+    {
       "path": "/api/reports/monthly-po",
       "schedule": "0 6 1 * *"
     },
@@ -50,15 +54,19 @@
     },
     {
       "path": "/api/investments/fetch-dividends",
-      "schedule": "0 6 * * 1-5"
+      "schedule": "15 6 * * 1-5"
     },
     {
       "path": "/api/cron/tax-alerts",
-      "schedule": "0 0,6 * * *"
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/tax-alerts",
+      "schedule": "15 6 * * *"
     },
     {
       "path": "/api/investments/fetch-pension-prices",
-      "schedule": "0 23 * * 1-5"
+      "schedule": "15 6 * * 1-5"
     },
     {
       "path": "/api/folderit/sync",
