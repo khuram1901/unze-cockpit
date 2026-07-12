@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import * as XLSX from "xlsx";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { folderitFetch } from "../../../lib/folderit-auth";
@@ -41,10 +42,10 @@ async function requestFolderitPreviewLink(accountUid: string, fileUid: string): 
 
   if (typeof json?.url === "string") return { kind: "url", url: json.url };
 
-  // 202 = still generating the PDF rendition. Office formats (Excel,
-  // Word) need an actual conversion pass and can take several seconds;
-  // native PDFs resolve instantly and never hit this branch. Folderit
-  // tells us how long to wait via Retry-After / retryAfter.
+  // 202 = still generating the PDF rendition. Word/PowerPoint need an
+  // actual conversion pass and can take several seconds; native PDFs
+  // resolve instantly and never hit this branch. Folderit tells us how
+  // long to wait via Retry-After / retryAfter.
   if (res.status === 202 || res.status === 303) {
     const headerDelay = Number(res.headers.get("retry-after"));
     const bodyDelay = typeof json?.retryAfter === "number" ? json.retryAfter : NaN;
@@ -56,12 +57,83 @@ async function requestFolderitPreviewLink(accountUid: string, fileUid: string): 
   // Surface exactly what Folderit said instead of a generic message — the
   // status/body tells us whether this is permissions (403), a
   // deleted/moved file (404), an unsupported type for PDF conversion
-  // (400), or something else entirely.
+  // (400), or something else entirely. Note: a clean 404 "No preview
+  // found" is EXPECTED for Excel files — Folderit's own docs list
+  // supported preview formats as PDF/JPG/PNG/GIF/DOCX/PPTX/PSD/AI, and
+  // .xlsx/.xls simply isn't one of them. That's not a bug on either
+  // side; see requestFolderitDownloadLink below for how we handle it.
   return {
     kind: "error",
     message: `Folderit didn't return a preview link (${res.status}${res.statusText ? " " + res.statusText : ""})${rawBody ? `: ${rawBody.slice(0, 300)}` : ""}`,
     status: 502,
   };
+}
+
+// Folderit never generates a preview rendition for spreadsheets (confirmed
+// against their own docs — supported preview formats are PDF, JPG, PNG,
+// GIF, DOCX, PPTX, PSD, AI; Excel isn't on that list), so the /preview
+// call above always 404s for .xlsx/.xls. Khuram: "build a feature that
+// opens the Excel file and converts it into a preview." Since Folderit
+// won't do this for us, we do it ourselves: fetch the ORIGINAL file
+// bytes via Folderit's /download endpoint (never exposed to the browser
+// — same "no downloads" posture as the PDF path, just a different
+// conversion target) and render every sheet as an HTML table with
+// SheetJS (already a dependency, used elsewhere for the finance import
+// flows). The browser only ever receives the rendered HTML, never the
+// original .xlsx bytes.
+async function requestFolderitDownloadLink(accountUid: string, fileUid: string): Promise<string | null> {
+  const res = await folderitFetch(`/v2/accounts/${accountUid}/files/${fileUid}/download`, {
+    redirect: "manual",
+  });
+  const location = res.headers.get("location");
+  if (location) return location;
+  const rawBody = await res.text().catch(() => null);
+  if (rawBody) {
+    try {
+      const json = JSON.parse(rawBody);
+      if (typeof json?.url === "string") return json.url;
+    } catch {
+      // not JSON — fall through to null
+    }
+  }
+  return null;
+}
+
+const SPREADSHEET_TABLE_CSS = `
+  body { font-family: system-ui, -apple-system, sans-serif; padding: 16px; color: #1e293b; }
+  h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin: 24px 0 8px; }
+  h3:first-child { margin-top: 0; }
+  table { border-collapse: collapse; margin-bottom: 8px; }
+  td, th { border: 1px solid #e2e8f0; padding: 4px 8px; font-size: 12.5px; white-space: nowrap; }
+  th { background: #f8fafc; font-weight: 600; }
+`;
+
+// Returns rendered HTML on success, or null if the bytes aren't a
+// spreadsheet SheetJS can parse (e.g. a genuinely unsupported/corrupt
+// file) — the caller falls back to the original Folderit error in that
+// case rather than pretending this succeeded.
+async function tryRenderSpreadsheetPreview(accountUid: string, fileUid: string): Promise<string | null> {
+  try {
+    const downloadUrl = await requestFolderitDownloadLink(accountUid, fileUid);
+    if (!downloadUrl) return null;
+
+    const fileRes = await fetch(downloadUrl);
+    if (!fileRes.ok) return null;
+
+    const buffer = await fileRes.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array" });
+    if (!workbook.SheetNames.length) return null;
+
+    const showSheetNames = workbook.SheetNames.length > 1;
+    const tables = workbook.SheetNames.map((sheetName) => {
+      const html = XLSX.utils.sheet_to_html(workbook.Sheets[sheetName], { header: "", footer: "" });
+      return showSheetNames ? `<h3>${sheetName}</h3>${html}` : html;
+    }).join("\n");
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${SPREADSHEET_TABLE_CSS}</style></head><body>${tables}</body></html>`;
+  } catch {
+    return null;
+  }
 }
 
 // Stream a PDF PREVIEW of a Folderit file back to the browser — never the
@@ -171,6 +243,23 @@ export async function GET(request: NextRequest) {
         break;
       }
       if (result.kind === "error") {
+        // Folderit has no preview rendition for this file — most commonly
+        // because it's a spreadsheet, which Folderit never generates a
+        // preview for at all (see requestFolderitPreviewLink above). Try
+        // rendering it ourselves before giving up; if the bytes aren't a
+        // spreadsheet SheetJS can parse, this returns null and we fall
+        // through to the original, honest error message.
+        const spreadsheetHtml = await tryRenderSpreadsheetPreview(accountUid, fileUid);
+        if (spreadsheetHtml) {
+          return new Response(spreadsheetHtml, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Content-Disposition": "inline",
+              "Cache-Control": "private, max-age=60",
+            },
+          });
+        }
         return Response.json({ error: result.message }, { status: result.status });
       }
       // result.kind === "retry"
