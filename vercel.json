@@ -59,6 +59,10 @@
     {
       "path": "/api/investments/fetch-pension-prices",
       "schedule": "0 23 * * 1-5"
+    },
+    {
+      "path": "/api/folderit/sync",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
