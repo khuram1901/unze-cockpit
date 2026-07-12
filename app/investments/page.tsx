@@ -7,7 +7,7 @@ import { COLOURS, RADII, SectionTitle, PageHeader, useConfirm } from "../lib/Sha
 import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
-import { canEditInvestments, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canEditInvestments, canRefreshInvestmentPrices, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { formatDateUK } from "../lib/dateUtils";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar,
@@ -177,6 +177,7 @@ export default function InvestmentsPage() {
   const todayISO = new Date().toISOString().slice(0, 10);
 
   const [canEdit, setCanEdit] = useState(false);
+  const [canRefresh, setCanRefresh] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayISO);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [portfolioPrices, setPortfolioPrices] = useState<PriceRow[]>([]);
@@ -326,6 +327,7 @@ export default function InvestmentsPage() {
       if (p) overrides = p as PermOverrides;
       const ctx: UserCtx = { email, role: memberData?.role ?? null, department: memberData?.department ?? null, company: memberData?.company ?? null, overrides };
       setCanEdit(canEditInvestments(ctx));
+      setCanRefresh(canRefreshInvestmentPrices(ctx));
     })();
   }, [checking, load, loadPensionData, selectedDate]);
 
@@ -378,7 +380,7 @@ export default function InvestmentsPage() {
   const pensionLatestDate = pensionSummary?.last_price_date ?? null;
 
   async function handleRefreshPrices() {
-    if (!canEdit) return;
+    if (!canRefresh) return;
     setUpdating(true);
     setUpdateResult(null);
     try {
@@ -688,14 +690,18 @@ export default function InvestmentsPage() {
             )}
 
             {/* Actions */}
-            {canEdit && (
+            {(canEdit || canRefresh) && (
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px" }}>
-                <button onClick={handleRefreshPrices} disabled={updating} style={btnStyle}>
-                  {updating ? "Updating..." : "Refresh Prices from PSX"}
-                </button>
-                <button onClick={() => { resetForm(); setShowAddForm(true); }} style={{ ...btnStyle, backgroundColor: GREEN }}>
-                  + Add Holding
-                </button>
+                {canRefresh && (
+                  <button onClick={handleRefreshPrices} disabled={updating} style={btnStyle}>
+                    {updating ? "Updating..." : "Refresh Prices from PSX"}
+                  </button>
+                )}
+                {canEdit && (
+                  <button onClick={() => { resetForm(); setShowAddForm(true); }} style={{ ...btnStyle, backgroundColor: GREEN }}>
+                    + Add Holding
+                  </button>
+                )}
                 {updateResult && (
                   <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", alignSelf: "center" }}>{updateResult}</span>
                 )}

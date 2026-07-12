@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { canEditInvestments, type UserCtx, type PermOverrides } from "../../../lib/permissions";
+import { canRefreshInvestmentPrices, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
@@ -85,7 +85,7 @@ export async function GET(req: Request) {
       company: member?.company ?? null,
       overrides,
     };
-    if (!canEditInvestments(ctx)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!canRefreshInvestmentPrices(ctx)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { data: holdings } = await sb

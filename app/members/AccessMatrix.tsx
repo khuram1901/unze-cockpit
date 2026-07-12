@@ -35,6 +35,7 @@ const PERM_COLUMNS = [
   { key: "can_manage_guarantees", label: "BF Mgr", group: "Finance", tip: "Add, edit, convert and release bank guarantees" },
   { key: "can_view_investments", label: "Inv", group: "Finance", tip: "View the PSX stock portfolio" },
   { key: "can_edit_investments", label: "Inv Edit", group: "Finance", tip: "Add/edit/delete holdings and refresh prices" },
+  { key: "can_refresh_investment_prices", label: "Inv Refresh", group: "Finance", tip: "View + trigger a live price refresh only — not add/edit/delete holdings" },
 
   // ── Receivables ─────────────────────────────────────────────
   { key: "can_view_receivables", label: "View", group: "Recv.", tip: "View receivable bills and stages" },
@@ -156,6 +157,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_edit_operations_targets": return admin || exec || lc(m.email) === OPS_HOD_EMAIL;
     case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com" || exec;
     case "can_edit_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
+    case "can_refresh_investment_prices": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com" || exec;
     case "can_view_folderit_hr": return admin;
     default: return false;
   }
