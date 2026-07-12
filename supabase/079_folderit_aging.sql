@@ -80,6 +80,10 @@ as $$
 $$;
 
 -- ── get_folderit_company_breakdown: add oldest-day aging per box ──
+-- Explicit DROP required — CREATE OR REPLACE cannot change a table
+-- function's output column list (078's version only had 3 columns; this
+-- adds 2 more), and silently fails/rolls back without it.
+drop function if exists get_folderit_company_breakdown();
 create or replace function get_folderit_company_breakdown()
 returns table (
   company_uuid            uuid,
