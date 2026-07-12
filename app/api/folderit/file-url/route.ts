@@ -5,7 +5,65 @@ import { folderitFetch } from "../../../lib/folderit-auth";
 import { canViewFolderitHr } from "../../../lib/permissions";
 import { loadFolderitUserCtx } from "../_shared";
 
-export const maxDuration = 30; // proxying a large PDF's bytes can take a moment
+export const maxDuration = 60; // conversion-heavy files (xlsx, docx) can take a while to render to PDF
+
+// How many times to poll Folderit while it's still generating the PDF
+// rendition, and how long to wait between polls (clamped — Folderit's own
+// retryAfter is honoured within these bounds).
+const MAX_PREVIEW_POLLS = 8;
+const MIN_POLL_DELAY_MS = 1000;
+const MAX_POLL_DELAY_MS = 3000;
+
+type PreviewLinkResult =
+  | { kind: "url"; url: string }
+  | { kind: "retry"; delayMs: number }
+  | { kind: "error"; message: string; status: number };
+
+async function requestFolderitPreviewLink(accountUid: string, fileUid: string): Promise<PreviewLinkResult> {
+  const res = await folderitFetch(`/v2/accounts/${accountUid}/files/${fileUid}/preview`, {
+    redirect: "manual",
+  });
+
+  const location = res.headers.get("location");
+  if (location) return { kind: "url", url: location };
+
+  // Read as text first (a body can only be consumed once) so a non-JSON
+  // error body from Folderit is still visible in the error case below,
+  // instead of being silently swallowed by a failed .json() parse.
+  const rawBody = await res.text().catch(() => null);
+  let json: Record<string, unknown> | null = null;
+  if (rawBody) {
+    try {
+      json = JSON.parse(rawBody);
+    } catch {
+      // not JSON — rawBody stays as-is for the error message below
+    }
+  }
+
+  if (typeof json?.url === "string") return { kind: "url", url: json.url };
+
+  // 202 = still generating the PDF rendition. Office formats (Excel,
+  // Word) need an actual conversion pass and can take several seconds;
+  // native PDFs resolve instantly and never hit this branch. Folderit
+  // tells us how long to wait via Retry-After / retryAfter.
+  if (res.status === 202 || res.status === 303) {
+    const headerDelay = Number(res.headers.get("retry-after"));
+    const bodyDelay = typeof json?.retryAfter === "number" ? json.retryAfter : NaN;
+    const delaySec = !isNaN(bodyDelay) ? bodyDelay : !isNaN(headerDelay) ? headerDelay : 2;
+    const delayMs = Math.min(Math.max(delaySec * 1000, MIN_POLL_DELAY_MS), MAX_POLL_DELAY_MS);
+    return { kind: "retry", delayMs };
+  }
+
+  // Surface exactly what Folderit said instead of a generic message — the
+  // status/body tells us whether this is permissions (403), a
+  // deleted/moved file (404), an unsupported type for PDF conversion
+  // (400), or something else entirely.
+  return {
+    kind: "error",
+    message: `Folderit didn't return a preview link (${res.status}${res.statusText ? " " + res.statusText : ""})${rawBody ? `: ${rawBody.slice(0, 300)}` : ""}`,
+    status: 502,
+  };
+}
 
 // Stream a PDF PREVIEW of a Folderit file back to the browser — never the
 // original, and never a link the browser downloads. Khuram: "every time I
@@ -84,47 +142,35 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const folderitRes = await folderitFetch(`/v2/accounts/${accountUid}/files/${fileUid}/preview`, {
-      redirect: "manual",
-    });
-
-    let signedUrl = folderitRes.headers.get("location");
-    let rawBody: string | null = null;
-
-    if (!signedUrl) {
-      // Fall back to the JSON body's `url` field — some responses (e.g.
-      // watermark processing) carry the link there instead of a header.
-      // Read as text first (a body can only be consumed once) so a
-      // non-JSON error body from Folderit is still visible below instead
-      // of being silently swallowed by a failed .json() parse.
-      rawBody = await folderitRes.text().catch(() => null);
-      if (rawBody) {
-        try {
-          const json = JSON.parse(rawBody);
-          if (json?.url) signedUrl = json.url;
-        } catch {
-          // not JSON — rawBody stays as-is for the diagnostic message below
-        }
+    // Poll until Folderit finishes converting the file to a PDF rendition.
+    // Khuram: "i noticed it was applying to files which are .xlxs excel
+    // files not pdf as they work fine" — confirms this: native PDFs need
+    // no conversion and resolve on the first request, but Excel/Word
+    // files go through an actual conversion pass and were hitting 202
+    // ("still generating") on that first request, which the old code
+    // treated as a dead end instead of waiting and asking again.
+    let signedUrl: string | null = null;
+    for (let attempt = 0; attempt < MAX_PREVIEW_POLLS; attempt++) {
+      const result = await requestFolderitPreviewLink(accountUid, fileUid);
+      if (result.kind === "url") {
+        signedUrl = result.url;
+        break;
       }
-    }
-
-    if (!signedUrl) {
-      if (folderitRes.status === 202) {
+      if (result.kind === "error") {
+        return Response.json({ error: result.message }, { status: result.status });
+      }
+      // result.kind === "retry"
+      if (attempt === MAX_PREVIEW_POLLS - 1) {
         return Response.json(
-          { error: "Preview is still being generated — try again in a moment." },
+          { error: "Preview is taking longer than usual to generate (large file?) — try again in a moment." },
           { status: 202 }
         );
       }
-      // Surface exactly what Folderit said instead of a generic message —
-      // the status/body tells us whether this is permissions (403), a
-      // deleted/moved file (404), an unsupported type for PDF conversion
-      // (400), or something else entirely.
-      return Response.json(
-        {
-          error: `Folderit didn't return a preview link (${folderitRes.status}${folderitRes.statusText ? " " + folderitRes.statusText : ""})${rawBody ? `: ${rawBody.slice(0, 300)}` : ""}`,
-        },
-        { status: 502 }
-      );
+      await new Promise((resolve) => setTimeout(resolve, result.delayMs));
+    }
+
+    if (!signedUrl) {
+      return Response.json({ error: "Folderit didn't return a preview link in time." }, { status: 502 });
     }
 
     // Fetch the actual PDF bytes ourselves and re-serve them with an
