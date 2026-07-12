@@ -78,9 +78,11 @@ type DetailItem = {
 
 function AgeTag({ days }: { days: number | null }) {
   if (days === null) return null;
-  const color = days >= 7 ? COLOURS.RED : days >= 3 ? AMBER : SLATE;
+  // Same red/amber/green scale as everywhere else on this page
+  // (severityColor) — one vocabulary for "how long has this sat here",
+  // whether it's a file row, a company card, or the aging chart.
   return (
-    <span style={{ fontSize: "10.5px", fontWeight: 600, color, flexShrink: 0 }}>
+    <span style={{ fontSize: "10.5px", fontWeight: 600, color: severityColor(days), flexShrink: 0 }}>
       {days === 0 ? "today" : days === 1 ? "1 day" : `${days} days`}
     </span>
   );
@@ -712,7 +714,7 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
                 <div style={{ fontFamily: "var(--font-sans, Inter, sans-serif)", fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Inbox — not yet filed</div>
                 <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: inboxCount > 0 ? BLUE : SLATE }}>{inboxCount}</div>
                 {inboxOldestDays !== null && inboxCount > 0 && (
-                  <div style={{ fontSize: "12px", fontWeight: 600, color: inboxOldestDays >= 7 ? COLOURS.RED : SLATE, marginTop: "2px" }}>oldest {inboxOldestDays}d</div>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: severityColor(inboxOldestDays), marginTop: "2px" }}>oldest {inboxOldestDays}d</div>
                 )}
               </div>
             </div>
