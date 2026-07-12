@@ -696,6 +696,11 @@ export default function GuaranteesPage() {
 
   const convertTarget = convertId ? guarantees.find((g) => g.id === convertId) : null;
 
+  // Overdue = expired, or past its release-due date, and still sitting Active/
+  // Converted unactioned. Same "chase_urgency" the summary cards already count —
+  // this just surfaces the individual guarantees so they can't be missed.
+  const overdueGuarantees = guarantees.filter((g) => g.chase_urgency === "Overdue");
+
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
@@ -705,6 +710,29 @@ export default function GuaranteesPage() {
           <SectionTitle title="Bank Facilities" style={{ margin: "0 0 2px" }} />
           <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: "0 0 16px" }}>Unze Trading — bank facilities, bid guarantees, pay orders &amp; performance guarantees</p>
         </div>
+
+        {/* ── Overdue guarantees — top-of-page alert, impossible to miss ── */}
+        {overdueGuarantees.length > 0 && (
+          <div style={{ border: `1px solid ${COLOURS.RED}`, borderLeft: `4px solid ${COLOURS.RED}`, borderRadius: "8px", backgroundColor: COLOURS.DANGER_SOFT, padding: "12px 16px", marginBottom: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <span style={{ fontSize: "17px" }}>⚠</span>
+              <span style={{ fontSize: "15px", fontWeight: 800, color: COLOURS.RED }}>
+                {overdueGuarantees.length} guarantee{overdueGuarantees.length > 1 ? "s" : ""} overdue — needs chasing now
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              {overdueGuarantees.map((g) => (
+                <div key={g.id} style={{ fontSize: "13px", color: `var(--text-primary,${COLOURS.NAVY})`, display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "baseline" }}>
+                  <span style={{ fontWeight: 700 }}>{g.customer_name}</span>
+                  <span style={{ color: COLOURS.SLATE }}>— {g.guarantee_number} · {g.bank_name} · {g.guarantee_type}</span>
+                  {g.expiry_date && <span style={{ color: COLOURS.RED, fontWeight: 600 }}>Expired {formatDateUK(g.expiry_date)}{g.days_to_expiry !== null ? ` (${Math.abs(g.days_to_expiry)}d ago)` : ""}</span>}
+                  {!g.expiry_date && g.release_due_date && <span style={{ color: COLOURS.RED, fontWeight: 600 }}>Release was due {formatDateUK(g.release_due_date)}</span>}
+                  {showFinancials && <span style={{ color: COLOURS.SLATE }}>· {pkr(g.amount)}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Action bar — both buttons, same size, at the top ── */}
         {canManage && (

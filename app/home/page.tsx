@@ -127,6 +127,18 @@ type Escalation = {
   sourceLabel: string;
 };
 
+type GuaranteeAlertItem = {
+  id: string;
+  customer_name: string;
+  guarantee_number: string;
+  bank_name: string;
+  guarantee_type: string;
+  amount: number;
+  due_date: string | null;
+  days_overdue?: number;
+  days_left?: number;
+};
+
 type PerformanceRow = {
   name: string;
   red: number;
@@ -457,6 +469,7 @@ export default function HomePage() {
   const [recAgingByCustomer, setRecAgingByCustomer] = useState<{ customer: string; "0-30": number; "31-60": number; "61-90": number; "90+": number; total: number }[]>([]);
   const [showFinance, setShowFinance] = useState(false);
   const [facilitySynopsis, setFacilitySynopsis] = useState<{ bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[]>([]);
+  const [guaranteeAlerts, setGuaranteeAlerts] = useState<GuaranteeAlertItem[]>([]);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
   const [actioningTask, setActioningTask] = useState<string | null>(null);
@@ -1289,6 +1302,22 @@ export default function HomePage() {
     loadSynopsis();
   }, []);
 
+  useEffect(() => {
+    async function loadGuaranteeAlerts() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch("/api/finance/guarantee-alerts", {
+          headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          setGuaranteeAlerts(json.overdue ?? []);
+        }
+      } catch { /* silent */ }
+    }
+    loadGuaranteeAlerts();
+  }, []);
+
   /* ── Member-view data loader (non-CEO logins) ── */
   useEffect(() => {
     if (ctxLoading) return;
@@ -1695,6 +1724,7 @@ export default function HomePage() {
             folderitCompanyBreakdown={folderitCompanyBreakdown}
             dailyOpsData={dailyOpsData}
             facilitySynopsis={facilitySynopsis}
+            guaranteeAlerts={guaranteeAlerts}
             taxOverdueCount={taxOverdueCount}
             taxTier2Alerts={taxTier2Alerts}
             taxScheduleEntries={taxScheduleEntries}
@@ -2266,7 +2296,7 @@ function ExecutiveDashboardBody({
   ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
-  facilitySynopsis, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
+  facilitySynopsis, guaranteeAlerts, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
   taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve,
 }: {
   ctx: UserCtx | null;
@@ -2294,6 +2324,7 @@ function ExecutiveDashboardBody({
   dailyOpsData: DailyOpsPoint[];
   isMobile: boolean;
   facilitySynopsis: { bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[];
+  guaranteeAlerts: GuaranteeAlertItem[];
   taxOverdueCount: number;
   taxTier2Alerts: { alert_type: string; period_key: string; overdue_count: number; alert_message: string; tax_year: string }[];
   taxScheduleEntries: Map<string, "Not Started" | "In Progress" | "External Auditors" | "Completed">;
@@ -2405,9 +2436,11 @@ function ExecutiveDashboardBody({
       if (!cfd.cashPlan) cashAlerts.push({ title: `${cfd.companyName}: No Plan`, value: 0, color: AMBER });
     }
   }
-  const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0 || taxUrgent.length > 0;
+  const overdueGuarantees = showFinance ? guaranteeAlerts : [];
 
-  const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0 || taxOverdue.length > 0 || cashAlerts.length > 0;
+  const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0 || taxUrgent.length > 0 || overdueGuarantees.length > 0;
+
+  const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0 || taxOverdue.length > 0 || cashAlerts.length > 0 || overdueGuarantees.length > 0;
 
   type AttentionItem = { key: string; primary: string; secondary: string; badge?: string | null; taskId?: string; machineId?: string; actionType?: "complete" | "reply" | "resolve" };
   type AttentionRow = { id: string; label: string; count: number; color: string; items: AttentionItem[] };
@@ -2423,6 +2456,14 @@ function ExecutiveDashboardBody({
   if (escalations.length > 0) attentionRows.push({
     id: "escalations", label: "Escalations", count: escalations.length, color: RED,
     items: escalations.map((e) => ({ key: e.sourceLabel, primary: `${e.plantName} — ${e.metric}`, secondary: e.detail })),
+  });
+  if (overdueGuarantees.length > 0) attentionRows.push({
+    id: "guarantees", label: "Guarantees Overdue", count: overdueGuarantees.length, color: RED,
+    items: overdueGuarantees.map((g) => ({
+      key: g.id,
+      primary: `${g.customer_name} — ${g.guarantee_number} (${g.bank_name})`,
+      secondary: `${g.guarantee_type} · PKR ${Math.round(g.amount).toLocaleString()}${g.due_date ? ` · ${g.days_overdue}d overdue` : ""}`,
+    })),
   });
   if (waitingReplies.length > 0) attentionRows.push({
     id: "waiting", label: "Waiting Replies", count: waitingReplies.length, color: RED,
