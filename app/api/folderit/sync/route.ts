@@ -102,9 +102,11 @@ async function syncAccountInbox(
 async function syncAccountApprovals(
   db: ReturnType<typeof createServiceClient>,
   account: AccountMapRow
-): Promise<{ invitesSynced: number; errors: string[] }> {
+): Promise<{ invitesSynced: number; errors: string[]; auditEntriesScanned: number; candidatesFound: number; sampleEvents: string[] }> {
   const errors: string[] = [];
   let invitesSynced = 0;
+  let auditEntriesScanned = 0;
+  const sampleEvents = new Set<string>(); // distinct event types seen, for debugging shape assumptions
 
   try {
     const candidateEntityUids = new Set<string>();
@@ -116,15 +118,19 @@ async function syncAccountApprovals(
         errors.push(`${account.account_name}: audit fetch page ${page} — ${auditRes.status}`);
         break;
       }
-      const entries: AuditEntry[] = await auditRes.json();
+      const json = await auditRes.json();
+      const entries: AuditEntry[] = Array.isArray(json) ? json : (json.entries ?? json.data ?? []);
       if (!entries.length) break;
+      auditEntriesScanned += entries.length;
       for (const entry of entries) {
+        if (entry?.event) sampleEvents.add(entry.event);
         if (entry.event === "fileResolutionNew" && entry.entityUid) {
           candidateEntityUids.add(entry.entityUid);
         }
       }
       if (entries.length < AUDIT_PER_PAGE) break; // last page
     }
+    const candidatesFound = candidateEntityUids.size;
 
     const currentInviteUids: string[] = [];
 
@@ -179,11 +185,12 @@ async function syncAccountApprovals(
     } else {
       await db.from("folderit_resolution_invites").delete().eq("account_uid", account.account_uid);
     }
+    return { invitesSynced, errors, auditEntriesScanned, candidatesFound, sampleEvents: Array.from(sampleEvents) };
   } catch (e) {
     errors.push(`${account.account_name}: approval sync error — ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  return { invitesSynced, errors };
+  return { invitesSynced, errors, auditEntriesScanned, candidatesFound: 0, sampleEvents: Array.from(sampleEvents) };
 }
 
 async function syncHrCategory(
@@ -237,6 +244,9 @@ export async function GET(request: NextRequest) {
   let inboxSynced = 0;
   let invitesSynced = 0;
   let hrFilesSynced = 0;
+  let auditEntriesScanned = 0;
+  let candidatesFound = 0;
+  const sampleEventsSeen = new Set<string>();
 
   const { data: accounts, error: accountsErr } = await db
     .from("folderit_account_map")
@@ -273,6 +283,9 @@ export async function GET(request: NextRequest) {
   for (const { inbox, approvals } of accountResults) {
     inboxSynced += inbox.inboxSynced;
     invitesSynced += approvals.invitesSynced;
+    auditEntriesScanned += approvals.auditEntriesScanned;
+    candidatesFound += approvals.candidatesFound;
+    for (const ev of approvals.sampleEvents) sampleEventsSeen.add(ev);
     errors.push(...inbox.errors, ...approvals.errors);
   }
   for (const hr of hrResults) {
@@ -286,6 +299,13 @@ export async function GET(request: NextRequest) {
     inboxFilesSynced: inboxSynced,
     invitesSynced,
     hrCategoryFilesSynced: hrFilesSynced,
+    // Debug fields to sanity-check the audit-trail approach — remove once
+    // invitesSynced has been confirmed against a real pending approval.
+    debug: {
+      auditEntriesScanned,
+      candidatesFound,
+      distinctEventTypesSeen: Array.from(sampleEventsSeen),
+    },
     errors,
   });
 }
