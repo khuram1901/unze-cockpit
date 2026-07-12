@@ -166,6 +166,14 @@ function FileRow({ item, showTopBorder, indentPx = 40 }: { item: DetailItem; sho
 // viewer's own toolbar/download button hidden. Nothing is saved to disk
 // and no separate tab/download prompt ever opens.
 function PreviewModal({ url, name, onClose }: { url: string; name: string | null; onClose: () => void }) {
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
   return (
     <div
       onClick={onClose}
@@ -339,6 +347,87 @@ function CollapsibleRow({
   );
 }
 
+type HrSearchResult = { file_uid: string; name: string | null; category_name: string | null; folder_path: string | null; created_at: string | null };
+
+// Search box at the top of the HR section — Khuram: "I need you to build
+// in the search option where I can search for the policy on the main
+// page." Searches by name across every HR category and the HR inbox in
+// one Postgres query (search_folderit_hr_files), debounced client-side so
+// it doesn't fire on every keystroke.
+function HrSearchBox() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<HrSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const q = query.trim();
+
+    // All state updates happen inside this callback (never synchronously
+    // in the effect body) — both to satisfy the "no setState directly in
+    // an effect" lint rule and, more importantly, to guard against a slow
+    // request resolving after the user has already typed something else
+    // or the component unmounted.
+    const handle = setTimeout(async () => {
+      if (q.length < 2) {
+        if (!cancelled) { setResults([]); setSearching(false); }
+        return;
+      }
+      if (!cancelled) setSearching(true);
+      const res = await authFetch(`/api/folderit/hr-search?q=${encodeURIComponent(q)}`);
+      const json = await res.json();
+      if (!cancelled) { setResults(json.items ?? []); setSearching(false); }
+    }, q.length < 2 ? 0 : 300);
+
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [query]);
+
+  const trimmed = query.trim();
+
+  return (
+    <div style={{ marginBottom: "12px" }}>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search HR documents by name…"
+        style={{
+          width: "100%", padding: "10px 12px", fontSize: "13.5px", borderRadius: RADII.CARD,
+          border: `1px solid ${HAIRLINE}`, color: NAVY, outline: "none", boxSizing: "border-box",
+          backgroundColor: COLOURS.CARD,
+        }}
+      />
+      {trimmed.length >= 2 && (
+        <div style={{ ...cardStyle, marginTop: "8px", overflow: "hidden" }}>
+          {searching ? (
+            <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Searching…</div>
+          ) : results.length === 0 ? (
+            <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>No documents match &quot;{trimmed}&quot;.</div>
+          ) : (
+            results.map((r, i) => (
+              <FileRow
+                key={r.file_uid}
+                item={{
+                  section: "hr_inbox",
+                  item_uid: r.file_uid,
+                  name: r.name,
+                  account_name: r.category_name
+                    ? (r.folder_path ? `${r.category_name} / ${r.folder_path}` : r.category_name)
+                    : "Inbox — not yet filed",
+                  status: null,
+                  created_at: r.created_at,
+                  days_pending: null,
+                }}
+                showTopBorder={i > 0}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HrSection({
   categories, hrInboxCount, expanded, setExpanded, detailsCache, setDetailsCache,
 }: {
@@ -399,6 +488,7 @@ function HrSection({
   return (
     <div style={{ marginTop: "24px" }}>
       <SectionTitle title="HR" />
+      <HrSearchBox />
       <div style={{ ...cardStyle, overflow: "hidden" }}>
         {categories.map((cat) => (
           <CollapsibleRow
