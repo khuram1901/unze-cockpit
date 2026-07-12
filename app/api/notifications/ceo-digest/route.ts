@@ -120,7 +120,10 @@ export async function GET(request: NextRequest) {
       supabase.rpc("get_weekly_ops_snapshot", { p_since: weekAgo, p_today: today }),
       supabase.rpc("get_monthly_po_snapshot", { p_month_start: monthStart, p_month_end: today }),
       supabase.rpc("get_portfolio_daily_summary", { p_as_of: today, p_prev_date: yesterday, p_alert_pct: -3, p_div_days: 14 }),
-      supabase.from("tax_deadline_alerts").select("alert_message, tier, overdue_count").eq("resolved", false).order("tier"),
+      // Tier 2 (red, past the actual legal deadline) first — the email
+      // only ever shows the first 5, so the most urgent ones must never
+      // be the ones pushed out by tier 1 (amber, early-warning) items.
+      supabase.from("tax_deadline_alerts").select("alert_message, tier, overdue_count").eq("resolved", false).order("tier", { ascending: false }),
     ]);
 
     const firstError = digestErr || opsErr || weekErr || monthErr || portfolioErr;
