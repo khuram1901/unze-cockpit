@@ -5,16 +5,23 @@ import { folderitFetch } from "../../../lib/folderit-auth";
 import { canViewFolderitHr } from "../../../lib/permissions";
 import { loadFolderitUserCtx } from "../_shared";
 
-// Resolve a live, time-limited link to view/download a Folderit file.
+// Resolve a live, time-limited link to PREVIEW a Folderit file — never the
+// original for download. Khuram: "every time I click on the documents to
+// view, it downloads the document... Can you enable a preview function...
+// I don't want people downloading it from the app."
+//
 // Frontend only ever needs the file_uid it already has from a details/HR
 // list — this route looks up which Folderit account the file lives in via
 // get_folderit_file_account(), checks the caller is allowed to see it, then
-// asks Folderit for a download link and hands back just the URL.
+// asks Folderit for a preview link and hands back just the URL.
 //
-// GET /v2/accounts/{accountUid}/files/{fileUid}/download responds with a
-// 302/303 whose Location header (and JSON body) carries the real link —
-// it's never meant to be followed as a normal 2xx fetch, so this uses
-// redirect: "manual" and reads the Location header directly.
+// GET /v2/accounts/{accountUid}/files/{fileUid}/preview returns a link to a
+// PDF *rendition* of the file (Folderit converts it server-side, regardless
+// of original format) — deliberately not the /download endpoint, which
+// serves the original file and is what was triggering the browser's
+// download prompt. Same response shape as /download: a 302/303 whose
+// Location header (and JSON body) carries the real link, never meant to be
+// followed as a normal 2xx fetch — hence redirect: "manual".
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
@@ -68,7 +75,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const folderitRes = await folderitFetch(`/v2/accounts/${accountUid}/files/${fileUid}/download`, {
+    const folderitRes = await folderitFetch(`/v2/accounts/${accountUid}/files/${fileUid}/preview`, {
       redirect: "manual",
     });
 
@@ -80,11 +87,15 @@ export async function GET(request: NextRequest) {
     try {
       const json = await folderitRes.json();
       if (json?.url) return Response.json({ url: json.url });
+      // 202 = PDF rendition is still being generated, no link yet.
+      if (folderitRes.status === 202) {
+        return Response.json({ error: "Preview is still being generated — try again in a moment." }, { status: 202 });
+      }
     } catch {
       // no JSON body — fall through to the error below
     }
 
-    return Response.json({ error: "Folderit did not return a file link" }, { status: 502 });
+    return Response.json({ error: "Folderit did not return a preview link" }, { status: 502 });
   } catch (e) {
     return Response.json(
       { error: `File link fetch failed — ${e instanceof Error ? e.message : String(e)}` },

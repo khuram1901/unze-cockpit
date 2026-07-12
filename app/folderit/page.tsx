@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext, createContext } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
 import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../lib/SharedUI";
@@ -84,32 +84,49 @@ function AgeTag({ days }: { days: number | null }) {
 
 type HrCategory = { category_name: string; file_count: number; sort_order: number };
 
-// Asks the backend for a live Folderit link and opens it in a new tab.
-// Backend resolves the file's account from just its uid and checks the
-// caller is allowed to see it, so nothing sensitive is exposed here.
-async function openFile(fileUid: string) {
-  try {
-    const res = await authFetch(`/api/folderit/file-url?file=${encodeURIComponent(fileUid)}`);
-    const json = await res.json();
-    if (!res.ok || !json.url) {
-      window.alert(json.error ?? "Couldn't open this document.");
-      return;
-    }
-    window.open(json.url, "_blank", "noopener,noreferrer");
-  } catch {
-    window.alert("Couldn't open this document.");
-  }
+// In-app document preview — no downloads. FolderitDashboard owns the modal
+// state; this context lets FileRow (nested many levels deep, inside
+// CollapsibleRow/FileList/FolderNodeRow) open it without prop-drilling a
+// setter through every intermediate component.
+type PreviewTarget = { url: string; name: string | null } | null;
+const PreviewContext = createContext<(target: PreviewTarget) => void>(() => {});
+
+// Asks the backend for a live preview link. Backend resolves the file's
+// account from just its uid, checks the caller is allowed to see it, and
+// asks Folderit for a PDF preview rendition (never the original file), so
+// nothing sensitive is exposed here and nothing gets saved to disk.
+async function fetchPreviewUrl(fileUid: string): Promise<string> {
+  const res = await authFetch(`/api/folderit/file-url?file=${encodeURIComponent(fileUid)}`);
+  const json = await res.json();
+  if (!res.ok || !json.url) throw new Error(json.error ?? "Couldn't preview this document.");
+  return json.url;
 }
 
 function FileRow({ item, showTopBorder, indentPx = 40 }: { item: DetailItem; showTopBorder: boolean; indentPx?: number }) {
+  const setPreview = useContext(PreviewContext);
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick() {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const url = await fetchPreviewUrl(item.item_uid);
+      setPreview({ url, name: item.name });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Couldn't preview this document.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div
-      onClick={() => openFile(item.item_uid)}
+      onClick={handleClick}
       style={{
         padding: `8px 16px 8px ${indentPx}px`,
         borderTop: showTopBorder ? `1px solid ${HAIRLINE}` : "none",
         display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-        cursor: "pointer",
+        cursor: "pointer", opacity: loading ? 0.6 : 1,
       }}
     >
       <div style={{ minWidth: 0, flex: 1 }}>
@@ -125,6 +142,43 @@ function FileRow({ item, showTopBorder, indentPx = 40 }: { item: DetailItem; sho
             {item.status}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+// In-app preview only — Folderit's /preview endpoint returns a PDF
+// rendition of the document (converted server-side, regardless of the
+// original file type), shown inline in an iframe with the built-in
+// viewer's own toolbar/download button hidden. Nothing is saved to disk
+// and no separate tab/download prompt ever opens.
+function PreviewModal({ url, name, onClose }: { url: string; name: string | null; onClose: () => void }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, backgroundColor: "rgba(15,23,32,0.72)",
+        zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          backgroundColor: COLOURS.CARD, borderRadius: RADII.CARD, width: "100%", maxWidth: "960px",
+          height: "88vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: SHADOWS.HOVER,
+        }}
+      >
+        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+          <span style={{ fontSize: "14px", fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {name ?? "Document preview"}
+          </span>
+          <span onClick={onClose} style={{ cursor: "pointer", fontSize: "12.5px", color: SLATE, fontWeight: 600, flexShrink: 0 }}>Close ✕</span>
+        </div>
+        <iframe
+          src={`${url}#toolbar=0&navpanes=0`}
+          title={name ?? "Document preview"}
+          style={{ flex: 1, border: "none", width: "100%" }}
+        />
       </div>
     </div>
   );
@@ -691,6 +745,7 @@ function FolderitDashboard() {
   const [hrCategories, setHrCategories] = useState<HrCategory[]>([]);
   const [hrInboxCount, setHrInboxCount] = useState(0);
   const [hrLoading, setHrLoading] = useState(true);
+  const [preview, setPreview] = useState<PreviewTarget>(null);
 
   useEffect(() => {
     (async () => {
@@ -714,19 +769,22 @@ function FolderitDashboard() {
   const hasHrAccess = canViewFolderitHr(ctx);
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
-      <PageHeader />
-      <h1 style={{ fontSize: "22px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>Folderit</h1>
-      <div style={{ fontSize: "13.5px", color: SLATE, marginBottom: "20px" }}>
-        Documents pending approval &amp; filing — read-only status view. Act on anything by opening Folderit directly.
-      </div>
+    <PreviewContext.Provider value={setPreview}>
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
+        <PageHeader />
+        <h1 style={{ fontSize: "22px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>Folderit</h1>
+        <div style={{ fontSize: "13.5px", color: SLATE, marginBottom: "20px" }}>
+          Documents pending approval &amp; filing — read-only status view. Act on anything by opening Folderit directly.
+        </div>
 
-      {isAdmin ? (
-        <AdminView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
-      ) : (
-        <MemberView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
-      )}
-    </div>
+        {isAdmin ? (
+          <AdminView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
+        ) : (
+          <MemberView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
+        )}
+      </div>
+      {preview && <PreviewModal url={preview.url} name={preview.name} onClose={() => setPreview(null)} />}
+    </PreviewContext.Provider>
   );
 }
 
