@@ -70,3 +70,50 @@ export async function folderitFetch(path: string, init?: RequestInit): Promise<R
     },
   });
 }
+
+// A handful of Folderit endpoints (e.g. GET /audit/accountLog) document
+// their filters as a JSON request body on a GET request. The standard
+// fetch() API refuses to send a body on GET/HEAD — that's a restriction of
+// the WHATWG Fetch spec, not of HTTP itself — so calling folderitFetch()
+// with a GET + body throws "Request with GET/HEAD method cannot have body"
+// before the request ever leaves the machine. This helper drops down to
+// Node's raw https client, which has no such restriction, for those
+// specific calls only. Keep using folderitFetch() for every ordinary
+// (body-less) GET.
+export async function folderitGetWithBody(
+  path: string,
+  body: Record<string, unknown>
+): Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }> {
+  const token = await getFolderitToken();
+  const payload = JSON.stringify(body);
+  const https = await import("node:https");
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      `${FOLDERIT_API_BASE}${path}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (chunk) => (raw += chunk));
+        res.on("end", () => {
+          const status = res.statusCode ?? 500;
+          resolve({
+            ok: status < 400,
+            status,
+            json: async () => (raw ? JSON.parse(raw) : null),
+          });
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+}

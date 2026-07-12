@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
-import { folderitFetch } from "../../../lib/folderit-auth";
+import { folderitFetch, folderitGetWithBody } from "../../../lib/folderit-auth";
 
 export const maxDuration = 60; // Vercel Pro ceiling — accounts sync in parallel below
 
@@ -54,8 +54,23 @@ type AuditEntry = {
 // pages of that log to discover candidate files, then ask the live
 // resolutions/invites endpoints for their current status (never trusting
 // the audit log itself for current state, only for discovery).
+//
+// IMPORTANT: this MUST call GET /audit/accountLog, not GET /audit. The
+// plain /audit endpoint's response schema (auditTrailAccountEntry) is a
+// closed set of 50 account-level event types that structurally can never
+// include "fileResolutionNew" — confirmed against the OpenAPI spec, this is
+// why invitesSynced was always 0 even with real pending approvals. The
+// correct endpoint's schema is a union across file/folder/account entries,
+// and file entries do include fileResolutionNew.
+//
+// /audit/accountLog also takes its filters (type, event, time) as a JSON
+// body on a GET request — see folderitGetWithBody() for why that needs
+// Node's raw https client instead of fetch(). Without an explicit `time`,
+// Folderit defaults to only the last 1 day (max 30), which alone could
+// explain missed approvals older than that.
 const AUDIT_PAGES_TO_SCAN = 3;
-const AUDIT_PER_PAGE = 100;
+const AUDIT_PER_PAGE = 500;
+const AUDIT_LOOKBACK_DAYS = 30; // Folderit's documented max for this endpoint
 
 async function syncAccountInbox(
   db: ReturnType<typeof createServiceClient>,
@@ -111,16 +126,18 @@ async function syncAccountApprovals(
 
   try {
     const candidateEntityUids = new Set<string>();
+    const sinceUnix = Math.floor(Date.now() / 1000) - AUDIT_LOOKBACK_DAYS * 24 * 60 * 60;
     for (let page = 1; page <= AUDIT_PAGES_TO_SCAN; page++) {
-      const auditRes = await folderitFetch(
-        `/v2/accounts/${account.account_uid}/audit?page=${page}&per-page=${AUDIT_PER_PAGE}`
+      const auditRes = await folderitGetWithBody(
+        `/v2/accounts/${account.account_uid}/audit/accountLog?page=${page}&per-page=${AUDIT_PER_PAGE}`,
+        { type: ["file"], event: ["fileResolutionNew"], time: sinceUnix }
       );
       if (!auditRes.ok) {
         errors.push(`${account.account_name}: audit fetch page ${page} — ${auditRes.status}`);
         break;
       }
-      const json = await auditRes.json();
-      const entries: AuditEntry[] = Array.isArray(json) ? json : (json.entries ?? json.data ?? []);
+      const json = (await auditRes.json()) as AuditEntry[] | { entries?: AuditEntry[]; data?: AuditEntry[] } | null;
+      const entries: AuditEntry[] = Array.isArray(json) ? json : (json?.entries ?? json?.data ?? []);
       if (!entries.length) break;
       auditEntriesScanned += entries.length;
       for (const entry of entries) {
