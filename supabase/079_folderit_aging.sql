@@ -141,8 +141,8 @@ security definer
 set search_path = public
 as $$
   select
-    'approval', ri.invite_uid, coalesce(f.name, ri.entity_uid), am.account_name,
-    ac.company_uuid, extract(day from now() - coalesce(ri.created_at, ri.synced_at))::int
+    'approval' as section, ri.invite_uid as item_uid, coalesce(f.name, ri.entity_uid) as name, am.account_name,
+    ac.company_uuid, extract(day from now() - coalesce(ri.created_at, ri.synced_at))::int as days_pending
   from folderit_resolution_invites ri
   join folderit_account_map am on am.account_uid = ri.account_uid
   join folderit_account_companies ac on ac.account_uid = ri.account_uid
@@ -152,8 +152,8 @@ as $$
     and extract(day from now() - coalesce(ri.created_at, ri.synced_at)) >= p_threshold_days
   union all
   select
-    'company_inbox', f.file_uid, f.name, am.account_name,
-    ac.company_uuid, extract(day from now() - coalesce(f.created_at, f.synced_at))::int
+    'company_inbox' as section, f.file_uid as item_uid, f.name, am.account_name,
+    ac.company_uuid, extract(day from now() - coalesce(f.created_at, f.synced_at))::int as days_pending
   from folderit_inbox_files f
   join folderit_account_map am on am.account_uid = f.account_uid
   join folderit_account_companies ac on ac.account_uid = f.account_uid
