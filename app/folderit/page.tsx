@@ -65,6 +65,11 @@ type DetailItem = {
   status: string | null;
   created_at: string | null;
   days_pending: number | null;
+  // "/"-joined Folderit subfolder breadcrumb (e.g. "01-Archive/2019"), only
+  // populated for HR category file lists. Null/undefined means the file
+  // sits directly in the category's root folder — or that this item type
+  // doesn't have folders at all (approvals, company inbox).
+  folder_path?: string | null;
 };
 
 function AgeTag({ days }: { days: number | null }) {
@@ -79,30 +84,80 @@ function AgeTag({ days }: { days: number | null }) {
 
 type HrCategory = { category_name: string; file_count: number; sort_order: number };
 
+function FileRow({ item, showTopBorder, indent }: { item: DetailItem; showTopBorder: boolean; indent?: boolean }) {
+  return (
+    <div style={{
+      padding: `8px 16px 8px ${indent ? 56 : 40}px`,
+      borderTop: showTopBorder ? `1px solid ${HAIRLINE}` : "none",
+      display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+    }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: "13.5px", color: NAVY, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {item.name ?? "Untitled document"}
+        </div>
+        <div style={{ fontSize: "11.5px", color: SLATE, marginTop: "1px" }}>{item.account_name}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+        <AgeTag days={item.days_pending} />
+        {item.status && (
+          <span style={{ fontSize: "10.5px", fontWeight: 600, color: AMBER, textTransform: "capitalize" }}>
+            {item.status}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FolderHeader({ path, showTopBorder }: { path: string; showTopBorder: boolean }) {
+  return (
+    <div style={{
+      padding: "8px 16px 4px 40px", fontSize: "11px", fontWeight: 700,
+      color: SLATE, textTransform: "uppercase", letterSpacing: "0.03em",
+      borderTop: showTopBorder ? `1px solid ${HAIRLINE}` : "none",
+    }}>
+      {path}
+    </div>
+  );
+}
+
 function FileList({ items }: { items: DetailItem[] }) {
   if (!items.length) return <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Nothing here.</div>;
+
+  const hasFolders = items.some((it) => it.folder_path);
+  if (!hasFolders) {
+    return (
+      <div>
+        {items.map((item, i) => (
+          <FileRow key={item.item_uid} item={item} showTopBorder={i > 0} />
+        ))}
+      </div>
+    );
+  }
+
+  // Folderit's real subfolder structure — group root-level files first,
+  // then one section per subfolder, so users see the same map/directory
+  // they'd navigate inside Folderit itself instead of one flat pile.
+  const rootItems = items.filter((it) => !it.folder_path);
+  const folderMap = new Map<string, DetailItem[]>();
+  for (const it of items) {
+    if (!it.folder_path) continue;
+    if (!folderMap.has(it.folder_path)) folderMap.set(it.folder_path, []);
+    folderMap.get(it.folder_path)!.push(it);
+  }
+  const sortedFolders = Array.from(folderMap.keys()).sort((a, b) => a.localeCompare(b));
+
   return (
     <div>
-      {items.map((item, i) => (
-        <div key={item.item_uid} style={{
-          padding: "8px 16px 8px 40px",
-          borderTop: i > 0 ? `1px solid ${HAIRLINE}` : "none",
-          display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-        }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: "13.5px", color: NAVY, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {item.name ?? "Untitled document"}
-            </div>
-            <div style={{ fontSize: "11.5px", color: SLATE, marginTop: "1px" }}>{item.account_name}</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-            <AgeTag days={item.days_pending} />
-            {item.status && (
-              <span style={{ fontSize: "10.5px", fontWeight: 600, color: AMBER, textTransform: "capitalize" }}>
-                {item.status}
-              </span>
-            )}
-          </div>
+      {rootItems.map((item, i) => (
+        <FileRow key={item.item_uid} item={item} showTopBorder={i > 0} />
+      ))}
+      {sortedFolders.map((folder) => (
+        <div key={folder}>
+          <FolderHeader path={folder} showTopBorder />
+          {folderMap.get(folder)!.map((item) => (
+            <FileRow key={item.item_uid} item={item} showTopBorder={false} indent />
+          ))}
         </div>
       ))}
     </div>
@@ -171,7 +226,7 @@ function HrSection({
       setLoadingKey(key);
       const res = await authFetch(`/api/folderit/details?category=${encodeURIComponent(categoryName)}`);
       const json = await res.json();
-      const items: DetailItem[] = (json.items ?? []).map((it: { file_uid: string; name: string | null; created_at: string | null }) => ({
+      const items: DetailItem[] = (json.items ?? []).map((it: { file_uid: string; name: string | null; created_at: string | null; folder_path: string | null }) => ({
         section: "hr_inbox" as const,
         item_uid: it.file_uid,
         name: it.name,
@@ -179,6 +234,7 @@ function HrSection({
         status: null,
         created_at: it.created_at,
         days_pending: null,
+        folder_path: it.folder_path,
       }));
       setDetailsCache((prev) => ({ ...prev, [key]: items }));
       setLoadingKey(null);

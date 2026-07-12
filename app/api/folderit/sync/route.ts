@@ -23,6 +23,11 @@ type FolderitFile = {
   uid: string;
   name: string;
   createdAt?: number;
+  // "/"-joined breadcrumb of subfolder names relative to the category's
+  // root folder (e.g. "01-Archive/2019"), or undefined for files sitting
+  // directly in the root. Only populated for HR category files — see
+  // fetchFolderFilesRecursive.
+  folderPath?: string;
 };
 
 type FolderitResolution = {
@@ -232,7 +237,10 @@ async function fetchFolderFilesRecursive(
   folderUid: string,
   depth: number,
   errors: string[],
-  categoryLabel: string
+  categoryLabel: string,
+  // "/"-joined breadcrumb of subfolder names walked so far, relative to the
+  // category's root folder. Empty string at the root itself.
+  folderPath: string = ""
 ): Promise<FolderitFile[]> {
   const collected: FolderitFile[] = [];
 
@@ -247,7 +255,10 @@ async function fetchFolderFilesRecursive(
     // the OpenAPI spec, not a { files: [...] } wrapper — the `?? filesJson`
     // fallback covers that shape defensively either way.
     const files: FolderitFile[] = filesJson.files ?? filesJson ?? [];
-    collected.push(...files);
+    // Stamp each file with the folder path it was found in, so the UI can
+    // later show the same folder/subfolder structure Khuram sees inside
+    // Folderit itself instead of one flat list.
+    collected.push(...files.map((f) => (folderPath ? { ...f, folderPath } : f)));
   }
 
   if (depth >= HR_MAX_FOLDER_DEPTH) return collected;
@@ -265,8 +276,10 @@ async function fetchFolderFilesRecursive(
 
   if (subfolders.length) {
     const nested = await Promise.all(
-      subfolders.map((sf) =>
-        fetchFolderFilesRecursive(accountUid, sf.uid, depth + 1, errors, categoryLabel)
+      subfolders.map((sf) => {
+        const childPath = folderPath ? `${folderPath}/${sf.name ?? sf.uid}` : (sf.name ?? sf.uid);
+        return fetchFolderFilesRecursive(accountUid, sf.uid, depth + 1, errors, categoryLabel, childPath);
+      }
       )
     );
     for (const n of nested) collected.push(...n);
@@ -298,6 +311,7 @@ async function syncHrCategory(
         file_uid: f.uid,
         category_name: category.category_name,
         name: f.name,
+        folder_path: f.folderPath ?? null,
         created_at: f.createdAt ? new Date(f.createdAt * 1000).toISOString() : null,
         synced_at: new Date().toISOString(),
       }));

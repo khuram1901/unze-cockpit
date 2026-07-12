@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -rhoE '\"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}\"' app --include=\"*.tsx\" --include=\"*.ts\")",
+      "Bash(npx next *)",
+      "Bash(npx eslint *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(grep -qiE \"ready|local:|started server|error\" \"/private/tmp/claude-501/-Users-jamesbond-Documents-Apps-Unze-Dashboard/359931f2-5bf4-4bb0-be2e-64f613233910/tasks/b4q4s3g0j.output\")",
+      "Bash(break)",
+      "Bash(curl -s -o /dev/null -w \"/members → HTTP %{http_code}\\\\n\" http://localhost:3000/members)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(vercel ls *)",
+      "Bash(vercel inspect *)"
+    ]
+  }
+}
