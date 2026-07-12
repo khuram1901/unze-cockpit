@@ -36,6 +36,7 @@ type FolderitResolutionInvite = {
   email: string;
   status: "pending" | "pendingInvite" | "active" | "approved" | "rejected";
   order?: number;
+  createdAt?: number; // unix seconds, same convention as FolderitFile.createdAt
 };
 
 type AuditEntry = {
@@ -165,6 +166,10 @@ async function syncAccountApprovals(
               email: invite.email,
               status: invite.status,
               invite_order: invite.order ?? null,
+              // Preserve the invite's real creation date from Folderit so
+              // "days pending" reflects when the approval actually started,
+              // not when our sync last ran.
+              created_at: invite.createdAt ? new Date(invite.createdAt * 1000).toISOString() : null,
               synced_at: new Date().toISOString(),
             });
             if (upsertErr) errors.push(`${account.account_name}: invite upsert — ${upsertErr.message}`);

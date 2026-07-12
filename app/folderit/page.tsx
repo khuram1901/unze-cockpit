@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
-import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, CountCard } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../lib/SharedUI";
 import { COMPANIES } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
 import { isAdminTier } from "../lib/permissions";
@@ -39,7 +39,18 @@ type DetailItem = {
   account_name: string;
   status: string | null;
   created_at: string | null;
+  days_pending: number | null;
 };
+
+function AgeTag({ days }: { days: number | null }) {
+  if (days === null) return null;
+  const color = days >= 7 ? COLOURS.RED : days >= 3 ? AMBER : SLATE;
+  return (
+    <span style={{ fontSize: "10.5px", fontWeight: 600, color, flexShrink: 0 }}>
+      {days === 0 ? "today" : days === 1 ? "1 day" : `${days} days`}
+    </span>
+  );
+}
 
 type HrCategory = { category_name: string; file_count: number; sort_order: number };
 
@@ -59,11 +70,14 @@ function FileList({ items }: { items: DetailItem[] }) {
             </div>
             <div style={{ fontSize: "11.5px", color: SLATE, marginTop: "1px" }}>{item.account_name}</div>
           </div>
-          {item.status && (
-            <span style={{ fontSize: "10.5px", fontWeight: 600, color: AMBER, textTransform: "capitalize", flexShrink: 0 }}>
-              {item.status}
-            </span>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+            <AgeTag days={item.days_pending} />
+            {item.status && (
+              <span style={{ fontSize: "10.5px", fontWeight: 600, color: AMBER, textTransform: "capitalize" }}>
+                {item.status}
+              </span>
+            )}
+          </div>
         </div>
       ))}
     </div>
@@ -139,6 +153,7 @@ function HrSection({
         account_name: categoryName,
         status: null,
         created_at: it.created_at,
+        days_pending: null,
       }));
       setDetailsCache((prev) => ({ ...prev, [key]: items }));
       setLoadingKey(null);
@@ -160,6 +175,7 @@ function HrSection({
         account_name: it.account_name,
         status: null,
         created_at: it.created_at,
+        days_pending: null,
       }));
       setDetailsCache((prev) => ({ ...prev, [key]: items }));
       setLoadingKey(null);
@@ -259,26 +275,49 @@ function MemberView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[]
 }
 
 // ── CEO/Admin view: every company on one page ───────────────────────
+type CompanyBreakdownRow = {
+  company_uuid: string;
+  inbox_count: number;
+  inbox_oldest_days: number | null;
+  pending_approval_count: number;
+  approval_oldest_days: number | null;
+};
+
+type OverdueItem = {
+  section: "approval" | "company_inbox";
+  item_uid: string;
+  name: string | null;
+  account_name: string;
+  company_uuid: string;
+  days_pending: number;
+};
+
 function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[]; hrInboxCount: number }) {
-  const [rows, setRows] = useState<{ company_uuid: string; inbox_count: number; pending_approval_count: number }[]>([]);
+  const [rows, setRows] = useState<CompanyBreakdownRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
   const [loadingCompany, setLoadingCompany] = useState<string | null>(null);
   const [detailsByCompany, setDetailsByCompany] = useState<Record<string, DetailItem[]>>({});
   const [hrExpanded, setHrExpanded] = useState<string | null>(null);
   const [hrDetailsCache, setHrDetailsCache] = useState<Record<string, DetailItem[]>>({});
+  const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([]);
+  const [bannerOpen, setBannerOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const res = await authFetch("/api/folderit/company-breakdown");
-      const json = await res.json();
-      setRows(json.companies ?? []);
+      const [breakdownRes, overdueRes] = await Promise.all([
+        authFetch("/api/folderit/company-breakdown"),
+        authFetch("/api/folderit/overdue"),
+      ]);
+      const breakdownJson = await breakdownRes.json();
+      setRows(breakdownJson.companies ?? []);
+      const overdueJson = await overdueRes.json();
+      setOverdueItems(overdueJson.items ?? []);
       setLoading(false);
     })();
   }, []);
 
-  async function toggleCompany(companyUuid: string) {
-    if (expandedCompany === companyUuid) { setExpandedCompany(null); return; }
+  async function openCompany(companyUuid: string) {
     setExpandedCompany(companyUuid);
     if (!detailsByCompany[companyUuid]) {
       setLoadingCompany(companyUuid);
@@ -289,25 +328,70 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
     }
   }
 
-  if (loading) return <div style={{ color: SLATE }}>Loading…</div>;
+  async function toggleCompany(companyUuid: string) {
+    if (expandedCompany === companyUuid) { setExpandedCompany(null); return; }
+    await openCompany(companyUuid);
+  }
 
-  const totalInbox = rows.reduce((s, r) => s + r.inbox_count, 0);
-  const totalApprovals = rows.reduce((s, r) => s + r.pending_approval_count, 0);
+  if (loading) return <div style={{ color: SLATE }}>Loading…</div>;
 
   return (
     <>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginBottom: "16px" }}>
-        <CountCard label="Companies tracked" value={rows.length} color={NAVY} />
-        <CountCard label="Total inbox unfiled" value={totalInbox} color={BLUE} />
-        <CountCard label="Total pending approvals" value={totalApprovals} color={AMBER} />
-      </div>
+      {overdueItems.length > 0 && (
+        <div style={WARNING_BANNER_STYLE}>
+          <div
+            onClick={() => setBannerOpen(!bannerOpen)}
+            style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "20px" }}>⚠</span>
+              <div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
+                  {overdueItems.length} document{overdueItems.length > 1 ? "s" : ""} sitting 7+ days, not yet filed or approved
+                </div>
+                <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
+                  {overdueItems.slice(0, 3).map((it) => `${it.name ?? "Untitled"} (${it.days_pending}d)`).join(" · ")}
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
+          </div>
+          {bannerOpen && (
+            <div style={{ borderTop: "1px solid #F1D9A9", backgroundColor: COLOURS.CARD }}>
+              {overdueItems.map((it) => {
+                const company = COMPANIES.find((c) => c.id === it.company_uuid);
+                return (
+                  <div
+                    key={`${it.section}:${it.item_uid}`}
+                    onClick={() => { openCompany(it.company_uuid); setBannerOpen(false); }}
+                    style={{ padding: "8px 16px 8px 48px", borderBottom: `1px solid ${HAIRLINE}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}
+                  >
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: "13.5px", fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {it.name ?? "Untitled document"}
+                      </div>
+                      <div style={{ fontSize: "11.5px", color: SLATE, marginTop: "1px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        {company && <CompanyBadge shortCode={company.shortCode} />}
+                        {it.account_name} · {it.section === "approval" ? "pending approval" : "inbox"}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED, flexShrink: 0 }}>{it.days_pending}d</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <SectionTitle title="By Company" />
       <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px" }}>
         {COMPANIES.map((company, i) => {
           const row = rows.find((r) => r.company_uuid === company.id);
           const inboxCount = row?.inbox_count ?? 0;
+          const inboxOldestDays = row?.inbox_oldest_days ?? null;
           const approvalCount = row?.pending_approval_count ?? 0;
+          const approvalOldestDays = row?.approval_oldest_days ?? null;
           const isOpen = expandedCompany === company.id;
           const hasData = inboxCount > 0 || approvalCount > 0;
           return (
@@ -324,14 +408,30 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
                   <CompanyBadge shortCode={company.shortCode} />
                   <span style={{ fontSize: "14.5px", fontWeight: 600, color: NAVY }}>{company.name}</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
-                  <div style={{ textAlign: "right" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{
+                    textAlign: "right", padding: "4px 10px", borderRadius: RADII.SM,
+                    backgroundColor: inboxCount > 0 ? "#EEF1FC" : "transparent", minWidth: "72px",
+                  }}>
                     <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Inbox</div>
                     <div style={{ fontSize: "13px", fontWeight: 700, color: inboxCount > 0 ? BLUE : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{inboxCount}</div>
+                    {inboxOldestDays !== null && inboxCount > 0 && (
+                      <div style={{ fontSize: "9.5px", fontWeight: 600, marginTop: "1px", color: inboxOldestDays >= 7 ? COLOURS.RED : SLATE }}>
+                        oldest {inboxOldestDays}d
+                      </div>
+                    )}
                   </div>
-                  <div style={{ textAlign: "right" }}>
+                  <div style={{
+                    textAlign: "right", padding: "4px 10px", borderRadius: RADII.SM,
+                    backgroundColor: approvalCount > 0 ? COLOURS.WARNING_SOFT : "transparent", minWidth: "72px",
+                  }}>
                     <div style={{ fontSize: "9.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Approvals</div>
                     <div style={{ fontSize: "13px", fontWeight: 700, color: approvalCount > 0 ? AMBER : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{approvalCount}</div>
+                    {approvalOldestDays !== null && approvalCount > 0 && (
+                      <div style={{ fontSize: "9.5px", fontWeight: 600, marginTop: "1px", color: approvalOldestDays >= 7 ? COLOURS.RED : SLATE }}>
+                        oldest {approvalOldestDays}d
+                      </div>
+                    )}
                   </div>
                   {hasData && <span style={{ fontSize: "12px", color: SLATE }}>{isOpen ? "▼" : "▶"}</span>}
                 </div>
