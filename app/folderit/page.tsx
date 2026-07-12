@@ -4,7 +4,7 @@ import { useEffect, useState, useContext, createContext } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
 import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle } from "../lib/SharedUI";
-import { COMPANIES } from "../lib/constants";
+import { COMPANIES, ALM_COMPANY_ID } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
 import { useMobile } from "../lib/useMobile";
 import { isAdminTier, canViewFolderitHr } from "../lib/permissions";
@@ -18,8 +18,11 @@ const BRNH_ID = "6401ba75-f297-4617-84c1-305bcaf35a50";
 const HD_ID = "16a92b7f-b3fa-4271-819b-c6befb534f12";
 const RESTAURANT_GROUP_KEY = "restaurants";
 
+// Khuram: "lets remove the company Almahar from this card for now" —
+// hidden from the Folderit page only; Almahar stays in COMPANIES and
+// everywhere else in the app.
 const FOLDERIT_DISPLAY_COMPANIES: { id: string; shortCode: string; name: string }[] = [
-  ...COMPANIES.filter((c) => c.id !== BRNH_ID && c.id !== HD_ID).map((c) => ({ id: c.id, shortCode: c.shortCode, name: c.name })),
+  ...COMPANIES.filter((c) => c.id !== BRNH_ID && c.id !== HD_ID && c.id !== ALM_COMPANY_ID).map((c) => ({ id: c.id, shortCode: c.shortCode, name: c.name })),
   { id: RESTAURANT_GROUP_KEY, shortCode: "RST", name: "Restaurant" },
 ];
 
