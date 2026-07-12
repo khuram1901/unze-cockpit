@@ -6,7 +6,7 @@ import { useRequireCapability, loadUserCtx } from "../../lib/useRouteGuard";
 import { supabase } from "../../lib/supabase";
 import { canViewGuaranteeFinancials, canManageGuarantees } from "../../lib/permissions";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, primaryButtonStyle, inputStyle, labelStyle } from "../../lib/SharedUI";
+import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, cardStyle, useToast, useConfirm, primaryButtonStyle, inputStyle, labelStyle } from "../../lib/SharedUI";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInput from "../../lib/DateInput";
 
@@ -158,7 +158,7 @@ function BankFacilityCard({ bank, allGuarantees, onEdit, onDelete, canManage }: 
   const pct = bank.bank_utilisation_pct;
   const barColor = pct >= 90 ? COLOURS.RED : pct >= 70 ? COLOURS.AMBER : COLOURS.GREEN;
   return (
-    <div style={{ padding: "16px 18px", backgroundColor: "var(--bg-card,#fff)", borderRadius: "12px", border: `1px solid var(--border-color,${COLOURS.HAIRLINE})`, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+    <div style={{ ...cardStyle, padding: "16px 18px" }}>
       {/* Bank header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
         <div style={{ fontSize: "16px", fontWeight: 800, color: `var(--text-primary,${COLOURS.NAVY})`, letterSpacing: "-0.2px" }}>{bank.bank_name}</div>
@@ -188,7 +188,7 @@ function BankFacilityCard({ bank, allGuarantees, onEdit, onDelete, canManage }: 
             const sfColor = sfPct >= 90 ? COLOURS.RED : sfPct >= 70 ? COLOURS.AMBER : COLOURS.GREEN;
             const sfGuarantees = allGuarantees.filter((g) => g.facility_id === sf.id && g.status === "Active");
             return (
-              <div key={sf.id} style={{ padding: "12px 14px", backgroundColor: "#f8fafc", borderRadius: "10px", border: `1px solid ${COLOURS.HAIRLINE}` }}>
+              <div key={sf.id} style={{ padding: "12px 14px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}>
                 {/* Facility header: name + edit/delete buttons */}
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
                   <div style={{ fontSize: "13px", fontWeight: 700, color: `var(--text-primary,${COLOURS.NAVY})`, flex: 1 }}>
@@ -219,7 +219,7 @@ function BankFacilityCard({ bank, allGuarantees, onEdit, onDelete, canManage }: 
                 {sf.type_breakdown && sf.type_breakdown.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: sfGuarantees.length > 0 ? "10px" : "0" }}>
                     {sf.type_breakdown.map((tb) => (
-                      <div key={tb.guarantee_type} style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", backgroundColor: "#e0e7ff", color: "#3730a3", fontWeight: 600 }}>
+                      <div key={tb.guarantee_type} style={{ padding: "4px 10px", borderRadius: RADII.PILL, fontSize: "11px", backgroundColor: COLOURS.INFO_SOFT, color: COLOURS.BLUE, fontWeight: 600 }}>
                         {tb.guarantee_type}: {pkr(tb.seized)} ({tb.count})
                       </div>
                     ))}
@@ -234,7 +234,7 @@ function BankFacilityCard({ bank, allGuarantees, onEdit, onDelete, canManage }: 
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <span style={{ fontWeight: 600, color: `var(--text-primary,${COLOURS.NAVY})` }}>{g.customer_name}</span>
                           <span style={{ color: COLOURS.SLATE }}> · {g.guarantee_number}</span>
-                          <span style={{ marginLeft: "6px", fontSize: "10px", padding: "1px 6px", borderRadius: "8px", backgroundColor: "#f1f5f9", color: COLOURS.SLATE, fontWeight: 600 }}>{g.guarantee_type}</span>
+                          <span style={{ marginLeft: "6px", fontSize: "10px", padding: "1px 6px", borderRadius: "8px", backgroundColor: COLOURS.TRACK, color: COLOURS.SLATE, fontWeight: 600 }}>{g.guarantee_type}</span>
                           {g.chase_urgency === "Overdue" && <span style={{ marginLeft: "4px", fontSize: "10px", color: COLOURS.RED, fontWeight: 700 }}>⚠ Overdue</span>}
                           {g.chase_urgency === "Due soon" && <span style={{ marginLeft: "4px", fontSize: "10px", color: COLOURS.AMBER, fontWeight: 700 }}>⏱ Soon</span>}
                         </div>
@@ -309,7 +309,7 @@ function BillPicker({ linkedId, linkedDate, linkedRef, onLink, onManualDate, man
   return (
     <div>
       {linkedId ? (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", backgroundColor: "#f0fdf4", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 10px", backgroundColor: COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, border: `1px solid ${COLOURS.GREEN}40` }}>
           <span style={{ fontSize: "13px", color: COLOURS.GREEN, fontWeight: 600 }}>
             ✓ Linked: {linkedRef || "Bill"} — {linkedDate ? formatDateUK(linkedDate) : "—"}
           </span>
@@ -366,13 +366,13 @@ const STATUSES = ["Active", "Converted", "Returned", "Released", "Expired"];
 
 function statusBadge(status: string) {
   const map: Record<string, { bg: string; color: string }> = {
-    "Active":      { bg: "#eff6ff", color: COLOURS.BLUE },
-    "Converted":   { bg: "#f5f3ff", color: COLOURS.PURPLE },
-    "Returned":    { bg: "#f0fdf4", color: COLOURS.GREEN },
-    "Released":    { bg: "#f0fdf4", color: COLOURS.GREEN },
-    "Expired":     { bg: "#fef2f2", color: COLOURS.RED },
+    "Active":      { bg: COLOURS.INFO_SOFT,    color: COLOURS.BLUE },
+    "Converted":   { bg: "#f5f3ff",            color: COLOURS.PURPLE },
+    "Returned":    { bg: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN },
+    "Released":    { bg: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN },
+    "Expired":     { bg: COLOURS.DANGER_SOFT,  color: COLOURS.RED },
   };
-  const s = map[status] || { bg: "#f8fafc", color: COLOURS.SLATE };
+  const s = map[status] || { bg: COLOURS.CARD_ALT, color: COLOURS.SLATE };
   return (
     <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", backgroundColor: s.bg, color: s.color }}>
       {status}
@@ -381,8 +381,8 @@ function statusBadge(status: string) {
 }
 
 function urgencyBadge(urgency: string) {
-  if (urgency === "Overdue")   return <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", backgroundColor: "#fef2f2", color: COLOURS.RED }}>⚠ Overdue</span>;
-  if (urgency === "Due soon")  return <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", backgroundColor: "#fffbeb", color: COLOURS.AMBER }}>⏱ Due soon</span>;
+  if (urgency === "Overdue")   return <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", backgroundColor: COLOURS.DANGER_SOFT, color: COLOURS.RED }}>⚠ Overdue</span>;
+  if (urgency === "Due soon")  return <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", backgroundColor: COLOURS.WARNING_SOFT, color: COLOURS.AMBER }}>⏱ Due soon</span>;
   return null;
 }
 
@@ -418,6 +418,7 @@ export default function GuaranteesPage() {
   // Filters
   const [filterStatus, setFilterStatus] = useState("Active");
   const [filterType, setFilterType] = useState("All");
+  const [filterQuery, setFilterQuery] = useState("");
 
   // Add guarantee form
   const [showAddForm, setShowAddForm] = useState(false);
@@ -494,6 +495,11 @@ export default function GuaranteesPage() {
   const visible = guarantees.filter((g) => {
     if (filterStatus !== "All" && g.status !== filterStatus) return false;
     if (filterType   !== "All" && g.guarantee_type !== filterType) return false;
+    if (filterQuery) {
+      const q = filterQuery.toLowerCase();
+      const haystack = `${g.customer_name} ${g.guarantee_number} ${g.bank_name} ${g.tender_reference ?? ""}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
     return true;
   });
 
@@ -695,9 +701,9 @@ export default function GuaranteesPage() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", minWidth: 0 }}>
         <PageHeader />
 
-        <div style={{ marginBottom: "16px" }}>
-          <h1 style={{ fontSize: "22px", fontWeight: 800, color: `var(--text-primary,${COLOURS.NAVY})`, margin: "0 0 2px" }}>Bank Facilities</h1>
-          <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: 0 }}>Unze Trading — bank facilities, bid guarantees, pay orders &amp; performance guarantees</p>
+        <div style={{ marginBottom: "4px" }}>
+          <SectionTitle title="Bank Facilities" style={{ margin: "0 0 2px" }} />
+          <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: "0 0 16px" }}>Unze Trading — bank facilities, bid guarantees, pay orders &amp; performance guarantees</p>
         </div>
 
         {/* ── Action bar — both buttons, same size, at the top ── */}
@@ -705,19 +711,19 @@ export default function GuaranteesPage() {
           <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
             {(() => {
               const btnBase: React.CSSProperties = {
-                padding: "7px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 700,
-                cursor: "pointer", border: "none", transition: "opacity 0.1s",
+                padding: "7px 18px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 600,
+                cursor: "pointer", transition: "opacity 0.1s", fontFamily: "var(--font-sans, Inter, sans-serif)",
               };
               const activeForm = showAddForm ? "guarantee" : showFacilityForm ? "facility" : null;
               return (
                 <>
                   <button
                     onClick={() => { setShowFacilityForm((v) => !v); setShowAddForm(false); setEditId(null); setConvertId(null); setStatusActionId(null); }}
-                    style={{ ...btnBase, backgroundColor: activeForm === "facility" ? COLOURS.NAVY : "#f1f5f9", color: activeForm === "facility" ? "#fff" : COLOURS.NAVY, border: `1px solid ${COLOURS.NAVY}` }}
+                    style={{ ...btnBase, backgroundColor: activeForm === "facility" ? COLOURS.NAVY : COLOURS.CARD_ALT, color: activeForm === "facility" ? "#fff" : COLOURS.NAVY, border: `1px solid ${COLOURS.NAVY}` }}
                   >{activeForm === "facility" ? "✕ Cancel" : "+ New Facility"}</button>
                   <button
                     onClick={() => { setShowAddForm((v) => !v); setShowFacilityForm(false); setEditId(null); setConvertId(null); setStatusActionId(null); }}
-                    style={{ ...btnBase, backgroundColor: activeForm === "guarantee" ? COLOURS.NAVY : "#f1f5f9", color: activeForm === "guarantee" ? "#fff" : COLOURS.NAVY, border: `1px solid ${COLOURS.NAVY}` }}
+                    style={{ ...btnBase, backgroundColor: activeForm === "guarantee" ? COLOURS.NAVY : COLOURS.CARD_ALT, color: activeForm === "guarantee" ? "#fff" : COLOURS.NAVY, border: `1px solid ${COLOURS.NAVY}` }}
                   >{activeForm === "guarantee" ? "✕ Cancel" : "+ New Guarantee"}</button>
                 </>
               );
@@ -727,14 +733,14 @@ export default function GuaranteesPage() {
 
         {/* ── Inline panel — opens at the top, used for both New Facility and New Guarantee ── */}
         {canManage && showFacilityForm && (
-          <div style={{ border: `1.5px solid ${COLOURS.NAVY}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          <div style={{ ...cardStyle, border: `1.5px solid ${COLOURS.NAVY}`, padding: "14px 16px", marginBottom: "16px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>New Bank Facility</div>
             <FacilityForm facilityForm={facilityForm} setFacilityForm={setFacilityForm} saveFacility={saveFacility} savingFacility={savingFacility} isMobile={isMobile} />
           </div>
         )}
 
         {canManage && showAddForm && (
-          <div style={{ border: `1.5px solid ${COLOURS.NAVY}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "var(--bg-card,#fff)", marginBottom: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+          <div style={{ ...cardStyle, border: `1.5px solid ${COLOURS.NAVY}`, padding: "14px 16px", marginBottom: "16px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>New Guarantee / Pay Order</div>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: "10px" }}>
               <Field label="Type *">
@@ -797,36 +803,25 @@ export default function GuaranteesPage() {
 
         {/* ── Summary strip — Ops: counts only, no PKR amounts ── */}
         {showFinancials === false && totals && (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3,1fr)", gap: "10px", marginBottom: "18px" }}>
-            {[
-              { label: "Active guarantees", value: String(totals.active_count), sub: "Currently issued", color: COLOURS.BLUE },
-              { label: "Overdue", value: String(totals.overdue_count), sub: totals.overdue_count > 0 ? "Needs chasing now" : "None overdue", color: totals.overdue_count > 0 ? COLOURS.RED : COLOURS.GREEN },
-              { label: "Due soon", value: String(totals.due_soon_count), sub: totals.due_soon_count > 0 ? "Expiring within 30 days" : "None due soon", color: totals.due_soon_count > 0 ? COLOURS.AMBER : COLOURS.GREEN },
-            ].map((c) => (
-              <div key={c.label} style={{ padding: "12px 14px", backgroundColor: "var(--bg-card,#fff)", borderRadius: "10px", border: `1px solid var(--border-color,${COLOURS.HAIRLINE})`, borderTop: `3px solid ${c.color}` }}>
-                <div style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>{c.label}</div>
-                <div style={{ fontSize: "28px", fontWeight: 800, color: c.color, marginBottom: "2px" }}>{c.value}</div>
-                <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.sub}</div>
-              </div>
-            ))}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px", marginBottom: "18px" }}>
+            <CountCard label="Active guarantees" value={totals.active_count} color={COLOURS.BLUE} sub="Currently issued" />
+            <CountCard label="Overdue" value={totals.overdue_count} color={totals.overdue_count > 0 ? COLOURS.RED : COLOURS.GREEN} sub={totals.overdue_count > 0 ? "Needs chasing now" : "None overdue"} />
+            <CountCard label="Due soon" value={totals.due_soon_count} color={totals.due_soon_count > 0 ? COLOURS.AMBER : COLOURS.GREEN} sub={totals.due_soon_count > 0 ? "Expiring within 30 days" : "None due soon"} />
           </div>
         )}
 
         {/* ── Summary strip — Finance only ── */}
         {showFinancials && totals && (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: "10px", marginBottom: "18px" }}>
-            {[
-              { label: "Active guarantees", value: String(totals.active_count), sub: totals.overdue_count > 0 ? `${totals.overdue_count} overdue` : totals.due_soon_count > 0 ? `${totals.due_soon_count} due soon` : "All OK", alertColor: totals.overdue_count > 0 ? COLOURS.RED : totals.due_soon_count > 0 ? COLOURS.AMBER : COLOURS.GREEN },
-              { label: "Total facility seized", value: pkr(totals.total_amount_active), sub: "Face value of active guarantees", alertColor: COLOURS.SLATE },
-              { label: "Cash margin stuck", value: pkr(totals.total_cash_margin_stuck), sub: "5% held by banks as collateral", alertColor: COLOURS.AMBER },
-              { label: "Bank charges paid", value: pkr(totals.total_bank_charges), sub: "All-time issuance charges", alertColor: COLOURS.SLATE },
-            ].map((c) => (
-              <div key={c.label} style={{ padding: "12px 14px", backgroundColor: "var(--bg-card,#fff)", borderRadius: "10px", border: `1px solid var(--border-color,${COLOURS.HAIRLINE})` }}>
-                <div style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "4px" }}>{c.label}</div>
-                <div style={{ fontSize: "20px", fontWeight: 800, color: `var(--text-primary,${COLOURS.NAVY})`, marginBottom: "2px" }}>{c.value}</div>
-                <div style={{ fontSize: "12px", color: c.alertColor }}>{c.sub}</div>
-              </div>
-            ))}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginBottom: "18px" }}>
+            <CountCard
+              label="Active guarantees"
+              value={totals.active_count}
+              color={totals.overdue_count > 0 ? COLOURS.RED : totals.due_soon_count > 0 ? COLOURS.AMBER : COLOURS.GREEN}
+              sub={totals.overdue_count > 0 ? `${totals.overdue_count} overdue` : totals.due_soon_count > 0 ? `${totals.due_soon_count} due soon` : "All OK"}
+            />
+            <CountCard label="Total facility seized" value={pkr(totals.total_amount_active)} color={COLOURS.NAVY} sub="Face value of active guarantees" />
+            <CountCard label="Cash margin stuck" value={pkr(totals.total_cash_margin_stuck)} color={COLOURS.AMBER} sub="5% held by banks as collateral" />
+            <CountCard label="Bank charges paid" value={pkr(totals.total_bank_charges)} color={COLOURS.NAVY} sub="All-time issuance charges" />
           </div>
         )}
 
@@ -870,7 +865,7 @@ export default function GuaranteesPage() {
             )}
 
             {banks.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "12px" }}>
                 {banks.map((b) => <BankFacilityCard key={b.bank_name} bank={b} allGuarantees={guarantees} onEdit={startEditFacility} onDelete={deleteFacility} canManage={canManage} />)}
               </div>
             ) : !loading && (
@@ -882,27 +877,35 @@ export default function GuaranteesPage() {
         )}
 
         {/* ── Guarantee list ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "10px" }}>
-          <SectionTitle title="Guarantees" />
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ ...inputStyle, padding: "5px 10px", fontSize: "13px" }}>
-              <option value="All">All statuses</option>
-              {STATUSES.map((s) => <option key={s}>{s}</option>)}
-            </select>
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...inputStyle, padding: "5px 10px", fontSize: "13px" }}>
-              <option value="All">All types</option>
-              {GUARANTEE_TYPES.map((t) => <option key={t}>{t}</option>)}
-            </select>
-          </div>
+        <SectionTitle title="Guarantees" />
+        <div style={{
+          display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center",
+          position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--bg-page, #f4f6f9)", paddingTop: "4px", paddingBottom: "4px",
+        }}>
+          <input
+            type="text"
+            placeholder="Search by customer, guarantee number, bank…"
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            style={{ ...inputStyle, flex: "1 1 240px", maxWidth: "360px" }}
+          />
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "8px 10px", fontSize: "13px" }}>
+            <option value="All">All statuses</option>
+            {STATUSES.map((s) => <option key={s}>{s}</option>)}
+          </select>
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={{ ...inputStyle, width: "auto", padding: "8px 10px", fontSize: "13px" }}>
+            <option value="All">All types</option>
+            {GUARANTEE_TYPES.map((t) => <option key={t}>{t}</option>)}
+          </select>
         </div>
 
         {loading ? (
           <div style={{ color: COLOURS.SLATE, fontSize: "14px" }}>Loading…</div>
         ) : error ? (
-          <div style={{ color: COLOURS.RED, fontSize: "14px", padding: "12px", backgroundColor: "#fef2f2", borderRadius: "8px" }}>{error}</div>
+          <div style={{ color: COLOURS.RED, fontSize: "14px", padding: "12px", backgroundColor: COLOURS.DANGER_SOFT, borderRadius: "8px" }}>{error}</div>
         ) : visible.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", backgroundColor: "var(--bg-card,#fff)" }}>
-            No guarantees found. {filterStatus !== "All" || filterType !== "All" ? "Try clearing filters." : showFinancials ? "Add the first one above." : "None recorded yet."}
+            No guarantees found. {filterStatus !== "All" || filterType !== "All" || filterQuery ? "Try clearing filters or the search box." : showFinancials ? "Add the first one above." : "None recorded yet."}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -916,7 +919,7 @@ export default function GuaranteesPage() {
 
               return (
                 <div key={g.id} style={{ border: `1px solid var(--border-color,${COLOURS.HAIRLINE})`, borderRadius: "10px", backgroundColor: "var(--bg-card,#fff)", overflow: "hidden",
-                  borderLeft: `4px solid ${g.chase_urgency === "Overdue" ? COLOURS.RED : g.chase_urgency === "Due soon" ? COLOURS.AMBER : g.status === "Active" ? COLOURS.BLUE : "#94a3b8"}`,
+                  borderLeft: `4px solid ${g.chase_urgency === "Overdue" ? COLOURS.RED : g.chase_urgency === "Due soon" ? COLOURS.AMBER : g.status === "Active" ? COLOURS.BLUE : COLOURS.SLATE}`,
                   opacity: ["Returned","Released","Expired"].includes(g.status) ? 0.7 : 1 }}>
 
                   {/* Row header */}
@@ -927,7 +930,7 @@ export default function GuaranteesPage() {
                           <span style={{ fontSize: "15px", fontWeight: 700, color: `var(--text-primary,${COLOURS.NAVY})` }}>
                             {g.customer_name} — {g.guarantee_number}
                           </span>
-                          <span style={{ fontSize: "12px", padding: "1px 8px", borderRadius: "10px", backgroundColor: "#f1f5f9", color: COLOURS.SLATE, fontWeight: 600 }}>
+                          <span style={{ fontSize: "12px", padding: "1px 8px", borderRadius: "10px", backgroundColor: COLOURS.TRACK, color: COLOURS.SLATE, fontWeight: 600 }}>
                             {g.guarantee_type}
                           </span>
                           {statusBadge(g.status)}
@@ -973,19 +976,19 @@ export default function GuaranteesPage() {
                           </button>
                         )}
                         {canRelease && (
-                          <button onClick={() => { setStatusActionId(g.id); setEditId(null); setConvertId(null); }} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, border: `1px solid ${COLOURS.GREEN}`, backgroundColor: "#f0fdf4", color: COLOURS.GREEN, cursor: "pointer" }}>
+                          <button onClick={() => { setStatusActionId(g.id); setEditId(null); setConvertId(null); }} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, border: `1px solid ${COLOURS.GREEN}`, backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, cursor: "pointer" }}>
                             Mark Released
                           </button>
                         )}
                         {canReturn && !canRelease && (
-                          <button onClick={() => { setStatusActionId(g.id); setEditId(null); setConvertId(null); }} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, border: `1px solid ${COLOURS.GREEN}`, backgroundColor: "#f0fdf4", color: COLOURS.GREEN, cursor: "pointer" }}>
+                          <button onClick={() => { setStatusActionId(g.id); setEditId(null); setConvertId(null); }} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, border: `1px solid ${COLOURS.GREEN}`, backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, cursor: "pointer" }}>
                             Mark Returned
                           </button>
                         )}
                         <button
                           onClick={() => deleteGuarantee(g)}
                           disabled={deletingId === g.id}
-                          style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: "1px solid #fecaca", backgroundColor: "#fef2f2", color: COLOURS.RED, cursor: "pointer", marginLeft: "auto", opacity: deletingId === g.id ? 0.6 : 1 }}>
+                          style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: `1px solid ${COLOURS.RED}40`, backgroundColor: COLOURS.DANGER_SOFT, color: COLOURS.RED, cursor: "pointer", marginLeft: "auto", opacity: deletingId === g.id ? 0.6 : 1 }}>
                           {deletingId === g.id ? "Deleting…" : "Delete"}
                         </button>
                       </div>
@@ -994,7 +997,7 @@ export default function GuaranteesPage() {
 
                   {/* ── Edit form — Finance managers only ── */}
                   {canManage && isEditing && (
-                    <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "14px", backgroundColor: "#f8fafc" }}>
+                    <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "14px", backgroundColor: COLOURS.CARD_ALT }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "10px" }}>Edit Guarantee</div>
                       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
                         <Field label="Type">
@@ -1058,7 +1061,7 @@ export default function GuaranteesPage() {
 
                   {/* ── Convert to Performance Guarantee form — Finance managers only ── */}
                   {canManage && isConverting && convertTarget && (
-                    <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "14px", backgroundColor: "#faf5ff" }}>
+                    <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "14px", backgroundColor: "#f5f3ff" }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.PURPLE, marginBottom: "6px" }}>Convert to Performance Guarantee</div>
                       <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>
                         The original {g.guarantee_type} ({g.guarantee_number}) will be marked <strong>Converted</strong> and a new Performance Guarantee will be created.
@@ -1106,7 +1109,7 @@ export default function GuaranteesPage() {
 
                   {/* ── Mark Returned / Released — Finance managers only ── */}
                   {canManage && isActioning && (
-                    <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "14px", backgroundColor: "#f0fdf4" }}>
+                    <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "14px", backgroundColor: COLOURS.SUCCESS_SOFT }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.GREEN, marginBottom: "10px" }}>
                         {canRelease ? "Mark as Released" : "Mark as Returned to Bank"}
                       </div>
