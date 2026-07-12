@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { folderitFetch } from "../../../lib/folderit-auth";
 
+export const maxDuration = 60; // Vercel Pro ceiling — accounts sync in parallel below
+
 const CRON_SECRET = process.env.CRON_SECRET;
 
 type AccountMapRow = {
@@ -9,6 +11,12 @@ type AccountMapRow = {
   account_name: string;
   scope: string;
   inbox_folder_uid: string | null;
+};
+
+type HrCategoryRow = {
+  category_name: string;
+  account_uid: string;
+  folder_uid: string;
 };
 
 type FolderitFile = {
@@ -48,94 +56,86 @@ type AuditEntry = {
 const AUDIT_PAGES_TO_SCAN = 3;
 const AUDIT_PER_PAGE = 100;
 
-export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization") ?? "";
-  const isCron = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
-  if (!isCron) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const db = createServiceClient();
+async function syncAccountInbox(
+  db: ReturnType<typeof createServiceClient>,
+  account: AccountMapRow
+): Promise<{ inboxSynced: number; errors: string[] }> {
   const errors: string[] = [];
   let inboxSynced = 0;
-  let invitesSynced = 0;
 
-  const { data: accounts, error: accountsErr } = await db
-    .from("folderit_account_map")
-    .select("account_uid, account_name, scope, inbox_folder_uid")
-    .eq("is_active", true)
-    .neq("scope", "excluded")
-    .neq("scope", "pending");
+  if (!account.inbox_folder_uid) return { inboxSynced, errors };
 
-  if (accountsErr || !accounts?.length) {
-    return Response.json({ error: accountsErr?.message ?? "No active Folderit accounts mapped" }, { status: 500 });
+  try {
+    const res = await folderitFetch(
+      `/v2/accounts/${account.account_uid}/folders/${account.inbox_folder_uid}/files?limit=200`
+    );
+    if (!res.ok) {
+      errors.push(`${account.account_name}: inbox fetch ${res.status}`);
+      return { inboxSynced, errors };
+    }
+    const json = await res.json();
+    const files: FolderitFile[] = json.files ?? json ?? [];
+
+    // Replace this account's inbox snapshot wholesale — simplest way to
+    // drop files that have since been filed elsewhere.
+    await db.from("folderit_inbox_files").delete().eq("account_uid", account.account_uid);
+
+    if (files.length) {
+      const rows = files.map((f) => ({
+        file_uid: f.uid,
+        account_uid: account.account_uid,
+        name: f.name,
+        created_at: f.createdAt ? new Date(f.createdAt * 1000).toISOString() : null,
+        synced_at: new Date().toISOString(),
+      }));
+      const { error: upsertErr } = await db.from("folderit_inbox_files").upsert(rows);
+      if (upsertErr) errors.push(`${account.account_name}: inbox upsert — ${upsertErr.message}`);
+      else inboxSynced = rows.length;
+    }
+  } catch (e) {
+    errors.push(`${account.account_name}: inbox fetch error — ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  for (const account of accounts as AccountMapRow[]) {
-    // ── 1. Inbox files: whatever is still sitting in the mail-in folder ──
-    if (account.inbox_folder_uid) {
-      try {
-        const res = await folderitFetch(
-          `/v2/accounts/${account.account_uid}/folders/${account.inbox_folder_uid}/files?limit=200`
-        );
-        if (!res.ok) {
-          errors.push(`${account.account_name}: inbox fetch ${res.status}`);
-        } else {
-          const json = await res.json();
-          const files: FolderitFile[] = json.files ?? json ?? [];
+  return { inboxSynced, errors };
+}
 
-          // Replace this account's inbox snapshot wholesale — simplest way
-          // to drop files that have since been filed elsewhere.
-          await db.from("folderit_inbox_files").delete().eq("account_uid", account.account_uid);
+async function syncAccountApprovals(
+  db: ReturnType<typeof createServiceClient>,
+  account: AccountMapRow
+): Promise<{ invitesSynced: number; errors: string[] }> {
+  const errors: string[] = [];
+  let invitesSynced = 0;
 
-          if (files.length) {
-            const rows = files.map((f) => ({
-              file_uid: f.uid,
-              account_uid: account.account_uid,
-              name: f.name,
-              created_at: f.createdAt ? new Date(f.createdAt * 1000).toISOString() : null,
-              synced_at: new Date().toISOString(),
-            }));
-            const { error: upsertErr } = await db.from("folderit_inbox_files").upsert(rows);
-            if (upsertErr) errors.push(`${account.account_name}: inbox upsert — ${upsertErr.message}`);
-            else inboxSynced += rows.length;
-          }
-        }
-      } catch (e) {
-        errors.push(`${account.account_name}: inbox fetch error — ${e instanceof Error ? e.message : String(e)}`);
+  try {
+    const candidateEntityUids = new Set<string>();
+    for (let page = 1; page <= AUDIT_PAGES_TO_SCAN; page++) {
+      const auditRes = await folderitFetch(
+        `/v2/accounts/${account.account_uid}/audit?page=${page}&per-page=${AUDIT_PER_PAGE}`
+      );
+      if (!auditRes.ok) {
+        errors.push(`${account.account_name}: audit fetch page ${page} — ${auditRes.status}`);
+        break;
       }
+      const entries: AuditEntry[] = await auditRes.json();
+      if (!entries.length) break;
+      for (const entry of entries) {
+        if (entry.event === "fileResolutionNew" && entry.entityUid) {
+          candidateEntityUids.add(entry.entityUid);
+        }
+      }
+      if (entries.length < AUDIT_PER_PAGE) break; // last page
     }
 
-    // ── 2. Approval invites: discover candidate files via the audit trail ──
-    try {
-      // Discover entityUids that have started an approval recently by
-      // scanning the account's audit log for "fileResolutionNew" events.
-      const candidateEntityUids = new Set<string>();
-      for (let page = 1; page <= AUDIT_PAGES_TO_SCAN; page++) {
-        const auditRes = await folderitFetch(
-          `/v2/accounts/${account.account_uid}/audit?page=${page}&per-page=${AUDIT_PER_PAGE}`
-        );
-        if (!auditRes.ok) {
-          errors.push(`${account.account_name}: audit fetch page ${page} — ${auditRes.status}`);
-          break;
-        }
-        const entries: AuditEntry[] = await auditRes.json();
-        if (!entries.length) break;
-        for (const entry of entries) {
-          if (entry.event === "fileResolutionNew" && entry.entityUid) {
-            candidateEntityUids.add(entry.entityUid);
-          }
-        }
-        if (entries.length < AUDIT_PER_PAGE) break; // last page
-      }
+    const currentInviteUids: string[] = [];
 
-      const currentInviteUids: string[] = [];
-
-      for (const entityUid of candidateEntityUids) {
+    // Candidate entities within an account are independent of each other —
+    // fetch their resolutions/invites in parallel rather than serially.
+    await Promise.all(
+      Array.from(candidateEntityUids).map(async (entityUid) => {
         const resResolutions = await folderitFetch(
           `/v2/accounts/${account.account_uid}/entities/${entityUid}/resolutions`
         );
-        if (!resResolutions.ok) continue;
+        if (!resResolutions.ok) return;
         const resolutionsJson = await resResolutions.json();
         const resolutions: FolderitResolution[] = resolutionsJson.resolutions ?? resolutionsJson ?? [];
 
@@ -165,22 +165,119 @@ export async function GET(request: NextRequest) {
             else invitesSynced += 1;
           }
         }
-      }
+      })
+    );
 
-      // Drop stale invites for this account that weren't seen this run
-      // (resolved/cancelled since last sync).
-      if (currentInviteUids.length) {
-        await db
-          .from("folderit_resolution_invites")
-          .delete()
-          .eq("account_uid", account.account_uid)
-          .not("invite_uid", "in", `(${currentInviteUids.map((u) => `"${u}"`).join(",")})`);
-      } else {
-        await db.from("folderit_resolution_invites").delete().eq("account_uid", account.account_uid);
-      }
-    } catch (e) {
-      errors.push(`${account.account_name}: approval sync error — ${e instanceof Error ? e.message : String(e)}`);
+    // Drop stale invites for this account that weren't seen this run
+    // (resolved/cancelled since last sync).
+    if (currentInviteUids.length) {
+      await db
+        .from("folderit_resolution_invites")
+        .delete()
+        .eq("account_uid", account.account_uid)
+        .not("invite_uid", "in", `(${currentInviteUids.map((u) => `"${u}"`).join(",")})`);
+    } else {
+      await db.from("folderit_resolution_invites").delete().eq("account_uid", account.account_uid);
     }
+  } catch (e) {
+    errors.push(`${account.account_name}: approval sync error — ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  return { invitesSynced, errors };
+}
+
+async function syncHrCategory(
+  db: ReturnType<typeof createServiceClient>,
+  category: HrCategoryRow
+): Promise<{ filesSynced: number; errors: string[] }> {
+  const errors: string[] = [];
+  let filesSynced = 0;
+
+  try {
+    const res = await folderitFetch(
+      `/v2/accounts/${category.account_uid}/folders/${category.folder_uid}/files?limit=200`
+    );
+    if (!res.ok) {
+      errors.push(`HR/${category.category_name}: fetch ${res.status}`);
+      return { filesSynced, errors };
+    }
+    const json = await res.json();
+    const files: FolderitFile[] = json.files ?? json ?? [];
+
+    await db.from("folderit_hr_category_files").delete().eq("category_name", category.category_name);
+
+    if (files.length) {
+      const rows = files.map((f) => ({
+        file_uid: f.uid,
+        category_name: category.category_name,
+        name: f.name,
+        created_at: f.createdAt ? new Date(f.createdAt * 1000).toISOString() : null,
+        synced_at: new Date().toISOString(),
+      }));
+      const { error: upsertErr } = await db.from("folderit_hr_category_files").upsert(rows);
+      if (upsertErr) errors.push(`HR/${category.category_name}: upsert — ${upsertErr.message}`);
+      else filesSynced = rows.length;
+    }
+  } catch (e) {
+    errors.push(`HR/${category.category_name}: fetch error — ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  return { filesSynced, errors };
+}
+
+export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization") ?? "";
+  const isCron = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
+  if (!isCron) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const db = createServiceClient();
+  const errors: string[] = [];
+  let inboxSynced = 0;
+  let invitesSynced = 0;
+  let hrFilesSynced = 0;
+
+  const { data: accounts, error: accountsErr } = await db
+    .from("folderit_account_map")
+    .select("account_uid, account_name, scope, inbox_folder_uid")
+    .eq("is_active", true)
+    .neq("scope", "excluded")
+    .neq("scope", "pending");
+
+  if (accountsErr || !accounts?.length) {
+    return Response.json({ error: accountsErr?.message ?? "No active Folderit accounts mapped" }, { status: 500 });
+  }
+
+  const { data: hrCategories } = await db
+    .from("folderit_hr_categories")
+    .select("category_name, account_uid, folder_uid")
+    .eq("is_active", true);
+
+  // Accounts (and HR categories) are independent of each other — sync all
+  // of them in parallel instead of one at a time to stay well inside
+  // Vercel's function time limit.
+  const [accountResults, hrResults] = await Promise.all([
+    Promise.all(
+      (accounts as AccountMapRow[]).map(async (account) => {
+        const [inbox, approvals] = await Promise.all([
+          syncAccountInbox(db, account),
+          syncAccountApprovals(db, account),
+        ]);
+        return { inbox, approvals };
+      })
+    ),
+    Promise.all(((hrCategories ?? []) as HrCategoryRow[]).map((c) => syncHrCategory(db, c))),
+  ]);
+
+  for (const { inbox, approvals } of accountResults) {
+    inboxSynced += inbox.inboxSynced;
+    invitesSynced += approvals.invitesSynced;
+    errors.push(...inbox.errors, ...approvals.errors);
+  }
+  for (const hr of hrResults) {
+    hrFilesSynced += hr.filesSynced;
+    errors.push(...hr.errors);
   }
 
   return Response.json({
@@ -188,6 +285,7 @@ export async function GET(request: NextRequest) {
     accountsSynced: accounts.length,
     inboxFilesSynced: inboxSynced,
     invitesSynced,
+    hrCategoryFilesSynced: hrFilesSynced,
     errors,
   });
 }
