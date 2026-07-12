@@ -31,12 +31,15 @@ export async function GET(request: NextRequest) {
       (t) => t.source_type === "kpi_escalation" || t.source_type === "receivable_escalation"
     );
 
-    // Get Admin and Executive members who have email notifications on
+    // Get Admin and Executive members who have email notifications on.
+    // The CEO's two addresses are excluded here — he now gets a single
+    // consolidated digest instead (app/api/notifications/ceo-digest/route.ts).
     const { data: admins } = await supabase
       .from("members")
       .select("email, first_name, last_name, name, role, notify_email, phone_e164, notify_whatsapp")
       .in("role", ["Admin", "Executive"])
-      .eq("notify_email", true);
+      .eq("notify_email", true)
+      .not("email", "in", '("khuram1901@gmail.com","k.saleem@unzegroup.com")');
 
     if (!admins || admins.length === 0) {
       return Response.json({ ok: true, message: "No admin/executive with notifications enabled", sent: 0 });

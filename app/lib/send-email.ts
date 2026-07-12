@@ -71,6 +71,15 @@ function buildRawEmail(to: string, from: string, subject: string, htmlBody: stri
   return Buffer.from(raw).toString("base64url");
 }
 
+// Task-assignment and escalation emails used to fire once per event —
+// 50-70 emails a day for the CEO. Those two trigger types are now folded
+// into a single daily digest instead (app/api/notifications/ceo-digest/
+// route.ts), so we suppress the individual emails for his addresses only.
+// Every other trigger type (reports, digests, password resets, etc.) and
+// every other recipient are unaffected.
+const DIGEST_COVERED_TRIGGER_TYPES = ["task_assigned", "escalation"];
+const DIGEST_COVERED_RECIPIENTS = ["k.saleem@unzegroup.com", "khuram1901@gmail.com"];
+
 export async function sendNotificationEmail({
   to,
   subject,
@@ -96,6 +105,11 @@ export async function sendNotificationEmail({
   whatsAppPhone?: string | null;
   whatsAppMessage?: string;
 }) {
+  if (DIGEST_COVERED_TRIGGER_TYPES.includes(triggerType) && DIGEST_COVERED_RECIPIENTS.includes(to.toLowerCase())) {
+    console.log(`[send-email] ${triggerType} suppressed for ${to} — now covered by the daily CEO digest.`);
+    return { success: true, skipped: true };
+  }
+
   try {
     // Use whichever Google account is connected — pick the most recently updated token
     const supabaseForTokens = createServiceClient();
