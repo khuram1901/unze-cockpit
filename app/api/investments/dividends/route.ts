@@ -19,9 +19,10 @@ async function requireInvestmentAdmin(
   return Response.json({ error: "Forbidden" }, { status: 403 });
 }
 
-// GET — return all dividends (upcoming window for UI, all for management)
-// ?mode=upcoming&days=14  → RPC with holdings join
-// ?mode=all               → raw table, all statuses
+// GET — return all dividends (windowed for UI, all for management)
+// ?mode=upcoming&days=14&daysBack=14  → RPC with holdings join, ex-dividend date
+//                                       within [today-daysBack, today+days]
+// ?mode=all                           → raw table, all statuses
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
@@ -30,9 +31,10 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode") ?? "upcoming";
   const days = parseInt(searchParams.get("days") ?? "14", 10);
+  const daysBack = parseInt(searchParams.get("daysBack") ?? "0", 10);
 
   if (mode === "upcoming") {
-    const { data, error } = await supabase.rpc("get_upcoming_dividends", { p_days_ahead: days });
+    const { data, error } = await supabase.rpc("get_upcoming_dividends", { p_days_ahead: days, p_days_back: daysBack });
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ dividends: data ?? [] });
   }

@@ -240,7 +240,9 @@ export default function InvestmentsPage() {
 
   const loadDividends = useCallback(async () => {
     try {
-      const res = await authFetch("/api/investments/dividends?mode=upcoming&days=14");
+      // 2 weeks back + 2 weeks ahead, so recently-paid dividends stay visible
+      // for sell/hold decisions instead of disappearing the moment they pay out.
+      const res = await authFetch("/api/investments/dividends?mode=upcoming&days=14&daysBack=14");
       const json = await res.json();
       setDividends(json.dividends ?? []);
     } catch { /* silently ignore — dividends are additive */ }
@@ -985,10 +987,10 @@ export default function InvestmentsPage() {
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "10px 0" }}
               >
                 <span style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>
-                  Dividends — Next 14 Days
+                  Dividends — Past 2 Weeks &amp; Next 2 Weeks
                   {confirmedDivs.length > 0 && (
                     <span style={{ marginLeft: "8px", fontSize: "12px", fontWeight: 700, color: "white", backgroundColor: AMBER, padding: "2px 8px", borderRadius: "10px" }}>
-                      {confirmedDivs.length} upcoming
+                      {confirmedDivs.length} confirmed
                     </span>
                   )}
                   {unconfirmedDivs.length > 0 && (
@@ -1011,6 +1013,7 @@ export default function InvestmentsPage() {
                           <thead>
                             <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
                               <Th>Ticker</Th>
+                              <Th>Status</Th>
                               <Th align="right">Rs/Share</Th>
                               <Th>Ex-Date</Th>
                               <Th>Pay Date</Th>
@@ -1020,19 +1023,26 @@ export default function InvestmentsPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {confirmedDivs.map((d) => (
+                            {confirmedDivs.map((d) => {
+                              const isPast = d.days_to_ex < 0;
+                              return (
                               <tr key={d.id} style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)" }}>
                                 <td style={{ ...divTd, fontWeight: 700, color: NAVY }}>{d.ticker}</td>
+                                <td style={{ ...divTd }}>
+                                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", color: isPast ? SLATE : GREEN, backgroundColor: isPast ? "var(--border-light, #f1f5f9)" : "#e7f2ed" }}>
+                                    {isPast ? "Paid" : "Upcoming"}
+                                  </span>
+                                </td>
                                 <td style={{ ...divTd, textAlign: "right" }}>{fmtPrice(d.dividend_per_share)}</td>
                                 <td style={{ ...divTd }}>
-                                  <span style={{ fontWeight: d.days_to_ex <= 3 ? 700 : 400, color: d.days_to_ex <= 3 ? RED : "inherit" }}>
+                                  <span style={{ fontWeight: !isPast && d.days_to_ex <= 3 ? 700 : 400, color: !isPast && d.days_to_ex <= 3 ? RED : "inherit" }}>
                                     {formatDateUK(d.ex_dividend_date)}
                                   </span>
                                 </td>
                                 <td style={{ ...divTd, color: SLATE }}>{d.payment_date ? formatDateUK(d.payment_date) : "—"}</td>
                                 <td style={{ ...divTd, textAlign: "right" }}>
-                                  <span style={{ fontWeight: 700, color: d.days_to_ex <= 3 ? RED : d.days_to_ex <= 7 ? AMBER : GREEN }}>
-                                    {d.days_to_ex}d
+                                  <span style={{ fontWeight: 700, color: isPast ? SLATE : d.days_to_ex <= 3 ? RED : d.days_to_ex <= 7 ? AMBER : GREEN }}>
+                                    {isPast ? `${Math.abs(d.days_to_ex)}d ago` : `${d.days_to_ex}d`}
                                   </span>
                                 </td>
                                 <td style={{ ...divTd, textAlign: "right", fontWeight: 700, color: GREEN }}>
@@ -1045,7 +1055,8 @@ export default function InvestmentsPage() {
                                   </td>
                                 )}
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -1053,7 +1064,7 @@ export default function InvestmentsPage() {
                   )}
 
                   {confirmedDivs.length === 0 && !unconfirmedDivs.length && (
-                    <p style={{ color: SLATE, fontSize: "13px", marginBottom: "12px" }}>No upcoming dividends in the next 14 days.</p>
+                    <p style={{ color: SLATE, fontSize: "13px", marginBottom: "12px" }}>No dividend activity in the past 2 weeks or next 2 weeks.</p>
                   )}
 
                   {/* Unconfirmed dividends — review list */}
@@ -1063,13 +1074,14 @@ export default function InvestmentsPage() {
                         Unconfirmed — please verify before acting on these
                       </div>
                       <div style={{ fontSize: "12px", color: "#92400e", marginBottom: "10px" }}>
-                        Auto-fetched data. Review each entry and confirm or dismiss.
+                        Auto-fetched data, including already-paid dividends from the past 2 weeks. Review each entry and confirm or dismiss.
                       </div>
                       <div style={{ overflowX: "auto" }}>
                         <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "500px" }}>
                           <thead>
                             <tr style={{ backgroundColor: "#fef3c7" }}>
                               <Th>Ticker</Th>
+                              <Th>Status</Th>
                               <Th align="right">Rs/Share</Th>
                               <Th>Ex-Date</Th>
                               <Th>Source</Th>
@@ -1077,9 +1089,16 @@ export default function InvestmentsPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {unconfirmedDivs.map((d) => (
+                            {unconfirmedDivs.map((d) => {
+                              const isPast = d.days_to_ex < 0;
+                              return (
                               <tr key={d.id} style={{ borderBottom: "1px solid #fde68a" }}>
                                 <td style={{ ...divTd, fontWeight: 700 }}>{d.ticker}</td>
+                                <td style={{ ...divTd }}>
+                                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "10px", color: isPast ? SLATE : GREEN, backgroundColor: isPast ? "var(--border-light, #f1f5f9)" : "#e7f2ed" }}>
+                                    {isPast ? "Paid" : "Upcoming"}
+                                  </span>
+                                </td>
                                 <td style={{ ...divTd, textAlign: "right" }}>{fmtPrice(d.dividend_per_share)}</td>
                                 <td style={{ ...divTd }}>{formatDateUK(d.ex_dividend_date)}</td>
                                 <td style={{ ...divTd, color: SLATE, fontSize: "12px" }}>{d.source}</td>
@@ -1098,7 +1117,8 @@ export default function InvestmentsPage() {
                                   )}
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
