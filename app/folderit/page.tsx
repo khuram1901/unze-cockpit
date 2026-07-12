@@ -91,15 +91,28 @@ type HrCategory = { category_name: string; file_count: number; sort_order: numbe
 type PreviewTarget = { url: string; name: string | null } | null;
 const PreviewContext = createContext<(target: PreviewTarget) => void>(() => {});
 
-// Asks the backend for a live preview link. Backend resolves the file's
-// account from just its uid, checks the caller is allowed to see it, and
-// asks Folderit for a PDF preview rendition (never the original file), so
-// nothing sensitive is exposed here and nothing gets saved to disk.
-async function fetchPreviewUrl(fileUid: string): Promise<string> {
+// Asks the backend for the actual PDF preview bytes and turns them into a
+// local blob: URL. The backend proxies Folderit's preview content itself
+// rather than handing back Folderit's signed link — that link carries its
+// own Content-Disposition baked into the signature (set to "attachment"),
+// which caused the browser to download it no matter what the frontend did
+// with it. A blob: URL has no such disposition; the browser renders it
+// inline in the iframe based on its Content-Type alone.
+async function fetchPreviewBlobUrl(fileUid: string): Promise<string> {
   const res = await authFetch(`/api/folderit/file-url?file=${encodeURIComponent(fileUid)}`);
-  const json = await res.json();
-  if (!res.ok || !json.url) throw new Error(json.error ?? "Couldn't preview this document.");
-  return json.url;
+  const contentType = res.headers.get("content-type") || "";
+  if (!res.ok || contentType.includes("application/json")) {
+    let message = "Couldn't preview this document.";
+    try {
+      const json = await res.json();
+      if (json?.error) message = json.error;
+    } catch {
+      // no JSON body — use the default message
+    }
+    throw new Error(message);
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
 }
 
 function FileRow({ item, showTopBorder, indentPx = 40 }: { item: DetailItem; showTopBorder: boolean; indentPx?: number }) {
@@ -110,7 +123,7 @@ function FileRow({ item, showTopBorder, indentPx = 40 }: { item: DetailItem; sho
     if (loading) return;
     setLoading(true);
     try {
-      const url = await fetchPreviewUrl(item.item_uid);
+      const url = await fetchPreviewBlobUrl(item.item_uid);
       setPreview({ url, name: item.name });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Couldn't preview this document.");
@@ -746,6 +759,14 @@ function FolderitDashboard() {
   const [hrInboxCount, setHrInboxCount] = useState(0);
   const [hrLoading, setHrLoading] = useState(true);
   const [preview, setPreview] = useState<PreviewTarget>(null);
+
+  // Blob URLs hold the whole PDF in memory — revoke the previous one the
+  // moment it's replaced or the modal closes, not just on unmount.
+  useEffect(() => {
+    return () => {
+      if (preview?.url) URL.revokeObjectURL(preview.url);
+    };
+  }, [preview]);
 
   useEffect(() => {
     (async () => {
