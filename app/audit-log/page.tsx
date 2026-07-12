@@ -47,9 +47,9 @@ function getDept(tableName: string): string {
 }
 
 const ACTION_COLOURS: Record<string, { bg: string; text: string }> = {
-  Created: { bg: "#dcfce7", text: "#16a34a" },
-  Updated: { bg: "#fef3c7", text: "#d97706" },
-  Deleted: { bg: "#fee2e2", text: "#dc2626" },
+  Created: { bg: "#dcfce7", text: COLOURS.GREEN },
+  Updated: { bg: "#fef3c7", text: COLOURS.AMBER },
+  Deleted: { bg: "#fee2e2", text: COLOURS.RED },
 };
 
 export default function AuditLogPage() {
@@ -92,9 +92,9 @@ export default function AuditLogPage() {
 
   // Action donut
   const actionDonut = [
-    { name: "Created", value: created, color: "#16a34a" },
-    { name: "Updated", value: updated, color: "#d97706" },
-    { name: "Deleted", value: deleted, color: "#dc2626" },
+    { name: "Created", value: created, color: COLOURS.GREEN },
+    { name: "Updated", value: updated, color: COLOURS.AMBER },
+    { name: "Deleted", value: deleted, color: COLOURS.RED },
   ].filter((d) => d.value > 0);
 
   // Department donut
@@ -104,9 +104,9 @@ export default function AuditLogPage() {
     deptMap.set(d, (deptMap.get(d) || 0) + 1);
   }
   const deptColors: Record<string, string> = {
-    Tasks: "#d97706", Members: "#2563eb", Audit: "#7c3aed", Taxation: "#dc2626",
-    HR: "#059669", Meetings: COLOURS.NAVY, Finance: "#16a34a", Production: "#16a34a",
-    Dispatch: "#059669", Breakage: "#dc2626", Machines: "#dc2626",
+    Tasks: COLOURS.AMBER, Members: COLOURS.BLUE, Audit: COLOURS.PURPLE, Taxation: COLOURS.RED,
+    HR: COLOURS.TEAL, Meetings: COLOURS.NAVY, Finance: COLOURS.GREEN, Production: COLOURS.GREEN,
+    Dispatch: COLOURS.TEAL, Breakage: COLOURS.RED, Machines: COLOURS.RED,
   };
   const deptDonut = Array.from(deptMap.entries())
     .map(([name, value]) => ({ name, value, color: deptColors[name] || COLOURS.SLATE }))
@@ -142,21 +142,21 @@ export default function AuditLogPage() {
     return (
       <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--border-light, #f1f5f9)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: "16px", color: "var(--text-primary, #1e293b)", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+          <div style={{ fontSize: "16px", color: `var(--text-primary, ${COLOURS.NAVY})`, display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             <span style={{ fontWeight: 600 }}>{log.user_name || log.user_email}</span>
             <ActionBadge action={log.action} />
             <span style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.BLUE }}>{getDept(log.table_name)}</span>
           </div>
-          {log.details && <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{log.details}</div>}
+          {log.details && <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})`, marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{log.details}</div>}
         </div>
-        <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", whiteSpace: "nowrap", flexShrink: 0 }}>
+        <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})`, whiteSpace: "nowrap", flexShrink: 0 }}>
           {formatDateTimeUK(log.created_at)}
         </div>
       </div>
     );
   }
 
-  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: `var(--text-secondary, ${COLOURS.SLATE})` }}>Checking permissions...</p></main></AuthWrapper>;
 
   return (
     <AuthWrapper>
@@ -167,9 +167,9 @@ export default function AuditLogPage() {
           {!loading && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
               <CountCard label="Today" value={todayLogs.length} color={COLOURS.BLUE} />
-              <CountCard label="Created" value={created} color="#16a34a" />
-              <CountCard label="Updated" value={updated} color="#d97706" />
-              <CountCard label="Deleted" value={deleted} color="#dc2626" />
+              <CountCard label="Created" value={created} color={COLOURS.GREEN} />
+              <CountCard label="Updated" value={updated} color={COLOURS.AMBER} />
+              <CountCard label="Deleted" value={deleted} color={COLOURS.RED} />
               <CountCard label="Total" value={filtered.length} color={COLOURS.NAVY} />
             </div>
           )}
@@ -178,8 +178,8 @@ export default function AuditLogPage() {
           {!loading && filtered.length > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
               {actionDonut.length > 0 && (
-                <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "6px" }}>By Action</div>
+                <div style={{ border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})`, marginBottom: "6px" }}>By Action</div>
                   <ResponsiveContainer width="100%" height={150}>
                     <PieChart>
                       <Pie data={actionDonut} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
@@ -190,7 +190,7 @@ export default function AuditLogPage() {
                   </ResponsiveContainer>
                   <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
                     {actionDonut.map((d) => (
-                      <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>
+                      <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>
                         <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                       </div>
                     ))}
@@ -198,8 +198,8 @@ export default function AuditLogPage() {
                 </div>
               )}
               {deptDonut.length > 0 && (
-                <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "6px" }}>By Department</div>
+                <div style={{ border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})`, marginBottom: "6px" }}>By Department</div>
                   <ResponsiveContainer width="100%" height={150}>
                     <PieChart>
                       <Pie data={deptDonut} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={2}>
@@ -210,7 +210,7 @@ export default function AuditLogPage() {
                   </ResponsiveContainer>
                   <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
                     {deptDonut.map((d) => (
-                      <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>
+                      <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "13px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>
                         <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                       </div>
                     ))}
@@ -223,13 +223,13 @@ export default function AuditLogPage() {
           {/* Search + Group toggle */}
           <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center", position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--bg-page, #f8fafc)", paddingTop: "4px", paddingBottom: "4px" }}>
             <input type="text" placeholder="Search..." value={filter} onChange={(e) => setFilter(e.target.value)}
-              style={{ flex: "1 1 200px", maxWidth: "300px", padding: "7px 12px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "16px", boxSizing: "border-box" }} />
+              style={{ flex: "1 1 200px", maxWidth: "300px", padding: "7px 12px", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "6px", fontSize: "16px", boxSizing: "border-box" }} />
             <div style={{ display: "flex", gap: "3px" }}>
               {(["time", "department", "person"] as const).map((g) => (
                 <button key={g} onClick={() => setGroupBy(g)} style={{
                   backgroundColor: groupBy === g ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
-                  color: groupBy === g ? "white" : "var(--text-primary, #1e293b)",
-                  border: `1px solid ${groupBy === g ? COLOURS.NAVY : "var(--border-color, #e2e8f0)"}`,
+                  color: groupBy === g ? "white" : `var(--text-primary, ${COLOURS.NAVY})`,
+                  border: `1px solid ${groupBy === g ? COLOURS.NAVY : `var(--border-color, ${COLOURS.HAIRLINE})`}`,
                   borderRadius: "5px", padding: "5px 12px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
                   textTransform: "capitalize",
                 }}>{g}</button>
@@ -239,23 +239,23 @@ export default function AuditLogPage() {
 
           {/* Log entries */}
           {loading ? <SkeletonRows count={5} height="40px" /> : filtered.length === 0 ? (
-            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: "var(--text-secondary, #64748b)", textAlign: "center" }}>No log entries found.</div>
+            <div style={{ border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)", color: `var(--text-secondary, ${COLOURS.SLATE})`, textAlign: "center" }}>No log entries found.</div>
           ) : groupBy === "time" ? (
-            <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
+            <div style={{ border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden" }}>
               {filtered.slice(0, 200).map((log) => <LogRow key={log.id} log={log} />)}
-              {filtered.length > 200 && <div style={{ padding: "10px 14px", textAlign: "center", color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>Showing 200 of {filtered.length}</div>}
+              {filtered.length > 200 && <div style={{ padding: "10px 14px", textAlign: "center", color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "15px" }}>Showing 200 of {filtered.length}</div>}
             </div>
           ) : groupBy === "department" ? (
             deptNames.map((dept) => {
               const entries = deptGroups.get(dept)!;
               return (
-                <div key={dept} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "10px" }}>
-                  <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: "1px solid var(--border-color, #e2e8f0)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{dept}</span>
-                    <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>{entries.length} entries</span>
+                <div key={dept} style={{ border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "10px" }}>
+                  <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "16px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})` }}>{dept}</span>
+                    <span style={{ fontSize: "15px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>{entries.length} entries</span>
                   </div>
                   {entries.slice(0, 20).map((log) => <LogRow key={log.id} log={log} />)}
-                  {entries.length > 20 && <div style={{ padding: "8px 14px", textAlign: "center", color: "var(--text-secondary, #64748b)", fontSize: "14px" }}>+{entries.length - 20} more</div>}
+                  {entries.length > 20 && <div style={{ padding: "8px 14px", textAlign: "center", color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "14px" }}>+{entries.length - 20} more</div>}
                 </div>
               );
             })
@@ -263,13 +263,13 @@ export default function AuditLogPage() {
             personNames.map((person) => {
               const entries = personGroups.get(person)!;
               return (
-                <div key={person} style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "10px" }}>
-                  <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: "1px solid var(--border-color, #e2e8f0)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{person}</span>
-                    <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)" }}>{entries.length} actions</span>
+                <div key={person} style={{ border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "10px" }}>
+                  <div style={{ padding: "8px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "16px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})` }}>{person}</span>
+                    <span style={{ fontSize: "15px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>{entries.length} actions</span>
                   </div>
                   {entries.slice(0, 20).map((log) => <LogRow key={log.id} log={log} />)}
-                  {entries.length > 20 && <div style={{ padding: "8px 14px", textAlign: "center", color: "var(--text-secondary, #64748b)", fontSize: "14px" }}>+{entries.length - 20} more</div>}
+                  {entries.length > 20 && <div style={{ padding: "8px 14px", textAlign: "center", color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "14px" }}>+{entries.length - 20} more</div>}
                 </div>
               );
             })

@@ -5,6 +5,7 @@ import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMobile } from "../lib/useMobile";
+import { COLOURS } from "../lib/SharedUI";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -101,13 +102,13 @@ export default function ResetPasswordPage() {
   const inputProps = {
     style: {
       display: "block" as const, width: "100%", padding: "10px 14px",
-      border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "15px",
+      border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "15px",
       boxSizing: "border-box" as const, outline: "none",
       transition: "border-color 0.15s",
       backgroundColor: "#f8fafc",
     },
     onFocus: (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.backgroundColor = "#fff"; },
-    onBlur: (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.backgroundColor = "#f8fafc"; },
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = COLOURS.HAIRLINE; e.currentTarget.style.backgroundColor = "#f8fafc"; },
   };
 
   return (
@@ -124,7 +125,7 @@ export default function ResetPasswordPage() {
         backgroundColor: "#ffffff",
         padding: isMobile ? "28px 24px" : "40px 36px",
         borderRadius: "16px",
-        border: "1px solid #e2e8f0",
+        border: `1px solid ${COLOURS.HAIRLINE}`,
         boxShadow: "0 8px 30px rgba(15,23,42,0.08)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
@@ -135,13 +136,13 @@ export default function ResetPasswordPage() {
         <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}>
           Set a new password
         </h1>
-        <p style={{ color: "#64748b", fontSize: "14px", margin: "0 0 24px", lineHeight: 1.5 }}>
+        <p style={{ color: COLOURS.SLATE, fontSize: "14px", margin: "0 0 24px", lineHeight: 1.5 }}>
           Enter your new password below.
         </p>
 
         {checking ? (
           <div style={{ padding: "20px 0", textAlign: "center" }}>
-            <div style={{ fontSize: "14px", color: "#64748b" }}>Verifying your reset link...</div>
+            <div style={{ fontSize: "14px", color: COLOURS.SLATE }}>Verifying your reset link...</div>
           </div>
         ) : sessionReady ? (
           <form onSubmit={handleSubmit}>
@@ -201,7 +202,7 @@ export default function ResetPasswordPage() {
             marginTop: "16px", padding: "10px 14px",
             borderRadius: "8px", fontSize: "13px", fontWeight: 500,
             backgroundColor: message.startsWith("Error") ? "#fef2f2" : "#f0fdf4",
-            color: message.startsWith("Error") ? "#dc2626" : "#16a34a",
+            color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN,
             border: `1px solid ${message.startsWith("Error") ? "#fecaca" : "#bbf7d0"}`,
           }}>
             {message}

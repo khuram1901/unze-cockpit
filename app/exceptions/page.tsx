@@ -90,7 +90,7 @@ export default function ExceptionsPage() {
   );
   const totalOpen = waitingReply.length + submitted.length;
 
-  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: `var(--text-secondary, ${COLOURS.SLATE})` }}>Checking permissions...</p></main></AuthWrapper>;
 
   return (
     <AuthWrapper>
@@ -115,7 +115,7 @@ export default function ExceptionsPage() {
         )}
 
         {loading ? (
-          <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "17px" }}>Loading exceptions…</p>
+          <p style={{ color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "17px" }}>Loading exceptions…</p>
         ) : escalations.length === 0 ? (
           <div
             style={{
@@ -171,12 +171,12 @@ function EscalationTable({ rows, mobile }: { rows: EscalationTask[]; mobile: boo
             marginBottom: "6px",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "6px" }}>
-              <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)", minWidth: 0, flex: 1 }}>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})`, minWidth: 0, flex: 1 }}>
                 {row.description}
               </div>
               <StatusBadge status={row.status} />
             </div>
-            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px", fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px", fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>
               <span style={{
                 fontWeight: 700,
                 padding: "1px 6px",
@@ -237,7 +237,7 @@ function EscalationTable({ rows, mobile }: { rows: EscalationTask[]; mobile: boo
                 </span>
               </td>
               <td style={tdBold}>{exceptionTypeLabel(row.exception_type)}</td>
-              <td style={{ ...td, maxWidth: "320px", color: "var(--text-primary, #1e293b)" }}>
+              <td style={{ ...td, maxWidth: "320px", color: `var(--text-primary, ${COLOURS.NAVY})` }}>
                 {row.description}
               </td>
               <td style={td}>{row.assigned_to || "—"}</td>

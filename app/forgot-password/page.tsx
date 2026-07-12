@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import Link from "next/link";
 import { useMobile } from "../lib/useMobile";
+import { COLOURS } from "../lib/SharedUI";
 
 export default function ForgotPasswordPage() {
   const isMobile = useMobile();
@@ -45,7 +46,7 @@ export default function ForgotPasswordPage() {
         backgroundColor: "#ffffff",
         padding: isMobile ? "28px 24px" : "40px 36px",
         borderRadius: "16px",
-        border: "1px solid #e2e8f0",
+        border: `1px solid ${COLOURS.HAIRLINE}`,
         boxShadow: "0 8px 30px rgba(15,23,42,0.08)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "28px" }}>
@@ -56,7 +57,7 @@ export default function ForgotPasswordPage() {
         <h1 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}>
           Reset your password
         </h1>
-        <p style={{ color: "#64748b", fontSize: "14px", margin: "0 0 24px", lineHeight: 1.5 }}>
+        <p style={{ color: COLOURS.SLATE, fontSize: "14px", margin: "0 0 24px", lineHeight: 1.5 }}>
           Enter your email and we&apos;ll send you a reset link.
         </p>
 
@@ -73,13 +74,13 @@ export default function ForgotPasswordPage() {
               placeholder="you@unzegroup.com"
               style={{
                 display: "block", width: "100%", padding: "10px 14px",
-                border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "15px",
+                border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", fontSize: "15px",
                 boxSizing: "border-box", outline: "none",
                 transition: "border-color 0.15s",
                 backgroundColor: "#f8fafc",
               }}
               onFocus={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.backgroundColor = "#fff"; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.backgroundColor = "#f8fafc"; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = COLOURS.HAIRLINE; e.currentTarget.style.backgroundColor = "#f8fafc"; }}
             />
           </div>
 
@@ -99,7 +100,7 @@ export default function ForgotPasswordPage() {
             marginTop: "16px", padding: "10px 14px",
             borderRadius: "8px", fontSize: "13px", fontWeight: 500,
             backgroundColor: message.startsWith("Error") ? "#fef2f2" : "#f0fdf4",
-            color: message.startsWith("Error") ? "#dc2626" : "#16a34a",
+            color: message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN,
             border: `1px solid ${message.startsWith("Error") ? "#fecaca" : "#bbf7d0"}`,
           }}>
             {message}

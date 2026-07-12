@@ -598,7 +598,7 @@ export default function InvestmentsPage() {
           <DateInput
             value={selectedDate}
             onChange={(e) => { setSelectedDate(e.target.value); setLoading(true); }}
-            style={{ padding: "6px 10px", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "6px", fontSize: "15px" }}
+            style={{ padding: "6px 10px", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "6px", fontSize: "15px" }}
           />
           {isHistorical && (
             <button
@@ -622,9 +622,9 @@ export default function InvestmentsPage() {
         )}
 
         {loading ? (
-          <p style={{ color: "var(--text-secondary, #64748b)" }}>Loading portfolio...</p>
+          <p style={{ color: `var(--text-secondary, ${COLOURS.SLATE})` }}>Loading portfolio...</p>
         ) : stocks.length === 0 && !showAddForm ? (
-          <div style={{ border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px", padding: "40px 20px", backgroundColor: "var(--bg-card, #ffffff)", textAlign: "center" }}>
+          <div style={{ border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "12px", padding: "40px 20px", backgroundColor: "var(--bg-card, #ffffff)", textAlign: "center" }}>
             <div style={{ fontSize: "40px", marginBottom: "12px" }}>📊</div>
             <div style={{ fontSize: "18px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>No Holdings Yet</div>
             <div style={{ fontSize: "15px", color: SLATE, marginBottom: "16px" }}>
@@ -666,7 +666,7 @@ export default function InvestmentsPage() {
 
             {/* Last updated */}
             {lastPriceUpdate && (
-              <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginBottom: "12px", textAlign: "right" }}>
+              <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})`, marginBottom: "12px", textAlign: "right" }}>
                 Prices last updated: {new Date(lastPriceUpdate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} at {new Date(lastPriceUpdate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
               </div>
             )}
@@ -703,7 +703,7 @@ export default function InvestmentsPage() {
                   </button>
                 )}
                 {updateResult && (
-                  <span style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", alignSelf: "center" }}>{updateResult}</span>
+                  <span style={{ fontSize: "15px", color: `var(--text-secondary, ${COLOURS.SLATE})`, alignSelf: "center" }}>{updateResult}</span>
                 )}
               </div>
             )}
@@ -711,10 +711,10 @@ export default function InvestmentsPage() {
             {/* Add/Edit Form */}
             {canEdit && showAddForm && (
               <div style={{
-                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
+                border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px", marginBottom: "16px",
               }}>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "12px" }}>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})`, marginBottom: "12px" }}>
                   {editingId ? "Edit Holding" : "Add New Holding"}
                 </div>
                 <form onSubmit={handleAddHolding} style={{
@@ -740,11 +740,11 @@ export default function InvestmentsPage() {
             {/* Manual Price Modal */}
             {canEdit && manualPriceModal && (
               <div style={{
-                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
+                border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px", marginBottom: "16px",
                 display: "flex", gap: "10px", alignItems: "center",
               }}>
-                <span style={{ fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{manualPriceModal}:</span>
+                <span style={{ fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})` }}>{manualPriceModal}:</span>
                 <input
                   type="number" step="0.01" placeholder="Price (Rs)"
                   value={manualPrice} onChange={(e) => setManualPrice(e.target.value)}
@@ -780,8 +780,8 @@ export default function InvestmentsPage() {
                     <tr key={s.ticker} style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)" }}
                       onClick={() => setSelectedTicker(s.ticker)}
                     >
-                      <td style={{ ...td, fontWeight: 700, color: "var(--text-primary, #1e293b)", cursor: "pointer" }}>{s.ticker}</td>
-                      <td style={{ ...td, color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>{s.company}</td>
+                      <td style={{ ...td, fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})`, cursor: "pointer" }}>{s.ticker}</td>
+                      <td style={{ ...td, color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "15px" }}>{s.company}</td>
                       <td style={{ ...td, textAlign: "right" }}>{s.totalQty.toLocaleString()}</td>
                       <td style={{ ...td, textAlign: "right" }}>{fmtPrice(s.avgCost)}</td>
                       <td style={{ ...td, textAlign: "right", fontWeight: 600 }}>
@@ -824,10 +824,10 @@ export default function InvestmentsPage() {
                           </span>
                         ) : "—"}
                       </td>
-                      <td style={{ ...td, textAlign: "right", color: "var(--text-secondary, #64748b)" }}>
+                      <td style={{ ...td, textAlign: "right", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>
                         {s.targetPrice ? fmtPrice(s.targetPrice) : "—"}
                       </td>
-                      <td style={{ ...td, color: "var(--text-secondary, #64748b)", fontSize: "14px" }}>
+                      <td style={{ ...td, color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "14px" }}>
                         {s.priceDate ? formatDateUK(s.priceDate) : "—"}
                         {s.priceSource ? ` (${s.priceSource})` : ""}
                       </td>
@@ -847,7 +847,7 @@ export default function InvestmentsPage() {
                             </>
                           )}
                           {s.lots.length > 1 && (
-                            <span style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)" }}>{s.lots.length} lots</span>
+                            <span style={{ fontSize: "13px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>{s.lots.length} lots</span>
                           )}
                         </td>
                       )}
@@ -882,20 +882,20 @@ export default function InvestmentsPage() {
             }}>
               {/* Price Chart */}
               <div style={{
-                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
+                border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>
+                  <div style={{ fontSize: "15px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})` }}>
                     {chartTicker || "—"} Price History
                   </div>
                   <div style={{ display: "flex", gap: "4px" }}>
                     {(["1M", "3M", "6M", "ALL"] as const).map((r) => (
                       <button key={r} onClick={() => setChartRange(r)} style={{
                         padding: "2px 8px", fontSize: "12px", fontWeight: 600,
-                        border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "4px", cursor: "pointer",
+                        border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "4px", cursor: "pointer",
                         backgroundColor: chartRange === r ? NAVY : "transparent",
-                        color: chartRange === r ? "white" : "var(--text-secondary, #64748b)",
+                        color: chartRange === r ? "white" : `var(--text-secondary, ${COLOURS.SLATE})`,
                       }}>{r}</button>
                     ))}
                   </div>
@@ -904,9 +904,9 @@ export default function InvestmentsPage() {
                   {stocks.map((s) => (
                     <button key={s.ticker} onClick={() => setSelectedTicker(s.ticker)} style={{
                       padding: "2px 8px", fontSize: "11px", fontWeight: 600,
-                      border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "4px", cursor: "pointer",
+                      border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "4px", cursor: "pointer",
                       backgroundColor: chartTicker === s.ticker ? NAVY : "transparent",
-                      color: chartTicker === s.ticker ? "white" : "var(--text-secondary, #64748b)",
+                      color: chartTicker === s.ticker ? "white" : `var(--text-secondary, ${COLOURS.SLATE})`,
                     }}>{s.ticker}</button>
                   ))}
                 </div>
@@ -921,16 +921,16 @@ export default function InvestmentsPage() {
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", textAlign: "center", padding: "40px 0" }}>No price history for {chartTicker}</p>
+                  <p style={{ color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "15px", textAlign: "center", padding: "40px 0" }}>No price history for {chartTicker}</p>
                 )}
               </div>
 
               {/* Gain/Loss Bar Chart */}
               <div style={{
-                border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "10px",
+                border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "10px",
                 backgroundColor: "var(--bg-card, #fff)", padding: "16px",
               }}>
-                <div style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)", marginBottom: "12px" }}>
+                <div style={{ fontSize: "15px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})`, marginBottom: "12px" }}>
                   Gain/Loss by Stock (%)
                 </div>
                 {glBarData.length > 0 ? (
@@ -946,7 +946,7 @@ export default function InvestmentsPage() {
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", textAlign: "center", padding: "40px 0" }}>No data</p>
+                  <p style={{ color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "15px", textAlign: "center", padding: "40px 0" }}>No data</p>
                 )}
               </div>
             </div>
@@ -962,12 +962,12 @@ export default function InvestmentsPage() {
                 }}>
                   {winners.sort((a, b) => (b.gainLossPct ?? 0) - (a.gainLossPct ?? 0)).map((s) => (
                     <div key={s.ticker} style={{
-                      border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${GREEN}`,
+                      border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderTop: `3px solid ${GREEN}`,
                       borderRadius: "8px", padding: "10px 12px",
                       backgroundColor: "var(--bg-card, #fff)",
                     }}>
-                      <div style={{ fontWeight: 700, color: "var(--text-primary, #1e293b)", fontSize: "15px" }}>{s.ticker}</div>
-                      <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{s.company}</div>
+                      <div style={{ fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})`, fontSize: "15px" }}>{s.ticker}</div>
+                      <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>{s.company}</div>
                       <div style={{ fontWeight: 700, color: GREEN, fontSize: "18px", marginTop: "4px" }}>
                         {fmtPct(s.gainLossPct!)}
                       </div>
@@ -1557,13 +1557,13 @@ function PensionMetricCard({ label, value, color }: { label: string; value: stri
 function SummaryCard({ label, value, color, sub }: { label: string; value: string; color: string; sub?: string }) {
   return (
     <div style={{
-      border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${color}`,
+      border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderTop: `3px solid ${color}`,
       borderRadius: "8px", padding: "10px 14px",
       backgroundColor: "var(--bg-card, #fff)",
     }}>
-      <div style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", marginBottom: "2px" }}>{label}</div>
+      <div style={{ color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "15px", marginBottom: "2px" }}>{label}</div>
       <div style={{ fontSize: "20px", fontWeight: 800, color }}>{value}</div>
-      {sub && <div style={{ fontSize: "15px", color: "var(--text-secondary, #64748b)", marginTop: "2px" }}>{sub}</div>}
+      {sub && <div style={{ fontSize: "15px", color: `var(--text-secondary, ${COLOURS.SLATE})`, marginTop: "2px" }}>{sub}</div>}
     </div>
   );
 }
@@ -1571,8 +1571,8 @@ function SummaryCard({ label, value, color, sub }: { label: string; value: strin
 function Th({ children, align }: { children: React.ReactNode; align?: "left" | "right" }) {
   return (
     <th style={{
-      textAlign: align || "left", borderBottom: "1px solid var(--border-color, #e2e8f0)",
-      padding: "6px 10px", fontSize: "14px", color: "var(--text-secondary, #64748b)", fontWeight: 700,
+      textAlign: align || "left", borderBottom: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`,
+      padding: "6px 10px", fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})`, fontWeight: 700,
       whiteSpace: "nowrap",
     }}>{children}</th>
   );
@@ -1583,7 +1583,7 @@ const td: React.CSSProperties = {
 };
 
 const inputStyle: React.CSSProperties = {
-  padding: "8px 10px", border: "1px solid var(--border-color, #e2e8f0)",
+  padding: "8px 10px", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`,
   borderRadius: "6px", fontSize: "16px", boxSizing: "border-box",
 };
 

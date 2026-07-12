@@ -278,7 +278,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                   <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: COLOURS.GREEN, display: "inline-block" }} /> On
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                  <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: "var(--border-color, #e2e8f0)", border: "1px solid #cbd5e1", display: "inline-block" }} /> Off
+                  <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: `var(--border-color, ${COLOURS.HAIRLINE})`, border: "1px solid #cbd5e1", display: "inline-block" }} /> Off
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
                   <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: COLOURS.GREEN, opacity: 0.35, display: "inline-block" }} /> Default
@@ -444,7 +444,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                                     width: 18, height: 18, margin: "0 auto",
                                     borderRadius: 4,
                                     border: "2px solid #111827",
-                                    backgroundColor: on ? COLOURS.GREEN : "var(--border-color, #e2e8f0)",
+                                    backgroundColor: on ? COLOURS.GREEN : `var(--border-color, ${COLOURS.HAIRLINE})`,
                                     display: "flex", alignItems: "center", justifyContent: "center",
                                   }} title="Locked — Admin/CEO permissions cannot be changed">
                                     {on && <span style={{ color: "white", fontSize: 11, fontWeight: 700 }}>✓</span>}
@@ -466,7 +466,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                                       width: 18, height: 18, padding: 0, margin: "0 auto",
                                       borderRadius: 4, cursor: canToggle ? "pointer" : "not-allowed",
                                       border: hasOverride ? "2px solid #3b82f6" : "1px solid #cbd5e1",
-                                      backgroundColor: on ? COLOURS.GREEN : "var(--border-color, #e2e8f0)",
+                                      backgroundColor: on ? COLOURS.GREEN : `var(--border-color, ${COLOURS.HAIRLINE})`,
                                       opacity: isLoading ? 0.3 : hasOverride ? 1 : 0.55,
                                       display: "flex", alignItems: "center", justifyContent: "center",
                                       transition: "all 0.15s",

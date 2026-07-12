@@ -292,7 +292,7 @@ export default function PADashboardPage() {
     loadData();
   }
 
-  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: "var(--text-secondary, #64748b)" }}>Checking permissions...</p></main></AuthWrapper>;
+  if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: `var(--text-secondary, ${COLOURS.SLATE})` }}>Checking permissions...</p></main></AuthWrapper>;
 
   const openTasks = tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const completedTasks = tasks.filter((t) => t.status === "Completed");
@@ -321,8 +321,8 @@ export default function PADashboardPage() {
   const bannerItems: { label: string; count: number; color: string }[] = [];
   if (overdueTasks.length > 0) bannerItems.push({ label: `${overdueTasks.length} overdue task${overdueTasks.length > 1 ? "s" : ""}`, count: overdueTasks.length, color: COLOURS.RED });
   if (waitingReply.length > 0) bannerItems.push({ label: `${waitingReply.length} waiting repl${waitingReply.length > 1 ? "ies" : "y"}`, count: waitingReply.length, color: COLOURS.RED });
-  if (escalations.length > 0) bannerItems.push({ label: `${escalations.length} escalation${escalations.length > 1 ? "s" : ""}`, count: escalations.length, color: "#d97706" });
-  if (meetingRequests.length > 0) bannerItems.push({ label: `${meetingRequests.length} meeting${meetingRequests.length > 1 ? "s" : ""} to approve`, count: meetingRequests.length, color: "#2563eb" });
+  if (escalations.length > 0) bannerItems.push({ label: `${escalations.length} escalation${escalations.length > 1 ? "s" : ""}`, count: escalations.length, color: COLOURS.AMBER });
+  if (meetingRequests.length > 0) bannerItems.push({ label: `${meetingRequests.length} meeting${meetingRequests.length > 1 ? "s" : ""} to approve`, count: meetingRequests.length, color: COLOURS.BLUE });
   const hasCritical = overdueTasks.length > 0 || escalations.length > 0;
 
   function TaskCard({ task }: { task: Task }) {
@@ -337,8 +337,8 @@ export default function PADashboardPage() {
           )}
           <div onClick={() => setExpandedTask(isExpanded ? null : task.id)} style={{ flex: 1, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
-            <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ fontSize: "16px", fontWeight: 600, color: `var(--text-primary, ${COLOURS.NAVY})`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
+            <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})`, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
               <span>{task.assigned_to || "Unassigned"}</span>
               {task.due_date && (
                 <span style={{ color: isOverdue(task) ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue(task) ? 700 : 400 }}>
@@ -349,7 +349,7 @@ export default function PADashboardPage() {
               <StatusBadge status={task.status} />
             </div>
           </div>
-          <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", flexShrink: 0 }}>{isExpanded ? "▼" : "▶"}</span>
+          <span style={{ color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "15px", flexShrink: 0 }}>{isExpanded ? "▼" : "▶"}</span>
           </div>
         </div>
 
@@ -393,29 +393,29 @@ export default function PADashboardPage() {
                 <button onClick={() => setQuickNote(null)} style={actionBtn(COLOURS.SLATE)}>Cancel</button>
               </div>
             ) : (
-              task.notes && <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)", marginBottom: "6px", padding: "6px 8px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "4px", whiteSpace: "pre-line" }}>{task.notes}</div>
+              task.notes && <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})`, marginBottom: "6px", padding: "6px 8px", backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "4px", whiteSpace: "pre-line" }}>{task.notes}</div>
             )}
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              <button onClick={() => chaseTask(task)} style={actionBtn("#2563eb")} title="Send chase email notification">Chase</button>
+              <button onClick={() => chaseTask(task)} style={actionBtn(COLOURS.BLUE)} title="Send chase email notification">Chase</button>
               {(() => {
                 const m = members.find((mem) => memberName(mem) === task.assigned_to);
                 const waLink = m ? whatsappLink(m.phone_e164, taskChaseMessage(task.description, task.assigned_to, task.due_date ? formatDateUK(task.due_date) : null)) : null;
                 return waLink ? (
-                  <a href={waLink} target="_blank" rel="noopener noreferrer" style={{ ...actionBtn("#16a34a"), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "3px" }} title="Send WhatsApp reminder">
+                  <a href={waLink} target="_blank" rel="noopener noreferrer" style={{ ...actionBtn(COLOURS.GREEN), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "3px" }} title="Send WhatsApp reminder">
                     WA
                   </a>
                 ) : null;
               })()}
               <button onClick={() => closeTask(task.id)} style={actionBtn(COLOURS.GREEN)} title="Mark as completed">Complete</button>
-              <button onClick={() => setQuickNote({ taskId: task.id, text: "" })} style={actionBtn("#7c3aed")} title="Add a note to this task">Note</button>
+              <button onClick={() => setQuickNote({ taskId: task.id, text: "" })} style={actionBtn(COLOURS.PURPLE)} title="Add a note to this task">Note</button>
               <button onClick={async () => {
                 if (!await dlg.confirm(`Delete "${task.description}"? This cannot be undone.`, true)) return;
                 await supabase.from("tasks").delete().eq("id", task.id);
                 showMsg("Task deleted.");
                 loadData();
-              }} style={{ ...actionBtn("#dc2626"), backgroundColor: "var(--bg-card, #ffffff)", color: "#dc2626", border: "1px solid #dc2626" }} title="Delete this task">Delete</button>
+              }} style={{ ...actionBtn(COLOURS.RED), backgroundColor: "var(--bg-card, #ffffff)", color: COLOURS.RED, border: `1px solid ${COLOURS.RED}` }} title="Delete this task">Delete</button>
             </div>
-            <div style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)", marginTop: "6px" }}>
+            <div style={{ fontSize: "13px", color: `var(--text-secondary, ${COLOURS.SLATE})`, marginTop: "6px" }}>
               By: {task.assigned_by || "—"} · Dept: {task.assigned_to_department || "—"} · Project: {task.project || "—"}
             </div>
           </div>
@@ -437,7 +437,7 @@ export default function PADashboardPage() {
 
   const donutData = [
     { name: "Overdue", value: overdueTasks.length, color: COLOURS.RED },
-    { name: "Waiting Reply", value: waitingReply.length, color: "#d97706" },
+    { name: "Waiting Reply", value: waitingReply.length, color: COLOURS.AMBER },
     { name: "In Progress", value: inProgress.length, color: COLOURS.BLUE },
     { name: "Not Started", value: notStarted.length, color: COLOURS.SLATE },
   ].filter((d) => d.value > 0);
@@ -471,7 +471,7 @@ export default function PADashboardPage() {
           </p>
 
           {message && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: "var(--text-primary, #1e293b)" }}>
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "15px", color: `var(--text-primary, ${COLOURS.NAVY})` }}>
               {message}
             </div>
           )}
@@ -523,24 +523,24 @@ export default function PADashboardPage() {
                   gap: "10px",
                 }}>
                   <KPICard value={overdueTasks.length} label="Overdue" color={overdueTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
-                  <KPICard value={waitingReply.length} label="Waiting Reply" color={waitingReply.length > 0 ? "#d97706" : COLOURS.GREEN} />
-                  <KPICard value={escalations.length} label="Escalations" color={escalations.length > 0 ? "#d97706" : COLOURS.GREEN} />
-                  <KPICard value={upcomingTasks.length} label="Due This Week" color="#2563eb" />
+                  <KPICard value={waitingReply.length} label="Waiting Reply" color={waitingReply.length > 0 ? COLOURS.AMBER : COLOURS.GREEN} />
+                  <KPICard value={escalations.length} label="Escalations" color={escalations.length > 0 ? COLOURS.AMBER : COLOURS.GREEN} />
+                  <KPICard value={upcomingTasks.length} label="Due This Week" color={COLOURS.BLUE} />
                   <KPICard value={openTasks.length} label="Open Tasks" color={COLOURS.NAVY} />
-                  <KPICard value={meetingRequests.length} label="To Approve" color={meetingRequests.length > 0 ? "#2563eb" : COLOURS.GREEN} />
+                  <KPICard value={meetingRequests.length} label="To Approve" color={meetingRequests.length > 0 ? COLOURS.BLUE : COLOURS.GREEN} />
                 </div>
 
                 {/* Right: Donut + quick stats */}
                 <div style={{
-                  backgroundColor: "var(--bg-card, white)", border: "1px solid var(--border-color, #e2e8f0)",
+                  backgroundColor: "var(--bg-card, white)", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`,
                   borderRadius: "12px", overflow: "hidden",
                 }}>
                   <div style={{
-                    padding: "12px 16px", borderBottom: "1px solid var(--border-color, #e2e8f0)",
+                    padding: "12px 16px", borderBottom: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`,
                     display: "flex", alignItems: "center", gap: "8px",
                   }}>
                     <span style={{ fontSize: "14px" }}>📊</span>
-                    <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>Task Breakdown</span>
+                    <span style={{ fontSize: "14px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})` }}>Task Breakdown</span>
                   </div>
                   <div style={{ padding: "12px 16px" }}>
                     {donutData.length > 0 ? (
@@ -555,7 +555,7 @@ export default function PADashboardPage() {
                         </ResponsiveContainer>
                         <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap", marginTop: "4px" }}>
                           {donutData.map((d) => (
-                            <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: "var(--text-secondary, #64748b)" }}>
+                            <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>
                               <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
                             </div>
                           ))}
@@ -566,7 +566,7 @@ export default function PADashboardPage() {
                         All tasks completed!
                       </div>
                     )}
-                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid var(--border-color, #e2e8f0)", display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-secondary, #64748b)" }}>
+                    <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, display: "flex", justifyContent: "space-between", fontSize: "12px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>
                       <span>Completed this month</span>
                       <span style={{ fontWeight: 700, color: COLOURS.GREEN }}>{completedThisMonth}</span>
                     </div>
@@ -588,7 +588,7 @@ export default function PADashboardPage() {
               {bannerItems.length > 0 ? (
                 <div style={{
                   border: `1px solid ${hasCritical ? "#fecaca" : COLOURS.BORDER}`,
-                  borderLeft: `4px solid ${hasCritical ? COLOURS.RED : "#d97706"}`,
+                  borderLeft: `4px solid ${hasCritical ? COLOURS.RED : COLOURS.AMBER}`,
                   borderRadius: "8px",
                   backgroundColor: hasCritical ? "#fef2f2" : "#fffbeb",
                   overflow: "hidden", marginBottom: "14px",
@@ -628,19 +628,19 @@ export default function PADashboardPage() {
                         </BannerSection>
                       )}
                       {escalations.length > 0 && (
-                        <BannerSection title={`Escalations (${escalations.length})`} color="#d97706">
+                        <BannerSection title={`Escalations (${escalations.length})`} color={COLOURS.AMBER}>
                           {escalations.map((t) => (
                             <BannerItem key={t.id} href={`/tasks?task=${t.id}`} primary={t.description} secondary={t.assigned_to || "Unassigned"} />
                           ))}
                         </BannerSection>
                       )}
                       {meetingRequests.length > 0 && (
-                        <BannerSection title={`Meetings to Approve (${meetingRequests.length})`} color="#2563eb">
+                        <BannerSection title={`Meetings to Approve (${meetingRequests.length})`} color={COLOURS.BLUE}>
                           {meetingRequests.map((r) => (
                             <div key={r.id} style={{ padding: "8px 16px 8px 48px", borderBottom: "1px solid var(--border-light, #f1f5f9)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                               <div>
-                                <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{r.meeting_title}</div>
-                                <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{r.requested_by_name || "—"} · {formatDateUK(r.requested_date)}</div>
+                                <div style={{ fontSize: "16px", fontWeight: 600, color: `var(--text-primary, ${COLOURS.NAVY})` }}>{r.meeting_title}</div>
+                                <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>{r.requested_by_name || "—"} · {formatDateUK(r.requested_date)}</div>
                               </div>
                               <button onClick={() => approveMeeting(r.id)} style={actionBtn(COLOURS.GREEN)}>Approve</button>
                             </div>
@@ -651,7 +651,7 @@ export default function PADashboardPage() {
                   )}
                 </div>
               ) : (
-                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "12px 16px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "16px", color: "var(--text-primary, #1e293b)", fontWeight: 600, marginBottom: "14px" }}>
+                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderLeft: `4px solid ${COLOURS.GREEN}`, borderRadius: "6px", padding: "12px 16px", backgroundColor: "var(--bg-card, #ffffff)", fontSize: "16px", color: `var(--text-primary, ${COLOURS.NAVY})`, fontWeight: 600, marginBottom: "14px" }}>
                   All clear — nothing needs your attention right now.
                 </div>
               )}
@@ -660,7 +660,7 @@ export default function PADashboardPage() {
               {/* Bulk action bar */}
               {bulkAction && selectedTasks.size > 0 && (
                 <div style={{ display: "flex", gap: "6px", alignItems: "center", padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{selectedTasks.size} selected</span>
+                  <span style={{ fontSize: "16px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})` }}>{selectedTasks.size} selected</span>
                   <button onClick={bulkComplete} style={actionBtn(COLOURS.GREEN)} title="Complete all selected">Complete All</button>
                   <select onChange={(e) => { if (e.target.value) bulkReassign(e.target.value); e.target.value = ""; }}
                     style={{ padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "13px" }}>
@@ -680,15 +680,15 @@ export default function PADashboardPage() {
                 ]).map((tab) => (
                   <button key={tab.key} onClick={() => { setActiveTab(tab.key); setViewPerson(null); }} style={{
                     backgroundColor: activeTab === tab.key ? COLOURS.NAVY : "var(--bg-card, #ffffff)",
-                    color: activeTab === tab.key ? "white" : "var(--text-primary, #1e293b)",
+                    color: activeTab === tab.key ? "white" : `var(--text-primary, ${COLOURS.NAVY})`,
                     border: `1px solid ${activeTab === tab.key ? COLOURS.NAVY : COLOURS.BORDER}`,
                     borderRadius: "6px", padding: "7px 14px", fontSize: "14px", fontWeight: 600, cursor: "pointer",
                   }}>{tab.label}</button>
                 ))}
                 <div style={{ flex: 1 }} />
                 <button onClick={() => { setBulkAction(!bulkAction); setSelectedTasks(new Set()); }} style={{
-                  backgroundColor: bulkAction ? "#d97706" : "var(--bg-card, #ffffff)", color: bulkAction ? "white" : "var(--text-primary, #1e293b)",
-                  border: `1px solid ${bulkAction ? "#d97706" : COLOURS.BORDER}`,
+                  backgroundColor: bulkAction ? COLOURS.AMBER : "var(--bg-card, #ffffff)", color: bulkAction ? "white" : `var(--text-primary, ${COLOURS.NAVY})`,
+                  border: `1px solid ${bulkAction ? COLOURS.AMBER : COLOURS.BORDER}`,
                   borderRadius: "6px", padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
                 }} title="Select multiple tasks for bulk actions">{bulkAction ? "Cancel Select" : "Bulk Select"}</button>
               </div>
@@ -697,24 +697,24 @@ export default function PADashboardPage() {
               <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #ffffff)", overflow: "hidden", marginBottom: "14px" }}>
                 {activeTab === "upcoming" && (
                   upcomingTasks.length === 0 ? (
-                    <div style={{ padding: "16px", color: "var(--text-secondary, #64748b)", textAlign: "center" }}>No tasks due in the next 7 days.</div>
+                    <div style={{ padding: "16px", color: `var(--text-secondary, ${COLOURS.SLATE})`, textAlign: "center" }}>No tasks due in the next 7 days.</div>
                   ) : (
                     <div style={{ maxHeight: "500px", overflowY: "auto" }}>
                       {upcomingTasks.map((t) => {
                         const d = daysUntil(t.due_date!);
-                        const urgency = d <= 1 ? COLOURS.RED : d <= 3 ? "#d97706" : COLOURS.SLATE;
+                        const urgency = d <= 1 ? COLOURS.RED : d <= 3 ? COLOURS.AMBER : COLOURS.SLATE;
                         return (
                           <div key={t.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "9px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.description}</div>
-                              <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{t.assigned_to || "Unassigned"}</div>
+                              <div style={{ fontSize: "16px", fontWeight: 600, color: `var(--text-primary, ${COLOURS.NAVY})`, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.description}</div>
+                              <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>{t.assigned_to || "Unassigned"}</div>
                             </div>
                             <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
                               <span style={{ fontSize: "13px", fontWeight: 700, color: urgency }}>
                                 {d === 0 ? "Today" : d === 1 ? "Tomorrow" : `${d} days`}
                               </span>
                               <PriorityBadge priority={t.priority} />
-                              <a href={`/tasks?task=${t.id}`} style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>Open →</a>
+                              <a href={`/tasks?task=${t.id}`} style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600, textDecoration: "none" }}>Open →</a>
                             </div>
                           </div>
                         );
@@ -729,14 +729,14 @@ export default function PADashboardPage() {
                       <div key={p.name} onClick={() => setViewPerson(p.name)}
                         style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, padding: "9px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }}>
                         <div>
-                          <span style={{ fontWeight: 600, fontSize: "16px", color: "var(--text-primary, #1e293b)" }}>{p.name}</span>
-                          <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px", marginLeft: "6px" }}>({p.total} tasks)</span>
+                          <span style={{ fontWeight: 600, fontSize: "16px", color: `var(--text-primary, ${COLOURS.NAVY})` }}>{p.name}</span>
+                          <span style={{ color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "15px", marginLeft: "6px" }}>({p.total} tasks)</span>
                         </div>
                         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                           {p.overdue > 0 && <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.RED }}>{p.overdue} overdue</span>}
-                          {p.waiting > 0 && <span style={{ fontSize: "12px", fontWeight: 700, color: "#d97706" }}>{p.waiting} waiting</span>}
+                          {p.waiting > 0 && <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.AMBER }}>{p.waiting} waiting</span>}
                           {p.overdue === 0 && p.waiting === 0 && <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.GREEN, display: "inline-block" }} />}
-                          <span style={{ color: "var(--text-secondary, #64748b)", fontSize: "15px" }}>▶</span>
+                          <span style={{ color: `var(--text-secondary, ${COLOURS.SLATE})`, fontSize: "15px" }}>▶</span>
                         </div>
                       </div>
                     ))}
@@ -746,8 +746,8 @@ export default function PADashboardPage() {
                 {activeTab === "people" && viewPerson && viewTasks && (
                   <>
                     <div style={{ padding: "10px 14px", backgroundColor: "var(--bg-card-hover, #f8fafc)", borderBottom: `1px solid ${COLOURS.BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary, #1e293b)" }}>{viewPerson} — {viewTasks.length} tasks</span>
-                      <button onClick={() => setViewPerson(null)} style={{ background: "transparent", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", padding: "4px 10px", fontSize: "15px", color: "var(--text-secondary, #64748b)", cursor: "pointer" }}>← Back</button>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})` }}>{viewPerson} — {viewTasks.length} tasks</span>
+                      <button onClick={() => setViewPerson(null)} style={{ background: "transparent", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "5px", padding: "4px 10px", fontSize: "15px", color: `var(--text-secondary, ${COLOURS.SLATE})`, cursor: "pointer" }}>← Back</button>
                     </div>
                     <div style={{ maxHeight: "500px", overflowY: "auto" }}>
                       {viewTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a)).map((t) => <TaskCard key={t.id} task={t} />)}
@@ -780,7 +780,7 @@ export default function PADashboardPage() {
                         borderBottom: i < paDividends.length - 1 ? `1px solid var(--border-light, #f1f5f9)` : "none",
                       }}>
                         <span style={{ fontWeight: 700, fontSize: "14px", color: COLOURS.NAVY, minWidth: "60px" }}>{d.ticker}</span>
-                        <span style={{ fontSize: "13px", color: "var(--text-secondary, #64748b)", flex: 1 }}>
+                        <span style={{ fontSize: "13px", color: `var(--text-secondary, ${COLOURS.SLATE})`, flex: 1 }}>
                           Ex-date: <strong>{formatDateUK(d.ex_dividend_date)}</strong>
                           {d.payment_date && <> &nbsp;·&nbsp; Pay: {formatDateUK(d.payment_date)}</>}
                         </span>
@@ -817,11 +817,11 @@ export default function PADashboardPage() {
 function KPICard({ value, label, color }: { value: number; label: string; color: string }) {
   return (
     <div style={{
-      border: "1px solid var(--border-color, #e2e8f0)", borderTop: `3px solid ${color}`,
+      border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderTop: `3px solid ${color}`,
       borderRadius: "12px", padding: "14px 16px", backgroundColor: "var(--bg-card, white)",
     }}>
       <div style={{ fontSize: "26px", fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: "12px", color: "var(--text-secondary, #64748b)", marginTop: "6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+      <div style={{ fontSize: "12px", color: `var(--text-secondary, ${COLOURS.SLATE})`, marginTop: "6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
     </div>
   );
 }
@@ -829,7 +829,7 @@ function KPICard({ value, label, color }: { value: number; label: string; color:
 function PASkeleton({ isMobile }: { isMobile: boolean }) {
   const pulse: React.CSSProperties = {
     borderRadius: "6px",
-    background: "linear-gradient(90deg, var(--border-color, #e2e8f0) 25%, var(--border-light, #f1f5f9) 50%, var(--border-color, #e2e8f0) 75%)",
+    background: `linear-gradient(90deg, var(--border-color, ${COLOURS.HAIRLINE}) 25%, var(--border-light, #f1f5f9) 50%, var(--border-color, ${COLOURS.HAIRLINE}) 75%)`,
     backgroundSize: "200% 100%",
     animation: "shimmer 1.5s ease-in-out infinite",
   };
@@ -838,18 +838,18 @@ function PASkeleton({ isMobile }: { isMobile: boolean }) {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr minmax(200px, 280px)", gap: "16px", marginBottom: "20px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} style={{ backgroundColor: "var(--bg-card, white)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px", padding: "14px 16px" }}>
+            <div key={i} style={{ backgroundColor: "var(--bg-card, white)", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "12px", padding: "14px 16px" }}>
               <div style={{ ...pulse, width: "40px", height: "26px" }} />
               <div style={{ ...pulse, width: "70px", height: "12px", marginTop: "8px" }} />
             </div>
           ))}
         </div>
-        <div style={{ backgroundColor: "var(--bg-card, white)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px", padding: "16px" }}>
+        <div style={{ backgroundColor: "var(--bg-card, white)", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "12px", padding: "16px" }}>
           <div style={{ ...pulse, width: "100px", height: "14px", marginBottom: "12px" }} />
           <div style={{ ...pulse, width: "100%", height: "120px", borderRadius: "50%" }} />
         </div>
       </div>
-      <div style={{ backgroundColor: "var(--bg-card, white)", border: "1px solid var(--border-color, #e2e8f0)", borderRadius: "12px", padding: "16px" }}>
+      <div style={{ backgroundColor: "var(--bg-card, white)", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "12px", padding: "16px" }}>
         <div style={{ ...pulse, width: "120px", height: "14px", marginBottom: "12px" }} />
         {[1, 2, 3, 4, 5].map((i) => <div key={i} style={{ ...pulse, width: "100%", height: "14px", marginBottom: "10px" }} />)}
       </div>
@@ -873,12 +873,12 @@ function BannerItem({ href, primary, secondary, badge }: { href: string; primary
       onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = "transparent"; }}>
       <div style={{ padding: "7px 16px 7px 48px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: "15px", fontWeight: 600, color: "var(--text-primary, #1e293b)" }}>{primary}</div>
-          <div style={{ fontSize: "14px", color: "var(--text-secondary, #64748b)" }}>{secondary}</div>
+          <div style={{ fontSize: "15px", fontWeight: 600, color: `var(--text-primary, ${COLOURS.NAVY})` }}>{primary}</div>
+          <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>{secondary}</div>
         </div>
         <div style={{ display: "flex", gap: "4px", alignItems: "center", flexShrink: 0 }}>
           {badge && <PriorityBadge priority={badge} />}
-          <span style={{ fontSize: "12px", color: "#2563eb", fontWeight: 600 }}>Open →</span>
+          <span style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600 }}>Open →</span>
         </div>
       </div>
     </a>
@@ -892,15 +892,15 @@ const actionBtn = (color: string): React.CSSProperties => ({
 
 const controlStyle: React.CSSProperties = {
   padding: "5px 8px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px",
-  backgroundColor: "var(--bg-input, #ffffff)", color: "var(--text-primary, #1e293b)",
+  backgroundColor: "var(--bg-input, #ffffff)", color: `var(--text-primary, ${COLOURS.NAVY})`,
 };
 
 const labelStyle: React.CSSProperties = {
-  display: "block", fontSize: "16px", fontWeight: 600, color: "var(--text-primary, #1e293b)", marginBottom: "6px",
+  display: "block", fontSize: "16px", fontWeight: 600, color: `var(--text-primary, ${COLOURS.NAVY})`, marginBottom: "6px",
 };
 
 const inputStyle: React.CSSProperties = {
   display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
   border: `1px solid ${COLOURS.BORDER}`, borderRadius: "6px", fontSize: "15px", boxSizing: "border-box",
-  backgroundColor: "var(--bg-input, #ffffff)", color: "var(--text-primary, #1e293b)",
+  backgroundColor: "var(--bg-input, #ffffff)", color: `var(--text-primary, ${COLOURS.NAVY})`,
 };
