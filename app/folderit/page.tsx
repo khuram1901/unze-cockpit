@@ -8,7 +8,7 @@ import { COMPANIES, ALM_COMPANY_ID, DIR_COMPANY_ID } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
 import { useMobile } from "../lib/useMobile";
 import { isAdminTier, canViewFolderitHr } from "../lib/permissions";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, LabelList } from "recharts";
 
 // Baranh and Haute Dolci share the same Folderit account (Restaurants) —
 // the Folderit page shows them as one merged "Restaurant" card. They
@@ -51,6 +51,10 @@ const COMPANY_BADGE_STYLES: Record<string, { bg: string; text: string }> = {
   HD: { bg: "#F3EEF9", text: "#6E45B8" },
   ALM: { bg: COLOURS.CARD_ALT, text: COLOURS.SLATE },
   DIR: { bg: COLOURS.CARD_ALT, text: COLOURS.NAVY },
+  // Merged Baranh + Haute Dolci card on this page — its own badge colour
+  // (distinct from both) so it reads as one company in the chart, not a
+  // clash of the two it's made from.
+  RST: { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
 };
 
 function CompanyBadge({ shortCode }: { shortCode: string }) {
@@ -758,27 +762,37 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
       )}
 
       {(() => {
+        // Bars coloured to match each company's own badge colour (same
+        // one used on its card above), not by severity — Khuram: "can we
+        // change the colours of the bar chart matching the colours of
+        // the company, Please ensure all companies are in different
+        // colours so its consistent" / "match the names on bar charts,
+        // as well please" — the y-axis label is now the same name shown
+        // on that company's card (e.g. "Family Documents", not "DIR"),
+        // not just its short code.
         const chartData = FOLDERIT_DISPLAY_COMPANIES.map((company) => {
           const row = rows.find((r) => r.group_key === company.id);
           const days = row?.inbox_oldest_days ?? 0;
-          return { name: company.shortCode, days };
+          const colour = COMPANY_BADGE_STYLES[company.shortCode]?.text ?? SLATE;
+          return { name: company.name, shortCode: company.shortCode, days, colour };
         });
         return (
           <div style={{ ...cardStyle, padding: "22px 24px", marginBottom: "16px" }}>
             <div style={{ fontFamily: "var(--font-sans, Inter, sans-serif)", fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "14px" }}>Document Aging by Company</div>
             <ResponsiveContainer width="100%" height={Math.max(120, chartData.length * 34)}>
-              <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 24, top: 0, bottom: 0 }}>
+              <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 36, top: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 10, fill: SLATE }} allowDecimals={false} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: NAVY }} width={48} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: NAVY }} width={150} />
                 <Tooltip formatter={(value) => [`${value} days`, "Oldest outstanding"]} />
                 <Bar dataKey="days" radius={[0, 4, 4, 0]}>
-                  {chartData.map((d, i) => <Cell key={i} fill={severityColor(d.days)} />)}
+                  {chartData.map((d, i) => <Cell key={i} fill={d.colour} />)}
+                  <LabelList dataKey="days" position="right" formatter={(v) => `${v}d`} style={{ fontSize: "11px", fontWeight: 600, fill: NAVY }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
             <div style={{ fontSize: "11px", color: SLATE, marginTop: "10px" }}>
-              Longest a document has sat unfiled or unapproved, per company. Red = 7+ days, amber = 3-6 days.
+              Longest a document has sat unfiled or unapproved, per company. Bar colour matches each company&apos;s badge above.
             </div>
           </div>
         );
