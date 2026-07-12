@@ -67,7 +67,7 @@ async function syncAccountInbox(
 
   try {
     const res = await folderitFetch(
-      `/v2/accounts/${account.account_uid}/folders/${account.inbox_folder_uid}/files?limit=200`
+      `/v2/accounts/${account.account_uid}/folders/${account.inbox_folder_uid}/files?per-page=500`
     );
     if (!res.ok) {
       errors.push(`${account.account_name}: inbox fetch ${res.status}`);
@@ -193,28 +193,86 @@ async function syncAccountApprovals(
   return { invitesSynced, errors, auditEntriesScanned, candidatesFound: 0, sampleEvents: Array.from(sampleEvents) };
 }
 
+type FolderitFolder = {
+  uid: string;
+  name?: string;
+};
+
+// How deep to recurse into HR subfolders. The "Policies & SOPs" tree has
+// nested folders (01-Archive, 02-Policies & SOPs, etc.) — a flat fetch of
+// the top folder only picked up its 3 loose files and missed everything
+// inside subfolders. Depth is capped to avoid runaway recursion / rate
+// limits if Folderit ever returns a folder that references itself.
+const HR_MAX_FOLDER_DEPTH = 6;
+
+async function fetchFolderFilesRecursive(
+  accountUid: string,
+  folderUid: string,
+  depth: number,
+  errors: string[],
+  categoryLabel: string
+): Promise<FolderitFile[]> {
+  const collected: FolderitFile[] = [];
+
+  const filesRes = await folderitFetch(
+    `/v2/accounts/${accountUid}/folders/${folderUid}/files?per-page=500`
+  );
+  if (!filesRes.ok) {
+    errors.push(`${categoryLabel}: files fetch ${filesRes.status} (folder ${folderUid})`);
+  } else {
+    const filesJson = await filesRes.json();
+    // Folderit's files/folders list endpoints return a bare JSON array per
+    // the OpenAPI spec, not a { files: [...] } wrapper — the `?? filesJson`
+    // fallback covers that shape defensively either way.
+    const files: FolderitFile[] = filesJson.files ?? filesJson ?? [];
+    collected.push(...files);
+  }
+
+  if (depth >= HR_MAX_FOLDER_DEPTH) return collected;
+
+  const foldersRes = await folderitFetch(
+    `/v2/accounts/${accountUid}/folders/${folderUid}/folders?per-page=500`
+  );
+  if (!foldersRes.ok) {
+    // Not every folder necessarily supports a sub-folders listing the same
+    // way — treat this as "no subfolders" rather than a hard error.
+    return collected;
+  }
+  const foldersJson = await foldersRes.json();
+  const subfolders: FolderitFolder[] = foldersJson.folders ?? foldersJson ?? [];
+
+  if (subfolders.length) {
+    const nested = await Promise.all(
+      subfolders.map((sf) =>
+        fetchFolderFilesRecursive(accountUid, sf.uid, depth + 1, errors, categoryLabel)
+      )
+    );
+    for (const n of nested) collected.push(...n);
+  }
+
+  return collected;
+}
+
 async function syncHrCategory(
   db: ReturnType<typeof createServiceClient>,
   category: HrCategoryRow
 ): Promise<{ filesSynced: number; errors: string[] }> {
   const errors: string[] = [];
   let filesSynced = 0;
+  const label = `HR/${category.category_name}`;
 
   try {
-    const res = await folderitFetch(
-      `/v2/accounts/${category.account_uid}/folders/${category.folder_uid}/files?limit=200`
-    );
-    if (!res.ok) {
-      errors.push(`HR/${category.category_name}: fetch ${res.status}`);
-      return { filesSynced, errors };
-    }
-    const json = await res.json();
-    const files: FolderitFile[] = json.files ?? json ?? [];
+    const files = await fetchFolderFilesRecursive(category.account_uid, category.folder_uid, 0, errors, label);
+
+    // De-dupe by file uid in case a file shows up via more than one path.
+    const byUid = new Map<string, FolderitFile>();
+    for (const f of files) byUid.set(f.uid, f);
+    const uniqueFiles = Array.from(byUid.values());
 
     await db.from("folderit_hr_category_files").delete().eq("category_name", category.category_name);
 
-    if (files.length) {
-      const rows = files.map((f) => ({
+    if (uniqueFiles.length) {
+      const rows = uniqueFiles.map((f) => ({
         file_uid: f.uid,
         category_name: category.category_name,
         name: f.name,
@@ -222,11 +280,11 @@ async function syncHrCategory(
         synced_at: new Date().toISOString(),
       }));
       const { error: upsertErr } = await db.from("folderit_hr_category_files").upsert(rows);
-      if (upsertErr) errors.push(`HR/${category.category_name}: upsert — ${upsertErr.message}`);
+      if (upsertErr) errors.push(`${label}: upsert — ${upsertErr.message}`);
       else filesSynced = rows.length;
     }
   } catch (e) {
-    errors.push(`HR/${category.category_name}: fetch error — ${e instanceof Error ? e.message : String(e)}`);
+    errors.push(`${label}: fetch error — ${e instanceof Error ? e.message : String(e)}`);
   }
 
   return { filesSynced, errors };

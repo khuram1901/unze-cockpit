@@ -151,9 +151,16 @@ function HrSection({
     setExpanded(key);
     if (!detailsCache[key]) {
       setLoadingKey(key);
-      const res = await authFetch("/api/folderit/details");
+      const res = await authFetch("/api/folderit/hr-inbox");
       const json = await res.json();
-      const items: DetailItem[] = (json.items ?? []).filter((it: DetailItem) => it.section === "hr_inbox");
+      const items: DetailItem[] = (json.items ?? []).map((it: { file_uid: string; name: string | null; account_name: string; created_at: string | null }) => ({
+        section: "hr_inbox" as const,
+        item_uid: it.file_uid,
+        name: it.name,
+        account_name: it.account_name,
+        status: null,
+        created_at: it.created_at,
+      }));
       setDetailsCache((prev) => ({ ...prev, [key]: items }));
       setLoadingKey(null);
     }
@@ -333,7 +340,24 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
                 loadingCompany === company.id ? (
                   <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Loading…</div>
                 ) : (
-                  <FileList items={detailsByCompany[company.id] ?? []} />
+                  <div style={{ backgroundColor: CARD_ALT }}>
+                    {approvalCount > 0 && (
+                      <>
+                        <div style={{ padding: "8px 16px 4px 40px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                          Pending approval
+                        </div>
+                        <FileList items={(detailsByCompany[company.id] ?? []).filter((it) => it.section === "approval")} />
+                      </>
+                    )}
+                    {inboxCount > 0 && (
+                      <>
+                        <div style={{ padding: "8px 16px 4px 40px", fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                          Inbox — not yet filed
+                        </div>
+                        <FileList items={(detailsByCompany[company.id] ?? []).filter((it) => it.section === "company_inbox")} />
+                      </>
+                    )}
+                  </div>
                 )
               )}
             </div>
