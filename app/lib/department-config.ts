@@ -1,3 +1,5 @@
+import { COLOURS } from "./SharedUI";
+
 export type FormField = {
   key: string;
   label: string;
@@ -75,11 +77,11 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "planned", label: "Planned", countFn: (rows) => rows.filter((r) => r.status === "Planned").length, color: "#0070f3" },
-      { id: "in_progress", label: "In Progress", countFn: (rows) => rows.filter((r) => r.status === "In Progress").length, color: "#d97706" },
-      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: "#16a34a" },
-      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.target_date && (r.target_date as string) < today).length, color: "#dc2626" },
-      { id: "avg_completion", label: "Avg Completion", countFn: (rows) => { const active = rows.filter((r) => r.status !== "Cancelled"); if (active.length === 0) return 0; return Math.round(active.reduce((s, r) => s + (Number(r.completion_pct) || 0), 0) / active.length); }, color: "#7c3aed" },
+      { id: "planned", label: "Planned", countFn: (rows) => rows.filter((r) => r.status === "Planned").length, color: COLOURS.BLUE },
+      { id: "in_progress", label: "In Progress", countFn: (rows) => rows.filter((r) => r.status === "In Progress").length, color: COLOURS.AMBER },
+      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: COLOURS.GREEN },
+      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.target_date && (r.target_date as string) < today).length, color: COLOURS.RED },
+      { id: "avg_completion", label: "Avg Completion", countFn: (rows) => { const active = rows.filter((r) => r.status !== "Cancelled"); if (active.length === 0) return 0; return Math.round(active.reduce((s, r) => s + (Number(r.completion_pct) || 0), 0) / active.length); }, color: COLOURS.PURPLE },
     ],
   },
   {
@@ -105,10 +107,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "open", label: "Open Positions", countFn: (rows) => rows.filter((r) => r.status === "Open" || r.status === "Interviewing").length, color: "#d97706" },
-      { id: "filled", label: "Filled", countFn: (rows) => rows.filter((r) => r.status === "Filled").length, color: "#16a34a" },
-      { id: "long_open", label: "Open 60+ Days", countFn: (rows) => rows.filter((r) => (r.status === "Open" || r.status === "Interviewing") && daysBetween(r.date_opened as string | null) > 60).length, color: "#dc2626" },
-      { id: "total", label: "Total", countFn: (rows) => rows.length, color: "#0070f3" },
+      { id: "open", label: "Open Positions", countFn: (rows) => rows.filter((r) => r.status === "Open" || r.status === "Interviewing").length, color: COLOURS.AMBER },
+      { id: "filled", label: "Filled", countFn: (rows) => rows.filter((r) => r.status === "Filled").length, color: COLOURS.GREEN },
+      { id: "long_open", label: "Open 60+ Days", countFn: (rows) => rows.filter((r) => (r.status === "Open" || r.status === "Interviewing") && daysBetween(r.date_opened as string | null) > 60).length, color: COLOURS.RED },
+      { id: "total", label: "Total", countFn: (rows) => rows.length, color: COLOURS.BLUE },
     ],
   },
   {
@@ -142,10 +144,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "pending", label: "Pending", countFn: (rows) => rows.filter((r) => r.resolution_status === "pending").length, color: "#d97706" },
-      { id: "hearing_soon", label: "Hearing < 7 Days", countFn: (rows) => rows.filter((r) => r.resolution_status === "pending" && r.hearing_deadline && daysBetween(r.hearing_deadline as string) <= 0 && daysBetween(r.hearing_deadline as string) > -7).length, color: "#dc2626" },
-      { id: "high_exposure", label: "Exposure > 500K", countFn: (rows) => rows.filter((r) => r.resolution_status === "pending" && (r.financial_exposure as number) > 500000).length, color: "#dc2626" },
-      { id: "resolved", label: "Resolved", countFn: (rows) => rows.filter((r) => r.resolution_status !== "pending").length, color: "#16a34a" },
+      { id: "pending", label: "Pending", countFn: (rows) => rows.filter((r) => r.resolution_status === "pending").length, color: COLOURS.AMBER },
+      { id: "hearing_soon", label: "Hearing < 7 Days", countFn: (rows) => rows.filter((r) => r.resolution_status === "pending" && r.hearing_deadline && daysBetween(r.hearing_deadline as string) <= 0 && daysBetween(r.hearing_deadline as string) > -7).length, color: COLOURS.RED },
+      { id: "high_exposure", label: "Exposure > 500K", countFn: (rows) => rows.filter((r) => r.resolution_status === "pending" && (r.financial_exposure as number) > 500000).length, color: COLOURS.RED },
+      { id: "resolved", label: "Resolved", countFn: (rows) => rows.filter((r) => r.resolution_status !== "pending").length, color: COLOURS.GREEN },
     ],
   },
   {
@@ -174,10 +176,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "open", label: "Open Tasks", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled").length, color: "#d97706" },
-      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.due_date && (r.due_date as string) < today).length, color: "#dc2626" },
-      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: "#16a34a" },
-      { id: "total", label: "Total", countFn: (rows) => rows.length, color: "#0070f3" },
+      { id: "open", label: "Open Tasks", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled").length, color: COLOURS.AMBER },
+      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.due_date && (r.due_date as string) < today).length, color: COLOURS.RED },
+      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: COLOURS.GREEN },
+      { id: "total", label: "Total", countFn: (rows) => rows.length, color: COLOURS.BLUE },
     ],
   },
   {
@@ -204,10 +206,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "open", label: "Open Tasks", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled").length, color: "#d97706" },
-      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.due_date && (r.due_date as string) < today).length, color: "#dc2626" },
-      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: "#16a34a" },
-      { id: "total", label: "Total", countFn: (rows) => rows.length, color: "#0070f3" },
+      { id: "open", label: "Open Tasks", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled").length, color: COLOURS.AMBER },
+      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.due_date && (r.due_date as string) < today).length, color: COLOURS.RED },
+      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: COLOURS.GREEN },
+      { id: "total", label: "Total", countFn: (rows) => rows.length, color: COLOURS.BLUE },
     ],
   },
   {
@@ -234,10 +236,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "open", label: "Open Tasks", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled").length, color: "#d97706" },
-      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.due_date && (r.due_date as string) < today).length, color: "#dc2626" },
-      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: "#16a34a" },
-      { id: "total", label: "Total", countFn: (rows) => rows.length, color: "#0070f3" },
+      { id: "open", label: "Open Tasks", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled").length, color: COLOURS.AMBER },
+      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.due_date && (r.due_date as string) < today).length, color: COLOURS.RED },
+      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: COLOURS.GREEN },
+      { id: "total", label: "Total", countFn: (rows) => rows.length, color: COLOURS.BLUE },
     ],
   },
 ];
@@ -247,11 +249,11 @@ export function getDepartmentConfig(slug: string): DepartmentConfig | undefined 
 }
 
 export function getDepartmentHealthStatus(rows: Record<string, unknown>[], config: DepartmentConfig): "GREEN" | "AMBER" | "RED" {
-  const redKpis = config.kpis.filter((k) => k.color === "#dc2626");
+  const redKpis = config.kpis.filter((k) => k.color === COLOURS.RED);
   const hasRed = redKpis.some((k) => k.countFn(rows) > 0);
   if (hasRed) return "RED";
 
-  const amberKpis = config.kpis.filter((k) => k.color === "#d97706");
+  const amberKpis = config.kpis.filter((k) => k.color === COLOURS.AMBER);
   const hasAmber = amberKpis.some((k) => k.countFn(rows) > 0);
   if (hasAmber) return "AMBER";
 

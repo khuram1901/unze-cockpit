@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { COLOURS } from "./SharedUI";
 
 /**
  * DateInput — cross-browser DD/MM/YYYY date picker.
@@ -119,7 +120,7 @@ export default function DateInput({ value, onChange, min, max, required, style, 
     }
   }
 
-  const borderColor = invalid ? "#dc2626" : "var(--border-color, #e2e8f0)";
+  const borderColor = invalid ? COLOURS.RED : `var(--border-color, ${COLOURS.HAIRLINE})`;
 
   return (
     <input

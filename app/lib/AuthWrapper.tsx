@@ -5,6 +5,7 @@ import { supabase, loadMyPermissions } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
 import { canSeeAllTasks, type UserCtx, type PermOverrides } from "./permissions";
+import { COLOURS } from "./SharedUI";
 
 type Member = {
   id: string;
@@ -16,7 +17,7 @@ type Member = {
   company: string | null;
 };
 
-const SLATE = "#64748b";
+const { SLATE } = COLOURS;
 
 function displayName(member: Member | null, email: string | null) {
   if (!member) return email || "User";
@@ -222,13 +223,13 @@ export default function AuthWrapper({
 
   const roleColor =
     email === "k.saleem@unzegroup.com"
-      ? "#2563eb"
+      ? COLOURS.BLUE
       : currentRole === "Admin"
       ? "#111827"
       : currentRole === "Executive"
-      ? "#7c3aed"
+      ? COLOURS.PURPLE
       : currentRole === "Manager"
-      ? "#16a34a"
+      ? COLOURS.GREEN
       : SLATE;
 
   return (

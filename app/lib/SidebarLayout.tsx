@@ -595,13 +595,13 @@ export default function SidebarLayout({
               <HeaderButton
                 onClick={() => setNotifOpen(!notifOpen)}
                 title="Notifications"
-                style={{ color: notifCount > 0 ? "#dc2626" : "var(--text-primary)" }}
+                style={{ color: notifCount > 0 ? COLOURS.RED : "var(--text-primary)" }}
               >
                 🔔
                 {notifCount > 0 && (
                   <span style={{
                     position: "absolute", top: "-2px", right: "-2px",
-                    backgroundColor: "#dc2626", color: "white",
+                    backgroundColor: COLOURS.RED, color: "white",
                     fontSize: "10px", fontWeight: 700,
                     width: "16px", height: "16px",
                     borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
@@ -638,7 +638,7 @@ export default function SidebarLayout({
                         <span style={{ fontSize: "13px", color: "var(--text-primary)", fontWeight: 500 }}>{item.label}</span>
                         <span style={{
                           fontSize: "11px", fontWeight: 700, color: "white",
-                          backgroundColor: "#dc2626", borderRadius: "10px", padding: "2px 7px",
+                          backgroundColor: COLOURS.RED, borderRadius: "10px", padding: "2px 7px",
                         }}>{item.count}</span>
                       </a>
                     ))
