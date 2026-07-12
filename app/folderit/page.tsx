@@ -22,10 +22,6 @@ const FOLDERIT_DISPLAY_COMPANIES: { id: string; shortCode: string; name: string 
   { id: RESTAURANT_GROUP_KEY, shortCode: "RST", name: "Restaurant" },
 ];
 
-function displayGroupFor(realCompanyUuid: string): string {
-  return realCompanyUuid === BRNH_ID || realCompanyUuid === HD_ID ? RESTAURANT_GROUP_KEY : realCompanyUuid;
-}
-
 function severityColor(days: number): string {
   if (days >= 7) return COLOURS.RED;
   if (days >= 3) return COLOURS.AMBER;
@@ -637,6 +633,7 @@ type OverdueItem = {
 };
 
 function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean }) {
+  const setPreview = useContext(PreviewContext);
   const [rows, setRows] = useState<CompanyBreakdownRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
@@ -646,6 +643,25 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
   const [hrDetailsCache, setHrDetailsCache] = useState<Record<string, DetailItem[]>>({});
   const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([]);
   const [bannerOpen, setBannerOpen] = useState(false);
+  const [previewingUid, setPreviewingUid] = useState<string | null>(null);
+
+  // Overdue banner items preview directly now — Khuram: "I can see there
+  // are so many documents outstanding that have not been filed. Can we
+  // click on those documents and preview them to see what they are?"
+  // Previously this just opened the company card below; now it behaves
+  // exactly like every other document row on the page.
+  async function previewOverdueItem(it: OverdueItem) {
+    if (previewingUid) return;
+    setPreviewingUid(it.item_uid);
+    try {
+      const url = await fetchPreviewBlobUrl(it.item_uid);
+      setPreview({ url, name: it.name });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Couldn't preview this document.");
+    } finally {
+      setPreviewingUid(null);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -717,8 +733,12 @@ function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: 
                 return (
                   <div
                     key={`${it.section}:${it.item_uid}`}
-                    onClick={() => { openCompany(displayGroupFor(it.company_uuid)); setBannerOpen(false); }}
-                    style={{ padding: "8px 16px 8px 48px", borderBottom: `1px solid ${HAIRLINE}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}
+                    onClick={() => previewOverdueItem(it)}
+                    style={{
+                      padding: "8px 16px 8px 48px", borderBottom: `1px solid ${HAIRLINE}`, cursor: "pointer",
+                      display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+                      opacity: previewingUid === it.item_uid ? 0.6 : 1,
+                    }}
                   >
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontSize: "13.5px", fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
