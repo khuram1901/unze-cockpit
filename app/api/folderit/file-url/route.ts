@@ -89,24 +89,43 @@ export async function GET(request: NextRequest) {
     });
 
     let signedUrl = folderitRes.headers.get("location");
+    let rawBody: string | null = null;
+
     if (!signedUrl) {
       // Fall back to the JSON body's `url` field — some responses (e.g.
       // watermark processing) carry the link there instead of a header.
-      try {
-        const json = await folderitRes.json();
-        if (json?.url) signedUrl = json.url;
-        else if (folderitRes.status === 202) {
-          return Response.json(
-            { error: "Preview is still being generated — try again in a moment." },
-            { status: 202 }
-          );
+      // Read as text first (a body can only be consumed once) so a
+      // non-JSON error body from Folderit is still visible below instead
+      // of being silently swallowed by a failed .json() parse.
+      rawBody = await folderitRes.text().catch(() => null);
+      if (rawBody) {
+        try {
+          const json = JSON.parse(rawBody);
+          if (json?.url) signedUrl = json.url;
+        } catch {
+          // not JSON — rawBody stays as-is for the diagnostic message below
         }
-      } catch {
-        // no JSON body — signedUrl stays null, handled below
       }
     }
 
-    if (!signedUrl) return Response.json({ error: "Folderit did not return a preview link" }, { status: 502 });
+    if (!signedUrl) {
+      if (folderitRes.status === 202) {
+        return Response.json(
+          { error: "Preview is still being generated — try again in a moment." },
+          { status: 202 }
+        );
+      }
+      // Surface exactly what Folderit said instead of a generic message —
+      // the status/body tells us whether this is permissions (403), a
+      // deleted/moved file (404), an unsupported type for PDF conversion
+      // (400), or something else entirely.
+      return Response.json(
+        {
+          error: `Folderit didn't return a preview link (${folderitRes.status}${folderitRes.statusText ? " " + folderitRes.statusText : ""})${rawBody ? `: ${rawBody.slice(0, 300)}` : ""}`,
+        },
+        { status: 502 }
+      );
+    }
 
     // Fetch the actual PDF bytes ourselves and re-serve them with an
     // explicit inline disposition — see comment above for why we can't
