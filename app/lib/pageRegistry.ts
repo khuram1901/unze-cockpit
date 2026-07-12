@@ -67,7 +67,7 @@ export const PAGE_REGISTRY: PageCard[] = [
 
   // ── My Workspace (alphabetical) ──
   { permKey: "_calendar", title: "Calendar", subtitle: "Tasks and deadlines view", href: "/calendar", icon: "🗓️", group: "My Workspace", badgeKey: "calendar" },
-  { permKey: "_folderit", title: "Folderit", subtitle: "Documents pending approval & filing", href: "/folderit", icon: "📁", group: "My Workspace" },
+  { permKey: "_folderit", title: "Folder-it", subtitle: "Documents pending approval & filing", href: "/folderit", icon: "📁", group: "My Workspace" },
   { permKey: "can_see_all_minutes", title: "Meetings", subtitle: "Minutes, approvals, action items", href: "/meetings", icon: "💬", group: "My Workspace", badgeKey: "meetings" },
   { permKey: "_my_minutes", title: "My Minutes", subtitle: "Meeting minutes you attended", href: "/my-minutes", icon: "🗒️", group: "My Workspace", badgeKey: "minutes" },
   { permKey: "_profile", title: "Profile", subtitle: "Your account and preferences", href: "/profile", icon: "👤", group: "My Workspace" },

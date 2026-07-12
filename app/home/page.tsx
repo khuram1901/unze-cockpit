@@ -7,7 +7,7 @@ import { supabase, authFetch, loadMyPermissions } from "../lib/supabase";
 import EscalationTrafficLights from "../lib/EscalationTrafficLights";
 import { COLOURS, RADII, StatusBadge, SectionTitle, RAGStatus, ragColour, FreshnessBadge, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR, displayRole } from "../lib/SharedUI";
 import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtils";
-import { UTPL_COMPANY_ID, COMPANIES } from "../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
 import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -18,6 +18,18 @@ import DateInput from "../lib/DateInput";
 import TaxComplianceSummary from "../accounts-tax/TaxComplianceSummary";
 
 const { NAVY, SLATE, BORDER, CANVAS, HAIRLINE, CARD_ALT, INK_700, INK_400, GREEN, AMBER, RED, BLUE, SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT } = COLOURS;
+
+// Same company grouping as the Folder-it page's "By Company" grid
+// (Baranh + Haute Dolci merged into one Restaurant row, Directors shown
+// as Family Documents, Almahar left out for now) — brief labels + a
+// distinct colour per company for the executive summary card below.
+type FolderitHomeCardCompany = { groupKey: string; label: string; colour: string };
+const FOLDERIT_HOME_CARD_COMPANIES: FolderitHomeCardCompany[] = [
+  { groupKey: UTPL_COMPANY_ID, label: "UTPL", colour: BLUE },
+  { groupKey: IFPL_COMPANY_ID, label: "IFPL", colour: GREEN },
+  { groupKey: "restaurants", label: "Restaurant", colour: AMBER },
+  { groupKey: DIR_COMPANY_ID, label: "Family Documents", colour: NAVY },
+];
 
 /* ───────────────────────── Types ───────────────────────── */
 
@@ -467,6 +479,7 @@ export default function HomePage() {
   const [investmentData, setInvestmentData] = useState<InvestmentSummary | null>(null);
   const [pensionSummary, setPensionSummary] = useState<{ gbp: number; pkr: number; netGain: number; totalReturn: number; contributed: number; feesPaid: number } | null>(null);
   const [folderitSummary, setFolderitSummary] = useState<{ pendingApproval: number; companyInbox: number; hrInbox: number } | null>(null);
+  const [folderitCompanyBreakdown, setFolderitCompanyBreakdown] = useState<{ group_key: string; inbox_count: number; inbox_oldest_days: number | null }[]>([]);
   const [dailyOpsData, setDailyOpsData] = useState<DailyOpsPoint[]>([]);
   const [taxOverdueCount, setTaxOverdueCount] = useState(0);
   const [taxTier2Alerts, setTaxTier2Alerts] = useState<{ alert_type: string; period_key: string; overdue_count: number; alert_message: string; tax_year: string }[]>([]);
@@ -609,6 +622,7 @@ export default function HomePage() {
           setDailyOpsData(payload.dailyOpsData);
           if (payload.pensionSummary) setPensionSummary(payload.pensionSummary);
           if (payload.folderitSummary) setFolderitSummary(payload.folderitSummary);
+          if (payload.folderitCompanyBreakdown) setFolderitCompanyBreakdown(payload.folderitCompanyBreakdown);
           if (payload.taxSummaryYear) {
             setTaxScheduleEntries(new Map(payload.taxScheduleEntries));
             setTaxReturnFilings(new Map(payload.taxReturnFilings));
@@ -1035,15 +1049,33 @@ export default function HomePage() {
     } catch { /* non-fatal — pension card is additive */ }
 
     // Folderit summary for Executive Dashboard — aggregation done in Postgres
+    let computedFolderitSummary: { pendingApproval: number; companyInbox: number; hrInbox: number } | null = null;
     try {
       const folderitRes = await authFetch("/api/folderit/summary");
       if (folderitRes.ok) {
         const f = await folderitRes.json();
-        setFolderitSummary({
+        computedFolderitSummary = {
           pendingApproval: f.pending_approval_count ?? 0,
           companyInbox: f.company_inbox_count ?? 0,
           hrInbox: f.hr_inbox_count ?? 0,
-        });
+        };
+        setFolderitSummary(computedFolderitSummary);
+      }
+    } catch { /* non-fatal — Folderit card is additive */ }
+
+    // Per-company "not yet filed" breakdown for the same card — Khuram:
+    // "a long card just like the investment size, where you show me
+    // number of approvals outstanding, company name and number of
+    // documents not filed keep it brief and within one card." Admin-only
+    // RPC (get_folderit_company_breakdown), safe here since this whole
+    // function only runs for exec/admin users (see isExec guard below).
+    let computedFolderitCompanyBreakdown: { group_key: string; inbox_count: number; inbox_oldest_days: number | null }[] = [];
+    try {
+      const breakdownRes = await authFetch("/api/folderit/company-breakdown");
+      if (breakdownRes.ok) {
+        const b = await breakdownRes.json();
+        computedFolderitCompanyBreakdown = b.companies ?? [];
+        setFolderitCompanyBreakdown(computedFolderitCompanyBreakdown);
       }
     } catch { /* non-fatal — Folderit card is additive */ }
 
@@ -1201,7 +1233,8 @@ export default function HomePage() {
           deptHealth: healthResults,
           investmentData: computedInvestmentData ?? undefined,
           pensionSummary: computedPensionSummary ?? undefined,
-          folderitSummary: folderitSummary ?? undefined,
+          folderitSummary: computedFolderitSummary ?? undefined,
+          folderitCompanyBreakdown: computedFolderitCompanyBreakdown,
           dailyOpsData: computedDailyOpsData,
           taxSummaryYear: prevComplete ? taxNow : taxPrevYear,
           taxScheduleEntries: Array.from((prevComplete ? smCurr : smPrev).entries()),
@@ -1659,6 +1692,7 @@ export default function HomePage() {
             investmentData={investmentData}
             pensionSummary={pensionSummary}
             folderitSummary={folderitSummary}
+            folderitCompanyBreakdown={folderitCompanyBreakdown}
             dailyOpsData={dailyOpsData}
             facilitySynopsis={facilitySynopsis}
             taxOverdueCount={taxOverdueCount}
@@ -2231,7 +2265,7 @@ export default function HomePage() {
 function ExecutiveDashboardBody({
   ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
-  expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, pensionSummary, folderitSummary, dailyOpsData,
+  expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
   facilitySynopsis, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
   taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve,
 }: {
@@ -2256,6 +2290,7 @@ function ExecutiveDashboardBody({
   investmentData: InvestmentSummary | null;
   pensionSummary: { gbp: number; pkr: number; netGain: number; totalReturn: number; contributed: number; feesPaid: number } | null;
   folderitSummary: { pendingApproval: number; companyInbox: number; hrInbox: number } | null;
+  folderitCompanyBreakdown: { group_key: string; inbox_count: number; inbox_oldest_days: number | null }[];
   dailyOpsData: DailyOpsPoint[];
   isMobile: boolean;
   facilitySynopsis: { bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[];
@@ -3039,38 +3074,49 @@ function ExecutiveDashboardBody({
         </div>
       )}
 
-      {/* ── FOLDERIT ── */}
+      {/* ── FOLDER-IT ── */}
+      {/* Khuram: "a long card just like the investment size, where you
+          show me number of approvals outstanding, company name and
+          number of documents not filed keep it brief and within one
+          card." Same execCard shell as Investments — one stat up top
+          (approvals outstanding, personal), then a brief per-company
+          "not filed" breakdown below it, all in a single card. */}
       {folderitSummary && (
-        <div
-          onClick={() => { window.location.href = "/folderit"; }}
-          style={{
-            backgroundColor: COLOURS.CARD,
-            border: `1px solid ${HAIRLINE}`,
-            borderTop: `3px solid ${AMBER}`,
-            borderRadius: RADII.CARD,
-            padding: "14px 18px",
-            cursor: "pointer",
-            marginBottom: "12px",
-          }}
-        >
-          <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px" }}>
-            Folderit
-          </div>
-          <div style={{ display: "flex", gap: "24px" }}>
-            <div>
-              <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "22px", fontWeight: 600, color: AMBER, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+        <>
+          <SectionTitle title="Folder-it" />
+          <a href="/folderit" style={{ textDecoration: "none", display: "block" }}>
+            <div style={{ ...execCard(AMBER), marginBottom: "12px", cursor: "pointer" }}>
+              <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
+                Pending My Approval
+              </div>
+              <div style={{ fontSize: "28px", fontWeight: 600, color: folderitSummary.pendingApproval > 0 ? AMBER : SLATE, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
                 {folderitSummary.pendingApproval}
               </div>
-              <div style={{ fontSize: "11px", color: SLATE, marginTop: "4px" }}>Pending my approval</div>
+
+              {folderitCompanyBreakdown.length > 0 && (
+                <div style={{ borderTop: `1px solid ${HAIRLINE}`, marginTop: "16px", paddingTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {FOLDERIT_HOME_CARD_COMPANIES.map((c) => {
+                    const row = folderitCompanyBreakdown.find((r) => r.group_key === c.groupKey);
+                    const count = row?.inbox_count ?? 0;
+                    return (
+                      <div key={c.groupKey} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: c.colour, flexShrink: 0 }} />
+                          <span style={{ fontSize: "13px", color: NAVY, fontWeight: 500 }}>{c.label}</span>
+                        </div>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: count > 0 ? c.colour : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>
+                          {count} not filed
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div style={{ fontSize: "13px", color: SLATE, marginTop: "12px" }}>Click to view Folder-it →</div>
             </div>
-            <div>
-              <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "22px", fontWeight: 600, color: BLUE, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
-                {folderitSummary.companyInbox}
-              </div>
-              <div style={{ fontSize: "11px", color: SLATE, marginTop: "4px" }}>Company inbox unfiled</div>
-            </div>
-          </div>
-        </div>
+          </a>
+        </>
       )}
 
       {/* ── DEPARTMENT SCORECARD ── */}

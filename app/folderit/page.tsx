@@ -369,6 +369,63 @@ function CollapsibleRow({
   );
 }
 
+// Compact stat card — Khuram: "pending approval card is too long... i just
+// dont want this size as its taking space." Same shape as the "By
+// Company" grid cards below (uppercase label, big Inter Tight number),
+// so a click toggles a DetailPanel underneath instead of the row itself
+// expanding full-width.
+function StatCard({
+  label, count, color, isOpen, onToggle, sub,
+}: {
+  label: string; count: number; color: string; isOpen: boolean; onToggle: () => void; sub?: string;
+}) {
+  return (
+    <div
+      onClick={onToggle}
+      style={{
+        ...cardStyle,
+        padding: "14px 16px",
+        cursor: "pointer",
+        border: isOpen ? `1.5px solid ${NAVY}` : `1px solid ${HAIRLINE}`,
+        boxShadow: isOpen ? SHADOWS.HOVER : "none",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+        <div style={{ fontFamily: "var(--font-sans, Inter, sans-serif)", fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+        {count > 0 && <span style={{ fontSize: "12px", color: SLATE, flexShrink: 0 }}>{isOpen ? "▼" : "▶"}</span>}
+      </div>
+      <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: count > 0 ? color : SLATE, marginTop: "8px" }}>{count}</div>
+      {sub && <div style={{ fontSize: "12px", color: SLATE, marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</div>}
+    </div>
+  );
+}
+
+// The expandable content a StatCard opens into — same header-bar +
+// FileList shape already used for the "By Company" drill-down panel.
+function DetailPanel({
+  title, items, loading, onClose, asFolderTree,
+}: {
+  title: string; items: DetailItem[]; loading: boolean; onClose: () => void; asFolderTree?: boolean;
+}) {
+  return (
+    <div style={{ ...cardStyle, overflow: "hidden", marginTop: "-4px", marginBottom: "16px", padding: 0 }}>
+      <div style={{ padding: "13px 16px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: CARD_ALT }}>
+        <span style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>{title}</span>
+        <span onClick={onClose} style={{ cursor: "pointer", fontSize: "12px", color: SLATE }}>Close ✕</span>
+      </div>
+      {loading ? (
+        <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Loading…</div>
+      ) : items.length === 0 ? (
+        <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Nothing here.</div>
+      ) : asFolderTree ? (
+        <HrCategoryFileList items={items} />
+      ) : (
+        <FileList items={items} />
+      )}
+    </div>
+  );
+}
+
 type HrSearchResult = { file_uid: string; name: string | null; category_name: string | null; folder_path: string | null; created_at: string | null };
 
 // Search box at the top of the HR section — Khuram: "I need you to build
@@ -540,8 +597,15 @@ function HrSection({
   );
 }
 
-// ── Member view: just my own numbers, collapsible ──────────────────
-function MemberView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean }) {
+// ── Member view: just my own numbers, as two compact stat cards ────
+// Khuram: "every manager should be able to see their company only on
+// their dashboard showing them their approval outstanding, plus the
+// number of documents which arent filed and they can also see the
+// documents by clicking the preview button." Both counts are already
+// scoped server-side to the caller's own company (see
+// /api/folderit/summary + /api/folderit/details) — this just shows
+// which company that is, and keeps the click-to-preview behaviour.
+function MemberView({ hrCategories, hrInboxCount, hasHrAccess, companyName }: { hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean; companyName?: string | null }) {
   const [summary, setSummary] = useState<{ pending_approval_count: number; company_inbox_count: number } | null>(null);
   const [details, setDetails] = useState<DetailItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -569,26 +633,29 @@ function MemberView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories:
 
   return (
     <>
-      <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px" }}>
-        <CollapsibleRow
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+        <StatCard
           label="Pending my approval"
           count={summary?.pending_approval_count ?? 0}
           color={AMBER}
           isOpen={expanded === "approval"}
           onToggle={() => setExpanded(expanded === "approval" ? null : "approval")}
-          items={approvals}
-          loading={false}
         />
-        <CollapsibleRow
-          label="Company inbox — not yet filed"
+        <StatCard
+          label="Not yet filed"
           count={summary?.company_inbox_count ?? 0}
           color={BLUE}
+          sub={companyName ?? undefined}
           isOpen={expanded === "inbox"}
           onToggle={() => setExpanded(expanded === "inbox" ? null : "inbox")}
-          items={companyInbox}
-          loading={false}
         />
       </div>
+      {expanded === "approval" && (
+        <DetailPanel title="Pending my approval" items={approvals} loading={false} onClose={() => setExpanded(null)} />
+      )}
+      {expanded === "inbox" && (
+        <DetailPanel title={companyName ? `Not yet filed — ${companyName}` : "Not yet filed"} items={companyInbox} loading={false} onClose={() => setExpanded(null)} />
+      )}
       {hasHrAccess && (
         <HrSection
           categories={hrCategories}
@@ -628,16 +695,19 @@ function PersonalApprovalsCard() {
   }, []);
 
   return (
-    <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px" }}>
-      <CollapsibleRow
-        label="Pending my approval"
-        count={count}
-        color={AMBER}
-        isOpen={expanded}
-        onToggle={() => setExpanded(!expanded)}
-        items={items}
-        loading={loading}
-      />
+    <div style={{ marginBottom: "16px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 220px))", gap: "12px", marginBottom: "12px" }}>
+        <StatCard
+          label="Pending my approval"
+          count={count}
+          color={AMBER}
+          isOpen={expanded}
+          onToggle={() => setExpanded(!expanded)}
+        />
+      </div>
+      {expanded && (
+        <DetailPanel title="Pending my approval" items={items} loading={loading} onClose={() => setExpanded(false)} />
+      )}
     </div>
   );
 }
@@ -853,7 +923,7 @@ function FolderitDashboard() {
     <PreviewContext.Provider value={setPreview}>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader />
-        <h1 style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.01em", color: NAVY, marginTop: "8px", marginBottom: "4px" }}>Folderit</h1>
+        <h1 style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.01em", color: NAVY, marginTop: "8px", marginBottom: "4px" }}>Folder-it Dashboard</h1>
         <div style={{ fontSize: "13px", color: SLATE, marginBottom: "20px" }}>
           Documents pending approval &amp; filing — read-only status view. Act on anything by opening Folderit directly.
         </div>
@@ -861,7 +931,7 @@ function FolderitDashboard() {
         {isAdmin ? (
           <AdminView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
         ) : (
-          <MemberView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
+          <MemberView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} companyName={ctx.company} />
         )}
       </main>
       {preview && <PreviewModal url={preview.url} name={preview.name} onClose={() => setPreview(null)} />}
