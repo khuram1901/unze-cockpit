@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { canViewFolderitHr } from "../../../lib/permissions";
+import { loadFolderitUserCtx } from "../_shared";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -9,9 +11,13 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient();
 
-  // HR category drill-down (e.g. "Policies & SOPs") — same for everyone.
+  // HR category drill-down (e.g. "Policies & SOPs") — locked behind
+  // can_view_folderit_hr, off by default for everyone except Admin/CEO.
   const category = request.nextUrl.searchParams.get("category");
   if (category) {
+    const ctx = await loadFolderitUserCtx(db, email);
+    if (!canViewFolderitHr(ctx)) return Response.json({ error: "Forbidden" }, { status: 403 });
+
     const { data, error } = await db.rpc("get_folderit_hr_category_files", { p_category_name: category });
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ items: data ?? [] });

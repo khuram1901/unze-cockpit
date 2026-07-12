@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { canViewFolderitHr } from "../../../lib/permissions";
+import { loadFolderitUserCtx } from "../_shared";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -31,5 +33,12 @@ export async function GET(request: NextRequest) {
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   const row = data?.[0] ?? { pending_approval_count: 0, company_inbox_count: 0, hr_inbox_count: 0 };
+
+  // HR documents are locked behind can_view_folderit_hr — withhold even
+  // the count for anyone without it, so the HR section is invisible end
+  // to end, not just missing its file list.
+  const ctx = await loadFolderitUserCtx(db, email);
+  if (!canViewFolderitHr(ctx)) row.hr_inbox_count = 0;
+
   return Response.json(row);
 }

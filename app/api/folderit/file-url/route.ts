@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { folderitFetch } from "../../../lib/folderit-auth";
+import { canViewFolderitHr } from "../../../lib/permissions";
+import { loadFolderitUserCtx } from "../_shared";
 
 // Resolve a live, time-limited link to view/download a Folderit file.
 // Frontend only ever needs the file_uid it already has from a details/HR
@@ -41,9 +43,9 @@ export async function GET(request: NextRequest) {
     member?.role === "CEO";
 
   if (!isAdmin) {
-    // HR documents are visible to everyone regardless of company (same
-    // rule as get_folderit_hr_category_files). Everything else is scoped
-    // to the caller's own company.
+    // HR documents are locked behind can_view_folderit_hr (off by default,
+    // granted per-member via Members > Access Matrix > Folderit > HR).
+    // Everything else is scoped to the caller's own company, as before.
     const { data: hrMatch } = await db
       .from("folderit_hr_categories")
       .select("category_name")
@@ -51,7 +53,10 @@ export async function GET(request: NextRequest) {
       .limit(1)
       .maybeSingle();
 
-    if (!hrMatch) {
+    if (hrMatch) {
+      const ctx = await loadFolderitUserCtx(db, email);
+      if (!canViewFolderitHr(ctx)) return Response.json({ error: "Forbidden" }, { status: 403 });
+    } else {
       const { data: companyMatch } = await db
         .from("folderit_account_companies")
         .select("company_uuid")

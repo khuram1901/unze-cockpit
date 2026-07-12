@@ -6,7 +6,7 @@ import { authFetch } from "../lib/supabase";
 import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR } from "../lib/SharedUI";
 import { COMPANIES } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
-import { isAdminTier } from "../lib/permissions";
+import { isAdminTier, canViewFolderitHr } from "../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
 
 // Baranh and Haute Dolci share the same Folderit account (Restaurants) —
@@ -362,7 +362,7 @@ function HrSection({
 }
 
 // ── Member view: just my own numbers, collapsible ──────────────────
-function MemberView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[]; hrInboxCount: number }) {
+function MemberView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean }) {
   const [summary, setSummary] = useState<{ pending_approval_count: number; company_inbox_count: number } | null>(null);
   const [details, setDetails] = useState<DetailItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -410,14 +410,16 @@ function MemberView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[]
           loading={false}
         />
       </div>
-      <HrSection
-        categories={hrCategories}
-        hrInboxCount={hrInboxCount}
-        expanded={hrExpanded}
-        setExpanded={setHrExpanded}
-        detailsCache={hrDetailsCache}
-        setDetailsCache={setHrDetailsCache}
-      />
+      {hasHrAccess && (
+        <HrSection
+          categories={hrCategories}
+          hrInboxCount={hrInboxCount}
+          expanded={hrExpanded}
+          setExpanded={setHrExpanded}
+          detailsCache={hrDetailsCache}
+          setDetailsCache={setHrDetailsCache}
+        />
+      )}
     </>
   );
 }
@@ -477,7 +479,7 @@ type OverdueItem = {
   days_pending: number;
 };
 
-function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[]; hrInboxCount: number }) {
+function AdminView({ hrCategories, hrInboxCount, hasHrAccess }: { hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean }) {
   const [rows, setRows] = useState<CompanyBreakdownRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
@@ -670,14 +672,16 @@ function AdminView({ hrCategories, hrInboxCount }: { hrCategories: HrCategory[];
         );
       })()}
 
-      <HrSection
-        categories={hrCategories}
-        hrInboxCount={hrInboxCount}
-        expanded={hrExpanded}
-        setExpanded={setHrExpanded}
-        detailsCache={hrDetailsCache}
-        setDetailsCache={setHrDetailsCache}
-      />
+      {hasHrAccess && (
+        <HrSection
+          categories={hrCategories}
+          hrInboxCount={hrInboxCount}
+          expanded={hrExpanded}
+          setExpanded={setHrExpanded}
+          detailsCache={hrDetailsCache}
+          setDetailsCache={setHrDetailsCache}
+        />
+      )}
     </>
   );
 }
@@ -707,6 +711,7 @@ function FolderitDashboard() {
   }
 
   const isAdmin = isAdminTier(ctx);
+  const hasHrAccess = canViewFolderitHr(ctx);
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "24px 16px" }}>
@@ -717,9 +722,9 @@ function FolderitDashboard() {
       </div>
 
       {isAdmin ? (
-        <AdminView hrCategories={hrCategories} hrInboxCount={hrInboxCount} />
+        <AdminView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
       ) : (
-        <MemberView hrCategories={hrCategories} hrInboxCount={hrInboxCount} />
+        <MemberView hrCategories={hrCategories} hrInboxCount={hrInboxCount} hasHrAccess={hasHrAccess} />
       )}
     </div>
   );

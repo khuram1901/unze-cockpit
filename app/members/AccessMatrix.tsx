@@ -79,6 +79,9 @@ const PERM_COLUMNS = [
   { key: "can_view_audit_log", label: "Log", group: "Admin", tip: "View the system audit trail" },
   { key: "can_view_exceptions", label: "Exc", group: "Admin", tip: "View escalation/exception alerts" },
   { key: "can_import_export", label: "I/O", group: "Admin", tip: "Import/export member data via CSV" },
+
+  // ── Folderit ─────────────────────────────────────────────────
+  { key: "can_view_folderit_hr", label: "HR", group: "Folderit", tip: "View and open HR documents (Policies & SOPs, etc.) on the Folderit page — off by default for everyone except Admin/CEO" },
 ] as const;
 
 type ColDef = (typeof PERM_COLUMNS)[number];
@@ -95,6 +98,7 @@ const GROUP_COLOURS: Record<string, string> = {
   Admin: COLOURS.NAVY,
   "Prod.": "#ea580c",
   "Tax Mgmt": COLOURS.AMBER,
+  Folderit: COLOURS.SLATE,
 };
 
 function lc(s: string | null | undefined) { return (s || "").toLowerCase(); }
@@ -152,6 +156,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_edit_operations_targets": return admin || exec || lc(m.email) === OPS_HOD_EMAIL;
     case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com" || exec;
     case "can_edit_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
+    case "can_view_folderit_hr": return admin;
     default: return false;
   }
 }

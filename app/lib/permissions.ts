@@ -350,6 +350,16 @@ export function canManageTaxSchedule(u: UserCtx): boolean {
   return false;
 }
 
+// ── Folderit (document status dashboard) ──────────────────────────
+// HR documents (Policies & SOPs, etc.) are locked down by default — only
+// Admin/CEO can see them until explicitly granted via the Members access
+// matrix ("Folderit" box → "HR" toggle).
+export function canViewFolderitHr(u: UserCtx): boolean {
+  const o = ov(u, "can_view_folderit_hr");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+
 // ── Task ownership ──────────────────────────────────────────────
 const PROTECTED_CREATOR_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, PA_EMAIL];
 
