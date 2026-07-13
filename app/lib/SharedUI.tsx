@@ -112,6 +112,7 @@ export function statusColor(status: string | null): string {
     case "Rejected":
       return COLOURS.RED;
     case "Cancelled":
+    case "Stuck": // neutral grey for now — no dedicated colour assigned yet, ask before picking one
       return COLOURS.SLATE;
     default:
       return COLOURS.SLATE;

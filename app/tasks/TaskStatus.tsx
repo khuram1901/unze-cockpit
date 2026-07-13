@@ -4,12 +4,15 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII } from "../lib/SharedUI";
+import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 
 type Task = {
   id: string;
   status: string;
   due_date: string | null;
+  original_due_date?: string | null;
+  stage?: string | null;
   assigned_to: string | null;
   assigned_by: string | null;
   reply_required: boolean | null;
@@ -21,10 +24,26 @@ type Task = {
   notes: string | null;
 };
 
+type Subtask = {
+  id: string;
+  title: string;
+  is_complete: boolean;
+  position: number;
+};
+
+type DueDateHistoryRow = {
+  id: string;
+  old_due_date: string | null;
+  new_due_date: string | null;
+  changed_by: string | null;
+  changed_at: string;
+};
+
 const STATUSES = [
   "Not Started",
   "In Progress",
   "Waiting Reply",
+  "Stuck",
   "Submitted",
   "Completed",
   "Cancelled",
@@ -55,12 +74,20 @@ export default function TaskStatus({
   const [savingDate, setSavingDate] = useState(false);
   const [dateMessage, setDateMessage] = useState("");
 
+  const [stage, setStage] = useState(task.stage || "");
+  const [savingStage, setSavingStage] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
 
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [newSubtask, setNewSubtask] = useState("");
+  const [dueDateHistory, setDueDateHistory] = useState<DueDateHistoryRow[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const isReviewer = canReviewProp ?? (currentRole === "Admin" || currentRole === "Executive");
   const canEditDate = canEditDateProp ?? (currentRole === "Admin" || currentRole === "Executive");
@@ -73,7 +100,34 @@ export default function TaskStatus({
     }
   }, [canEditDate]);
 
+  async function loadSubtasks() {
+    const { data } = await supabase
+      .from("task_subtasks")
+      .select("id, title, is_complete, position")
+      .eq("task_id", task.id)
+      .order("position", { ascending: true });
+    setSubtasks(data || []);
+  }
+
+  useEffect(() => {
+    loadSubtasks();
+    supabase
+      .from("task_due_date_history")
+      .select("id, old_due_date, new_due_date, changed_by, changed_at")
+      .eq("task_id", task.id)
+      .order("changed_at", { ascending: false })
+      .then(({ data }) => setDueDateHistory(data || []));
+  }, [task.id]);
+
+  const openSubtasks = subtasks.filter((s) => !s.is_complete).length;
+  const hasSubtasks = subtasks.length > 0;
+
   async function saveStatus(newStatus: string) {
+    if (newStatus === "Completed" && openSubtasks > 0) {
+      toast.show(`Complete all ${subtasks.length} subtask${subtasks.length > 1 ? "s" : ""} before this task can be marked Completed.`, "error");
+      return;
+    }
+
     setSaving(true);
     setSavedMessage("");
 
@@ -113,9 +167,67 @@ export default function TaskStatus({
     }
 
     logAction("Updated", "tasks", `Due date → ${dueDate}: ${task.id}`, task.id);
-    setDateMessage("Date saved ✓");
+    setDateMessage("Date saved ✓ — logged in due date history below");
     onChanged();
-    setTimeout(() => setDateMessage(""), 2000);
+    supabase
+      .from("task_due_date_history")
+      .select("id, old_due_date, new_due_date, changed_by, changed_at")
+      .eq("task_id", task.id)
+      .order("changed_at", { ascending: false })
+      .then(({ data }) => setDueDateHistory(data || []));
+    setTimeout(() => setDateMessage(""), 3000);
+  }
+
+  async function saveStage() {
+    setSavingStage(true);
+    const { error } = await supabase
+      .from("tasks")
+      .update({ stage: stage.trim() || null, updated_at: new Date().toISOString() })
+      .eq("id", task.id);
+    setSavingStage(false);
+    if (error) {
+      toast.show("Error updating stage: " + error.message, "error");
+      return;
+    }
+    logAction("Updated", "tasks", `Stage → ${stage}: ${task.id}`, task.id);
+    onChanged();
+  }
+
+  async function addSubtask() {
+    const title = newSubtask.trim();
+    if (!title) return;
+    const { error } = await supabase.from("task_subtasks").insert({
+      task_id: task.id,
+      title,
+      position: subtasks.length,
+    });
+    if (error) {
+      toast.show("Error adding subtask: " + error.message, "error");
+      return;
+    }
+    setNewSubtask("");
+    loadSubtasks();
+  }
+
+  async function toggleSubtask(sub: Subtask) {
+    const { error } = await supabase
+      .from("task_subtasks")
+      .update({ is_complete: !sub.is_complete })
+      .eq("id", sub.id);
+    if (error) {
+      toast.show("Error updating subtask: " + error.message, "error");
+      return;
+    }
+    loadSubtasks();
+  }
+
+  async function removeSubtask(sub: Subtask) {
+    const { error } = await supabase.from("task_subtasks").delete().eq("id", sub.id);
+    if (error) {
+      toast.show("Error removing subtask: " + error.message, "error");
+      return;
+    }
+    loadSubtasks();
   }
 
   async function submitExplanation() {
@@ -239,34 +351,113 @@ export default function TaskStatus({
         {saving && <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Saving…</span>}
       </div>
 
-      {/* Due-date editor */}
-      {canEditDate && (
-        <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          <span style={kickerStyle}>Due date</span>
-          <DateInput
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            style={controlStyle}
+      {/* Stage — optional free-text pipeline label, separate from status */}
+      <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+        <span style={kickerStyle}>Stage (optional)</span>
+        <input
+          type="text"
+          value={stage}
+          onChange={(e) => setStage(e.target.value)}
+          onBlur={() => { if (stage !== (task.stage || "")) saveStage(); }}
+          placeholder="e.g. Back to FD Dept"
+          style={{ ...controlStyle, width: "220px" }}
+          disabled={savingStage}
+        />
+      </div>
+
+      {/* Subtasks — one flat checklist level, gates Completed */}
+      <div style={{ marginTop: "12px" }}>
+        <span style={kickerStyle}>Subtasks{hasSubtasks ? ` (${subtasks.length - openSubtasks} of ${subtasks.length} complete)` : " (none yet)"}</span>
+        {subtasks.length > 0 && (
+          <div style={{ marginTop: "6px", height: "6px", backgroundColor: COLOURS.TRACK, borderRadius: "3px", overflow: "hidden", maxWidth: "320px" }}>
+            <div style={{ height: "100%", width: `${Math.round(((subtasks.length - openSubtasks) / subtasks.length) * 100)}%`, backgroundColor: COLOURS.GREEN }} />
+          </div>
+        )}
+        <div style={{ marginTop: "8px" }}>
+          {subtasks.map((s) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 0" }}>
+              <input type="checkbox" checked={s.is_complete} onChange={() => toggleSubtask(s)} style={{ width: "15px", height: "15px", accentColor: COLOURS.GREEN, cursor: "pointer" }} />
+              <span style={{ fontSize: "13.5px", color: s.is_complete ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: s.is_complete ? "line-through" : "none", flex: 1 }}>{s.title}</span>
+              <button onClick={() => removeSubtask(s)} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Remove</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+          <input
+            type="text"
+            value={newSubtask}
+            onChange={(e) => setNewSubtask(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubtask(); } }}
+            placeholder="Add a subtask…"
+            style={{ ...controlStyle, flex: 1, maxWidth: "320px" }}
           />
-          <button
-            onClick={saveDueDate}
-            disabled={savingDate}
-            style={{
-              backgroundColor: COLOURS.BLUE,
-              color: "white",
-              border: "none",
-              borderRadius: RADII.SM,
-              padding: "6px 14px",
-              fontSize: "13px",
-              cursor: "pointer",
-              fontWeight: 600,
-              opacity: savingDate ? 0.7 : 1,
-            }}
-          >
-            Save date
-          </button>
-          {dateMessage && <span style={{ color: COLOURS.GREEN, fontSize: "13px", fontWeight: 600 }}>{dateMessage}</span>}
-          {savingDate && <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Saving…</span>}
+          <button onClick={addSubtask} style={{ ...controlStyle, backgroundColor: COLOURS.CARD_ALT, fontWeight: 600, cursor: "pointer" }}>+ Add</button>
+        </div>
+        {openSubtasks > 0 && (
+          <p style={{ fontSize: "12px", color: COLOURS.AMBER, marginTop: "6px", marginBottom: 0 }}>
+            Complete all subtasks before this task can be marked Completed.
+          </p>
+        )}
+      </div>
+
+      {/* Due-date editor — original locked, current open, every move logged */}
+      {canEditDate && (
+        <div style={{ marginTop: "14px" }}>
+          {task.original_due_date && (
+            <div style={{ marginBottom: "8px", fontSize: "13px" }}>
+              <span style={kickerStyle}>Original due date (locked)</span>{" "}
+              <strong style={{ color: COLOURS.NAVY }}>{formatDateUK(task.original_due_date)}</strong>
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span style={kickerStyle}>Current due date</span>
+            <DateInput
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              style={controlStyle}
+            />
+            <button
+              onClick={saveDueDate}
+              disabled={savingDate}
+              style={{
+                backgroundColor: COLOURS.BLUE,
+                color: "white",
+                border: "none",
+                borderRadius: RADII.SM,
+                padding: "6px 14px",
+                fontSize: "13px",
+                cursor: "pointer",
+                fontWeight: 600,
+                opacity: savingDate ? 0.7 : 1,
+              }}
+            >
+              Save date
+            </button>
+            {dateMessage && <span style={{ color: COLOURS.GREEN, fontSize: "13px", fontWeight: 600 }}>{dateMessage}</span>}
+            {savingDate && <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Saving…</span>}
+          </div>
+          {dueDateHistory.length > 0 && (
+            <div style={{ marginTop: "8px" }}>
+              <span
+                onClick={() => setHistoryOpen(!historyOpen)}
+                style={{ fontSize: "12px", color: COLOURS.SLATE, cursor: "pointer", fontWeight: 600 }}
+              >
+                {historyOpen ? "▼" : "▶"} Due date history ({dueDateHistory.length} move{dueDateHistory.length > 1 ? "s" : ""})
+              </span>
+              {historyOpen && (
+                <div style={{ marginTop: "6px" }}>
+                  {dueDateHistory.map((h) => (
+                    <div key={h.id} style={{ fontSize: "12px", color: COLOURS.SLATE, padding: "4px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                      <strong style={{ color: COLOURS.NAVY }}>{h.old_due_date ? formatDateUK(h.old_due_date) : "—"}</strong>
+                      {" → "}
+                      <strong style={{ color: COLOURS.NAVY }}>{h.new_due_date ? formatDateUK(h.new_due_date) : "—"}</strong>
+                      {" — moved by "}{h.changed_by || "unknown"}{", "}{formatDateUK(h.changed_at)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
