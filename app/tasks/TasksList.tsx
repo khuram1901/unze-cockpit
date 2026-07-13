@@ -11,6 +11,7 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
 import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, useConfirm, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
 import { canDeleteTask, canEditTask, isTaskProtected } from "../lib/permissions";
+import TeamStats from "./TeamStats";
 
 type Task = {
   id: string;
@@ -19,12 +20,14 @@ type Task = {
   project: string | null;
   priority: string | null;
   due_date: string | null;
+  original_due_date: string | null;
   assigned_date: string | null;
   assigned_to: string | null;
   assigned_to_email: string | null;
   assigned_by: string | null;
   assigned_by_email: string | null;
   status: string;
+  stage: string | null;
   stuck_reason: string | null;
   notes: string | null;
   reply_required: boolean | null;
@@ -37,7 +40,28 @@ type Task = {
   meeting_id: string | null;
   time_spent_minutes: number | null;
   created_at: string | null;
+  completed_at: string | null;
   assigned_to_department: string | null;
+  company_id: string | null;
+  task_subtasks?: { id: string; is_complete: boolean }[];
+};
+
+type CompanyLite = { id: string; name: string; short_code: string | null };
+
+const COMPANY_BADGE_COLOURS: Record<string, { color: string; background: string }> = {
+  UTPL: { color: COLOURS.BLUE, background: COLOURS.INFO_SOFT },
+  IFPL: { color: COLOURS.GREEN, background: COLOURS.SUCCESS_SOFT },
+  BRNH: { color: COLOURS.AMBER, background: COLOURS.WARNING_SOFT },
+  HD:   { color: "#6E45B8", background: "#F3EEF9" },
+};
+
+type KpiSummary = {
+  open_count: number;
+  overdue_count: number;
+  due_today_count: number;
+  waiting_reply_count: number;
+  stuck_count: number;
+  completed_count: number;
 };
 
 const todayStr = new Date().toISOString().slice(0, 10);
@@ -83,11 +107,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [errorMsg, setErrorMsg] = useState("");
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(taskIdFromUrl);
-  const [timeView, setTimeView] = useState<"department" | "weekly" | "monthly" | "quarterly" | "timeline">("department");
+  const [timeView, setTimeView] = useState<"department" | "weekly" | "monthly" | "quarterly" | "timeline" | "team">("department");
   const [filter, setFilter] = useState<"all" | "overdue" | "waiting">("all");
   const [bannerOpen, setBannerOpen] = useState(false);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
+  const [companies, setCompanies] = useState<CompanyLite[]>([]);
+  const [companyFilter, setCompanyFilter] = useState<string>("all");
+  const [kpi, setKpi] = useState<KpiSummary | null>(null);
 
   const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "Executive");
 
@@ -98,7 +125,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
     let query = supabase
       .from("tasks")
-      .select("*")
+      .select("*, task_subtasks(id, is_complete)")
       .order("created_at", { ascending: false });
 
     if (!isPrivileged && email) {
@@ -112,6 +139,21 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     setLoading(false);
   }
 
+  async function loadKpi() {
+    const params = companyFilter === "all"
+      ? {}
+      : companyFilter === "group"
+      ? { p_group_only: true }
+      : { p_company_id: companyFilter };
+    const { data, error } = await supabase.rpc("get_tasks_kpi_summary", params).single();
+    if (!error && data) setKpi(data as KpiSummary);
+  }
+
+  function resetFilters() {
+    setCompanyFilter("all");
+    setFilter("all");
+  }
+
   useEffect(() => {
     loadTasks();
     supabase.from("members").select("name, phone_e164").then(({ data }) => {
@@ -119,7 +161,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       for (const m of (data || [])) { if (m.name && m.phone_e164) phones[m.name] = m.phone_e164; }
       setMemberPhones(phones);
     });
+    supabase.from("companies").select("id, name, short_code").then(({ data }) => setCompanies(data || []));
   }, []);
+
+  // Re-run the KPI RPC whenever the Company filter changes, so the KPI
+  // row always matches what the Company dropdown is showing below it.
+  useEffect(() => {
+    loadKpi();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyFilter]);
 
   useEffect(() => {
     if (taskIdFromUrl && tasks.length > 0) {
@@ -136,7 +186,20 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   if (loading) return <SkeletonRows count={5} height="48px" />;
   if (errorMsg) return <ErrorBanner message={errorMsg} onRetry={loadTasks} />;
 
-  const scopedTasks = tasks;
+  const scopedTasks = companyFilter === "all" ? tasks : tasks.filter((t) => (companyFilter === "group" ? !t.company_id : t.company_id === companyFilter));
+
+  function refreshAll() {
+    loadTasks();
+    loadKpi();
+  }
+
+  function companyBadge(companyId: string | null) {
+    if (!companyId) return { label: "Group", color: COLOURS.SLATE, background: COLOURS.HAIRLINE };
+    const c = companies.find((co) => co.id === companyId);
+    const code = c?.short_code || "";
+    const found = COMPANY_BADGE_COLOURS[code] || { color: COLOURS.NAVY, background: COLOURS.HAIRLINE };
+    return { label: c?.short_code || c?.name || "—", color: found.color, background: found.background };
+  }
 
   const allOpen = scopedTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const overdueTasks = allOpen.filter(isOverdue);
@@ -228,7 +291,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       d.open++;
       if (isOverdue(t)) d.overdue++;
       if (t.status === "Waiting Reply") d.waiting++;
-      if (t.stuck_reason) d.stuck++;
+      if (t.stuck_reason || t.status === "Stuck") d.stuck++;
     }
   }
   const departments = Array.from(deptMap.values()).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
@@ -268,9 +331,27 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
             <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
               <span>{task.assigned_to || "Unassigned"}</span>
+              {(() => {
+                const badge = companyBadge(task.company_id);
+                return (
+                  <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 8px", borderRadius: RADII.PILL, color: badge.color, backgroundColor: badge.background }}>
+                    {badge.label}
+                  </span>
+                );
+              })()}
               {task.assigned_to_department && timeView !== "department" && (
                 <span style={{ fontSize: "11px", fontWeight: 600, padding: "1px 6px", borderRadius: RADII.XS, color: COLOURS.NAVY, backgroundColor: COLOURS.HAIRLINE }}>
                   {task.assigned_to_department}
+                </span>
+              )}
+              {task.stage && (
+                <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "1px 7px", borderRadius: RADII.XS, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                  → {task.stage}
+                </span>
+              )}
+              {task.task_subtasks && task.task_subtasks.length > 0 && (
+                <span style={{ fontSize: "10.5px", fontWeight: 700, padding: "1px 7px", borderRadius: RADII.XS, color: COLOURS.SLATE, backgroundColor: COLOURS.TRACK }}>
+                  {task.task_subtasks.filter((s) => s.is_complete).length}/{task.task_subtasks.length}
                 </span>
               )}
               {task.due_date && (
@@ -319,7 +400,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                       Assigned by {task.assigned_by || "management"} — you can update status and add notes but cannot edit or delete this task.
                     </div>
                   )}
-                  <TaskStatus task={task} currentRole={currentRole} onChanged={loadTasks} canReview={canReview ?? isPrivileged} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
+                  <TaskStatus task={task} currentRole={currentRole} onChanged={refreshAll} canReview={canReview ?? isPrivileged} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
                   {((canDelete ?? isPrivileged) || taskDeletable) && (
                     <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "flex-end", gap: "6px" }}>
                       {task.assigned_to && memberPhones[task.assigned_to] && (
@@ -337,7 +418,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                           onClick={async () => {
                             if (!await dlg.confirm(`Delete task "${task.description}"? This cannot be undone.`, true)) return;
                             await supabase.from("tasks").delete().eq("id", task.id);
-                            loadTasks();
+                            refreshAll();
                           }}
                           style={{ backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.SM, padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", minHeight: "34px" }}
                           title="Permanently delete this task"
@@ -399,16 +480,18 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         </div>
       )}
 
-      {/* ═══ KPI SUMMARY ROW ═══ */}
+      {/* ═══ KPI SUMMARY ROW — sourced from get_tasks_kpi_summary() RPC, not client-side counting ═══ */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "flex-start" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", flex: 1 }}>
           {[
-            { label: "Open",          value: allOpen.length },
-            { label: "Overdue",       value: overdueTasks.length },
-            { label: "Waiting Reply", value: waitingReply.length },
-            { label: "Completed",     value: completedAll.length },
-          ].map(({ label, value }) => (
-            <div key={label} style={{ ...cardStyle, padding: "10px 14px" }}>
+            { label: "Open",          value: kpi?.open_count ?? allOpen.length,          accent: COLOURS.BLUE },
+            { label: "Overdue",       value: kpi?.overdue_count ?? overdueTasks.length,   accent: COLOURS.RED },
+            { label: "Due Today",     value: kpi?.due_today_count ?? 0,                   accent: COLOURS.AMBER },
+            { label: "Waiting Reply", value: kpi?.waiting_reply_count ?? waitingReply.length, accent: COLOURS.BLUE },
+            { label: "Stuck",         value: kpi?.stuck_count ?? 0,                        accent: COLOURS.SLATE },
+            { label: "Completed",     value: kpi?.completed_count ?? completedAll.length,  accent: COLOURS.GREEN },
+          ].map(({ label, value, accent }) => (
+            <div key={label} style={{ ...cardStyle, padding: "10px 14px", borderLeft: `3px solid ${accent}` }}>
               <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "6px" }}>{label}</div>
               <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY }}>{value.toLocaleString()}</div>
             </div>
@@ -466,7 +549,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 count++;
               }
               toast.show(`Successfully imported ${count} task${count !== 1 ? "s" : ""}.`, "success");
-              loadTasks();
+              refreshAll();
             }}
             templateHeaders={["Description", "Assigned To", "Assigned By", "Assigned Date", "Due Date", "Priority", "Department / Area", "Starting Status", "Notes"]}
             templateFilename="tasks-import-template.csv"
@@ -483,7 +566,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         backgroundColor: COLOURS.CARD_ALT,
         paddingTop: "6px", paddingBottom: "6px",
       }}>
-        {(["department", "weekly", "monthly", "quarterly", "timeline"] as const).map((v) => (
+        {(["department", "weekly", "monthly", "quarterly", "timeline", "team"] as const).map((v) => (
           <button key={v} onClick={() => setTimeView(v)} style={{
             backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
             color: timeView === v ? "white" : COLOURS.NAVY,
@@ -492,6 +575,20 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             textTransform: "capitalize",
           }}>{v}</button>
         ))}
+        <select
+          value={companyFilter}
+          onChange={(e) => setCompanyFilter(e.target.value)}
+          style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 10px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, backgroundColor: COLOURS.CARD }}
+        >
+          <option value="all">All companies</option>
+          {companies.map((c) => <option key={c.id} value={c.id}>{c.short_code || c.name}</option>)}
+          <option value="group">Group / needs review</option>
+        </select>
+        {(companyFilter !== "all" || filter !== "all") && (
+          <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
+            Reset Filters
+          </button>
+        )}
         <div style={{ flex: 1 }} />
         {(["all", "overdue", "waiting"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} style={{
@@ -753,6 +850,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           </div>
         );
       })()}
+
+      {/* ═══ TEAM VIEW ═══ */}
+      {timeView === "team" && <TeamStats />}
 
       {scopedTasks.length === 0 && (
         <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No tasks yet.</p>
