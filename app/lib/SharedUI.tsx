@@ -110,13 +110,21 @@ export function statusColor(status: string | null): string {
     case "Open":
     case "Down":
     case "Rejected":
+    case "Stuck": // Khuram (14/07/2026): "Stuck means red alert."
       return COLOURS.RED;
     case "Cancelled":
-    case "Stuck": // neutral grey for now — no dedicated colour assigned yet, ask before picking one
       return COLOURS.SLATE;
     default:
       return COLOURS.SLATE;
   }
+}
+
+// Stuck and Waiting Reply are both red (same underlying colour) — this
+// gives Stuck a dashed border on top of the red pill so it's still
+// visually distinct from Waiting Reply at a glance, rather than the two
+// looking identical. See StatusBadge below.
+export function isStuckStatus(status: string | null): boolean {
+  return status === "Stuck";
 }
 
 export function priorityColor(priority: string | null): string {
@@ -194,6 +202,7 @@ export function StatusBadge({ status }: { status: string | null }) {
     [COLOURS.RED]:   COLOURS.DANGER_SOFT,
   };
   const soft = softMap[colour] ?? COLOURS.HAIRLINE;
+  const stuck = isStuckStatus(status);
   return (
     <span
       style={{
@@ -205,6 +214,7 @@ export function StatusBadge({ status }: { status: string | null }) {
         color:         colour,
         backgroundColor: soft,
         whiteSpace:    "nowrap",
+        border:        stuck ? `1.5px dashed ${colour}` : "none",
       }}
     >
       {status || "—"}
