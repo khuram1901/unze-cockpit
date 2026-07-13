@@ -4,6 +4,21 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Tasks Phase 4: Stuck is red, Kanban board, Recurring merged in, monthly/quarterly moved to RPCs
+
+Khuram, on the previous entry's three deferred items: "these three things that you've not done — I need you to solve them" plus "Stuck... should be red, because Stuck means red alert." Five small commits:
+
+- **Stuck status → red.** Moved out of the neutral-grey bucket in `statusColor()` (`SharedUI.tsx`). Added a dashed border on Stuck badges to keep it visually distinct from Waiting Reply, which is also red — my own call, not something Khuram asked for, flagging it in case he'd rather they look identical.
+- **Kanban board.** New `TasksBoard.tsx` — native HTML5 drag-and-drop (no external library), one column per status plus an "Other" column for anything unrecognised. Dragging onto Completed while subtasks are open is rejected by the migration-100 database trigger; the rejection message now surfaces as a toast instead of a raw Postgres error. Extracted the task detail view out of the List row into shared `TaskDetailPanel.tsx` so List and Board don't carry two copies of the same logic.
+- **Recurring tab.** New `RecurringTasksPanel.tsx`, same `recurring_tasks` table and cron engine as the standalone `/recurring-tasks` page (untouched, still works). Emoji removed from the example cards per the earlier "no emojis" instruction.
+- **Monthly/quarterly RPCs (migration 102).** `get_tasks_monthly_chart()` and `get_tasks_quarterly_chart()` replace the JS for-loops that built those two bar charts, per house rule 0. Department/weekly/timeline grouping deliberately left as client-side — those views need full task rows to render, not just counts.
+
+Verification: `tsc --noEmit` clean. ESLint flagged the same pre-existing `react-hooks/set-state-in-effect` pattern already present elsewhere in this file (and now also in the new `RecurringTasksPanel.tsx`, following the same established convention) — not a new class of problem, disclosed rather than hidden. Two small pre-existing lint warnings (unused `TaskStatus` import, unused `thisWeekStart` variable) cleaned up while in the file.
+
+Migration 102 is written to `supabase/`, **not yet applied** — run it via the Supabase SQL Editor after 098–101, same as always.
+
+---
+
 ## 2026-07-14 — Tasks visibility audit (no code change needed) + removed Shakeel's can_see_all_tasks override
 
 Khuram asked for confirmation that "every member can only see their own tasks unless they're Admin/CEO/PA" — checked the live database rather than assuming. The `tasks_select` RLS policy (migrations 027/030/090) already enforces exactly this: `can_access_all_tasks() OR assigned_to_email = me OR assigned_by = my name`, and `can_access_all_tasks()` defaults to Admin tier + Executive (PA) only, with a per-member override checked first. This is a real database-level rule, not just a client-side filter, so it holds even for direct API calls. No code or migration needed — verified via `pg_policies` and the function definitions live on the project.

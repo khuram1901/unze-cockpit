@@ -925,7 +925,10 @@ Automatic, append-only audit trail of every `due_date` change. Columns: `task_id
 #### `recurring_tasks`
 Templates for recurring task generation. Fields: description, assigned_to/email/dept, frequency ('weekly'/'monthly'/'quarterly'), day_of_week, day_of_month, due_days_after, active.
 **RLS (migration 072):** Uses `is_privileged()` — PA (Executive role) can read and write. Previously was `is_admin_or_exec()` which blocked PA since migration 027.
-**Not yet merged into the redesigned /tasks page** — still its own page/tab, deliberately deferred (see Tasks redesign note below).
+**Now also managed from the Tasks page's Recurring tab** (`RecurringTasksPanel.tsx`, 14/07/2026) — same table, same CRUD, same cron engine, just reachable from `/tasks` as well as the standalone `/recurring-tasks` page (which still works unchanged).
+
+#### Task monthly/quarterly chart RPCs (migration 102)
+`get_tasks_monthly_chart(p_company_id uuid default null, p_group_only boolean default false)` and `get_tasks_quarterly_chart(...)` — replace the client-side for-loops that used to build the Monthly ("Created vs Completed") and Quarterly (overdue/active/completed) bar chart data in `TasksList.tsx`. Same visibility rule and Company-filter params as the migration 101 RPCs.
 
 #### `meetings`
 fields: meeting_date, title, company, department, executive_summary, decisions, risks, opportunities, attendees (jsonb), raw_transcript, created_by.
@@ -936,7 +939,13 @@ Supporting meeting tables. See migration files.
 #### Tasks page redesign (14/07/2026) — what shipped and what didn't
 Real code, not just the design mockup (`Tasks_Page_Mockup.html`, still a standalone reference file, not wired into the app): `NewTaskForm.tsx` (required Company tag, locked assigned date, inline subtasks, Stage, Urgent priority, Stuck status), `TaskStatus.tsx` (subtasks checklist with completion gating, Stage editing, due-date history + locked original date), `TasksList.tsx` (company badges, Company filter + Reset Filters, RPC-sourced KPI row incl. Due Today/Stuck, new Team tab via `TeamStats.tsx`).
 
-**Deliberately not attempted in this pass** (flagged to Khuram rather than silently skipped): a true drag-and-drop Kanban board (the existing department/weekly/monthly/quarterly/timeline view system stays as the browsing surface); merging Recurring Tasks into this page as a tab; rewriting the existing client-side department/weekly/monthly/quarterly/timeline grouping logic in `TasksList.tsx` into RPCs (pre-existing house-rule-0 debt, untouched — only the KPI row was moved to an RPC in this pass). These were held back as separate, safer follow-ups rather than risking a single very large, hard-to-review change to a production tool.
+**Phase 4 (same day, 14/07/2026) — the three items deferred above, now done:**
+- **Stuck status is now red** — Khuram: "Stuck means red alert." Distinguished from Waiting Reply (also red) by a dashed border on the Stuck badge (`statusColor()`/`StatusBadge` in `SharedUI.tsx`).
+- **Drag-and-drop Kanban board** — new Board tab (`TasksBoard.tsx`), native HTML5 drag-and-drop, one column per status. Moving a card to Completed while subtasks are open is rejected by the migration-100 database trigger; the rejection surfaces as a toast. The task detail view was extracted out of the List row into a shared `TaskDetailPanel.tsx` so List and Board use one implementation.
+- **Recurring Tasks merged in** — new Recurring tab (`RecurringTasksPanel.tsx`), same `recurring_tasks` table and cron engine as the standalone `/recurring-tasks` page (which still exists and still works — nothing there was removed).
+- **Monthly/quarterly charts moved to RPCs** — migration 102 (`get_tasks_monthly_chart`, `get_tasks_quarterly_chart`) replaces the JS for-loops that used to build this chart data. Department/weekly/timeline grouping still runs client-side over the full row list on purpose — those views render individual tasks, not just counts, so they still need the full list either way.
+
+Migrations 098–102 all still need to be run by hand in the Supabase SQL Editor if that hasn't happened yet — see the note at the top of each `.sql` file for the exact order.
 
 ---
 
