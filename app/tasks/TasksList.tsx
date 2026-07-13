@@ -3,15 +3,15 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabase";
-import TaskStatus from "./TaskStatus";
 import { formatDateUK } from "../lib/dateUtils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
-import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
-import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, useConfirm, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
-import { canDeleteTask, canEditTask, isTaskProtected } from "../lib/permissions";
+import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
 import TeamStats from "./TeamStats";
+import TaskDetailPanel from "./TaskDetailPanel";
+import TasksBoard from "./TasksBoard";
+import RecurringTasksPanel from "./RecurringTasksPanel";
 
 type Task = {
   id: string;
@@ -64,6 +64,9 @@ type KpiSummary = {
   completed_count: number;
 };
 
+type MonthlyChartRow = { month: string; label: string; created: number; completed: number };
+type QuarterlyChartRow = { quarter: string; overdue: number; active: number; completed: number };
+
 const todayStr = new Date().toISOString().slice(0, 10);
 
 function isOverdue(task: Task) {
@@ -85,29 +88,20 @@ function getWeekStart(d: Date): string {
   return monday.toISOString().slice(0, 10);
 }
 
-function getMonthLabel(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
-}
-
-function getQuarterLabel(dateStr: string): string {
-  const [y, m] = dateStr.slice(0, 7).split("-").map(Number);
-  const q = Math.ceil(m / 3);
-  return `Q${q} ${y}`;
-}
+// getMonthLabel/getQuarterLabel removed — labels now come straight from
+// get_tasks_monthly_chart()/get_tasks_quarterly_chart() (migration 102).
 
 export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean }) {
   const searchParams = useSearchParams();
   const taskIdFromUrl = searchParams.get("task");
   const toast = useToast();
-  const dlg = useConfirm();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(taskIdFromUrl);
-  const [timeView, setTimeView] = useState<"department" | "weekly" | "monthly" | "quarterly" | "timeline" | "team">("department");
+  const [timeView, setTimeView] = useState<"department" | "weekly" | "monthly" | "quarterly" | "timeline" | "team" | "board" | "recurring">("department");
   const [filter, setFilter] = useState<"all" | "overdue" | "waiting">("all");
   const [bannerOpen, setBannerOpen] = useState(false);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
@@ -115,6 +109,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [companies, setCompanies] = useState<CompanyLite[]>([]);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [kpi, setKpi] = useState<KpiSummary | null>(null);
+  const [monthlyData, setMonthlyData] = useState<MonthlyChartRow[]>([]);
+  const [quarterlyData, setQuarterlyData] = useState<QuarterlyChartRow[]>([]);
 
   const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "Executive");
 
@@ -164,10 +160,25 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     supabase.from("companies").select("id, name, short_code").then(({ data }) => setCompanies(data || []));
   }, []);
 
-  // Re-run the KPI RPC whenever the Company filter changes, so the KPI
-  // row always matches what the Company dropdown is showing below it.
+  async function loadCharts() {
+    const params = companyFilter === "all"
+      ? {}
+      : companyFilter === "group"
+      ? { p_group_only: true }
+      : { p_company_id: companyFilter };
+    const [monthlyRes, quarterlyRes] = await Promise.all([
+      supabase.rpc("get_tasks_monthly_chart", params),
+      supabase.rpc("get_tasks_quarterly_chart", params),
+    ]);
+    if (!monthlyRes.error) setMonthlyData(monthlyRes.data || []);
+    if (!quarterlyRes.error) setQuarterlyData(quarterlyRes.data || []);
+  }
+
+  // Re-run the KPI + chart RPCs whenever the Company filter changes, so
+  // everything on screen always matches what the Company dropdown shows.
   useEffect(() => {
     loadKpi();
+    loadCharts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyFilter]);
 
@@ -207,7 +218,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const completedAll = scopedTasks.filter((t) => t.status === "Completed");
 
   // ── Weekly grouping ──
-  const thisWeekStart = getWeekStart(new Date());
   const nextWeekDate = new Date();
   nextWeekDate.setDate(nextWeekDate.getDate() + 7);
   const nextWeekStart = getWeekStart(nextWeekDate);
@@ -230,40 +240,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     weekGroups.get(g)!.push(t);
   }
 
-  // ── Monthly chart data ──
-  const monthMap = new Map<string, { month: string; label: string; created: number; completed: number }>();
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-  const cutoff = sixMonthsAgo.toISOString().slice(0, 7);
-
-  for (const t of scopedTasks) {
-    const createdMonth = t.created_at?.slice(0, 7) || "";
-    if (createdMonth >= cutoff) {
-      if (!monthMap.has(createdMonth)) monthMap.set(createdMonth, { month: createdMonth, label: getMonthLabel(createdMonth + "-01"), created: 0, completed: 0 });
-      monthMap.get(createdMonth)!.created++;
-    }
-  }
-  for (const t of completedAll) {
-    const createdMonth = t.created_at?.slice(0, 7) || "";
-    if (createdMonth >= cutoff) {
-      if (!monthMap.has(createdMonth)) monthMap.set(createdMonth, { month: createdMonth, label: getMonthLabel(createdMonth + "-01"), created: 0, completed: 0 });
-      monthMap.get(createdMonth)!.completed++;
-    }
-  }
-  const monthlyData = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
-
-  // ── Quarterly chart data ──
-  const qMap = new Map<string, { quarter: string; overdue: number; active: number; completed: number }>();
-  for (const t of scopedTasks) {
-    const dt = t.due_date || t.created_at?.slice(0, 10) || todayStr;
-    const q = getQuarterLabel(dt);
-    if (!qMap.has(q)) qMap.set(q, { quarter: q, overdue: 0, active: 0, completed: 0 });
-    const row = qMap.get(q)!;
-    if (t.status === "Completed") row.completed++;
-    else if (isOverdue(t)) row.overdue++;
-    else if (t.status !== "Cancelled") row.active++;
-  }
-  const quarterlyData = Array.from(qMap.values()).sort((a, b) => a.quarter.localeCompare(b.quarter));
+  // Monthly and Quarterly chart data are no longer computed here — they
+  // come from get_tasks_monthly_chart()/get_tasks_quarterly_chart() (see
+  // migration 102) via the monthlyData/quarterlyData state above, kept in
+  // sync with the Company filter by the loadCharts() effect. Per house
+  // rule 0, aggregation belongs in the database, not in a JS loop here.
 
   // ── Person grouping ──
   const personMap = new Map<string, { total: number; overdue: number }>();
@@ -369,69 +350,16 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         </div>
 
         {isOpen && (
-          <div style={{ padding: "12px 16px", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
-            <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "6px" }}>
-              Type: <strong style={{ color: COLOURS.NAVY }}>{task.task_type || "Task"}</strong>
-              {" · "}Assigned by: <strong style={{ color: COLOURS.NAVY }}>{task.assigned_by || "—"}</strong>
-              {" · "}Date: {formatDateUK(task.assigned_date)}
-              {" · "}Project: {task.project || "—"}
-              {task.meeting_id && (
-                <span> · <a href={`/my-minutes?meeting=${task.meeting_id}`} style={{ color: COLOURS.BLUE, fontWeight: 600, textDecoration: "none" }}>View Minutes →</a></span>
-              )}
-            </div>
-            {task.notes && <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "6px" }}>Notes: {task.notes}</div>}
-            {task.reply_text && (
-              <div style={{ padding: "8px 12px", border: `1px solid ${COLOURS.GREEN}`, backgroundColor: COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, color: COLOURS.GREEN, fontSize: "13px", marginBottom: "8px" }}>
-                <strong>Explanation:</strong> {task.reply_text}
-                {task.corrective_action && <div style={{ marginTop: "4px" }}><strong>Corrective action:</strong> {task.corrective_action}</div>}
-                {task.recovery_date && <div style={{ marginTop: "4px" }}><strong>Expected recovery:</strong> {formatDateUK(task.recovery_date)}</div>}
-                <div style={{ marginTop: "4px", fontSize: "12px", color: COLOURS.SLATE }}>By {task.reply_by || "unknown"} {task.reply_at ? `on ${formatDateUK(task.reply_at)}` : ""}</div>
-              </div>
-            )}
-            {(() => {
-              const userCtx = { email: myEmail, role: currentRole };
-              const taskEditable = canEditTask(userCtx, task.assigned_by_email);
-              const taskDeletable = canDeleteTask(userCtx, task.assigned_by_email);
-              const protected_ = isTaskProtected(task.assigned_by_email);
-              return (
-                <>
-                  {protected_ && !isPrivileged && (
-                    <div style={{ fontSize: "12px", color: COLOURS.AMBER, fontWeight: 600, marginBottom: "6px", padding: "4px 8px", backgroundColor: COLOURS.WARNING_SOFT, borderRadius: RADII.XS, border: `1px solid ${COLOURS.AMBER}` }}>
-                      Assigned by {task.assigned_by || "management"} — you can update status and add notes but cannot edit or delete this task.
-                    </div>
-                  )}
-                  <TaskStatus task={task} currentRole={currentRole} onChanged={refreshAll} canReview={canReview ?? isPrivileged} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
-                  {((canDelete ?? isPrivileged) || taskDeletable) && (
-                    <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-                      {task.assigned_to && memberPhones[task.assigned_to] && (
-                        <a
-                          href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
-                          target="_blank" rel="noopener noreferrer"
-                          style={{ backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: RADII.SM, padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", textDecoration: "none", minHeight: "34px", display: "inline-flex", alignItems: "center" }}
-                          title="Send WhatsApp reminder to assignee"
-                        >
-                          WhatsApp
-                        </a>
-                      )}
-                      {taskDeletable && (
-                        <button
-                          onClick={async () => {
-                            if (!await dlg.confirm(`Delete task "${task.description}"? This cannot be undone.`, true)) return;
-                            await supabase.from("tasks").delete().eq("id", task.id);
-                            refreshAll();
-                          }}
-                          style={{ backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.SM, padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", minHeight: "34px" }}
-                          title="Permanently delete this task"
-                        >
-                          Delete Task
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
+          <TaskDetailPanel
+            task={task}
+            currentRole={currentRole}
+            isPrivileged={isPrivileged}
+            canReview={canReview}
+            canDelete={canDelete}
+            myEmail={myEmail}
+            memberPhones={memberPhones}
+            onChanged={refreshAll}
+          />
         )}
       </div>
     );
@@ -440,7 +368,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   return (
     <div>
       {toast.element}
-      {dlg.element}
 
       {/* ═══ OVERDUE BANNER ═══ */}
       {overdueTasks.length > 0 && (
@@ -566,7 +493,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         backgroundColor: COLOURS.CARD_ALT,
         paddingTop: "6px", paddingBottom: "6px",
       }}>
-        {(["department", "weekly", "monthly", "quarterly", "timeline", "team"] as const).map((v) => (
+        {(["board", "department", "weekly", "monthly", "quarterly", "timeline", "team", "recurring"] as const).map((v) => (
           <button key={v} onClick={() => setTimeView(v)} style={{
             backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
             color: timeView === v ? "white" : COLOURS.NAVY,
@@ -851,8 +778,25 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         );
       })()}
 
+      {/* ═══ BOARD (KANBAN) VIEW ═══ */}
+      {timeView === "board" && (
+        <TasksBoard
+          tasks={scopedTasks}
+          currentRole={currentRole}
+          isPrivileged={isPrivileged}
+          canReview={canReview}
+          canDelete={canDelete}
+          myEmail={myEmail}
+          memberPhones={memberPhones}
+          onChanged={refreshAll}
+        />
+      )}
+
       {/* ═══ TEAM VIEW ═══ */}
       {timeView === "team" && <TeamStats />}
+
+      {/* ═══ RECURRING VIEW ═══ */}
+      {timeView === "recurring" && <RecurringTasksPanel isPrivileged={isPrivileged} />}
 
       {scopedTasks.length === 0 && (
         <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No tasks yet.</p>
