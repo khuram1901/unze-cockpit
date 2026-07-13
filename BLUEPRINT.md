@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 11/07/2026 (UI designer audit: 7 styling fixes; pension cache fix; AGENTS.md added; pension price cron; authority letter expiry/over-quantity dispatch validation; Audit multi-company; pension RPC functions; constants/permissions/AccessMatrix extended).
+> **This is the source of truth.** Read before touching any code. Last updated: 12/07/2026 (Folderit DMS integration: 15 migrations 074–089 + 095; security hardening: RLS performance fixes 090–091, anon/PUBLIC revokes 092–093, investment view lockdown 094; CEO daily digest RPC + cron; pension fund factsheet fields; `search_folderit_inbox` RPC for company inbox search).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -194,6 +194,10 @@ app/
 │                                     with COLOURS tokens; shared table styles; RADII.PILL buttons;
 │                                     progress bars use TRACK + RADII.PILL; font sizes 13–14px.
 │
+├── folderit/page.tsx                 Folderit DMS dashboard — pending approvals + company inbox counts +
+│                                     HR category counts. Drill-down lists per section/company.
+│                                     Search across company inboxes + HR policies + HR inbox.
+│
 └── lib/
     ├── supabase.ts                   Supabase browser client + loadMyPermissions helper
     ├── supabase-server.ts            createServiceClient() — server-side (bypasses RLS)
@@ -241,6 +245,7 @@ app/
     ├── audit-log.ts                  logAuditEvent() helper
     ├── send-email.ts                 Email sending via Gmail API
     ├── google-client.ts              Google OAuth2 client setup
+    ├── folderit-auth.ts              Folderit API auth helper — client-credentials token management
     ├── crypto.ts                     Token encryption/decryption for OAuth storage
     ├── rate-limit.ts                 In-memory rate limiter (resets on cold start)
     ├── backup-tables.ts              List of tables included in backups
@@ -294,6 +299,19 @@ api/
 │   │                                 Server-side role check enforced in addition to UI-level gates.
 │   └── guarantee-facilities/route.ts All methods: Admin, CEO, Finance Manager only → 403 otherwise.
 │                                     Server-side role check enforced in addition to UI-level gates.
+├── folderit/
+│   ├── _shared.ts                    Shared Folderit API client helper (auth token + base URL)
+│   ├── sync/route.ts                 GET (cron every 30 min) — syncs inbox files + resolution invites
+│   │                                 from all active Folderit accounts into DB tables
+│   ├── summary/route.ts              GET — calls get_folderit_summary RPC; counts for home/sidebar badges
+│   ├── company-breakdown/route.ts    GET — calls get_folderit_company_breakdown RPC; per-company inbox/approval counts
+│   ├── details/route.ts              GET — calls get_folderit_details RPC; drill-down lists
+│   ├── hr-summary/route.ts           GET — calls get_folderit_hr_categories RPC; HR category file counts
+│   ├── hr-inbox/route.ts             GET — calls get_folderit_hr_inbox RPC; HR inbox file list
+│   ├── hr-search/route.ts            GET — calls search_folderit_hr_files RPC; HR policies + inbox search
+│   ├── search/route.ts               GET — calls search_folderit_inbox RPC; company inbox search (scoped by company)
+│   ├── overdue/route.ts              GET — calls get_folderit_overdue_items RPC; files overdue for filing/approval
+│   └── file-url/route.ts             GET — returns a signed preview URL for a Folderit file_uid
 ├── google/
 │   ├── auth/route.ts                 GET — initiate Google OAuth2 flow
 │   ├── callback/route.ts             GET — OAuth2 callback
@@ -325,6 +343,9 @@ api/
 │   └── invite/route.ts               POST — invite new member (creates Supabase auth user)
 ├── notifications/
 │   ├── digest/route.ts               POST — send digest notification (cron)
+│   ├── ceo-digest/route.ts           GET (cron Mon–Fri 06:30 UTC = 11:30am PKT) — calls get_ceo_daily_digest
+│   │                                 RPC, emails Khuram a single summary: open tasks, escalations, Folderit
+│   │                                 pending approvals. Replaces 50-70 individual task emails per day.
 │   ├── password-changed/route.ts     POST — notify admin of password change
 │   ├── push-subscribe/route.ts       POST — register push subscription
 │   ├── push/route.ts                 POST — send push notification to specific user
@@ -986,6 +1007,71 @@ Daily price records for pension funds. Columns: id, fund_id (FK → pension_fund
 
 ---
 
+### Folderit DMS tables (migrations 074–089, 095)
+
+Folderit is the group's Document Management System. The dashboard (read-only) syncs inbox and approval state from Folderit's API every 30 minutes.
+
+#### `folderit_account_map`
+Maps Folderit accounts to companies.
+| Column | Type | Notes |
+|--------|------|-------|
+| account_uid | text PK | Folderit account UID |
+| account_name | text | Display name from Folderit |
+| company_uuid | uuid FK → companies | null for scope='global'/'excluded'/'pending' |
+| scope | text | CHECK IN ('company','global','excluded','pending') |
+| inbox_folder_uid | text | Folderit inbox folder UID |
+| is_active | boolean | DEFAULT true |
+| updated_at | timestamptz | |
+
+**Account mapping:**
+| Folderit UID | Account | Company | Scope |
+|---|---|---|---|
+| pNeZ609Mgw | Unze Trading | UTPL | company |
+| YUsup0PqWr | Imperial Footwear | IFPL | company |
+| 6cVIn0up6S | Unze London | IFPL | company |
+| B9jVq0_u1U | Restaurants | BRNH | company |
+| dYjdc0Ev6N | Family Documents | DIR | company |
+| 2ztVT0f2yX | Human Resource | — | global |
+| fEKAm0deuD | S&W London | — | excluded |
+| JsXvG0hu5g | S&M Investments | — | pending |
+
+Haute Dolci (HD) and Almahar (ALM) have no Folderit account yet — their counts read 0 until mapped.
+
+#### `folderit_inbox_files`
+Files currently in a mail-in inbox, not yet filed.
+| Column | Notes |
+|--------|-------|
+| file_uid | PK |
+| account_uid | FK → folderit_account_map |
+| name | Filename |
+| created_at, synced_at | timestamps |
+
+#### `folderit_resolution_invites`
+Per-person approval tasks (Folderit "resolution invite" objects).
+| Column | Notes |
+|--------|-------|
+| invite_uid | PK |
+| resolution_uid, file_uid, entity_uid | Folderit references |
+| account_uid | FK → folderit_account_map |
+| email | Person the invite is for |
+| status | pending \| pendingInvite \| active \| approved \| rejected |
+| invite_order | integer |
+| synced_at | timestamp |
+
+#### `folderit_hr_categories`
+HR sub-categories within the HR account (e.g. "Policies & SOPs").
+Columns: category_name PK, display_name, sort_order, is_active.
+
+#### `folderit_hr_category_files`
+Files belonging to each HR category.
+Columns: file_uid PK, category_name FK, name, created_at, synced_at.
+
+#### `folderit_email_aliases`
+Email aliases for Folderit accounts (maps Folderit email → member email).
+Columns: id, folderit_email, member_email, notes.
+
+---
+
 ### Tax Accounts tables (migrations 069–071)
 
 #### `tax_schedule_entries` — migration 070
@@ -1095,11 +1181,50 @@ One row per customer with b0_30, b31_60, b61_90, b90_plus, total columns.
 Returns a single row: `{ total_value_gbp, net_gain_gbp, return_pct, contributed_gbp, fees_gbp, fund_count, last_price_date }`.
 **Used by:** `app/investments/page.tsx`, `app/home/page.tsx` (via sessionStorage cache).
 
-#### `get_pension_fund_breakdown()` — (no migration number — applied directly)
-Returns one row per fund: `{ fund_name, isin, units_held, price_gbp, value_gbp, allocation_pct, price_date, value_pkr? }`.
+#### `get_pension_fund_breakdown()` — migration 073 (updated from original direct apply)
+Returns one row per fund: `{ fund_name, isin, units_held, price_gbp, value_gbp, allocation_pct, price_date, risk_rating, ongoing_charge_pct, benchmark, return_1m_pct, return_3m_pct, return_6m_pct, return_1y_pct, return_5y_pct, factsheet_date, factsheet_notes }`. Factsheet fields added in 073.
 **Used by:** `app/investments/page.tsx`.
 
-**Security:** All RPCs use `security definer` + `set search_path = public`. Accessible to `authenticated` role only.
+#### `get_folderit_summary(p_user_email, p_company_uuid)` — migration 074
+Returns `{ pending_approval_count, company_inbox_count, hr_inbox_count }`. Used for home page/sidebar badges. CEO/Admin pass nulls for both params (no filter); other callers pass their own email/company.
+**Used by:** `/api/folderit/summary`.
+
+#### `get_folderit_company_breakdown()` — migration 076
+One row per company: `{ company_uuid, inbox_count, pending_approval_count }`. Admin/CEO view — all companies.
+**Used by:** `/api/folderit/company-breakdown`.
+
+#### `get_folderit_hr_categories()` — migration 076
+One row per active HR category: `{ category_name, file_count, sort_order }`.
+**Used by:** `/api/folderit/hr-summary`.
+
+#### `get_folderit_hr_category_files(p_category_name)` — migration 076
+Files in a specific HR category: `{ file_uid, name, created_at }`.
+
+#### `get_folderit_details(p_user_email, p_company_uuid, p_include_company_inbox)` — migration 074 + 077
+Detail drill-down: approval items, company inbox files, HR inbox files. Scoped by caller.
+**Used by:** `/api/folderit/details`.
+
+#### `get_folderit_hr_inbox()` — migration 083
+HR inbox files (HR account's own inbox, separate from HR category files).
+**Used by:** `/api/folderit/hr-inbox`.
+
+#### `search_folderit_hr_files(p_query)` — migration 086
+Searches HR category files + HR inbox files by filename. Returns `{ file_uid, name, source, created_at }`.
+**Used by:** `/api/folderit/hr-search`.
+
+#### `search_folderit_inbox(p_query, p_company_uuid)` — migration 095
+Searches company inbox files by filename. `p_company_uuid = NULL` = all companies (Admin/CEO only). Scoped via `folderit_account_companies` — HR account and excluded/pending accounts naturally excluded.
+**Used by:** `/api/folderit/search`.
+
+#### `get_folderit_overdue_items(p_threshold_days)` — migration 079
+Files/approvals overdue for filing/action beyond threshold days.
+**Used by:** `/api/folderit/overdue`.
+
+#### `get_ceo_daily_digest(p_emails text[])` — migration 080
+Returns JSONB: open tasks, overdue task count, escalations, Folderit pending approvals. Assembled in one Postgres round-trip. Called by the CEO digest cron (never from browser pages).
+**Used by:** `/api/notifications/ceo-digest`.
+
+**Security:** All RPCs use `security definer` + `set search_path = public`. Accessible to `authenticated` role only. Migrations 092–093 revoked the default PUBLIC EXECUTE grant from all data-returning RPCs — anon callers now get permission-denied. Migrations 090–091 fixed `multiple_permissive_policies` and `auth_rls_initplan` RLS performance warnings.
 
 ---
 
@@ -1255,6 +1380,7 @@ Items within each group are sorted A–Z case-insensitively at render time.
 
 ### Finance (A–Z)
 - Bank Facilities (`/finance/guarantees`)
+- Documents (`/folderit`) — Folderit DMS status (inbox + approvals)
 - Imperial Footwear (`/finance/imperial`)
 - Investments (`/investments`)
 - Opening Balances (`/opening-balances`)
@@ -1386,6 +1512,16 @@ Recurring task templates. PA (Executive) can read/write since migration 072 fixe
 
 #### `/members`
 Members list, invite, edit, delete. Access Matrix tab (per-member boolean overrides). 38 permission columns across 9 groups: Dashboards, Finance, Recv., Tasks, Depts, Tax Mgmt, Prod., Members, Admin. Columns added: can_view_guarantees, can_manage_guarantees, can_view_investments, can_edit_investments, can_view_dept_tax_accounts, can_manage_tax_schedule, can_manage_tax_notices, can_view_stock, can_manage_stock, can_edit_operations_targets, can_manage_meetings. finance_company_scope is a select (UTPL/IFPL/both) that only appears when can_view_finance is on. Protected members (Admin/CEO/PA) show locked (border-only) cells. Each override highlights in blue.
+
+#### `/folderit`
+- **File:** `app/folderit/page.tsx`
+- **Access:** All authenticated users (PA + Admin/CEO — investment and finance data not shown here)
+- **What it does:** Document Management System status dashboard, read-only.
+  - **CEO/Admin view:** Per-company breakdown (UTPL, IFPL, BRNH, DIR) with inbox count + pending approvals. HR section with category file counts (Policies & SOPs) + HR inbox count.
+  - **Non-admin view:** Own pending approvals only (scoped to user's email + company).
+  - **Search:** Full-text search across company inboxes + HR policies + HR inbox. Company search scoped to user's company.
+  - **Drill-down:** Collapsible lists showing actual file names per section. File name opens signed preview URL in new tab.
+  - **Sync:** Data refreshed every 30 minutes by `/api/folderit/sync` cron.
 
 #### `/audit-log`
 System activity trail.
@@ -1560,6 +1696,8 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 | `/api/reports/monthly-po` | 06:00 1st of month | Monthly PO progress report |
 | `/api/cron/tax-alerts` | 00:00 and 06:00 daily | Tax deadline alert computation |
 | `/api/investments/fetch-pension-prices` | 23:00 Mon–Fri | Fetch UK pension fund NAV prices from Morningstar |
+| `/api/folderit/sync` | Every 30 min | Sync Folderit inbox files + resolution invites into DB |
+| `/api/notifications/ceo-digest` | 06:30 Mon–Fri (11:30am PKT) | CEO daily task/escalation/Folderit digest email |
 
 ### Supabase Storage
 - Bucket: `source-documents` — uploaded PDFs
@@ -1594,6 +1732,10 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 23. **Tax data is all-users visible (except PA)** — `canViewTaxAccounts()` defaults to true for all authenticated non-PA users. Manage access (`canManageTaxSchedule`) defaults to false and must be explicitly granted.
 24. **Tax alert engine runs after every schedule/filing save** — POST to `/api/cron/tax-alerts` is fire-and-forget from AccountsTaxDashboard. Never block the UI on this call.
 25. **Recurring tasks RLS uses `is_privileged()`** — not `is_admin_or_exec()`. Migration 072 fixed this so PA (Executive) can create and read recurring tasks.
+26. **All data-returning RPCs must revoke PUBLIC EXECUTE** — migrations 092–093. Default Postgres/Supabase behaviour grants EXECUTE to PUBLIC (including anon). Every new RPC that returns real business data must `REVOKE EXECUTE ON FUNCTION ... FROM PUBLIC` after creation.
+27. **`portfolio_summary` and `current_prices` views are access-revoked** — migration 094. `security_invoker = true` + REVOKE ALL from anon and authenticated. Nothing in the app uses these views; all investment queries go through `get_portfolio_summary_full()` RPC instead.
+28. **Folderit is read-only from the dashboard** — the `/folderit` page and all folderit API routes only read data from the DB (synced by cron). No write operations to Folderit's API are ever made from the dashboard.
+29. **CEO daily digest replaces individual task emails** — `/api/notifications/ceo-digest` sends one email per weekday (11:30am PKT). Do not re-introduce per-task email notifications to Khuram's addresses.
 
 ---
 
@@ -1622,7 +1764,7 @@ npm install
 
 ### Step 2: Restore the database
 1. Log in to Supabase dashboard → create a new project
-2. Run all SQL migration files in order (001 through 072) via the Supabase SQL Editor. Also apply the pension RPCs (`get_pension_summary`, `get_pension_fund_breakdown`) and pension tables (`pension_funds`, `pension_fund_prices`) which were applied directly without a numbered migration file.
+2. Run all SQL migration files in order (001 through 095) via the Supabase SQL Editor. Pension tables (`pension_funds`, `pension_fund_prices`) and the original `get_pension_summary` RPC were applied directly without a numbered migration file and must also be run.
 3. Restore data from the most recent backup (available in Supabase Storage or via the `/admin` page backup list)
 
 ### Step 3: Configure environment
@@ -1654,4 +1796,4 @@ vercel deploy --prod
 
 ---
 
-*Blueprint created: 01/07/2026. Last full refresh: 11/07/2026. Maintained by the blueprint-keeper agent. Always keep this accurate — it is the rebuilding guide.*
+*Blueprint created: 01/07/2026. Last full refresh: 12/07/2026. Maintained by the blueprint-keeper agent. Always keep this accurate — it is the rebuilding guide.*
