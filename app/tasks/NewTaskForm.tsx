@@ -24,6 +24,18 @@ type DepartmentOwner = {
   primary_owner_email: string | null;
 };
 
+type Company = {
+  id: string;
+  name: string;
+  short_code: string | null;
+};
+
+// The 4 trading companies in scope for task tagging today — Almahar and
+// Directors were deliberately excluded when this hierarchy was agreed
+// with Khuram. Anything not tagged to one of these falls into the
+// "Group / needs review" bucket (company_id left null).
+const TASK_COMPANY_CODES = ["UTPL", "IFPL", "BRNH", "HD"];
+
 const PROJECT_AREAS = [
   "Unze Trading Ops",
   "Finance",
@@ -42,6 +54,7 @@ const STATUSES = [
   "Not Started",
   "In Progress",
   "Waiting Reply",
+  "Stuck",
   "Submitted",
   "Completed",
   "Cancelled",
@@ -81,18 +94,23 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
   const [members, setMembers] = useState<Member[]>([]);
   const [departmentOwners, setDepartmentOwners] = useState<DepartmentOwner[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
 
   const [description, setDescription] = useState("");
+  const [companyId, setCompanyId] = useState<string>(""); // "" = Group / needs review
   const [project, setProject] = useState("");
+  const [stage, setStage] = useState("");
   const [priority, setPriority] = useState("Medium");
   const [status, setStatus] = useState("Not Started");
   const [dueDate, setDueDate] = useState("");
-  const [assignedDate, setAssignedDate] = useState(today);
   const [assignedTo, setAssignedTo] = useState("");
   const [assignedBy, setAssignedBy] = useState("");
   const [assignedByEmail, setAssignedByEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const [subtasks, setSubtasks] = useState<string[]>([]);
+  const [subtaskInput, setSubtaskInput] = useState("");
 
   useEffect(() => {
     async function loadInitialData() {
@@ -109,7 +127,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
       setAssignedBy(memberData?.name || currentEmail);
 
-      const [membersRes, ownersRes] = await Promise.all([
+      const [membersRes, ownersRes, companiesRes] = await Promise.all([
         supabase
           .from("members")
           .select("id, name, email, role, department, business_unit")
@@ -122,10 +140,17 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
           )
           .eq("active", true)
           .order("department_name", { ascending: true }),
+
+        supabase
+          .from("companies")
+          .select("id, name, short_code")
+          .in("short_code", TASK_COMPANY_CODES)
+          .order("name", { ascending: true }),
       ]);
 
       if (membersRes.data) setMembers(membersRes.data);
       if (ownersRes.data) setDepartmentOwners(ownersRes.data);
+      if (companiesRes.data) setCompanies(companiesRes.data);
     }
 
     loadInitialData();
@@ -144,6 +169,17 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
     }
   }
 
+  function addSubtask() {
+    const text = subtaskInput.trim();
+    if (!text) return;
+    setSubtasks((prev) => [...prev, text]);
+    setSubtaskInput("");
+  }
+
+  function removeSubtask(index: number) {
+    setSubtasks((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -151,10 +187,8 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
       toast.show("Due date is required — every task must have a deadline.", "error");
       return;
     }
-    if (assignedDate > today) {
-      toast.show("Assigned date cannot be in the future.", "error");
-      return;
-    }
+    // Note: companyId === "" is a valid, deliberate choice (Group / needs
+    // review), not a missing value — nothing to validate here.
 
     setSaving(true);
 
@@ -166,12 +200,14 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
     const { data: newTask, error } = await supabase.from("tasks").insert({
       task_type: "Task",
       description,
+      company_id: companyId || null,
       project,
+      stage: stage.trim() || null,
       priority,
       status,
       due_date: dueDate,
       assigned_by_email: assignedByEmail || null,
-      assigned_date: assignedDate || null,
+      assigned_date: today,
       assigned_to: assignedTo,
       assigned_to_email: assignedToEmail,
       assigned_by: assignedBy,
@@ -181,12 +217,22 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
       assigned_to_business_unit: assignedMember?.business_unit || null,
     }).select("id").single();
 
-    setSaving(false);
-
     if (error) {
+      setSaving(false);
       toast.show("Error saving task: " + error.message, "error");
       return;
     }
+
+    if (subtasks.length > 0 && newTask?.id) {
+      const { error: subtaskError } = await supabase.from("task_subtasks").insert(
+        subtasks.map((title, i) => ({ task_id: newTask.id, title, position: i }))
+      );
+      if (subtaskError) {
+        toast.show("Task created, but subtasks failed to save: " + subtaskError.message, "error");
+      }
+    }
+
+    setSaving(false);
 
     logAction("Created", "tasks", `Task: ${description} → ${assignedTo}`);
 
@@ -199,13 +245,16 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
     }
 
     setDescription("");
+    setCompanyId("");
     setProject("");
+    setStage("");
     setPriority("Medium");
     setStatus("Not Started");
     setDueDate("");
-    setAssignedDate(today);
     setAssignedTo("");
     setNotes("");
+    setSubtasks([]);
+    setSubtaskInput("");
 
     router.refresh();
     onCreated?.();
@@ -230,7 +279,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0 16px" }}>
 
-          <label>
+          <label style={{ gridColumn: "1 / -1" }}>
             <span style={kickerStyle}>What needs to be done?</span>
             <textarea
               style={{ ...inputStyle, height: "80px" }}
@@ -242,7 +291,22 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
           </label>
 
           <label>
-            <span style={kickerStyle}>Department / project area</span>
+            <span style={kickerStyle}>Company *</span>
+            <select
+              style={inputStyle}
+              value={companyId}
+              onChange={(e) => setCompanyId(e.target.value)}
+              required
+            >
+              <option value="">Group / needs review</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span style={kickerStyle}>Department / project area *</span>
             <select
               style={inputStyle}
               value={project}
@@ -267,6 +331,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
                 backgroundColor: COLOURS.CARD_ALT,
                 fontSize: "13px",
                 color: COLOURS.SLATE,
+                gridColumn: "1 / -1",
               }}
             >
               Default owner:{" "}
@@ -277,6 +342,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
           <label>
             <span style={kickerStyle}>Priority</span>
             <select style={inputStyle} value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option>Urgent</option>
               <option>High</option>
               <option>Medium</option>
               <option>Low</option>
@@ -290,6 +356,17 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
                 <option key={s}>{s}</option>
               ))}
             </select>
+          </label>
+
+          <label>
+            <span style={kickerStyle}>Stage (optional)</span>
+            <input
+              type="text"
+              style={inputStyle}
+              value={stage}
+              onChange={(e) => setStage(e.target.value)}
+              placeholder="e.g. Submitted to Civil Dept"
+            />
           </label>
 
           <label>
@@ -343,15 +420,23 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
             </div>
           </div>
 
-          <label>
+          <div style={{ marginBottom: "12px" }}>
             <span style={kickerStyle}>Assigned date</span>
-            <DateInput
-              style={inputStyle}
-              value={assignedDate}
-              max={today}
-              onChange={(e) => setAssignedDate(e.target.value)}
-            />
-          </label>
+            <div
+              style={{
+                marginTop: "4px",
+                padding: "7px 10px",
+                border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: RADII.SM,
+                backgroundColor: COLOURS.CARD_ALT,
+                color: COLOURS.SLATE,
+                fontSize: "14px",
+              }}
+              title="Set automatically when the task is created — never editable, including by Admin."
+            >
+              {new Date(today + "T00:00:00").toLocaleDateString("en-GB")} — today, locked
+            </div>
+          </div>
 
           <label>
             <span style={kickerStyle}>Due date</span>
@@ -363,7 +448,53 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
             />
           </label>
 
-          <label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            <span style={kickerStyle}>Subtasks (optional) — add as many steps as this task needs</span>
+            {subtasks.length > 0 && (
+              <div style={{ marginTop: "6px", marginBottom: "6px" }}>
+                {subtasks.map((s, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <span style={{ fontSize: "13.5px", color: COLOURS.NAVY }}>{s}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeSubtask(i)}
+                      style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "11.5px", fontWeight: 600, cursor: "pointer" }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "8px", marginTop: "4px", marginBottom: "12px" }}>
+              <input
+                type="text"
+                value={subtaskInput}
+                onChange={(e) => setSubtaskInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubtask(); } }}
+                placeholder="Add a subtask…"
+                style={{ ...inputStyle, marginBottom: 0, flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={addSubtask}
+                style={{
+                  border: `1px solid ${COLOURS.HAIRLINE}`,
+                  backgroundColor: COLOURS.CARD_ALT,
+                  borderRadius: RADII.SM,
+                  padding: "0 16px",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  color: COLOURS.NAVY,
+                  cursor: "pointer",
+                }}
+              >
+                + Add
+              </button>
+            </div>
+          </label>
+
+          <label style={{ gridColumn: "1 / -1" }}>
             <span style={kickerStyle}>Notes / context</span>
             <textarea
               style={{ ...inputStyle, height: "70px" }}
