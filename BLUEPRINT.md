@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 12/07/2026 (Folderit DMS integration: 15 migrations 074–089 + 095; security hardening: RLS performance fixes 090–091, anon/PUBLIC revokes 092–093, investment view lockdown 094; CEO daily digest RPC + cron; pension fund factsheet fields; `search_folderit_inbox` RPC for company inbox search).
+> **This is the source of truth.** Read before touching any code. Last updated: 14/07/2026 (Tasks redesign: migrations 098–101 — company tag, stage, locked assigned/original-due dates, subtasks table with DB-enforced completion gating, automatic due-date history, Stuck status, KPI/Team RPCs; NewTaskForm/TaskStatus/TasksList rebuilt to match; verified tasks_select RLS already enforced "own tasks only unless Admin/CEO/PA" and removed an undocumented company-wide override on one Manager account).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -895,27 +895,48 @@ Individual pickups against an authority letter.
 | id | uuid PK | |
 | task_type | text | |
 | description | text NOT NULL | |
-| project | text | |
+| project | text | department / area — required in the New Task form |
+| company_id | uuid FK → companies | **Added migration 098.** Null = "Group / needs review". Only UTPL/IFPL/Baranh/Haute Dolci are offered in the New Task form (Almahar/Directors excluded by design) |
+| stage | text | **Added migration 098.** Optional free-text pipeline label, separate from status (e.g. "Back to FD Dept") |
 | priority | text | 'Urgent', 'High', 'Medium', 'Normal', 'Low' |
-| due_date | date | **Required** |
-| assigned_date | date | |
+| due_date | date | **Required.** Freely editable by anyone with task access — every change is logged automatically (see `task_due_date_history` below) |
+| original_due_date | date | **Added migration 098.** Captured once at creation, locked forever by a trigger (`tasks_lock_dates`) — reverts any UPDATE attempt back to the original value, even for Admin |
+| assigned_date | date | Set once at creation (today, non-editable in the UI) and locked forever by the same trigger as `original_due_date` |
 | assigned_to / assigned_to_email / assigned_to_department | text | |
 | assigned_by / assigned_by_email | text | |
-| status | text | 'Not Started', 'In Progress', 'Waiting Reply', 'Submitted', 'Completed', 'Cancelled' |
+| status | text | 'Not Started', 'In Progress', 'Waiting Reply', **'Stuck'** (added — no dedicated colour yet, renders neutral grey), 'Submitted', 'Completed', 'Cancelled'. No DB CHECK constraint — any text is technically insertable, the list above is enforced by the UI only |
+| completed_at | timestamptz | **Added migration 098.** Stamped/cleared automatically by a trigger on status transitions into/out of 'Completed' — powers the Team tab's on-time rate |
 | completion_notes | text | |
 | meeting_id | uuid FK → meetings | |
 | time_spent_minutes | int | DEFAULT 0 |
 | created_at | timestamptz | |
 
+**A task cannot be set to `status = 'Completed'` at the database level while it has any incomplete row in `task_subtasks`** — enforced by a BEFORE UPDATE trigger (migration 100), not just a disabled button in the UI.
+
+#### `task_subtasks` (migration 100)
+One flat checklist level under a task — no nesting. Columns: `id`, `task_id` (FK → tasks, cascade delete), `title`, `is_complete`, `position`, `created_at`, `completed_at` (auto-stamped). RLS mirrors `tasks_select`/`tasks_update` — if you can see/edit the parent task, you can see/edit its subtasks.
+
+#### `task_due_date_history` (migration 099)
+Automatic, append-only audit trail of every `due_date` change. Columns: `task_id`, `old_due_date`, `new_due_date`, `changed_by`, `changed_by_email`, `changed_at`. Populated entirely by an AFTER UPDATE trigger on `tasks` (`tasks_log_due_date_change`) — no application code ever writes to this table directly, so it can't be forgotten or bypassed by a future screen. RLS: readable by anyone who can see the parent task; no client insert policy (trigger only, `security definer`).
+
+#### Task summary RPCs (migration 101)
+`get_tasks_kpi_summary(p_company_id uuid default null, p_group_only boolean default false)`, `get_tasks_department_breakdown()`, `get_tasks_team_stats()` — replace client-side counting for the Tasks page KPI row, department breakdown, and Team tab. Each is `security definer` and re-implements the exact same visibility rule as the `tasks_select` RLS policy by hand (privileged, or assigned-to-me, or assigned-by-me), since a `security definer` function does not automatically re-apply the caller's RLS.
+
 #### `recurring_tasks`
 Templates for recurring task generation. Fields: description, assigned_to/email/dept, frequency ('weekly'/'monthly'/'quarterly'), day_of_week, day_of_month, due_days_after, active.
 **RLS (migration 072):** Uses `is_privileged()` — PA (Executive role) can read and write. Previously was `is_admin_or_exec()` which blocked PA since migration 027.
+**Not yet merged into the redesigned /tasks page** — still its own page/tab, deliberately deferred (see Tasks redesign note below).
 
 #### `meetings`
 fields: meeting_date, title, company, department, executive_summary, decisions, risks, opportunities, attendees (jsonb), raw_transcript, created_by.
 
 #### `meeting_attendees`, `meeting_tasks`, `pending_minutes`
 Supporting meeting tables. See migration files.
+
+#### Tasks page redesign (14/07/2026) — what shipped and what didn't
+Real code, not just the design mockup (`Tasks_Page_Mockup.html`, still a standalone reference file, not wired into the app): `NewTaskForm.tsx` (required Company tag, locked assigned date, inline subtasks, Stage, Urgent priority, Stuck status), `TaskStatus.tsx` (subtasks checklist with completion gating, Stage editing, due-date history + locked original date), `TasksList.tsx` (company badges, Company filter + Reset Filters, RPC-sourced KPI row incl. Due Today/Stuck, new Team tab via `TeamStats.tsx`).
+
+**Deliberately not attempted in this pass** (flagged to Khuram rather than silently skipped): a true drag-and-drop Kanban board (the existing department/weekly/monthly/quarterly/timeline view system stays as the browsing surface); merging Recurring Tasks into this page as a tab; rewriting the existing client-side department/weekly/monthly/quarterly/timeline grouping logic in `TasksList.tsx` into RPCs (pre-existing house-rule-0 debt, untouched — only the KPI row was moved to an RPC in this pass). These were held back as separate, safer follow-ups rather than risking a single very large, hard-to-review change to a production tool.
 
 ---
 

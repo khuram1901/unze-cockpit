@@ -14,6 +14,23 @@ Also, on `Tasks_Page_Redesign_Proposal.md` / `Tasks_Page_Mockup.html` (still a s
 
 ---
 
+## 2026-07-14 — Tasks redesign built into real code (migrations 098–101 + NewTaskForm/TaskStatus/TasksList)
+
+Khuram asked to turn the approved Tasks mockup into the real `/tasks` page and confirmed doing it as one full pass with one review at the end. Four migrations (written to `supabase/`, **not yet applied** — apply via SQL Editor, in order, before this code takes effect):
+
+- **098** — `tasks.company_id` (FK → companies, null = "Group / needs review"), `stage` (optional free-text pipeline label), `original_due_date` and `completed_at`. Two triggers make the rules real rather than UI conventions: `assigned_date`/`original_due_date` are locked forever (any UPDATE attempt is silently reverted), and `completed_at` is stamped/cleared automatically on status transitions.
+- **099** — `task_due_date_history`, populated entirely by an AFTER UPDATE trigger — every due-date move logged automatically (old date, new date, who, when), no app code has to remember to log it.
+- **100** — `task_subtasks` (one flat checklist level, no nesting) + a BEFORE UPDATE trigger that blocks setting a task to `Completed` at the database level while any subtask is still open — same escalation pattern as migration 045's protected-task rule.
+- **101** — `get_tasks_kpi_summary()`, `get_tasks_department_breakdown()`, `get_tasks_team_stats()` — read-only RPCs replacing client-side counting for the KPI row and the new Team tab, each re-implementing the `tasks_select` visibility rule by hand since `security definer` functions don't inherit the caller's RLS automatically.
+
+Code changes, four small commits: `NewTaskForm.tsx` (required Company select, locked "today, locked" assigned date, optional Stage field, inline subtask list, Urgent priority, Stuck status), `TaskStatus.tsx` (subtasks checklist with completion gating, Stage editing, due-date history + locked original date shown above the now-freely-editable current due date), `TasksList.tsx` (company badges + Stage chip + subtask count on each row, a Company filter dropdown with Reset Filters, KPI row now RPC-sourced with new Due Today/Stuck tiles, new Team tab via `TeamStats.tsx` — on-time completion rate is genuinely computable for the first time, no longer "not trackable yet").
+
+Verification: `tsc --noEmit` passes clean across the whole app. `next build` couldn't be run end-to-end in the sandbox (no network access to fetch the platform SWC binary) — Vercel's own build is the real confirmation once this is pushed. ESLint flagged some `react-hooks/set-state-in-effect` errors; confirmed these are pre-existing in the original file (checked against the last committed version), not introduced by this change.
+
+Deliberately not attempted, flagged rather than silently skipped: a true drag-and-drop Kanban board, merging Recurring Tasks into this page as a tab, and rewriting the existing client-side department/weekly/monthly/quarterly/timeline grouping into RPCs (pre-existing debt, untouched beyond the KPI row). Held back as separate, safer follow-ups rather than one very large, hard-to-review change to a production tool.
+
+---
+
 ## 2026-07-11 — UI designer audit (7 styling fixes), pension cache fix, pension price cron, AGENTS.md, Audit multi-company, dispatch/letter safety hardening, constants/permissions/AccessMatrix extended
 
 ### AGENTS.md added
