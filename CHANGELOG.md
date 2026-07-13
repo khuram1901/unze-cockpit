@@ -4,6 +4,16 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Tasks visibility audit (no code change needed) + removed Shakeel's can_see_all_tasks override
+
+Khuram asked for confirmation that "every member can only see their own tasks unless they're Admin/CEO/PA" — checked the live database rather than assuming. The `tasks_select` RLS policy (migrations 027/030/090) already enforces exactly this: `can_access_all_tasks() OR assigned_to_email = me OR assigned_by = my name`, and `can_access_all_tasks()` defaults to Admin tier + Executive (PA) only, with a per-member override checked first. This is a real database-level rule, not just a client-side filter, so it holds even for direct API calls. No code or migration needed — verified via `pg_policies` and the function definitions live on the project.
+
+One live exception found: Muhammad Shakeel (Manager, Finance) had `member_permissions.can_see_all_tasks = true`, an undocumented manual override giving him company-wide task visibility. Flagged to Khuram, who confirmed removing it. Set to `false` via direct SQL update (data change, not a migration — no schema change involved). Only the two Admin accounts and the PA (Sundas Hussain) now have `can_see_all_tasks = true`.
+
+Also, on `Tasks_Page_Redesign_Proposal.md` / `Tasks_Page_Mockup.html` (still a standalone design file, not wired into the app): removed the left sidebar per Khuram's feedback (screenshot was layout inspiration only, not a request for new navigation structure), replaced the Company/Department pill rows with real dropdown selects, added a working "More Filters" panel and a "Reset Filters" control, and removed all emoji from the mockup in favour of the app's existing text-first style.
+
+---
+
 ## 2026-07-11 — UI designer audit (7 styling fixes), pension cache fix, pension price cron, AGENTS.md, Audit multi-company, dispatch/letter safety hardening, constants/permissions/AccessMatrix extended
 
 ### AGENTS.md added
