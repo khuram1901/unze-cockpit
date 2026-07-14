@@ -788,7 +788,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               }}
             >
               <div style={{ fontSize: "10.5px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "2px" }}>{label}</div>
-              <div style={{ fontSize: "19px", fontWeight: 700, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: accent }}>{value.toLocaleString()}</div>
+              <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "19px", fontWeight: 700, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: accent }}>{value.toLocaleString()}</div>
               {sub && <div style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.RED, marginTop: "1px" }}>{sub}</div>}
             </div>
           ))}
@@ -1068,15 +1068,16 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         )}
       </div>
 
-      {/* ═══ SEARCH + FILTERS — every tab except Team/Recurring, which
-          aren't task lists (Team is aggregate stats, Recurring is
-          templates not tasks). All ten filters used to sit in two
-          permanently-open rows; they're now one "Filters" button with a
-          badge, and the whole panel below opens on demand — the redesign
-          Khuram approved. ═══ */}
+      {/* ═══ ONE TOOLBAR ROW — search, Filters, the All/Overdue/Waiting quick
+          pills, and (List view only) the My tasks/Everyone scope + Select
+          all used to be four separate stacked rows. Folded into one
+          wrapping row, matching the single consolidated toolbar Khuram
+          approved — everything task-list-level lives together instead of
+          reading as a stack of strips. Hidden on Team/Recurring, which
+          aren't task lists. ═══ */}
       {timeView !== "team" && timeView !== "recurring" && (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: filtersOpen ? "8px" : "12px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: 1, minWidth: "180px", maxWidth: "300px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: "1 1 180px", minWidth: "180px", maxWidth: "260px" }}>
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -1108,6 +1109,46 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
               Reset
             </button>
+          )}
+
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            {(["all", "overdue", "waiting"] as const).map((f) => (
+              <button key={f} onClick={() => setFilter(f)} style={{
+                backgroundColor: filter === f ? COLOURS.NAVY : COLOURS.CARD,
+                color: filter === f ? "white" : COLOURS.NAVY,
+                border: `1px solid ${filter === f ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                borderRadius: RADII.PILL, padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              }}>
+                {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueTasks.length})` : `Waiting (${waitingReply.length})`}
+              </button>
+            ))}
+          </div>
+
+          {timeView === "list" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginLeft: "auto" }}>
+              <div style={{ display: "flex", gap: "4px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, padding: "3px" }}>
+                {(["mine", "everyone"] as const).map((s) => (
+                  <button key={s} onClick={() => setMyTasksScope(s)} style={{
+                    backgroundColor: myTasksScope === s ? COLOURS.CARD : "transparent",
+                    color: myTasksScope === s ? COLOURS.NAVY : COLOURS.SLATE,
+                    border: "none", borderRadius: RADII.PILL, padding: "5px 14px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
+                    boxShadow: myTasksScope === s ? "0 1px 2px rgba(15,23,32,0.08)" : "none",
+                  }}>
+                    {s === "mine" ? "My tasks" : "Everyone"}
+                  </button>
+                ))}
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, cursor: myTasksSource.length > 0 ? "pointer" : "default" }}>
+                <input
+                  type="checkbox"
+                  checked={isAllSelected(myTasksSource.map((t) => t.id))}
+                  onChange={() => toggleSelectAll(myTasksSource.map((t) => t.id))}
+                  disabled={myTasksSource.length === 0}
+                  style={{ width: "15px", height: "15px", cursor: myTasksSource.length > 0 ? "pointer" : "default" }}
+                />
+                Select all ({myTasksSource.length})
+              </label>
+            </div>
           )}
         </div>
       )}
@@ -1175,48 +1216,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         </div>
       )}
 
-      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "12px" }}>
-        {(["all", "overdue", "waiting"] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} style={{
-            backgroundColor: filter === f ? COLOURS.NAVY : COLOURS.CARD,
-            color: filter === f ? "white" : COLOURS.NAVY,
-            border: `1px solid ${filter === f ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-            borderRadius: RADII.PILL, padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
-          }}>
-            {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueTasks.length})` : `Waiting (${waitingReply.length})`}
-          </button>
-        ))}
-      </div>
-
       {/* ═══ LIST VIEW (default landing view) ═══ */}
       {timeView === "list" && (
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.INK_400 }}>Viewing</span>
-            <div style={{ display: "flex", gap: "4px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, padding: "3px" }}>
-              {(["mine", "everyone"] as const).map((s) => (
-                <button key={s} onClick={() => setMyTasksScope(s)} style={{
-                  backgroundColor: myTasksScope === s ? COLOURS.CARD : "transparent",
-                  color: myTasksScope === s ? COLOURS.NAVY : COLOURS.SLATE,
-                  border: "none", borderRadius: RADII.PILL, padding: "5px 14px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
-                  boxShadow: myTasksScope === s ? "0 1px 2px rgba(15,23,32,0.08)" : "none",
-                }}>
-                  {s === "mine" ? "My tasks" : "Everyone"}
-                </button>
-              ))}
-            </div>
-            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, cursor: myTasksSource.length > 0 ? "pointer" : "default", marginLeft: "auto" }}>
-              <input
-                type="checkbox"
-                checked={isAllSelected(myTasksSource.map((t) => t.id))}
-                onChange={() => toggleSelectAll(myTasksSource.map((t) => t.id))}
-                disabled={myTasksSource.length === 0}
-                style={{ width: "15px", height: "15px", cursor: myTasksSource.length > 0 ? "pointer" : "default" }}
-              />
-              Select all ({myTasksSource.length})
-            </label>
-          </div>
-
           {myTasksGroupOrder.filter((g) => myTasksGroups.has(g)).map((group) => {
             const groupTasks = myTasksGroups.get(group)!;
             return (
