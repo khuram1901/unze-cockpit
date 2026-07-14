@@ -4,6 +4,14 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Recurring-task cron migrated onto the shared createTaskCore gate
+
+Last of the 7 original task-insert call sites from TASK_NOTIFICATION_AUDIT.md. `app/api/tasks/recurring/route.ts` used to insert into `tasks` directly; now it calls `createTaskCore()` in-process (no HTTP round-trip — this cron has no user session to authenticate an `/api/tasks/create` call with, unlike the cash-escalation path which goes through the browser).
+
+Caught before shipping: `createTaskCore` hard-requires a company on every task, and all 8 active recurring templates (Sundas's PA payment follow-ups — Fee Challan, Bilal Engineer, Pak Qatar, Shapes, Stock Sheet, Transworld Bill, Umer Ahmad Shah Hostel Fee, Follow Up - Bilal) had `company_id = null`. Flipping the switch without fixing this would have silently stopped all 8 from firing. Asked Khuram — tagged all 8 to the existing "Directors" company (personal/CEO-level items, not tied to UTPL/IFPL). The cron also now skips (and reports back, rather than crashing) any future template missing a company or an assignee, instead of failing the whole run.
+
+---
+
 ## 2026-07-14 — "Unze Group" as an explicit company, replacing the blank-company convention
 
 Khuram, after the Kamran group-level fix: "instead of keeping them blank why don't we create Unze Group, which we can allocate everyone into... will this be better?" Yes — leaving Company blank to mean "sees the whole group" only worked because it happened to be undocumented behaviour; anyone editing a member later couldn't tell blank-on-purpose from blank-because-nobody-filled-it-in.
