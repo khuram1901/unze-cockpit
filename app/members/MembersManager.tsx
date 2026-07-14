@@ -306,13 +306,18 @@ export default function MembersManager() {
     }
     const fn = updates.first_name !== undefined ? updates.first_name : member?.first_name || "";
     const ln = updates.last_name !== undefined ? updates.last_name : member?.last_name || "";
-    const { error } = await supabase.from("members").update({
+    const finalUpdates = {
       ...updates, ...(updates.email !== undefined ? { email: (updates.email || "").trim() } : {}),
       name: `${fn} ${ln}`.trim() || member?.name || null,
-    }).eq("id", id);
+    };
+    const { error } = await supabase.from("members").update(finalUpdates).eq("id", id);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
     logAction("Updated", "members", `Updated ${Object.keys(updates).join(", ")}`, id);
-    loadData();
+    // Patch local state instead of a full reload (5+ queries) — this was
+    // the actual cause of Khuram's "getting stuck" report: every keystroke
+    // in a text field, or every checkbox click, was waiting on a full
+    // members/plants/departments/tasks refetch before the screen updated.
+    setMembers((prev) => prev.map((x) => x.id === id ? { ...x, ...finalUpdates } : x));
   }
 
   // Sets or clears manager_id on ANOTHER member's row (not the one being
@@ -321,12 +326,15 @@ export default function MembersManager() {
   // own manager one at a time.
   async function toggleTeamMember(managerId: string, memberId: string, checked: boolean) {
     if (memberId === managerId) return;
-    const { error } = await supabase.from("members").update({ manager_id: checked ? managerId : null }).eq("id", memberId);
+    const newManagerId = checked ? managerId : null;
+    const { error } = await supabase.from("members").update({ manager_id: newManagerId }).eq("id", memberId);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
     const mgr = members.find((x) => x.id === managerId);
     const person = members.find((x) => x.id === memberId);
     logAction("Updated", "members", checked ? `${person?.name} now reports to ${mgr?.name}` : `${person?.name} no longer reports to ${mgr?.name}`, memberId);
-    loadData();
+    // Local patch, not a full reload — same fix as updateMember above, and
+    // this is what makes ticking several boxes in a row feel instant.
+    setMembers((prev) => prev.map((x) => x.id === memberId ? { ...x, manager_id: newManagerId } : x));
   }
 
   async function deleteMember(id: string, nm: string) {
@@ -784,8 +792,8 @@ export default function MembersManager() {
                   {isAdmin && isEditing && (
                     <div style={{ padding: "8px 12px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT }}>
                       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(120px, 1fr))", gap: "6px", marginBottom: "6px", alignItems: "end" }}>
-                        <div><label style={lblC}>First Name</label><input style={inpC} value={m.first_name || ""} onChange={(e) => updateMember(m.id, { first_name: e.target.value })} /></div>
-                        <div><label style={lblC}>Last Name</label><input style={inpC} value={m.last_name || ""} onChange={(e) => updateMember(m.id, { last_name: e.target.value })} /></div>
+                        <div><label style={lblC}>First Name</label><input style={inpC} defaultValue={m.first_name || ""} onBlur={(e) => { if (e.target.value !== (m.first_name || "")) updateMember(m.id, { first_name: e.target.value }); }} /></div>
+                        <div><label style={lblC}>Last Name</label><input style={inpC} defaultValue={m.last_name || ""} onBlur={(e) => { if (e.target.value !== (m.last_name || "")) updateMember(m.id, { last_name: e.target.value }); }} /></div>
                         <div><label style={lblC}>Email</label><input style={inpC} defaultValue={m.email || ""} onBlur={(e) => { if (e.target.value.trim() !== (m.email || "")) updateMember(m.id, { email: e.target.value }); }} /></div>
                         <div><label style={lblC}>Role</label><select style={inpC} value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })} disabled={!canEditMember(me, { email: m.email, role: m.role })}>{Array.from(new Set([m.role, ...myAssignableRoles])).map((r) => <option key={r}>{r}</option>)}</select></div>
                         <div><label style={lblC}>Department</label><select style={inpC} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}><option value="">—</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></div>
@@ -794,7 +802,7 @@ export default function MembersManager() {
                         <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }}>
                           <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} /> HOD
                         </label>
-                        <div><label style={lblC}>Position title</label><input style={inpC} value={m.position_title || ""} onChange={(e) => updateMember(m.id, { position_title: e.target.value || null })} placeholder="e.g. CEO, Director" /></div>
+                        <div><label style={lblC}>Position title</label><input style={inpC} defaultValue={m.position_title || ""} onBlur={(e) => { if (e.target.value !== (m.position_title || "")) updateMember(m.id, { position_title: e.target.value || null }); }} placeholder="e.g. CEO, Director" /></div>
                       </div>
 
                       {/* Reports to — read-only here, set from the manager/director's own
@@ -808,26 +816,40 @@ export default function MembersManager() {
                       {/* Team members — only shown for HODs/Directors (and Admin/Exec,
                           who sit at the top of the chain and can have direct reports
                           too). Tick whoever should report to this person; unticking
-                          clears their manager_id. */}
-                      {(m.is_hod || m.role === "Admin" || m.role === "Executive") && (
-                        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 10px", marginBottom: "6px", backgroundColor: COLOURS.CARD }}>
-                          <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "6px", textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
-                            Team members reporting to {dn}
+                          clears their manager_id.
+                          One person can only report to one HOD, so anyone already
+                          assigned to someone else is hidden here entirely, not just
+                          shown unticked — the only way to move them is to untick them
+                          under their current manager first. */}
+                      {(m.is_hod || m.role === "Admin" || m.role === "Executive") && (() => {
+                        const pickable = members.filter((x) => x.id !== m.id && (!x.manager_id || x.manager_id === m.id));
+                        const elsewhereCount = members.filter((x) => x.id !== m.id && x.manager_id && x.manager_id !== m.id).length;
+                        return (
+                          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 10px", marginBottom: "6px", backgroundColor: COLOURS.CARD }}>
+                            <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "6px", textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
+                              Team members reporting to {dn}
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                              {pickable.map((x) => {
+                                const xn = fullName(x.first_name, x.last_name, x.name);
+                                const checked = x.manager_id === m.id;
+                                return (
+                                  <label key={x.id} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "12px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer" }}>
+                                    <input type="checkbox" checked={checked} onChange={(e) => toggleTeamMember(m.id, x.id, e.target.checked)} style={{ width: "13px", height: "13px" }} />
+                                    {xn}
+                                  </label>
+                                );
+                              })}
+                              {pickable.length === 0 && <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>Nobody left to assign.</span>}
+                            </div>
+                            {elsewhereCount > 0 && (
+                              <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "6px" }}>
+                                {elsewhereCount} other{elsewhereCount !== 1 ? "s" : ""} already assigned to a different manager — not shown here.
+                              </div>
+                            )}
                           </div>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                            {members.filter((x) => x.id !== m.id).map((x) => {
-                              const xn = fullName(x.first_name, x.last_name, x.name);
-                              const checked = x.manager_id === m.id;
-                              return (
-                                <label key={x.id} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "12px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer" }}>
-                                  <input type="checkbox" checked={checked} onChange={(e) => toggleTeamMember(m.id, x.id, e.target.checked)} style={{ width: "13px", height: "13px" }} />
-                                  {xn}
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* Plants + Notifications */}
                       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "6px", fontSize: "14px" }}>
