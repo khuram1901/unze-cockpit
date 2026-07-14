@@ -4,6 +4,18 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Full company names, Almahar/Directors excluded, Department filter shows all departments
+
+Three more fixes from Khuram:
+
+- **Full company names, not codes** — Tasks badges/filters/board cards were showing "UTPL"/"IFPL" instead of the real company name. Now show `companies.name` ("Unze Trading Pvt Ltd", "Imperial Footwear Pvt Ltd", etc.) everywhere; short_code is only still used internally to pick the badge colour.
+- **Almahar and Directors excluded everywhere on Tasks** — `NewTaskForm.tsx` already excluded them (`TASK_COMPANY_CODES`, agreed with Khuram previously), but the task-edit form (`TaskDetailPanel.tsx`) and the Company filter dropdown (`TasksList.tsx`) were still fetching every company unfiltered. `TASK_COMPANY_CODES` moved to `SharedUI.tsx` so all three screens share one list instead of drifting. Confirmed 0 existing tasks reference either company, so nothing was orphaned.
+- **Department filter was only showing departments already used on a task** — so the 7 departments Khuram added in the last round (with no tasks yet) never appeared as filter options. Now merges the canonical `department_owners` list with whatever's on existing tasks, so all departments show up regardless of usage.
+
+Verification: `tsc --noEmit` clean, `eslint` shows only the same pre-existing `react-hooks/set-state-in-effect` pattern.
+
+---
+
 ## 2026-07-14 — Fixed "Muhammad Shakeel twice" + removed duplicate week filter
 
 Khuram spotted Muhammad Shakeel listed twice in the Tasks Owner filter despite there being only one such member. Root cause: 10 member rows (Asif Shakoor, Usman Arshad, Muhammad Nadeem, Awais Zaman, Muhammad Shakeel, Sania Saleem, Shahid Masaud, Muhammad Akhlaq, Shahida Naseem, Zuhair Khalid) were imported with a stray trailing space on first/last name, producing a double space in `name`. Browsers collapse that visually, so it looked fine — but some tasks were entered with a clean single space instead, and anywhere the app deduped/grouped by the raw string (Owner filter, Tree view person grouping, `get_tasks_team_stats()`), the two spellings counted as different people.
