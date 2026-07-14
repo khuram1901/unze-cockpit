@@ -148,7 +148,7 @@ export default function PADashboardPage() {
     const [tasksRes, meetingsRes, membersRes, companiesRes] = await Promise.all([
       supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(300),
       supabase.from("meeting_requests").select("id, requested_by_name, meeting_title, requested_date, priority, status").eq("status", "Pending").order("created_at", { ascending: false }),
-      supabase.from("members").select("first_name, last_name, name, email, department, phone_e164"),
+      supabase.from("members").select("first_name, last_name, name, email, department, phone_e164").eq("is_active", true),
       supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
     ]);
 

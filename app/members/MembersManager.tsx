@@ -23,6 +23,7 @@ type Member = {
   is_hod: boolean;
   manager_id: string | null;
   position_title: string | null;
+  is_active: boolean;
   notify_email: boolean;
   notify_whatsapp: boolean;
   phone_e164: string | null;
@@ -106,7 +107,7 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
   borderRadius: "5px", padding: "4px 10px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
 });
 
-type ActiveTab = "people" | "matrix" | "ownership" | "reassign" | "orgchart";
+type ActiveTab = "people" | "matrix" | "ownership" | "offboard" | "orgchart";
 
 // Renders one person plus everyone under them, recursively — depth-capped
 // and cycle-guarded since manager_id has no DB constraint preventing a loop
@@ -183,10 +184,11 @@ export default function MembersManager() {
 
   const [departments, setDepartments] = useState<DepartmentOwner[]>([]);
   const [openTasks, setOpenTasks] = useState<TaskSummary[]>([]);
-  const [fromMemberId, setFromMemberId] = useState("");
-  const [toMemberId, setToMemberId] = useState("");
-  const [reassigning, setReassigning] = useState(false);
-  const [reassignMsg, setReassignMsg] = useState("");
+  const [leavingId, setLeavingId] = useState("");
+  const [replacementId, setReplacementId] = useState("");
+  const [stepIntoLine, setStepIntoLine] = useState(true);
+  const [offboarding, setOffboarding] = useState(false);
+  const [offboardMsg, setOffboardMsg] = useState("");
 
   async function loadData() {
     const { data: userData } = await supabase.auth.getUser();
@@ -202,7 +204,7 @@ export default function MembersManager() {
       }
     }
     const { data } = await supabase.from("members")
-      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, manager_id, position_title, notify_email, notify_whatsapp, phone_e164")
+      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, manager_id, position_title, is_active, notify_email, notify_whatsapp, phone_e164")
       .order("first_name", { ascending: true });
     if (data) setMembers(data);
 
@@ -352,14 +354,17 @@ export default function MembersManager() {
   const isAdmin = myRole === "Admin" || myRole === "Executive";
   const myAssignableRoles = assignableRoles(me);
 
-  // Reassign-tasks access: Admin/Exec (everyone), or a HOD/Director acting
-  // on their own team — Khuram's call, so departures don't have to wait on
-  // him personally. Scoped below to just the HOD's own direct reports (plus
+  // Offboard access: Admin/Exec (everyone), or a HOD acting on their own
+  // team — Khuram's call, so departures don't have to wait on him
+  // personally. Scoped below to just the HOD's own direct reports (plus
   // themselves, so they can step in and hold the work personally).
-  const canReassign = isAdmin || myIsHod;
-  const reassignableMembers = isAdmin
+  const canOffboard = isAdmin || myIsHod;
+  const offboardableMembers = (isAdmin
     ? members
-    : members.filter((m) => m.id === myMemberId || m.manager_id === myMemberId);
+    : members.filter((m) => m.id === myMemberId || m.manager_id === myMemberId)
+  ).filter((m) => m.is_active !== false);
+  // Who can take over — anyone active, except the person leaving.
+  const replacementCandidates = members.filter((m) => m.is_active !== false && m.id !== leavingId);
 
   async function updateDeptOwner(deptId: string, memberId: string) {
     const m = memberId ? members.find((x) => x.id === memberId) : null;
@@ -378,27 +383,76 @@ export default function MembersManager() {
   const openTaskCounts = new Map<string, number>();
   for (const t of openTasks) { const n = t.assigned_to || "Unassigned"; openTaskCounts.set(n, (openTaskCounts.get(n) || 0) + 1); }
 
-  async function reassignOpenTasks() {
-    setReassignMsg("");
-    if (!fromMemberId || !toMemberId) { setReassignMsg("Select both current and new owner."); return; }
-    if (fromMemberId === toMemberId) { setReassignMsg("Cannot reassign to the same person."); return; }
-    const fromM = members.find((m) => m.id === fromMemberId);
-    const toM = members.find((m) => m.id === toMemberId);
-    if (!fromM || !toM) return;
-    if (!await dialog.confirm(`Move all open tasks from ${fromM.name} to ${toM.name}?\n\nNot Started, In Progress and Waiting Reply tasks only.`)) return;
-    setReassigning(true);
-    const OPEN_STATUSES = ["Not Started", "In Progress", "Waiting Reply"];
-    const { data: tasksToMove } = await supabase.from("tasks").select("id").eq("assigned_to", fromM.name).in("status", OPEN_STATUSES);
-    const ids = (tasksToMove || []).map((t) => t.id);
-    if (ids.length === 0) { setReassigning(false); setReassignMsg(`No open tasks found for ${fromM.name}.`); return; }
-    const { error } = await supabase.from("tasks").update({
-      assigned_to: toM.name, assigned_to_email: toM.email, assigned_to_department: toM.department, assigned_to_business_unit: toM.business_unit, updated_at: new Date().toISOString(),
-    }).in("id", ids);
-    setReassigning(false);
-    if (error) { setReassignMsg("Error: " + error.message); return; }
-    logAction("Updated", "tasks", `Reassigned ${ids.length} tasks from ${fromM.name} to ${toM.name}`);
-    setReassignMsg(`Moved ${ids.length} open task(s) from ${fromM.name} to ${toM.name}.`);
-    setFromMemberId(""); setToMemberId("");
+  function nameOf(m: Member) { return m.name || fullName(m.first_name, m.last_name); }
+
+  // Single "this person is leaving" action. Replaces the old standalone
+  // Reassign Tasks tool — Khuram's call, since that tool only ever existed
+  // to handle departures, and doing tasks/reports/ownership separately left
+  // room to forget one. No replacement lined up yet -> everything routes to
+  // the leaver's own manager as interim cover, same as Khuram described for
+  // "HOD steps in until someone new joins."
+  async function offboardMember() {
+    setOffboardMsg("");
+    if (!leavingId) { setOffboardMsg("Select who is leaving."); return; }
+    if (leavingId === replacementId) { setOffboardMsg("Replacement must be a different person."); return; }
+    const leaver = members.find((m) => m.id === leavingId);
+    if (!leaver) return;
+    const replacement = replacementId ? members.find((m) => m.id === replacementId) || null : null;
+    const interim = !replacement && leaver.manager_id ? members.find((m) => m.id === leaver.manager_id) || null : null;
+    const target = replacement || interim;
+
+    const directReports = members.filter((m) => m.manager_id === leaver.id);
+    const ownedDepts = departments.filter((d) => d.primary_owner_member_id === leaver.id);
+    const taskCount = openTaskCounts.get(leaver.name || "") || 0;
+    const willStepIntoLine = !!replacement && stepIntoLine && !replacement.manager_id && !!leaver.manager_id;
+
+    if (!target && (directReports.length > 0 || ownedDepts.length > 0 || taskCount > 0)) {
+      setOffboardMsg(`${nameOf(leaver)} has no manager on file and no replacement was picked, so there's nowhere to route their ${taskCount} task(s)/${directReports.length} report(s). Pick a replacement first.`);
+      return;
+    }
+
+    const summary = [
+      taskCount > 0 ? `${taskCount} open task(s) → ${target ? nameOf(target) : "—"}` : null,
+      directReports.length > 0 ? `${directReports.length} direct report(s) → ${target ? nameOf(target) : "—"}` : null,
+      ownedDepts.length > 0 ? `${ownedDepts.length} department(s) they own → ${target ? nameOf(target) : "—"}` : null,
+      willStepIntoLine ? `${nameOf(replacement!)} will now report to ${nameOf(members.find((m) => m.id === leaver.manager_id)!)}` : null,
+    ].filter(Boolean) as string[];
+
+    if (!await dialog.confirm(
+      `Offboard ${nameOf(leaver)}?\n\n${summary.length ? summary.join("\n") : "No open tasks, reports, or department ownership to move."}\n\n${nameOf(leaver)} will be marked inactive and hidden from every list going forward — nothing is deleted.`,
+      true,
+    )) return;
+
+    setOffboarding(true);
+
+    if (target && taskCount > 0) {
+      const OPEN_STATUSES = ["Not Started", "In Progress", "Waiting Reply"];
+      const { data: tasksToMove } = await supabase.from("tasks").select("id").eq("assigned_to", leaver.name).in("status", OPEN_STATUSES);
+      const ids = (tasksToMove || []).map((t) => t.id);
+      if (ids.length > 0) {
+        await supabase.from("tasks").update({
+          assigned_to: target.name, assigned_to_email: target.email, assigned_to_department: target.department, assigned_to_business_unit: target.business_unit, updated_at: new Date().toISOString(),
+        }).in("id", ids);
+      }
+    }
+    if (target && directReports.length > 0) {
+      await supabase.from("members").update({ manager_id: target.id }).in("id", directReports.map((m) => m.id));
+    }
+    if (target && ownedDepts.length > 0) {
+      await supabase.from("department_owners").update({
+        primary_owner_member_id: target.id, primary_owner_name: target.name, primary_owner_email: target.email,
+      }).in("id", ownedDepts.map((d) => d.id));
+    }
+    if (willStepIntoLine && replacement) {
+      await supabase.from("members").update({ manager_id: leaver.manager_id }).eq("id", replacement.id);
+    }
+
+    const { error } = await supabase.from("members").update({ is_active: false }).eq("id", leaver.id);
+    setOffboarding(false);
+    if (error) { setOffboardMsg("Error: " + error.message); return; }
+    logAction("Updated", "members", `Offboarded ${nameOf(leaver)}${target ? ` — handed over to ${nameOf(target)}` : ""}`, leaver.id);
+    setOffboardMsg(`${nameOf(leaver)} offboarded.${summary.length ? " " + summary.join("; ") + "." : ""}`);
+    setLeavingId(""); setReplacementId(""); setStepIntoLine(true);
     loadData();
   }
 
@@ -436,7 +490,7 @@ export default function MembersManager() {
     { key: "people",    label: "People",        count: members.length },
     { key: "matrix",    label: "Access matrix", count: members.length },
     { key: "ownership", label: "Dept. ownership" },
-    { key: "reassign",  label: "Reassign tasks" },
+    { key: "offboard",  label: "Offboard" },
     { key: "orgchart",  label: "Org chart" },
   ];
 
@@ -774,11 +828,16 @@ export default function MembersManager() {
                     )}
 
                     {/* Role badge */}
-                    <span style={{
-                      fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: RADII.PILL,
-                      width: "fit-content", justifySelf: isMobile ? "end" : "start",
-                      ...roleChip(m.role, m.email),
-                    }}>{m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role}</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: isMobile ? "flex-end" : "flex-start" }}>
+                      <span style={{
+                        fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: RADII.PILL,
+                        width: "fit-content",
+                        ...roleChip(m.role, m.email),
+                      }}>{m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role}</span>
+                      {m.is_active === false && (
+                        <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.SLATE, backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "2px 8px", width: "fit-content" }}>Inactive</span>
+                      )}
+                    </div>
                   </div>
 
                   {/* ── Mobile sub-row ────────────────────── */}
@@ -803,6 +862,9 @@ export default function MembersManager() {
                           <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} /> HOD
                         </label>
                         <div><label style={lblC}>Position title</label><input style={inpC} defaultValue={m.position_title || ""} onBlur={(e) => { if (e.target.value !== (m.position_title || "")) updateMember(m.id, { position_title: e.target.value || null }); }} placeholder="e.g. CEO, Director" /></div>
+                        <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: m.is_active === false ? COLOURS.RED : COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }} title="Use Offboard instead if they still have tasks, reports, or ownership to hand over — this just flips the flag directly.">
+                          <input type="checkbox" checked={m.is_active !== false} onChange={(e) => updateMember(m.id, { is_active: e.target.checked })} /> Active
+                        </label>
                       </div>
 
                       {/* Reports to — read-only here, set from the manager/director's own
@@ -822,8 +884,8 @@ export default function MembersManager() {
                           shown unticked — the only way to move them is to untick them
                           under their current manager first. */}
                       {(m.is_hod || m.role === "Admin" || m.role === "Executive") && (() => {
-                        const pickable = members.filter((x) => x.id !== m.id && (!x.manager_id || x.manager_id === m.id));
-                        const elsewhereCount = members.filter((x) => x.id !== m.id && x.manager_id && x.manager_id !== m.id).length;
+                        const pickable = members.filter((x) => x.id !== m.id && x.is_active !== false && (!x.manager_id || x.manager_id === m.id));
+                        const elsewhereCount = members.filter((x) => x.id !== m.id && x.is_active !== false && x.manager_id && x.manager_id !== m.id).length;
                         return (
                           <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 10px", marginBottom: "6px", backgroundColor: COLOURS.CARD }}>
                             <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "6px", textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
@@ -995,7 +1057,7 @@ export default function MembersManager() {
                   <select style={inpC} value={dept.primary_owner_member_id || ""}
                     onChange={(e) => updateDeptOwner(dept.id, e.target.value)}>
                     <option value="">— None —</option>
-                    {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                    {members.filter((m) => m.is_active !== false || m.id === dept.primary_owner_member_id).map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}{m.is_active === false ? " (inactive)" : ""}</option>)}
                   </select>
                 </div>
               </div>
@@ -1005,58 +1067,69 @@ export default function MembersManager() {
       )}
 
       {/* ══════════════════════════════════════════════
-          TAB: REASSIGN TASKS
+          TAB: OFFBOARD
       ══════════════════════════════════════════════ */}
-      {activeTab === "reassign" && canReassign && (
-        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
-          <div style={{
-            backgroundColor: COLOURS.NAVY,
-            padding: "14px 18px",
-          }}>
-            <div style={{ fontSize: "14px", fontWeight: 600, color: "white", fontFamily: "var(--font-display)" }}>
-              Reassign Open Tasks
-            </div>
-            <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
-              Transfer tasks when a member leaves or changes role
-            </div>
-          </div>
-          <div style={{ padding: "14px" }}>
-            <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "10px" }}>
-              Moves Not Started, In Progress, and Waiting Reply tasks only. Completed tasks stay with the original owner.
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "10px", maxWidth: "500px" }}>
-              <div>
-                <label style={lblC}>Current owner</label>
-                <select style={inpC} value={fromMemberId} onChange={(e) => setFromMemberId(e.target.value)}>
-                  <option value="">— Select —</option>
-                  {reassignableMembers.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)} ({openTaskCounts.get(m.name || "") || 0} open)</option>)}
-                </select>
+      {activeTab === "offboard" && canOffboard && (() => {
+        const leaver = leavingId ? members.find((m) => m.id === leavingId) : null;
+        const replacement = replacementId ? members.find((m) => m.id === replacementId) : null;
+        const taskCount = leaver ? openTaskCounts.get(leaver.name || "") || 0 : 0;
+        const directReportCount = leaver ? members.filter((m) => m.manager_id === leaver.id).length : 0;
+        const ownedDeptCount = leaver ? departments.filter((d) => d.primary_owner_member_id === leaver.id).length : 0;
+        const interimManager = leaver?.manager_id ? members.find((m) => m.id === leaver.manager_id) : null;
+        const showStepIntoLine = !!replacement && !replacement.manager_id && !!leaver?.manager_id;
+        return (
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
+            <div style={{ backgroundColor: COLOURS.NAVY, padding: "14px 18px" }}>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: "white", fontFamily: "var(--font-display)" }}>
+                Offboard a Team Member
               </div>
-              <div>
-                <label style={lblC}>New owner</label>
-                <select style={inpC} value={toMemberId} onChange={(e) => setToMemberId(e.target.value)}>
-                  <option value="">— Select —</option>
-                  {reassignableMembers.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
-                </select>
+              <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
+                One action for a departure: moves their open tasks, direct reports, and department ownership — then hides them from every list
               </div>
             </div>
-            {!isAdmin && (
-              <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "8px" }}>Scoped to your own team — you and whoever reports directly to you.</p>
-            )}
-            {fromMemberId && (() => {
-              const fm = members.find((m) => m.id === fromMemberId);
-              const count = fm ? openTaskCounts.get(fm.name || "") || 0 : 0;
-              return <p style={{ fontSize: "15px", color: COLOURS.SLATE, marginBottom: "8px" }}>{fm?.name} has <strong>{count}</strong> open task(s).</p>;
-            })()}
-            <button onClick={reassignOpenTasks} disabled={reassigning} style={{ ...smallBtn(COLOURS.RED, true), fontSize: "15px", padding: "6px 14px" }}>
-              {reassigning ? "Reassigning..." : "Move Open Tasks"}
-            </button>
-            {reassignMsg && (
-              <p style={{ marginTop: "8px", fontSize: "15px", fontWeight: 600, color: reassignMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{reassignMsg}</p>
-            )}
+            <div style={{ padding: "14px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px", marginBottom: "10px", maxWidth: "560px" }}>
+                <div>
+                  <label style={lblC}>Who is leaving</label>
+                  <select style={inpC} value={leavingId} onChange={(e) => { setLeavingId(e.target.value); setOffboardMsg(""); }}>
+                    <option value="">— Select —</option>
+                    {offboardableMembers.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)} ({openTaskCounts.get(m.name || "") || 0} open)</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lblC}>Replacement (optional)</label>
+                  <select style={inpC} value={replacementId} onChange={(e) => { setReplacementId(e.target.value); setOffboardMsg(""); }} disabled={!leavingId}>
+                    <option value="">— None yet, route to their manager —</option>
+                    {replacementCandidates.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                  </select>
+                </div>
+              </div>
+              {!isAdmin && (
+                <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "8px" }}>Scoped to your own team — you and whoever reports directly to you.</p>
+              )}
+              {leaver && (
+                <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "10px 12px", marginBottom: "10px", backgroundColor: COLOURS.CARD_ALT, fontSize: "13px", color: COLOURS.SLATE, maxWidth: "560px" }}>
+                  <div><strong style={{ color: COLOURS.NAVY }}>{taskCount}</strong> open task(s), <strong style={{ color: COLOURS.NAVY }}>{directReportCount}</strong> direct report(s){ownedDeptCount > 0 ? <>, owns <strong style={{ color: COLOURS.NAVY }}>{ownedDeptCount}</strong> department(s)</> : null} — all moving to{" "}
+                    <strong style={{ color: COLOURS.NAVY }}>{replacement ? fullName(replacement.first_name, replacement.last_name, replacement.name) : interimManager ? `${fullName(interimManager.first_name, interimManager.last_name, interimManager.name)} (their manager, interim)` : "nobody — pick a replacement if they have anything to hand over"}</strong>.
+                  </div>
+                  {showStepIntoLine && (
+                    <label style={{ display: "flex", alignItems: "center", gap: "5px", marginTop: "8px", cursor: "pointer" }}>
+                      <input type="checkbox" checked={stepIntoLine} onChange={(e) => setStepIntoLine(e.target.checked)} />
+                      {fullName(replacement!.first_name, replacement!.last_name, replacement!.name)} also steps into {fullName(leaver.first_name, leaver.last_name, leaver.name)}&apos;s reporting line (reports to {fullName(interimManager?.first_name ?? null, interimManager?.last_name ?? null, interimManager?.name)})
+                    </label>
+                  )}
+                </div>
+              )}
+              <button onClick={offboardMember} disabled={offboarding || !leavingId} style={{ ...smallBtn(COLOURS.RED, true), fontSize: "15px", padding: "6px 14px" }}>
+                {offboarding ? "Offboarding..." : "Offboard"}
+              </button>
+              {offboardMsg && (
+                <p style={{ marginTop: "8px", fontSize: "15px", fontWeight: 600, color: offboardMsg.startsWith("Error") || offboardMsg.includes("nowhere to route") ? COLOURS.RED : COLOURS.GREEN }}>{offboardMsg}</p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ══════════════════════════════════════════════
           TAB: ORG CHART
@@ -1071,15 +1144,20 @@ export default function MembersManager() {
           </div>
           <div style={{ padding: "14px" }}>
             {(() => {
-              const roots = members.filter((m) => !m.manager_id);
-              const unassigned = members.filter((m) => m.manager_id && !members.some((x) => x.id === m.manager_id));
+              // Leavers are archived, not deleted — keep them out of the
+              // chart entirely rather than showing a stale box for someone
+              // who no longer works here (their reports/ownership are moved
+              // off them by the Offboard action, so this is just display).
+              const activeMembers = members.filter((m) => m.is_active !== false);
+              const roots = activeMembers.filter((m) => !m.manager_id);
+              const unassigned = activeMembers.filter((m) => m.manager_id && !activeMembers.some((x) => x.id === m.manager_id));
               if (roots.length === 0) {
                 return <div style={{ fontSize: "13px", color: COLOURS.SLATE, textAlign: "center" as const, padding: "20px" }}>No one has been set up yet — start from the People tab.</div>;
               }
               return (
                 <>
                   {roots.map((r) => (
-                    <OrgNode key={r.id} member={r} allMembers={members} depth={0} visited={new Set()} />
+                    <OrgNode key={r.id} member={r} allMembers={activeMembers} depth={0} visited={new Set()} />
                   ))}
                   {unassigned.length > 0 && (
                     <div style={{ marginTop: "14px", padding: "8px 12px", border: `1px dashed ${COLOURS.RED}`, borderRadius: RADII.SM, fontSize: "12px", color: COLOURS.RED }}>

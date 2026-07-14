@@ -145,7 +145,7 @@ function MyMinutesPage() {
     setMeetings(meetingsData);
 
     // Load members for task creation
-    const { data: membersData } = await supabase.from("members").select("name, first_name, last_name, email, department");
+    const { data: membersData } = await supabase.from("members").select("name, first_name, last_name, email, department").eq("is_active", true);
     if (membersData) {
       setAllMembers(membersData.map((m) => ({
         name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || "",

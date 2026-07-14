@@ -127,6 +127,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
         supabase
           .from("members")
           .select("id, name, email, role, department, business_unit")
+          .eq("is_active", true)
           .order("name", { ascending: true }),
 
         supabase
