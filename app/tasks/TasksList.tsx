@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
@@ -70,9 +69,6 @@ type KpiSummary = {
 
 type DeptBreakdownRow = { department: string; open_count: number; overdue_count: number };
 
-type MonthlyChartRow = { month: string; label: string; created: number; completed: number };
-type QuarterlyChartRow = { quarter: string; overdue: number; active: number; completed: number };
-
 const todayStr = new Date().toISOString().slice(0, 10);
 
 function isOverdue(task: Task) {
@@ -107,14 +103,16 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [errorMsg, setErrorMsg] = useState("");
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(taskIdFromUrl);
-  const [timeView, setTimeView] = useState<"mytasks" | "weekly" | "monthly" | "quarterly" | "timeline" | "team" | "board" | "recurring">("mytasks");
+  // Board/Tree/List/Timeline are the icon-switcher views; Team/Recurring
+  // stay as separate pills since they aren't task-list views. Weekly/
+  // Monthly/Quarterly were removed as separate tabs — folded into the
+  // periodFilter dropdown below instead, per Khuram.
+  const [timeView, setTimeView] = useState<"list" | "board" | "tree" | "timeline" | "team" | "recurring">("list");
   const [filter, setFilter] = useState<"all" | "overdue" | "waiting">("all");
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [companies, setCompanies] = useState<CompanyLite[]>([]);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [kpi, setKpi] = useState<KpiSummary | null>(null);
-  const [monthlyData, setMonthlyData] = useState<MonthlyChartRow[]>([]);
-  const [quarterlyData, setQuarterlyData] = useState<QuarterlyChartRow[]>([]);
   const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdownRow[]>([]);
   const [deptBreakdownOpen, setDeptBreakdownOpen] = useState(false);
   const [kpiDrawer, setKpiDrawer] = useState<string | null>(null);
@@ -122,6 +120,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [periodFilter, setPeriodFilter] = useState<"all" | "week" | "month" | "quarter">("all");
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [dueFilter, setDueFilter] = useState<string>("all");
@@ -129,6 +128,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [subtaskFilter, setSubtaskFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
+  const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
+  const [collapsedPeople, setCollapsedPeople] = useState<Set<string>>(new Set());
 
   const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "Executive");
 
@@ -179,6 +180,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     setDepartmentFilter("all");
     setPriorityFilter("all");
     setOwnerFilter("all");
+    setPeriodFilter("all");
     setStageFilter("all");
     setDueFilter("all");
     setSourceFilter("all");
@@ -198,25 +200,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     supabase.rpc("get_tasks_department_breakdown").then(({ data, error }) => { if (!error) setDeptBreakdown(data || []); });
   }, []);
 
-  async function loadCharts() {
-    const params = companyFilter === "all"
-      ? {}
-      : companyFilter === "group"
-      ? { p_group_only: true }
-      : { p_company_id: companyFilter };
-    const [monthlyRes, quarterlyRes] = await Promise.all([
-      supabase.rpc("get_tasks_monthly_chart", params),
-      supabase.rpc("get_tasks_quarterly_chart", params),
-    ]);
-    if (!monthlyRes.error) setMonthlyData(monthlyRes.data || []);
-    if (!quarterlyRes.error) setQuarterlyData(quarterlyRes.data || []);
-  }
-
-  // Re-run the KPI + chart RPCs whenever the Company filter changes, so
-  // everything on screen always matches what the Company dropdown shows.
+  // Re-run the KPI RPC whenever the Company filter changes, so the KPI
+  // tiles always match what the Company dropdown shows. (The monthly/
+  // quarterly chart RPCs this used to also call were dropped along with
+  // the Monthly/Quarterly tabs — Khuram asked for those to become a
+  // simple period filter instead, with no charts.)
   useEffect(() => {
     loadKpi();
-    loadCharts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyFilter]);
 
@@ -241,6 +231,25 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const weekAheadDate = new Date(todayStr + "T00:00:00");
   weekAheadDate.setDate(weekAheadDate.getDate() + 7);
   const weekAheadStr = weekAheadDate.toISOString().slice(0, 10);
+
+  // Weekly/Monthly/Quarterly used to be separate tabs (with bar charts);
+  // Khuram asked for those to fold into a single "Due period" filter
+  // instead, with the charts dropped entirely. Boundaries are calendar-
+  // based (this Mon–Sun / this calendar month / this calendar quarter),
+  // not a rolling window.
+  const now = new Date(todayStr + "T00:00:00");
+  const periodWeekStart = getWeekStart(now);
+  const periodWeekEndDate = new Date(periodWeekStart + "T00:00:00");
+  periodWeekEndDate.setDate(periodWeekEndDate.getDate() + 7);
+  const periodWeekEnd = periodWeekEndDate.toISOString().slice(0, 10);
+  const periodMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const periodMonthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const periodMonthEnd = periodMonthEndDate.toISOString().slice(0, 10);
+  const periodQuarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+  const periodQuarterStart = `${now.getFullYear()}-${String(periodQuarterStartMonth + 1).padStart(2, "0")}-01`;
+  const periodQuarterEndDate = new Date(now.getFullYear(), periodQuarterStartMonth + 3, 1);
+  const periodQuarterEnd = periodQuarterEndDate.toISOString().slice(0, 10);
+
   const scopedTasks = tasks.filter((t) => {
     if (companyFilter !== "all") {
       if (companyFilter === "group" ? !!t.company_id : t.company_id !== companyFilter) return false;
@@ -248,6 +257,12 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     if (departmentFilter !== "all" && (t.assigned_to_department || t.project || "Unassigned") !== departmentFilter) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
     if (ownerFilter !== "all" && t.assigned_to !== ownerFilter) return false;
+    if (periodFilter !== "all") {
+      if (!t.due_date) return false;
+      if (periodFilter === "week" && !(t.due_date >= periodWeekStart && t.due_date < periodWeekEnd)) return false;
+      if (periodFilter === "month" && !(t.due_date >= periodMonthStart && t.due_date < periodMonthEnd)) return false;
+      if (periodFilter === "quarter" && !(t.due_date >= periodQuarterStart && t.due_date < periodQuarterEnd)) return false;
+    }
     if (stageFilter !== "all" && (t.stage || "") !== stageFilter) return false;
     if (dueFilter !== "all") {
       const isOd = t.status !== "Completed" && t.status !== "Cancelled" && !!t.due_date && t.due_date < todayStr;
@@ -278,7 +293,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const departmentOptions = Array.from(new Set(tasks.map((t) => t.assigned_to_department || t.project || "Unassigned"))).sort();
   const ownerOptions = Array.from(new Set(tasks.map((t) => t.assigned_to).filter((n): n is string => !!n))).sort();
   const stageOptions = Array.from(new Set(tasks.map((t) => t.stage).filter((s): s is string => !!s))).sort();
-  const filtersActive = departmentFilter !== "all" || priorityFilter !== "all" || ownerFilter !== "all" || stageFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all" || searchQuery.trim() !== "";
+  const filtersActive = departmentFilter !== "all" || priorityFilter !== "all" || ownerFilter !== "all" || periodFilter !== "all" || stageFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all" || searchQuery.trim() !== "";
 
   function refreshAll() {
     loadTasks();
@@ -304,24 +319,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   nextWeekDate.setDate(nextWeekDate.getDate() + 7);
   const nextWeekStart = getWeekStart(nextWeekDate);
 
-  function weekGroup(task: Task): string {
-    if (!task.due_date) return "No Due Date";
-    if (task.due_date < todayStr) return "Overdue";
-    if (task.due_date < nextWeekStart) return "This Week";
-    const twoWeeks = new Date();
-    twoWeeks.setDate(twoWeeks.getDate() + 14);
-    if (task.due_date < getWeekStart(twoWeeks)) return "Next Week";
-    return "Later";
-  }
-
-  const weekGroups = new Map<string, Task[]>();
-  const weekOrder = ["Overdue", "This Week", "Next Week", "Later", "No Due Date"];
-  for (const t of allOpen) {
-    const g = weekGroup(t);
-    if (!weekGroups.has(g)) weekGroups.set(g, []);
-    weekGroups.get(g)!.push(t);
-  }
-
   // ── My Tasks grouping (default landing view) — Overdue / Due Today /
   // This Week / Next Week & Later, scoped to just me unless "Everyone" is
   // picked. Anyone without full visibility already only sees their own +
@@ -345,29 +342,37 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     myTasksGroups.get(g)!.push(t);
   }
 
-  // Monthly and Quarterly chart data are no longer computed here — they
-  // come from get_tasks_monthly_chart()/get_tasks_quarterly_chart() (see
-  // migration 102) via the monthlyData/quarterlyData state above, kept in
-  // sync with the Company filter by the loadCharts() effect. Per house
-  // rule 0, aggregation belongs in the database, not in a JS loop here.
-
-  // ── Person grouping ──
-  const personMap = new Map<string, { total: number; overdue: number }>();
-  for (const t of allOpen) {
-    const p = t.assigned_to || "Unassigned";
-    if (!personMap.has(p)) personMap.set(p, { total: 0, overdue: 0 });
-    personMap.get(p)!.total++;
-    if (isOverdue(t)) personMap.get(p)!.overdue++;
+  // ── Tree view grouping — Department → Person → Tasks. This is the old
+  // Department view's grouping brought back as the "Tree" icon view, per
+  // Khuram — a real two-level hierarchy now (both levels collapsible),
+  // rather than the flat department list + a non-collapsible person strip
+  // it was before.
+  type DeptNode = { dept: string; tasks: Task[]; open: number; overdue: number };
+  const deptMap = new Map<string, Task[]>();
+  for (const t of scopedTasks) {
+    const dept = t.assigned_to_department || t.project || "Unassigned";
+    if (!deptMap.has(dept)) deptMap.set(dept, []);
+    deptMap.get(dept)!.push(t);
   }
-  const people = Array.from(personMap.entries())
-    .map(([name, d]) => ({ name, ...d }))
-    .sort((a, b) => b.overdue - a.overdue || b.total - a.total);
-  void people; // used indirectly via personMap
+  const deptNodes: DeptNode[] = Array.from(deptMap.entries()).map(([dept, deptTasks]) => {
+    const open = deptTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+    return { dept, tasks: deptTasks, open: open.length, overdue: open.filter(isOverdue).length };
+  }).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
 
-  // Department grouping was removed as a separate tab — the reference
-  // design Khuram wanted to match turned out to be the status-column
-  // Kanban board, not a department grouping, so Board (plus the
-  // Department filter dropdown, now on every tab) replaces it.
+  function toggleDept(dept: string) {
+    setCollapsedDepts((prev) => {
+      const next = new Set(prev);
+      if (next.has(dept)) next.delete(dept); else next.add(dept);
+      return next;
+    });
+  }
+  function togglePerson(key: string) {
+    setCollapsedPeople((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
 
   // ── Filtered task list ──
   let filteredTasks = allOpen;
@@ -378,9 +383,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 10px",
     fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, backgroundColor: COLOURS.CARD,
   };
-
-  const weekGroupColor = (g: string) =>
-    g === "Overdue" ? COLOURS.RED : g === "This Week" ? COLOURS.AMBER : g === "Next Week" ? COLOURS.BLUE : COLOURS.SLATE;
 
   // Small icon-square glyphs for the KPI tiles, matching the reference
   // design Khuram asked to bring back. Plain inline SVGs (no icon library
@@ -404,6 +406,23 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           {paths[label]}
         </svg>
       </span>
+    );
+  }
+
+  // Icon glyphs for the Board/Tree/List/Timeline view-switcher buttons —
+  // same plain-inline-SVG approach as the KPI icons above, no dependency.
+  const VIEW_ICON_PATHS: Record<string, React.ReactNode> = {
+    list: <><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></>,
+    board: <><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="9.5" y="4" width="5" height="10" rx="1" /><rect x="16" y="4" width="5" height="13" rx="1" /></>,
+    tree: <><circle cx="12" cy="4.5" r="2" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" /><line x1="12" y1="6.5" x2="12" y2="12" /><line x1="6" y1="16" x2="6" y2="12" /><line x1="18" y1="16" x2="18" y2="12" /><line x1="6" y1="12" x2="18" y2="12" /></>,
+    timeline: <><line x1="3" y1="12" x2="21" y2="12" /><circle cx="7" cy="12" r="2" /><circle cx="13" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></>,
+  };
+  const VIEW_LABELS: Record<string, string> = { list: "List", board: "Board", tree: "Tree", timeline: "Timeline" };
+  function viewIcon(view: string, active: boolean) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? "white" : COLOURS.SLATE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {VIEW_ICON_PATHS[view]}
+      </svg>
     );
   }
 
@@ -683,22 +702,44 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         );
       })()}
 
-      {/* ═══ VIEW TOGGLE + FILTER PILLS ═══ */}
+      {/* ═══ VIEW TOGGLE ═══ Team/Recurring as plain pills on the left
+          (they aren't task-list views); Board/Tree/List/Timeline as an
+          icon switcher on the right, per Khuram. ═══ */}
       <div style={{
-        display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap",
+        display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap",
         position: "sticky", top: 0, zIndex: 10,
         backgroundColor: COLOURS.CARD_ALT,
         paddingTop: "6px", paddingBottom: "6px",
       }}>
-        {(["mytasks", "board", "weekly", "monthly", "quarterly", "timeline", "team", "recurring"] as const).map((v) => (
-          <button key={v} onClick={() => setTimeView(v)} style={{
-            backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
-            color: timeView === v ? "white" : COLOURS.NAVY,
-            border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-            borderRadius: RADII.PILL, padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
-            textTransform: v === "mytasks" ? "none" : "capitalize",
-          }}>{v === "mytasks" ? "My Tasks" : v}</button>
-        ))}
+        <div style={{ display: "flex", gap: "4px" }}>
+          {(["team", "recurring"] as const).map((v) => (
+            <button key={v} onClick={() => setTimeView(v)} style={{
+              backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
+              color: timeView === v ? "white" : COLOURS.NAVY,
+              border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+              borderRadius: RADII.PILL, padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+              textTransform: "capitalize",
+            }}>{v}</button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: "4px" }}>
+          {(["list", "board", "tree", "timeline"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setTimeView(v)}
+              title={VIEW_LABELS[v]}
+              aria-label={VIEW_LABELS[v]}
+              style={{
+                backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
+                border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                borderRadius: RADII.SM, width: "34px", height: "34px",
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+              }}
+            >
+              {viewIcon(v, timeView === v)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ═══ SEARCH + FILTER ROW — every tab except Team/Recurring, which
@@ -731,6 +772,12 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={filterSelectStyle}>
             <option value="all">All owners</option>
             {ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)} style={filterSelectStyle}>
+            <option value="all">Any due period</option>
+            <option value="week">Due this week</option>
+            <option value="month">Due this month</option>
+            <option value="quarter">Due this quarter</option>
           </select>
           <button
             onClick={() => setMoreFiltersOpen(!moreFiltersOpen)}
@@ -792,8 +839,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         ))}
       </div>
 
-      {/* ═══ MY TASKS VIEW (default landing view) ═══ */}
-      {timeView === "mytasks" && (
+      {/* ═══ LIST VIEW (default landing view) ═══ */}
+      {timeView === "list" && (
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
             <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.INK_400 }}>Viewing</span>
@@ -838,100 +885,71 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         </div>
       )}
 
-      {/* ═══ WEEKLY VIEW ═══ */}
-      {timeView === "weekly" && (
-        <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
-          {weekOrder.filter((g) => weekGroups.has(g)).map((group) => {
-            const groupTasks = (filter === "overdue" ? weekGroups.get(group)!.filter(isOverdue) : filter === "waiting" ? weekGroups.get(group)!.filter((t) => t.status === "Waiting Reply") : weekGroups.get(group)!);
-            if (groupTasks.length === 0) return null;
+      {/* ═══ TREE VIEW — Department → Person → Tasks, both levels collapsible ═══ */}
+      {timeView === "tree" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
+          {deptNodes.length === 0 ? (
+            <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks to show.</div>
+          ) : deptNodes.map((d) => {
+            const isDeptCollapsed = collapsedDepts.has(d.dept);
+            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+            if (deptFiltered.length === 0 && filter !== "all") return null;
+
+            const personGroups = new Map<string, Task[]>();
+            for (const t of deptFiltered) {
+              const p = t.assigned_to || "Unassigned";
+              if (!personGroups.has(p)) personGroups.set(p, []);
+              personGroups.get(p)!.push(t);
+            }
+            const persons = Array.from(personGroups.entries()).sort((a, b) => b[1].length - a[1].length);
+
             return (
-              <div key={group}>
-                <div style={{ padding: "8px 16px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: weekGroupColor(group) }}>{group}</span>
-                  <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE }}>{groupTasks.length} task{groupTasks.length > 1 ? "s" : ""}</span>
+              <div key={d.dept} style={{
+                border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderLeft: `4px solid ${d.overdue > 0 ? COLOURS.RED : COLOURS.GREEN}`,
+                borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden",
+              }}>
+                <div
+                  onClick={() => toggleDept(d.dept)}
+                  style={{ padding: "11px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: COLOURS.CARD_ALT }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ color: COLOURS.SLATE, fontSize: "11px" }}>{isDeptCollapsed ? "▶" : "▼"}</span>
+                    <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{d.dept}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: "12px" }}>
+                    <span style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600 }}>{d.open} open</span>
+                    {d.overdue > 0 && <span style={{ fontSize: "12px", color: COLOURS.RED, fontWeight: 700 }}>{d.overdue} overdue</span>}
+                  </div>
                 </div>
-                {groupTasks.map((t) => <TaskRow key={t.id} task={t} />)}
+
+                {!isDeptCollapsed && persons.map(([person, ptasks]) => {
+                  const key = `${d.dept}::${person}`;
+                  const isPersonCollapsed = collapsedPeople.has(key);
+                  return (
+                    <div key={key} style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
+                      <div
+                        onClick={() => togglePerson(key)}
+                        style={{ padding: "8px 16px 8px 32px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: COLOURS.CARD }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ color: COLOURS.SLATE, fontSize: "10px" }}>{isPersonCollapsed ? "▶" : "▼"}</span>
+                          <span style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY }}>{person}</span>
+                        </div>
+                        <span style={{ fontSize: "11.5px", color: COLOURS.SLATE, fontWeight: 600 }}>{ptasks.length}</span>
+                      </div>
+                      {!isPersonCollapsed && (
+                        <div style={{ paddingLeft: "24px", borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
+                          {ptasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} />)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
-          {filteredTasks.length === 0 && (
-            <div style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks match this filter.</div>
-          )}
         </div>
-      )}
-
-      {/* ═══ MONTHLY VIEW ═══ */}
-      {timeView === "monthly" && (
-        <>
-          {monthlyData.length > 0 && (
-            <div style={{ ...cardStyle, padding: "20px 24px", marginBottom: "14px" }}>
-              <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Tasks Created vs Completed — Last 6 Months</div>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: COLOURS.SLATE }} />
-                  <YAxis tick={{ fontSize: 11, fill: COLOURS.SLATE }} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
-                  <Bar dataKey="created" fill={COLOURS.BLUE} name="Created" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="completed" fill={COLOURS.GREEN} name="Completed" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
-            {filteredTasks.length === 0 ? (
-              <div style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks match this filter.</div>
-            ) : (
-              filteredTasks.map((t) => <TaskRow key={t.id} task={t} />)
-            )}
-          </div>
-        </>
-      )}
-
-      {/* ═══ QUARTERLY VIEW ═══ */}
-      {timeView === "quarterly" && (
-        <>
-          {quarterlyData.length > 0 && (
-            <div style={{ ...cardStyle, padding: "20px 24px", marginBottom: "14px" }}>
-              <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "12px" }}>Quarterly Overview</div>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={quarterlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={COLOURS.TRACK} />
-                  <XAxis dataKey="quarter" tick={{ fontSize: 11, fill: COLOURS.SLATE }} />
-                  <YAxis tick={{ fontSize: 11, fill: COLOURS.SLATE }} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend iconType="square" wrapperStyle={{ fontSize: "12px" }} />
-                  <Bar dataKey="overdue" stackId="a" fill={COLOURS.RED} name="Overdue" />
-                  <Bar dataKey="active" stackId="a" fill={COLOURS.BLUE} name="Active" />
-                  <Bar dataKey="completed" stackId="a" fill={COLOURS.GREEN} name="Completed" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* Quarterly summary cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-            {quarterlyData.map((q) => (
-              <div key={q.quarter} style={{ ...cardStyle, padding: "16px 20px" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px" }}>{q.quarter}</div>
-                <div style={{ display: "flex", gap: "10px", fontSize: "12px", flexWrap: "wrap" }}>
-                  <span style={{ color: COLOURS.RED, fontWeight: 700 }}>{q.overdue} overdue</span>
-                  <span style={{ color: COLOURS.BLUE, fontWeight: 600 }}>{q.active} active</span>
-                  <span style={{ color: COLOURS.GREEN, fontWeight: 600 }}>{q.completed} done</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
-            {filteredTasks.length === 0 ? (
-              <div style={{ padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks match this filter.</div>
-            ) : (
-              filteredTasks.map((t) => <TaskRow key={t.id} task={t} />)
-            )}
-          </div>
-        </>
       )}
 
       {/* ═══ TIMELINE VIEW ═══ */}
@@ -993,7 +1011,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 const color = od ? COLOURS.RED : t.status === "Waiting Reply" ? COLOURS.AMBER : t.priority === "High" || t.priority === "Urgent" ? COLOURS.AMBER : COLOURS.BLUE;
                 const label = t.description.length > 32 ? t.description.slice(0, 30) + "…" : t.description;
                 return (
-                  <g key={t.id} style={{ cursor: "pointer" }} onClick={() => { setTimeView("weekly"); setExpandedTaskId(t.id); setTimeout(() => document.getElementById(`task-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}>
+                  <g key={t.id} style={{ cursor: "pointer" }} onClick={() => { setTimeView("list"); setExpandedTaskId(t.id); setTimeout(() => document.getElementById(`task-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}>
                     <circle cx={x} cy={y} r="5" fill={color} />
                     <text x={x + 8} y={y + 4} fontSize="12" fill={COLOURS.NAVY} fontWeight="600">{label}</text>
                     <text x="4" y={y + 4} fontSize="11" fill={COLOURS.SLATE}>{t.assigned_to?.split(" ")[0] || "?"}</text>
