@@ -93,7 +93,7 @@ export default function TasksBoard({
     if (newStatus === "Completed") {
       const t = tasks.find((x) => x.id === taskId);
       if (!t || t.status !== "Submitted" || !canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email)) {
-        toast.show("This has to be Submitted first, and only the assigned HOD (or Executive, for Khuram/Kamran's queue) can close it.", "error");
+        toast.show("This has to be Submitted first, and only the assigned HOD (or Khuram, Kamran, or the Executive) can close it.", "error");
         return;
       }
     }
@@ -230,7 +230,7 @@ export default function TasksBoard({
         })}
       </div>
       <p style={{ fontSize: "11.5px", color: COLOURS.INK_400, marginTop: "10px" }}>
-        Drag a card to a different column to change its status. Dropping onto Completed only works from Submitted, and only for the assigned HOD (or Executive) — everyone else, and any task with open subtasks, is blocked.
+        Drag a card to a different column to change its status. Dropping onto Completed only works from Submitted, and only for the assigned HOD (or Khuram, Kamran, or the Executive) — everyone else, and any task with open subtasks, is blocked.
       </p>
     </div>
   );

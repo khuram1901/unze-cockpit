@@ -101,8 +101,8 @@ export default function TaskStatus({
 
   // Who may close a Submitted task — see canCompleteSubmittedTask in
   // lib/permissions.ts for the full rule (owner completes their own once
-  // routed to them; the Executive may also close anything that landed
-  // with Khuram or Kamran specifically).
+  // routed to them; Khuram, Kamran, and the Executive are a blanket
+  // override on top of that, not limited to tasks routed to them).
   const canComplete = status === "Submitted" && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email);
   const canEditDate = canEditDateProp ?? (currentRole === "Admin" || currentRole === "Executive");
 

@@ -375,33 +375,22 @@ export function canViewFolderitHr(u: UserCtx): boolean {
 // ── Task ownership ──────────────────────────────────────────────
 const PROTECTED_CREATOR_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, PA_EMAIL];
 
-// Small, fixed list of the two people genuinely at the top of the chain —
-// Khuram and Kamran — used only by canCompleteSubmittedTask below to
-// decide when the Executive (PA) may act as their delegate. Deliberately
-// a hardcoded email list rather than isAdminTier's role check: isAdminTier
-// answers "does this role have admin rights" (true for anyone ever made
-// Admin), this answers "is this specifically one of the two people with
-// nobody above them" — a much narrower, identity-based question.
-export const KAMRAN_EMAIL = "kamran@unze.co.uk";
-const TOP_TIER_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, KAMRAN_EMAIL];
-
 // Khuram: "no task can be completed until it's submitted to their HOD, and
-// only the HOD can mark the task completed... Myself and Kamran are at
-// the top of the food chain — all people reporting to us, we are the only
-// ones to complete their task, or we will allow our Executive to check
-// and complete the task status. Executive's tasks can be completed by
-// themselves." Submitting a task (see routeSubmittedTask in
-// TaskStatus.tsx) reassigns it to the assignee's manager — so "the
-// current owner while it's Submitted" is already the right HOD in the
-// general case. This adds the two named exceptions on top: the Executive
-// may close anything that landed with Khuram or Kamran specifically, and
-// (handled in routeSubmittedTask, which skips reassignment for the
-// Executive's own tasks) the Executive closes her own without it routing
-// anywhere first.
+// only the HOD can mark the task completed... rest of the members submit
+// their tasks, only their HOD completes the tasks." Then, after finding
+// he couldn't close a task assigned to someone outside his own direct
+// reports: "i thought i can close any tasks, complete any task. You must
+// allow me, sundus and Kamran to do this" — Khuram, Kamran, and the
+// Executive (Sundas) are a blanket override on top of the HOD rule, not
+// limited to tasks that happen to have routed to them specifically.
+// Everyone else can only close what's actually theirs: submitting a task
+// (see routeSubmittedTask in TaskStatus.tsx) reassigns it to the
+// assignee's manager, so "the current owner while it's Submitted" is the
+// right HOD for the general case.
 export function canCompleteSubmittedTask(u: UserCtx, assignedToEmail: string | null | undefined): boolean {
   if (!assignedToEmail) return false;
   if (lc(u.email) === lc(assignedToEmail)) return true;
-  return isPA(u) && TOP_TIER_EMAILS.includes(lc(assignedToEmail));
+  return isPrivileged(u);
 }
 
 export function isTaskProtected(assignedByEmail: string | null | undefined): boolean {

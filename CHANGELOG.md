@@ -4,6 +4,18 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Completion rule corrected: Khuram, Kamran, and the Executive can close ANY task
+
+Khuram hit the rule immediately after it shipped: tried to bulk-complete a task assigned to Sania Saleem (routed to her own department HOD, not to him) and got blocked — correctly, per the previous rule, but not what he actually wants. His words: "i thought i can close any tasks, complete any task. You must allow me, sundus and Kamran to do this."
+
+Changed `canCompleteSubmittedTask()` in lib/permissions.ts: it now uses `isPrivileged()` (Admin-tier — Khuram/Kamran — or Executive) as a blanket override on top of the ordinary owner-completes-their-own rule, instead of the narrower "Executive may close it only if it landed with Khuram or Kamran specifically." Removed the now-unneeded `TOP_TIER_EMAILS`/`KAMRAN_EMAIL`/`is_admin_tier_email` machinery that existed only to support that narrower check.
+
+Wrote `supabase/115_task_completion_override_fix.sql` — **not yet applied, needs to be run in the Supabase SQL Editor** (after 114, or instead of it if 114 was never applied — 115 recreates the same trigger from scratch either way) — updating the database trigger to match: the task's current owner may always close their own, and Khuram, Kamran, or the Executive may close anyone's, full stop.
+
+**Action needed:** run `115_task_completion_override_fix.sql` in the Supabase SQL Editor.
+
+---
+
 ## 2026-07-14 — Fixed: Status filter dropdown was missing "Submitted"
 
 Khuram: "in the status dropdown box i see all status but not submitted, instead i see cancelled." Found it — the Status *filter* at the top of the Tasks page (the one that narrows the list, separate from the two dropdowns that actually change a task's status) never had "Submitted" as an option, a pre-existing gap that only became a real problem once Submitted became the key state in the new HOD workflow. Added it in TasksList.tsx, in the same order as everywhere else: Not Started, In Progress, Waiting Reply, Stuck, Submitted, Completed, Cancelled.

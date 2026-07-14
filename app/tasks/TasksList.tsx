@@ -464,7 +464,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       eligible.push(id);
     }
     if (eligible.length === 0) {
-      toast.show("None of the selected tasks can be completed right now — each must be Submitted, have no open subtasks, and be assigned to you (or, for the Executive, to Khuram/Kamran).", "error");
+      toast.show("None of the selected tasks can be completed right now — each must be Submitted and have no open subtasks, and be assigned to you (Khuram, Kamran, and the Executive can close anyone's).", "error");
       return;
     }
     setBulkApplying(true);
