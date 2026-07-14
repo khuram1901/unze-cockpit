@@ -419,7 +419,12 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           style={{
             padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between",
             alignItems: "center", gap: "8px",
-            backgroundColor: overdue ? COLOURS.DANGER_SOFT : isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+            // A full red-tinted row for every overdue task got cramped and
+            // noisy once there were more than a few of them — a left accent
+            // bar plus the existing red "Xd late" text carries the same
+            // signal without painting the whole row.
+            backgroundColor: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+            borderLeft: `3px solid ${overdue ? COLOURS.RED : "transparent"}`,
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -472,6 +477,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             </div>
           </div>
           <div style={{ display: "flex", gap: "5px", alignItems: "center", flexShrink: 0 }}>
+            {overdue && (
+              <span style={{ fontSize: "10.5px", fontWeight: 700, padding: "1px 8px", borderRadius: RADII.PILL, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}` }}>
+                Overdue
+              </span>
+            )}
             {task.priority && <PriorityBadge priority={task.priority} />}
             <StatusBadge status={task.status} />
             <span style={{ fontSize: "11.5px", fontWeight: 700, color: COLOURS.BLUE }}>Open →</span>
