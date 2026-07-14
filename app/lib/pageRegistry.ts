@@ -66,12 +66,13 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_stock", title: "Stock", subtitle: "Customer POs, authority letters, dispatch balances", href: "/stock", icon: "🏭", group: "Operations" },
 
   // ── My Workspace (alphabetical) ──
-  { permKey: "_calendar", title: "Calendar", subtitle: "Tasks and deadlines view", href: "/calendar", icon: "🗓️", group: "My Workspace", badgeKey: "calendar" },
+  // Calendar hidden from the sidebar for everyone (2026-07) — feature isn't
+  // finished yet. Route still exists at /calendar, just not linked here.
+  // Recurring Tasks removed from the sidebar (2026-07) — merged into the
+  // Tasks page as a tab, so the standalone entry is redundant.
   { permKey: "_folderit", title: "Folder-it", subtitle: "Documents pending approval & filing", href: "/folderit", icon: "📁", group: "My Workspace" },
   { permKey: "can_see_all_minutes", title: "Meetings", subtitle: "Minutes, approvals, action items", href: "/meetings", icon: "💬", group: "My Workspace", badgeKey: "meetings" },
   { permKey: "_my_minutes", title: "My Minutes", subtitle: "Meeting minutes you attended", href: "/my-minutes", icon: "🗒️", group: "My Workspace", badgeKey: "minutes" },
-  { permKey: "_profile", title: "Profile", subtitle: "Your account and preferences", href: "/profile", icon: "👤", group: "My Workspace" },
-  { permKey: "can_manage_recurring_tasks", title: "Recurring Tasks", subtitle: "Manage recurring task templates", href: "/recurring-tasks", icon: "🔁", group: "My Workspace" },
   { permKey: "_tasks", title: "Tasks", subtitle: "View and manage tasks", href: "/tasks", icon: "🎯", group: "My Workspace", badgeKey: "tasks" },
 
   // ── Settings ──
@@ -79,4 +80,5 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_exceptions", title: "Exceptions", subtitle: "Exception management and alerts", href: "/exceptions", icon: "🚨", group: "Settings" },
   { permKey: "can_view_audit_log", title: "Audit Log", subtitle: "System activity trail", href: "/audit-log", icon: "📋", group: "Settings" },
   { permKey: "_admin_settings", title: "Data & Backups", subtitle: "Source documents, backups, restore", href: "/admin", icon: "🗄️", group: "Settings" },
+  { permKey: "_profile", title: "Profile", subtitle: "Your account and preferences", href: "/profile", icon: "👤", group: "Settings" },
 ];
