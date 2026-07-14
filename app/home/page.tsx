@@ -461,6 +461,11 @@ export default function HomePage() {
   const [machineIssues, setMachineIssues] = useState<MachineIssue[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
+  // Stuck receivables are deliberately an alert, not a task — see
+  // TASK_NOTIFICATION_AUDIT.md. The department already watches its own
+  // receivables page; this just surfaces the same exception on the
+  // executive "Needs Your Attention" banner without creating a task.
+  const [stuckReceivables, setStuckReceivables] = useState<{ key: string; primary: string; secondary: string }[]>([]);
   const [execLoading, setExecLoading] = useState(true);
 
   const [companyFinance, setCompanyFinance] = useState<CompanyFinanceData[]>([]);
@@ -505,111 +510,58 @@ export default function HomePage() {
   const [taxSignoffs, setTaxSignoffs] = useState<Map<string, boolean>>(new Map());
   const [taxSignoffs2, setTaxSignoffs2] = useState<Map<string, boolean>>(new Map());
 
-  async function autoCreateEscalationTask(
-    esc: Escalation,
-    allTasks: Task[],
-    owner: DepartmentOwner | null
-  ) {
-    if (!owner?.primary_owner_name || !owner?.primary_owner_email) return;
-    const alreadyExists = allTasks.some(
-      (task) => task.source_type === "kpi_escalation" && task.source_label === esc.sourceLabel
-    );
-    if (alreadyExists) return;
-    await supabase.from("tasks").insert({
-      task_type: "Explanation Required",
-      exception_type: esc.metric.toLowerCase(),
-      explanation_required: true,
-      description: `Explanation required: ${esc.metric} lagging for ${esc.plantName}. ${esc.detail}`,
-      project: "Unze Trading Ops",
-      priority: "High",
-      status: "Waiting Reply",
-      due_date: dueIn48Hours(),
-      assigned_date: today,
-      assigned_to: owner.primary_owner_name,
-      assigned_to_email: owner.primary_owner_email,
-      assigned_by: "System",
-      assigned_by_email: "khuram1901@gmail.com",
-      notes: `Auto-created by the executive escalation engine. ${esc.detail}`,
-      reply_required: true,
-      assigned_to_department: "Unze Trading Ops",
-      assigned_to_business_unit: null,
-      source_type: "kpi_escalation",
-      source_record_id: null,
-      source_label: esc.sourceLabel,
-    });
-  }
-
-  async function autoCreateReceivableTask(
-    bill: Receivable,
-    stageName: string,
-    allTasks: Task[],
-    owner: DepartmentOwner | null
-  ) {
-    if (!owner?.primary_owner_name || !owner?.primary_owner_email) return;
-    const sourceLabel = `receivable_stuck:${bill.id}:${bill.current_stage_order}`;
-    const alreadyExists = allTasks.some(
-      (task) => task.source_type === "receivable_escalation" && task.source_label === sourceLabel
-    );
-    if (alreadyExists) return;
-    await supabase.from("tasks").insert({
-      task_type: "Explanation Required",
-      exception_type: "receivable",
-      explanation_required: true,
-      description: `Receivable stuck: ${bill.utility} bill of ${fmtMoney(bill.amount)} ${bill.currency} is over time at stage "${stageName}".`,
-      project: "Unze Trading Ops",
-      priority: "High",
-      status: "Waiting Reply",
-      due_date: dueIn48Hours(),
-      assigned_date: today,
-      assigned_to: owner.primary_owner_name,
-      assigned_to_email: owner.primary_owner_email,
-      assigned_by: "System",
-      assigned_by_email: "khuram1901@gmail.com",
-      notes: `Auto-created by the receivables escalation engine. Bill for ${bill.utility} has exceeded its budgeted working days at stage "${stageName}".`,
-      reply_required: true,
-      assigned_to_department: "Unze Trading Ops",
-      assigned_to_business_unit: null,
-      source_type: "receivable_escalation",
-      source_record_id: bill.id,
-      source_label: sourceLabel,
-    });
-  }
-
+  // KPI escalations (production/dispatch/breakage lagging) and stuck
+  // receivables were previously auto-created as "Explanation Required"
+  // tasks here. Per Khuram's review (14/07/2026, see
+  // TASK_NOTIFICATION_AUDIT.md), both are reclassified as alerts, not
+  // tasks: the underlying exception is already visible on the department's
+  // own pages, and the "Escalations" / "Stuck Receivables" rows on this
+  // dashboard's attention banner already surface it without needing a
+  // tracked, emailed task. See the loops below (foundEscalations /
+  // foundStuckReceivables) — detection logic stayed, task-creation didn't.
+  //
+  // Cash escalation is the one exception Khuram asked to keep as a task
+  // (a specific written explanation from Finance is wanted, tracked to
+  // completion) — it now routes through the shared /api/tasks/create
+  // gate instead of inserting directly, so it gets a company tag and an
+  // actual notification email (previously silent).
   async function autoCreateCashEscalationTask(
     exceptionType: "cash_receivables" | "cash_payouts",
     detail: string,
-    allTasks: Task[],
+    companyId: string,
     financeOwner: DepartmentOwner | null
   ) {
     if (!financeOwner?.primary_owner_name || !financeOwner?.primary_owner_email) return;
     const month = formatDate(new Date()).slice(0, 7);
     const sourceLabel = `kpi_escalation:${exceptionType}:${month}`;
-    const alreadyExists = allTasks.some(
-      (task) => task.source_type === "kpi_escalation" && task.source_label === sourceLabel
-    );
-    if (alreadyExists) return;
-    await supabase.from("tasks").insert({
-      task_type: "Explanation Required",
-      exception_type: exceptionType,
-      explanation_required: true,
-      description: detail,
-      project: "Unze Trading Ops",
-      priority: "High",
-      status: "Waiting Reply",
-      due_date: workingDaysFromNow(3),
-      assigned_date: today,
-      assigned_to: financeOwner.primary_owner_name,
-      assigned_to_email: financeOwner.primary_owner_email,
-      assigned_by: "System",
-      assigned_by_email: "khuram1901@gmail.com",
-      notes: `Auto-created by the executive cash escalation engine. ${detail}`,
-      reply_required: true,
-      assigned_to_department: "Finance",
-      assigned_to_business_unit: null,
-      source_type: "kpi_escalation",
-      source_record_id: null,
-      source_label: sourceLabel,
-    });
+    try {
+      await authFetch("/api/tasks/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskType: "Explanation Required",
+          exceptionType,
+          explanationRequired: true,
+          description: detail,
+          companyId,
+          project: "Unze Trading Ops",
+          priority: "High",
+          status: "Waiting Reply",
+          dueDate: workingDaysFromNow(3),
+          assignedTo: financeOwner.primary_owner_name,
+          assignedToEmail: financeOwner.primary_owner_email,
+          assignedToDepartment: "Finance",
+          notes: `Auto-created by the executive cash escalation engine. ${detail}`,
+          replyRequired: true,
+          sourceType: "kpi_escalation",
+          sourceLabel,
+          notificationStyle: "escalation",
+          systemActor: "System",
+        }),
+      });
+    } catch (e) {
+      console.error("Failed to create cash escalation task", e);
+    }
   }
 
   async function loadExecutiveData(dateToView: string) {
@@ -625,6 +577,7 @@ export default function HomePage() {
           setMachineIssues(payload.machineIssues);
           setTasks(payload.tasks);
           setEscalations(payload.escalations);
+          setStuckReceivables(payload.stuckReceivables || []);
           setCompanyFinance(payload.companyFinance);
           setReceivableRows(payload.receivableRows);
           setRecAgingTotals(payload.recAgingTotals);
@@ -709,6 +662,7 @@ export default function HomePage() {
     const activeMachineIssues = machineIssuesRes.data || [];
     const taskData: Task[] = tasksRes.data || [];
     const owner: DepartmentOwner | null = ownerRes.data || null;
+    void owner; // no longer used to create tasks (KPI/receivable escalations are alert-only now) — kept for a possible future alert-owner display
     const monthlyProductionTargets: MonthlyTarget[] = monthlyProductionTargetsRes.data || [];
     const monthlyDispatchTargets: MonthlyTarget[] = monthlyDispatchTargetsRes.data || [];
     const monthlyProduction = monthlyProductionRes.data || [];
@@ -815,10 +769,18 @@ export default function HomePage() {
     }));
     setRecAgingByCustomer(recAgingByCust);
 
-    // Escalation engine — still needs per-bill data, but slim fetch above covers it
+    // Stuck receivables — alert only, not a task (see note above the
+    // auto-create functions). Still needs per-bill data, but slim fetch
+    // above covers it.
+    const foundStuckReceivables: { key: string; primary: string; secondary: string }[] = [];
     for (const bill of bills) {
       if (billRagStatus(bill) === "red") {
-        await autoCreateReceivableTask(bill, stageNameFor(bill.current_stage_order), taskData, owner);
+        const stageName = stageNameFor(bill.current_stage_order);
+        foundStuckReceivables.push({
+          key: `receivable_stuck:${bill.id}:${bill.current_stage_order}`,
+          primary: `${bill.utility} — ${fmtMoney(bill.amount)} ${bill.currency}`,
+          secondary: `Stuck at stage "${stageName}"`,
+        });
       }
     }
 
@@ -917,9 +879,10 @@ export default function HomePage() {
       }
     }
 
-    for (const esc of foundEscalations) {
-      await autoCreateEscalationTask(esc, taskData, owner);
-    }
+    // KPI escalations (foundEscalations) are alert-only — see note above
+    // the auto-create functions. No task-creation loop needed here
+    // anymore; setEscalations(foundEscalations) below still feeds the
+    // "Escalations" attention row exactly as before.
 
     const cashMonth = formatDate(new Date()).slice(0, 7);
     const financeOwnerRes = await supabase
@@ -947,7 +910,7 @@ export default function HomePage() {
         await autoCreateCashEscalationTask(
           "cash_receivables",
           `${cfd.companyName}: Receivables pacing at ${Math.round(recvPct)}% — actual ${fmtMoney(recMTD)} vs expected ${fmtMoney(Math.round(expRecv))} by day ${de} of ${dim}.`,
-          taskData,
+          cfd.companyId,
           financeOwner
         );
       }
@@ -955,7 +918,7 @@ export default function HomePage() {
         await autoCreateCashEscalationTask(
           "cash_payouts",
           `${cfd.companyName}: Payouts pacing at ${Math.round(payPct)}% — actual ${fmtMoney(payMTD)} vs expected ${fmtMoney(Math.round(expPay))} by day ${de} of ${dim}.`,
-          taskData,
+          cfd.companyId,
           financeOwner
         );
       }
@@ -963,6 +926,7 @@ export default function HomePage() {
 
     setSummaries(result);
     setEscalations(foundEscalations);
+    setStuckReceivables(foundStuckReceivables);
 
     const opsMap = new Map<string, DailyOpsPoint>();
     for (const r of monthlyProduction) {
@@ -1238,6 +1202,7 @@ export default function HomePage() {
           machineIssues: activeMachineIssues,
           tasks: taskData,
           escalations: foundEscalations,
+          stuckReceivables: foundStuckReceivables,
           companyFinance: allCompanyFinance,
           receivableRows: recRows,
           recAgingTotals: aging,
@@ -1707,6 +1672,7 @@ export default function HomePage() {
             machineIssues={machineIssues}
             tasks={tasks}
             escalations={escalations}
+            stuckReceivables={stuckReceivables}
             companyFinance={companyFinance}
             receivableRows={receivableRows}
             recAgingTotals={recAgingTotals}
@@ -2293,7 +2259,7 @@ export default function HomePage() {
 /* ───────────────────────── Executive Dashboard Body (CEO-only) ───────────────────────── */
 
 function ExecutiveDashboardBody({
-  ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations,
+  ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations, stuckReceivables,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
   facilitySynopsis, guaranteeAlerts, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
@@ -2306,6 +2272,7 @@ function ExecutiveDashboardBody({
   machineIssues: MachineIssue[];
   tasks: Task[];
   escalations: Escalation[];
+  stuckReceivables: { key: string; primary: string; secondary: string }[];
   companyFinance: CompanyFinanceData[];
   receivableRows: ReceivableCustomerRow[];
   recAgingTotals: { "0-30": number; "31-60": number; "61-90": number; "90+": number };
@@ -2438,9 +2405,9 @@ function ExecutiveDashboardBody({
   }
   const overdueGuarantees = showFinance ? guaranteeAlerts : [];
 
-  const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0 || taxUrgent.length > 0 || overdueGuarantees.length > 0;
+  const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || stuckReceivables.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0 || taxUrgent.length > 0 || overdueGuarantees.length > 0;
 
-  const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0 || taxOverdue.length > 0 || cashAlerts.length > 0 || overdueGuarantees.length > 0;
+  const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0 || stuckReceivables.length > 0 || taxOverdue.length > 0 || cashAlerts.length > 0 || overdueGuarantees.length > 0;
 
   type AttentionItem = { key: string; primary: string; secondary: string; badge?: string | null; taskId?: string; machineId?: string; actionType?: "complete" | "reply" | "resolve" };
   type AttentionRow = { id: string; label: string; count: number; color: string; items: AttentionItem[] };
@@ -2456,6 +2423,10 @@ function ExecutiveDashboardBody({
   if (escalations.length > 0) attentionRows.push({
     id: "escalations", label: "Escalations", count: escalations.length, color: RED,
     items: escalations.map((e) => ({ key: e.sourceLabel, primary: `${e.plantName} — ${e.metric}`, secondary: e.detail })),
+  });
+  if (stuckReceivables.length > 0) attentionRows.push({
+    id: "stuck-receivables", label: "Stuck Receivables", count: stuckReceivables.length, color: RED,
+    items: stuckReceivables.map((r) => ({ key: r.key, primary: r.primary, secondary: r.secondary })),
   });
   if (overdueGuarantees.length > 0) attentionRows.push({
     id: "guarantees", label: "Guarantees Overdue", count: overdueGuarantees.length, color: RED,

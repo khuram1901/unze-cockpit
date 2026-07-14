@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { createServiceClient } from "./supabase-server";
 import { encrypt, safeDecrypt } from "./crypto";
+import { TRIGGER_TASK_ASSIGNED, TRIGGER_ESCALATION } from "./notification-types";
 
 function buildWhatsAppLink(phone: string, message: string): string {
   const encoded = encodeURIComponent(message);
@@ -80,8 +81,8 @@ function buildRawEmail(to: string, from: string, subject: string, htmlBody: stri
 // still gets their email exactly as before. Password resets, account
 // invites, and anything not in this list are never affected.
 const DIGEST_COVERED_TRIGGER_TYPES = [
-  "task_assigned",
-  "escalation",
+  TRIGGER_TASK_ASSIGNED,
+  TRIGGER_ESCALATION,
   "daily_digest",          // app/api/notifications/digest/route.ts (5am PKT admin/exec digest)
   "daily_report",          // app/api/reports/daily-pdf/route.ts
   "weekly_report",         // app/api/reports/weekly/route.ts
