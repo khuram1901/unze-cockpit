@@ -4,6 +4,28 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Tasks: multi-assignee support + bulk actions
+
+Khuram: "select multiple tasks at the same time and move them, change their status, change their company, or change their ownership" plus "in a task I can't change the company or the user, or assign it to multiple people by multi-selecting it."
+
+Investigated first: Company was already editable in the task edit panel (added in an earlier session) — the real gap was that there was no way at all to change who a task is assigned to after creation, and no way to assign more than one person. Asked Khuram to confirm the model: real shared ownership (every person added sees it as their own task) rather than a lighter "notify others" version — he confirmed shared ownership.
+
+Built: migration 112 adds a `task_assignees` join table. `tasks.assigned_to`/`assigned_to_email`/etc. stay as the "primary" owner so every existing report, filter, notification, and WhatsApp reminder keeps working untouched; task_assignees holds the full owner list, primary included. Critical detail caught during build: task visibility is enforced by RLS on the `tasks` table itself, not just the app's query filters — a co-assignee who wasn't the primary owner would've been silently blocked from ever seeing their own task. Fixed by extending `tasks_select`/`tasks_update` via security-definer helper functions (`is_task_assignee`, `owns_or_created_task`, `is_task_creator`) rather than having the two tables' RLS policies check each other directly, which would recurse.
+
+NewTaskForm's single assignee dropdown became a checkbox multi-select (first ticked = primary). TaskDetailPanel's edit-task panel gained an "Owner(s)" field — previously missing entirely. TasksList/the home My Tasks widget now also catch tasks you're a co-assignee on, not just ones where you're the primary owner, and rows show "+N" when there's more than one owner.
+
+Bulk actions: List view rows got checkboxes, with a bar that appears once something's ticked — change status, change company, or change owner across every selected task in one action. Owner change in bulk is single-select (replaces the full owner list on the tasks you pick) — for setting several tasks to several different owners each, that's still a one-at-a-time job via each task's own Owner(s) picker.
+
+Known gap, flagged not fixed: the overdue-alert and digest cron jobs still only notify the primary owner, not co-assignees — a bigger follow-up if Khuram wants every co-owner reminded, not just the first one.
+
+---
+
+## 2026-07-14 — Org Chart: redesign as branching tree view
+
+Khuram: "can we make it a tree view, so its easier to view it." Replaced the indented-list layout with an actual branching tree — stem down from each node, a horizontal bar across siblings, then a stem down to each child — using plain inline-styled divs (no CSS pseudo-elements, matching the codebase's inline-styles-only rule). Horizontally scrollable for wide trees; separate root chains (Khuram/Kamran) sit side by side.
+
+---
+
 ## 2026-07-14 — Offboard action: is_active flag, Reassign Tasks folded in
 
 Khuram asked whether Reassign Tasks was still needed now that manager_id/HOD structure exists, and separately asked to map a departure across everything a person is linked to — not just their org-chart spot, but tasks, reports, and ownership too, in one place, "so it stays with them all the way."
