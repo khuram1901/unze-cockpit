@@ -135,3 +135,48 @@ export async function PATCH(request: NextRequest) {
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ purchaseOrder: data });
 }
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  const { data: member } = await supabase
+    .from("members")
+    .select("role, department")
+    .eq("email", auth.email)
+    .single();
+
+  if (!member || !canManagePOs(member.role, member.department)) {
+    return Response.json({ error: "Ops Manager or Admin required" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const { id } = body;
+  if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+
+  const { data: existing } = await supabase
+    .from("purchase_orders")
+    .select("is_system_unallocated")
+    .eq("id", id)
+    .single();
+
+  if (existing?.is_system_unallocated) {
+    return Response.json({ error: "System unallocated PO cannot be deleted" }, { status: 400 });
+  }
+
+  const { error } = await supabase.from("purchase_orders").delete().eq("id", id);
+  if (error) {
+    // Postgres foreign-key "on delete restrict" violation (authority letters or
+    // production allocations still point at this PO) — friendlier message than
+    // the raw Postgres error text.
+    if (error.code === "23503") {
+      return Response.json(
+        { error: "This PO has authority letters or production allocated against it — close it instead, or remove those first." },
+        { status: 409 }
+      );
+    }
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  return Response.json({ success: true });
+}

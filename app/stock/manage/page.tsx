@@ -239,10 +239,18 @@ export default function StockManagePage() {
   const [letterSearch, setLetterSearch] = useState("");
   const [letterFilter, setLetterFilter] = useState<"all" | "active" | "expiring" | "expired" | "complete">("all");
 
+  // ── Contractors tab search ──
+  const [contractorSearch, setContractorSearch] = useState("");
+
   // ── PO form ──
   const [showPOForm, setShowPOForm] = useState(false);
   const [poForm, setPOForm] = useState(emptyPO);
   const [savingPO, setSavingPO] = useState(false);
+
+  // ── PO edit (core fields) ──
+  const [editPOId, setEditPOId] = useState<string | null>(null);
+  const [editPOForm, setEditPOForm] = useState(emptyPO);
+  const [savingEditPO, setSavingEditPO] = useState(false);
 
   // ── Letter (new) form — shown inside PO card ──
   const [showLetterForm, setShowLetterForm] = useState(false);
@@ -257,6 +265,7 @@ export default function StockManagePage() {
   const [editLetterId, setEditLetterId] = useState<string | null>(null);
   const [editLetterForm, setEditLetterForm] = useState(emptyLetter);
   const [savingEditLetter, setSavingEditLetter] = useState(false);
+  const [deletingLetterId, setDeletingLetterId] = useState<string | null>(null);
 
   // ── Contractor form ──
   const [showContractorForm, setShowContractorForm] = useState(false);
@@ -402,6 +411,48 @@ export default function StockManagePage() {
     loadPOs();
   }
 
+  function startEditPO(po: PO) {
+    setEditPOId(po.id);
+    setEditPOForm({
+      customer_name: po.customer_name, po_number: po.po_number, po_label: po.po_label || "",
+      ordered_31: String(po.ordered_31 || ""), ordered_36: String(po.ordered_36 || ""),
+      ordered_40: String(po.ordered_40 || ""), ordered_45: String(po.ordered_45 || ""),
+      ordered_meter: String(po.ordered_meter || ""),
+      start_date: po.start_date || "", notes: po.notes || "",
+      opening_produced_31: String(po.opening_produced_31 || "0"),
+      opening_produced_36: String(po.opening_produced_36 || "0"),
+      opening_produced_40: String(po.opening_produced_40 || "0"),
+      opening_produced_45: String(po.opening_produced_45 || "0"),
+      opening_produced_meter: String(po.opening_produced_meter || "0"),
+    });
+  }
+
+  async function saveEditPO() {
+    if (!editPOId) return;
+    if (!editPOForm.customer_name || !editPOForm.po_number) { toast("Customer name and PO number are required", "error"); return; }
+    setSavingEditPO(true);
+    const res = await authedFetch("/api/stock/purchase-orders", {
+      method: "PATCH",
+      body: JSON.stringify({
+        id: editPOId,
+        customer_name: editPOForm.customer_name, po_number: editPOForm.po_number, po_label: editPOForm.po_label,
+        ordered_31: Number(editPOForm.ordered_31) || 0, ordered_36: Number(editPOForm.ordered_36) || 0,
+        ordered_45: Number(editPOForm.ordered_45) || 0, ordered_meter: Number(editPOForm.ordered_meter) || 0,
+        start_date: editPOForm.start_date || null, notes: editPOForm.notes || null,
+        opening_produced_31: Number(editPOForm.opening_produced_31) || 0,
+        opening_produced_36: Number(editPOForm.opening_produced_36) || 0,
+        opening_produced_45: Number(editPOForm.opening_produced_45) || 0,
+        opening_produced_meter: Number(editPOForm.opening_produced_meter) || 0,
+      }),
+    });
+    const json = await res.json();
+    setSavingEditPO(false);
+    if (json.error) { toast(json.error, "error"); return; }
+    toast("PO updated", "success");
+    setEditPOId(null);
+    loadPOs();
+  }
+
   async function handleBulkDelete() {
     if (selectedPOs.size === 0) return;
     const ok = await confirm(`Permanently delete ${selectedPOs.size} selected PO${selectedPOs.size > 1 ? "s" : ""}? This cannot be undone.`, true);
@@ -503,6 +554,19 @@ export default function StockManagePage() {
     toast("Letter updated", "success");
     setEditLetterId(null);
     if (viewLettersPOId) loadLetters(viewLettersPOId);
+  }
+
+  async function deleteLetter(l: AuthorityLetter) {
+    const ok = await confirm(`Permanently delete authority letter #${l.letter_number}? This cannot be undone.`, true);
+    if (!ok) return;
+    setDeletingLetterId(l.id);
+    const res = await authedFetch("/api/stock/authority-letters", { method: "DELETE", body: JSON.stringify({ id: l.id }) });
+    const json = await res.json();
+    setDeletingLetterId(null);
+    if (json.error) { toast(json.error, "error"); return; }
+    toast("Letter deleted", "success");
+    if (viewLettersPOId) loadLetters(viewLettersPOId);
+    loadPOs();
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -647,6 +711,17 @@ export default function StockManagePage() {
       l.letter_number.toLowerCase().includes(q) ||
       l.contractor_name.toLowerCase().includes(q) ||
       l.customer_name.toLowerCase().includes(q)
+    );
+  });
+
+  const filteredContractors = contractors.filter((c) => {
+    if (!contractorSearch) return true;
+    const q = contractorSearch.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      (c.cnic_or_id || "").toLowerCase().includes(q) ||
+      (c.contact_phone || "").toLowerCase().includes(q) ||
+      (c.contact_address || "").toLowerCase().includes(q)
     );
   });
 
@@ -1028,11 +1103,44 @@ export default function StockManagePage() {
                           >
                             {isExpanded ? "▴ Hide" : "▾ Letters"}
                           </button>
+                          <button onClick={(e) => { e.stopPropagation(); startEditPO(po); }} style={{ ...ghostBtn() }}>Edit</button>
                           {!isClosed && (
                             <button onClick={(e) => { e.stopPropagation(); closePO(po); }} style={{ ...ghostBtn() }}>Close PO</button>
                           )}
                         </div>
                       </div>
+
+                      {/* Edit PO panel */}
+                      {editPOId === po.id && (
+                        <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "16px", backgroundColor: COLOURS.CARD_ALT }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Edit PO #{po.po_number}</div>
+                          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px" }}>
+                            <Field label="Customer name *"><input value={editPOForm.customer_name} onChange={(e) => setEditPOForm({ ...editPOForm, customer_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                            <Field label="PO number *"><input value={editPOForm.po_number} onChange={(e) => setEditPOForm({ ...editPOForm, po_number: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                            <Field label="PO label / description"><input value={editPOForm.po_label} onChange={(e) => setEditPOForm({ ...editPOForm, po_label: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                            <Field label="Start date"><DateInput value={editPOForm.start_date} onChange={(e) => setEditPOForm({ ...editPOForm, start_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                          </div>
+                          <div style={{ ...kicker, margin: "10px 0 8px" }}>Ordered quantities (by size)</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px,1fr))", gap: "8px" }}>
+                            <Field label="31ft"><NumInput value={editPOForm.ordered_31} onChange={(v) => setEditPOForm({ ...editPOForm, ordered_31: v })} /></Field>
+                            <Field label="36ft"><NumInput value={editPOForm.ordered_36} onChange={(v) => setEditPOForm({ ...editPOForm, ordered_36: v })} /></Field>
+                            <Field label="45ft"><NumInput value={editPOForm.ordered_45} onChange={(v) => setEditPOForm({ ...editPOForm, ordered_45: v })} /></Field>
+                            <Field label="Meter"><NumInput value={editPOForm.ordered_meter} onChange={(v) => setEditPOForm({ ...editPOForm, ordered_meter: v })} /></Field>
+                          </div>
+                          <div style={{ ...kicker, margin: "10px 0 8px" }}>Opening balance (already produced before go-live)</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px,1fr))", gap: "8px" }}>
+                            <Field label="31ft"><NumInput value={editPOForm.opening_produced_31} onChange={(v) => setEditPOForm({ ...editPOForm, opening_produced_31: v })} /></Field>
+                            <Field label="36ft"><NumInput value={editPOForm.opening_produced_36} onChange={(v) => setEditPOForm({ ...editPOForm, opening_produced_36: v })} /></Field>
+                            <Field label="45ft"><NumInput value={editPOForm.opening_produced_45} onChange={(v) => setEditPOForm({ ...editPOForm, opening_produced_45: v })} /></Field>
+                            <Field label="Meter"><NumInput value={editPOForm.opening_produced_meter} onChange={(v) => setEditPOForm({ ...editPOForm, opening_produced_meter: v })} /></Field>
+                          </div>
+                          <Field label="Notes"><textarea value={editPOForm.notes || ""} onChange={(e) => setEditPOForm({ ...editPOForm, notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", resize: "vertical" as const }} /></Field>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <button onClick={saveEditPO} disabled={savingEditPO} style={{ ...primaryButtonStyle, fontSize: "13px", padding: "6px 14px", opacity: savingEditPO ? 0.6 : 1 }}>{savingEditPO ? "Saving…" : "Save changes"}</button>
+                            <button onClick={() => setEditPOId(null)} style={{ padding: "6px 14px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, cursor: "pointer" }}>Cancel</button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Card body — expanded letters panel */}
                       {isExpanded && (
@@ -1143,6 +1251,13 @@ export default function StockManagePage() {
                                           </div>
                                           <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
                                             <button onClick={() => { startEditLetter(l); setViewDispatchLetterId(null); }} style={{ ...ghostBtn() }}>Edit</button>
+                                            <button
+                                              onClick={() => deleteLetter(l)}
+                                              disabled={deletingLetterId === l.id}
+                                              style={{ ...ghostBtn(), color: COLOURS.RED, borderColor: COLOURS.RED, opacity: deletingLetterId === l.id ? 0.6 : 1 }}
+                                            >
+                                              {deletingLetterId === l.id ? "Deleting…" : "Delete"}
+                                            </button>
                                             <button
                                               onClick={() => {
                                                 const isOpen = viewDispatchLetterId === l.id;
@@ -1409,7 +1524,7 @@ export default function StockManagePage() {
         ══════════════════════════════════════════════ */}
         {activeTab === "contractors" && (
           <>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
               <SectionTitle title="Contractors" style={{ margin: 0 }} />
               <button
                 onClick={() => setShowContractorForm((v) => !v)}
@@ -1417,6 +1532,17 @@ export default function StockManagePage() {
               >
                 {showContractorForm ? "Cancel" : "+ Add Contractor"}
               </button>
+            </div>
+
+            {/* Search */}
+            <div style={{ position: "relative", marginBottom: "12px", maxWidth: isMobile ? "100%" : "320px" }}>
+              <input
+                value={contractorSearch}
+                onChange={(e) => setContractorSearch(e.target.value)}
+                placeholder="Search by name, phone, CNIC, address…"
+                style={{ ...inputStyle, paddingLeft: "32px", width: "100%", boxSizing: "border-box" }}
+              />
+              <span style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: COLOURS.SLATE, fontSize: "13px", pointerEvents: "none" }}>⌕</span>
             </div>
 
             {/* Add contractor form */}
@@ -1441,10 +1567,14 @@ export default function StockManagePage() {
               <div style={{ textAlign: "center" as const, padding: "32px", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD }}>
                 No contractors yet. Add one above.
               </div>
+            ) : filteredContractors.length === 0 ? (
+              <div style={{ textAlign: "center" as const, padding: "32px", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD }}>
+                No contractors match your search.
+              </div>
             ) : (
               <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
-                {contractors.map((c, idx) => (
-                  <div key={c.id} style={{ borderBottom: idx < contractors.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none" }}>
+                {filteredContractors.map((c, idx) => (
+                  <div key={c.id} style={{ borderBottom: idx < filteredContractors.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none" }}>
                     {editContractorId === c.id ? (
                       <div style={{ padding: "16px" }}>
                         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "10px" }}>
