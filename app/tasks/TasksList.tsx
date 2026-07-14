@@ -1069,6 +1069,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <option>In Progress</option>
             <option>Waiting Reply</option>
             <option>Stuck</option>
+            <option>Submitted</option>
             <option>Completed</option>
             <option>Cancelled</option>
           </select>

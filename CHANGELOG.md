@@ -4,6 +4,12 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Fixed: Status filter dropdown was missing "Submitted"
+
+Khuram: "in the status dropdown box i see all status but not submitted, instead i see cancelled." Found it — the Status *filter* at the top of the Tasks page (the one that narrows the list, separate from the two dropdowns that actually change a task's status) never had "Submitted" as an option, a pre-existing gap that only became a real problem once Submitted became the key state in the new HOD workflow. Added it in TasksList.tsx, in the same order as everywhere else: Not Started, In Progress, Waiting Reply, Stuck, Submitted, Completed, Cancelled.
+
+---
+
 ## 2026-07-14 — Bulk "Mark Complete" + renamed the HOD close button
 
 Khuram: "for practical reasons, i would want an options to complete multiple tasks in one go, also you said when the task comes to me or kamran then we need to accept& close then complete i think we can make it one step." The second part was already one click — "Accept & Close" sets status straight to Completed, no separate "complete" step after it — but the name implied two actions, so it's renamed to "Mark Complete" everywhere (TaskStatus.tsx).
