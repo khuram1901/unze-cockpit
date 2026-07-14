@@ -4,6 +4,26 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Tasks: live-testing feedback round (9 points from Khuram)
+
+Khuram tried the live page and sent 9 issues. Addressed all:
+
+- **One attention banner, not two** — removed the older collapsible overdue-list banner; its unique value (click to see the actual tasks) was folded into making every KPI tile clickable.
+- **Every KPI tile is now clickable** (previously only Open/Overdue) — clicking any tile (Open, Overdue, Due Today, Waiting Reply, Stuck, Completed) opens a drawer of the matching tasks underneath.
+- **Recurring task templates can now be edited** (previously only Pause/Resume/Delete).
+- **Regular tasks can now be edited too** — new "Edit task" button in the task detail modal (description/priority/department/company), since `TaskStatus.tsx`'s `canEditTask` prop existed but had no UI wired to it.
+- **People/Owner filter** — already existed but was only visible on Board/Department/Weekly; now visible on every tab (My Tasks, Monthly, Quarterly, Timeline included).
+- **Escape key** now closes the New Task modal, Task Detail modal, and the calendar date-picker popover.
+- **KPI tiles now show a small icon square** (clock, alert triangle, calendar, chat bubble, checkmark) per Khuram's request to match the reference design — plain inline SVGs, no new dependency.
+- **Department tab removed** — the reference image Khuram attached turned out to be the status-column Kanban board (Inbox/Doing/Waiting/Review/Done), which is what the existing Board tab already is. Department is now just a filter dropdown on every tab instead of a separate grouped view.
+- **Data backfill for the 77 pre-redesign tasks** — migration `106_backfill_task_company_department.sql` (not yet applied) tags all 77 with company_id = UTPL and fills in department ("Executive Office") for the 11 rows missing it. **Correction to Khuram's request:** priority and owner were *not* backfilled — a live query showed 0 of 77 tasks are missing either field (priorities are already a real mix: 38 High/19 Medium/11 Normal/8 Urgent/1 Low; owners are all populated). Setting everything to "High" as asked would have destroyed real data, so that part was skipped.
+
+Verification: `tsc --noEmit` clean. New `react-hooks/set-state-in-effect` ESLint flags checked against the pre-change file and confirmed pre-existing, not introduced by this round.
+
+Migration 106 is written, **not yet applied** — run via Supabase SQL Editor. Commits are local only; the sandbox has no push credentials, so `git push` needs to run from Khuram's own terminal.
+
+---
+
 ## 2026-07-14 — Tasks Phase 5: mockup reconciliation after Khuram flagged the live page didn't match the design
 
 Khuram, after checking the live page: "It's almost 40% of the design, and 60% of the elements are not there... I thought we designed it so we don't have to do this now." He was right. Going back to the finalised mockup line-by-line found a real, sizeable gap beyond the three items Phase 4 had already closed — the Phase 3/4 handoff had only called out three deferred items when in fact many more mockup features had quietly not made it into the real build. That was a process failure: no systematic reconciliation was done before reporting the rebuild as complete. Fixed properly this time, one pass, seven commits:
