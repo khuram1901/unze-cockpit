@@ -4,7 +4,8 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { COLOURS, RADII, PriorityBadge, StatusBadge, useToast } from "../lib/SharedUI";
-import { canCompleteSubmittedTask } from "../lib/permissions";
+import { canCompleteSubmittedTask, canReopenCompletedTask } from "../lib/permissions";
+import { routeSubmittedTask } from "../lib/taskRouting";
 import TaskDetailModal from "./TaskDetailModal";
 import MiniSubtaskToggle from "./MiniSubtaskToggle";
 
@@ -85,19 +86,36 @@ export default function TasksBoard({
   }
 
   async function moveTask(taskId: string, newStatus: string) {
+    const t = tasks.find((x) => x.id === taskId);
+
     // Dragging straight onto Completed used to bypass the whole "submit to
     // your HOD" flow this same board respects everywhere else — a card
     // could go from Not Started to Completed in one drop. Same rule as the
     // single-task view now: only Submitted can become Completed, and only
     // by the person that rule says may close it.
     if (newStatus === "Completed") {
-      const t = tasks.find((x) => x.id === taskId);
       if (!t || t.status !== "Submitted" || !canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email)) {
         toast.show("This has to be Submitted first, and only the assigned HOD (or Khuram, Kamran, or the Executive) can close it.", "error");
         return;
       }
     }
-    const { error } = await supabase.from("tasks").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", taskId);
+
+    // Khuram: "I dont think the task should be allowed to be edited
+    // afterwards... unless the administration who has the rights to bring
+    // it back." A completed card is locked — dragging it to any other
+    // column is a reopen, so only Admin-tier can do it.
+    if (t?.status === "Completed" && newStatus !== "Completed" && !canReopenCompletedTask({ email: myEmail, role: currentRole })) {
+      toast.show("This task is completed and locked — only an admin can reopen it.", "error");
+      return;
+    }
+
+    // "Submitted" routes to the assignee's HOD — same rule as the
+    // single-task dropdown and the bulk status change in TasksList.tsx.
+    const extra = newStatus === "Submitted" && t && t.status !== "Submitted"
+      ? await routeSubmittedTask(taskId, t.assigned_to, t.assigned_to_email)
+      : {};
+
+    const { error } = await supabase.from("tasks").update({ status: newStatus, updated_at: new Date().toISOString(), ...extra }).eq("id", taskId);
     if (error) {
       // Most likely cause: the subtask-completion gate (migration 100) rejected
       // a move to Completed while subtasks are still open — surface that
@@ -166,6 +184,7 @@ export default function TasksBoard({
                 colTasks.map((t) => {
                   const overdue = isOverdue(t);
                   const totalCount = t.task_subtasks?.length ?? 0;
+                  const done = t.status === "Completed";
                   return (
                     <div key={t.id} style={{ marginBottom: "6px" }}>
                       <div
@@ -174,12 +193,12 @@ export default function TasksBoard({
                         onDragEnd={() => setDraggingId(null)}
                         onClick={() => setExpandedId(t.id)}
                         style={{
-                          background: COLOURS.CARD,
+                          background: done ? COLOURS.CARD_ALT : COLOURS.CARD,
                           border: `1px solid ${COLOURS.HAIRLINE}`,
                           borderRadius: "10px",
                           padding: "9px 11px",
                           cursor: "grab",
-                          opacity: draggingId === t.id ? 0.4 : 1,
+                          opacity: draggingId === t.id ? 0.4 : done ? 0.6 : 1,
                         }}
                       >
                         <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "6px" }}>
@@ -189,7 +208,7 @@ export default function TasksBoard({
                             {companyLabel(t.company_id)}
                           </span>
                         </div>
-                        <div style={{ fontSize: "12.5px", fontWeight: 500, color: COLOURS.NAVY, marginBottom: "6px", lineHeight: 1.35 }}>{t.description}</div>
+                        <div style={{ fontSize: "12.5px", fontWeight: 500, color: done ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: done ? "line-through" : "none", marginBottom: "6px", lineHeight: 1.35 }}>{t.description}</div>
                         {t.meeting_id && (
                           <a
                             href={`/my-minutes?meeting=${t.meeting_id}`}

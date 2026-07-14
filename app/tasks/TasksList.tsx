@@ -7,7 +7,8 @@ import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
-import { canCompleteSubmittedTask } from "../lib/permissions";
+import { canCompleteSubmittedTask, canReopenCompletedTask } from "../lib/permissions";
+import { routeSubmittedTask } from "../lib/taskRouting";
 import TeamStats from "./TeamStats";
 import TaskDetailModal from "./TaskDetailModal";
 import MiniSubtaskToggle from "./MiniSubtaskToggle";
@@ -422,26 +423,72 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     });
   }
 
+  // Completed tasks are locked — Khuram: "I dont think the task should be
+  // allowed to be edited afterwards... unless the administration who has
+  // the rights to bring it back." Every bulk action below pre-filters
+  // Completed tasks out of the selection unless the actor is Admin-tier,
+  // same rule as the single-task view (see TaskStatus.tsx's `locked`).
+  function splitLocked(ids: string[]): { eligible: string[]; lockedCount: number } {
+    const canReopen = canReopenCompletedTask({ email: myEmail, role: currentRole });
+    const eligible: string[] = [];
+    let lockedCount = 0;
+    for (const id of ids) {
+      const t = tasks.find((x) => x.id === id);
+      if (!t) continue;
+      if (t.status === "Completed" && !canReopen) { lockedCount++; continue; }
+      eligible.push(id);
+    }
+    return { eligible, lockedCount };
+  }
+
   async function applyBulkStatus() {
     if (!bulkStatus || selectedIds.size === 0) return;
+    const { eligible, lockedCount } = splitLocked(Array.from(selectedIds));
+    if (eligible.length === 0) {
+      toast.show("Every selected task is completed and locked — only an admin can change its status.", "error");
+      return;
+    }
     setBulkApplying(true);
-    const ids = Array.from(selectedIds);
-    const { error } = await supabase.from("tasks").update({ status: bulkStatus }).in("id", ids);
-    setBulkApplying(false);
-    if (error) { toast.show("Error: " + error.message, "error"); return; }
-    toast.show(`Updated status on ${ids.length} task(s).`, "success");
+
+    // "Submitted" routes to each task's own HOD individually — the same
+    // rule as the single-task dropdown and the Kanban board — so it can't
+    // be one blanket UPDATE the way the other statuses can.
+    if (bulkStatus === "Submitted") {
+      let routed = 0, failed = 0;
+      for (const id of eligible) {
+        const t = tasks.find((x) => x.id === id);
+        if (!t || t.status === "Submitted") continue;
+        const extra = await routeSubmittedTask(id, t.assigned_to, t.assigned_to_email);
+        const { error } = await supabase.from("tasks").update({ status: "Submitted", updated_at: new Date().toISOString(), ...extra }).eq("id", id);
+        if (error) failed++; else routed++;
+      }
+      setBulkApplying(false);
+      const parts = [`Submitted ${routed} task(s)`];
+      if (failed > 0) parts.push(`${failed} failed`);
+      if (lockedCount > 0) parts.push(`skipped ${lockedCount} completed`);
+      toast.show(parts.join(", ") + ".", failed > 0 ? "error" : "success");
+    } else {
+      const { error } = await supabase.from("tasks").update({ status: bulkStatus, updated_at: new Date().toISOString() }).in("id", eligible);
+      setBulkApplying(false);
+      if (error) { toast.show("Error: " + error.message, "error"); return; }
+      toast.show(`Updated status on ${eligible.length} task(s).${lockedCount > 0 ? ` Skipped ${lockedCount} completed task(s).` : ""}`, "success");
+    }
     setBulkStatus(""); setSelectedIds(new Set());
     refreshAll();
   }
 
   async function applyBulkCompany() {
     if (!bulkCompanyId || selectedIds.size === 0) return;
+    const { eligible, lockedCount } = splitLocked(Array.from(selectedIds));
+    if (eligible.length === 0) {
+      toast.show("Every selected task is completed and locked — only an admin can change it.", "error");
+      return;
+    }
     setBulkApplying(true);
-    const ids = Array.from(selectedIds);
-    const { error } = await supabase.from("tasks").update({ company_id: bulkCompanyId }).in("id", ids);
+    const { error } = await supabase.from("tasks").update({ company_id: bulkCompanyId }).in("id", eligible);
     setBulkApplying(false);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
-    toast.show(`Updated company on ${ids.length} task(s).`, "success");
+    toast.show(`Updated company on ${eligible.length} task(s).${lockedCount > 0 ? ` Skipped ${lockedCount} completed task(s).` : ""}`, "success");
     setBulkCompanyId(""); setSelectedIds(new Set());
     refreshAll();
   }
@@ -455,8 +502,12 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     if (!bulkOwnerId || selectedIds.size === 0) return;
     const owner = bulkMembers.find((m) => m.id === bulkOwnerId);
     if (!owner) return;
+    const { eligible: ids, lockedCount } = splitLocked(Array.from(selectedIds));
+    if (ids.length === 0) {
+      toast.show("Every selected task is completed and locked — only an admin can reassign it.", "error");
+      return;
+    }
     setBulkApplying(true);
-    const ids = Array.from(selectedIds);
     const { error } = await supabase.from("tasks").update({
       assigned_to: owner.name,
       assigned_to_email: owner.email,
@@ -469,7 +520,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     }
     setBulkApplying(false);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
-    toast.show(`Reassigned ${ids.length} task(s) to ${owner.name}.`, "success");
+    toast.show(`Reassigned ${ids.length} task(s) to ${owner.name}.${lockedCount > 0 ? ` Skipped ${lockedCount} completed task(s).` : ""}`, "success");
     setBulkOwnerId(""); setSelectedIds(new Set());
     refreshAll();
   }
@@ -642,6 +693,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     const od = daysOverdue(task);
     const overdue = isOverdue(task);
     const otherAssignees = (assigneesByTask.get(task.id) || []).filter((n) => n !== task.assigned_to);
+    // Khuram: "once the task is completed then it should be greyed out."
+    // Visual-only here — the actual lock (can't edit unless admin) lives
+    // in TaskStatus.tsx/TaskDetailPanel.tsx; this just signals at a
+    // glance, in every list, that the cycle is closed.
+    const done = task.status === "Completed";
 
     return (
       <div id={`task-${task.id}`} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
@@ -654,8 +710,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             // noisy once there were more than a few of them — a left accent
             // bar plus the existing red "Xd late" text carries the same
             // signal without painting the whole row.
-            backgroundColor: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+            backgroundColor: isOpen ? COLOURS.CARD_ALT : done ? COLOURS.CARD_ALT : COLOURS.CARD,
             borderLeft: `3px solid ${overdue ? COLOURS.RED : "transparent"}`,
+            opacity: done ? 0.6 : 1,
           }}
         >
           {selectable && (
@@ -668,7 +725,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             />
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: done ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: done ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
             {/* One muted meta line, dot-separated, instead of a row of
                 boxed badges — same information, far less visual noise. */}
             <div style={{ fontSize: "12px", color: COLOURS.INK_400, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>

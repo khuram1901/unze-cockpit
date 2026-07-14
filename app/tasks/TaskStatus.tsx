@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII } from "../lib/SharedUI";
-import { canCompleteSubmittedTask } from "../lib/permissions";
+import { canCompleteSubmittedTask, canReopenCompletedTask } from "../lib/permissions";
+import { routeSubmittedTask } from "../lib/taskRouting";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
@@ -106,6 +107,16 @@ export default function TaskStatus({
   const canComplete = status === "Submitted" && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email);
   const canEditDate = canEditDateProp ?? (currentRole === "Admin" || currentRole === "Executive");
 
+  // Khuram: "once the task is completed then it should be greyed out...
+  // not allowed to be edited afterwards, unless the administration who
+  // has the rights to bring it back." Every editable control below —
+  // status, stage, subtasks, due date, time tracking, notes, reassign —
+  // is disabled once a task is Completed, unless the viewer is
+  // Admin-tier (canReopenCompletedTask). Mirrored at the DB level by
+  // migration 117 so it holds regardless of which screen is used.
+  const canReopen = canReopenCompletedTask({ email: myEmail, role: currentRole });
+  const locked = status === "Completed" && !canReopen;
+
   useEffect(() => {
     if (canEditDate) {
       supabase.from("members").select("name, email, department, phone_e164").order("name").then(({ data }) => {
@@ -135,34 +146,6 @@ export default function TaskStatus({
 
   const openSubtasks = subtasks.filter((s) => !s.is_complete).length;
   const hasSubtasks = subtasks.length > 0;
-
-  // Khuram: "every time a task is submitted, it should go to their HOD...
-  // it should now become part of their task to review the work." Looks up
-  // the current owner's manager_id and reassigns the task to them — the
-  // manager sees it in their own My Tasks, not just a permission to act on
-  // someone else's. Returns {} (no reassignment) if the owner has no
-  // manager on file — e.g. Khuram/Kamran at the top of the chain.
-  async function routeSubmittedTask(): Promise<Record<string, unknown>> {
-    if (!task.assigned_to_email) return {};
-    const { data: me } = await supabase.from("members").select("manager_id, role").eq("email", task.assigned_to_email).maybeSingle();
-    // Executive (the PA) closes her own tasks directly — Khuram: "Executive's
-    // tasks can be completed by themselves" — so submitting doesn't hand it
-    // up to whoever she reports to. Same no-op as the no-manager-on-file
-    // case just below, for the same reason: nobody else needs to sign off.
-    if (!me?.manager_id || me.role === "Executive") return {};
-    const { data: mgr } = await supabase.from("members").select("id, name, email, department, business_unit").eq("id", me.manager_id).maybeSingle();
-    if (!mgr?.email) return {};
-    await supabase.from("task_assignees").delete().eq("task_id", task.id);
-    await supabase.from("task_assignees").insert({ task_id: task.id, member_id: mgr.id, member_name: mgr.name, member_email: mgr.email });
-    return {
-      assigned_to: mgr.name,
-      assigned_to_email: mgr.email,
-      assigned_to_department: mgr.department,
-      assigned_to_business_unit: mgr.business_unit,
-      submitted_by_name: task.assigned_to,
-      submitted_by_email: task.assigned_to_email,
-    };
-  }
 
   // Mirror image: once the manager moves a routed task anywhere other than
   // Submitted, hand it back to whoever it came from — except Completed/
@@ -196,7 +179,7 @@ export default function TaskStatus({
     setSavedMessage("");
 
     const extra = newStatus === "Submitted" && task.status !== "Submitted"
-      ? await routeSubmittedTask()
+      ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email)
       : await handBackIfLeaving(newStatus);
 
     const { error } = await supabase
@@ -312,7 +295,7 @@ export default function TaskStatus({
     setSavedMessage("");
 
     const { data: userData } = await supabase.auth.getUser();
-    const extra = task.status !== "Submitted" ? await routeSubmittedTask() : {};
+    const extra = task.status !== "Submitted" ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email) : {};
 
     const { error } = await supabase
       .from("tasks")
@@ -403,42 +386,59 @@ export default function TaskStatus({
   return (
     <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
       {toast.element}
+
+      {locked && (
+        <div style={{
+          marginBottom: "12px", padding: "8px 12px", borderRadius: RADII.SM,
+          backgroundColor: COLOURS.TRACK, border: `1px solid ${COLOURS.HAIRLINE}`,
+          fontSize: "12.5px", color: COLOURS.SLATE, fontWeight: 600,
+        }}>
+          This task is completed and locked. Only an admin can reopen or edit it.
+        </div>
+      )}
+
       <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
         <span style={kickerStyle}>Update status</span>
 
-        <select
-          style={controlStyle}
-          value={status}
-          onChange={(e) => saveStatus(e.target.value)}
-          disabled={saving}
-        >
-          {/* "Completed" is never a free jump from this dropdown — the only
-              door to Completed is the HOD's "Mark Complete" button further
-              down, and only once the task is Submitted. Still listed here
-              if the task already IS Completed, so the control renders its
-              real value instead of falling back to a blank/mismatched one. */}
-          {STATUSES.filter((s) => s !== "Completed" || status === "Completed").map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
+        {locked ? (
+          <span style={{ ...controlStyle, backgroundColor: COLOURS.TRACK, color: COLOURS.SLATE, cursor: "default" }}>Completed</span>
+        ) : (
+          <select
+            style={controlStyle}
+            value={status}
+            onChange={(e) => saveStatus(e.target.value)}
+            disabled={saving}
+          >
+            {/* "Completed" is never a free jump from this dropdown — the only
+                door to Completed is the HOD's "Mark Complete" button further
+                down, and only once the task is Submitted. Still listed here
+                if the task already IS Completed, so the control renders its
+                real value instead of falling back to a blank/mismatched one. */}
+            {STATUSES.filter((s) => s !== "Completed" || status === "Completed").map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+        )}
 
         {savedMessage && <span style={{ color: COLOURS.GREEN, fontSize: "13px", fontWeight: 600 }}>{savedMessage}</span>}
         {saving && <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Saving…</span>}
       </div>
 
       {/* Stage — optional free-text pipeline label, separate from status */}
-      <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-        <span style={kickerStyle}>Stage (optional)</span>
-        <input
-          type="text"
-          value={stage}
-          onChange={(e) => setStage(e.target.value)}
-          onBlur={() => { if (stage !== (task.stage || "")) saveStage(); }}
-          placeholder="e.g. Back to FD Dept"
-          style={{ ...controlStyle, width: "220px" }}
-          disabled={savingStage}
-        />
-      </div>
+      {!locked && (
+        <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <span style={kickerStyle}>Stage (optional)</span>
+          <input
+            type="text"
+            value={stage}
+            onChange={(e) => setStage(e.target.value)}
+            onBlur={() => { if (stage !== (task.stage || "")) saveStage(); }}
+            placeholder="e.g. Back to FD Dept"
+            style={{ ...controlStyle, width: "220px" }}
+            disabled={savingStage}
+          />
+        </div>
+      )}
 
       {/* Subtasks — one flat checklist level, gates Completed */}
       <div style={{ marginTop: "12px" }}>
@@ -451,23 +451,25 @@ export default function TaskStatus({
         <div style={{ marginTop: "8px" }}>
           {subtasks.map((s) => (
             <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 0" }}>
-              <input type="checkbox" checked={s.is_complete} onChange={() => toggleSubtask(s)} style={{ width: "15px", height: "15px", accentColor: COLOURS.GREEN, cursor: "pointer" }} />
+              <input type="checkbox" checked={s.is_complete} disabled={locked} onChange={() => toggleSubtask(s)} style={{ width: "15px", height: "15px", accentColor: COLOURS.GREEN, cursor: locked ? "default" : "pointer" }} />
               <span style={{ fontSize: "13.5px", color: s.is_complete ? COLOURS.SLATE : COLOURS.NAVY, textDecoration: s.is_complete ? "line-through" : "none", flex: 1 }}>{s.title}</span>
-              <button onClick={() => removeSubtask(s)} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Remove</button>
+              {!locked && <button onClick={() => removeSubtask(s)} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Remove</button>}
             </div>
           ))}
         </div>
-        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-          <input
-            type="text"
-            value={newSubtask}
-            onChange={(e) => setNewSubtask(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubtask(); } }}
-            placeholder="Add a subtask…"
-            style={{ ...controlStyle, flex: 1, maxWidth: "320px" }}
-          />
-          <button onClick={addSubtask} style={{ ...controlStyle, backgroundColor: COLOURS.CARD_ALT, fontWeight: 600, cursor: "pointer" }}>+ Add</button>
-        </div>
+        {!locked && (
+          <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+            <input
+              type="text"
+              value={newSubtask}
+              onChange={(e) => setNewSubtask(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubtask(); } }}
+              placeholder="Add a subtask…"
+              style={{ ...controlStyle, flex: 1, maxWidth: "320px" }}
+            />
+            <button onClick={addSubtask} style={{ ...controlStyle, backgroundColor: COLOURS.CARD_ALT, fontWeight: 600, cursor: "pointer" }}>+ Add</button>
+          </div>
+        )}
         {openSubtasks > 0 && (
           <p style={{ fontSize: "12px", color: COLOURS.AMBER, marginTop: "6px", marginBottom: 0 }}>
             Complete all subtasks before this task can be marked Completed.
@@ -484,7 +486,7 @@ export default function TaskStatus({
       </div>
 
       {/* Due-date editor — original locked, current open, every move logged */}
-      {canEditDate && (
+      {canEditDate && !locked && (
         <div style={{ marginTop: "14px" }}>
           {task.original_due_date && (
             <div style={{ marginBottom: "8px", fontSize: "13px" }}>
@@ -552,6 +554,7 @@ export default function TaskStatus({
           min="0"
           step="15"
           defaultValue={task.time_spent_minutes || 0}
+          disabled={locked}
           onBlur={async (e) => {
             const mins = Number(e.target.value) || 0;
             if (mins !== (task.time_spent_minutes || 0)) {
@@ -571,6 +574,7 @@ export default function TaskStatus({
       </div>
 
       {/* Add note */}
+      {!locked && (
       <div style={{ marginTop: "12px" }}>
         {!showNoteInput ? (
           <button
@@ -627,9 +631,10 @@ export default function TaskStatus({
           </div>
         )}
       </div>
+      )}
 
       {/* Reassign: Admin / Executive only */}
-      {canEditDate && (
+      {canEditDate && !locked && (
         <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <span style={kickerStyle}>Reassign to</span>
           <select

@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
 import { COLOURS, RADII, useConfirm, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
-import { canDeleteTask, canEditTask, isTaskProtected } from "../lib/permissions";
+import { canDeleteTask, canEditTask, canReopenCompletedTask, isTaskProtected } from "../lib/permissions";
 import TaskStatus from "./TaskStatus";
 
 type Comment = {
@@ -81,6 +81,12 @@ export default function TaskDetailPanel({
   const taskEditable = canEditTask(userCtx, task.assigned_by_email);
   const taskDeletable = canDeleteTask(userCtx, task.assigned_by_email);
   const protected_ = isTaskProtected(task.assigned_by_email);
+  // Khuram: "once the task is completed then it should be greyed out...
+  // not allowed to be edited afterwards, unless the administration who
+  // has the rights to bring it back." Locks the core-field editor,
+  // owner picker, and auto-remind toggle below; TaskStatus.tsx locks
+  // status/stage/subtasks/due-date/time/notes/reassign the same way.
+  const locked = task.status === "Completed" && !canReopenCompletedTask(userCtx);
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -230,7 +236,13 @@ export default function TaskDetailPanel({
         </div>
       )}
 
-      {taskEditable && (
+      {locked && (
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, marginBottom: "6px", padding: "6px 10px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.XS, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+          This task is completed and locked. Only an admin can reopen or edit it.
+        </div>
+      )}
+
+      {taskEditable && !locked && (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", marginBottom: "10px", backgroundColor: COLOURS.CARD }}>
           <label style={{ display: "block", marginBottom: "8px" }}>
             <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
@@ -300,8 +312,8 @@ export default function TaskDetailPanel({
 
       {/* Captures intent only — still needs the WhatsApp Business API setup
           before anything actually sends by itself. See migration 105. */}
-      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12.5px", color: COLOURS.NAVY, marginTop: "10px", cursor: "pointer" }}>
-        <input type="checkbox" checked={autoRemind} onChange={toggleAutoRemind} style={{ width: "15px", height: "15px", accentColor: COLOURS.GREEN, cursor: "pointer" }} />
+      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12.5px", color: COLOURS.NAVY, marginTop: "10px", cursor: locked ? "default" : "pointer" }}>
+        <input type="checkbox" checked={autoRemind} disabled={locked} onChange={toggleAutoRemind} style={{ width: "15px", height: "15px", accentColor: COLOURS.GREEN, cursor: locked ? "default" : "pointer" }} />
         Auto-remind on WhatsApp if this goes overdue
       </label>
 
@@ -350,26 +362,28 @@ export default function TaskDetailPanel({
         {comments.length === 0 && (
           <div style={{ fontSize: "12.5px", color: COLOURS.INK_400, marginBottom: "10px" }}>No comments yet.</div>
         )}
-        <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-          <input
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); postComment(); } }}
-            placeholder="Add a comment…"
-            style={{ flex: 1, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "8px 14px", fontSize: "13px", color: COLOURS.NAVY }}
-          />
-          <button
-            onClick={postComment}
-            disabled={postingComment || !newComment.trim()}
-            style={{
-              backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.PILL,
-              padding: "8px 16px", fontSize: "12.5px", fontWeight: 600, cursor: postingComment || !newComment.trim() ? "not-allowed" : "pointer",
-              opacity: postingComment || !newComment.trim() ? 0.6 : 1,
-            }}
-          >
-            Post
-          </button>
-        </div>
+        {!locked && (
+          <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+            <input
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); postComment(); } }}
+              placeholder="Add a comment…"
+              style={{ flex: 1, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "8px 14px", fontSize: "13px", color: COLOURS.NAVY }}
+            />
+            <button
+              onClick={postComment}
+              disabled={postingComment || !newComment.trim()}
+              style={{
+                backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.PILL,
+                padding: "8px 16px", fontSize: "12.5px", fontWeight: 600, cursor: postingComment || !newComment.trim() ? "not-allowed" : "pointer",
+                opacity: postingComment || !newComment.trim() ? 0.6 : 1,
+              }}
+            >
+              Post
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

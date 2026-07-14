@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-15 — Submitted-task routing fixed everywhere; Completed tasks locked
+
+Two related fixes, both about a task's lifecycle after Submitted:
+
+**1. "Submitted" wasn't always routing to the HOD.** Khuram: "it should be now showing up on the HOD's task list to review and complete. Please ensure this is working." Investigating found the reassign-to-manager logic lived only inside TaskStatus.tsx's status dropdown — the bulk "Change status" dropdown (TasksList.tsx) and the Kanban board's drag-and-drop (TasksBoard.tsx) both did a raw status UPDATE with no reassignment, so a task submitted through either of those stayed with the original assignee and never reached the manager's own My Tasks. Pulled the routing logic out into `app/lib/taskRouting.ts` and wired it into all three surfaces; bulk status change now routes each task to its own HOD individually (a per-task manager lookup, so it can't be one blanket UPDATE) and pre-skips tasks that don't qualify, same reporting pattern as the existing bulk "Mark Complete." Also added `supabase/116_route_submitted_task_db_trigger.sql` — a DB-level version of the same logic (forward routing + hand-back), matching the "airtight" bar Khuram set for the HOD-completion rule, so this holds regardless of which screen changes the status, present or future.
+
+**2. Completed tasks are now locked.** Khuram, mid-turn: "once the task is completed then it should be greyed out. I dont think the task should be allowed to be edited afterwards... unless the administration who has the rights to bring it back." Added `canReopenCompletedTask()` to lib/permissions.ts (Admin-tier only — Khuram, Kamran, or role Admin; deliberately narrower than the Executive-inclusive `isPrivileged()`, matching Khuram's word "administration"). Completed rows now render greyed out with a struck-through description everywhere (List, Tree, KPI drawer, Kanban card) via a shared `done`/`locked` check, and every editable control — status, stage, subtasks, due date, time tracking, notes, reassign, the core-field editor, owner picker, auto-remind toggle, and comment posting — is disabled once a task is Completed unless the viewer is Admin-tier. Bulk status/company/owner change in TasksList.tsx now pre-filters out Completed tasks the same way, and dragging a Completed Kanban card to another column is blocked unless admin. Added `supabase/117_completed_task_lock.sql` — a `BEFORE UPDATE` trigger that rejects any change to an already-Completed row unless the actor is admin-tier, closing the gap that migrations 114/115 left (they only ever gated the forward move *into* Completed, nothing stopped editing or reopening it afterwards).
+
+Completed tasks already default out of List and Tree's everyday views (both exclude Completed/Cancelled unless the Status filter is explicitly set to it) — left the Kanban board's Completed column and the "Completed" KPI-drawer lookup in place as the two deliberate ways to still find them.
+
+Verified with `tsc --noEmit` (clean) and `eslint` on every touched file (only pre-existing `react-hooks/set-state-in-effect`/`exhaustive-deps` findings, confirmed unrelated). **Two new migrations (116, 117) need applying via the Supabase SQL Editor, after 115** — same as 115, not yet confirmed as applied.
+
+---
+
 ## 2026-07-14 — Tasks page redesign: decluttered stat strip, collapsed filters, quieter rows
 
 Khuram: "the design has become very messy... redesign this page, that looks and feels more of our app." Showed him a mockup first (via the visualize tool) before touching any code, per his request; he approved it as-is: "yes this is perfect please go ahead, but ensure you do this exactly."

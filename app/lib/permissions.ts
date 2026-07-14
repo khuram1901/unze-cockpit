@@ -407,3 +407,16 @@ export function canDeleteTask(u: UserCtx, assignedByEmail: string | null | undef
   if (isAdminTier(u) || isPA(u)) return true;
   return !isTaskProtected(assignedByEmail);
 }
+
+// Khuram: "once the task is completed then it should be greyed out. I
+// dont think the task should be allowed to be edited afterwards... unless
+// the administration who has the rights to bring it back." Deliberately
+// narrower than isPrivileged — the Executive is not "administration" in
+// Khuram's wording here, so only Admin-tier (Khuram, Kamran, or role
+// Admin) can reopen or edit a Completed task. Used by TaskStatus.tsx and
+// TaskDetailPanel.tsx to lock every field on a completed task for anyone
+// else, and by the DB trigger (migration 117) as the same rule enforced
+// server-side.
+export function canReopenCompletedTask(u: UserCtx): boolean {
+  return isAdminTier(u);
+}
