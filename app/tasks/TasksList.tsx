@@ -7,7 +7,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
-import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
 import TeamStats from "./TeamStats";
 import TaskDetailModal from "./TaskDetailModal";
 import MiniSubtaskToggle from "./MiniSubtaskToggle";
@@ -107,11 +107,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [errorMsg, setErrorMsg] = useState("");
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(taskIdFromUrl);
-  const [timeView, setTimeView] = useState<"mytasks" | "department" | "weekly" | "monthly" | "quarterly" | "timeline" | "team" | "board" | "recurring">("mytasks");
+  const [timeView, setTimeView] = useState<"mytasks" | "weekly" | "monthly" | "quarterly" | "timeline" | "team" | "board" | "recurring">("mytasks");
   const [filter, setFilter] = useState<"all" | "overdue" | "waiting">("all");
-  const [bannerOpen, setBannerOpen] = useState(false);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
-  const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
   const [companies, setCompanies] = useState<CompanyLite[]>([]);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [kpi, setKpi] = useState<KpiSummary | null>(null);
@@ -119,6 +117,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [quarterlyData, setQuarterlyData] = useState<QuarterlyChartRow[]>([]);
   const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdownRow[]>([]);
   const [deptBreakdownOpen, setDeptBreakdownOpen] = useState(false);
+  const [kpiDrawer, setKpiDrawer] = useState<string | null>(null);
   const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">("mine");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
@@ -365,31 +364,10 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     .sort((a, b) => b.overdue - a.overdue || b.total - a.total);
   void people; // used indirectly via personMap
 
-  // ── Department grouping ──
-  type DeptStats = { dept: string; tasks: Task[]; open: number; overdue: number; waiting: number; stuck: number; completed: number };
-  const deptMap = new Map<string, DeptStats>();
-  for (const t of scopedTasks) {
-    const dept = t.assigned_to_department || t.project || "Unassigned";
-    if (!deptMap.has(dept)) deptMap.set(dept, { dept, tasks: [], open: 0, overdue: 0, waiting: 0, stuck: 0, completed: 0 });
-    const d = deptMap.get(dept)!;
-    d.tasks.push(t);
-    if (t.status === "Completed" || t.status === "Cancelled") { if (t.status === "Completed") d.completed++; }
-    else {
-      d.open++;
-      if (isOverdue(t)) d.overdue++;
-      if (t.status === "Waiting Reply") d.waiting++;
-      if (t.stuck_reason || t.status === "Stuck") d.stuck++;
-    }
-  }
-  const departments = Array.from(deptMap.values()).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
-
-  function toggleDept(dept: string) {
-    setCollapsedDepts((prev) => {
-      const next = new Set(prev);
-      if (next.has(dept)) next.delete(dept); else next.add(dept);
-      return next;
-    });
-  }
+  // Department grouping was removed as a separate tab — the reference
+  // design Khuram wanted to match turned out to be the status-column
+  // Kanban board, not a department grouping, so Board (plus the
+  // Department filter dropdown, now on every tab) replaces it.
 
   // ── Filtered task list ──
   let filteredTasks = allOpen;
@@ -403,6 +381,31 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
   const weekGroupColor = (g: string) =>
     g === "Overdue" ? COLOURS.RED : g === "This Week" ? COLOURS.AMBER : g === "Next Week" ? COLOURS.BLUE : COLOURS.SLATE;
+
+  // Small icon-square glyphs for the KPI tiles, matching the reference
+  // design Khuram asked to bring back. Plain inline SVGs (no icon library
+  // dependency, no cost) — one simple shape per KPI, tinted with that
+  // tile's accent colour.
+  function kpiIcon(label: string, color: string) {
+    const paths: Record<string, React.ReactNode> = {
+      Open: <><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" /></>,
+      Overdue: <><path d="M12 3 L21.5 20 H2.5 Z" /><line x1="12" y1="10" x2="12" y2="14.5" /><line x1="12" y1="17" x2="12" y2="17" /></>,
+      "Due Today": <><rect x="3.5" y="4.5" width="17" height="16" rx="2" /><line x1="15.5" y1="2.5" x2="15.5" y2="6.5" /><line x1="8.5" y1="2.5" x2="8.5" y2="6.5" /><line x1="3.5" y1="10" x2="20.5" y2="10" /></>,
+      "Waiting Reply": <path d="M20.5 11.5a8 8 0 0 1-8.5 8 8.4 8.4 0 0 1-3.5-.8L3.5 20l1.4-4.8a8 8 0 0 1-.9-3.7 8 8 0 0 1 8-8h.2a8 8 0 0 1 8.3 8z" />,
+      Stuck: <><circle cx="12" cy="12" r="9" /><line x1="5.5" y1="5.5" x2="18.5" y2="18.5" /></>,
+      Completed: <><path d="M21 11.1V12a9 9 0 1 1-5.4-8.3" /><polyline points="21 4 12 13.01 9 10.01" /></>,
+    };
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: "26px", height: "26px", borderRadius: RADII.SM, backgroundColor: `${color}1A`, flexShrink: 0,
+      }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {paths[label]}
+        </svg>
+      </span>
+    );
+  }
 
   function TaskRow({ task }: { task: Task }) {
     const isOpen = expandedTaskId === task.id;
@@ -431,7 +434,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   </span>
                 );
               })()}
-              {task.assigned_to_department && timeView !== "department" && (
+              {task.assigned_to_department && (
                 <span style={{ fontSize: "11px", fontWeight: 600, padding: "1px 6px", borderRadius: RADII.XS, color: COLOURS.NAVY, backgroundColor: COLOURS.HAIRLINE }}>
                   {task.assigned_to_department}
                 </span>
@@ -544,62 +547,28 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         </div>
       )}
 
-      {/* ═══ OVERDUE BANNER (detailed task list) ═══ */}
-      {overdueTasks.length > 0 && (
-        <div style={WARNING_BANNER_STYLE}>
-          <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "20px" }}>⚠</span>
-              <div>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
-                  {overdueTasks.length} overdue task{overdueTasks.length > 1 ? "s" : ""} need attention
-                </div>
-                <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
-                  {overdueTasks.slice(0, 3).map((t) => `${t.assigned_to || "Unassigned"}: ${t.description.slice(0, 30)}${t.description.length > 30 ? "…" : ""}`).join(" · ")}
-                  {overdueTasks.length > 3 && ` · +${overdueTasks.length - 3} more`}
-                </div>
-              </div>
-            </div>
-            <span style={{ fontSize: "13px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
-          </div>
-          {bannerOpen && (
-            <div style={WARNING_BANNER_INNER}>
-              {overdueTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a)).map((t) => (
-                <div
-                  key={t.id}
-                  onClick={() => { setExpandedTaskId(t.id); setBannerOpen(false); setTimeout(() => document.getElementById(`task-${t.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 100); }}
-                  style={{ padding: "8px 16px 8px 48px", borderBottom: `1px solid ${COLOURS.TRACK}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                >
-                  <div>
-                    <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{t.assigned_to || "Unassigned"}</div>
-                  </div>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.RED, flexShrink: 0 }}>{daysOverdue(t)}d late</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ═══ KPI SUMMARY ROW — sourced from get_tasks_kpi_summary() RPC, not client-side counting ═══ */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "flex-start" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", flex: 1 }}>
           {[
-            { label: "Open",          value: kpi?.open_count ?? allOpen.length,          accent: COLOURS.BLUE, clickable: true },
-            { label: "Overdue",       value: kpi?.overdue_count ?? overdueTasks.length,   accent: COLOURS.RED, clickable: true },
-            { label: "Due Today",     value: kpi?.due_today_count ?? 0,                   accent: COLOURS.AMBER, clickable: false },
-            { label: "Waiting Reply", value: kpi?.waiting_reply_count ?? waitingReply.length, accent: COLOURS.BLUE, clickable: false },
-            { label: "Stuck",         value: kpi?.stuck_count ?? 0,                        accent: COLOURS.SLATE, clickable: false },
-            { label: "Completed",     value: kpi?.completed_count ?? completedAll.length,  accent: COLOURS.GREEN, clickable: false },
-          ].map(({ label, value, accent, clickable }) => (
+            { label: "Open",          value: kpi?.open_count ?? allOpen.length,          accent: COLOURS.BLUE },
+            { label: "Overdue",       value: kpi?.overdue_count ?? overdueTasks.length,   accent: COLOURS.RED },
+            { label: "Due Today",     value: kpi?.due_today_count ?? 0,                   accent: COLOURS.AMBER },
+            { label: "Waiting Reply", value: kpi?.waiting_reply_count ?? waitingReply.length, accent: COLOURS.BLUE },
+            { label: "Stuck",         value: kpi?.stuck_count ?? 0,                        accent: COLOURS.SLATE },
+            { label: "Completed",     value: kpi?.completed_count ?? completedAll.length,  accent: COLOURS.GREEN },
+          ].map(({ label, value, accent }) => (
             <div
               key={label}
-              onClick={clickable ? () => setDeptBreakdownOpen(!deptBreakdownOpen) : undefined}
-              style={{ ...cardStyle, padding: "10px 14px", borderLeft: `3px solid ${accent}`, cursor: clickable ? "pointer" : "default" }}
+              onClick={() => setKpiDrawer(kpiDrawer === label ? null : label)}
+              style={{ ...cardStyle, padding: "10px 14px", borderLeft: `3px solid ${accent}`, cursor: "pointer", outline: kpiDrawer === label ? `2px solid ${accent}` : "none", display: "flex", alignItems: "center", gap: "10px" }}
             >
-              <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "6px" }}>{label}</div>
-              <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY }}>{value.toLocaleString()}</div>
+              {kpiIcon(label, accent)}
+              <div>
+                <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "4px" }}>{label}</div>
+                <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY }}>{value.toLocaleString()}</div>
+              </div>
             </div>
           ))}
         </div>
@@ -665,6 +634,45 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         )}
       </div>
 
+      {kpiDrawer && (() => {
+        const drawerTasks =
+          kpiDrawer === "Open" ? allOpen :
+          kpiDrawer === "Overdue" ? overdueTasks :
+          kpiDrawer === "Due Today" ? allOpen.filter((t) => t.due_date === todayStr) :
+          kpiDrawer === "Waiting Reply" ? waitingReply :
+          kpiDrawer === "Stuck" ? scopedTasks.filter((t) => t.status === "Stuck") :
+          completedAll;
+        return (
+          <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
+            <div style={{ padding: "9px 16px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{kpiDrawer} ({drawerTasks.length})</span>
+              <span onClick={() => setKpiDrawer(null)} style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, cursor: "pointer" }}>Close ✕</span>
+            </div>
+            {drawerTasks.length === 0 ? (
+              <div style={{ padding: "16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>Nothing here.</div>
+            ) : (
+              drawerTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => (
+                <div
+                  key={t.id}
+                  onClick={() => setExpandedTaskId(t.id)}
+                  style={{ padding: "9px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.description}</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{t.assigned_to || "Unassigned"}</div>
+                  </div>
+                  {t.due_date && (
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: isOverdue(t) ? COLOURS.RED : COLOURS.SLATE, flexShrink: 0 }}>
+                      {formatDateUK(t.due_date)}{isOverdue(t) && ` · ${daysOverdue(t)}d late`}
+                    </span>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        );
+      })()}
+
       {/* ═══ VIEW TOGGLE + FILTER PILLS ═══ */}
       <div style={{
         display: "flex", gap: "4px", marginBottom: "12px", flexWrap: "wrap",
@@ -672,7 +680,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         backgroundColor: COLOURS.CARD_ALT,
         paddingTop: "6px", paddingBottom: "6px",
       }}>
-        {(["mytasks", "board", "department", "weekly", "monthly", "quarterly", "timeline", "team", "recurring"] as const).map((v) => (
+        {(["mytasks", "board", "weekly", "monthly", "quarterly", "timeline", "team", "recurring"] as const).map((v) => (
           <button key={v} onClick={() => setTimeView(v)} style={{
             backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
             color: timeView === v ? "white" : COLOURS.NAVY,
@@ -683,8 +691,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         ))}
       </div>
 
-      {/* ═══ SEARCH + FILTER ROW (Board / List and everything below them) ═══ */}
-      {(timeView === "board" || timeView === "department" || timeView === "weekly") && (
+      {/* ═══ SEARCH + FILTER ROW — every tab except Team/Recurring, which
+          aren't task lists (Team is aggregate stats, Recurring is
+          templates not tasks), so the People/Owner filter Khuram asked for
+          is reachable everywhere it makes sense ═══ */}
+      {timeView !== "team" && timeView !== "recurring" && (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: 1, minWidth: "180px", maxWidth: "300px" }}>
             <input
@@ -730,7 +741,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         </div>
       )}
 
-      {(timeView === "board" || timeView === "department" || timeView === "weekly") && moreFiltersOpen && (
+      {timeView !== "team" && timeView !== "recurring" && moreFiltersOpen && (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
           <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={filterSelectStyle}>
             <option value="all">All stages</option>
@@ -814,88 +825,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {myTasksScope === "mine" ? "Nothing assigned to you right now." : "No tasks to show."}
             </div>
           )}
-        </div>
-      )}
-
-      {/* ═══ DEPARTMENT VIEW ═══ */}
-      {timeView === "department" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "14px" }}>
-          {departments.length === 0 ? (
-            <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks to show.</div>
-          ) : departments.map((d) => {
-            const isCollapsed = collapsedDepts.has(d.dept);
-            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
-            const hasIssues = d.overdue > 0 || d.stuck > 0;
-
-            const personBreakdown = new Map<string, { name: string; total: number; overdue: number; waiting: number }>();
-            for (const t of deptFiltered) {
-              const p = t.assigned_to || "Unassigned";
-              if (!personBreakdown.has(p)) personBreakdown.set(p, { name: p, total: 0, overdue: 0, waiting: 0 });
-              const pb = personBreakdown.get(p)!;
-              pb.total++;
-              if (isOverdue(t)) pb.overdue++;
-              if (t.status === "Waiting Reply") pb.waiting++;
-            }
-            const persons = Array.from(personBreakdown.values()).sort((a, b) => b.overdue - a.overdue || b.total - a.total);
-
-            if (deptFiltered.length === 0 && filter !== "all") return null;
-
-            return (
-              <div key={d.dept} style={{
-                border: `1px solid ${COLOURS.HAIRLINE}`,
-                borderLeft: `4px solid ${hasIssues ? COLOURS.RED : COLOURS.GREEN}`,
-                borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden",
-              }}>
-                {/* Department header */}
-                <div
-                  onClick={() => toggleDept(d.dept)}
-                  style={{
-                    padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
-                    backgroundColor: hasIssues ? COLOURS.DANGER_SOFT : COLOURS.CARD_ALT,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>{d.dept}</div>
-                    <div style={{ display: "flex", gap: "12px", marginTop: "4px", flexWrap: "wrap" }}>
-                      <span style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600 }}>{d.open} open</span>
-                      {d.overdue > 0 && <span style={{ fontSize: "12px", color: COLOURS.RED, fontWeight: 700 }}>{d.overdue} overdue</span>}
-                      {d.waiting > 0 && <span style={{ fontSize: "12px", color: COLOURS.AMBER, fontWeight: 600 }}>{d.waiting} waiting</span>}
-                      {d.stuck > 0 && <span style={{ fontSize: "12px", color: COLOURS.AMBER, fontWeight: 600 }}>{d.stuck} stuck</span>}
-                      <span style={{ fontSize: "12px", color: COLOURS.GREEN, fontWeight: 600 }}>{d.completed} done</span>
-                    </div>
-                  </div>
-                  <span style={{ color: COLOURS.SLATE, fontSize: "13px", flexShrink: 0 }}>{isCollapsed ? "▶" : "▼"}</span>
-                </div>
-
-                {/* Person breakdown bar */}
-                {!isCollapsed && persons.length > 0 && (
-                  <div style={{ padding: "8px 16px", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    {persons.map((p) => (
-                      <div key={p.name} style={{
-                        padding: "3px 10px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600,
-                        backgroundColor: p.overdue > 0 ? COLOURS.DANGER_SOFT : COLOURS.CARD,
-                        border: `1px solid ${p.overdue > 0 ? COLOURS.RED : COLOURS.HAIRLINE}`,
-                        color: p.overdue > 0 ? COLOURS.RED : COLOURS.NAVY,
-                      }}>
-                        {p.name.split(" ")[0]} — {p.total}{p.overdue > 0 && ` (${p.overdue} late)`}{p.waiting > 0 && ` (${p.waiting} wait)`}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Tasks list */}
-                {!isCollapsed && (
-                  <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
-                    {deptFiltered.length === 0 ? (
-                      <div style={{ padding: "12px 16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>No matching tasks.</div>
-                    ) : (
-                      deptFiltered.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} />)
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
         </div>
       )}
 
