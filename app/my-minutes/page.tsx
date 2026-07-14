@@ -7,7 +7,7 @@ import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, CountCard, StatusBadge, inputStyle, primaryButtonStyle, labelStyle } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, CountCard, StatusBadge, inputStyle, primaryButtonStyle, labelStyle, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import { canSeeAllMinutes, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Meeting = {
@@ -62,8 +62,11 @@ function MyMinutesPage() {
   const [newTaskOwner, setNewTaskOwner] = useState("");
   const [newTaskDue, setNewTaskDue] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState("Normal");
+  const [newTaskCompanyId, setNewTaskCompanyId] = useState("");
+  const [newTaskError, setNewTaskError] = useState("");
   const [savingNewTask, setSavingNewTask] = useState(false);
   const [allMembers, setAllMembers] = useState<{ name: string; email: string | null; department: string | null }[]>([]);
+  const [companies, setCompanies] = useState<{ id: string; name: string; short_code: string | null }[]>([]);
 
   useEffect(() => { loadData(); }, []);
 
@@ -150,6 +153,9 @@ function MyMinutesPage() {
       })).filter((m) => m.name));
     }
 
+    const { data: companiesData } = await supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true });
+    setCompanies(companiesData || []);
+
     // Load meeting tasks
     const { data: mtData } = await supabase.from("meeting_tasks").select("*");
     setMeetingTasks(mtData || []);
@@ -222,37 +228,44 @@ function MyMinutesPage() {
     : meetings;
 
   async function addTaskToMeeting(meetingId: string) {
-    if (!newTaskDesc.trim() || !newTaskOwner || !newTaskDue) return;
+    if (!newTaskDesc.trim() || !newTaskOwner || !newTaskDue || !newTaskCompanyId) return;
     setSavingNewTask(true);
+    setNewTaskError("");
     const member = allMembers.find((m) => m.name === newTaskOwner);
-    const { data: userData } = await supabase.auth.getUser();
-    const creatorEmail = userData.user?.email || null;
-    const { data: task } = await supabase.from("tasks").insert({
-      description: newTaskDesc.trim(),
-      assigned_to: newTaskOwner,
-      assigned_to_email: member?.email || null,
-      assigned_to_department: member?.department || null,
-      assigned_by: "Meeting Minutes",
-      assigned_by_email: creatorEmail,
-      assigned_date: new Date().toISOString().slice(0, 10),
-      due_date: newTaskDue || null,
-      priority: newTaskPriority,
-      status: "Not Started",
-      meeting_id: meetingId,
-      task_type: "Task",
-    }).select("id").single();
 
-    if (task) {
-      await supabase.from("meeting_tasks").insert({ meeting_id: meetingId, task_id: task.id });
-      if (member?.email) {
-        authFetch("/api/notifications/send", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "task_assigned", taskId: task.id, recipientEmail: member.email }),
-        }).catch(() => {});
-      }
+    // Routes through the shared task-creation gate (see
+    // TASK_NOTIFICATION_AUDIT.md) — this is also what fixes "assigned by"
+    // to the real person adding the task instead of the hardcoded
+    // "Meeting Minutes" label it used to always show.
+    const res = await authFetch("/api/tasks/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: newTaskDesc.trim(),
+        companyId: newTaskCompanyId,
+        assignedTo: newTaskOwner,
+        assignedToEmail: member?.email || null,
+        assignedToDepartment: member?.department || null,
+        dueDate: newTaskDue || null,
+        priority: newTaskPriority,
+        status: "Not Started",
+        meetingId,
+        taskType: "Task",
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+
+    if (!res.ok || result?.error) {
+      setSavingNewTask(false);
+      setNewTaskError(result?.error || "Couldn't add the task. Please try again.");
+      return;
     }
 
-    setNewTaskDesc(""); setNewTaskOwner(""); setNewTaskDue(""); setNewTaskPriority("Normal");
+    if (result?.taskId) {
+      await supabase.from("meeting_tasks").insert({ meeting_id: meetingId, task_id: result.taskId });
+    }
+
+    setNewTaskDesc(""); setNewTaskOwner(""); setNewTaskDue(""); setNewTaskPriority("Normal"); setNewTaskCompanyId("");
     setAddingTaskFor(null);
     setSavingNewTask(false);
     loadData();
@@ -408,16 +421,23 @@ function MyMinutesPage() {
                         {/* Inline add task form */}
                         {addingTaskFor === meeting.id && (
                           <div style={{ ...cardStyle, padding: "12px", marginBottom: "8px" }}>
-                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr 1fr", gap: "6px", marginBottom: "8px" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr 1fr 1fr", gap: "6px", marginBottom: "8px" }}>
                               <div>
-                                <label style={labelStyle}>Description</label>
-                                <input placeholder="Task description" value={newTaskDesc} onChange={(e) => setNewTaskDesc(e.target.value)} required style={inputStyle} />
+                                <label style={labelStyle}>Description ({newTaskDesc.length}/{TASK_DESCRIPTION_LIMIT})</label>
+                                <input placeholder="Task description" value={newTaskDesc} onChange={(e) => setNewTaskDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))} maxLength={TASK_DESCRIPTION_LIMIT} required style={inputStyle} />
                               </div>
                               <div>
                                 <label style={labelStyle}>Assign to</label>
                                 <select value={newTaskOwner} onChange={(e) => setNewTaskOwner(e.target.value)} required style={inputStyle}>
                                   <option value="">Assign to...</option>
                                   {allMembers.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label style={labelStyle}>Company</label>
+                                <select value={newTaskCompanyId} onChange={(e) => setNewTaskCompanyId(e.target.value)} required style={inputStyle}>
+                                  <option value="">Select...</option>
+                                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
                               </div>
                               <div>
@@ -432,8 +452,9 @@ function MyMinutesPage() {
                                 </select>
                               </div>
                             </div>
-                            <button onClick={() => addTaskToMeeting(meeting.id)} disabled={savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue}
-                              style={{ ...primaryButtonStyle, backgroundColor: COLOURS.GREEN, opacity: savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue ? 0.5 : 1 }}>
+                            {newTaskError && <div style={{ color: COLOURS.RED, fontSize: "12.5px", marginBottom: "8px" }}>{newTaskError}</div>}
+                            <button onClick={() => addTaskToMeeting(meeting.id)} disabled={savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue || !newTaskCompanyId}
+                              style={{ ...primaryButtonStyle, backgroundColor: COLOURS.GREEN, opacity: savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue || !newTaskCompanyId ? 0.5 : 1 }}>
                               {savingNewTask ? "Adding..." : "Add Task"}
                             </button>
                           </div>

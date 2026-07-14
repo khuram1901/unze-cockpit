@@ -21,6 +21,8 @@ import {
   labelStyle,
   inputStyle,
   useConfirm,
+  TASK_DESCRIPTION_LIMIT,
+  TASK_COMPANY_CODES,
 } from "../lib/SharedUI";
 
 type ExtractedMinutes = {
@@ -39,6 +41,7 @@ type ExtractedMinutes = {
     due_date?: string;
     priority: string;
     department?: string;
+    company_id?: string;
   }[];
 };
 
@@ -114,6 +117,7 @@ export default function MeetingsPage() {
   const [memberNames, setMemberNames] = useState<string[]>([]);
   const [memberEmails, setMemberEmails] = useState<{ name: string; email: string }[]>([]);
   const [memberDetails, setMemberDetails] = useState<{ name: string; role: string; department: string | null }[]>([]);
+  const [companies, setCompanies] = useState<{ id: string; name: string; short_code: string | null }[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   const [step, setStep] = useState<"input" | "review" | "approved">("input");
@@ -162,6 +166,13 @@ export default function MeetingsPage() {
         department: m.department || null,
       })).filter((m) => m.name));
     }
+
+    const { data: companiesData } = await supabase
+      .from("companies")
+      .select("id, name, short_code")
+      .in("short_code", TASK_COMPANY_CODES)
+      .order("name", { ascending: true });
+    setCompanies(companiesData || []);
 
     const { data: meetingsData } = await supabase
       .from("meetings")
@@ -309,9 +320,11 @@ export default function MeetingsPage() {
     const missingDue = extracted.action_items.filter((a) => !a.due_date);
     const missingDesc = extracted.action_items.filter((a) => !a.description.trim());
     const missingOwner = extracted.action_items.filter((a) => !a.owner_name);
+    const missingCompany = extracted.action_items.filter((a) => !a.company_id);
     if (missingDesc.length > 0) { setMessage(`Error: ${missingDesc.length} action item${missingDesc.length > 1 ? "s" : ""} missing a description.`); return; }
     if (missingOwner.length > 0) { setMessage(`Error: ${missingOwner.length} action item${missingOwner.length > 1 ? "s" : ""} missing an owner.`); return; }
     if (missingDue.length > 0) { setMessage(`Error: ${missingDue.length} action item${missingDue.length > 1 ? "s" : ""} missing a due date. Every task must have a deadline.`); return; }
+    if (missingCompany.length > 0) { setMessage(`Error: ${missingCompany.length} action item${missingCompany.length > 1 ? "s" : ""} missing a company.`); return; }
 
     setSaving(true);
 
@@ -344,44 +357,39 @@ export default function MeetingsPage() {
       return;
     }
 
+    // Routes through the shared task-creation gate (see
+    // TASK_NOTIFICATION_AUDIT.md) instead of inserting directly — fixes
+    // "assigned by" to the real person approving the minutes instead of
+    // the hardcoded "Meeting Minutes" label, and enforces the same
+    // company/character-limit rules as every other creation path.
     let tasksCreated = 0;
     for (const item of extracted.action_items) {
       const memberMatch = bestMatch(item.owner_name, memberEmails);
 
-      const { data: userData } = await supabase.auth.getUser();
-      const { data: task } = await supabase
-        .from("tasks")
-        .insert({
-          description: item.description,
-          assigned_to: item.owner_name,
-          assigned_to_email: memberMatch?.email || null,
-          assigned_by: "Meeting Minutes",
-          assigned_by_email: userData.user?.email || null,
-          assigned_date: isoDate,
-          due_date: item.due_date || null,
+      const res = await authFetch("/api/tasks/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: item.description.slice(0, TASK_DESCRIPTION_LIMIT),
+          companyId: item.company_id,
+          assignedTo: item.owner_name,
+          assignedToEmail: memberMatch?.email || null,
+          assignedToDepartment: item.department || null,
+          dueDate: item.due_date || null,
           priority: item.priority,
           status: "Not Started",
           project: extracted.meeting_title,
-          assigned_to_department: item.department || null,
-          meeting_id: meeting.id,
-        })
-        .select("id")
-        .single();
+          meetingId: meeting.id,
+          taskType: "Task",
+        }),
+      });
+      const result = await res.json().catch(() => ({}));
 
-      if (task) {
+      if (res.ok && !result?.error && result?.taskId) {
         await supabase.from("meeting_tasks").insert({
           meeting_id: meeting.id,
-          task_id: task.id,
+          task_id: result.taskId,
         });
-
-        if (memberMatch?.email) {
-          authFetch("/api/notifications/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: "task_assigned", taskId: task.id, recipientEmail: memberMatch.email }),
-          }).catch(() => {});
-        }
-
         tasksCreated++;
       }
     }
@@ -788,7 +796,7 @@ export default function MeetingsPage() {
             setExtracted({ ...extracted, action_items: extracted.action_items.filter((_, i) => i !== index) });
           };
           const addActionItem = () => {
-            setExtracted({ ...extracted, action_items: [...extracted.action_items, { description: "", owner_name: "", priority: "Medium", due_date: "", department: "" }] });
+            setExtracted({ ...extracted, action_items: [...extracted.action_items, { description: "", owner_name: "", priority: "Medium", due_date: "", department: "", company_id: "" }] });
           };
           const smallField: React.CSSProperties = { ...inputStyle, fontSize: "12px", padding: "6px 8px" };
 
@@ -895,10 +903,12 @@ export default function MeetingsPage() {
             {extracted.action_items.map((item, i) => (
               <div key={i} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, padding: "12px", marginBottom: "8px", backgroundColor: COLOURS.CARD_ALT }}>
                 <div style={{ marginBottom: "8px" }}>
-                  <input value={item.description} onChange={(e) => updateActionItem(i, { description: e.target.value })}
+                  <input value={item.description} onChange={(e) => updateActionItem(i, { description: e.target.value.slice(0, TASK_DESCRIPTION_LIMIT) })}
+                    maxLength={TASK_DESCRIPTION_LIMIT}
                     placeholder="Task description *" required style={{ ...inputStyle, fontWeight: 600, borderColor: !item.description.trim() ? COLOURS.RED : undefined }} />
+                  <span style={{ fontSize: "10.5px", color: item.description.length > TASK_DESCRIPTION_LIMIT - 20 ? COLOURS.AMBER : COLOURS.SLATE }}>{item.description.length}/{TASK_DESCRIPTION_LIMIT}</span>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
                   <div>
                     <label style={{ ...labelStyle, fontSize: "12px", color: !item.owner_name ? COLOURS.RED : undefined }}>Owner *</label>
                     <select value={item.owner_name} onChange={(e) => updateActionItem(i, { owner_name: e.target.value })}
@@ -910,6 +920,14 @@ export default function MeetingsPage() {
                       {item.owner_name && !memberDetails.find((m) => m.name === item.owner_name) && (
                         <option value={item.owner_name}>{item.owner_name} (not matched)</option>
                       )}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, fontSize: "12px", color: !item.company_id ? COLOURS.RED : undefined }}>Company *</label>
+                    <select value={item.company_id || ""} onChange={(e) => updateActionItem(i, { company_id: e.target.value })}
+                      style={{ ...smallField, borderColor: !item.company_id ? COLOURS.RED : undefined }}>
+                      <option value="">Select company</option>
+                      {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                   <div>

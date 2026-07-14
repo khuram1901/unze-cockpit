@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch } from "../lib/supabase";
-import { formatDateUK, todayISO } from "../lib/dateUtils";
+import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
@@ -15,6 +15,8 @@ import {
   StatusBadge,
   PriorityBadge,
   useConfirm,
+  TASK_DESCRIPTION_LIMIT,
+  TASK_COMPANY_CODES,
 } from "../lib/SharedUI";
 import { whatsappLink, taskChaseMessage } from "../lib/whatsapp";
 import { useRequireCapability } from "../lib/useRouteGuard";
@@ -55,6 +57,8 @@ type Member = {
   department: string | null;
   phone_e164: string | null;
 };
+
+type Company = { id: string; name: string; short_code: string | null };
 
 type PaDividend = {
   id: string;
@@ -119,7 +123,10 @@ export default function PADashboardPage() {
   const [newDueDate, setNewDueDate] = useState("");
   const [newPriority, setNewPriority] = useState("Normal");
   const [newProject, setNewProject] = useState("");
+  const [newCompanyId, setNewCompanyId] = useState("");
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [savingTask, setSavingTask] = useState(false);
+  const [taskError, setTaskError] = useState("");
   const [paDividends, setPaDividends] = useState<PaDividend[]>([]);
 
   useEffect(() => { loadData(); loadPaDividends(); }, []);
@@ -138,15 +145,17 @@ export default function PADashboardPage() {
     }
 
     const TASK_COLS = "id, description, project, priority, due_date, assigned_to, assigned_to_email, assigned_by, status, source_type, exception_type, assigned_to_department, reply_text, notes, created_at";
-    const [tasksRes, meetingsRes, membersRes] = await Promise.all([
+    const [tasksRes, meetingsRes, membersRes, companiesRes] = await Promise.all([
       supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(300),
       supabase.from("meeting_requests").select("id, requested_by_name, meeting_title, requested_date, priority, status").eq("status", "Pending").order("created_at", { ascending: false }),
       supabase.from("members").select("first_name, last_name, name, email, department, phone_e164"),
+      supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
     ]);
 
     setTasks(tasksRes.data || []);
     setMeetingRequests(meetingsRes.data || []);
     setMembers(membersRes.data || []);
+    setCompanies(companiesRes.data || []);
     setLoading(false);
   }
 
@@ -254,39 +263,44 @@ export default function PADashboardPage() {
 
   async function createNewTask(e: React.FormEvent) {
     e.preventDefault();
-    if (!newDesc.trim() || !newAssignTo || !newDueDate) return;
+    if (!newDesc.trim() || !newAssignTo || !newDueDate || !newCompanyId) return;
     setSavingTask(true);
+    setTaskError("");
 
     const assignedMember = members.find((m) => memberName(m) === newAssignTo);
 
-    const { data: userData } = await supabase.auth.getUser();
-    const { data: newTask } = await supabase.from("tasks").insert({
-      description: newDesc,
-      assigned_to: newAssignTo,
-      assigned_to_email: assignedMember?.email || null,
-      assigned_by: currentUserName || "PA",
-      assigned_by_email: userData.user?.email || null,
-      assigned_date: todayISO(),
-      due_date: newDueDate || null,
-      priority: newPriority,
-      project: newProject || null,
-      status: "Not Started",
-      task_type: "Task",
-      assigned_to_department: assignedMember?.department || null,
-    }).select("id").single();
+    // Routes through the shared task-creation gate (see
+    // TASK_NOTIFICATION_AUDIT.md) instead of inserting directly — this is
+    // what now enforces the company tag and the character limit here too,
+    // not just on the main New Task form.
+    const res = await authFetch("/api/tasks/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: newDesc,
+        companyId: newCompanyId,
+        assignedTo: newAssignTo,
+        assignedToEmail: assignedMember?.email || null,
+        assignedToDepartment: assignedMember?.department || null,
+        dueDate: newDueDate || null,
+        priority: newPriority,
+        project: newProject || null,
+        status: "Not Started",
+        taskType: "Task",
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+
+    if (!res.ok || result?.error) {
+      setSavingTask(false);
+      setTaskError(result?.error || "Couldn't create the task. Please try again.");
+      return;
+    }
 
     logAction("Created", "tasks", `PA assigned: ${newDesc} → ${newAssignTo}`);
 
-    if (assignedMember?.email && newTask?.id) {
-      authFetch("/api/notifications/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "task_assigned", taskId: newTask.id, recipientEmail: assignedMember.email }),
-      }).catch(() => {});
-    }
-
     setSavingTask(false);
-    setNewDesc(""); setNewAssignTo(""); setNewDueDate(""); setNewPriority("Normal"); setNewProject("");
+    setNewDesc(""); setNewAssignTo(""); setNewDueDate(""); setNewPriority("Normal"); setNewProject(""); setNewCompanyId("");
     setShowNewTask(false);
     showMsg(`Task assigned to ${newAssignTo}.`);
     loadData();
@@ -482,11 +496,19 @@ export default function PADashboardPage() {
               <SectionTitle title="Assign a New Task" />
               <form onSubmit={createNewTask}>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
-                  <label style={labelStyle}>Task <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="What needs to be done" required style={inputStyle} /></label>
+                  <label style={labelStyle}>Task <input value={newDesc} onChange={(e) => setNewDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))} maxLength={TASK_DESCRIPTION_LIMIT} placeholder="What needs to be done" required style={inputStyle} />
+                    <span style={{ fontSize: "10.5px", color: newDesc.length > TASK_DESCRIPTION_LIMIT - 20 ? COLOURS.AMBER : COLOURS.SLATE }}>{newDesc.length}/{TASK_DESCRIPTION_LIMIT}</span>
+                  </label>
                   <label style={labelStyle}>Assign To
                     <select value={newAssignTo} onChange={(e) => setNewAssignTo(e.target.value)} required style={inputStyle}>
                       <option value="">Select person...</option>
                       {members.map((m) => { const n = memberName(m); return <option key={n} value={n}>{n}</option>; })}
+                    </select>
+                  </label>
+                  <label style={labelStyle}>Company
+                    <select value={newCompanyId} onChange={(e) => setNewCompanyId(e.target.value)} required style={inputStyle}>
+                      <option value="">Select company...</option>
+                      {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </label>
                   <label style={labelStyle}>Due Date <DateInput value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} required style={inputStyle} /></label>
@@ -497,6 +519,7 @@ export default function PADashboardPage() {
                   </label>
                   <label style={labelStyle}>Project <input value={newProject} onChange={(e) => setNewProject(e.target.value)} placeholder="Optional" style={inputStyle} /></label>
                 </div>
+                {taskError && <div style={{ color: COLOURS.RED, fontSize: "12.5px", marginTop: "8px" }}>{taskError}</div>}
                 <button type="submit" disabled={savingTask} style={{
                   backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: "6px",
                   padding: "9px 18px", fontSize: "15px", fontWeight: 700, cursor: "pointer", marginTop: "8px",
