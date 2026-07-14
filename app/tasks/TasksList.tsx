@@ -55,6 +55,7 @@ const COMPANY_BADGE_COLOURS: Record<string, { color: string; background: string 
   IFPL: { color: COLOURS.GREEN, background: COLOURS.SUCCESS_SOFT },
   BRNH: { color: COLOURS.AMBER, background: COLOURS.WARNING_SOFT },
   HD:   { color: "#6E45B8", background: "#F3EEF9" },
+  DIR:  { color: COLOURS.SLATE, background: COLOURS.HAIRLINE },
 };
 
 type KpiSummary = {

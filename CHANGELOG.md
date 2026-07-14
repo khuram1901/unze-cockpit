@@ -4,6 +4,12 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Directors re-added to the Tasks company list (reverses earlier exclusion)
+
+While tagging the 8 personal/admin recurring tasks with a company (see stage 2 below), Khuram identified they're genuinely Directors-level personal items, not trading-company work — but still wants a company required, not left blank. Re-added `DIR` to `TASK_COMPANY_CODES` in `SharedUI.tsx`, app-wide (his explicit choice, not scoped to just Recurring Tasks). This **reverses** the Almahar/Directors exclusion from earlier the same day — Almahar stays excluded. Added a badge colour for `DIR` in `TasksList.tsx`. Directors is now selectable on every task company picker: New Task form, PA, meeting minutes, CSV import, filters, and Recurring Tasks.
+
+---
+
 ## 2026-07-14 — Task-creation consolidation, stage 2 (remaining 4 client paths migrated)
 
 Continuation of stage 1 (below). All 7 task-creation paths now route through the shared `/api/tasks/create` gate:

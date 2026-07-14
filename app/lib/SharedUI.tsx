@@ -14,15 +14,19 @@ import React from "react";
 // CSV import, which are separate flows Khuram didn't flag.
 export const TASK_DESCRIPTION_LIMIT = 150;
 
-// The trading companies in scope for task tagging — Almahar and Directors
-// were deliberately excluded when this hierarchy was agreed with Khuram
-// (confirmed again 14/07/2026: neither should appear anywhere on the
-// Tasks page — company picker, filters, or badges). Anything not tagged
-// to one of these falls into the "Group / needs review" bucket
-// (company_id left null). Shared here so every fetch of `companies` for
-// Tasks — New Task form, task-edit form, and the Company filter — stays
-// in sync instead of each screen keeping its own copy of this list.
-export const TASK_COMPANY_CODES = ["UTPL", "IFPL", "BRNH", "HD"];
+// The companies in scope for task tagging. Almahar stays excluded per
+// Khuram's original decision. Directors was excluded alongside it at
+// first, then deliberately re-added on 14/07/2026 — several personal/
+// admin recurring tasks (hostel fees, payment inquiries handled by his
+// executive) genuinely belong under Directors rather than a trading
+// company, and Khuram wants company still required for these, not left
+// blank. Re-added app-wide (not just Recurring Tasks) since this is one
+// shared list. Company is now a required field everywhere in the app —
+// there is no "Group / needs review" bucket to fall back to. Shared here
+// so every fetch of `companies` for Tasks — New Task form, task-edit
+// form, the Company filter, and Recurring Tasks — stays in sync instead
+// of each screen keeping its own copy of this list.
+export const TASK_COMPANY_CODES = ["UTPL", "IFPL", "BRNH", "HD", "DIR"];
 
 export const COLOURS = {
   // Surfaces
