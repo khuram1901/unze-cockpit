@@ -4,6 +4,22 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Manage POs: delete/edit rights fixed, plus contractor cap and edit bug
+
+Khuram asked to give himself and Nadeem Khan (Manager, Unze Trading Ops) rights to delete POs/letters and amend anything on the Manage POs page. Turned out not to be a permissions problem — both already passed the existing `canManagePOs`/`canManage` role checks (Admin, or Manager in Unze Trading Ops) used by every write route on this page. The actual gaps:
+
+- **No `DELETE` handler existed** on `/api/stock/purchase-orders` or `/api/stock/authority-letters` at all — the "Delete selected" button in the UI called an endpoint that was never built, so it always failed. Added both, gated the same way as the existing POST/PATCH on each route, with friendly error messages when Postgres's own `on delete restrict` foreign keys block a delete (letters/production still linked to a PO, dispatch records still linked to a letter) — no new safety logic needed, the schema already protects this.
+- **No way to edit an existing PO's core fields** (customer, PO number, label, quantities, dates, notes) — only create, close, and the broken bulk-delete existed. Added an Edit PO panel mirroring the existing Edit Letter pattern.
+- **No delete button on individual letters** — added one next to Edit.
+
+While testing, also hit and fixed a live bug: amending a letter or a contractor failed with *"Could not find the updated_at column of 'authority_letters' in the schema cache"* — both routes were unconditionally setting `updated_at` on every edit, but only `purchase_orders` actually has that column. Removed it from both PATCH payloads.
+
+Separately, Khuram flagged the Contractors tab was hard-capped at 50 with no search. Removed the `.limit(50)` in `/api/stock/contractors` and added a name/phone/CNIC/address search box to the tab.
+
+`tsc --noEmit` clean; `eslint` shows only pre-existing warnings on this file (unrelated `useEffect` patterns, one unused variable) — nothing new. 3 commits, not yet pushed (no git credentials in this sandbox — push from your own machine).
+
+---
+
 ## 2026-07-14 — Directors re-added to the Tasks company list (reverses earlier exclusion)
 
 While tagging the 8 personal/admin recurring tasks with a company (see stage 2 below), Khuram identified they're genuinely Directors-level personal items, not trading-company work — but still wants a company required, not left blank. Re-added `DIR` to `TASK_COMPANY_CODES` in `SharedUI.tsx`, app-wide (his explicit choice, not scoped to just Recurring Tasks). This **reverses** the Almahar/Directors exclusion from earlier the same day — Almahar stays excluded. Added a badge colour for `DIR` in `TasksList.tsx`. Directors is now selectable on every task company picker: New Task form, PA, meeting minutes, CSV import, filters, and Recurring Tasks.
