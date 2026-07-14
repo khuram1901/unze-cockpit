@@ -183,8 +183,8 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
       toast.show("Due date is required — every task must have a deadline.", "error");
       return;
     }
-    if (!companyTouched) {
-      toast.show("Please choose a Company — pick \"Group / needs review\" if it genuinely doesn't belong to one.", "error");
+    if (!companyTouched || !companyId) {
+      toast.show("Please choose a Company.", "error");
       return;
     }
 
@@ -195,35 +195,43 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
     const needsReply = status === "Waiting Reply";
 
-    const { data: newTask, error } = await supabase.from("tasks").insert({
-      task_type: "Task",
-      description,
-      company_id: companyId || null,
-      project,
-      stage: stage.trim() || null,
-      priority,
-      status,
-      due_date: dueDate,
-      assigned_by_email: assignedByEmail || null,
-      assigned_date: today,
-      assigned_to: assignedTo,
-      assigned_to_email: assignedToEmail,
-      assigned_by: assignedBy,
-      notes,
-      reply_required: needsReply,
-      assigned_to_department: assignedMember?.department || project || null,
-      assigned_to_business_unit: assignedMember?.business_unit || null,
-    }).select("id").single();
+    // Routes through the shared task-creation gate (see
+    // TASK_NOTIFICATION_AUDIT.md) instead of inserting directly — this
+    // form was already the closest to "doing it right," so this mainly
+    // just brings it onto the same rails as every other creation path.
+    const res = await authFetch("/api/tasks/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        taskType: "Task",
+        description,
+        companyId,
+        project,
+        stage: stage.trim() || null,
+        priority,
+        status,
+        dueDate,
+        assignedTo,
+        assignedToEmail,
+        assignedToDepartment: assignedMember?.department || project || null,
+        assignedToBusinessUnit: assignedMember?.business_unit || null,
+        notes,
+        replyRequired: needsReply,
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
 
-    if (error) {
+    if (!res.ok || result?.error) {
       setSaving(false);
-      toast.show("Error saving task: " + error.message, "error");
+      toast.show("Error saving task: " + (result?.error || "Unknown error"), "error");
       return;
     }
 
-    if (subtasks.length > 0 && newTask?.id) {
+    const newTaskId: string | undefined = result?.taskId;
+
+    if (subtasks.length > 0 && newTaskId) {
       const { error: subtaskError } = await supabase.from("task_subtasks").insert(
-        subtasks.map((title, i) => ({ task_id: newTask.id, title, position: i }))
+        subtasks.map((title, i) => ({ task_id: newTaskId, title, position: i }))
       );
       if (subtaskError) {
         toast.show("Task created, but subtasks failed to save: " + subtaskError.message, "error");
@@ -233,14 +241,6 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
     setSaving(false);
 
     logAction("Created", "tasks", `Task: ${description} → ${assignedTo}`);
-
-    if (assignedToEmail && newTask?.id) {
-      authFetch("/api/notifications/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "task_assigned", taskId: newTask.id, recipientEmail: assignedToEmail }),
-      }).catch(() => {});
-    }
 
     setDescription("");
     setCompanyId("");
@@ -299,15 +299,14 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
             <span style={kickerStyle}>Company *</span>
             <select
               style={{ ...inputStyle, color: companyTouched ? COLOURS.NAVY : COLOURS.SLATE }}
-              value={companyTouched ? (companyId || "__group__") : "__unselected__"}
+              value={companyTouched ? companyId : "__unselected__"}
               onChange={(e) => {
                 setCompanyTouched(true);
-                setCompanyId(e.target.value === "__group__" ? "" : e.target.value);
+                setCompanyId(e.target.value);
               }}
               required
             >
               <option value="__unselected__" disabled>Select…</option>
-              <option value="__group__">Group / needs review</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
