@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Org structure Phase 1: manager_id, is_director, team picker, org chart
+
+Khuram wants "Submitted" tasks to auto-route to the submitter's HOD for review, HODs alerted when their team's tasks go overdue, and a clean handoff tool for departures. Before enabling any of that, he asked for an honest read of the existing "who reports to whom" setup.
+
+Finding: the `members` table already had a `manager_name` column — completely unused. 0 of 15 members had it set, no page anywhere (checked Members management directly) selected or displayed it, and it was a free-typed name rather than a real link — the same fragile pattern that caused the task-assignment bugs fixed earlier this session (the system already has two people named Nadeem). Also found: every one of the 15 accounts is Manager/Admin/Executive — zero plain "Member" accounts — and two people (Nadeem Khan, Yahya Saleem) were both flagged HOD for Unze Trading Ops at once.
+
+Agreed design: a real `manager_id` link (not text), a new `is_director` tier above HOD (chain: team member → HOD → Director → Khuram/Kamran), driven from the manager's side ("tick your team members") rather than each person picking their own manager, and the existing Reassign Tasks tool opened up to HODs for their own team.
+
+Built this session: migration 109 (`manager_id`, `is_director`, drops `manager_name` — not yet applied); `is_director` checkbox and a "Team members" ticklist on every HOD/Director/Admin/Executive row in Members; a new Org Chart tab rendering the reporting tree recursively (cycle-guarded); Reassign Tasks now available to HODs/Directors scoped to their own team, not just Admin/Exec. Unflagged Yahya Saleem as HOD so Nadeem Khan is sole HOD for Unze Trading Ops (applied directly — a one-row data fix, not a schema change).
+
+Still blocked: Kamran's account doesn't exist yet (need name/email/role), and which HODs report to Khuram vs Kamran. "Submitted" as an actual task status, the auto-reassign-on-submit logic, and HOD overdue alerts are separate follow-up phases once the org data is populated — not built yet.
+
+---
+
 ## 2026-07-14 — Manage POs: delete/edit rights fixed, plus contractor cap and edit bug
 
 Khuram asked to give himself and Nadeem Khan (Manager, Unze Trading Ops) rights to delete POs/letters and amend anything on the Manage POs page. Turned out not to be a permissions problem — both already passed the existing `canManagePOs`/`canManage` role checks (Admin, or Manager in Unze Trading Ops) used by every write route on this page. The actual gaps:
