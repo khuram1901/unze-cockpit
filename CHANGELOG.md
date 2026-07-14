@@ -4,6 +4,26 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Offboard action: is_active flag, Reassign Tasks folded in
+
+Khuram asked whether Reassign Tasks was still needed now that manager_id/HOD structure exists, and separately asked to map a departure across everything a person is linked to — not just their org-chart spot, but tasks, reports, and ownership too, in one place, "so it stays with them all the way."
+
+Answer: manager_id only governs who reports to whom going forward — it does nothing to a leaver's already-existing open tasks. Reassign Tasks was the tool that actually moved those. So the two weren't redundant, but they were two separate manual steps for what's really one event. Folded them into a single Offboard action.
+
+Built: migration 111 adds `members.is_active` (default true) — not yet applied. The Offboard tab (replacing Reassign Tasks) lets an Admin or a HOD (for their own team) pick a leaver and an optional replacement; submitting moves the leaver's open tasks (matched by name, same mechanism as the old tool), their direct reports (manager_id), and any department they're Primary Owner of, all to the replacement — or to the leaver's own manager as interim cover if no replacement is picked yet, per Khuram's call. The leaver is then marked `is_active = false` rather than deleted, so old tasks/minutes/reports keep showing their name correctly, but they vanish from every picker going forward: Team Members, Org Chart, Department Ownership, and every place a new task gets assigned (Tasks page, PA quick-add, My Minutes follow-ups). A manual "Active" checkbox on each person's edit panel also allows reactivating a returning employee, or archiving someone directly without a handover.
+
+Not touched: `assigned_to` on tasks is still a name string, not a member_id link — that's the real reason the reassignment logic has to match by name rather than ID (same root cause as the earlier "two Nadeems"/"Muhammad Shakeel twice" bugs). Fixing that properly would mean adding an `assigned_to_member_id` column and backfilling every existing task — a bigger, separate piece of work, not done here.
+
+---
+
+## 2026-07-14 — Fix Members page stuck-on-edit bug; hide already-assigned people from other HODs
+
+Khuram reported First Name, Last Name, and Position Title fields "getting stuck" while typing on the Members page. Root cause: those three inputs used `value` + `onChange` calling straight into `updateMember()`, which ended with a full `loadData()` — 5+ Supabase queries — on every single keystroke. Email/Phone already used the correct `defaultValue` + `onBlur` pattern (fires once, on leaving the field); First Name/Last Name/Position Title didn't. Fixed by matching that pattern, and by replacing `loadData()` in `updateMember()`'s and `toggleTeamMember()`'s success paths with a local state patch — no full reload needed for a single-row update.
+
+Also requested: once someone is ticked as reporting to a HOD, hide them from every other HOD's "Team members" picker — one person, one manager. Implemented: the picker list now excludes anyone whose `manager_id` already points elsewhere, with a small note showing how many people are hidden for that reason.
+
+---
+
 ## 2026-07-14 — Org structure cleanup: drop is_director, dead owner fields, use position_title
 
 Khuram reviewed Phase 1 (below) and caught two things: (1) Director doesn't need its own flag — it's just Kamran's title sitting at the top next to Khuram's CEO title, not a rank anyone else holds, so `is_director` was removed in favour of the existing (previously UI-less) `position_title` field, now editable on the Members page and used as the org chart's label when set. (2) Secondary Owner and Escalation Owner on Department Ownership were confirmed dead via a full codebase search — read nowhere except the screen that sets them, and Escalation Owner in particular was meant to do exactly what the new HOD/manager_id chain now does properly. Dropped both, kept Primary Owner (which the Executive Dashboard does actively use). Migration 110, not yet applied.
