@@ -109,10 +109,13 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
 
 type ActiveTab = "people" | "matrix" | "ownership" | "offboard" | "orgchart";
 
-// Renders one person plus everyone under them, recursively — depth-capped
-// and cycle-guarded since manager_id has no DB constraint preventing a loop
-// if it's ever set incorrectly (a HOD's own picker can't target themselves,
-// but nothing stops A -> B -> A across two separate edits).
+// Renders one person plus everyone under them as a proper branching tree —
+// node, a stem down, a horizontal bar across siblings, then a stem down to
+// each child — pure inline-styled divs (no pseudo-elements, per the
+// inline-styles-only convention). Depth-capped and cycle-guarded since
+// manager_id has no DB constraint preventing a loop if it's ever set
+// incorrectly (a HOD's own picker can't target themselves, but nothing
+// stops A -> B -> A across two separate edits).
 function OrgNode({ member, allMembers, depth, visited }: { member: Member; allMembers: Member[]; depth: number; visited: Set<string> }) {
   const dn = fullName(member.first_name, member.last_name, member.name);
   if (visited.has(member.id) || depth > 6) return null;
@@ -124,25 +127,38 @@ function OrgNode({ member, allMembers, depth, visited }: { member: Member; allMe
   // Kamran's account is given, same as Khuram's is "CEO".
   const rankLabel = member.position_title || (member.is_hod ? "HOD" : (member.role === "Admin" || member.role === "Executive") ? member.role : null);
   return (
-    <div style={{ marginLeft: depth === 0 ? 0 : "22px", marginTop: "6px" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       <div style={{
-        display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px",
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "2px",
+        padding: "8px 14px", minWidth: "140px",
         border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
         backgroundColor: depth === 0 ? COLOURS.CARD_ALT : COLOURS.CARD,
-        borderLeft: `3px solid ${depth === 0 ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+        borderTop: `3px solid ${depth === 0 ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+        boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+        textAlign: "center" as const,
       }}>
-        <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{dn}</span>
+        <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, whiteSpace: "nowrap" as const }}>{dn}</span>
         {rankLabel && (
           <span style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.AMBER, textTransform: "uppercase" as const }}>{rankLabel}</span>
         )}
-        <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{member.department || (member.role === "Admin" || member.role === "Executive" ? "" : "No department")}</span>
-        {children.length > 0 && (
-          <span style={{ marginLeft: "auto", fontSize: "10.5px", color: COLOURS.INK_400, fontFamily: "var(--font-mono)" }}>{children.length} report{children.length !== 1 ? "s" : ""}</span>
-        )}
+        <span style={{ fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" as const }}>{member.department || (member.role === "Admin" || member.role === "Executive" ? "" : "No department")}</span>
       </div>
-      {children.map((c) => (
-        <OrgNode key={c.id} member={c} allMembers={allMembers} depth={depth + 1} visited={nextVisited} />
-      ))}
+      {children.length > 0 && (
+        <>
+          <div style={{ width: "2px", height: "16px", backgroundColor: COLOURS.HAIRLINE }} />
+          <div style={{
+            display: "flex", gap: "20px", alignItems: "flex-start",
+            borderTop: children.length > 1 ? `2px solid ${COLOURS.HAIRLINE}` : "none",
+          }}>
+            {children.map((c) => (
+              <div key={c.id} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{ width: "2px", height: "16px", backgroundColor: COLOURS.HAIRLINE }} />
+                <OrgNode member={c} allMembers={allMembers} depth={depth + 1} visited={nextVisited} />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1156,9 +1172,11 @@ export default function MembersManager() {
               }
               return (
                 <>
-                  {roots.map((r) => (
-                    <OrgNode key={r.id} member={r} allMembers={activeMembers} depth={0} visited={new Set()} />
-                  ))}
+                  <div style={{ display: "flex", gap: "40px", justifyContent: roots.length > 1 ? "flex-start" : "center", overflowX: "auto", padding: "4px 4px 12px" }}>
+                    {roots.map((r) => (
+                      <OrgNode key={r.id} member={r} allMembers={activeMembers} depth={0} visited={new Set()} />
+                    ))}
+                  </div>
                   {unassigned.length > 0 && (
                     <div style={{ marginTop: "14px", padding: "8px 12px", border: `1px dashed ${COLOURS.RED}`, borderRadius: RADII.SM, fontSize: "12px", color: COLOURS.RED }}>
                       {unassigned.length} member{unassigned.length !== 1 ? "s" : ""} point to a manager that no longer exists — check and re-assign on the People tab.
