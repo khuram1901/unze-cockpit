@@ -3,6 +3,7 @@ import { requireAuth } from "../../../lib/api-auth";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { createTaskCore, type TaskActor } from "../../../lib/task-creation";
 import { rateLimitByIP, rateLimitResponse } from "../../../lib/rate-limit";
+import { canCreateAssignments, isPrivileged, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 // The one shared entry point for creating a task — every path in the app
 // (New Task form, PA quick-add, meeting minutes, CSV import, and the
@@ -36,17 +37,37 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient();
     const { data: member } = await supabase
       .from("members")
-      .select("first_name, last_name, name, role")
+      .select("id, first_name, last_name, name, role, department")
       .eq("email", auth.email)
       .maybeSingle();
+
+    // Server-side capability check, matching canCreateAssignments() —
+    // the same rule that already gates the "+ New Task" button on every
+    // page. This route uses the service-role client (bypasses RLS) so it
+    // has to re-check this itself; the RLS insert policy on `tasks` alone
+    // doesn't restrict who can create one.
+    let overrides: PermOverrides | null = null;
+    if (member?.id) {
+      const { data: perms } = await supabase
+        .from("member_permissions")
+        .select("*")
+        .eq("member_id", member.id)
+        .maybeSingle();
+      overrides = (perms as PermOverrides) || null;
+    }
+    const ctx: UserCtx = { email: auth.email, role: member?.role ?? null, department: member?.department ?? null, overrides };
+    if (!canCreateAssignments(ctx)) {
+      return Response.json({ error: "Not authorised to create tasks" }, { status: 403 });
+    }
 
     let actor: TaskActor;
     if (systemActor) {
       // Only genuinely automated detections (currently: the cash-
       // escalation engine) may claim to be the system rather than the
-      // logged-in user — gated on admin/exec so a regular member can't
-      // spoof "assigned by System" on a task they're personally creating.
-      if (!member || (member.role !== "Admin" && member.role !== "Executive")) {
+      // logged-in user — gated on admin/exec/CEO so a regular member
+      // can't spoof "assigned by System" on a task they're personally
+      // creating.
+      if (!isPrivileged(ctx)) {
         return Response.json({ error: "Not authorised to create a system-attributed task" }, { status: 403 });
       }
       actor = { kind: "system", label: typeof systemActor === "string" ? systemActor : "System" };
