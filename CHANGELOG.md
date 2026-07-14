@@ -4,6 +4,24 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Task detail: Company/Department/Priority/Owner(s) always editable
+
+Khuram: "when you click the task it opens up the card and in there, we cannot amend the company, department, priority — these all options should be available everywhere." Those fields already existed in the edit panel, but were hidden behind an "Edit task" button (or clicking the modal's title) that toggled a separate edit mode — evidently not being found. Removed the toggle: Description, Priority, Department, Company, and Owner(s) now render as live, always-visible, auto-saving controls every time a task is opened, matching how the Status and Stage controls below them already worked (plain dropdown, saves immediately, no Save/Cancel step).
+
+Side effect: the click-to-edit plumbing this replaced (forwardRef/useImperativeHandle wiring between TaskDetailModal and TaskDetailPanel) is no longer needed and was removed — the modal header is just a header now.
+
+---
+
+## 2026-07-14 — Submitted tasks auto-route to the owner's manager
+
+The last piece of the org-structure work from earlier this session: Khuram's original ask ("every time a task is submitted, it should go to their HOD... become part of their task to review and complete") had been deliberately deferred until the reporting-line data existed. Checked live data before building: 10 of 15 active people already had a manager set; the remaining 4 HODs (Akhlaq/Admin, M. Nadeem/IT, Naseem/Accounts, Zuhair/HR) had none, because the plan was for every HOD to report to Khuram or Kamran and Kamran's account still doesn't exist. Khuram confirmed pointing those 4 to himself for now — applied directly as a one-row data fix (same treatment as the Yahya Saleem HOD-conflict fix in the Phase 1 session), not a migration.
+
+Built: migration 113 adds `submitted_by_name`/`submitted_by_email` to tasks — remembers who a task belonged to right before it's reassigned. In TaskStatus.tsx, moving a task's status to Submitted (either the plain status dropdown, or submitting an explanation on a reply-required task — both paths landed here) now looks up the current owner's manager and reassigns the task to them, so it shows up in the manager's own My Tasks rather than just being visible to them. If the owner has no manager on file (Khuram/Kamran at the top), it just saves the status with no reassignment. Moving it away from Submitted to anything except Completed/Cancelled hands it back to the original owner automatically — which also covers the existing "Reopen (send back)" reviewer button for free, since that goes through the same save path.
+
+Not done: no notification fires on this handoff (matches how every other status change in the app already works — only task *creation* sends notifications today). The manager finds out by seeing it appear in their own task list, not via an alert.
+
+---
+
 ## 2026-07-14 — Tasks: multi-assignee support + bulk actions
 
 Khuram: "select multiple tasks at the same time and move them, change their status, change their company, or change their ownership" plus "in a task I can't change the company or the user, or assign it to multiple people by multi-selecting it."
