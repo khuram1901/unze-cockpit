@@ -148,7 +148,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<"all" | "week" | "month" | "quarter">("all");
-  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  // Single collapsed "Filters" button (badge shows how many are active)
+  // instead of a permanent row of 7 dropdowns plus a separate "More
+  // Filters" toggle — the redesign Khuram approved folds every filter
+  // into one panel, opened on demand.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [dueFilter, setDueFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
@@ -259,7 +263,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     setSubtaskFilter("all");
     setStatusFilter("all");
     setSearchQuery("");
-    setMoreFiltersOpen(false);
+    setFiltersOpen(false);
   }
 
   useEffect(() => {
@@ -372,7 +376,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   ])).sort();
   const ownerOptions = Array.from(new Set(tasks.map((t) => normName(t.assigned_to)).filter((n) => !!n))).sort();
   const stageOptions = Array.from(new Set(tasks.map((t) => t.stage).filter((s): s is string => !!s))).sort();
-  const filtersActive = departmentFilter !== "all" || priorityFilter !== "all" || ownerFilter !== "all" || periodFilter !== "all" || stageFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all" || statusFilter !== "all" || searchQuery.trim() !== "";
+  // Counts every filter, including Company (left out of the old boolean
+  // check by oversight) — drives the badge on the single "Filters" button.
+  const activeFilterCount = [
+    companyFilter !== "all", departmentFilter !== "all", priorityFilter !== "all", statusFilter !== "all",
+    ownerFilter !== "all", periodFilter !== "all", stageFilter !== "all", dueFilter !== "all",
+    sourceFilter !== "all", subtaskFilter !== "all", searchQuery.trim() !== "",
+  ].filter(Boolean).length;
+  const filtersActive = activeFilterCount > 0;
 
   function refreshAll() {
     loadTasks();
@@ -609,31 +620,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     backgroundColor: COLOURS.NAVY, color: "white", cursor: "pointer",
   };
 
-  // Small icon-square glyphs for the KPI tiles, matching the reference
-  // design Khuram asked to bring back. Plain inline SVGs (no icon library
-  // dependency, no cost) — one simple shape per KPI, tinted with that
-  // tile's accent colour.
-  function kpiIcon(label: string, color: string) {
-    const paths: Record<string, React.ReactNode> = {
-      Open: <><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" /></>,
-      Overdue: <><path d="M12 3 L21.5 20 H2.5 Z" /><line x1="12" y1="10" x2="12" y2="14.5" /><line x1="12" y1="17" x2="12" y2="17" /></>,
-      "Due Today": <><rect x="3.5" y="4.5" width="17" height="16" rx="2" /><line x1="15.5" y1="2.5" x2="15.5" y2="6.5" /><line x1="8.5" y1="2.5" x2="8.5" y2="6.5" /><line x1="3.5" y1="10" x2="20.5" y2="10" /></>,
-      "Waiting Reply": <path d="M20.5 11.5a8 8 0 0 1-8.5 8 8.4 8.4 0 0 1-3.5-.8L3.5 20l1.4-4.8a8 8 0 0 1-.9-3.7 8 8 0 0 1 8-8h.2a8 8 0 0 1 8.3 8z" />,
-      Stuck: <><circle cx="12" cy="12" r="9" /><line x1="5.5" y1="5.5" x2="18.5" y2="18.5" /></>,
-      Completed: <><path d="M21 11.1V12a9 9 0 1 1-5.4-8.3" /><polyline points="21 4 12 13.01 9 10.01" /></>,
-    };
-    return (
-      <span style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: "26px", height: "26px", borderRadius: RADII.SM, backgroundColor: `${color}1A`, flexShrink: 0,
-      }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          {paths[label]}
-        </svg>
-      </span>
-    );
-  }
-
   // Icon glyphs for the Board/Tree/List/Timeline view-switcher buttons —
   // same plain-inline-SVG approach as the KPI icons above, no dependency.
   const VIEW_ICON_PATHS: Record<string, React.ReactNode> = {
@@ -683,10 +669,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
-            <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+            {/* One muted meta line, dot-separated, instead of a row of
+                boxed badges — same information, far less visual noise. */}
+            <div style={{ fontSize: "12px", color: COLOURS.INK_400, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
               <span title={otherAssignees.length > 0 ? `Also: ${otherAssignees.join(", ")}` : undefined}>
                 {task.assigned_to || "Unassigned"}{otherAssignees.length > 0 && ` +${otherAssignees.length}`}
               </span>
+              <span>·</span>
               {(() => {
                 const badge = companyBadge(task.company_id);
                 return (
@@ -696,51 +685,58 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 );
               })()}
               {task.assigned_to_department && (
-                <span style={{ fontSize: "11px", fontWeight: 600, padding: "1px 6px", borderRadius: RADII.XS, color: COLOURS.NAVY, backgroundColor: COLOURS.HAIRLINE }}>
-                  {task.assigned_to_department}
-                </span>
-              )}
-              {task.meeting_id && (
-                <a
-                  href={`/my-minutes?meeting=${task.meeting_id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.BLUE, backgroundColor: COLOURS.INFO_SOFT, borderRadius: RADII.XS, padding: "1px 9px", whiteSpace: "nowrap", textDecoration: "none" }}
-                >
-                  From: {meetingTitles[task.meeting_id] || "Meeting"} →
-                </a>
+                <>
+                  <span>·</span>
+                  <span>{task.assigned_to_department}</span>
+                </>
               )}
               {task.stage && (
-                <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "1px 7px", borderRadius: RADII.XS, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>
-                  → {task.stage}
-                </span>
+                <>
+                  <span>·</span>
+                  <span>→ {task.stage}</span>
+                </>
               )}
               {task.task_subtasks && task.task_subtasks.length > 0 && (
-                <span style={{ fontSize: "10.5px", fontWeight: 700, padding: "1px 7px", borderRadius: RADII.XS, color: COLOURS.SLATE, backgroundColor: COLOURS.TRACK }}>
-                  {task.task_subtasks.filter((s) => s.is_complete).length}/{task.task_subtasks.length}
-                </span>
+                <>
+                  <span>·</span>
+                  <span>{task.task_subtasks.filter((s) => s.is_complete).length}/{task.task_subtasks.length} subtasks</span>
+                </>
               )}
               {task.task_comments && task.task_comments.length > 0 && (
-                <span style={{ fontSize: "10.5px", fontWeight: 600, color: COLOURS.SLATE }}>
-                  {task.task_comments.length} comment{task.task_comments.length > 1 ? "s" : ""}
-                </span>
+                <>
+                  <span>·</span>
+                  <span>{task.task_comments.length} comment{task.task_comments.length > 1 ? "s" : ""}</span>
+                </>
               )}
-              {task.due_date && (
-                <span style={{ fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 600 : 400 }}>
-                  {task.assigned_date ? `Issued ${formatDateUK(task.assigned_date)} → Due ` : ""}
-                  {formatDateUK(task.due_date)}{od > 0 && ` · ${od}d late`}
-                </span>
+              {task.meeting_id && (
+                <>
+                  <span>·</span>
+                  <a
+                    href={`/my-minutes?meeting=${task.meeting_id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ fontWeight: 600, color: COLOURS.BLUE, whiteSpace: "nowrap", textDecoration: "none" }}
+                  >
+                    {meetingTitles[task.meeting_id] || "Meeting"} →
+                  </a>
+                </>
               )}
             </div>
           </div>
-          <div style={{ display: "flex", gap: "5px", alignItems: "center", flexShrink: 0 }}>
-            {overdue && (
-              <span style={{ fontSize: "10.5px", fontWeight: 700, padding: "1px 8px", borderRadius: RADII.PILL, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}` }}>
-                Overdue
-              </span>
-            )}
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
             {task.priority && <PriorityBadge priority={task.priority} />}
             <StatusBadge status={task.status} />
-            <span style={{ fontSize: "11.5px", fontWeight: 700, color: COLOURS.BLUE }}>Open →</span>
+            {task.due_date && (
+              <span
+                title={task.assigned_date ? `Issued ${formatDateUK(task.assigned_date)}` : undefined}
+                style={{
+                  fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", fontSize: "12px",
+                  color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 500,
+                  minWidth: "76px", textAlign: "right",
+                }}
+              >
+                {formatDateUK(task.due_date)}{od > 0 && ` · ${od}d`}
+              </span>
+            )}
           </div>
         </div>
 
@@ -766,34 +762,46 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         onChanged={refreshAll}
       />
 
-      {/* ═══ NEEDS YOUR ATTENTION BANNER ═══ */}
-      <div style={{
-        backgroundColor: COLOURS.DANGER_SOFT, border: `1px solid #F1C6C1`, borderLeft: `4px solid ${COLOURS.RED}`,
-        borderRadius: RADII.CARD, padding: "14px 18px", marginBottom: "14px",
-        display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "13.5px", color: COLOURS.RED, flexShrink: 0 }}>
-          Needs Your Attention
-        </div>
-        <div style={{ display: "flex", gap: "22px", flexWrap: "wrap", flex: 1 }}>
+      {/* ═══ STAT STRIP — one compact row, sourced from get_tasks_kpi_summary()
+          RPC. Replaces the old "Needs Your Attention" banner + separate KPI
+          card row, which duplicated the same Overdue/Due Today/Stuck
+          numbers twice on screen. Overdue and Due Today get a soft tint so
+          they still stand out; the urgent count now lives as a small
+          sub-label under Overdue instead of its own tile. ═══ */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "stretch" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))", gap: "8px", flex: 1 }}>
           {[
-            { n: kpi?.urgent_open_count ?? 0, l: "Critical (Urgent, open)" },
-            { n: kpi?.overdue_count ?? overdueTasks.length, l: "Overdue" },
-            { n: kpi?.due_today_count ?? 0, l: "Due Today" },
-            { n: kpi?.stuck_count ?? 0, l: "Stuck" },
-          ].map(({ n, l }) => (
-            <div key={l} style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-              <span style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "17px", fontWeight: 700, color: COLOURS.NAVY }}>{n}</span>
-              <span style={{ fontSize: "11.5px", color: COLOURS.SLATE, fontWeight: 600 }}>{l}</span>
+            { label: "Open",          value: kpi?.open_count ?? allOpen.length,          accent: COLOURS.NAVY, soft: COLOURS.CARD,       border: COLOURS.HAIRLINE },
+            { label: "Overdue",       value: kpi?.overdue_count ?? overdueTasks.length,   accent: COLOURS.RED,  soft: COLOURS.DANGER_SOFT, border: COLOURS.RED,
+              sub: (kpi?.urgent_open_count ?? 0) > 0 ? `${kpi!.urgent_open_count} urgent` : undefined },
+            { label: "Due Today",     value: kpi?.due_today_count ?? 0,                   accent: COLOURS.AMBER, soft: COLOURS.WARNING_SOFT, border: COLOURS.AMBER },
+            { label: "Waiting Reply", value: kpi?.waiting_reply_count ?? waitingReply.length, accent: COLOURS.NAVY, soft: COLOURS.CARD, border: COLOURS.HAIRLINE },
+            { label: "Stuck",         value: kpi?.stuck_count ?? 0,                        accent: COLOURS.NAVY, soft: COLOURS.CARD, border: COLOURS.HAIRLINE },
+            { label: "Completed",     value: kpi?.completed_count ?? completedAll.length,  accent: COLOURS.GREEN, soft: COLOURS.CARD, border: COLOURS.HAIRLINE },
+          ].map(({ label, value, accent, soft, border, sub }) => (
+            <div
+              key={label}
+              onClick={() => setKpiDrawer(kpiDrawer === label ? null : label)}
+              style={{
+                backgroundColor: soft, border: `1px solid ${kpiDrawer === label ? border : COLOURS.HAIRLINE}`,
+                borderRadius: RADII.SM, padding: "8px 12px", cursor: "pointer",
+              }}
+            >
+              <div style={{ fontSize: "10.5px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "2px" }}>{label}</div>
+              <div style={{ fontSize: "19px", fontWeight: 700, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: accent }}>{value.toLocaleString()}</div>
+              {sub && <div style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.RED, marginTop: "1px" }}>{sub}</div>}
             </div>
           ))}
         </div>
-        <span
+        <button
           onClick={() => setDeptBreakdownOpen(!deptBreakdownOpen)}
-          style={{ fontSize: "12.5px", fontWeight: 700, color: COLOURS.RED, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
+          style={{
+            border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, color: COLOURS.SLATE,
+            borderRadius: RADII.SM, padding: "0 14px", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+          }}
         >
-          View breakdown {deptBreakdownOpen ? "▲" : "→"}
-        </span>
+          Breakdown {deptBreakdownOpen ? "▲" : "▼"}
+        </button>
       </div>
 
       {deptBreakdownOpen && (
@@ -814,30 +822,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       )}
 
 
-      {/* ═══ KPI SUMMARY ROW — sourced from get_tasks_kpi_summary() RPC, not client-side counting ═══ */}
-      <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "flex-start" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", flex: 1 }}>
-          {[
-            { label: "Open",          value: kpi?.open_count ?? allOpen.length,          accent: COLOURS.BLUE },
-            { label: "Overdue",       value: kpi?.overdue_count ?? overdueTasks.length,   accent: COLOURS.RED },
-            { label: "Due Today",     value: kpi?.due_today_count ?? 0,                   accent: COLOURS.AMBER },
-            { label: "Waiting Reply", value: kpi?.waiting_reply_count ?? waitingReply.length, accent: COLOURS.BLUE },
-            { label: "Stuck",         value: kpi?.stuck_count ?? 0,                        accent: COLOURS.SLATE },
-            { label: "Completed",     value: kpi?.completed_count ?? completedAll.length,  accent: COLOURS.GREEN },
-          ].map(({ label, value, accent }) => (
-            <div
-              key={label}
-              onClick={() => setKpiDrawer(kpiDrawer === label ? null : label)}
-              style={{ ...cardStyle, padding: "10px 14px", borderLeft: `3px solid ${accent}`, cursor: "pointer", outline: kpiDrawer === label ? `2px solid ${accent}` : "none", display: "flex", alignItems: "center", gap: "10px" }}
-            >
-              {kpiIcon(label, accent)}
-              <div>
-                <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "4px" }}>{label}</div>
-                <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY }}>{value.toLocaleString()}</div>
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Import/export stays as its own row — a deliberate secondary action,
+          not competing with the stat strip above for attention. */}
+      <div style={{ marginBottom: "14px" }}>
         {(canImport ?? isPrivileged) && (
           <ImportExportButtons
             onExport={() => {
@@ -983,9 +970,10 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       <div style={{
         position: "sticky", top: 0, zIndex: 10,
         backgroundColor: COLOURS.CARD_ALT,
-        paddingTop: "6px", paddingBottom: "6px",
+        borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+        padding: "8px 2px 10px",
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: "4px" }}>
             {(["team", "recurring"] as const).map((v) => (
               <button key={v} onClick={() => setTimeView(v)} style={{
@@ -1080,12 +1068,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         )}
       </div>
 
-      {/* ═══ SEARCH + FILTER ROW — every tab except Team/Recurring, which
+      {/* ═══ SEARCH + FILTERS — every tab except Team/Recurring, which
           aren't task lists (Team is aggregate stats, Recurring is
-          templates not tasks), so the People/Owner filter Khuram asked for
-          is reachable everywhere it makes sense ═══ */}
+          templates not tasks). All ten filters used to sit in two
+          permanently-open rows; they're now one "Filters" button with a
+          badge, and the whole panel below opens on demand — the redesign
+          Khuram approved. ═══ */}
       {timeView !== "team" && timeView !== "recurring" && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: filtersOpen ? "8px" : "12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: 1, minWidth: "180px", maxWidth: "300px" }}>
             <input
               value={searchQuery}
@@ -1094,20 +1084,53 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%" }}
             />
           </div>
-          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={filterSelectStyle}>
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            style={{
+              display: "flex", alignItems: "center", gap: "7px",
+              border: `1px solid ${filtersOpen ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
+              backgroundColor: filtersOpen ? COLOURS.INFO_SOFT : COLOURS.CARD,
+              color: filtersOpen ? COLOURS.BLUE : COLOURS.NAVY,
+              borderRadius: RADII.SM, padding: "6px 14px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            Filters
+            {activeFilterCount > 0 && (
+              <span style={{
+                backgroundColor: filtersOpen ? COLOURS.BLUE : COLOURS.NAVY, color: "white",
+                borderRadius: "999px", fontSize: "10.5px", fontWeight: 700, padding: "1px 7px", minWidth: "16px", textAlign: "center",
+              }}>
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          {filtersActive && (
+            <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
+              Reset
+            </button>
+          )}
+        </div>
+      )}
+
+      {timeView !== "team" && timeView !== "recurring" && filtersOpen && (
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px",
+          marginBottom: "12px", padding: "12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD,
+        }}>
+          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">All companies</option>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             <option value="group">Group / needs review</option>
           </select>
-          <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={filterSelectStyle}>
+          <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">All departments</option>
             {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
-          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={filterSelectStyle}>
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">All priorities</option>
             <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
           </select>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={filterSelectStyle}>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">All statuses</option>
             <option>Not Started</option>
             <option>In Progress</option>
@@ -1117,54 +1140,33 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <option>Completed</option>
             <option>Cancelled</option>
           </select>
-          <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={filterSelectStyle}>
+          <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">All owners</option>
             {ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
-          <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)} style={filterSelectStyle}>
+          <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">Any due period</option>
             <option value="week">Due this week</option>
             <option value="month">Due this month</option>
             <option value="quarter">Due this quarter</option>
           </select>
-          <button
-            onClick={() => setMoreFiltersOpen(!moreFiltersOpen)}
-            style={{
-              border: `1px ${moreFiltersOpen ? "solid" : "dashed"} ${moreFiltersOpen ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
-              backgroundColor: moreFiltersOpen ? COLOURS.INFO_SOFT : COLOURS.CARD,
-              color: moreFiltersOpen ? COLOURS.BLUE : COLOURS.SLATE,
-              borderRadius: RADII.SM, padding: "6px 12px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
-            }}
-          >
-            More Filters
-          </button>
-          {filtersActive && (
-            <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
-              Reset Filters
-            </button>
-          )}
-        </div>
-      )}
-
-      {timeView !== "team" && timeView !== "recurring" && moreFiltersOpen && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
-          <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={filterSelectStyle}>
+          <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">All stages</option>
             {stageOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
-          <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={filterSelectStyle}>
+          <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">Any due date</option>
             <option value="overdue">Overdue</option>
             <option value="today">Due today</option>
             <option value="none">No due date</option>
           </select>
-          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={filterSelectStyle}>
+          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">All sources</option>
             <option value="meeting">Meeting-sourced only</option>
             <option value="manual">Manually created</option>
             <option value="recurring">Recurring-generated</option>
           </select>
-          <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={filterSelectStyle}>
+          <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">Any subtask state</option>
             <option value="has">Has subtasks</option>
             <option value="complete">All subtasks complete</option>
