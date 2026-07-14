@@ -4,7 +4,8 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { COLOURS, RADII, PriorityBadge, StatusBadge, useToast } from "../lib/SharedUI";
-import TaskDetailPanel from "./TaskDetailPanel";
+import TaskDetailModal from "./TaskDetailModal";
+import MiniSubtaskToggle from "./MiniSubtaskToggle";
 
 type Task = {
   id: string;
@@ -31,6 +32,7 @@ type Task = {
   impact_on_monthly_target: string | null;
   meeting_id: string | null;
   time_spent_minutes: number | null;
+  whatsapp_auto_remind: boolean;
   company_id: string | null;
   task_subtasks?: { id: string; is_complete: boolean }[];
 };
@@ -51,6 +53,7 @@ export default function TasksBoard({
   canDelete,
   myEmail,
   memberPhones,
+  meetingTitles,
   onChanged,
 }: {
   tasks: Task[];
@@ -60,6 +63,7 @@ export default function TasksBoard({
   canDelete?: boolean;
   myEmail: string | null;
   memberPhones: Record<string, string>;
+  meetingTitles?: Record<string, string>;
   onChanged: () => void;
 }) {
   const toast = useToast();
@@ -98,6 +102,18 @@ export default function TasksBoard({
   return (
     <div>
       {toast.element}
+      <TaskDetailModal
+        task={tasks.find((t) => t.id === expandedId) || null}
+        open={!!expandedId}
+        onClose={() => setExpandedId(null)}
+        currentRole={currentRole}
+        isPrivileged={isPrivileged}
+        canReview={canReview}
+        canDelete={canDelete}
+        myEmail={myEmail}
+        memberPhones={memberPhones}
+        onChanged={onChanged}
+      />
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`, gap: "8px", alignItems: "start" }}>
         {columns.map((col) => {
           const colTasks = tasksFor(col);
@@ -132,9 +148,7 @@ export default function TasksBoard({
                 </div>
               ) : (
                 colTasks.map((t) => {
-                  const isOpen = expandedId === t.id;
                   const overdue = isOverdue(t);
-                  const doneCount = t.task_subtasks?.filter((s) => s.is_complete).length ?? 0;
                   const totalCount = t.task_subtasks?.length ?? 0;
                   return (
                     <div key={t.id} style={{ marginBottom: "6px" }}>
@@ -142,7 +156,7 @@ export default function TasksBoard({
                         draggable
                         onDragStart={(e) => { setDraggingId(t.id); e.dataTransfer.setData("text/plain", t.id); e.dataTransfer.effectAllowed = "move"; }}
                         onDragEnd={() => setDraggingId(null)}
-                        onClick={() => setExpandedId(isOpen ? null : t.id)}
+                        onClick={() => setExpandedId(t.id)}
                         style={{
                           background: COLOURS.CARD,
                           border: `1px solid ${COLOURS.HAIRLINE}`,
@@ -160,6 +174,15 @@ export default function TasksBoard({
                           </span>
                         </div>
                         <div style={{ fontSize: "12.5px", fontWeight: 500, color: COLOURS.NAVY, marginBottom: "6px", lineHeight: 1.35 }}>{t.description}</div>
+                        {t.meeting_id && (
+                          <a
+                            href={`/my-minutes?meeting=${t.meeting_id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ display: "inline-block", fontSize: "10px", fontWeight: 600, color: COLOURS.BLUE, backgroundColor: COLOURS.INFO_SOFT, borderRadius: RADII.XS, padding: "1px 8px", marginBottom: "5px", textDecoration: "none" }}
+                          >
+                            From: {meetingTitles?.[t.meeting_id] || "Meeting"} →
+                          </a>
+                        )}
                         {t.stage && (
                           <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginBottom: "5px" }}>→ {t.stage}</div>
                         )}
@@ -171,24 +194,10 @@ export default function TasksBoard({
                             </span>
                           )}
                         </div>
-                        {totalCount > 0 && (
-                          <div style={{ marginTop: "5px", paddingTop: "5px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE }}>
-                            {doneCount}/{totalCount} subtasks
-                          </div>
-                        )}
                       </div>
-                      {isOpen && (
+                      {totalCount > 0 && (
                         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: "none", borderRadius: "0 0 10px 10px" }}>
-                          <TaskDetailPanel
-                            task={t}
-                            currentRole={currentRole}
-                            isPrivileged={isPrivileged}
-                            canReview={canReview}
-                            canDelete={canDelete}
-                            myEmail={myEmail}
-                            memberPhones={memberPhones}
-                            onChanged={onChanged}
-                          />
+                          <MiniSubtaskToggle task={t} onChanged={onChanged} />
                         </div>
                       )}
                     </div>
