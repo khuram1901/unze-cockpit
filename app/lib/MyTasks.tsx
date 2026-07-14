@@ -35,6 +35,12 @@ export default function MyTasks() {
 
       if (!member) { setLoaded(true); return; }
 
+      // Co-assigned tasks (Khuram: same task can now go to more than one
+      // person) — this widget only ever knew about assigned_to_email, so
+      // it was invisible here for anyone who wasn't the primary owner.
+      const { data: coAssigned } = await supabase.from("task_assignees").select("task_id").eq("member_email", user.email);
+      const coAssignedIds = (coAssigned || []).map((r) => r.task_id);
+
       const name = `${member.first_name || ""} ${member.last_name || ""}`.trim() || member.name || user.email;
       setUserName(name);
       setRole(member.role);
@@ -53,7 +59,8 @@ export default function MyTasks() {
         .order("due_date", { ascending: true });
 
       if (!canSeeAll) {
-        query = query.eq("assigned_to", name);
+        const idClause = coAssignedIds.length > 0 ? `,id.in.(${coAssignedIds.join(",")})` : "";
+        query = query.or(`assigned_to.eq.${name},assigned_to_email.eq.${user.email}${idClause}`);
       }
 
       const { data } = await query.limit(canSeeAll ? 30 : 15);

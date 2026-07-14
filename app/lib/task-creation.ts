@@ -11,11 +11,24 @@ export type TaskActor =
   | { kind: "user"; name: string; email: string }
   | { kind: "system"; label: string };
 
+export type AdditionalAssignee = {
+  memberId?: string | null;
+  name: string;
+  email: string | null;
+};
+
 export type CreateTaskInput = {
   description: string;
   companyId: string;
   assignedTo: string;
   assignedToEmail: string | null;
+  assignedToMemberId?: string | null;
+  // Genuine co-owners (Khuram: "same task assigned to multiple members") —
+  // each shows up in their own My Tasks, not just a heads-up. assignedTo/
+  // assignedToEmail above stay the "primary" owner for every existing
+  // report/filter/notification that only knows about one; this list is
+  // additive, stored in task_assignees alongside the primary.
+  additionalAssignees?: AdditionalAssignee[];
   assignedToDepartment?: string | null;
   assignedToBusinessUnit?: string | null;
   dueDate?: string | null;
@@ -113,6 +126,29 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
 
   if (error || !newTask) return { ok: false, error: error?.message || "Failed to create task." };
 
+  // Full owner list, primary included — task_assignees is the source of
+  // truth for "who owns this" going forward (RLS on tasks itself checks
+  // this table too, see migration 112), while assigned_to/assigned_to_email
+  // above stay populated exactly as before for every existing consumer
+  // that only knows about one owner.
+  const rawAssignees = [
+    { memberId: input.assignedToMemberId ?? null, name: input.assignedTo, email: input.assignedToEmail },
+    ...(input.additionalAssignees ?? []),
+  ];
+  const seenKeys = new Set<string>();
+  const assigneeRows = rawAssignees.filter((a) => {
+    const key = (a.email || a.name).trim().toLowerCase();
+    if (!key || seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+  if (assigneeRows.length > 0) {
+    const { error: assigneeError } = await supabase.from("task_assignees").insert(
+      assigneeRows.map((a) => ({ task_id: newTask.id, member_id: a.memberId ?? null, member_name: a.name, member_email: a.email }))
+    );
+    if (assigneeError) console.error("Task created but task_assignees insert failed", newTask.id, assigneeError);
+  }
+
   if (input.assignedToEmail && input.notificationStyle !== "none") {
     try {
       if (input.notificationStyle === "escalation") {
@@ -125,6 +161,24 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
       // fail — log it and move on. notification_log already has the
       // audit trail for send failures.
       console.error("Task created but notification failed", newTask.id, e);
+    }
+  }
+
+  // Co-owners get the same "you've been assigned" notification the
+  // primary owner does — real shared ownership means everyone added
+  // actually finds out, not just the first person picked.
+  if (input.notificationStyle !== "none") {
+    for (const a of input.additionalAssignees ?? []) {
+      if (!a.email) continue;
+      try {
+        if (input.notificationStyle === "escalation") {
+          await notifyEscalationTask(supabase, newTask.id, a.email);
+        } else {
+          await notifyTaskAssigned(supabase, newTask.id, a.email);
+        }
+      } catch (e) {
+        console.error("Task created but co-assignee notification failed", newTask.id, a.email, e);
+      }
     }
   }
 

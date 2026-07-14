@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      description, companyId, assignedTo, assignedToEmail, assignedToDepartment,
-      assignedToBusinessUnit, dueDate, priority, status, project, stage, notes,
+      description, companyId, assignedTo, assignedToEmail, assignedToMemberId, additionalAssignees,
+      assignedToDepartment, assignedToBusinessUnit, dueDate, priority, status, project, stage, notes,
       taskType, replyRequired, explanationRequired, exceptionType, meetingId,
       sourceType, sourceRecordId, sourceLabel, notificationStyle,
       systemActor,
@@ -79,8 +79,8 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await createTaskCore({
-      description, companyId, assignedTo, assignedToEmail, assignedToDepartment,
-      assignedToBusinessUnit, dueDate, priority, status, project, stage, notes,
+      description, companyId, assignedTo, assignedToEmail, assignedToMemberId, additionalAssignees,
+      assignedToDepartment, assignedToBusinessUnit, dueDate, priority, status, project, stage, notes,
       taskType, replyRequired, explanationRequired, exceptionType, meetingId,
       sourceType, sourceRecordId, sourceLabel, notificationStyle, actor,
     });

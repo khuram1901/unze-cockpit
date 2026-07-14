@@ -99,7 +99,12 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
   const [priority, setPriority] = useState("Medium");
   const [status, setStatus] = useState("Not Started");
   const [dueDate, setDueDate] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
+  // Multi-owner: Khuram wants the same task assignable to more than one
+  // person, each seeing it as their own — not just a heads-up. First
+  // person ticked stays the "primary" owner for every existing report/
+  // notification/WhatsApp reminder that only knows about one; the rest
+  // are additive co-owners stored in task_assignees.
+  const [assignedToIds, setAssignedToIds] = useState<string[]>([]);
   const [assignedBy, setAssignedBy] = useState("");
   const [assignedByEmail, setAssignedByEmail] = useState("");
   const [notes, setNotes] = useState("");
@@ -158,11 +163,10 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
     const owner = departmentOwners.find((d) => d.department_name === value);
 
-    if (owner?.primary_owner_member_id) {
-      const ownerMember = members.find((m) => m.id === owner.primary_owner_member_id);
-      setAssignedTo(ownerMember?.name || owner.primary_owner_name || "");
+    if (owner?.primary_owner_member_id && members.some((m) => m.id === owner.primary_owner_member_id)) {
+      setAssignedToIds([owner.primary_owner_member_id]);
     } else {
-      setAssignedTo("");
+      setAssignedToIds([]);
     }
   }
 
@@ -188,11 +192,17 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
       toast.show("Please choose a Company.", "error");
       return;
     }
+    if (assignedToIds.length === 0) {
+      toast.show("Select at least one person to assign this to.", "error");
+      return;
+    }
 
     setSaving(true);
 
-    const assignedMember = members.find((m) => m.name === assignedTo);
-    const assignedToEmail = assignedMember?.email || null;
+    const selectedMembers = assignedToIds.map((id) => members.find((m) => m.id === id)).filter((m): m is Member => !!m);
+    const [primaryMember, ...coMembers] = selectedMembers;
+    const assignedTo = primaryMember.name;
+    const assignedToEmail = primaryMember.email;
 
     const needsReply = status === "Waiting Reply";
 
@@ -214,8 +224,10 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
         dueDate,
         assignedTo,
         assignedToEmail,
-        assignedToDepartment: assignedMember?.department || project || null,
-        assignedToBusinessUnit: assignedMember?.business_unit || null,
+        assignedToMemberId: primaryMember.id,
+        additionalAssignees: coMembers.map((m) => ({ memberId: m.id, name: m.name, email: m.email })),
+        assignedToDepartment: primaryMember.department || project || null,
+        assignedToBusinessUnit: primaryMember.business_unit || null,
         notes,
         replyRequired: needsReply,
       }),
@@ -241,7 +253,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
     setSaving(false);
 
-    logAction("Created", "tasks", `Task: ${description} → ${assignedTo}`);
+    logAction("Created", "tasks", `Task: ${description} → ${selectedMembers.map((m) => m.name).join(", ")}`);
 
     setDescription("");
     setCompanyId("");
@@ -251,7 +263,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
     setPriority("Medium");
     setStatus("Not Started");
     setDueDate("");
-    setAssignedTo("");
+    setAssignedToIds([]);
     setNotes("");
     setSubtasks([]);
     setSubtaskInput("");
@@ -260,8 +272,12 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
     onCreated?.();
   }
 
-  const selectedMember = members.find((m) => m.name === assignedTo);
+  const selectedMembers = assignedToIds.map((id) => members.find((m) => m.id === id)).filter((m): m is Member => !!m);
   const selectedOwner = departmentOwners.find((d) => d.department_name === project);
+
+  function toggleAssignee(id: string, checked: boolean) {
+    setAssignedToIds((prev) => checked ? [...prev, id] : prev.filter((x) => x !== id));
+  }
 
   return (
     <>
@@ -379,23 +395,27 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
           </label>
 
           <label>
-            <span style={kickerStyle}>Assigned to</span>
-            <select
-              style={inputStyle}
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              required
-            >
-              <option value="">-- Select a member --</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.name}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+            <span style={kickerStyle}>Assigned to — tick everyone this applies to; the first person ticked is the primary owner</span>
+            <div style={{
+              marginTop: "4px", marginBottom: "12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
+              padding: "8px 10px", maxHeight: "160px", overflowY: "auto", display: "flex", flexWrap: "wrap", gap: "8px",
+              backgroundColor: COLOURS.CARD,
+            }}>
+              {members.map((m) => {
+                const checked = assignedToIds.includes(m.id);
+                const isPrimary = assignedToIds[0] === m.id;
+                return (
+                  <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer", fontWeight: checked ? 600 : 400 }}>
+                    <input type="checkbox" checked={checked} onChange={(e) => toggleAssignee(m.id, e.target.checked)} style={{ width: "14px", height: "14px" }} />
+                    {m.name}{isPrimary && <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.BLUE }}> (primary)</span>}
+                  </label>
+                );
+              })}
+              {members.length === 0 && <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>No members found.</span>}
+            </div>
           </label>
 
-          {selectedMember && (
+          {selectedMembers.length > 0 && (
             <div
               style={{
                 border: `1px solid ${COLOURS.HAIRLINE}`,
@@ -407,8 +427,11 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
                 color: COLOURS.SLATE,
               }}
             >
-              <div>Department: <strong style={{ color: COLOURS.NAVY }}>{selectedMember.department || "Not set"}</strong></div>
-              <div>Business Unit: <strong style={{ color: COLOURS.NAVY }}>{selectedMember.business_unit || "Not set"}</strong></div>
+              <div>Department: <strong style={{ color: COLOURS.NAVY }}>{selectedMembers[0].department || "Not set"}</strong></div>
+              <div>Business Unit: <strong style={{ color: COLOURS.NAVY }}>{selectedMembers[0].business_unit || "Not set"}</strong></div>
+              {selectedMembers.length > 1 && (
+                <div style={{ marginTop: "4px" }}>Also assigned to: <strong style={{ color: COLOURS.NAVY }}>{selectedMembers.slice(1).map((m) => m.name).join(", ")}</strong></div>
+              )}
             </div>
           )}
 

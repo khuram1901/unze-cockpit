@@ -18,6 +18,7 @@ type Comment = {
 
 type Company = { id: string; name: string; short_code: string };
 type DepartmentOwner = { id: string; department_name: string };
+type MemberLite = { id: string; name: string; email: string | null; department: string | null; business_unit: string | null };
 
 const PRIORITY_OPTIONS = ["Urgent", "High", "Medium", "Normal", "Low"];
 
@@ -104,12 +105,38 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
   const [editProject, setEditProject] = useState(task.project || "");
   const [editCompanyId, setEditCompanyId] = useState(task.company_id || "");
   const [savingTask, setSavingTask] = useState(false);
+  // Owners — real multi-assignee (Khuram: "same task assigned to multiple
+  // members"), not just the single assigned_to this used to be limited
+  // to. First person ticked stays the "primary" owner: tasks.assigned_to/
+  // assigned_to_email/etc. get kept in sync with them so every existing
+  // report/notification/WhatsApp reminder that only knows about one owner
+  // keeps working; task_assignees holds the full list.
+  const [members, setMembers] = useState<MemberLite[]>([]);
+  const [editOwnerIds, setEditOwnerIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!editingTask) return;
-    supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name").then(({ data }) => setCompanies(data || []));
-    supabase.from("department_owners").select("id, department_name").order("department_name").then(({ data }) => setDeptOwners(data || []));
-  }, [editingTask]);
+    (async () => {
+      const [companiesRes, deptRes, membersRes, assigneesRes] = await Promise.all([
+        supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name"),
+        supabase.from("department_owners").select("id, department_name").order("department_name"),
+        supabase.from("members").select("id, name, email, department, business_unit").eq("is_active", true).order("name"),
+        supabase.from("task_assignees").select("member_id, member_email").eq("task_id", task.id),
+      ]);
+      setCompanies(companiesRes.data || []);
+      setDeptOwners(deptRes.data || []);
+      const memberList = membersRes.data || [];
+      setMembers(memberList);
+      const ids = (assigneesRes.data || [])
+        .map((a) => a.member_id || memberList.find((m) => m.email === a.member_email)?.id)
+        .filter((id): id is string => !!id);
+      setEditOwnerIds(Array.from(new Set(ids)));
+    })();
+  }, [editingTask, task.id]);
+
+  function toggleEditOwner(id: string, checked: boolean) {
+    setEditOwnerIds((prev) => checked ? [...prev, id] : prev.filter((x) => x !== id));
+  }
 
   function startEditTask() {
     setEditDesc(task.description);
@@ -127,7 +154,12 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
 
   async function saveTaskEdit() {
     if (!editDesc.trim()) return;
+    if (editOwnerIds.length === 0) { alert("Select at least one owner."); return; }
     setSavingTask(true);
+
+    const selected = editOwnerIds.map((id) => members.find((m) => m.id === id)).filter((m): m is MemberLite => !!m);
+    const primary = selected[0];
+
     const { error } = await supabase
       .from("tasks")
       .update({
@@ -135,10 +167,22 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
         priority: editPriority,
         project: editProject || null,
         company_id: editCompanyId || null,
+        assigned_to: primary.name,
+        assigned_to_email: primary.email,
+        assigned_to_department: primary.department || editProject || null,
+        assigned_to_business_unit: primary.business_unit || null,
       })
       .eq("id", task.id);
+    if (error) { setSavingTask(false); alert("Couldn't save changes: " + error.message); return; }
+
+    // Replace the owner list wholesale — simpler and safer than diffing,
+    // and this only runs on an explicit Save click, not per keystroke.
+    await supabase.from("task_assignees").delete().eq("task_id", task.id);
+    const { error: assigneeError } = await supabase.from("task_assignees").insert(
+      selected.map((m) => ({ task_id: task.id, member_id: m.id, member_name: m.name, member_email: m.email }))
+    );
     setSavingTask(false);
-    if (error) { alert("Couldn't save changes: " + error.message); return; }
+    if (assigneeError) { alert("Task saved, but the owner list failed to update: " + assigneeError.message); }
     setEditingTask(false);
     onChanged();
   }
@@ -258,14 +302,38 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
               </select>
             </label>
           </div>
+
+          <label style={{ display: "block", marginBottom: "10px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>
+              Owner(s) — tick everyone this applies to; the first person ticked is the primary owner
+            </span>
+            <div style={{
+              border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 10px",
+              maxHeight: "140px", overflowY: "auto", display: "flex", flexWrap: "wrap", gap: "8px",
+              backgroundColor: "white",
+            }}>
+              {members.map((m) => {
+                const checked = editOwnerIds.includes(m.id);
+                const isPrimary = editOwnerIds[0] === m.id;
+                return (
+                  <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12.5px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer", fontWeight: checked ? 600 : 400 }}>
+                    <input type="checkbox" checked={checked} onChange={(e) => toggleEditOwner(m.id, e.target.checked)} style={{ width: "13px", height: "13px" }} />
+                    {m.name}{isPrimary && <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.BLUE }}> (primary)</span>}
+                  </label>
+                );
+              })}
+              {members.length === 0 && <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>Loading members…</span>}
+            </div>
+          </label>
+
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
             <button onClick={() => setEditingTask(false)} style={{ background: "none", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 14px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, cursor: "pointer" }}>
               Cancel
             </button>
             <button
               onClick={saveTaskEdit}
-              disabled={savingTask || !editDesc.trim()}
-              style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.SM, padding: "6px 14px", fontSize: "12.5px", fontWeight: 700, cursor: savingTask || !editDesc.trim() ? "not-allowed" : "pointer", opacity: savingTask || !editDesc.trim() ? 0.6 : 1 }}
+              disabled={savingTask || !editDesc.trim() || editOwnerIds.length === 0}
+              style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.SM, padding: "6px 14px", fontSize: "12.5px", fontWeight: 700, cursor: savingTask || !editDesc.trim() || editOwnerIds.length === 0 ? "not-allowed" : "pointer", opacity: savingTask || !editDesc.trim() || editOwnerIds.length === 0 ? 0.6 : 1 }}
             >
               Save
             </button>

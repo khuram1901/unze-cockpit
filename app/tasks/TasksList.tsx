@@ -50,6 +50,10 @@ type Task = {
 
 type CompanyLite = { id: string; name: string; short_code: string | null };
 
+// Kept in sync with TaskStatus.tsx / NewTaskForm.tsx's own STATUSES list —
+// used here only for the bulk-change dropdown.
+const STATUS_OPTIONS = ["Not Started", "In Progress", "Waiting Reply", "Stuck", "Submitted", "Completed", "Cancelled"];
+
 const COMPANY_BADGE_COLOURS: Record<string, { color: string; background: string }> = {
   UTPL: { color: COLOURS.BLUE, background: COLOURS.INFO_SOFT },
   IFPL: { color: COLOURS.GREEN, background: COLOURS.SUCCESS_SOFT },
@@ -153,6 +157,20 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
   const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
   const [collapsedPeople, setCollapsedPeople] = useState<Set<string>>(new Set());
+  // Multi-assignee: every task's full owner list, and which tasks the
+  // current user is a co-assignee on (not just the primary assigned_to_email)
+  // — needed both to display "+N" on rows and so "My Tasks" catches tasks
+  // shared with someone else, not only ones where you're the primary owner.
+  const [assigneesByTask, setAssigneesByTask] = useState<Map<string, string[]>>(new Map());
+  const [myCoAssignedTaskIds, setMyCoAssignedTaskIds] = useState<Set<string>>(new Set());
+  // Bulk select — List view only, per Khuram. Move/change status/company/
+  // owner across many tasks at once instead of one at a time.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkCompanyId, setBulkCompanyId] = useState("");
+  const [bulkOwnerId, setBulkOwnerId] = useState("");
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const [bulkMembers, setBulkMembers] = useState<{ id: string; name: string; email: string | null; department: string | null; business_unit: string | null }[]>([]);
 
   const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "Executive");
 
@@ -161,13 +179,27 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     const email = userData.user?.email || null;
     setMyEmail(email);
 
+    // Co-assignee ids for the current user — needed even for privileged
+    // users (the Mine/Everyone toggle uses it), and critically also used
+    // below to widen the fetch filter for non-privileged users: RLS
+    // (migration 112) already lets a co-assignee see a task they aren't
+    // the primary owner of, but the client-side .or() filter has to be
+    // widened to match or it'd never even ask for those rows.
+    let myCoAssignedIds: string[] = [];
+    if (email) {
+      const { data: ca } = await supabase.from("task_assignees").select("task_id").eq("member_email", email);
+      myCoAssignedIds = (ca || []).map((r) => r.task_id);
+    }
+    setMyCoAssignedTaskIds(new Set(myCoAssignedIds));
+
     let query = supabase
       .from("tasks")
       .select("*, task_subtasks(id, is_complete), task_comments(id)")
       .order("created_at", { ascending: false });
 
     if (!isPrivileged && email) {
-      query = query.or(`assigned_to_email.eq.${email},assigned_by_email.eq.${email}`);
+      const idClause = myCoAssignedIds.length > 0 ? `,id.in.(${myCoAssignedIds.join(",")})` : "";
+      query = query.or(`assigned_to_email.eq.${email},assigned_by_email.eq.${email}${idClause}`);
     }
 
     const { data, error } = await query;
@@ -176,6 +208,18 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       setErrorMsg(error.message);
     } else {
       setTasks(data || []);
+      const taskIds = (data || []).map((t) => t.id);
+      if (taskIds.length > 0) {
+        const { data: assigneeRows } = await supabase.from("task_assignees").select("task_id, member_name").in("task_id", taskIds);
+        const grouped = new Map<string, string[]>();
+        for (const r of assigneeRows || []) {
+          if (!grouped.has(r.task_id)) grouped.set(r.task_id, []);
+          grouped.get(r.task_id)!.push(r.member_name);
+        }
+        setAssigneesByTask(grouped);
+      } else {
+        setAssigneesByTask(new Map());
+      }
       const meetingIds = Array.from(new Set((data || []).map((t) => t.meeting_id).filter((id): id is string => !!id)));
       if (meetingIds.length > 0) {
         const { data: meetingRows } = await supabase.from("meetings").select("id, title").in("id", meetingIds);
@@ -223,6 +267,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).then(({ data }) => setCompanies(data || []));
     supabase.from("department_owners").select("department_name").order("department_name").then(({ data }) => setAllDepartments((data || []).map((d) => d.department_name)));
     supabase.rpc("get_tasks_department_breakdown").then(({ data, error }) => { if (!error) setDeptBreakdown(data || []); });
+    supabase.from("members").select("id, name, email, department, business_unit").eq("is_active", true).order("name").then(({ data }) => setBulkMembers(data || []));
   }, []);
 
   // Re-run the KPI RPC whenever the Company filter changes, so the KPI
@@ -330,6 +375,66 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     supabase.rpc("get_tasks_department_breakdown").then(({ data, error }) => { if (!error) setDeptBreakdown(data || []); });
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function applyBulkStatus() {
+    if (!bulkStatus || selectedIds.size === 0) return;
+    setBulkApplying(true);
+    const ids = Array.from(selectedIds);
+    const { error } = await supabase.from("tasks").update({ status: bulkStatus }).in("id", ids);
+    setBulkApplying(false);
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
+    toast.show(`Updated status on ${ids.length} task(s).`, "success");
+    setBulkStatus(""); setSelectedIds(new Set());
+    refreshAll();
+  }
+
+  async function applyBulkCompany() {
+    if (!bulkCompanyId || selectedIds.size === 0) return;
+    setBulkApplying(true);
+    const ids = Array.from(selectedIds);
+    const { error } = await supabase.from("tasks").update({ company_id: bulkCompanyId }).in("id", ids);
+    setBulkApplying(false);
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
+    toast.show(`Updated company on ${ids.length} task(s).`, "success");
+    setBulkCompanyId(""); setSelectedIds(new Set());
+    refreshAll();
+  }
+
+  // Bulk owner change replaces the full owner list on every selected task
+  // with this one person — a deliberate simplification vs. the per-task
+  // Owner(s) picker (which can add/remove individual co-owners). If you
+  // need several tasks to end up with several owners each, do that one
+  // task at a time from its own detail panel.
+  async function applyBulkOwner() {
+    if (!bulkOwnerId || selectedIds.size === 0) return;
+    const owner = bulkMembers.find((m) => m.id === bulkOwnerId);
+    if (!owner) return;
+    setBulkApplying(true);
+    const ids = Array.from(selectedIds);
+    const { error } = await supabase.from("tasks").update({
+      assigned_to: owner.name,
+      assigned_to_email: owner.email,
+      assigned_to_department: owner.department,
+      assigned_to_business_unit: owner.business_unit,
+    }).in("id", ids);
+    if (!error) {
+      await supabase.from("task_assignees").delete().in("task_id", ids);
+      await supabase.from("task_assignees").insert(ids.map((id) => ({ task_id: id, member_id: owner.id, member_name: owner.name, member_email: owner.email })));
+    }
+    setBulkApplying(false);
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
+    toast.show(`Reassigned ${ids.length} task(s) to ${owner.name}.`, "success");
+    setBulkOwnerId(""); setSelectedIds(new Set());
+    refreshAll();
+  }
+
   function companyBadge(companyId: string | null) {
     if (!companyId) return { label: "Group", color: COLOURS.SLATE, background: COLOURS.HAIRLINE };
     const c = companies.find((co) => co.id === companyId);
@@ -361,7 +466,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // picked. Anyone without full visibility already only sees their own +
   // ones they assigned via RLS, so "Everyone" for them means "everything
   // I can see", not "the whole company".
-  const myTasksSource = myTasksScope === "mine" ? allOpen.filter((t) => t.assigned_to_email === myEmail) : allOpen;
+  const myTasksSource = myTasksScope === "mine"
+    ? allOpen.filter((t) => t.assigned_to_email === myEmail || myCoAssignedTaskIds.has(t.id))
+    : allOpen;
   function myTaskGroup(task: Task): string {
     if (isOverdue(task)) return "Overdue";
     if (task.due_date === todayStr) return "Due Today";
@@ -421,6 +528,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, backgroundColor: COLOURS.CARD,
   };
 
+  const smallActionBtn: React.CSSProperties = {
+    border: "none", borderRadius: RADII.SM, padding: "6px 12px", fontSize: "12.5px", fontWeight: 700,
+    backgroundColor: COLOURS.NAVY, color: "white", cursor: "pointer",
+  };
+
   // Small icon-square glyphs for the KPI tiles, matching the reference
   // design Khuram asked to bring back. Plain inline SVGs (no icon library
   // dependency, no cost) — one simple shape per KPI, tinted with that
@@ -463,10 +575,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     );
   }
 
-  function TaskRow({ task }: { task: Task }) {
+  function TaskRow({ task, selectable }: { task: Task; selectable?: boolean }) {
     const isOpen = expandedTaskId === task.id;
     const od = daysOverdue(task);
     const overdue = isOverdue(task);
+    const otherAssignees = (assigneesByTask.get(task.id) || []).filter((n) => n !== task.assigned_to);
 
     return (
       <div id={`task-${task.id}`} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
@@ -483,10 +596,21 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             borderLeft: `3px solid ${overdue ? COLOURS.RED : "transparent"}`,
           }}
         >
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={selectedIds.has(task.id)}
+              onClick={(e) => e.stopPropagation()}
+              onChange={() => toggleSelect(task.id)}
+              style={{ width: "16px", height: "16px", flexShrink: 0, cursor: "pointer" }}
+            />
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
             <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-              <span>{task.assigned_to || "Unassigned"}</span>
+              <span title={otherAssignees.length > 0 ? `Also: ${otherAssignees.join(", ")}` : undefined}>
+                {task.assigned_to || "Unassigned"}{otherAssignees.length > 0 && ` +${otherAssignees.length}`}
+              </span>
               {(() => {
                 const badge = companyBadge(task.company_id);
                 return (
@@ -938,6 +1062,36 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             </div>
           </div>
 
+          {selectedIds.size > 0 && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
+              padding: "8px 12px", marginBottom: "12px",
+              border: `1px solid ${COLOURS.NAVY}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD_ALT,
+            }}>
+              <span style={{ fontSize: "12.5px", fontWeight: 700, color: COLOURS.NAVY }}>{selectedIds.size} selected</span>
+
+              <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={filterSelectStyle}>
+                <option value="">Change status…</option>
+                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <button onClick={applyBulkStatus} disabled={!bulkStatus || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkStatus || bulkApplying ? 0.5 : 1, cursor: !bulkStatus || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+
+              <select value={bulkCompanyId} onChange={(e) => setBulkCompanyId(e.target.value)} style={filterSelectStyle}>
+                <option value="">Change company…</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button onClick={applyBulkCompany} disabled={!bulkCompanyId || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkCompanyId || bulkApplying ? 0.5 : 1, cursor: !bulkCompanyId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+
+              <select value={bulkOwnerId} onChange={(e) => setBulkOwnerId(e.target.value)} style={filterSelectStyle}>
+                <option value="">Change owner…</option>
+                {bulkMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              <button onClick={applyBulkOwner} disabled={!bulkOwnerId || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkOwnerId || bulkApplying ? 0.5 : 1, cursor: !bulkOwnerId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+
+              <button onClick={() => setSelectedIds(new Set())} style={{ ...smallActionBtn, marginLeft: "auto", backgroundColor: "transparent", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>Clear</button>
+            </div>
+          )}
+
           {myTasksGroupOrder.filter((g) => myTasksGroups.has(g)).map((group) => {
             const groupTasks = myTasksGroups.get(group)!;
             return (
@@ -951,7 +1105,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   {groupTasks.length === 0 ? (
                     <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
                   ) : (
-                    groupTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} />)
+                    groupTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} selectable />)
                   )}
                 </div>
               </div>
