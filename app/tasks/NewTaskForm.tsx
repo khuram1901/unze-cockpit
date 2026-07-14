@@ -5,7 +5,7 @@ import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII } from "../lib/SharedUI";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 
 type Member = {
   id: string;
@@ -98,6 +98,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
   const [description, setDescription] = useState("");
   const [companyId, setCompanyId] = useState<string>(""); // "" = Group / needs review
+  const [companyTouched, setCompanyTouched] = useState(false); // must actively pick, "" is a real choice not a default
   const [project, setProject] = useState("");
   const [stage, setStage] = useState("");
   const [priority, setPriority] = useState("Medium");
@@ -187,8 +188,10 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
       toast.show("Due date is required — every task must have a deadline.", "error");
       return;
     }
-    // Note: companyId === "" is a valid, deliberate choice (Group / needs
-    // review), not a missing value — nothing to validate here.
+    if (!companyTouched) {
+      toast.show("Please choose a Company — pick \"Group / needs review\" if it genuinely doesn't belong to one.", "error");
+      return;
+    }
 
     setSaving(true);
 
@@ -246,6 +249,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
     setDescription("");
     setCompanyId("");
+    setCompanyTouched(false);
     setProject("");
     setStage("");
     setPriority("Medium");
@@ -293,12 +297,16 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
           <label>
             <span style={kickerStyle}>Company *</span>
             <select
-              style={inputStyle}
-              value={companyId}
-              onChange={(e) => setCompanyId(e.target.value)}
+              style={{ ...inputStyle, color: companyTouched ? COLOURS.NAVY : COLOURS.SLATE }}
+              value={companyTouched ? (companyId || "__group__") : "__unselected__"}
+              onChange={(e) => {
+                setCompanyTouched(true);
+                setCompanyId(e.target.value === "__group__" ? "" : e.target.value);
+              }}
               required
             >
-              <option value="">Group / needs review</option>
+              <option value="__unselected__" disabled>Select…</option>
+              <option value="__group__">Group / needs review</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -440,12 +448,14 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
           <label>
             <span style={kickerStyle}>Due date</span>
-            <DateInput
-              style={inputStyle}
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              required
-            />
+            <div style={{ marginTop: "4px", marginBottom: "12px" }}>
+              <DateInputWithCalendar
+                style={{ ...inputStyle, marginTop: 0, marginBottom: 0, width: "auto", flex: 1, display: "block" }}
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                required
+              />
+            </div>
           </label>
 
           <label style={{ gridColumn: "1 / -1" }}>
