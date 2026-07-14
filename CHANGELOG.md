@@ -4,6 +4,14 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — One-click "Select all" on every Tasks view with checkboxes
+
+Khuram: "there should be one click that can select multiple items, instead of me going one by one. this should apply to to all pages in the tasks." Added a "Select all (N)" checkbox to each of the three surfaces that have per-row checkboxes — List view (scoped to whatever `myTasksSource` currently shows: My tasks vs Everyone, plus filters), Tree view (scoped to exactly what each department node renders, respecting the All/Overdue/Waiting pill), and the KPI-card drawer (scoped to that drawer's own list). Each is a real toggle — ticking it selects everything currently visible in that view, unticking it deselects just those, without touching selections made elsewhere (the same shared `selectedIds` set the sticky bulk toolbar already used).
+
+Board and Timeline don't get one: neither has a per-row checkbox to select into (Board is drag-and-drop cards, Timeline is a scatter chart), so there's nothing for "select all" to tick there.
+
+---
+
 ## 2026-07-14 — Completion rule corrected: Khuram, Kamran, and the Executive can close ANY task
 
 Khuram hit the rule immediately after it shipped: tried to bulk-complete a task assigned to Sania Saleem (routed to her own department HOD, not to him) and got blocked — correctly, per the previous rule, but not what he actually wants. His words: "i thought i can close any tasks, complete any task. You must allow me, sundus and Kamran to do this."

@@ -388,6 +388,29 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     });
   }
 
+  // Khuram: "there should be one click that can select multiple items,
+  // instead of me going one by one. this should apply to all pages in the
+  // tasks." One "Select all" toggle per view (List, Tree, and the KPI-card
+  // drawer — the three surfaces with per-row checkboxes; Board and
+  // Timeline don't have a per-item selection UI to select into), each
+  // scoped to exactly the tasks currently visible in that view — ids
+  // already ticked elsewhere stay ticked, this only adds/removes the ones
+  // this particular view is offering.
+  function isAllSelected(ids: string[]) {
+    return ids.length > 0 && ids.every((id) => selectedIds.has(id));
+  }
+  function toggleSelectAll(ids: string[]) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (ids.length > 0 && ids.every((id) => next.has(id))) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
   async function applyBulkStatus() {
     if (!bulkStatus || selectedIds.size === 0) return;
     setBulkApplying(true);
@@ -547,6 +570,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     const open = deptTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
     return { dept, tasks: deptTasks, open: open.length, overdue: open.filter(isOverdue).length };
   }).sort((a, b) => b.overdue - a.overdue || b.open - a.open);
+
+  // Flattened ids of every task the Tree view actually renders right now —
+  // same per-department filter (all/overdue/waiting pill) the JSX below
+  // applies per node — so "Select all" ticks exactly what's on screen.
+  const treeVisibleIds = deptNodes.flatMap((d) => {
+    const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+    return deptFiltered.map((t) => t.id);
+  });
 
   function toggleDept(dept: string) {
     setCollapsedDepts((prev) => {
@@ -914,9 +945,22 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           completedAll;
         return (
           <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
-            <div style={{ padding: "9px 16px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ padding: "9px 16px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
               <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{kpiDrawer} ({drawerTasks.length})</span>
-              <span onClick={() => setKpiDrawer(null)} style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, cursor: "pointer" }}>Close ✕</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                {drawerTasks.length > 0 && (
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected(drawerTasks.map((t) => t.id))}
+                      onChange={() => toggleSelectAll(drawerTasks.map((t) => t.id))}
+                      style={{ width: "15px", height: "15px", cursor: "pointer" }}
+                    />
+                    Select all
+                  </label>
+                )}
+                <span onClick={() => setKpiDrawer(null)} style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, cursor: "pointer" }}>Close ✕</span>
+              </div>
             </div>
             {drawerTasks.length === 0 ? (
               <div style={{ padding: "16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>Nothing here.</div>
@@ -1145,7 +1189,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {/* ═══ LIST VIEW (default landing view) ═══ */}
       {timeView === "list" && (
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
             <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.INK_400 }}>Viewing</span>
             <div style={{ display: "flex", gap: "4px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, padding: "3px" }}>
               {(["mine", "everyone"] as const).map((s) => (
@@ -1159,6 +1203,16 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 </button>
               ))}
             </div>
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, cursor: myTasksSource.length > 0 ? "pointer" : "default", marginLeft: "auto" }}>
+              <input
+                type="checkbox"
+                checked={isAllSelected(myTasksSource.map((t) => t.id))}
+                onChange={() => toggleSelectAll(myTasksSource.map((t) => t.id))}
+                disabled={myTasksSource.length === 0}
+                style={{ width: "15px", height: "15px", cursor: myTasksSource.length > 0 ? "pointer" : "default" }}
+              />
+              Select all ({myTasksSource.length})
+            </label>
           </div>
 
           {myTasksGroupOrder.filter((g) => myTasksGroups.has(g)).map((group) => {
@@ -1191,6 +1245,17 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {/* ═══ TREE VIEW — Department → Person → Tasks, both levels collapsible ═══ */}
       {timeView === "tree" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
+          {deptNodes.length > 0 && (
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, cursor: "pointer", alignSelf: "flex-end" }}>
+              <input
+                type="checkbox"
+                checked={isAllSelected(treeVisibleIds)}
+                onChange={() => toggleSelectAll(treeVisibleIds)}
+                style={{ width: "15px", height: "15px", cursor: "pointer" }}
+              />
+              Select all ({treeVisibleIds.length})
+            </label>
+          )}
           {deptNodes.length === 0 ? (
             <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks to show.</div>
           ) : deptNodes.map((d) => {
