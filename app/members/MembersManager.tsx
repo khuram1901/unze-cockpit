@@ -21,6 +21,8 @@ type Member = {
   business_unit: string | null;
   company: string | null;
   is_hod: boolean;
+  is_director: boolean;
+  manager_id: string | null;
   notify_email: boolean;
   notify_whatsapp: boolean;
   phone_e164: string | null;
@@ -108,7 +110,41 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
   borderRadius: "5px", padding: "4px 10px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
 });
 
-type ActiveTab = "people" | "matrix" | "ownership" | "reassign";
+type ActiveTab = "people" | "matrix" | "ownership" | "reassign" | "orgchart";
+
+// Renders one person plus everyone under them, recursively — depth-capped
+// and cycle-guarded since manager_id has no DB constraint preventing a loop
+// if it's ever set incorrectly (a HOD's own picker can't target themselves,
+// but nothing stops A -> B -> A across two separate edits).
+function OrgNode({ member, allMembers, depth, visited }: { member: Member; allMembers: Member[]; depth: number; visited: Set<string> }) {
+  const dn = fullName(member.first_name, member.last_name, member.name);
+  if (visited.has(member.id) || depth > 6) return null;
+  const nextVisited = new Set(visited); nextVisited.add(member.id);
+  const children = allMembers.filter((x) => x.manager_id === member.id);
+  const rankLabel = member.is_director ? "Director" : member.is_hod ? "HOD" : (member.role === "Admin" || member.role === "Executive") ? member.role : null;
+  return (
+    <div style={{ marginLeft: depth === 0 ? 0 : "22px", marginTop: "6px" }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px",
+        border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
+        backgroundColor: depth === 0 ? COLOURS.CARD_ALT : COLOURS.CARD,
+        borderLeft: `3px solid ${depth === 0 ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+      }}>
+        <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{dn}</span>
+        {rankLabel && (
+          <span style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.AMBER, textTransform: "uppercase" as const }}>{rankLabel}</span>
+        )}
+        <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{member.department || (member.role === "Admin" || member.role === "Executive" ? "" : "No department")}</span>
+        {children.length > 0 && (
+          <span style={{ marginLeft: "auto", fontSize: "10.5px", color: COLOURS.INK_400, fontFamily: "var(--font-mono)" }}>{children.length} report{children.length !== 1 ? "s" : ""}</span>
+        )}
+      </div>
+      {children.map((c) => (
+        <OrgNode key={c.id} member={c} allMembers={allMembers} depth={depth + 1} visited={nextVisited} />
+      ))}
+    </div>
+  );
+}
 
 export default function MembersManager() {
   const isMobile = useMobile();
@@ -118,6 +154,8 @@ export default function MembersManager() {
   const [myRole, setMyRole] = useState("Member");
   const [myEmail, setMyEmail] = useState("");
   const [myOverrides, setMyOverrides] = useState<PermOverrides | null>(null);
+  const [myMemberId, setMyMemberId] = useState<string | null>(null);
+  const [myIsHodOrDirector, setMyIsHodOrDirector] = useState(false);
   const [loading, setLoading] = useState(true);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [assignments, setAssignments] = useState<Record<string, Set<string>>>({});
@@ -154,15 +192,17 @@ export default function MembersManager() {
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user) {
       setMyEmail(userData.user.email || "");
-      const { data: me } = await supabase.from("members").select("id, role").eq("email", userData.user.email).single();
+      const { data: me } = await supabase.from("members").select("id, role, is_hod, is_director").eq("email", userData.user.email).single();
       if (me) {
         setMyRole(me.role);
+        setMyMemberId(me.id);
+        setMyIsHodOrDirector(!!me.is_hod || !!me.is_director);
         const perms = await loadMyPermissions();
         if (perms) setMyOverrides(perms as PermOverrides);
       }
     }
     const { data } = await supabase.from("members")
-      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, notify_email, notify_whatsapp, phone_e164")
+      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, is_director, manager_id, notify_email, notify_whatsapp, phone_e164")
       .order("first_name", { ascending: true });
     if (data) setMembers(data);
 
@@ -275,6 +315,20 @@ export default function MembersManager() {
     loadData();
   }
 
+  // Sets or clears manager_id on ANOTHER member's row (not the one being
+  // edited) — the "tick your team members" flow Khuram asked for, driven
+  // from the HOD/Director's own row rather than each person picking their
+  // own manager one at a time.
+  async function toggleTeamMember(managerId: string, memberId: string, checked: boolean) {
+    if (memberId === managerId) return;
+    const { error } = await supabase.from("members").update({ manager_id: checked ? managerId : null }).eq("id", memberId);
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
+    const mgr = members.find((x) => x.id === managerId);
+    const person = members.find((x) => x.id === memberId);
+    logAction("Updated", "members", checked ? `${person?.name} now reports to ${mgr?.name}` : `${person?.name} no longer reports to ${mgr?.name}`, memberId);
+    loadData();
+  }
+
   async function deleteMember(id: string, nm: string) {
     const m = members.find((x) => x.id === id);
     const target: UserCtx = { email: m?.email, role: m?.role };
@@ -289,6 +343,15 @@ export default function MembersManager() {
   const me: UserCtx = { email: myEmail, role: myRole, overrides: myOverrides };
   const isAdmin = myRole === "Admin" || myRole === "Executive";
   const myAssignableRoles = assignableRoles(me);
+
+  // Reassign-tasks access: Admin/Exec (everyone), or a HOD/Director acting
+  // on their own team — Khuram's call, so departures don't have to wait on
+  // him personally. Scoped below to just the HOD's own direct reports (plus
+  // themselves, so they can step in and hold the work personally).
+  const canReassign = isAdmin || myIsHodOrDirector;
+  const reassignableMembers = isAdmin
+    ? members
+    : members.filter((m) => m.id === myMemberId || m.manager_id === myMemberId);
 
   async function updateDeptOwner(deptId: string, field: "primary" | "secondary" | "escalation", memberId: string) {
     const m = memberId ? members.find((x) => x.id === memberId) : null;
@@ -367,6 +430,7 @@ export default function MembersManager() {
     { key: "matrix",    label: "Access matrix", count: members.length },
     { key: "ownership", label: "Dept. ownership" },
     { key: "reassign",  label: "Reassign tasks" },
+    { key: "orgchart",  label: "Org chart" },
   ];
 
   return (
@@ -731,7 +795,42 @@ export default function MembersManager() {
                         <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }}>
                           <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} /> HOD
                         </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }}>
+                          <input type="checkbox" checked={m.is_director || false} onChange={(e) => updateMember(m.id, { is_director: e.target.checked })} /> Director
+                        </label>
                       </div>
+
+                      {/* Reports to — read-only here, set from the manager/director's own
+                          "Team members" picker below, not per-person. */}
+                      {m.manager_id && (
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "6px" }}>
+                          Reports to: <strong style={{ color: COLOURS.NAVY }}>{fullName(members.find((x) => x.id === m.manager_id)?.first_name ?? null, members.find((x) => x.id === m.manager_id)?.last_name ?? null, members.find((x) => x.id === m.manager_id)?.name)}</strong>
+                        </div>
+                      )}
+
+                      {/* Team members — only shown for HODs/Directors (and Admin/Exec,
+                          who sit at the top of the chain and can have direct reports
+                          too). Tick whoever should report to this person; unticking
+                          clears their manager_id. */}
+                      {(m.is_hod || m.is_director || m.role === "Admin" || m.role === "Executive") && (
+                        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 10px", marginBottom: "6px", backgroundColor: COLOURS.CARD }}>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "6px", textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
+                            Team members reporting to {dn}
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                            {members.filter((x) => x.id !== m.id).map((x) => {
+                              const xn = fullName(x.first_name, x.last_name, x.name);
+                              const checked = x.manager_id === m.id;
+                              return (
+                                <label key={x.id} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "12px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer" }}>
+                                  <input type="checkbox" checked={checked} onChange={(e) => toggleTeamMember(m.id, x.id, e.target.checked)} style={{ width: "13px", height: "13px" }} />
+                                  {xn}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Plants + Notifications */}
                       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "6px", fontSize: "14px" }}>
@@ -907,7 +1006,7 @@ export default function MembersManager() {
       {/* ══════════════════════════════════════════════
           TAB: REASSIGN TASKS
       ══════════════════════════════════════════════ */}
-      {activeTab === "reassign" && isAdmin && (
+      {activeTab === "reassign" && canReassign && (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
           <div style={{
             backgroundColor: COLOURS.NAVY,
@@ -929,17 +1028,20 @@ export default function MembersManager() {
                 <label style={lblC}>Current owner</label>
                 <select style={inpC} value={fromMemberId} onChange={(e) => setFromMemberId(e.target.value)}>
                   <option value="">— Select —</option>
-                  {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)} ({openTaskCounts.get(m.name || "") || 0} open)</option>)}
+                  {reassignableMembers.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)} ({openTaskCounts.get(m.name || "") || 0} open)</option>)}
                 </select>
               </div>
               <div>
                 <label style={lblC}>New owner</label>
                 <select style={inpC} value={toMemberId} onChange={(e) => setToMemberId(e.target.value)}>
                   <option value="">— Select —</option>
-                  {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                  {reassignableMembers.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
                 </select>
               </div>
             </div>
+            {!isAdmin && (
+              <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "8px" }}>Scoped to your own team — you and whoever reports directly to you.</p>
+            )}
             {fromMemberId && (() => {
               const fm = members.find((m) => m.id === fromMemberId);
               const count = fm ? openTaskCounts.get(fm.name || "") || 0 : 0;
@@ -951,6 +1053,41 @@ export default function MembersManager() {
             {reassignMsg && (
               <p style={{ marginTop: "8px", fontSize: "15px", fontWeight: 600, color: reassignMsg.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN }}>{reassignMsg}</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════
+          TAB: ORG CHART
+      ══════════════════════════════════════════════ */}
+      {activeTab === "orgchart" && isAdmin && (
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
+          <div style={{ backgroundColor: COLOURS.NAVY, padding: "14px 18px" }}>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "white", fontFamily: "var(--font-display)" }}>Org Chart</div>
+            <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
+              Who reports to whom — set from each HOD/Director&apos;s &quot;Team members&quot; picker on the People tab
+            </div>
+          </div>
+          <div style={{ padding: "14px" }}>
+            {(() => {
+              const roots = members.filter((m) => !m.manager_id);
+              const unassigned = members.filter((m) => m.manager_id && !members.some((x) => x.id === m.manager_id));
+              if (roots.length === 0) {
+                return <div style={{ fontSize: "13px", color: COLOURS.SLATE, textAlign: "center" as const, padding: "20px" }}>No one has been set up yet — start from the People tab.</div>;
+              }
+              return (
+                <>
+                  {roots.map((r) => (
+                    <OrgNode key={r.id} member={r} allMembers={members} depth={0} visited={new Set()} />
+                  ))}
+                  {unassigned.length > 0 && (
+                    <div style={{ marginTop: "14px", padding: "8px 12px", border: `1px dashed ${COLOURS.RED}`, borderRadius: RADII.SM, fontSize: "12px", color: COLOURS.RED }}>
+                      {unassigned.length} member{unassigned.length !== 1 ? "s" : ""} point to a manager that no longer exists — check and re-assign on the People tab.
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
