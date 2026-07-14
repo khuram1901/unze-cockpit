@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Tasks page redesign: decluttered stat strip, collapsed filters, quieter rows
+
+Khuram: "the design has become very messy... redesign this page, that looks and feels more of our app." Showed him a mockup first (via the visualize tool) before touching any code, per his request; he approved it as-is: "yes this is perfect please go ahead, but ensure you do this exactly."
+
+Three changes to `app/tasks/TasksList.tsx`, no schema or permission changes:
+
+1. **One stat strip instead of two.** The old "Needs Your Attention" red banner and the six-tile KPI row below it were showing the same Overdue/Due Today/Stuck numbers twice. Merged into a single compact row of six tiles (Open, Overdue, Due Today, Waiting Reply, Stuck, Completed), still sourced from `get_tasks_kpi_summary()`. Overdue and Due Today keep a soft red/amber tint so they still stand out; the old "Critical (Urgent, open)" tile is now a small red sub-label under Overdue instead of a seventh tile. "View breakdown" became a plain "Breakdown" button next to the strip — same department drill-down panel, just less shouty.
+2. **Filters collapsed into one button.** Company/Department/Priority/Status/Owner/Period used to sit permanently open, with a second "More Filters" row for Stage/Due/Source/Subtask underneath — nine dropdowns visible at all times. Replaced with a single "Filters" button carrying a badge (count of active filters), which opens one panel with all ten dropdowns in a grid. Renamed the underlying state from `moreFiltersOpen` to `filtersOpen`, and the "Reset Filters" link is now just "Reset."
+3. **Quieter task rows.** Each row's meta line was a run of boxed badges (department box, stage box, subtask-count box, comment count, meeting-link pill). Rewrote it as one muted line, dot-separated, keeping the colour-coded company pill (the one badge worth keeping) but turning the rest into plain text. Dropped the redundant standalone "Overdue" pill and the "Open →" hint (a left red accent bar + red due date already signal overdue; the whole row is obviously clickable). Moved the due date from the meta line into the row's right-hand column, next to the priority/status badges, so status and date sit together — the "Issued" date is now a hover tooltip instead of inline text.
+
+Verified with `tsc --noEmit` (clean) and `eslint` (only the three pre-existing `react-hooks/set-state-in-effect` findings from before this session — confirmed unrelated via diff). Committed locally as `fbee379`; **could not push from this session** (no git credentials in the sandbox) — needs a `git push` from Khuram's own machine.
+
+---
+
 ## 2026-07-14 — One-click "Select all" on every Tasks view with checkboxes
 
 Khuram: "there should be one click that can select multiple items, instead of me going one by one. this should apply to to all pages in the tasks." Added a "Select all (N)" checkbox to each of the three surfaces that have per-row checkboxes — List view (scoped to whatever `myTasksSource` currently shows: My tasks vs Everyone, plus filters), Tree view (scoped to exactly what each department node renders, respecting the All/Overdue/Waiting pill), and the KPI-card drawer (scoped to that drawer's own list). Each is a real toggle — ticking it selects everything currently visible in that view, unticking it deselects just those, without touching selections made elsewhere (the same shared `selectedIds` set the sticky bulk toolbar already used).
