@@ -82,6 +82,17 @@ function daysOverdue(task: Task): number {
   return Math.floor((Date.now() - new Date(task.due_date + "T00:00:00").getTime()) / 86400000);
 }
 
+// Some member records were imported with stray double spaces in their name
+// (e.g. "Muhammad  Shakeel") that a browser collapses when rendering text,
+// so it looks fine on screen — but a handful of tasks were entered with a
+// single-spaced "Muhammad Shakeel" instead, and since the Owner dropdown
+// dedupes on the raw string, the same person showed up twice. Comparing
+// (and building option lists) on the normalized form fixes it regardless
+// of which spacing any individual row happens to have.
+function normName(s: string | null | undefined): string {
+  return (s || "").trim().replace(/\s+/g, " ");
+}
+
 function getWeekStart(d: Date): string {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
@@ -228,9 +239,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // All the dropdown filters below are simple property filters over the
   // already-fetched rows — not aggregation, so this stays plain JS per
   // house rule 0 (that rule is about sums/counts, not filtering a list).
-  const weekAheadDate = new Date(todayStr + "T00:00:00");
-  weekAheadDate.setDate(weekAheadDate.getDate() + 7);
-  const weekAheadStr = weekAheadDate.toISOString().slice(0, 10);
 
   // Weekly/Monthly/Quarterly used to be separate tabs (with bar charts);
   // Khuram asked for those to fold into a single "Due period" filter
@@ -256,7 +264,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     }
     if (departmentFilter !== "all" && (t.assigned_to_department || t.project || "Unassigned") !== departmentFilter) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
-    if (ownerFilter !== "all" && t.assigned_to !== ownerFilter) return false;
+    if (ownerFilter !== "all" && normName(t.assigned_to) !== ownerFilter) return false;
     if (periodFilter !== "all") {
       if (!t.due_date) return false;
       if (periodFilter === "week" && !(t.due_date >= periodWeekStart && t.due_date < periodWeekEnd)) return false;
@@ -268,7 +276,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       const isOd = t.status !== "Completed" && t.status !== "Cancelled" && !!t.due_date && t.due_date < todayStr;
       if (dueFilter === "overdue" && !isOd) return false;
       if (dueFilter === "today" && t.due_date !== todayStr) return false;
-      if (dueFilter === "week" && !(t.due_date && t.due_date >= todayStr && t.due_date < weekAheadStr)) return false;
       if (dueFilter === "none" && t.due_date) return false;
     }
     if (sourceFilter !== "all") {
@@ -291,7 +298,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Dropdown option lists always come from the full, unfiltered task set so
   // picking one filter never hides the options for another.
   const departmentOptions = Array.from(new Set(tasks.map((t) => t.assigned_to_department || t.project || "Unassigned"))).sort();
-  const ownerOptions = Array.from(new Set(tasks.map((t) => t.assigned_to).filter((n): n is string => !!n))).sort();
+  const ownerOptions = Array.from(new Set(tasks.map((t) => normName(t.assigned_to)).filter((n) => !!n))).sort();
   const stageOptions = Array.from(new Set(tasks.map((t) => t.stage).filter((s): s is string => !!s))).sort();
   const filtersActive = departmentFilter !== "all" || priorityFilter !== "all" || ownerFilter !== "all" || periodFilter !== "all" || stageFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all" || searchQuery.trim() !== "";
 
@@ -808,7 +815,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <option value="all">Any due date</option>
             <option value="overdue">Overdue</option>
             <option value="today">Due today</option>
-            <option value="week">Due this week</option>
             <option value="none">No due date</option>
           </select>
           <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={filterSelectStyle}>
@@ -897,7 +903,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
             const personGroups = new Map<string, Task[]>();
             for (const t of deptFiltered) {
-              const p = t.assigned_to || "Unassigned";
+              const p = normName(t.assigned_to) || "Unassigned";
               if (!personGroups.has(p)) personGroups.set(p, []);
               personGroups.get(p)!.push(t);
             }
