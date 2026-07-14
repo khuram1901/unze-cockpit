@@ -127,7 +127,12 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdownRow[]>([]);
   const [deptBreakdownOpen, setDeptBreakdownOpen] = useState(false);
   const [kpiDrawer, setKpiDrawer] = useState<string | null>(null);
-  const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">("mine");
+  // Defaults to "everyone" — this was "mine" back when the tab was called
+  // "My Tasks", but now List sits alongside Board/Tree/Timeline as a
+  // general view, so it should show the same task set they do by
+  // default. The Mine/Everyone toggle is still there for anyone who
+  // wants to narrow it down to just their own.
+  const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">("everyone");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
