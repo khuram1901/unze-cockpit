@@ -399,6 +399,22 @@ export default function TaskStatus({
             Complete all subtasks before this task can be marked Completed.
           </p>
         )}
+        {status !== "Completed" && status !== "Cancelled" && (
+          <button
+            onClick={() => saveStatus("Completed")}
+            disabled={saving || openSubtasks > 0}
+            style={{
+              marginTop: "10px", width: "100%", maxWidth: "320px", padding: "10px",
+              borderRadius: RADII.SM, border: "none", fontSize: "13.5px", fontWeight: 700,
+              cursor: openSubtasks > 0 ? "not-allowed" : "pointer",
+              backgroundColor: openSubtasks > 0 ? COLOURS.TRACK : COLOURS.GREEN,
+              color: openSubtasks > 0 ? COLOURS.INK_400 : "white",
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            Mark task complete
+          </button>
+        )}
       </div>
 
       {/* Due-date editor — original locked, current open, every move logged */}

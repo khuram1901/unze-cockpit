@@ -46,6 +46,7 @@ type Task = {
   assigned_to_department: string | null;
   company_id: string | null;
   task_subtasks?: { id: string; is_complete: boolean }[];
+  task_comments?: { id: string }[];
 };
 
 type CompanyLite = { id: string; name: string; short_code: string | null };
@@ -139,7 +140,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
     let query = supabase
       .from("tasks")
-      .select("*, task_subtasks(id, is_complete)")
+      .select("*, task_subtasks(id, is_complete), task_comments(id)")
       .order("created_at", { ascending: false });
 
     if (!isPrivileged && email) {
@@ -454,8 +455,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   {task.task_subtasks.filter((s) => s.is_complete).length}/{task.task_subtasks.length}
                 </span>
               )}
+              {task.task_comments && task.task_comments.length > 0 && (
+                <span style={{ fontSize: "10.5px", fontWeight: 600, color: COLOURS.SLATE }}>
+                  {task.task_comments.length} comment{task.task_comments.length > 1 ? "s" : ""}
+                </span>
+              )}
               {task.due_date && (
                 <span style={{ fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 600 : 400 }}>
+                  {task.assigned_date ? `Issued ${formatDateUK(task.assigned_date)} → Due ` : ""}
                   {formatDateUK(task.due_date)}{od > 0 && ` · ${od}d late`}
                 </span>
               )}
@@ -579,14 +586,18 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "flex-start" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", flex: 1 }}>
           {[
-            { label: "Open",          value: kpi?.open_count ?? allOpen.length,          accent: COLOURS.BLUE },
-            { label: "Overdue",       value: kpi?.overdue_count ?? overdueTasks.length,   accent: COLOURS.RED },
-            { label: "Due Today",     value: kpi?.due_today_count ?? 0,                   accent: COLOURS.AMBER },
-            { label: "Waiting Reply", value: kpi?.waiting_reply_count ?? waitingReply.length, accent: COLOURS.BLUE },
-            { label: "Stuck",         value: kpi?.stuck_count ?? 0,                        accent: COLOURS.SLATE },
-            { label: "Completed",     value: kpi?.completed_count ?? completedAll.length,  accent: COLOURS.GREEN },
-          ].map(({ label, value, accent }) => (
-            <div key={label} style={{ ...cardStyle, padding: "10px 14px", borderLeft: `3px solid ${accent}` }}>
+            { label: "Open",          value: kpi?.open_count ?? allOpen.length,          accent: COLOURS.BLUE, clickable: true },
+            { label: "Overdue",       value: kpi?.overdue_count ?? overdueTasks.length,   accent: COLOURS.RED, clickable: true },
+            { label: "Due Today",     value: kpi?.due_today_count ?? 0,                   accent: COLOURS.AMBER, clickable: false },
+            { label: "Waiting Reply", value: kpi?.waiting_reply_count ?? waitingReply.length, accent: COLOURS.BLUE, clickable: false },
+            { label: "Stuck",         value: kpi?.stuck_count ?? 0,                        accent: COLOURS.SLATE, clickable: false },
+            { label: "Completed",     value: kpi?.completed_count ?? completedAll.length,  accent: COLOURS.GREEN, clickable: false },
+          ].map(({ label, value, accent, clickable }) => (
+            <div
+              key={label}
+              onClick={clickable ? () => setDeptBreakdownOpen(!deptBreakdownOpen) : undefined}
+              style={{ ...cardStyle, padding: "10px 14px", borderLeft: `3px solid ${accent}`, cursor: clickable ? "pointer" : "default" }}
+            >
               <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "6px" }}>{label}</div>
               <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY }}>{value.toLocaleString()}</div>
             </div>

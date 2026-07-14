@@ -35,6 +35,7 @@ type Task = {
   whatsapp_auto_remind: boolean;
   company_id: string | null;
   task_subtasks?: { id: string; is_complete: boolean }[];
+  task_comments?: { id: string }[];
 };
 
 const COLUMNS = ["Not Started", "In Progress", "Waiting Reply", "Stuck", "Submitted", "Completed"];
@@ -194,6 +195,11 @@ export default function TasksBoard({
                             </span>
                           )}
                         </div>
+                        {t.task_comments && t.task_comments.length > 0 && (
+                          <div style={{ marginTop: "5px", fontSize: "10.5px", color: COLOURS.SLATE, fontWeight: 600 }}>
+                            {t.task_comments.length} comment{t.task_comments.length > 1 ? "s" : ""}
+                          </div>
+                        )}
                       </div>
                       {totalCount > 0 && (
                         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: "none", borderRadius: "0 0 10px 10px" }}>

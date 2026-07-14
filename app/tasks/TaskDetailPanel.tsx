@@ -128,7 +128,7 @@ export default function TaskDetailPanel({
       <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "6px" }}>
         Type: <strong style={{ color: COLOURS.NAVY }}>{task.task_type || "Task"}</strong>
         {" · "}Assigned by: <strong style={{ color: COLOURS.NAVY }}>{task.assigned_by || "—"}</strong>
-        {" · "}Date: {formatDateUK(task.assigned_date)}
+        {" · "}Issue date (locked): {formatDateUK(task.assigned_date)}
         {" · "}Project: {task.project || "—"}
         {task.meeting_id && (
           <span> · <a href={`/my-minutes?meeting=${task.meeting_id}`} style={{ color: COLOURS.BLUE, fontWeight: 600, textDecoration: "none" }}>View Minutes →</a></span>

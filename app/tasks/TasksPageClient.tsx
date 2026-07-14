@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { COLOURS, RADII, SHADOWS, PageHeader } from "../lib/SharedUI";
+import { COLOURS, SHADOWS, PageHeader } from "../lib/SharedUI";
 import { useUserCtx } from "../lib/useUserCtx";
 import {
   canCreateAssignments as checkCanCreate,
   canSeeAllTasks, canReviewTasks, canImportExport, canDeleteTask,
 } from "../lib/permissions";
+import Modal from "../lib/Modal";
 import NewTaskForm from "./NewTaskForm";
 import TasksList from "./TasksList";
 
@@ -37,10 +38,10 @@ export default function TasksPageClient() {
         )}
       </div>
 
-      {canCreate && showForm && (
-        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, marginBottom: "14px", overflow: "hidden" }}>
-          <NewTaskForm />
-        </div>
+      {canCreate && (
+        <Modal open={showForm} onClose={() => setShowForm(false)}>
+          <NewTaskForm onCreated={() => setShowForm(false)} />
+        </Modal>
       )}
 
       <TasksList currentRole={role} canSeeAll={seeAll} canReview={review} canDelete={canDelete} canImport={impExp} />
