@@ -21,8 +21,8 @@ type Member = {
   business_unit: string | null;
   company: string | null;
   is_hod: boolean;
-  is_director: boolean;
   manager_id: string | null;
+  position_title: string | null;
   notify_email: boolean;
   notify_whatsapp: boolean;
   phone_e164: string | null;
@@ -33,11 +33,7 @@ type DepartmentOwner = {
   id: string;
   department_name: string;
   primary_owner_member_id: string | null;
-  secondary_owner_member_id: string | null;
-  escalation_owner_member_id: string | null;
   primary_owner_name: string | null;
-  secondary_owner_name: string | null;
-  escalation_owner_name: string | null;
 };
 type TaskSummary = { id: string; assigned_to: string | null; status: string };
 
@@ -121,7 +117,11 @@ function OrgNode({ member, allMembers, depth, visited }: { member: Member; allMe
   if (visited.has(member.id) || depth > 6) return null;
   const nextVisited = new Set(visited); nextVisited.add(member.id);
   const children = allMembers.filter((x) => x.manager_id === member.id);
-  const rankLabel = member.is_director ? "Director" : member.is_hod ? "HOD" : (member.role === "Admin" || member.role === "Executive") ? member.role : null;
+  // Prefer the person's actual title (e.g. "CEO", "GM Operations") when set
+  // — falls back to a generic HOD/role label for anyone who doesn't have
+  // one yet. No separate "Director" flag needed: it's just whatever title
+  // Kamran's account is given, same as Khuram's is "CEO".
+  const rankLabel = member.position_title || (member.is_hod ? "HOD" : (member.role === "Admin" || member.role === "Executive") ? member.role : null);
   return (
     <div style={{ marginLeft: depth === 0 ? 0 : "22px", marginTop: "6px" }}>
       <div style={{
@@ -155,7 +155,7 @@ export default function MembersManager() {
   const [myEmail, setMyEmail] = useState("");
   const [myOverrides, setMyOverrides] = useState<PermOverrides | null>(null);
   const [myMemberId, setMyMemberId] = useState<string | null>(null);
-  const [myIsHodOrDirector, setMyIsHodOrDirector] = useState(false);
+  const [myIsHod, setMyIsHod] = useState(false);
   const [loading, setLoading] = useState(true);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [assignments, setAssignments] = useState<Record<string, Set<string>>>({});
@@ -192,17 +192,17 @@ export default function MembersManager() {
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user) {
       setMyEmail(userData.user.email || "");
-      const { data: me } = await supabase.from("members").select("id, role, is_hod, is_director").eq("email", userData.user.email).single();
+      const { data: me } = await supabase.from("members").select("id, role, is_hod").eq("email", userData.user.email).single();
       if (me) {
         setMyRole(me.role);
         setMyMemberId(me.id);
-        setMyIsHodOrDirector(!!me.is_hod || !!me.is_director);
+        setMyIsHod(!!me.is_hod);
         const perms = await loadMyPermissions();
         if (perms) setMyOverrides(perms as PermOverrides);
       }
     }
     const { data } = await supabase.from("members")
-      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, is_director, manager_id, notify_email, notify_whatsapp, phone_e164")
+      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, manager_id, position_title, notify_email, notify_whatsapp, phone_e164")
       .order("first_name", { ascending: true });
     if (data) setMembers(data);
 
@@ -348,24 +348,23 @@ export default function MembersManager() {
   // on their own team — Khuram's call, so departures don't have to wait on
   // him personally. Scoped below to just the HOD's own direct reports (plus
   // themselves, so they can step in and hold the work personally).
-  const canReassign = isAdmin || myIsHodOrDirector;
+  const canReassign = isAdmin || myIsHod;
   const reassignableMembers = isAdmin
     ? members
     : members.filter((m) => m.id === myMemberId || m.manager_id === myMemberId);
 
-  async function updateDeptOwner(deptId: string, field: "primary" | "secondary" | "escalation", memberId: string) {
+  async function updateDeptOwner(deptId: string, memberId: string) {
     const m = memberId ? members.find((x) => x.id === memberId) : null;
-    const prefix = field === "primary" ? "primary_owner" : field === "secondary" ? "secondary_owner" : "escalation_owner";
-    const updates: Record<string, string | null> = {
-      [`${prefix}_member_id`]: m?.id || null,
-      [`${prefix}_name`]: m?.name || null,
-      [`${prefix}_email`]: m?.email || null,
+    const updates = {
+      primary_owner_member_id: m?.id || null,
+      primary_owner_name: m?.name || null,
+      primary_owner_email: m?.email || null,
     };
-    setDepartments((prev) => prev.map((d) => d.id === deptId ? { ...d, [`${prefix}_member_id`]: memberId || null } : d));
+    setDepartments((prev) => prev.map((d) => d.id === deptId ? { ...d, primary_owner_member_id: memberId || null } : d));
     const dept = departments.find((d) => d.id === deptId);
     const { error } = await supabase.from("department_owners").update(updates).eq("id", deptId);
     if (error) { toast.show(error.message, "error"); return; }
-    logAction("Updated", "department_owners", `Set ${field} owner for ${dept?.department_name || deptId}`, deptId);
+    logAction("Updated", "department_owners", `Set primary owner for ${dept?.department_name || deptId}`, deptId);
   }
 
   const openTaskCounts = new Map<string, number>();
@@ -795,9 +794,7 @@ export default function MembersManager() {
                         <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }}>
                           <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} /> HOD
                         </label>
-                        <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }}>
-                          <input type="checkbox" checked={m.is_director || false} onChange={(e) => updateMember(m.id, { is_director: e.target.checked })} /> Director
-                        </label>
+                        <div><label style={lblC}>Position title</label><input style={inpC} value={m.position_title || ""} onChange={(e) => updateMember(m.id, { position_title: e.target.value || null })} placeholder="e.g. CEO, Director" /></div>
                       </div>
 
                       {/* Reports to — read-only here, set from the manager/director's own
@@ -812,7 +809,7 @@ export default function MembersManager() {
                           who sit at the top of the chain and can have direct reports
                           too). Tick whoever should report to this person; unticking
                           clears their manager_id. */}
-                      {(m.is_hod || m.is_director || m.role === "Admin" || m.role === "Executive") && (
+                      {(m.is_hod || m.role === "Admin" || m.role === "Executive") && (
                         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 10px", marginBottom: "6px", backgroundColor: COLOURS.CARD }}>
                           <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "6px", textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
                             Team members reporting to {dn}
@@ -959,7 +956,7 @@ export default function MembersManager() {
                 Department Ownership
               </div>
               <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", marginTop: "2px" }}>
-                Primary, backup, and escalation owners
+                Who owns each department overall — shown on the Executive Dashboard
                 {(() => { const v = departments.filter((d) => !d.primary_owner_member_id).length; return v > 0 ? ` · ${v} vacant` : ""; })()}
               </div>
             </div>
@@ -971,31 +968,13 @@ export default function MembersManager() {
                   {dept.department_name}
                   {!dept.primary_owner_member_id && <span style={{ fontSize: "11px", color: COLOURS.RED, marginLeft: "8px", fontWeight: 600 }}>NO PRIMARY OWNER</span>}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px", alignItems: "end" }}>
-                  <div>
-                    <label style={lblC}>Primary Owner</label>
-                    <select style={inpC} value={dept.primary_owner_member_id || ""}
-                      onChange={(e) => updateDeptOwner(dept.id, "primary", e.target.value)}>
-                      <option value="">— None —</option>
-                      {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={lblC}>Backup Owner</label>
-                    <select style={inpC} value={dept.secondary_owner_member_id || ""}
-                      onChange={(e) => updateDeptOwner(dept.id, "secondary", e.target.value)}>
-                      <option value="">— None —</option>
-                      {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={lblC}>Escalation</label>
-                    <select style={inpC} value={dept.escalation_owner_member_id || ""}
-                      onChange={(e) => updateDeptOwner(dept.id, "escalation", e.target.value)}>
-                      <option value="">— None —</option>
-                      {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
-                    </select>
-                  </div>
+                <div style={{ maxWidth: "260px" }}>
+                  <label style={lblC}>Primary Owner</label>
+                  <select style={inpC} value={dept.primary_owner_member_id || ""}
+                    onChange={(e) => updateDeptOwner(dept.id, e.target.value)}>
+                    <option value="">— None —</option>
+                    {members.map((m) => <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)}</option>)}
+                  </select>
                 </div>
               </div>
             ))}
