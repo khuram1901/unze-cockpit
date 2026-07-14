@@ -81,6 +81,17 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
   const [dayOfMonth, setDayOfMonth] = useState(1);
   const [dueDays, setDueDays] = useState("3");
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDesc, setEditDesc] = useState("");
+  const [editAssignTo, setEditAssignTo] = useState("");
+  const [editPriority, setEditPriority] = useState("Normal");
+  const [editProject, setEditProject] = useState("");
+  const [editFrequency, setEditFrequency] = useState("weekly");
+  const [editDayOfWeek, setEditDayOfWeek] = useState(1);
+  const [editDayOfMonth, setEditDayOfMonth] = useState(1);
+  const [editDueDays, setEditDueDays] = useState("3");
+  const [savingEdit, setSavingEdit] = useState(false);
+
   async function loadData() {
     setLoading(true);
     const [tmplRes, memRes] = await Promise.all([
@@ -127,6 +138,43 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
   async function deleteTemplate(id: string) {
     if (!await dlg.confirm("Delete this recurring task template?", true)) return;
     await supabase.from("recurring_tasks").delete().eq("id", id);
+    loadData();
+  }
+
+  function startEdit(t: Template) {
+    setEditingId(t.id);
+    setEditDesc(t.description);
+    setEditAssignTo(t.assigned_to || "");
+    setEditPriority(t.priority || "Normal");
+    setEditProject(t.project || "");
+    setEditFrequency(t.frequency);
+    setEditDayOfWeek(t.day_of_week ?? 1);
+    setEditDayOfMonth(t.day_of_month ?? 1);
+    setEditDueDays(String(t.due_days_after ?? 3));
+  }
+
+  async function saveEdit(id: string) {
+    setSavingEdit(true);
+    const member = members.find((m) => memberName(m) === editAssignTo);
+    const { error } = await supabase.from("recurring_tasks").update({
+      description: editDesc,
+      assigned_to: editAssignTo || null,
+      assigned_to_email: member?.email || null,
+      assigned_to_department: member?.department || null,
+      priority: editPriority,
+      project: editProject || null,
+      frequency: editFrequency,
+      day_of_week: editFrequency === "weekly" ? editDayOfWeek : null,
+      day_of_month: editFrequency === "monthly" ? editDayOfMonth : null,
+      due_days_after: Number(editDueDays) || 3,
+    }).eq("id", id);
+    setSavingEdit(false);
+    if (error) {
+      alert("Error saving changes: " + error.message);
+      return;
+    }
+    logAction("Updated", "recurring_tasks", `Edited: ${editDesc}`, id);
+    setEditingId(null);
     loadData();
   }
 
@@ -198,31 +246,60 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       ) : (
         <div style={{ ...cardStyle, overflow: "hidden" }}>
           {templates.map((t) => (
-            <div key={t.id} style={{ padding: "10px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, opacity: t.active ? 1 : 0.5 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
-                  <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                    {t.assigned_to || "Unassigned"} · {t.frequency}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : t.frequency === "monthly" ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
-                    {t.last_created_at && ` · Last: ${t.last_created_at.slice(0, 10)}`}
+            <div key={t.id} style={{ padding: "10px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, opacity: editingId === t.id ? 1 : t.active ? 1 : 0.5 }}>
+              {editingId === t.id ? (
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: "8px 16px", marginBottom: "8px" }}>
+                    <label style={lbl}>Task Description <input style={inp} value={editDesc} onChange={(e) => setEditDesc(e.target.value)} /></label>
+                    <label style={lbl}>Assign To <select style={inp} value={editAssignTo} onChange={(e) => setEditAssignTo(e.target.value)}><option value="">Select</option>{members.map((m) => <option key={memberName(m)} value={memberName(m)}>{memberName(m)}</option>)}</select></label>
+                    <label style={lbl}>Priority <select style={inp} value={editPriority} onChange={(e) => setEditPriority(e.target.value)}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></label>
+                    <label style={lbl}>Frequency <select style={inp} value={editFrequency} onChange={(e) => setEditFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+                    {editFrequency === "weekly" && <label style={lbl}>Day <select style={inp} value={editDayOfWeek} onChange={(e) => setEditDayOfWeek(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>}
+                    {editFrequency === "monthly" && <label style={lbl}>Day of Month <input type="number" min="1" max="28" style={inp} value={editDayOfMonth} onChange={(e) => setEditDayOfMonth(Number(e.target.value))} /></label>}
+                    <label style={lbl}>Due after (days) <input type="number" min="1" style={inp} value={editDueDays} onChange={(e) => setEditDueDays(e.target.value)} /></label>
+                    <label style={lbl}>Department / Project <input style={inp} value={editProject} onChange={(e) => setEditProject(e.target.value)} placeholder="Optional" /></label>
+                  </div>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button onClick={() => saveEdit(t.id)} disabled={savingEdit} style={{
+                      backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.SM,
+                      padding: "6px 16px", fontSize: "12.5px", fontWeight: 700, cursor: "pointer", opacity: savingEdit ? 0.7 : 1,
+                    }}>{savingEdit ? "Saving…" : "Save"}</button>
+                    <button onClick={() => setEditingId(null)} style={{
+                      backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`,
+                      borderRadius: RADII.SM, padding: "6px 16px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
+                    }}>Cancel</button>
                   </div>
                 </div>
-                {isPrivileged && (
-                  <div style={{ display: "flex", gap: "5px", flexShrink: 0 }}>
-                    <button onClick={() => toggleActive(t.id, t.active)} style={{
-                      backgroundColor: t.active ? COLOURS.AMBER : COLOURS.GREEN,
-                      color: "white", border: "none", borderRadius: RADII.SM,
-                      padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
-                    }}>
-                      {t.active ? "Pause" : "Resume"}
-                    </button>
-                    <button onClick={() => deleteTemplate(t.id)} style={{
-                      backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`,
-                      borderRadius: RADII.SM, padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
-                    }}>Delete</button>
+              ) : (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                      {t.assigned_to || "Unassigned"} · {t.frequency}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : t.frequency === "monthly" ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
+                      {t.last_created_at && ` · Last: ${t.last_created_at.slice(0, 10)}`}
+                    </div>
                   </div>
-                )}
-              </div>
+                  {isPrivileged && (
+                    <div style={{ display: "flex", gap: "5px", flexShrink: 0 }}>
+                      <button onClick={() => startEdit(t)} style={{
+                        backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, border: `1px solid ${COLOURS.HAIRLINE}`,
+                        borderRadius: RADII.SM, padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                      }}>Edit</button>
+                      <button onClick={() => toggleActive(t.id, t.active)} style={{
+                        backgroundColor: t.active ? COLOURS.AMBER : COLOURS.GREEN,
+                        color: "white", border: "none", borderRadius: RADII.SM,
+                        padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                      }}>
+                        {t.active ? "Pause" : "Resume"}
+                      </button>
+                      <button onClick={() => deleteTemplate(t.id)} style={{
+                        backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`,
+                        borderRadius: RADII.SM, padding: "4px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer",
+                      }}>Delete</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
