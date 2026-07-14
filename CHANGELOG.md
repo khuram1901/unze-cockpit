@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Sidebar cleanup + Tasks view-switcher rebuild (Khuram's follow-up round)
+
+- **Sidebar**: Recurring Tasks and Calendar removed (Recurring lives inside Tasks now; Calendar hidden everywhere until it's finished — route still works directly). Profile moved from My Workspace to Settings.
+- **Task description capped at 150 characters** wherever it's typed by hand (New Task, task edit, recurring templates) — `TASK_DESCRIPTION_LIMIT` in `SharedUI.tsx`, with a live counter. CSV import and meeting-minutes action items left uncapped (separate flows).
+- **Overdue rows no longer get a full red background** — Khuram: "looks really messy." Replaced with a left accent bar + a small "Overdue" pill badge.
+- **7 missing departments added** to `department_owners` (Accounts, Tax, Retail, Marketing, Online, Executive Office, Procurement / Purchase) — migration 107, owners left blank for Khuram to assign. 5 existing departments not on his list left untouched.
+- **View switcher rebuilt**: Weekly/Monthly/Quarterly tabs and their bar charts removed entirely, replaced by a single "Due period" filter (All/week/month/quarter) available on every view. Board/Tree/List/Timeline are now icon-only buttons, right-aligned; Team/Recurring stay as text pills, left-aligned. "List" = the old "My Tasks" tab, renamed. "Tree" = the old Department view, rebuilt as a real collapsible Department → Person → Tasks hierarchy (both levels collapsible, not just a flat list with a static person strip).
+
+Verification: `tsc --noEmit` clean throughout; new `react-hooks/set-state-in-effect` ESLint flags checked against the pre-change file and confirmed pre-existing.
+
+Migrations 106–107 written, **not yet applied** — run via Supabase SQL Editor, after 098–105.
+
+---
+
 ## 2026-07-14 — Tasks: live-testing feedback round (9 points from Khuram)
 
 Khuram tried the live page and sent 9 issues. Addressed all:
