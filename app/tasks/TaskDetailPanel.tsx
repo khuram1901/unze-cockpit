@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
@@ -57,22 +57,7 @@ type Task = {
   company_id: string | null;
 };
 
-// Exposed to TaskDetailModal so clicking the modal's header/title can jump
-// straight into edit mode, instead of requiring a scroll-down-and-click on
-// the "Edit task" button below. Gated the same as that button (editable
-// only), so protected/not-mine tasks still can't be edited this way either.
-export type TaskDetailPanelHandle = { startEdit: () => void };
-
-const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
-  task: Task;
-  currentRole: string;
-  isPrivileged: boolean;
-  canReview?: boolean;
-  canDelete?: boolean;
-  myEmail: string | null;
-  memberPhones: Record<string, string>;
-  onChanged: () => void;
-}>(function TaskDetailPanel({
+export default function TaskDetailPanel({
   task,
   currentRole,
   isPrivileged,
@@ -81,7 +66,16 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
   myEmail,
   memberPhones,
   onChanged,
-}, ref) {
+}: {
+  task: Task;
+  currentRole: string;
+  isPrivileged: boolean;
+  canReview?: boolean;
+  canDelete?: boolean;
+  myEmail: string | null;
+  memberPhones: Record<string, string>;
+  onChanged: () => void;
+}) {
   const dlg = useConfirm();
   const userCtx = { email: myEmail, role: currentRole };
   const taskEditable = canEditTask(userCtx, task.assigned_by_email);
@@ -93,18 +87,18 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
   const [postingComment, setPostingComment] = useState(false);
   const [autoRemind, setAutoRemind] = useState(task.whatsapp_auto_remind);
 
-  // Core-field editing (description/priority/department/company) — separate
-  // from TaskStatus, which only ever handled operational fields (status,
-  // stage, due date, notes). Gated by taskEditable so protected tasks
-  // assigned by someone else still can't be rewritten.
-  const [editingTask, setEditingTask] = useState(false);
+  // Core fields (description/priority/department/company/owners) — always
+  // visible and auto-saving, same as Status/Stage further down. Khuram:
+  // "we cannot amend the company, department, priority — these options
+  // should be available everywhere," after the previous click-to-edit
+  // pattern turned out to hide them too well. Gated by taskEditable so
+  // protected tasks assigned by someone else still can't be rewritten.
   const [companies, setCompanies] = useState<Company[]>([]);
   const [deptOwners, setDeptOwners] = useState<DepartmentOwner[]>([]);
   const [editDesc, setEditDesc] = useState(task.description);
   const [editPriority, setEditPriority] = useState(task.priority || "Normal");
   const [editProject, setEditProject] = useState(task.project || "");
   const [editCompanyId, setEditCompanyId] = useState(task.company_id || "");
-  const [savingTask, setSavingTask] = useState(false);
   // Owners — real multi-assignee (Khuram: "same task assigned to multiple
   // members"), not just the single assigned_to this used to be limited
   // to. First person ticked stays the "primary" owner: tasks.assigned_to/
@@ -114,8 +108,14 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
   const [members, setMembers] = useState<MemberLite[]>([]);
   const [editOwnerIds, setEditOwnerIds] = useState<string[]>([]);
 
+  // No effect needed to reset editDesc/editPriority/editProject/
+  // editCompanyId when switching tasks — TaskDetailModal keys this
+  // component by task.id, so React remounts fresh (and these useState
+  // initializers re-run) instead of reusing state across tasks. Avoids
+  // the "setState synchronously in an effect" anti-pattern for what's
+  // really just a prop-driven initial value.
   useEffect(() => {
-    if (!editingTask) return;
+    if (!taskEditable) return;
     (async () => {
       const [companiesRes, deptRes, membersRes, assigneesRes] = await Promise.all([
         supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name"),
@@ -132,58 +132,34 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
         .filter((id): id is string => !!id);
       setEditOwnerIds(Array.from(new Set(ids)));
     })();
-  }, [editingTask, task.id]);
+  }, [taskEditable, task.id]);
 
-  function toggleEditOwner(id: string, checked: boolean) {
-    setEditOwnerIds((prev) => checked ? [...prev, id] : prev.filter((x) => x !== id));
+  async function updateTaskField(fields: Record<string, unknown>) {
+    const { error } = await supabase.from("tasks").update(fields).eq("id", task.id);
+    if (error) { alert("Couldn't save changes: " + error.message); return; }
+    onChanged();
   }
 
-  function startEditTask() {
-    setEditDesc(task.description);
-    setEditPriority(task.priority || "Normal");
-    setEditProject(task.project || "");
-    setEditCompanyId(task.company_id || "");
-    setEditingTask(true);
-  }
+  async function toggleEditOwner(id: string, checked: boolean) {
+    const nextIds = checked ? [...editOwnerIds, id] : editOwnerIds.filter((x) => x !== id);
+    if (nextIds.length === 0) { alert("At least one owner is required."); return; }
+    setEditOwnerIds(nextIds);
 
-  // Gated on taskEditable here too, not just by hiding the "Edit task"
-  // button — TaskDetailModal computes the same canEditTask() check
-  // independently to decide whether the header click does anything, but
-  // this is the real backstop in case that ever drifts out of sync.
-  useImperativeHandle(ref, () => ({ startEdit: () => { if (taskEditable) startEditTask(); } }), [taskEditable, task]);
-
-  async function saveTaskEdit() {
-    if (!editDesc.trim()) return;
-    if (editOwnerIds.length === 0) { alert("Select at least one owner."); return; }
-    setSavingTask(true);
-
-    const selected = editOwnerIds.map((id) => members.find((m) => m.id === id)).filter((m): m is MemberLite => !!m);
+    const selected = nextIds.map((mid) => members.find((m) => m.id === mid)).filter((m): m is MemberLite => !!m);
     const primary = selected[0];
+    const { error } = await supabase.from("tasks").update({
+      assigned_to: primary.name,
+      assigned_to_email: primary.email,
+      assigned_to_department: primary.department || editProject || null,
+      assigned_to_business_unit: primary.business_unit || null,
+    }).eq("id", task.id);
+    if (error) { alert("Couldn't update owners: " + error.message); return; }
 
-    const { error } = await supabase
-      .from("tasks")
-      .update({
-        description: editDesc.trim(),
-        priority: editPriority,
-        project: editProject || null,
-        company_id: editCompanyId || null,
-        assigned_to: primary.name,
-        assigned_to_email: primary.email,
-        assigned_to_department: primary.department || editProject || null,
-        assigned_to_business_unit: primary.business_unit || null,
-      })
-      .eq("id", task.id);
-    if (error) { setSavingTask(false); alert("Couldn't save changes: " + error.message); return; }
-
-    // Replace the owner list wholesale — simpler and safer than diffing,
-    // and this only runs on an explicit Save click, not per keystroke.
     await supabase.from("task_assignees").delete().eq("task_id", task.id);
     const { error: assigneeError } = await supabase.from("task_assignees").insert(
       selected.map((m) => ({ task_id: task.id, member_id: m.id, member_name: m.name, member_email: m.email }))
     );
-    setSavingTask(false);
     if (assigneeError) { alert("Task saved, but the owner list failed to update: " + assigneeError.message); }
-    setEditingTask(false);
     onChanged();
   }
 
@@ -254,16 +230,7 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
         </div>
       )}
 
-      {taskEditable && !editingTask && (
-        <button
-          onClick={startEditTask}
-          style={{ background: "none", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "4px 12px", fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, cursor: "pointer", marginBottom: "8px" }}
-        >
-          Edit task
-        </button>
-      )}
-
-      {taskEditable && editingTask && (
+      {taskEditable && (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", marginBottom: "10px", backgroundColor: COLOURS.CARD }}>
           <label style={{ display: "block", marginBottom: "8px" }}>
             <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
@@ -275,6 +242,7 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
             <textarea
               value={editDesc}
               onChange={(e) => setEditDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))}
+              onBlur={() => { if (editDesc.trim() && editDesc.trim() !== task.description) updateTaskField({ description: editDesc.trim() }); }}
               maxLength={TASK_DESCRIPTION_LIMIT}
               rows={2}
               style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "7px 10px", fontSize: "13px", color: COLOURS.NAVY, fontFamily: "inherit", resize: "vertical" }}
@@ -283,27 +251,27 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "10px" }}>
             <label>
               <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Priority</span>
-              <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
+              <select value={editPriority} onChange={(e) => { setEditPriority(e.target.value); updateTaskField({ priority: e.target.value }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
                 {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </label>
             <label>
               <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Department / area</span>
-              <select value={editProject} onChange={(e) => setEditProject(e.target.value)} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
+              <select value={editProject} onChange={(e) => { setEditProject(e.target.value); updateTaskField({ project: e.target.value || null }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
                 <option value="">-- None --</option>
                 {deptOwners.map((d) => <option key={d.id} value={d.department_name}>{d.department_name}</option>)}
               </select>
             </label>
             <label>
               <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Company</span>
-              <select value={editCompanyId} onChange={(e) => setEditCompanyId(e.target.value)} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
+              <select value={editCompanyId} onChange={(e) => { setEditCompanyId(e.target.value); updateTaskField({ company_id: e.target.value || null }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
                 <option value="">Group / needs review</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </label>
           </div>
 
-          <label style={{ display: "block", marginBottom: "10px" }}>
+          <label style={{ display: "block" }}>
             <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>
               Owner(s) — tick everyone this applies to; the first person ticked is the primary owner
             </span>
@@ -325,19 +293,6 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
               {members.length === 0 && <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>Loading members…</span>}
             </div>
           </label>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-            <button onClick={() => setEditingTask(false)} style={{ background: "none", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 14px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, cursor: "pointer" }}>
-              Cancel
-            </button>
-            <button
-              onClick={saveTaskEdit}
-              disabled={savingTask || !editDesc.trim() || editOwnerIds.length === 0}
-              style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.SM, padding: "6px 14px", fontSize: "12.5px", fontWeight: 700, cursor: savingTask || !editDesc.trim() || editOwnerIds.length === 0 ? "not-allowed" : "pointer", opacity: savingTask || !editDesc.trim() || editOwnerIds.length === 0 ? 0.6 : 1 }}
-            >
-              Save
-            </button>
-          </div>
         </div>
       )}
 
@@ -418,6 +373,4 @@ const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
       </div>
     </div>
   );
-});
-
-export default TaskDetailPanel;
+}
