@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { supabase } from "../lib/supabase";
+import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
-import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
 import TeamStats from "./TeamStats";
 import TaskDetailModal from "./TaskDetailModal";
 import MiniSubtaskToggle from "./MiniSubtaskToggle";
@@ -632,53 +632,88 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               downloadCSV(`tasks-${new Date().toISOString().slice(0, 10)}.csv`, headers, rows);
             }}
             onImport={async (rows) => {
+              // Strict validation, per Khuram's call: a row with an
+              // Assigned By, Department, or Company that doesn't exactly
+              // match a real system value is rejected outright — no
+              // silent fallback to whatever text was typed in the
+              // spreadsheet (see TASK_NOTIFICATION_AUDIT.md). Valid rows
+              // in the same file still import; only the bad ones are
+              // skipped, listed so they can be fixed and re-imported.
+              const { data: allMembers } = await supabase.from("members").select("name, first_name, last_name, email, department, business_unit");
+              const memberList = allMembers || [];
+              const memberByName = new Map(memberList.map((m) => {
+                const full = `${m.first_name || ""} ${m.last_name || ""}`.trim();
+                return [(full || m.name || "").toLowerCase(), m];
+              }));
+              const deptSet = new Set(allDepartments.map((d) => d.toLowerCase()));
+              const companyByLabel = new Map(companies.flatMap((c) => [
+                [c.name.toLowerCase(), c],
+                ...(c.short_code ? [[c.short_code.toLowerCase(), c] as [string, CompanyLite]] : []),
+              ]));
+
               const errors: string[] = [];
-              const validRows: Record<string, string>[] = [];
+              const validRows: { row: Record<string, string>; member: typeof memberList[number] | undefined; companyId: string }[] = [];
               rows.forEach((row, i) => {
                 const line = i + 2;
                 if (!row["Description"]?.trim()) { errors.push(`Row ${line}: Description is required`); return; }
+                if (row["Description"].trim().length > TASK_DESCRIPTION_LIMIT) { errors.push(`Row ${line}: Description exceeds ${TASK_DESCRIPTION_LIMIT} characters`); return; }
                 if (!row["Assigned To"]?.trim()) { errors.push(`Row ${line}: Assigned To is required`); return; }
                 if (!row["Assigned By"]?.trim()) { errors.push(`Row ${line}: Assigned By is required`); return; }
+                const assignedByMember = memberByName.get(row["Assigned By"].trim().toLowerCase());
+                if (!assignedByMember) { errors.push(`Row ${line}: Assigned By "${row["Assigned By"].trim()}" doesn't match a real member`); return; }
                 if (!row["Due Date"]?.trim()) { errors.push(`Row ${line}: Due Date is required`); return; }
                 if (!row["Priority"]?.trim()) { errors.push(`Row ${line}: Priority is required`); return; }
                 if (!row["Department / Area"]?.trim()) { errors.push(`Row ${line}: Department / Area is required`); return; }
-                validRows.push(row);
+                if (!deptSet.has(row["Department / Area"].trim().toLowerCase())) { errors.push(`Row ${line}: Department / Area "${row["Department / Area"].trim()}" doesn't match a real department`); return; }
+                if (!row["Company"]?.trim()) { errors.push(`Row ${line}: Company is required`); return; }
+                const company = companyByLabel.get(row["Company"].trim().toLowerCase());
+                if (!company) { errors.push(`Row ${line}: Company "${row["Company"].trim()}" doesn't match a real company`); return; }
+                const assignedName = row["Assigned To"].trim();
+                const member = memberList.find((m) => {
+                  const full = `${m.first_name || ""} ${m.last_name || ""}`.trim();
+                  return full.toLowerCase() === assignedName.toLowerCase() || (m.name || "").toLowerCase() === assignedName.toLowerCase();
+                });
+                if (!member) { errors.push(`Row ${line}: Assigned To "${assignedName}" doesn't match a real member`); return; }
+                validRows.push({ row, member, companyId: company.id });
               });
               if (errors.length > 0) {
                 toast.show(`Import validation failed:\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`, "error");
                 return;
               }
-              const { data: allMembers } = await supabase.from("members").select("name, first_name, last_name, email, department, business_unit");
-              const memberList = allMembers || [];
+
               let count = 0;
-              for (const row of validRows) {
-                const assignedName = row["Assigned To"].trim();
-                const member = memberList.find((m) => {
-                  const full = `${m.first_name || ""} ${m.last_name || ""}`.trim();
-                  return full === assignedName || m.name === assignedName;
+              const failedRows: string[] = [];
+              for (const { row, member, companyId } of validRows) {
+                const res = await authFetch("/api/tasks/create", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    description: row["Description"].trim(),
+                    companyId,
+                    assignedTo: row["Assigned To"].trim(),
+                    assignedToEmail: member?.email || null,
+                    assignedToDepartment: member?.department || row["Department / Area"].trim(),
+                    assignedToBusinessUnit: member?.business_unit || null,
+                    priority: row["Priority"].trim(),
+                    dueDate: row["Due Date"].trim(),
+                    status: row["Starting Status"]?.trim() || "Not Started",
+                    project: row["Department / Area"].trim(),
+                    notes: row["Notes"]?.trim() || null,
+                    taskType: "Task",
+                  }),
                 });
-                await supabase.from("tasks").insert({
-                  description: row["Description"].trim(),
-                  assigned_to: assignedName,
-                  assigned_to_email: member?.email || null,
-                  assigned_to_department: member?.department || row["Department / Area"].trim(),
-                  assigned_to_business_unit: member?.business_unit || null,
-                  priority: row["Priority"].trim(),
-                  due_date: row["Due Date"].trim(),
-                  status: row["Starting Status"]?.trim() || "Not Started",
-                  project: row["Department / Area"].trim(),
-                  notes: row["Notes"]?.trim() || null,
-                  task_type: "Task",
-                  assigned_by: row["Assigned By"].trim(),
-                  assigned_by_email: myEmail,
-                  assigned_date: row["Assigned Date"]?.trim() || new Date().toISOString().slice(0, 10),
-                });
-                count++;
+                const result = await res.json().catch(() => ({}));
+                if (res.ok && !result?.error) count++;
+                else failedRows.push(row["Description"].trim());
               }
-              toast.show(`Successfully imported ${count} task${count !== 1 ? "s" : ""}.`, "success");
+              if (failedRows.length > 0) {
+                toast.show(`Imported ${count} task${count !== 1 ? "s" : ""}. ${failedRows.length} failed: ${failedRows.slice(0, 5).join(", ")}${failedRows.length > 5 ? "…" : ""}`, "error");
+              } else {
+                toast.show(`Successfully imported ${count} task${count !== 1 ? "s" : ""}.`, "success");
+              }
               refreshAll();
             }}
-            templateHeaders={["Description", "Assigned To", "Assigned By", "Assigned Date", "Due Date", "Priority", "Department / Area", "Starting Status", "Notes"]}
+            templateHeaders={["Description", "Assigned To", "Assigned By", "Assigned Date", "Due Date", "Priority", "Department / Area", "Company", "Starting Status", "Notes"]}
             templateFilename="tasks-import-template.csv"
             exportLabel="Export all tasks as CSV"
             importLabel="Import tasks from CSV"
