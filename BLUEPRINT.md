@@ -963,6 +963,16 @@ Migrations 098–105 all still need to be run by hand in the Supabase SQL Editor
 
 Migrations 103–105 need to be run after 098–102, same manual process.
 
+**Phase 6 (14/07/2026) — second live-testing feedback round.** Two rounds of feedback after Khuram tried the live page, back to back:
+
+*Round 1 (9 points):* one attention banner instead of two; every KPI tile clickable to a drawer of matching tasks (not just Open/Overdue); recurring templates editable (`RecurringTasksPanel.tsx`); core-field edit (description/priority/department/company) added to regular tasks via `TaskDetailPanel.tsx` (the `canEditTask` prop on `TaskStatus.tsx` had existed with no UI wired to it); People/Owner filter made visible on every tab, not just Board/Weekly/Department; Escape key closes `Modal.tsx` and `DateInputWithCalendar.tsx`; KPI tiles gained small icon squares (inline SVG, no new dependency); Department tab dropped (the reference image was actually the Board Kanban layout). Migration 106 backfills `company_id`/department on the 77 pre-redesign tasks — priority and owner were deliberately **not** touched, since a live query showed both were already fully populated with real values.
+
+*Round 2 (Khuram's next message, same day):* Recurring Tasks and Calendar removed from the sidebar (`pageRegistry.ts`) — Recurring lives inside Tasks now, Calendar is hidden everywhere until it's finished; Profile moved from My Workspace to Settings. Task description capped at 150 characters (`TASK_DESCRIPTION_LIMIT` in `SharedUI.tsx`, applied in `NewTaskForm.tsx`, `TaskDetailPanel.tsx`'s edit form, and `RecurringTasksPanel.tsx`) — CSV import and meeting-action-item creation deliberately left uncapped, those are separate flows. Overdue task rows no longer get a full red background (was "cramped and messy" per Khuram) — replaced with a left accent bar + a small "Overdue" pill badge, full-row tint removed from `TaskRow` in `TasksList.tsx`. Migration 107 adds the 7 departments Khuram listed that were missing from `department_owners` (Accounts, Tax, Retail, Marketing, Online, Executive Office, Procurement / Purchase) — owners left blank for Khuram to assign via Members; 5 existing departments not on his list (BINC, Legal, S&M Investment, Sales, Unze Trading Ops) were left untouched, not deleted.
+
+**View switcher rebuilt** — Weekly/Monthly/Quarterly tabs (and their bar charts) removed entirely; replaced with a single "Due period" filter (All/This week/this month/this quarter, calendar-based boundaries) available alongside the other filters on every tab. `get_tasks_monthly_chart()`/`get_tasks_quarterly_chart()` (migration 102) are still in the database but no longer called from anywhere — safe to ignore, not worth a migration to drop them. Board/Tree/List/Timeline are now icon-only buttons (right-aligned); Team/Recurring stay as plain text pills (left-aligned) since they aren't task-list views. "List" is the old "My Tasks" tab, renamed. "Tree" is the old Department view brought back with an actual two-level collapsible hierarchy (Department → Person → Tasks), not just a flat list with a non-collapsible person strip.
+
+Migrations 106–107 need to be run after 098–105, same manual process — check the note at the top of each file.
+
 ---
 
 ### Notification tables
@@ -1434,18 +1444,18 @@ Items within each group are sorted A–Z case-insensitively at render time.
 - Unze Trading (`/finance/unze-trading`)
 
 ### My Workspace (was "Tasks & Meetings" — A–Z)
-- Calendar (`/calendar`)
 - Meetings (`/meetings`)
 - My Minutes (`/my-minutes`)
-- Profile (`/profile`)
-- Recurring Tasks (`/recurring-tasks`)
 - Tasks (`/tasks`)
+
+Calendar and Recurring Tasks were removed from the sidebar (14/07/2026) — Calendar hidden for everyone until it's finished (route still exists at `/calendar`, just unlinked), Recurring Tasks merged into the Tasks page's Recurring tab (the standalone `/recurring-tasks` route still works, just not linked here either).
 
 ### Settings
 - Members (`/members`)
 - Exceptions (`/exceptions`)
 - Audit Log (`/audit-log`)
 - Data & Backups (`/admin`) — Admin only
+- Profile (`/profile`) — moved here from My Workspace (14/07/2026)
 
 ### Nav active state
 NAVY background + white text. **Blue left accent bar (3px solid COLOURS.BLUE)** on active items in expanded state (3px transparent when collapsed). Items collapsed to icon-only when sidebar is collapsed.
@@ -1542,10 +1552,10 @@ Collapsible tree: Plant → PO → Contractor → Letter → balances. PO delive
 Create POs, authority letters, contractors. Close PO action. Edit permissions for Ops Managers.
 
 #### `/tasks`
-All users. Department / Weekly / Monthly / Quarterly / Timeline view switcher. Protected task ownership rules.
+All users. List/Board/Tree/Timeline icon view switcher (Team/Recurring as separate pills), Due period filter (week/month/quarter) instead of separate tabs. Protected task ownership rules.
 
 #### `/calendar`
-Tasks by due date in calendar layout.
+Tasks by due date in calendar layout. Hidden from the sidebar (14/07/2026) until finished — still reachable directly at `/calendar`.
 
 #### `/meetings`
 Past Meetings tab + Decision Log tab. AI extraction via Claude. Meeting Action Tracker.
