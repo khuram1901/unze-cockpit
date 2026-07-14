@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import { logAction } from "../lib/audit-log";
-import { useToast, COLOURS, RADII } from "../lib/SharedUI";
+import { useToast, COLOURS, RADII, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 
 type Member = {
@@ -284,13 +284,19 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0 16px" }}>
 
           <label style={{ gridColumn: "1 / -1" }}>
-            <span style={kickerStyle}>What needs to be done?</span>
+            <span style={{ ...kickerStyle, display: "flex", justifyContent: "space-between" }}>
+              <span>What needs to be done?</span>
+              <span style={{ color: description.length > TASK_DESCRIPTION_LIMIT - 20 ? COLOURS.AMBER : COLOURS.SLATE, fontWeight: 600 }}>
+                {description.length}/{TASK_DESCRIPTION_LIMIT}
+              </span>
+            </span>
             <textarea
               style={{ ...inputStyle, height: "80px" }}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => setDescription(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))}
+              maxLength={TASK_DESCRIPTION_LIMIT}
               required
-              placeholder="Example: Follow up on MEPCO production shortfall and report recovery plan."
+              placeholder="Example: Follow up on MEPCO production shortfall and report recovery plan. One line, not a paragraph."
             />
           </label>
 

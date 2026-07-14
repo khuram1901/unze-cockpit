@@ -7,6 +7,13 @@ import React from "react";
 // Source of truth for all colours, radii, and shadows.
 // ─────────────────────────────────────────────────────────────────
 
+// A task is a one-line action, not a memo — this cap keeps List/Board rows
+// readable and stops the "paragraph as a task" problem. Applied everywhere
+// a task description is typed by hand (New Task, editing, recurring
+// templates). Not applied to meeting-minutes-extracted action items or
+// CSV import, which are separate flows Khuram didn't flag.
+export const TASK_DESCRIPTION_LIMIT = 150;
+
 export const COLOURS = {
   // Surfaces
   CANVAS:      "#F7F5F1", // page background

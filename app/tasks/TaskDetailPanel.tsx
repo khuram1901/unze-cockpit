@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
-import { COLOURS, RADII, useConfirm } from "../lib/SharedUI";
+import { COLOURS, RADII, useConfirm, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
 import { canDeleteTask, canEditTask, isTaskProtected } from "../lib/permissions";
 import TaskStatus from "./TaskStatus";
 
@@ -210,10 +210,16 @@ export default function TaskDetailPanel({
       {taskEditable && editingTask && (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", marginBottom: "10px", backgroundColor: COLOURS.CARD }}>
           <label style={{ display: "block", marginBottom: "8px" }}>
-            <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Description</span>
+            <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+              <span>Description</span>
+              <span style={{ fontWeight: 500, color: editDesc.length > TASK_DESCRIPTION_LIMIT - 20 ? COLOURS.AMBER : COLOURS.SLATE }}>
+                {editDesc.length}/{TASK_DESCRIPTION_LIMIT}
+              </span>
+            </span>
             <textarea
               value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value)}
+              onChange={(e) => setEditDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))}
+              maxLength={TASK_DESCRIPTION_LIMIT}
               rows={2}
               style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "7px 10px", fontSize: "13px", color: COLOURS.NAVY, fontFamily: "inherit", resize: "vertical" }}
             />

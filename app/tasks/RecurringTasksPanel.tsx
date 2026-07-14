@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, RADII, cardStyle, SHADOWS, SectionTitle, useConfirm, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, SHADOWS, SectionTitle, useConfirm, SkeletonRows, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 
 // The same recurring_tasks table and scheduling engine as the standalone
@@ -198,7 +198,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
           <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px", letterSpacing: "-0.01em" }}>New Recurring Task</div>
           <form onSubmit={handleAdd}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: "8px 16px" }}>
-              <label style={lbl}>Task Description <input style={inp} value={desc} onChange={(e) => setDesc(e.target.value)} required placeholder="e.g. Submit weekly production report" /></label>
+              <label style={lbl}>Task Description <input style={inp} value={desc} onChange={(e) => setDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))} maxLength={TASK_DESCRIPTION_LIMIT} required placeholder="e.g. Submit weekly production report" /></label>
               <label style={lbl}>Assign To <select style={inp} value={assignTo} onChange={(e) => setAssignTo(e.target.value)} required><option value="">Select</option>{members.map((m) => <option key={memberName(m)} value={memberName(m)}>{memberName(m)}</option>)}</select></label>
               <label style={lbl}>Priority <select style={inp} value={priority} onChange={(e) => setPriority(e.target.value)}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></label>
               <label style={lbl}>Frequency <select style={inp} value={frequency} onChange={(e) => setFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
@@ -250,7 +250,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
               {editingId === t.id ? (
                 <div>
                   <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: "8px 16px", marginBottom: "8px" }}>
-                    <label style={lbl}>Task Description <input style={inp} value={editDesc} onChange={(e) => setEditDesc(e.target.value)} /></label>
+                    <label style={lbl}>Task Description <input style={inp} value={editDesc} onChange={(e) => setEditDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))} maxLength={TASK_DESCRIPTION_LIMIT} /></label>
                     <label style={lbl}>Assign To <select style={inp} value={editAssignTo} onChange={(e) => setEditAssignTo(e.target.value)}><option value="">Select</option>{members.map((m) => <option key={memberName(m)} value={memberName(m)}>{memberName(m)}</option>)}</select></label>
                     <label style={lbl}>Priority <select style={inp} value={editPriority} onChange={(e) => setEditPriority(e.target.value)}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></label>
                     <label style={lbl}>Frequency <select style={inp} value={editFrequency} onChange={(e) => setEditFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
