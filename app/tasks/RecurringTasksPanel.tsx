@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, RADII, cardStyle, SHADOWS, SectionTitle, useConfirm, SkeletonRows, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, SHADOWS, SectionTitle, useConfirm, SkeletonRows, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 
 // The same recurring_tasks table and scheduling engine as the standalone
@@ -27,9 +27,11 @@ type Template = {
   due_days_after: number | null;
   active: boolean;
   last_created_at: string | null;
+  company_id: string | null;
 };
 
 type Member = { name: string; email: string | null; department: string | null; first_name: string | null; last_name: string | null };
+type Company = { id: string; name: string; short_code: string | null };
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -68,12 +70,14 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
   const dlg = useConfirm();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [desc, setDesc] = useState("");
   const [assignTo, setAssignTo] = useState("");
+  const [companyId, setCompanyId] = useState("");
   const [priority, setPriority] = useState("Normal");
   const [project, setProject] = useState("");
   const [frequency, setFrequency] = useState("weekly");
@@ -84,6 +88,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDesc, setEditDesc] = useState("");
   const [editAssignTo, setEditAssignTo] = useState("");
+  const [editCompanyId, setEditCompanyId] = useState("");
   const [editPriority, setEditPriority] = useState("Normal");
   const [editProject, setEditProject] = useState("");
   const [editFrequency, setEditFrequency] = useState("weekly");
@@ -94,12 +99,14 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
 
   async function loadData() {
     setLoading(true);
-    const [tmplRes, memRes] = await Promise.all([
+    const [tmplRes, memRes, companiesRes] = await Promise.all([
       supabase.from("recurring_tasks").select("*").order("created_at", { ascending: false }),
       supabase.from("members").select("name, email, department, first_name, last_name"),
+      supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
     ]);
     setTemplates(tmplRes.data || []);
     setMembers(memRes.data || []);
+    setCompanies(companiesRes.data || []);
     setLoading(false);
   }
 
@@ -115,6 +122,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       description: desc, assigned_to: assignTo || null,
       assigned_to_email: member?.email || null, assigned_to_department: member?.department || null,
       assigned_by: "Recurring Template", priority, project: project || null,
+      company_id: companyId || null,
       frequency, day_of_week: frequency === "weekly" ? dayOfWeek : null,
       day_of_month: frequency === "monthly" ? dayOfMonth : null,
       due_days_after: Number(dueDays) || 3, active: true,
@@ -125,7 +133,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       return;
     }
     logAction("Created", "recurring_tasks", `${desc} (${frequency})`);
-    setDesc(""); setAssignTo(""); setPriority("Normal"); setProject(""); setFrequency("weekly"); setDueDays("3");
+    setDesc(""); setAssignTo(""); setCompanyId(""); setPriority("Normal"); setProject(""); setFrequency("weekly"); setDueDays("3");
     setShowForm(false);
     loadData();
   }
@@ -147,6 +155,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
     setEditAssignTo(t.assigned_to || "");
     setEditPriority(t.priority || "Normal");
     setEditProject(t.project || "");
+    setEditCompanyId(t.company_id || "");
     setEditFrequency(t.frequency);
     setEditDayOfWeek(t.day_of_week ?? 1);
     setEditDayOfMonth(t.day_of_month ?? 1);
@@ -163,6 +172,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       assigned_to_department: member?.department || null,
       priority: editPriority,
       project: editProject || null,
+      company_id: editCompanyId || null,
       frequency: editFrequency,
       day_of_week: editFrequency === "weekly" ? editDayOfWeek : null,
       day_of_month: editFrequency === "monthly" ? editDayOfMonth : null,
@@ -200,6 +210,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: "8px 16px" }}>
               <label style={lbl}>Task Description <input style={inp} value={desc} onChange={(e) => setDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))} maxLength={TASK_DESCRIPTION_LIMIT} required placeholder="e.g. Submit weekly production report" /></label>
               <label style={lbl}>Assign To <select style={inp} value={assignTo} onChange={(e) => setAssignTo(e.target.value)} required><option value="">Select</option>{members.map((m) => <option key={memberName(m)} value={memberName(m)}>{memberName(m)}</option>)}</select></label>
+              <label style={lbl}>Company <select style={inp} value={companyId} onChange={(e) => setCompanyId(e.target.value)}><option value="">Group / none</option>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
               <label style={lbl}>Priority <select style={inp} value={priority} onChange={(e) => setPriority(e.target.value)}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></label>
               <label style={lbl}>Frequency <select style={inp} value={frequency} onChange={(e) => setFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
               {frequency === "weekly" && <label style={lbl}>Day <select style={inp} value={dayOfWeek} onChange={(e) => setDayOfWeek(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>}
@@ -252,6 +263,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                   <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: "8px 16px", marginBottom: "8px" }}>
                     <label style={lbl}>Task Description <input style={inp} value={editDesc} onChange={(e) => setEditDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))} maxLength={TASK_DESCRIPTION_LIMIT} /></label>
                     <label style={lbl}>Assign To <select style={inp} value={editAssignTo} onChange={(e) => setEditAssignTo(e.target.value)}><option value="">Select</option>{members.map((m) => <option key={memberName(m)} value={memberName(m)}>{memberName(m)}</option>)}</select></label>
+                    <label style={lbl}>Company <select style={inp} value={editCompanyId} onChange={(e) => setEditCompanyId(e.target.value)}><option value="">Group / none</option>{companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
                     <label style={lbl}>Priority <select style={inp} value={editPriority} onChange={(e) => setEditPriority(e.target.value)}><option>Low</option><option>Normal</option><option>High</option><option>Urgent</option></select></label>
                     <label style={lbl}>Frequency <select style={inp} value={editFrequency} onChange={(e) => setEditFrequency(e.target.value)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
                     {editFrequency === "weekly" && <label style={lbl}>Day <select style={inp} value={editDayOfWeek} onChange={(e) => setEditDayOfWeek(Number(e.target.value))}>{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select></label>}
@@ -277,6 +289,17 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                     <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
                       {t.assigned_to || "Unassigned"} · {t.frequency}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : t.frequency === "monthly" ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
                       {t.last_created_at && ` · Last: ${t.last_created_at.slice(0, 10)}`}
+                    </div>
+                    <div style={{ marginTop: "4px" }}>
+                      {t.company_id ? (
+                        <span style={{ fontSize: "10.5px", fontWeight: 700, padding: "1px 7px", borderRadius: RADII.PILL, color: COLOURS.SLATE, backgroundColor: COLOURS.HAIRLINE }}>
+                          {companies.find((c) => c.id === t.company_id)?.name || "Company set"}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: "10.5px", fontWeight: 700, padding: "1px 7px", borderRadius: RADII.PILL, color: "white", backgroundColor: COLOURS.AMBER }}>
+                          No company set
+                        </span>
+                      )}
                     </div>
                   </div>
                   {isPrivileged && (
