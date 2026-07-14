@@ -4,6 +4,12 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Org structure cleanup: drop is_director, dead owner fields, use position_title
+
+Khuram reviewed Phase 1 (below) and caught two things: (1) Director doesn't need its own flag — it's just Kamran's title sitting at the top next to Khuram's CEO title, not a rank anyone else holds, so `is_director` was removed in favour of the existing (previously UI-less) `position_title` field, now editable on the Members page and used as the org chart's label when set. (2) Secondary Owner and Escalation Owner on Department Ownership were confirmed dead via a full codebase search — read nowhere except the screen that sets them, and Escalation Owner in particular was meant to do exactly what the new HOD/manager_id chain now does properly. Dropped both, kept Primary Owner (which the Executive Dashboard does actively use). Migration 110, not yet applied.
+
+---
+
 ## 2026-07-14 — Org structure Phase 1: manager_id, is_director, team picker, org chart
 
 Khuram wants "Submitted" tasks to auto-route to the submitter's HOD for review, HODs alerted when their team's tasks go overdue, and a clean handoff tool for departures. Before enabling any of that, he asked for an honest read of the existing "who reports to whom" setup.
