@@ -9,7 +9,8 @@ import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
 import TeamStats from "./TeamStats";
-import TaskDetailPanel from "./TaskDetailPanel";
+import TaskDetailModal from "./TaskDetailModal";
+import MiniSubtaskToggle from "./MiniSubtaskToggle";
 import TasksBoard from "./TasksBoard";
 import RecurringTasksPanel from "./RecurringTasksPanel";
 
@@ -39,6 +40,7 @@ type Task = {
   impact_on_monthly_target: string | null;
   meeting_id: string | null;
   time_spent_minutes: number | null;
+  whatsapp_auto_remind: boolean;
   created_at: string | null;
   completed_at: string | null;
   assigned_to_department: string | null;
@@ -62,7 +64,10 @@ type KpiSummary = {
   waiting_reply_count: number;
   stuck_count: number;
   completed_count: number;
+  urgent_open_count: number;
 };
+
+type DeptBreakdownRow = { department: string; open_count: number; overdue_count: number };
 
 type MonthlyChartRow = { month: string; label: string; created: number; completed: number };
 type QuarterlyChartRow = { quarter: string; overdue: number; active: number; completed: number };
@@ -101,7 +106,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [errorMsg, setErrorMsg] = useState("");
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(taskIdFromUrl);
-  const [timeView, setTimeView] = useState<"department" | "weekly" | "monthly" | "quarterly" | "timeline" | "team" | "board" | "recurring">("department");
+  const [timeView, setTimeView] = useState<"mytasks" | "department" | "weekly" | "monthly" | "quarterly" | "timeline" | "team" | "board" | "recurring">("mytasks");
   const [filter, setFilter] = useState<"all" | "overdue" | "waiting">("all");
   const [bannerOpen, setBannerOpen] = useState(false);
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
@@ -111,6 +116,19 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [kpi, setKpi] = useState<KpiSummary | null>(null);
   const [monthlyData, setMonthlyData] = useState<MonthlyChartRow[]>([]);
   const [quarterlyData, setQuarterlyData] = useState<QuarterlyChartRow[]>([]);
+  const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdownRow[]>([]);
+  const [deptBreakdownOpen, setDeptBreakdownOpen] = useState(false);
+  const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">("mine");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [ownerFilter, setOwnerFilter] = useState<string>("all");
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const [stageFilter, setStageFilter] = useState<string>("all");
+  const [dueFilter, setDueFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [subtaskFilter, setSubtaskFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
 
   const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "Executive");
 
@@ -130,8 +148,18 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
     const { data, error } = await query;
 
-    if (error) setErrorMsg(error.message);
-    else setTasks(data || []);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setTasks(data || []);
+      const meetingIds = Array.from(new Set((data || []).map((t) => t.meeting_id).filter((id): id is string => !!id)));
+      if (meetingIds.length > 0) {
+        const { data: meetingRows } = await supabase.from("meetings").select("id, title").in("id", meetingIds);
+        const titles: Record<string, string> = {};
+        for (const m of meetingRows || []) titles[m.id] = m.title;
+        setMeetingTitles(titles);
+      }
+    }
     setLoading(false);
   }
 
@@ -148,6 +176,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   function resetFilters() {
     setCompanyFilter("all");
     setFilter("all");
+    setDepartmentFilter("all");
+    setPriorityFilter("all");
+    setOwnerFilter("all");
+    setStageFilter("all");
+    setDueFilter("all");
+    setSourceFilter("all");
+    setSubtaskFilter("all");
+    setSearchQuery("");
+    setMoreFiltersOpen(false);
   }
 
   useEffect(() => {
@@ -158,6 +195,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       setMemberPhones(phones);
     });
     supabase.from("companies").select("id, name, short_code").then(({ data }) => setCompanies(data || []));
+    supabase.rpc("get_tasks_department_breakdown").then(({ data, error }) => { if (!error) setDeptBreakdown(data || []); });
   }, []);
 
   async function loadCharts() {
@@ -197,11 +235,55 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   if (loading) return <SkeletonRows count={5} height="48px" />;
   if (errorMsg) return <ErrorBanner message={errorMsg} onRetry={loadTasks} />;
 
-  const scopedTasks = companyFilter === "all" ? tasks : tasks.filter((t) => (companyFilter === "group" ? !t.company_id : t.company_id === companyFilter));
+  // All the dropdown filters below are simple property filters over the
+  // already-fetched rows — not aggregation, so this stays plain JS per
+  // house rule 0 (that rule is about sums/counts, not filtering a list).
+  const weekAheadDate = new Date(todayStr + "T00:00:00");
+  weekAheadDate.setDate(weekAheadDate.getDate() + 7);
+  const weekAheadStr = weekAheadDate.toISOString().slice(0, 10);
+  const scopedTasks = tasks.filter((t) => {
+    if (companyFilter !== "all") {
+      if (companyFilter === "group" ? !!t.company_id : t.company_id !== companyFilter) return false;
+    }
+    if (departmentFilter !== "all" && (t.assigned_to_department || t.project || "Unassigned") !== departmentFilter) return false;
+    if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
+    if (ownerFilter !== "all" && t.assigned_to !== ownerFilter) return false;
+    if (stageFilter !== "all" && (t.stage || "") !== stageFilter) return false;
+    if (dueFilter !== "all") {
+      const isOd = t.status !== "Completed" && t.status !== "Cancelled" && !!t.due_date && t.due_date < todayStr;
+      if (dueFilter === "overdue" && !isOd) return false;
+      if (dueFilter === "today" && t.due_date !== todayStr) return false;
+      if (dueFilter === "week" && !(t.due_date && t.due_date >= todayStr && t.due_date < weekAheadStr)) return false;
+      if (dueFilter === "none" && t.due_date) return false;
+    }
+    if (sourceFilter !== "all") {
+      const isRecurring = t.assigned_by === "Recurring Template";
+      if (sourceFilter === "meeting" && !t.meeting_id) return false;
+      if (sourceFilter === "manual" && (t.meeting_id || isRecurring)) return false;
+      if (sourceFilter === "recurring" && !isRecurring) return false;
+    }
+    if (subtaskFilter !== "all") {
+      const total = t.task_subtasks?.length ?? 0;
+      const done = t.task_subtasks?.filter((s) => s.is_complete).length ?? 0;
+      if (subtaskFilter === "has" && total === 0) return false;
+      if (subtaskFilter === "complete" && !(total > 0 && done === total)) return false;
+      if (subtaskFilter === "none" && total > 0) return false;
+    }
+    if (searchQuery.trim() && !t.description.toLowerCase().includes(searchQuery.trim().toLowerCase())) return false;
+    return true;
+  });
+
+  // Dropdown option lists always come from the full, unfiltered task set so
+  // picking one filter never hides the options for another.
+  const departmentOptions = Array.from(new Set(tasks.map((t) => t.assigned_to_department || t.project || "Unassigned"))).sort();
+  const ownerOptions = Array.from(new Set(tasks.map((t) => t.assigned_to).filter((n): n is string => !!n))).sort();
+  const stageOptions = Array.from(new Set(tasks.map((t) => t.stage).filter((s): s is string => !!s))).sort();
+  const filtersActive = departmentFilter !== "all" || priorityFilter !== "all" || ownerFilter !== "all" || stageFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all" || searchQuery.trim() !== "";
 
   function refreshAll() {
     loadTasks();
     loadKpi();
+    supabase.rpc("get_tasks_department_breakdown").then(({ data, error }) => { if (!error) setDeptBreakdown(data || []); });
   }
 
   function companyBadge(companyId: string | null) {
@@ -238,6 +320,29 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     const g = weekGroup(t);
     if (!weekGroups.has(g)) weekGroups.set(g, []);
     weekGroups.get(g)!.push(t);
+  }
+
+  // ── My Tasks grouping (default landing view) — Overdue / Due Today /
+  // This Week / Next Week & Later, scoped to just me unless "Everyone" is
+  // picked. Anyone without full visibility already only sees their own +
+  // ones they assigned via RLS, so "Everyone" for them means "everything
+  // I can see", not "the whole company".
+  const myTasksSource = myTasksScope === "mine" ? allOpen.filter((t) => t.assigned_to_email === myEmail) : allOpen;
+  function myTaskGroup(task: Task): string {
+    if (isOverdue(task)) return "Overdue";
+    if (task.due_date === todayStr) return "Due Today";
+    if (!task.due_date) return "Next Week & Later";
+    if (task.due_date < nextWeekStart) return "This Week";
+    return "Next Week & Later";
+  }
+  const myTasksGroupOrder = ["Overdue", "Due Today", "This Week", "Next Week & Later"];
+  const myTasksGroupColor = (g: string) =>
+    g === "Overdue" ? COLOURS.RED : g === "Due Today" ? COLOURS.AMBER : g === "This Week" ? COLOURS.BLUE : COLOURS.SLATE;
+  const myTasksGroups = new Map<string, Task[]>();
+  for (const t of myTasksSource) {
+    const g = myTaskGroup(t);
+    if (!myTasksGroups.has(g)) myTasksGroups.set(g, []);
+    myTasksGroups.get(g)!.push(t);
   }
 
   // Monthly and Quarterly chart data are no longer computed here — they
@@ -290,6 +395,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   if (filter === "overdue") filteredTasks = overdueTasks;
   else if (filter === "waiting") filteredTasks = waitingReply;
 
+  const filterSelectStyle: React.CSSProperties = {
+    border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 10px",
+    fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, backgroundColor: COLOURS.CARD,
+  };
+
   const weekGroupColor = (g: string) =>
     g === "Overdue" ? COLOURS.RED : g === "This Week" ? COLOURS.AMBER : g === "Next Week" ? COLOURS.BLUE : COLOURS.SLATE;
 
@@ -325,6 +435,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   {task.assigned_to_department}
                 </span>
               )}
+              {task.meeting_id && (
+                <a
+                  href={`/my-minutes?meeting=${task.meeting_id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.BLUE, backgroundColor: COLOURS.INFO_SOFT, borderRadius: RADII.XS, padding: "1px 9px", whiteSpace: "nowrap", textDecoration: "none" }}
+                >
+                  From: {meetingTitles[task.meeting_id] || "Meeting"} →
+                </a>
+              )}
               {task.stage && (
                 <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "1px 7px", borderRadius: RADII.XS, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>
                   → {task.stage}
@@ -345,22 +464,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           <div style={{ display: "flex", gap: "5px", alignItems: "center", flexShrink: 0 }}>
             {task.priority && <PriorityBadge priority={task.priority} />}
             <StatusBadge status={task.status} />
-            <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>{isOpen ? "▼" : "▶"}</span>
+            <span style={{ fontSize: "11.5px", fontWeight: 700, color: COLOURS.BLUE }}>Open →</span>
           </div>
         </div>
 
-        {isOpen && (
-          <TaskDetailPanel
-            task={task}
-            currentRole={currentRole}
-            isPrivileged={isPrivileged}
-            canReview={canReview}
-            canDelete={canDelete}
-            myEmail={myEmail}
-            memberPhones={memberPhones}
-            onChanged={refreshAll}
-          />
-        )}
+        <MiniSubtaskToggle task={task} onChanged={refreshAll} />
       </div>
     );
   }
@@ -369,7 +477,67 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     <div>
       {toast.element}
 
-      {/* ═══ OVERDUE BANNER ═══ */}
+      <TaskDetailModal
+        task={tasks.find((t) => t.id === expandedTaskId) || null}
+        open={!!expandedTaskId}
+        onClose={() => setExpandedTaskId(null)}
+        currentRole={currentRole}
+        isPrivileged={isPrivileged}
+        canReview={canReview}
+        canDelete={canDelete}
+        myEmail={myEmail}
+        memberPhones={memberPhones}
+        onChanged={refreshAll}
+      />
+
+      {/* ═══ NEEDS YOUR ATTENTION BANNER ═══ */}
+      <div style={{
+        backgroundColor: COLOURS.DANGER_SOFT, border: `1px solid #F1C6C1`, borderLeft: `4px solid ${COLOURS.RED}`,
+        borderRadius: RADII.CARD, padding: "14px 18px", marginBottom: "14px",
+        display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "13.5px", color: COLOURS.RED, flexShrink: 0 }}>
+          Needs Your Attention
+        </div>
+        <div style={{ display: "flex", gap: "22px", flexWrap: "wrap", flex: 1 }}>
+          {[
+            { n: kpi?.urgent_open_count ?? 0, l: "Critical (Urgent, open)" },
+            { n: kpi?.overdue_count ?? overdueTasks.length, l: "Overdue" },
+            { n: kpi?.due_today_count ?? 0, l: "Due Today" },
+            { n: kpi?.stuck_count ?? 0, l: "Stuck" },
+          ].map(({ n, l }) => (
+            <div key={l} style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+              <span style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "17px", fontWeight: 700, color: COLOURS.NAVY }}>{n}</span>
+              <span style={{ fontSize: "11.5px", color: COLOURS.SLATE, fontWeight: 600 }}>{l}</span>
+            </div>
+          ))}
+        </div>
+        <span
+          onClick={() => setDeptBreakdownOpen(!deptBreakdownOpen)}
+          style={{ fontSize: "12.5px", fontWeight: 700, color: COLOURS.RED, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
+        >
+          View breakdown {deptBreakdownOpen ? "▲" : "→"}
+        </span>
+      </div>
+
+      {deptBreakdownOpen && (
+        <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 0.8fr", gap: "10px", padding: "9px 16px", backgroundColor: COLOURS.CARD_ALT, fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.INK_400 }}>
+            <div>Department</div><div>Open</div><div>Overdue</div>
+          </div>
+          {deptBreakdown.length === 0 ? (
+            <div style={{ padding: "16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>No data yet.</div>
+          ) : deptBreakdown.map((d) => (
+            <div key={d.department} style={{ display: "grid", gridTemplateColumns: "1.6fr 0.8fr 0.8fr", gap: "10px", padding: "9px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, alignItems: "center" }}>
+              <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{d.department}</div>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{d.open_count}</div>
+              <div style={{ fontSize: "14px", fontWeight: 600, color: d.overdue_count > 0 ? COLOURS.RED : COLOURS.GREEN }}>{d.overdue_count}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ═══ OVERDUE BANNER (detailed task list) ═══ */}
       {overdueTasks.length > 0 && (
         <div style={WARNING_BANNER_STYLE}>
           <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -493,30 +661,93 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         backgroundColor: COLOURS.CARD_ALT,
         paddingTop: "6px", paddingBottom: "6px",
       }}>
-        {(["board", "department", "weekly", "monthly", "quarterly", "timeline", "team", "recurring"] as const).map((v) => (
+        {(["mytasks", "board", "department", "weekly", "monthly", "quarterly", "timeline", "team", "recurring"] as const).map((v) => (
           <button key={v} onClick={() => setTimeView(v)} style={{
             backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
             color: timeView === v ? "white" : COLOURS.NAVY,
             border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
             borderRadius: RADII.PILL, padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
-            textTransform: "capitalize",
-          }}>{v}</button>
+            textTransform: v === "mytasks" ? "none" : "capitalize",
+          }}>{v === "mytasks" ? "My Tasks" : v}</button>
         ))}
-        <select
-          value={companyFilter}
-          onChange={(e) => setCompanyFilter(e.target.value)}
-          style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 10px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, backgroundColor: COLOURS.CARD }}
-        >
-          <option value="all">All companies</option>
-          {companies.map((c) => <option key={c.id} value={c.id}>{c.short_code || c.name}</option>)}
-          <option value="group">Group / needs review</option>
-        </select>
-        {(companyFilter !== "all" || filter !== "all") && (
-          <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
-            Reset Filters
+      </div>
+
+      {/* ═══ SEARCH + FILTER ROW (Board / List and everything below them) ═══ */}
+      {(timeView === "board" || timeView === "department" || timeView === "weekly") && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: 1, minWidth: "180px", maxWidth: "300px" }}>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tasks…"
+              style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%" }}
+            />
+          </div>
+          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={filterSelectStyle}>
+            <option value="all">All companies</option>
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.short_code || c.name}</option>)}
+            <option value="group">Group / needs review</option>
+          </select>
+          <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={filterSelectStyle}>
+            <option value="all">All departments</option>
+            {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={filterSelectStyle}>
+            <option value="all">All priorities</option>
+            <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
+          </select>
+          <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={filterSelectStyle}>
+            <option value="all">All owners</option>
+            {ownerOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <button
+            onClick={() => setMoreFiltersOpen(!moreFiltersOpen)}
+            style={{
+              border: `1px ${moreFiltersOpen ? "solid" : "dashed"} ${moreFiltersOpen ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
+              backgroundColor: moreFiltersOpen ? COLOURS.INFO_SOFT : COLOURS.CARD,
+              color: moreFiltersOpen ? COLOURS.BLUE : COLOURS.SLATE,
+              borderRadius: RADII.SM, padding: "6px 12px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            More Filters
           </button>
-        )}
-        <div style={{ flex: 1 }} />
+          {filtersActive && (
+            <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
+              Reset Filters
+            </button>
+          )}
+        </div>
+      )}
+
+      {(timeView === "board" || timeView === "department" || timeView === "weekly") && moreFiltersOpen && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
+          <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={filterSelectStyle}>
+            <option value="all">All stages</option>
+            {stageOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={filterSelectStyle}>
+            <option value="all">Any due date</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Due today</option>
+            <option value="week">Due this week</option>
+            <option value="none">No due date</option>
+          </select>
+          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} style={filterSelectStyle}>
+            <option value="all">All sources</option>
+            <option value="meeting">Meeting-sourced only</option>
+            <option value="manual">Manually created</option>
+            <option value="recurring">Recurring-generated</option>
+          </select>
+          <select value={subtaskFilter} onChange={(e) => setSubtaskFilter(e.target.value)} style={filterSelectStyle}>
+            <option value="all">Any subtask state</option>
+            <option value="has">Has subtasks</option>
+            <option value="complete">All subtasks complete</option>
+            <option value="none">No subtasks</option>
+          </select>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "12px" }}>
         {(["all", "overdue", "waiting"] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} style={{
             backgroundColor: filter === f ? COLOURS.NAVY : COLOURS.CARD,
@@ -528,6 +759,52 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           </button>
         ))}
       </div>
+
+      {/* ═══ MY TASKS VIEW (default landing view) ═══ */}
+      {timeView === "mytasks" && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", color: COLOURS.INK_400 }}>Viewing</span>
+            <div style={{ display: "flex", gap: "4px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, padding: "3px" }}>
+              {(["mine", "everyone"] as const).map((s) => (
+                <button key={s} onClick={() => setMyTasksScope(s)} style={{
+                  backgroundColor: myTasksScope === s ? COLOURS.CARD : "transparent",
+                  color: myTasksScope === s ? COLOURS.NAVY : COLOURS.SLATE,
+                  border: "none", borderRadius: RADII.PILL, padding: "5px 14px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
+                  boxShadow: myTasksScope === s ? "0 1px 2px rgba(15,23,32,0.08)" : "none",
+                }}>
+                  {s === "mine" ? "My tasks" : "Everyone"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {myTasksGroupOrder.filter((g) => myTasksGroups.has(g)).map((group) => {
+            const groupTasks = myTasksGroups.get(group)!;
+            return (
+              <div key={group} style={{ marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: myTasksGroupColor(group), display: "inline-block" }} />
+                  <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>{group}</span>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600 }}>{groupTasks.length}</span>
+                </div>
+                <div style={{ ...cardStyle, overflow: "hidden" }}>
+                  {groupTasks.length === 0 ? (
+                    <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
+                  ) : (
+                    groupTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} />)
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {myTasksSource.length === 0 && (
+            <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>
+              {myTasksScope === "mine" ? "Nothing assigned to you right now." : "No tasks to show."}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ═══ DEPARTMENT VIEW ═══ */}
       {timeView === "department" && (
@@ -788,6 +1065,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           canDelete={canDelete}
           myEmail={myEmail}
           memberPhones={memberPhones}
+          meetingTitles={meetingTitles}
           onChanged={refreshAll}
         />
       )}
