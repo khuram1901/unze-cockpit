@@ -6,6 +6,7 @@ import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII } from "../lib/SharedUI";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 
 type Task = {
   id: string;
@@ -411,7 +412,7 @@ export default function TaskStatus({
           )}
           <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <span style={kickerStyle}>Current due date</span>
-            <DateInput
+            <DateInputWithCalendar
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
               style={controlStyle}
