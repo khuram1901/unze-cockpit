@@ -4,6 +4,18 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — HOD-only task completion made airtight at the database level (migration 114)
+
+Follow-up to the HOD-completion rule below. Khuram, after being told the rule was only enforced client-side: "it really doesnt matter if the sub tasks are completed by the users, as long as the main task is closed by thier hod, so please ensure this is airtight." Written `supabase/114_task_completion_hod_gate.sql` — **not yet applied, needs to be run in the Supabase SQL Editor.**
+
+Adds a `before update` trigger on `tasks` (same pattern as the existing subtask-completion gate from migration 100) that blocks the database write itself, not just the UI, whenever someone tries to set `status = 'Completed'`: it must be moving from `'Submitted'` (no jumping straight there), and the person making the change must be either the task's current owner (`assigned_to_email`, which is genuinely the assignee's HOD by the time it's Submitted — see migration 113's routing) or the Executive closing something that landed with Khuram or Kamran specifically. This closes the gap the client-side version couldn't: someone hitting the Supabase API directly, or a future server-side route using the service-role key, would previously have bypassed the rule entirely — a database trigger fires regardless of how the write arrives, service role included (only RLS is bypassed by service role, not triggers).
+
+Added a small helper, `is_admin_tier_email(target_email)`, mirroring the existing `is_admin_tier()` function but for an arbitrary target email rather than the current session — needed because the trigger has to ask "is the task's *assignee* top-tier," not "is whoever's currently logged in top-tier."
+
+**Action needed:** run `114_task_completion_hod_gate.sql` in the Supabase SQL Editor to actually turn this on — until then, only the client-side check (already live) applies.
+
+---
+
 ## 2026-07-14 — Tasks: universal edit/select on KPI cards, sticky bulk toolbar, and a real HOD-only completion rule
 
 Khuram: "when i click cards in tasks, like open overdue, due tday it expands list but i cannot edit the tasks, this should be universal. multiple select this should also be universal... that tool bar needs to be visible whether scrolling down or being static." Three fixes in TasksList.tsx: the Open/Overdue/Due Today/etc. KPI-card drawer had its own bespoke, non-selectable row markup instead of the shared `TaskRow` component every other view uses — replaced it with `TaskRow` (now also used in Tree view) so opening a task from a KPI card behaves identically to opening one from List, with the same checkbox for multi-select. The bulk-selection toolbar moved out of the List-view-only block into the sticky view-toggle wrapper at the top of the page, so it now appears above every view (not just List) and never scrolls out of sight while a selection is active.
