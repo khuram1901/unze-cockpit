@@ -15,6 +15,9 @@ type Task = {
   original_due_date?: string | null;
   stage?: string | null;
   assigned_to: string | null;
+  assigned_to_email?: string | null;
+  assigned_to_department?: string | null;
+  assigned_to_business_unit?: string | null;
   assigned_by: string | null;
   reply_required: boolean | null;
   reply_text: string | null;
@@ -23,6 +26,11 @@ type Task = {
   impact_on_monthly_target: string | null;
   time_spent_minutes: number | null;
   notes: string | null;
+  // Who the task belonged to right before it got auto-routed to their
+  // manager on "Submitted" — see routeSubmittedTask/handBackIfLeaving
+  // below (migration 113).
+  submitted_by_name?: string | null;
+  submitted_by_email?: string | null;
 };
 
 type Subtask = {
@@ -123,6 +131,52 @@ export default function TaskStatus({
   const openSubtasks = subtasks.filter((s) => !s.is_complete).length;
   const hasSubtasks = subtasks.length > 0;
 
+  // Khuram: "every time a task is submitted, it should go to their HOD...
+  // it should now become part of their task to review the work." Looks up
+  // the current owner's manager_id and reassigns the task to them — the
+  // manager sees it in their own My Tasks, not just a permission to act on
+  // someone else's. Returns {} (no reassignment) if the owner has no
+  // manager on file — e.g. Khuram/Kamran at the top of the chain.
+  async function routeSubmittedTask(): Promise<Record<string, unknown>> {
+    if (!task.assigned_to_email) return {};
+    const { data: me } = await supabase.from("members").select("manager_id").eq("email", task.assigned_to_email).maybeSingle();
+    if (!me?.manager_id) return {};
+    const { data: mgr } = await supabase.from("members").select("id, name, email, department, business_unit").eq("id", me.manager_id).maybeSingle();
+    if (!mgr?.email) return {};
+    await supabase.from("task_assignees").delete().eq("task_id", task.id);
+    await supabase.from("task_assignees").insert({ task_id: task.id, member_id: mgr.id, member_name: mgr.name, member_email: mgr.email });
+    return {
+      assigned_to: mgr.name,
+      assigned_to_email: mgr.email,
+      assigned_to_department: mgr.department,
+      assigned_to_business_unit: mgr.business_unit,
+      submitted_by_name: task.assigned_to,
+      submitted_by_email: task.assigned_to_email,
+    };
+  }
+
+  // Mirror image: once the manager moves a routed task anywhere other than
+  // Submitted, hand it back to whoever it came from — except Completed/
+  // Cancelled, where it just stays closed under whoever closed it.
+  async function handBackIfLeaving(newStatus: string): Promise<Record<string, unknown>> {
+    if (task.status !== "Submitted" || newStatus === "Submitted" || !task.submitted_by_email) return {};
+    if (newStatus === "Completed" || newStatus === "Cancelled") {
+      return { submitted_by_name: null, submitted_by_email: null };
+    }
+    const { data: original } = await supabase.from("members").select("id, name, email, department, business_unit").eq("email", task.submitted_by_email).maybeSingle();
+    if (!original?.email) return { submitted_by_name: null, submitted_by_email: null };
+    await supabase.from("task_assignees").delete().eq("task_id", task.id);
+    await supabase.from("task_assignees").insert({ task_id: task.id, member_id: original.id, member_name: original.name, member_email: original.email });
+    return {
+      assigned_to: original.name,
+      assigned_to_email: original.email,
+      assigned_to_department: original.department,
+      assigned_to_business_unit: original.business_unit,
+      submitted_by_name: null,
+      submitted_by_email: null,
+    };
+  }
+
   async function saveStatus(newStatus: string) {
     if (newStatus === "Completed" && openSubtasks > 0) {
       toast.show(`Complete all ${subtasks.length} subtask${subtasks.length > 1 ? "s" : ""} before this task can be marked Completed.`, "error");
@@ -132,9 +186,13 @@ export default function TaskStatus({
     setSaving(true);
     setSavedMessage("");
 
+    const extra = newStatus === "Submitted" && task.status !== "Submitted"
+      ? await routeSubmittedTask()
+      : await handBackIfLeaving(newStatus);
+
     const { error } = await supabase
       .from("tasks")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .update({ status: newStatus, updated_at: new Date().toISOString(), ...extra })
       .eq("id", task.id);
 
     setSaving(false);
@@ -144,7 +202,7 @@ export default function TaskStatus({
       return;
     }
 
-    logAction("Updated", "tasks", `Status → ${newStatus}: ${task.id}`, task.id);
+    logAction("Updated", "tasks", extra.assigned_to ? `Status → ${newStatus}: ${task.id} (owner → ${extra.assigned_to})` : `Status → ${newStatus}: ${task.id}`, task.id);
     setStatus(newStatus);
     setSavedMessage("Saved ✓");
     onChanged();
@@ -245,6 +303,7 @@ export default function TaskStatus({
     setSavedMessage("");
 
     const { data: userData } = await supabase.auth.getUser();
+    const extra = task.status !== "Submitted" ? await routeSubmittedTask() : {};
 
     const { error } = await supabase
       .from("tasks")
@@ -256,6 +315,7 @@ export default function TaskStatus({
         reply_at: new Date().toISOString(),
         status: "Submitted",
         updated_at: new Date().toISOString(),
+        ...extra,
       })
       .eq("id", task.id);
 
@@ -266,7 +326,7 @@ export default function TaskStatus({
       return;
     }
 
-    logAction("Updated", "tasks", `Explanation submitted: ${task.id}`, task.id);
+    logAction("Updated", "tasks", extra.assigned_to ? `Explanation submitted: ${task.id} (routed to ${extra.assigned_to})` : `Explanation submitted: ${task.id}`, task.id);
     setStatus("Submitted");
     setSavedMessage("Response submitted ✓");
     onChanged();
