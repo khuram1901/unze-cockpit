@@ -4,6 +4,19 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Fixed "Muhammad Shakeel twice" + removed duplicate week filter
+
+Khuram spotted Muhammad Shakeel listed twice in the Tasks Owner filter despite there being only one such member. Root cause: 10 member rows (Asif Shakoor, Usman Arshad, Muhammad Nadeem, Awais Zaman, Muhammad Shakeel, Sania Saleem, Shahid Masaud, Muhammad Akhlaq, Shahida Naseem, Zuhair Khalid) were imported with a stray trailing space on first/last name, producing a double space in `name`. Browsers collapse that visually, so it looked fine — but some tasks were entered with a clean single space instead, and anywhere the app deduped/grouped by the raw string (Owner filter, Tree view person grouping, `get_tasks_team_stats()`), the two spellings counted as different people.
+
+- Code fix: `normName()` helper in `TasksList.tsx` collapses whitespace before building the Owner filter options, the owner-filter comparison, and the Tree view's per-person grouping.
+- Data fix: migration 108 normalizes whitespace in `members` (first_name/last_name/name), `tasks` (assigned_to/assigned_by), `recurring_tasks.assigned_to`, and `department_owners`' owner-name columns. Not yet applied.
+- Also removed the "Due this week" option from More Filters — it duplicated the new primary Due Period filter from the last round.
+- Confirmed with Khuram: keep the 5 existing departments not on his list (BINC, Legal, S&M Investment, Sales, Unze Trading Ops) — no deletion.
+
+Verification: `tsc --noEmit` clean.
+
+---
+
 ## 2026-07-14 — Sidebar cleanup + Tasks view-switcher rebuild (Khuram's follow-up round)
 
 - **Sidebar**: Recurring Tasks and Calendar removed (Recurring lives inside Tasks now; Calendar hidden everywhere until it's finished — route still works directly). Profile moved from My Workspace to Settings.
