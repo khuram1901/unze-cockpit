@@ -36,6 +36,7 @@ type Task = {
   meeting_id: string | null;
   time_spent_minutes: number | null;
   whatsapp_auto_remind: boolean;
+  company_id: string | null;
 };
 
 export default function TaskDetailModal({

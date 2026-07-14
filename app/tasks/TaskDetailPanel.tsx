@@ -1,7 +1,5 @@
 "use client";
 
-"use client";
-
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
@@ -17,6 +15,11 @@ type Comment = {
   commented_by_email: string | null;
   created_at: string;
 };
+
+type Company = { id: string; name: string; short_code: string };
+type DepartmentOwner = { id: string; department_name: string };
+
+const PRIORITY_OPTIONS = ["Urgent", "High", "Medium", "Normal", "Low"];
 
 // Shared by both the department/weekly/monthly/quarterly list rows
 // (TasksList.tsx) and the Board view (TasksBoard.tsx) so the task detail
@@ -50,6 +53,7 @@ type Task = {
   meeting_id: string | null;
   time_spent_minutes: number | null;
   whatsapp_auto_remind: boolean;
+  company_id: string | null;
 };
 
 export default function TaskDetailPanel({
@@ -81,6 +85,51 @@ export default function TaskDetailPanel({
   const [newComment, setNewComment] = useState("");
   const [postingComment, setPostingComment] = useState(false);
   const [autoRemind, setAutoRemind] = useState(task.whatsapp_auto_remind);
+
+  // Core-field editing (description/priority/department/company) — separate
+  // from TaskStatus, which only ever handled operational fields (status,
+  // stage, due date, notes). Gated by taskEditable so protected tasks
+  // assigned by someone else still can't be rewritten.
+  const [editingTask, setEditingTask] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [deptOwners, setDeptOwners] = useState<DepartmentOwner[]>([]);
+  const [editDesc, setEditDesc] = useState(task.description);
+  const [editPriority, setEditPriority] = useState(task.priority || "Normal");
+  const [editProject, setEditProject] = useState(task.project || "");
+  const [editCompanyId, setEditCompanyId] = useState(task.company_id || "");
+  const [savingTask, setSavingTask] = useState(false);
+
+  useEffect(() => {
+    if (!editingTask) return;
+    supabase.from("companies").select("id, name, short_code").order("name").then(({ data }) => setCompanies(data || []));
+    supabase.from("department_owners").select("id, department_name").order("department_name").then(({ data }) => setDeptOwners(data || []));
+  }, [editingTask]);
+
+  function startEditTask() {
+    setEditDesc(task.description);
+    setEditPriority(task.priority || "Normal");
+    setEditProject(task.project || "");
+    setEditCompanyId(task.company_id || "");
+    setEditingTask(true);
+  }
+
+  async function saveTaskEdit() {
+    if (!editDesc.trim()) return;
+    setSavingTask(true);
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        description: editDesc.trim(),
+        priority: editPriority,
+        project: editProject || null,
+        company_id: editCompanyId || null,
+      })
+      .eq("id", task.id);
+    setSavingTask(false);
+    if (error) { alert("Couldn't save changes: " + error.message); return; }
+    setEditingTask(false);
+    onChanged();
+  }
 
   async function toggleAutoRemind() {
     const next = !autoRemind;
@@ -148,6 +197,64 @@ export default function TaskDetailPanel({
           Assigned by {task.assigned_by || "management"} — you can update status and add notes but cannot edit or delete this task.
         </div>
       )}
+
+      {taskEditable && !editingTask && (
+        <button
+          onClick={startEditTask}
+          style={{ background: "none", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "4px 12px", fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, cursor: "pointer", marginBottom: "8px" }}
+        >
+          Edit task
+        </button>
+      )}
+
+      {taskEditable && editingTask && (
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", marginBottom: "10px", backgroundColor: COLOURS.CARD }}>
+          <label style={{ display: "block", marginBottom: "8px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Description</span>
+            <textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              rows={2}
+              style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "7px 10px", fontSize: "13px", color: COLOURS.NAVY, fontFamily: "inherit", resize: "vertical" }}
+            />
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "10px" }}>
+            <label>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Priority</span>
+              <select value={editPriority} onChange={(e) => setEditPriority(e.target.value)} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
+                {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </label>
+            <label>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Department / area</span>
+              <select value={editProject} onChange={(e) => setEditProject(e.target.value)} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
+                <option value="">-- None --</option>
+                {deptOwners.map((d) => <option key={d.id} value={d.department_name}>{d.department_name}</option>)}
+              </select>
+            </label>
+            <label>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Company</span>
+              <select value={editCompanyId} onChange={(e) => setEditCompanyId(e.target.value)} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
+                <option value="">Group / needs review</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+            <button onClick={() => setEditingTask(false)} style={{ background: "none", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 14px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, cursor: "pointer" }}>
+              Cancel
+            </button>
+            <button
+              onClick={saveTaskEdit}
+              disabled={savingTask || !editDesc.trim()}
+              style={{ backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.SM, padding: "6px 14px", fontSize: "12.5px", fontWeight: 700, cursor: savingTask || !editDesc.trim() ? "not-allowed" : "pointer", opacity: savingTask || !editDesc.trim() ? 0.6 : 1 }}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
       <TaskStatus task={task} currentRole={currentRole} onChanged={onChanged} canReview={canReview ?? isPrivileged} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
 
       {/* Captures intent only — still needs the WhatsApp Business API setup
