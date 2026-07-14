@@ -76,7 +76,7 @@ export function financeCompanies(u: UserCtx): "both" | "UTPL" | "IFPL" | "none" 
   if (!canViewFinance(u)) return "none";
   const scopeOv = u.overrides?.finance_company_scope;
   if (scopeOv === "UTPL" || scopeOv === "IFPL" || scopeOv === "both") return scopeOv;
-  if (isAdminTier(u) || !u.company) return "both";
+  if (isAdminTier(u) || !u.company || u.company === "Unze Group") return "both";
   if (u.company.startsWith("Unze Trading")) return "UTPL";
   if (u.company.startsWith("Imperial")) return "IFPL";
   return "both";

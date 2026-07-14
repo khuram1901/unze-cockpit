@@ -4,6 +4,16 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — "Unze Group" as an explicit company, replacing the blank-company convention
+
+Khuram, after the Kamran group-level fix: "instead of keeping them blank why don't we create Unze Group, which we can allocate everyone into... will this be better?" Yes — leaving Company blank to mean "sees the whole group" only worked because it happened to be undocumented behaviour; anyone editing a member later couldn't tell blank-on-purpose from blank-because-nobody-filled-it-in.
+
+Added "Unze Group" as a real option in the Members Company picker (`MEMBER_COMPANIES` in MembersManager.tsx). Moved the 9 people who had `company = null` (Khuram — both accounts, Kamran, Akhlaq, Nadeem, Awais Zaman, Shakeel, Shahid Masaud, Sundas Hussain) onto it via a direct data update — same one-row-fix pattern used all session, no schema change since `company` was already free text.
+
+Tightened `financeCompanies()` in permissions.ts and the mirrored preview logic in AccessMatrix.tsx to explicitly check `company === "Unze Group"` rather than relying on the fact that any non-UTPL/non-Imperial string fell through to "both" anyway. Scope: Members only, per Khuram's choice — the separate `companies` table used for tagging Tasks (UTPL/IFPL/etc.) is untouched.
+
+---
+
 ## 2026-07-14 — Task detail: Company/Department/Priority/Owner(s) always editable
 
 Khuram: "when you click the task it opens up the card and in there, we cannot amend the company, department, priority — these all options should be available everywhere." Those fields already existed in the edit panel, but were hidden behind an "Edit task" button (or clicking the modal's title) that toggled a separate edit mode — evidently not being found. Removed the toggle: Description, Priority, Department, Company, and Owner(s) now render as live, always-visible, auto-saving controls every time a task is opened, matching how the Status and Stage controls below them already worked (plain dropdown, saves immediately, no Save/Cancel step).

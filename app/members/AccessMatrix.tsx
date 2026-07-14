@@ -120,7 +120,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_view_finance": return admin || (manager && dept === "Finance");
     case "can_edit_finance": return admin || (manager && dept === "Finance");
     case "finance_company_scope": {
-      if (admin || !m.company) return "both";
+      if (admin || !m.company || m.company === "Unze Group") return "both";
       if (m.company?.startsWith("Unze Trading")) return "UTPL";
       if (m.company?.startsWith("Imperial")) return "IFPL";
       return "both";

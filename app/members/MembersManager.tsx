@@ -49,6 +49,7 @@ const ALL_BUSINESS_UNITS = [
 ];
 
 const MEMBER_COMPANIES = [
+  "Unze Group",
   "Unze Trading PVT Limited",
   "Imperial Footwear PVT Limited",
   "Haute Dolci",
