@@ -14,6 +14,16 @@ import React from "react";
 // CSV import, which are separate flows Khuram didn't flag.
 export const TASK_DESCRIPTION_LIMIT = 150;
 
+// The trading companies in scope for task tagging — Almahar and Directors
+// were deliberately excluded when this hierarchy was agreed with Khuram
+// (confirmed again 14/07/2026: neither should appear anywhere on the
+// Tasks page — company picker, filters, or badges). Anything not tagged
+// to one of these falls into the "Group / needs review" bucket
+// (company_id left null). Shared here so every fetch of `companies` for
+// Tasks — New Task form, task-edit form, and the Company filter — stays
+// in sync instead of each screen keeping its own copy of this list.
+export const TASK_COMPANY_CODES = ["UTPL", "IFPL", "BRNH", "HD"];
+
 export const COLOURS = {
   // Surfaces
   CANVAS:      "#F7F5F1", // page background

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
-import { COLOURS, RADII, useConfirm, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
+import { COLOURS, RADII, useConfirm, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import { canDeleteTask, canEditTask, isTaskProtected } from "../lib/permissions";
 import TaskStatus from "./TaskStatus";
 
@@ -101,7 +101,7 @@ export default function TaskDetailPanel({
 
   useEffect(() => {
     if (!editingTask) return;
-    supabase.from("companies").select("id, name, short_code").order("name").then(({ data }) => setCompanies(data || []));
+    supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name").then(({ data }) => setCompanies(data || []));
     supabase.from("department_owners").select("id, department_name").order("department_name").then(({ data }) => setDeptOwners(data || []));
   }, [editingTask]);
 

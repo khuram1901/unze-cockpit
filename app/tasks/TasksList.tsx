@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
-import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import TeamStats from "./TeamStats";
 import TaskDetailModal from "./TaskDetailModal";
 import MiniSubtaskToggle from "./MiniSubtaskToggle";
@@ -123,6 +123,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [companies, setCompanies] = useState<CompanyLite[]>([]);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
+  const [allDepartments, setAllDepartments] = useState<string[]>([]);
   const [kpi, setKpi] = useState<KpiSummary | null>(null);
   const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdownRow[]>([]);
   const [deptBreakdownOpen, setDeptBreakdownOpen] = useState(false);
@@ -212,7 +213,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       for (const m of (data || [])) { if (m.name && m.phone_e164) phones[m.name] = m.phone_e164; }
       setMemberPhones(phones);
     });
-    supabase.from("companies").select("id, name, short_code").then(({ data }) => setCompanies(data || []));
+    supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).then(({ data }) => setCompanies(data || []));
+    supabase.from("department_owners").select("department_name").order("department_name").then(({ data }) => setAllDepartments((data || []).map((d) => d.department_name)));
     supabase.rpc("get_tasks_department_breakdown").then(({ data, error }) => { if (!error) setDeptBreakdown(data || []); });
   }, []);
 
@@ -302,7 +304,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
   // Dropdown option lists always come from the full, unfiltered task set so
   // picking one filter never hides the options for another.
-  const departmentOptions = Array.from(new Set(tasks.map((t) => t.assigned_to_department || t.project || "Unassigned"))).sort();
+  // Merge the canonical department list (department_owners — includes
+  // departments with zero tasks so far, like the 7 Khuram just added)
+  // with whatever's actually on existing tasks, so nothing is missing
+  // from the filter either way.
+  const departmentOptions = Array.from(new Set([
+    ...allDepartments,
+    ...tasks.map((t) => t.assigned_to_department || t.project || "Unassigned"),
+  ])).sort();
   const ownerOptions = Array.from(new Set(tasks.map((t) => normName(t.assigned_to)).filter((n) => !!n))).sort();
   const stageOptions = Array.from(new Set(tasks.map((t) => t.stage).filter((s): s is string => !!s))).sort();
   const filtersActive = departmentFilter !== "all" || priorityFilter !== "all" || ownerFilter !== "all" || periodFilter !== "all" || stageFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all" || searchQuery.trim() !== "";
@@ -318,7 +327,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     const c = companies.find((co) => co.id === companyId);
     const code = c?.short_code || "";
     const found = COMPANY_BADGE_COLOURS[code] || { color: COLOURS.NAVY, background: COLOURS.HAIRLINE };
-    return { label: c?.short_code || c?.name || "—", color: found.color, background: found.background };
+    // Full name, not the short code — "Unze Trading Pvt Ltd", not "UTPL".
+    // short_code is still used above just to pick the badge colour.
+    return { label: c?.name || "—", color: found.color, background: found.background };
   }
 
   const allOpen = scopedTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
@@ -770,7 +781,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           </div>
           <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={filterSelectStyle}>
             <option value="all">All companies</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.short_code || c.name}</option>)}
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             <option value="group">Group / needs review</option>
           </select>
           <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={filterSelectStyle}>
@@ -1045,6 +1056,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           myEmail={myEmail}
           memberPhones={memberPhones}
           meetingTitles={meetingTitles}
+          companies={companies}
           onChanged={refreshAll}
         />
       )}

@@ -55,6 +55,7 @@ export default function TasksBoard({
   myEmail,
   memberPhones,
   meetingTitles,
+  companies,
   onChanged,
 }: {
   tasks: Task[];
@@ -65,6 +66,7 @@ export default function TasksBoard({
   myEmail: string | null;
   memberPhones: Record<string, string>;
   meetingTitles?: Record<string, string>;
+  companies?: { id: string; name: string; short_code: string | null }[];
   onChanged: () => void;
 }) {
   const toast = useToast();
@@ -94,10 +96,10 @@ export default function TasksBoard({
   }
 
   function companyLabel(companyId: string | null): string {
-    // Board cards keep this simple (no extra company lookup query) — the
-    // company badge with real names/colours already lives on the List
-    // view rows; here it's enough to show whether it's tagged at all.
-    return companyId ? "Tagged" : "Group";
+    if (!companyId) return "Group";
+    const c = companies?.find((co) => co.id === companyId);
+    // Full name, not a short code — "Unze Trading Pvt Ltd", not "UTPL".
+    return c?.name || "Tagged";
   }
 
   return (

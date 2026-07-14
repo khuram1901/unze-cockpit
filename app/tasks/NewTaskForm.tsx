@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import { logAction } from "../lib/audit-log";
-import { useToast, COLOURS, RADII, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
+import { useToast, COLOURS, RADII, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 
 type Member = {
@@ -30,11 +30,6 @@ type Company = {
   short_code: string | null;
 };
 
-// The 4 trading companies in scope for task tagging today — Almahar and
-// Directors were deliberately excluded when this hierarchy was agreed
-// with Khuram. Anything not tagged to one of these falls into the
-// "Group / needs review" bucket (company_id left null).
-const TASK_COMPANY_CODES = ["UTPL", "IFPL", "BRNH", "HD"];
 
 const PROJECT_AREAS = [
   "Unze Trading Ops",
