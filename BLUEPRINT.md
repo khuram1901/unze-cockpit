@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 14/07/2026 (Tasks redesign: migrations 098–101 — company tag, stage, locked assigned/original-due dates, subtasks table with DB-enforced completion gating, automatic due-date history, Stuck status, KPI/Team RPCs; NewTaskForm/TaskStatus/TasksList rebuilt to match; verified tasks_select RLS already enforced "own tasks only unless Admin/CEO/PA" and removed an undocumented company-wide override on one Manager account).
+> **This is the source of truth.** Read before touching any code. Last updated: 14/07/2026 (Tasks page rebuild, Phases 3–5: migrations 098–105 — company tag, stage, locked assigned/original-due dates, subtasks with DB-enforced completion gating, due-date history, Stuck status (red), Kanban board, Recurring tab, Team tab, monthly/quarterly RPCs, attention banner, My Tasks tab, real filters, task-detail modal, mini-checklist, comments, WhatsApp auto-remind toggle, calendar picker, meeting chip — see "Tasks page redesign" section for the full history including the mockup-reconciliation pass after Khuram flagged the live page didn't match what was designed).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -945,7 +945,23 @@ Real code, not just the design mockup (`Tasks_Page_Mockup.html`, still a standal
 - **Recurring Tasks merged in** — new Recurring tab (`RecurringTasksPanel.tsx`), same `recurring_tasks` table and cron engine as the standalone `/recurring-tasks` page (which still exists and still works — nothing there was removed).
 - **Monthly/quarterly charts moved to RPCs** — migration 102 (`get_tasks_monthly_chart`, `get_tasks_quarterly_chart`) replaces the JS for-loops that used to build this chart data. Department/weekly/timeline grouping still runs client-side over the full row list on purpose — those views render individual tasks, not just counts, so they still need the full list either way.
 
-Migrations 098–102 all still need to be run by hand in the Supabase SQL Editor if that hasn't happened yet — see the note at the top of each `.sql` file for the exact order.
+Migrations 098–105 all still need to be run by hand in the Supabase SQL Editor if that hasn't happened yet — see the note at the top of each `.sql` file for the exact order.
+
+**Phase 5 (14/07/2026) — mockup reconciliation, after Khuram flagged the live page was missing most of the finalised design.** The Phase 3/4 report understated the gap: only three items were called out as deferred, when in fact a much larger set of mockup features had quietly not made it into the real build (attention banner, My Tasks view, most filters, search, the modal detail pattern, mini-checklist, comments, WhatsApp toggle, calendar picker, meeting chip, and a Company field that wasn't genuinely required). This phase closes all of it:
+
+- **Company is now genuinely required** on `NewTaskForm.tsx` — previously defaulted silently to "Group / needs review" and would save without ever being touched; now starts on a disabled placeholder and won't submit until actively chosen.
+- **"Needs Your Attention" banner** — Critical (Urgent, open) / Overdue / Due Today / Stuck stat row plus a "View breakdown" drawer, finally wiring `get_tasks_department_breakdown()` (built in migration 101, unused until now) into the UI. Migration 103 adds `urgent_open_count` to `get_tasks_kpi_summary()` for the Critical stat.
+- **"My Tasks" tab**, now the default landing view — grouped Overdue / Due Today / This Week / Next Week & Later, with a My tasks/Everyone scope toggle.
+- **Department, Priority, Owner filters + a "More Filters" panel** (Stage, Due date, Source, Subtask state) on Board/List — all genuinely functional client-side filters over the fetched rows (not aggregation, so this doesn't conflict with house rule 0).
+- **Search box** over task descriptions.
+- **Task detail is now a modal popup** (`TaskDetailModal.tsx` + `app/lib/Modal.tsx`) instead of an inline expand-in-row/card panel, matching the finalised design. `TaskDetailPanel.tsx` itself is unchanged internally, just wrapped.
+- **Inline mini-subtask-checklist** (`MiniSubtaskToggle.tsx`) — a quick tick-off caret on List rows and Board cards, separate from opening the full modal, reading/writing the same `task_subtasks` rows so it can never drift out of sync the way the mockup's demo copies honestly couldn't.
+- **Comments** (migration 104, new `task_comments` table) — flat, oldest-first, append-only, RLS mirrors `tasks_select`.
+- **WhatsApp auto-remind toggle** (migration 105, `tasks.whatsapp_auto_remind`) — captures intent only; still needs the pending WhatsApp Business API setup before anything actually auto-sends.
+- **Calendar-popover date picker** (`app/lib/DateInputWithCalendar.tsx`) — adds a "Pick" button + popover calendar alongside the existing `DateInput` text field on the New Task due date and the current-due-date editor. Still not a native `<input type="date">`, per house rules.
+- **Meeting-source chip** on List rows and Board cards — a compact "From: [meeting title] →" chip, not just a link buried inside the full detail view.
+
+Migrations 103–105 need to be run after 098–102, same manual process.
 
 ---
 

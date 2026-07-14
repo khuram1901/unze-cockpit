@@ -4,6 +4,28 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Tasks Phase 5: mockup reconciliation after Khuram flagged the live page didn't match the design
+
+Khuram, after checking the live page: "It's almost 40% of the design, and 60% of the elements are not there... I thought we designed it so we don't have to do this now." He was right. Going back to the finalised mockup line-by-line found a real, sizeable gap beyond the three items Phase 4 had already closed — the Phase 3/4 handoff had only called out three deferred items when in fact many more mockup features had quietly not made it into the real build. That was a process failure: no systematic reconciliation was done before reporting the rebuild as complete. Fixed properly this time, one pass, seven commits:
+
+- **Company is now genuinely required** on `NewTaskForm.tsx` — it previously defaulted silently to "Group / needs review" and would save without ever being actively chosen, the opposite of what was designed.
+- **"Needs Your Attention" banner** — Critical (Urgent, open) / Overdue / Due Today / Stuck stats + a "View breakdown" drawer, finally wiring `get_tasks_department_breakdown()` (built in migration 101, sitting unused until now) into the UI. Migration 103 adds `urgent_open_count` to `get_tasks_kpi_summary()`.
+- **"My Tasks" tab**, now the default landing view — Overdue/Due Today/This Week/Next Week & Later groups, with a My tasks/Everyone scope toggle.
+- **Department, Priority, Owner filters + a "More Filters" panel** (Stage, Due date, Source, Subtask state) — all real, functional filters, not just visual like the mockup's own draft.
+- **Search box** over task descriptions.
+- **Task detail is now a modal popup** (new `TaskDetailModal.tsx` + `app/lib/Modal.tsx`), replacing the inline expand-in-row/card pattern, matching the finalised design.
+- **Inline mini-subtask-checklist** (`MiniSubtaskToggle.tsx`) — quick tick-off on List rows and Board cards without opening the full modal, reading/writing the same `task_subtasks` rows so it never drifts.
+- **Comments** — new `task_comments` table (migration 104), flat/oldest-first/append-only, RLS mirrors `tasks_select`.
+- **WhatsApp auto-remind toggle** — new `whatsapp_auto_remind` column (migration 105); captures intent only, still needs the pending WhatsApp Business API setup to actually auto-send.
+- **Calendar-popover date picker** (`app/lib/DateInputWithCalendar.tsx`) — "Pick" button + popover calendar alongside the existing DateInput text field, on the New Task due date and current-due-date editor. Still not a native `<input type="date">`.
+- **Meeting-source chip** — compact "From: [meeting] →" chip directly on List rows and Board cards, not only inside the full detail view.
+
+Verification: `tsc --noEmit` clean throughout. One new ESLint purity error (`Date.now()` called during render) was caught and fixed by computing the date from the already-fixed `todayStr` instead. Remaining ESLint flags are the same pre-existing `react-hooks/set-state-in-effect` pattern already used everywhere else in this file.
+
+Migrations 103–105 are written to `supabase/`, **not yet applied** — run after 098–102, same manual process via the Supabase SQL Editor.
+
+---
+
 ## 2026-07-14 — Tasks Phase 4: Stuck is red, Kanban board, Recurring merged in, monthly/quarterly moved to RPCs
 
 Khuram, on the previous entry's three deferred items: "these three things that you've not done — I need you to solve them" plus "Stuck... should be red, because Stuck means red alert." Five small commits:
