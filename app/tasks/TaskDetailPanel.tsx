@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
@@ -56,16 +56,13 @@ type Task = {
   company_id: string | null;
 };
 
-export default function TaskDetailPanel({
-  task,
-  currentRole,
-  isPrivileged,
-  canReview,
-  canDelete,
-  myEmail,
-  memberPhones,
-  onChanged,
-}: {
+// Exposed to TaskDetailModal so clicking the modal's header/title can jump
+// straight into edit mode, instead of requiring a scroll-down-and-click on
+// the "Edit task" button below. Gated the same as that button (editable
+// only), so protected/not-mine tasks still can't be edited this way either.
+export type TaskDetailPanelHandle = { startEdit: () => void };
+
+const TaskDetailPanel = forwardRef<TaskDetailPanelHandle, {
   task: Task;
   currentRole: string;
   isPrivileged: boolean;
@@ -74,7 +71,16 @@ export default function TaskDetailPanel({
   myEmail: string | null;
   memberPhones: Record<string, string>;
   onChanged: () => void;
-}) {
+}>(function TaskDetailPanel({
+  task,
+  currentRole,
+  isPrivileged,
+  canReview,
+  canDelete,
+  myEmail,
+  memberPhones,
+  onChanged,
+}, ref) {
   const dlg = useConfirm();
   const userCtx = { email: myEmail, role: currentRole };
   const taskEditable = canEditTask(userCtx, task.assigned_by_email);
@@ -112,6 +118,12 @@ export default function TaskDetailPanel({
     setEditCompanyId(task.company_id || "");
     setEditingTask(true);
   }
+
+  // Gated on taskEditable here too, not just by hiding the "Edit task"
+  // button — TaskDetailModal computes the same canEditTask() check
+  // independently to decide whether the header click does anything, but
+  // this is the real backstop in case that ever drifts out of sync.
+  useImperativeHandle(ref, () => ({ startEdit: () => { if (taskEditable) startEditTask(); } }), [taskEditable, task]);
 
   async function saveTaskEdit() {
     if (!editDesc.trim()) return;
@@ -338,4 +350,6 @@ export default function TaskDetailPanel({
       </div>
     </div>
   );
-}
+});
+
+export default TaskDetailPanel;

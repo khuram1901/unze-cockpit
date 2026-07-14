@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef } from "react";
 import Modal from "../lib/Modal";
-import TaskDetailPanel from "./TaskDetailPanel";
+import TaskDetailPanel, { type TaskDetailPanelHandle } from "./TaskDetailPanel";
 import { COLOURS, RADII, StatusBadge, PriorityBadge } from "../lib/SharedUI";
+import { canEditTask } from "../lib/permissions";
 
 // The finalised Tasks mockup opens task detail as a centred modal popup,
 // not an inline expand-in-row/card panel. This wraps the existing
@@ -62,13 +64,25 @@ export default function TaskDetailModal({
   memberPhones: Record<string, string>;
   onChanged: () => void;
 }) {
+  const panelRef = useRef<TaskDetailPanelHandle>(null);
+
   if (!task) return null;
+
+  // Same canEditTask() check TaskDetailPanel itself uses — computed here
+  // too (rather than read off the ref) so the header's cursor/title reflect
+  // it immediately, without waiting on a ref that only updates after the
+  // child mounts. The ref's startEdit() re-checks this independently too.
+  const editable = canEditTask({ email: myEmail, role: currentRole }, task.assigned_by_email);
 
   return (
     <Modal open={open} onClose={onClose}>
       <div style={{ padding: "18px 22px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
         <div style={{ flex: 1 }}>
-          <h2 style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "17px", fontWeight: 600, color: COLOURS.NAVY, margin: "0 0 8px", lineHeight: 1.35 }}>
+          <h2
+            onClick={() => { if (editable) panelRef.current?.startEdit(); }}
+            title={editable ? "Click to edit this task" : undefined}
+            style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "17px", fontWeight: 600, color: COLOURS.NAVY, margin: "0 0 8px", lineHeight: 1.35, cursor: editable ? "pointer" : "default" }}
+          >
             {task.description}
           </h2>
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
@@ -91,6 +105,7 @@ export default function TaskDetailModal({
       </div>
       <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
         <TaskDetailPanel
+          ref={panelRef}
           task={task}
           currentRole={currentRole}
           isPrivileged={isPrivileged}

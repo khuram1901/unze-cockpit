@@ -144,6 +144,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [dueFilter, setDueFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [subtaskFilter, setSubtaskFilter] = useState<string>("all");
+  // Explicit status picker (Not Started/In Progress/Waiting Reply/Stuck/
+  // Completed/Cancelled) — separate from the all/overdue/waiting quick
+  // pills below, and the one way to see Completed/Cancelled tasks in the
+  // main list/board/timeline views, which otherwise always hide them.
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
   const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
@@ -203,6 +208,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     setDueFilter("all");
     setSourceFilter("all");
     setSubtaskFilter("all");
+    setStatusFilter("all");
     setSearchQuery("");
     setMoreFiltersOpen(false);
   }
@@ -272,6 +278,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     }
     if (departmentFilter !== "all" && (t.assigned_to_department || t.project || "Unassigned") !== departmentFilter) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
+    if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (ownerFilter !== "all" && normName(t.assigned_to) !== ownerFilter) return false;
     if (periodFilter !== "all") {
       if (!t.due_date) return false;
@@ -315,7 +322,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   ])).sort();
   const ownerOptions = Array.from(new Set(tasks.map((t) => normName(t.assigned_to)).filter((n) => !!n))).sort();
   const stageOptions = Array.from(new Set(tasks.map((t) => t.stage).filter((s): s is string => !!s))).sort();
-  const filtersActive = departmentFilter !== "all" || priorityFilter !== "all" || ownerFilter !== "all" || periodFilter !== "all" || stageFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all" || searchQuery.trim() !== "";
+  const filtersActive = departmentFilter !== "all" || priorityFilter !== "all" || ownerFilter !== "all" || periodFilter !== "all" || stageFilter !== "all" || dueFilter !== "all" || sourceFilter !== "all" || subtaskFilter !== "all" || statusFilter !== "all" || searchQuery.trim() !== "";
 
   function refreshAll() {
     loadTasks();
@@ -333,7 +340,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     return { label: c?.name || "—", color: found.color, background: found.background };
   }
 
-  const allOpen = scopedTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+  // When a specific status is picked, it overrides the default "hide
+  // Completed/Cancelled" behaviour entirely — scopedTasks is already
+  // narrowed to just that status (see the statusFilter check above), so
+  // there's nothing left to additionally exclude.
+  const allOpen = statusFilter !== "all"
+    ? scopedTasks
+    : scopedTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const overdueTasks = allOpen.filter(isOverdue);
   const waitingReply = allOpen.filter((t) => t.status === "Waiting Reply");
   const completedAll = scopedTasks.filter((t) => t.status === "Completed");
@@ -827,6 +840,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} style={filterSelectStyle}>
             <option value="all">All priorities</option>
             <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
+          </select>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={filterSelectStyle}>
+            <option value="all">All statuses</option>
+            <option>Not Started</option>
+            <option>In Progress</option>
+            <option>Waiting Reply</option>
+            <option>Stuck</option>
+            <option>Completed</option>
+            <option>Cancelled</option>
           </select>
           <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={filterSelectStyle}>
             <option value="all">All owners</option>
