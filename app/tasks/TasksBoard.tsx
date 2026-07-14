@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { COLOURS, RADII, PriorityBadge, StatusBadge, useToast } from "../lib/SharedUI";
+import { canCompleteSubmittedTask } from "../lib/permissions";
 import TaskDetailModal from "./TaskDetailModal";
 import MiniSubtaskToggle from "./MiniSubtaskToggle";
 
@@ -84,6 +85,18 @@ export default function TasksBoard({
   }
 
   async function moveTask(taskId: string, newStatus: string) {
+    // Dragging straight onto Completed used to bypass the whole "submit to
+    // your HOD" flow this same board respects everywhere else — a card
+    // could go from Not Started to Completed in one drop. Same rule as the
+    // single-task view now: only Submitted can become Completed, and only
+    // by the person that rule says may close it.
+    if (newStatus === "Completed") {
+      const t = tasks.find((x) => x.id === taskId);
+      if (!t || t.status !== "Submitted" || !canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email)) {
+        toast.show("This has to be Submitted first, and only the assigned HOD (or Executive, for Khuram/Kamran's queue) can close it.", "error");
+        return;
+      }
+    }
     const { error } = await supabase.from("tasks").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", taskId);
     if (error) {
       // Most likely cause: the subtask-completion gate (migration 100) rejected
@@ -217,7 +230,7 @@ export default function TasksBoard({
         })}
       </div>
       <p style={{ fontSize: "11.5px", color: COLOURS.INK_400, marginTop: "10px" }}>
-        Drag a card to a different column to change its status. Dropping onto Completed is blocked by the database if the task still has open subtasks.
+        Drag a card to a different column to change its status. Dropping onto Completed only works from Submitted, and only for the assigned HOD (or Executive) — everyone else, and any task with open subtasks, is blocked.
       </p>
     </div>
   );

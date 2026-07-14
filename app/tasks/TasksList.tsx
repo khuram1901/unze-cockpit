@@ -51,8 +51,12 @@ type Task = {
 type CompanyLite = { id: string; name: string; short_code: string | null };
 
 // Kept in sync with TaskStatus.tsx / NewTaskForm.tsx's own STATUSES list —
-// used here only for the bulk-change dropdown.
-const STATUS_OPTIONS = ["Not Started", "In Progress", "Waiting Reply", "Stuck", "Submitted", "Completed", "Cancelled"];
+// used here only for the bulk-change dropdown. "Completed" is deliberately
+// left out: bulk status change is a raw, ungated update with no per-task
+// HOD check, so it can't be allowed to touch Completed at all now that
+// only the assignee's HOD (or Executive, for Khuram/Kamran's queue) can
+// close a task — see canCompleteSubmittedTask in lib/permissions.ts.
+const STATUS_OPTIONS = ["Not Started", "In Progress", "Waiting Reply", "Stuck", "Submitted", "Cancelled"];
 
 const COMPANY_BADGE_COLOURS: Record<string, { color: string; background: string }> = {
   UTPL: { color: COLOURS.BLUE, background: COLOURS.INFO_SOFT },
@@ -876,23 +880,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             {drawerTasks.length === 0 ? (
               <div style={{ padding: "16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>Nothing here.</div>
             ) : (
-              drawerTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => (
-                <div
-                  key={t.id}
-                  onClick={() => setExpandedTaskId(t.id)}
-                  style={{ padding: "9px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.description}</div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{t.assigned_to || "Unassigned"}</div>
-                  </div>
-                  {t.due_date && (
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: isOverdue(t) ? COLOURS.RED : COLOURS.SLATE, flexShrink: 0 }}>
-                      {formatDateUK(t.due_date)}{isOverdue(t) && ` · ${daysOverdue(t)}d late`}
-                    </span>
-                  )}
-                </div>
-              ))
+              // Same TaskRow component every other view uses — was a
+              // bespoke, non-clickable-looking div before with no checkbox,
+              // which is why opening/editing/selecting a task from a KPI
+              // card (Open/Overdue/Due Today/etc.) felt different from
+              // opening one from the List or Tree view. One row renderer,
+              // used everywhere, per Khuram: "this should be universal."
+              drawerTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} selectable />)
             )}
           </div>
         );
@@ -902,40 +896,79 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           (they aren't task-list views); Board/Tree/List/Timeline as an
           icon switcher on the right, per Khuram. ═══ */}
       <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap",
         position: "sticky", top: 0, zIndex: 10,
         backgroundColor: COLOURS.CARD_ALT,
         paddingTop: "6px", paddingBottom: "6px",
       }}>
-        <div style={{ display: "flex", gap: "4px" }}>
-          {(["team", "recurring"] as const).map((v) => (
-            <button key={v} onClick={() => setTimeView(v)} style={{
-              backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
-              color: timeView === v ? "white" : COLOURS.NAVY,
-              border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-              borderRadius: RADII.PILL, padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
-              textTransform: "capitalize",
-            }}>{v}</button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: "4px" }}>
-          {(["list", "board", "tree", "timeline"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setTimeView(v)}
-              title={VIEW_LABELS[v]}
-              aria-label={VIEW_LABELS[v]}
-              style={{
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "4px" }}>
+            {(["team", "recurring"] as const).map((v) => (
+              <button key={v} onClick={() => setTimeView(v)} style={{
                 backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
+                color: timeView === v ? "white" : COLOURS.NAVY,
                 border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-                borderRadius: RADII.SM, width: "34px", height: "34px",
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-              }}
-            >
-              {viewIcon(v, timeView === v)}
-            </button>
-          ))}
+                borderRadius: RADII.PILL, padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                textTransform: "capitalize",
+              }}>{v}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: "4px" }}>
+            {(["list", "board", "tree", "timeline"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setTimeView(v)}
+                title={VIEW_LABELS[v]}
+                aria-label={VIEW_LABELS[v]}
+                style={{
+                  backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
+                  border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                  borderRadius: RADII.SM, width: "34px", height: "34px",
+                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                }}
+              >
+                {viewIcon(v, timeView === v)}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* ═══ BULK SELECTION TOOLBAR — selectedIds is one shared,
+            page-level set, so this shows above List, Tree, or a KPI-card
+            drawer, whichever put tasks into it. Lives inside this sticky
+            wrapper (not inside the List view block, where it used to be
+            the only place it could appear) so it stays pinned to the top
+            of the screen while scrolling through a long selection instead
+            of scrolling out of view, per Khuram. ═══ */}
+        {selectedIds.size > 0 && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
+            padding: "8px 12px",
+            border: `1px solid ${COLOURS.NAVY}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD,
+            boxShadow: "0 2px 6px rgba(15,23,32,0.08)",
+          }}>
+            <span style={{ fontSize: "12.5px", fontWeight: 700, color: COLOURS.NAVY }}>{selectedIds.size} selected</span>
+
+            <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={filterSelectStyle}>
+              <option value="">Change status…</option>
+              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <button onClick={applyBulkStatus} disabled={!bulkStatus || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkStatus || bulkApplying ? 0.5 : 1, cursor: !bulkStatus || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+
+            <select value={bulkCompanyId} onChange={(e) => setBulkCompanyId(e.target.value)} style={filterSelectStyle}>
+              <option value="">Change company…</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <button onClick={applyBulkCompany} disabled={!bulkCompanyId || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkCompanyId || bulkApplying ? 0.5 : 1, cursor: !bulkCompanyId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+
+            <select value={bulkOwnerId} onChange={(e) => setBulkOwnerId(e.target.value)} style={filterSelectStyle}>
+              <option value="">Change owner…</option>
+              {bulkMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+            <button onClick={applyBulkOwner} disabled={!bulkOwnerId || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkOwnerId || bulkApplying ? 0.5 : 1, cursor: !bulkOwnerId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+
+            <button onClick={() => setSelectedIds(new Set())} style={{ ...smallActionBtn, marginLeft: "auto", backgroundColor: "transparent", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>Clear</button>
+          </div>
+        )}
       </div>
 
       {/* ═══ SEARCH + FILTER ROW — every tab except Team/Recurring, which
@@ -1062,36 +1095,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             </div>
           </div>
 
-          {selectedIds.size > 0 && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
-              padding: "8px 12px", marginBottom: "12px",
-              border: `1px solid ${COLOURS.NAVY}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD_ALT,
-            }}>
-              <span style={{ fontSize: "12.5px", fontWeight: 700, color: COLOURS.NAVY }}>{selectedIds.size} selected</span>
-
-              <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={filterSelectStyle}>
-                <option value="">Change status…</option>
-                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <button onClick={applyBulkStatus} disabled={!bulkStatus || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkStatus || bulkApplying ? 0.5 : 1, cursor: !bulkStatus || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
-
-              <select value={bulkCompanyId} onChange={(e) => setBulkCompanyId(e.target.value)} style={filterSelectStyle}>
-                <option value="">Change company…</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <button onClick={applyBulkCompany} disabled={!bulkCompanyId || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkCompanyId || bulkApplying ? 0.5 : 1, cursor: !bulkCompanyId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
-
-              <select value={bulkOwnerId} onChange={(e) => setBulkOwnerId(e.target.value)} style={filterSelectStyle}>
-                <option value="">Change owner…</option>
-                {bulkMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-              <button onClick={applyBulkOwner} disabled={!bulkOwnerId || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkOwnerId || bulkApplying ? 0.5 : 1, cursor: !bulkOwnerId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
-
-              <button onClick={() => setSelectedIds(new Set())} style={{ ...smallActionBtn, marginLeft: "auto", backgroundColor: "transparent", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>Clear</button>
-            </div>
-          )}
-
           {myTasksGroupOrder.filter((g) => myTasksGroups.has(g)).map((group) => {
             const groupTasks = myTasksGroups.get(group)!;
             return (
@@ -1174,7 +1177,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                       </div>
                       {!isPersonCollapsed && (
                         <div style={{ paddingLeft: "24px", borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
-                          {ptasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} />)}
+                          {ptasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} selectable />)}
                         </div>
                       )}
                     </div>

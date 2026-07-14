@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Tasks: universal edit/select on KPI cards, sticky bulk toolbar, and a real HOD-only completion rule
+
+Khuram: "when i click cards in tasks, like open overdue, due tday it expands list but i cannot edit the tasks, this should be universal. multiple select this should also be universal... that tool bar needs to be visible whether scrolling down or being static." Three fixes in TasksList.tsx: the Open/Overdue/Due Today/etc. KPI-card drawer had its own bespoke, non-selectable row markup instead of the shared `TaskRow` component every other view uses — replaced it with `TaskRow` (now also used in Tree view) so opening a task from a KPI card behaves identically to opening one from List, with the same checkbox for multi-select. The bulk-selection toolbar moved out of the List-view-only block into the sticky view-toggle wrapper at the top of the page, so it now appears above every view (not just List) and never scrolls out of sight while a selection is active.
+
+The bigger piece: "no task can be completed until its submitted to their HOD and only HOD can mark the task completed... This is very important." Two things were quietly bypassing this before: the free status dropdown let anyone jump straight to Completed from any state, and a "Mark task complete" button (gated only on subtasks, not on who was clicking it) sat right next to it. Both removed. The only door to Completed now is the existing "Accept & Close" button, shown only once a task is Submitted, and only to whoever is allowed to close it.
+
+Khuram's exact rule, clarified mid-session: "Myself and Kamran are at the top of the food chain — all people reporting to us, we are the only ones to complete their task, or we will allow our Executive to check and complete the task status. Executive's tasks can be completed by themselves. rest of the members submit their tasks, only their HOD completes the tasks." Added `canCompleteSubmittedTask()` to permissions.ts as the one place this lives: the task's current owner may close it (submitting already reassigns a task to the assignee's manager via the existing `routeSubmittedTask`, so the current owner post-submission is genuinely their HOD); additionally the Executive (Sundas) may close anything that landed with Khuram or Kamran specifically (a new `TOP_TIER_EMAILS` list — separate from the role-based `isAdminTier`, since this needs to name the two specific people, not "whoever holds Admin"). `routeSubmittedTask` also now skips reassignment when the assignee is the Executive, so her own tasks close under her own sign-off instead of routing further up.
+
+Closed the same gap in two other places that could set status directly and would otherwise have bypassed the whole rule: the bulk "Change status…" dropdown (TasksList.tsx) no longer offers Completed at all (it's a raw ungated update with no per-task check), and the Kanban board's drag-to-Completed column now runs the same `canCompleteSubmittedTask` check plus a Submitted-only guard before allowing the drop, instead of writing the status unconditionally.
+
+Note: all of this is enforced client-side, consistent with how the rest of the app's permission model works (no DB-level trigger/RLS for who's allowed to complete a task, unlike the existing subtask-completion gate which is enforced in the database). Worth knowing if this ever needs to be airtight against someone hitting the API directly rather than going through the UI.
+
+---
+
 ## 2026-07-14 — Recurring-task cron migrated onto the shared createTaskCore gate
 
 Last of the 7 original task-insert call sites from TASK_NOTIFICATION_AUDIT.md. `app/api/tasks/recurring/route.ts` used to insert into `tasks` directly; now it calls `createTaskCore()` in-process (no HTTP round-trip — this cron has no user session to authenticate an `/api/tasks/create` call with, unlike the cash-escalation path which goes through the browser).

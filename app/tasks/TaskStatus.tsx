@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII } from "../lib/SharedUI";
+import { canCompleteSubmittedTask } from "../lib/permissions";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
@@ -62,13 +63,13 @@ export default function TaskStatus({
   task,
   currentRole,
   onChanged,
-  canReview: canReviewProp,
+  myEmail,
   canEditDueDate: canEditDateProp,
 }: {
   task: Task;
   currentRole: string;
   onChanged: () => void;
-  canReview?: boolean;
+  myEmail?: string | null;
   canEditDueDate?: boolean;
   canEditTask?: boolean;
 }) {
@@ -98,7 +99,11 @@ export default function TaskStatus({
   const [dueDateHistory, setDueDateHistory] = useState<DueDateHistoryRow[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  const isReviewer = canReviewProp ?? (currentRole === "Admin" || currentRole === "Executive");
+  // Who may close a Submitted task — see canCompleteSubmittedTask in
+  // lib/permissions.ts for the full rule (owner completes their own once
+  // routed to them; the Executive may also close anything that landed
+  // with Khuram or Kamran specifically).
+  const canComplete = status === "Submitted" && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email);
   const canEditDate = canEditDateProp ?? (currentRole === "Admin" || currentRole === "Executive");
 
   useEffect(() => {
@@ -139,8 +144,12 @@ export default function TaskStatus({
   // manager on file — e.g. Khuram/Kamran at the top of the chain.
   async function routeSubmittedTask(): Promise<Record<string, unknown>> {
     if (!task.assigned_to_email) return {};
-    const { data: me } = await supabase.from("members").select("manager_id").eq("email", task.assigned_to_email).maybeSingle();
-    if (!me?.manager_id) return {};
+    const { data: me } = await supabase.from("members").select("manager_id, role").eq("email", task.assigned_to_email).maybeSingle();
+    // Executive (the PA) closes her own tasks directly — Khuram: "Executive's
+    // tasks can be completed by themselves" — so submitting doesn't hand it
+    // up to whoever she reports to. Same no-op as the no-manager-on-file
+    // case just below, for the same reason: nobody else needs to sign off.
+    if (!me?.manager_id || me.role === "Executive") return {};
     const { data: mgr } = await supabase.from("members").select("id, name, email, department, business_unit").eq("id", me.manager_id).maybeSingle();
     if (!mgr?.email) return {};
     await supabase.from("task_assignees").delete().eq("task_id", task.id);
@@ -403,7 +412,12 @@ export default function TaskStatus({
           onChange={(e) => saveStatus(e.target.value)}
           disabled={saving}
         >
-          {STATUSES.map((s) => (
+          {/* "Completed" is never a free jump from this dropdown — the only
+              door to Completed is the HOD's "Accept & Close" button further
+              down, and only once the task is Submitted. Still listed here
+              if the task already IS Completed, so the control renders its
+              real value instead of falling back to a blank/mismatched one. */}
+          {STATUSES.filter((s) => s !== "Completed" || status === "Completed").map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>
@@ -459,21 +473,13 @@ export default function TaskStatus({
             Complete all subtasks before this task can be marked Completed.
           </p>
         )}
-        {status !== "Completed" && status !== "Cancelled" && (
-          <button
-            onClick={() => saveStatus("Completed")}
-            disabled={saving || openSubtasks > 0}
-            style={{
-              marginTop: "10px", width: "100%", maxWidth: "320px", padding: "10px",
-              borderRadius: RADII.SM, border: "none", fontSize: "13.5px", fontWeight: 700,
-              cursor: openSubtasks > 0 ? "not-allowed" : "pointer",
-              backgroundColor: openSubtasks > 0 ? COLOURS.TRACK : COLOURS.GREEN,
-              color: openSubtasks > 0 ? COLOURS.INK_400 : "white",
-              opacity: saving ? 0.7 : 1,
-            }}
-          >
-            Mark task complete
-          </button>
+        {/* No self-serve "mark complete" here any more — per Khuram, a task
+            can only become Completed via the HOD's "Accept & Close" button
+            below, once it's been Submitted. */}
+        {status !== "Completed" && status !== "Cancelled" && status !== "Submitted" && (
+          <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "10px", marginBottom: 0 }}>
+            Move this to <strong>Submitted</strong> above when the work is done — it will be routed to the manager for sign-off before it can be marked Completed.
+          </p>
         )}
       </div>
 
@@ -701,45 +707,65 @@ export default function TaskStatus({
         </div>
       )}
 
-      {/* Reviewer closes or reopens a Submitted task */}
-      {isReviewer && status === "Submitted" && (
-        <div style={{ marginTop: "12px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => saveStatus("Completed")}
-            disabled={saving}
-            style={{
-              backgroundColor: COLOURS.GREEN,
-              color: "white",
-              border: "none",
-              borderRadius: RADII.SM,
-              padding: "8px 18px",
-              fontSize: "13px",
-              cursor: "pointer",
-              fontWeight: 700,
-              opacity: saving ? 0.7 : 1,
-            }}
-          >
-            Accept &amp; Close
-          </button>
+      {/* The task's current owner (its HOD, once Submitted routing has
+          happened — or itself, for top-of-chain people with no manager on
+          file) closes or reopens it. This is the ONLY path to Completed
+          in the whole app now — see the removed free-dropdown option and
+          self-serve button above. */}
+      {status === "Submitted" && canComplete && (
+        <div style={{ marginTop: "12px" }}>
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <button
+              onClick={() => saveStatus("Completed")}
+              disabled={saving || openSubtasks > 0}
+              title={openSubtasks > 0 ? "Complete all subtasks first" : undefined}
+              style={{
+                backgroundColor: openSubtasks > 0 ? COLOURS.TRACK : COLOURS.GREEN,
+                color: openSubtasks > 0 ? COLOURS.INK_400 : "white",
+                border: "none",
+                borderRadius: RADII.SM,
+                padding: "8px 18px",
+                fontSize: "13px",
+                cursor: openSubtasks > 0 ? "not-allowed" : "pointer",
+                fontWeight: 700,
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              Accept &amp; Close
+            </button>
 
-          <button
-            onClick={() => saveStatus("Waiting Reply")}
-            disabled={saving}
-            style={{
-              backgroundColor: COLOURS.CARD,
-              color: COLOURS.RED,
-              border: `1px solid ${COLOURS.RED}`,
-              borderRadius: RADII.SM,
-              padding: "8px 18px",
-              fontSize: "13px",
-              cursor: "pointer",
-              fontWeight: 700,
-              opacity: saving ? 0.7 : 1,
-            }}
-          >
-            Reopen (send back)
-          </button>
+            <button
+              onClick={() => saveStatus("Waiting Reply")}
+              disabled={saving}
+              style={{
+                backgroundColor: COLOURS.CARD,
+                color: COLOURS.RED,
+                border: `1px solid ${COLOURS.RED}`,
+                borderRadius: RADII.SM,
+                padding: "8px 18px",
+                fontSize: "13px",
+                cursor: "pointer",
+                fontWeight: 700,
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              Reopen (send back)
+            </button>
+          </div>
+          {openSubtasks > 0 && (
+            <p style={{ fontSize: "12px", color: COLOURS.AMBER, marginTop: "6px", marginBottom: 0 }}>
+              Complete all subtasks above before this can be closed.
+            </p>
+          )}
         </div>
+      )}
+      {/* Submitted, but the viewer isn't the one it's waiting on — tell
+          them plainly rather than leave them wondering why there's no
+          button here for them to click. */}
+      {status === "Submitted" && !canComplete && (
+        <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "12px" }}>
+          Submitted — waiting for {task.assigned_to || "the assigned manager"} to review and close.
+        </p>
       )}
     </div>
   );

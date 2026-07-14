@@ -296,7 +296,7 @@ export default function TaskDetailPanel({
         </div>
       )}
 
-      <TaskStatus task={task} currentRole={currentRole} onChanged={onChanged} canReview={canReview ?? isPrivileged} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
+      <TaskStatus task={task} currentRole={currentRole} onChanged={onChanged} myEmail={myEmail} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
 
       {/* Captures intent only — still needs the WhatsApp Business API setup
           before anything actually sends by itself. See migration 105. */}
