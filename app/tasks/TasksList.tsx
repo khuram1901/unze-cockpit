@@ -7,6 +7,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
+import { canCompleteSubmittedTask } from "../lib/permissions";
 import TeamStats from "./TeamStats";
 import TaskDetailModal from "./TaskDetailModal";
 import MiniSubtaskToggle from "./MiniSubtaskToggle";
@@ -436,6 +437,46 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     if (error) { toast.show("Error: " + error.message, "error"); return; }
     toast.show(`Reassigned ${ids.length} task(s) to ${owner.name}.`, "success");
     setBulkOwnerId(""); setSelectedIds(new Set());
+    refreshAll();
+  }
+
+  // Khuram: "for practical reasons, i would want an options to complete
+  // multiple tasks in one go." A single UPDATE statement is all-or-nothing
+  // against the database's HOD-completion and subtask gates (migrations
+  // 114 and 100) — if even one selected task doesn't qualify, the whole
+  // statement is rejected and NOTHING completes. So this filters the
+  // selection down to only the tasks the current user is genuinely
+  // allowed to close (same rule as the single-task "Mark Complete"
+  // button — see canCompleteSubmittedTask in lib/permissions.ts) before
+  // sending the update, then reports what it skipped and why rather than
+  // failing silently.
+  async function applyBulkComplete() {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    const eligible: string[] = [];
+    let notSubmitted = 0, openSubtasks = 0, notAllowed = 0;
+    for (const id of ids) {
+      const t = tasks.find((x) => x.id === id);
+      if (!t) continue;
+      if (t.status !== "Submitted") { notSubmitted++; continue; }
+      if ((t.task_subtasks || []).some((s) => !s.is_complete)) { openSubtasks++; continue; }
+      if (!canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email)) { notAllowed++; continue; }
+      eligible.push(id);
+    }
+    if (eligible.length === 0) {
+      toast.show("None of the selected tasks can be completed right now — each must be Submitted, have no open subtasks, and be assigned to you (or, for the Executive, to Khuram/Kamran).", "error");
+      return;
+    }
+    setBulkApplying(true);
+    const { error } = await supabase.from("tasks").update({ status: "Completed", updated_at: new Date().toISOString() }).in("id", eligible);
+    setBulkApplying(false);
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
+    const skippedParts: string[] = [];
+    if (notSubmitted > 0) skippedParts.push(`${notSubmitted} not yet Submitted`);
+    if (openSubtasks > 0) skippedParts.push(`${openSubtasks} with open subtasks`);
+    if (notAllowed > 0) skippedParts.push(`${notAllowed} not yours to close`);
+    toast.show(`Completed ${eligible.length} task(s).${skippedParts.length > 0 ? ` Skipped: ${skippedParts.join(", ")}.` : ""}`, "success");
+    setSelectedIds(new Set());
     refreshAll();
   }
 
@@ -965,6 +1006,30 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {bulkMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
             <button onClick={applyBulkOwner} disabled={!bulkOwnerId || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkOwnerId || bulkApplying ? 0.5 : 1, cursor: !bulkOwnerId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+
+            {(() => {
+              const eligibleCount = Array.from(selectedIds).filter((id) => {
+                const t = tasks.find((x) => x.id === id);
+                return !!t && t.status === "Submitted"
+                  && !(t.task_subtasks || []).some((s) => !s.is_complete)
+                  && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email);
+              }).length;
+              return (
+                <button
+                  onClick={applyBulkComplete}
+                  disabled={eligibleCount === 0 || bulkApplying}
+                  title={eligibleCount === 0 ? "None of your selected tasks are Submitted and yours to close" : undefined}
+                  style={{
+                    ...smallActionBtn,
+                    backgroundColor: eligibleCount === 0 ? smallActionBtn.backgroundColor : COLOURS.GREEN,
+                    opacity: eligibleCount === 0 || bulkApplying ? 0.5 : 1,
+                    cursor: eligibleCount === 0 || bulkApplying ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Mark Complete{eligibleCount > 0 ? ` (${eligibleCount})` : ""}
+                </button>
+              );
+            })()}
 
             <button onClick={() => setSelectedIds(new Set())} style={{ ...smallActionBtn, marginLeft: "auto", backgroundColor: "transparent", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>Clear</button>
           </div>

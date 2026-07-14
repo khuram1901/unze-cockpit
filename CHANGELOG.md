@@ -4,6 +4,14 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Bulk "Mark Complete" + renamed the HOD close button
+
+Khuram: "for practical reasons, i would want an options to complete multiple tasks in one go, also you said when the task comes to me or kamran then we need to accept& close then complete i think we can make it one step." The second part was already one click — "Accept & Close" sets status straight to Completed, no separate "complete" step after it — but the name implied two actions, so it's renamed to "Mark Complete" everywhere (TaskStatus.tsx).
+
+Added the bulk version to the selection toolbar (TasksList.tsx): a "Mark Complete (N)" button that only counts/acts on the tasks in your selection you're actually allowed to close right now — Submitted, no open subtasks, and yours per the same `canCompleteSubmittedTask` rule as the single-task button. This matters because a single bulk UPDATE is all-or-nothing against the database triggers (migrations 100 and 114): if even one selected task didn't qualify, the whole batch would be rejected and nothing would complete. So it's filtered down first, then reports what it skipped and why (not yet Submitted / open subtasks / not yours to close) rather than failing silently.
+
+---
+
 ## 2026-07-14 — HOD-only task completion made airtight at the database level (migration 114)
 
 Follow-up to the HOD-completion rule below. Khuram, after being told the rule was only enforced client-side: "it really doesnt matter if the sub tasks are completed by the users, as long as the main task is closed by thier hod, so please ensure this is airtight." Written `supabase/114_task_completion_hod_gate.sql` — **not yet applied, needs to be run in the Supabase SQL Editor.**

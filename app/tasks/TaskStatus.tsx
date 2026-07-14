@@ -413,7 +413,7 @@ export default function TaskStatus({
           disabled={saving}
         >
           {/* "Completed" is never a free jump from this dropdown — the only
-              door to Completed is the HOD's "Accept & Close" button further
+              door to Completed is the HOD's "Mark Complete" button further
               down, and only once the task is Submitted. Still listed here
               if the task already IS Completed, so the control renders its
               real value instead of falling back to a blank/mismatched one. */}
@@ -474,7 +474,7 @@ export default function TaskStatus({
           </p>
         )}
         {/* No self-serve "mark complete" here any more — per Khuram, a task
-            can only become Completed via the HOD's "Accept & Close" button
+            can only become Completed via the HOD's "Mark Complete" button
             below, once it's been Submitted. */}
         {status !== "Completed" && status !== "Cancelled" && status !== "Submitted" && (
           <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "10px", marginBottom: 0 }}>
@@ -731,7 +731,7 @@ export default function TaskStatus({
                 opacity: saving ? 0.7 : 1,
               }}
             >
-              Accept &amp; Close
+              Mark Complete
             </button>
 
             <button
