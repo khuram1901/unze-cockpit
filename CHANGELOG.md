@@ -4,6 +4,25 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Task-creation consolidation, stage 1 (server-side paths + alert/task split)
+
+Khuram asked for a full map of how notifications and task-assignment worked across the app, suspecting duplication/inconsistency. Delivered `TASK_NOTIFICATION_AUDIT.md`: notifications were already centralised and fine (one `sendNotificationEmail()` function, working CEO-digest suppression), but task **creation** had 7 independent, uncoordinated insert call sites with wildly inconsistent field population.
+
+Agreed fix, stage 1 (server-side, lowest-risk paths):
+
+- **New shared gate**: `app/lib/task-creation.ts` (`createTaskCore`) + `app/api/tasks/create/route.ts`. Validates company required (Khuram's rule — no more silent "Group" fallback going forward), 150-char description limit, resolves `assigned_by` from the real actor (never a raw unchecked string), always fires a notification. Every task-creation path will route through this one gate.
+- **Notification email logic extracted** into `app/lib/task-notifications.ts` (`notifyTaskAssigned`, `notifyEscalationTask`), shared by `/api/notifications/send` (kept as a thin wrapper for not-yet-migrated call sites) and `createTaskCore` directly.
+- **Trigger-type constants** (`app/lib/notification-types.ts`) replace the free-typed `"task_assigned"`/`"escalation"` strings in `send-email.ts`'s digest-suppression list, so a typo can't create an unsuppressed new type.
+- **Alert vs. task, differentiated for the first time**: Khuram's rule — if the exception is already visible somewhere the owner checks anyway and nothing needs to be explicitly "completed," it's an alert (bell + "Needs Your Attention" banner), not a task. KPI escalations (production/dispatch/breakage lagging) and stuck receivables are reclassified from auto-created "Explanation Required" tasks to alert-only; the existing "Escalations" attention row already covered KPI visibility, added a new "Stuck Receivables" row so nothing disappears. Cash escalation stays a task (Khuram's call — a written explanation is wanted, tracked to completion) but now routes through the shared gate with a real company tag and an actual notification email (previously silent — one of the 3 auto-escalation functions in `home/page.tsx` fired zero notifications).
+- **Recurring tasks**: added a company picker to `RecurringTasksPanel.tsx`'s add/edit forms, prep for enforcing company-required on the cron. None of the 8 currently-active templates have one set yet — several (fee challans, personal payments) don't look company-specific — so Khuram is going through them before the cron itself is migrated (`app/api/tasks/recurring/route.ts` still inserts directly for now).
+- **Migration 106** (not yet applied): `company_id` on `recurring_tasks`; two `NOT VALID` check constraints on `tasks` (description ≤150 chars, `assigned_by_email` not null) as a DB-level backstop behind the new gate — grandfathers in existing rows (10 tasks already exceed 150 chars from before the character-limit rule).
+
+Still to do: PA quick-add + meeting-minutes company pickers and real-actor `assigned_by`, CSV import strict validation, migrate NewTaskForm onto the shared gate, migrate the recurring cron once Khuram's tagged the 8 templates.
+
+Verification: `tsc --noEmit` clean, `eslint` shows only pre-existing warnings/errors (same baseline as before these changes — none introduced).
+
+---
+
 ## 2026-07-14 — Full company names, Almahar/Directors excluded, Department filter shows all departments
 
 Three more fixes from Khuram:
