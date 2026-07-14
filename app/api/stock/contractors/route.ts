@@ -28,11 +28,12 @@ export async function GET(request: NextRequest) {
     return Response.json({ contractors: (data || []).map((r) => r.contractors) });
   }
 
-  // Search all contractors (for lookup/add)
+  // Search all contractors (for lookup/add) — no cap, Khuram wants every
+  // contractor to show regardless of list size (was hard-limited to 50).
   let query = supabase.from("contractors").select("*").order("name");
   if (search) query = query.ilike("name", `%${search}%`);
 
-  const { data, error } = await query.limit(50);
+  const { data, error } = await query;
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ contractors: data || [] });
 }
@@ -88,7 +89,9 @@ export async function PATCH(request: NextRequest) {
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });
   if (name !== undefined && !name) return Response.json({ error: "name cannot be empty" }, { status: 400 });
 
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  // Note: contractors has no updated_at column (unlike purchase_orders) —
+  // same bug as authority_letters, fixed at the same time.
+  const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
   if (cnic_or_id !== undefined) updates.cnic_or_id = cnic_or_id || null;
   if (contact_phone !== undefined) updates.contact_phone = contact_phone || null;

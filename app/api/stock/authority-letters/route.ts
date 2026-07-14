@@ -284,7 +284,10 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  // Note: authority_letters has no updated_at column (unlike purchase_orders) —
+  // setting one here caused every edit to fail with "Could not find the
+  // 'updated_at' column of 'authority_letters' in the schema cache".
+  const updates: Record<string, unknown> = {};
   if (contractor_id !== undefined) updates.contractor_id = contractor_id;
   if (letter_number !== undefined) updates.letter_number = letter_number;
   if (issue_date !== undefined) updates.issue_date = issue_date;
@@ -301,4 +304,35 @@ export async function PATCH(request: NextRequest) {
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ letter: data });
+}
+
+export async function DELETE(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  const { data: member } = await supabase
+    .from("members").select("role, department").eq("email", auth.email).single();
+
+  if (!member || !canManage(member.role, member.department)) {
+    return Response.json({ error: "Ops Manager or Admin required" }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const { id } = body;
+  if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+
+  const { error } = await supabase.from("authority_letters").delete().eq("id", id);
+  if (error) {
+    // Postgres foreign-key "on delete restrict" violation (dispatch records
+    // still point at this letter) — friendlier message than the raw error.
+    if (error.code === "23503") {
+      return Response.json(
+        { error: "This letter has dispatch records against it — remove those first." },
+        { status: 409 }
+      );
+    }
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+  return Response.json({ success: true });
 }
