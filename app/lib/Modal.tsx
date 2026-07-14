@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { COLOURS, RADII, SHADOWS } from "./SharedUI";
 
 // Small, generic centred-overlay modal — used by the Tasks page's task
@@ -17,6 +18,15 @@ export default function Modal({
   children: React.ReactNode;
   maxWidth?: string;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
