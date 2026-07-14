@@ -244,6 +244,9 @@ app/
     ├── department-config.ts          Department slug → name mapping
     ├── audit-log.ts                  logAuditEvent() helper
     ├── send-email.ts                 Email sending via Gmail API
+    ├── notification-types.ts         Named trigger-type constants (task_assigned, escalation)
+    ├── task-notifications.ts         notifyTaskAssigned() / notifyEscalationTask() — shared by /api/notifications/send and createTaskCore
+    ├── task-creation.ts              createTaskCore() — the one gate every task-creation path routes through (see TASK_NOTIFICATION_AUDIT.md)
     ├── google-client.ts              Google OAuth2 client setup
     ├── folderit-auth.ts              Folderit API auth helper — client-credentials token management
     ├── crypto.ts                     Token encryption/decryption for OAuth storage
@@ -1712,13 +1715,17 @@ Daily entry → `production_entries` + `production_allocations`; dispatch → `d
 Paste/upload → Claude extraction → review & edit → approve → tasks created + notifications sent.
 
 ### Task Data Flow
-Task created → assignee notified → status updates → weekly digest.
+All 7 task-creation paths (New Task form, PA quick-add, meeting minutes manual add, meeting AI-extraction, CSV import, recurring-task cron, cash-escalation auto-task) now go through one shared gate: `app/lib/task-creation.ts` (`createTaskCore`), reached via `POST /api/tasks/create` for every client-facing path (the recurring cron calls it in-process, server-side, no HTTP round-trip). This replaced 7 independent `supabase.from("tasks").insert()` call sites that each populated a different subset of fields — see `TASK_NOTIFICATION_AUDIT.md` for the full before/after. The gate enforces: company required (no "Group" fallback), 150-char description limit, `assigned_by` resolved from the real actor (never a hardcoded label), and always fires a notification via `app/lib/task-notifications.ts`.
+Task created → gate validates + inserts → assignee notified → status updates → weekly digest.
+
+### Alert vs. Task (14/07/2026)
+Not every exception becomes a task. Rule: if the underlying data is already visible somewhere the owner checks anyway, and nothing needs to be explicitly "completed," it's an **alert** (bell icon + "Needs Your Attention" banner on the executive dashboard, live-computed, nothing persisted) — not a task. KPI escalations (production/dispatch/breakage lagging) and stuck receivables are alert-only. Cash escalation and anything requiring a specific written reply/explanation stays a task.
 
 ### Exception Escalation Flow
-Cron runs → metrics vs thresholds → `/exceptions` page + manager briefings.
+Cron runs → metrics vs thresholds → `/exceptions` page + manager briefings. KPI/receivable exceptions surface on the executive "Needs Your Attention" banner (Escalations / Stuck Receivables rows) rather than creating tasks — see Alert vs. Task above.
 
 ### Notification Flow
-Task creation → `/api/notifications/send` → email. Push via VAPID/web-push.
+Task creation → shared gate (`createTaskCore`) → `app/lib/task-notifications.ts` → email. `/api/notifications/send` still exists as a thin wrapper around the same notify functions, for any call site not yet migrated. Push via VAPID/web-push.
 
 ---
 

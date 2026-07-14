@@ -4,6 +4,22 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-14 — Task-creation consolidation, stage 2 (remaining 4 client paths migrated)
+
+Continuation of stage 1 (below). All 7 task-creation paths now route through the shared `/api/tasks/create` gate:
+
+- **Recurring Tasks**: added a company picker to `RecurringTasksPanel.tsx`'s add/edit forms (migration 106 already added the `company_id` column). Read-only rows flag "No company set" in amber. The cron itself (`api/tasks/recurring/route.ts`) is **not yet migrated** — none of the 8 currently-active templates have a company set, so switching the cron to require one would silently stop generating tasks. Waiting on Khuram to tag all 8 before this is flipped.
+- **PA quick-add** (`pa/page.tsx`): added a required company dropdown and the 150-char description limit (neither existed before); `createNewTask` now calls `/api/tasks/create`.
+- **Meeting minutes manual add** (`my-minutes/page.tsx`) and **meeting AI-extraction** (`meetings/page.tsx`): both added a required company selector (per action item, for the AI-extraction case — the meeting's own free-text `company` label is a fixed list of 6 strings that doesn't reliably map to the `companies` table, so it isn't used as a default) and the character limit. Both now call `/api/tasks/create`, which also fixes `assigned_by` to the real logged-in user instead of the hardcoded `"Meeting Minutes"` label both paths used before.
+- **CSV bulk import** (`TasksList.tsx`): added a required Company column to the template; per Khuram's call, Assigned By / Assigned To / Department / Company must each exactly match a real member/department/company or the row is rejected (case-insensitive) — other valid rows in the same file still import. Now calls `/api/tasks/create` per row, so CSV-imported tasks get a real notification email for the first time.
+- **New Task form** (`NewTaskForm.tsx`): last path migrated. Also removed the "Group / needs review" company option — company is now genuinely required with no opt-out, closing the loophole that survived an earlier "required" pass (task history above).
+
+Verification: `tsc --noEmit` clean across the whole project; `eslint` shows only the same pre-existing warnings/errors as before this work (react-hooks/set-state-in-effect patterns, a few unused-var warnings, two `any` types, one unescaped apostrophe) — nothing new introduced. 5 commits, not yet pushed to `origin/main` (this sandbox has no git credentials configured — push from your own machine, or re-authorise here).
+
+Still open: apply `supabase/106_task_creation_hardening.sql` if not already done; tag all 8 active recurring-task templates with a company, then the cron can be migrated onto the shared gate.
+
+---
+
 ## 2026-07-14 — Task-creation consolidation, stage 1 (server-side paths + alert/task split)
 
 Khuram asked for a full map of how notifications and task-assignment worked across the app, suspecting duplication/inconsistency. Delivered `TASK_NOTIFICATION_AUDIT.md`: notifications were already centralised and fine (one `sendNotificationEmail()` function, working CEO-digest suppression), but task **creation** had 7 independent, uncoordinated insert call sites with wildly inconsistent field population.
