@@ -211,12 +211,15 @@ type BudgetRow = {
 
 type DeptBudgetRow = { department: string; category: string; budgeted_amount: number; actual_amount: number };
 
+type PdcWeek = { week_number: number; week_start: string; week_end: string; pdc_due: number; effective_balance: number };
+
 type CompanyFinanceData = {
   companyId: string;
   companyName: string;
   cashOpening: OpeningBalance | null;
   cashPlan: MonthlyPlan | null;
   cashPositions: DailyPosition[];
+  pdcOutlook: PdcWeek[];
   lastYearReceipts: number | null;
   lastYearPayments: number | null;
   forecast: BudgetRow[];
@@ -691,10 +694,11 @@ export default function HomePage() {
       c.shortCode === "UTPL" || c.shortCode === "IFPL"
     );
     for (const company of FINANCE_COMPANIES) {
-      const [cashOpenRes, cashPlanRes, cashPosRes, lyRes, forecastRes, deptBudgetRes] = await Promise.all([
+      const [cashOpenRes, cashPlanRes, cashPosRes, pdcRes, lyRes, forecastRes, deptBudgetRes] = await Promise.all([
         supabase.from("cash_opening_balance").select("id, as_of_date, opening_amount, currency").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
         supabase.from("monthly_cash_plan").select("id, plan_month, tentative_receivables, tentative_payouts").eq("company_id", company.id).eq("plan_month", currentMonthForCash).maybeSingle(),
         supabase.from("daily_cash_position").select("id, position_date, opening_balance, total_receipts, total_payments, closing_balance, post_dated_total, closing_after_post_dated").eq("company_id", company.id).lte("position_date", dateToView).order("position_date", { ascending: false }).limit(30),
+        supabase.rpc("get_pdc_outlook", { p_company_id: company.id, p_today: dateToView }),
         supabase.rpc("get_company_cash_yearly_comparison", { p_company_id: company.id, p_month: currentMonthForCash }),
         supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("company_id", company.id).gte("budget_month", currentMonthForCash).order("budget_month", { ascending: true }),
         supabase.from("department_budgets").select("department, category, budgeted_amount, actual_amount").eq("company_id", company.id).eq("budget_month", currentMonthForCash),
@@ -710,6 +714,7 @@ export default function HomePage() {
         cashOpening: cashOpenRes.data && cashOpenRes.data.length > 0 ? cashOpenRes.data[0] : null,
         cashPlan: cashPlanRes.data || null,
         cashPositions: cashPosRes.data || [],
+        pdcOutlook: (pdcRes.data || []) as PdcWeek[],
         lastYearReceipts: lyReceipts,
         lastYearPayments: lyPayments,
         forecast: (() => {
@@ -3554,12 +3559,25 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
       ) : (
         <div style={{ ...execCard(NAVY), padding: "12px", marginBottom: "8px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px", marginBottom: "8px" }}>
+            {/* 15 Jul 2026, per Khuram: cash in hand and PDC are two
+                different things — a PDC he's issued isn't out of his hand
+                yet, so it can't be silently blended into the headline cash
+                figure. This card used to show closing_after_post_dated
+                (cash minus every outstanding PDC); it's now the plain
+                actual closing balance, with PDC Outstanding broken out as
+                its own card next to it. */}
             {summaryCard(
-              "Cash Available",
-              latest ? `PKR ${fmtMoney(latest.closing_after_post_dated)}` : "—",
+              "Cash in Hand",
+              latest ? `PKR ${fmtMoney(latest.closing_balance)}` : "—",
               latest ? `Updated ${formatDateUK(latest.position_date)}` : "No data",
-              !latest ? BLUE : latest.closing_after_post_dated < 0 ? RED : GREEN,
+              !latest ? BLUE : latest.closing_balance < 0 ? RED : GREEN,
               { primary: true, freshnessDate: latest ? latest.position_date : null }
+            )}
+            {summaryCard(
+              "PDC Outstanding",
+              latest ? `PKR ${fmtMoney(latest.post_dated_total)}` : "—",
+              "Issued, not yet cleared",
+              AMBER
             )}
             {summaryCard(
               "Money In (MTD)",
@@ -3574,6 +3592,25 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
               plannedPay > 0 ? (payStatus === "RED" ? RED : payStatus === "AMBER" ? AMBER : GREEN) : SLATE
             )}
           </div>
+
+          {/* PDC due soon — sum of the first 4 weeks of get_pdc_outlook()
+              (migration 132). Only shown when there's something to flag,
+              same "management by exception" pattern as the rest of this
+              page — a clean outlook is silent, not a reassuring zero. */}
+          {(() => {
+            const dueWithin4Weeks = data.pdcOutlook.filter((w) => w.week_number <= 4).reduce((s, w) => s + w.pdc_due, 0);
+            if (dueWithin4Weeks <= 0) return null;
+            return (
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "8px 10px", marginBottom: "6px", borderRadius: "8px",
+                backgroundColor: "var(--bg-warning-soft, #FBF0DF)",
+              }}>
+                <span style={{ fontSize: "12.5px", fontWeight: 600, color: AMBER }}>⚠ PDC due within 4 weeks</span>
+                <span style={{ fontSize: "12.5px", fontWeight: 700, color: AMBER }}>PKR {fmtMoney(dueWithin4Weeks)}</span>
+              </div>
+            );
+          })()}
 
           <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 4px", fontSize: "13px" }}>
             <span style={{ color: SLATE }}>Projected month-end</span>
