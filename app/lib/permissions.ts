@@ -59,9 +59,15 @@ export function isPrivileged(u: UserCtx) {
 
 // ── Finance ───────────────────────────────────────────────────────
 export function canViewFinance(u: UserCtx) {
+  // Found during the 15 Jul 2026 audit: isPA() used to be checked AFTER
+  // the per-member override, so a mis-set Access Matrix override could
+  // let a PA account see finance data through this shared helper — in
+  // direct conflict with the standing rule "PA never sees financial
+  // data. Ever." isPA() is now checked first, unconditionally, so no
+  // override can ever grant a PA account finance access via this path.
+  if (isPA(u)) return false;
   const o = ov(u, "can_view_finance");
   if (o !== null) return o;
-  if (isPA(u)) return false;
   if (isAdminTier(u)) return true;
   return u.role === "Manager" && u.department === "Finance";
 }
@@ -84,9 +90,11 @@ export function financeCompanies(u: UserCtx): "both" | "UTPL" | "IFPL" | "none" 
 
 // ── Receivables ───────────────────────────────────────────────────
 export function canViewReceivables(u: UserCtx) {
+  // Same override-before-PA ordering bug as canViewFinance, fixed the
+  // same way on 15 Jul 2026 — isPA() checked first, unconditionally.
+  if (isPA(u)) return false;
   const o = ov(u, "can_view_receivables");
   if (o !== null) return o;
-  if (isPA(u)) return false;
   if (isAdminTier(u)) return true;
   return u.role === "Manager" && (u.department === "Finance" || u.department === "Unze Trading Ops");
 }
@@ -119,9 +127,11 @@ export function canViewStock(u: UserCtx) {
 
 // Guarantees: Finance dept + Unze Trading Ops (they chase releases)
 export function canViewGuarantees(u: UserCtx) {
+  // Same override-before-PA ordering bug as canViewFinance, fixed the
+  // same way on 15 Jul 2026 — isPA() checked first, unconditionally.
+  if (isPA(u)) return false;
   const o = ov(u, "can_view_guarantees");
   if (o !== null) return o;
-  if (isPA(u)) return false;
   if (isAdminTier(u)) return true;
   return u.role === "Manager" && (u.department === "Finance" || u.department === "Unze Trading Ops");
 }
@@ -135,9 +145,11 @@ export function canViewGuaranteeFinancials(u: UserCtx) {
 }
 
 export function canManageGuarantees(u: UserCtx): boolean {
+  // Same override-before-PA ordering bug as canViewFinance, fixed the
+  // same way on 15 Jul 2026 — isPA() checked first, unconditionally.
+  if (isPA(u)) return false;
   const o = ov(u, "can_manage_guarantees");
   if (o !== null) return o;
-  if (isPA(u)) return false;
   if (isAdminTier(u)) return true;
   return u.role === "Manager" && u.department === "Finance";
 }
@@ -180,9 +192,11 @@ export function canManageCalendarRequests(u: UserCtx) {
 }
 
 export function canManageTaxNotices(u: UserCtx): boolean {
+  // Same override-before-PA ordering bug as canViewFinance, fixed the
+  // same way on 15 Jul 2026 — isPA() checked first, unconditionally.
+  if (isPA(u)) return false;
   const o = ov(u, "can_manage_tax_notices");
   if (o !== null) return o;
-  if (isPA(u)) return false;
   if (isAdminTier(u)) return true;
   return false;
 }
@@ -349,16 +363,20 @@ export function canEditOperationsTargets(u: UserCtx) {
 
 // ── Tax Accounts Schedule ────────────────────────────────────────
 export function canViewTaxAccounts(u: UserCtx): boolean {
+  // Same override-before-PA ordering bug as canViewFinance, fixed the
+  // same way on 15 Jul 2026 — isPA() checked first, unconditionally.
+  if (isPA(u)) return false;
   const o = ov(u, "can_view_dept_tax_accounts");
   if (o !== null) return o;
-  if (isPA(u)) return false;
   return true; // all other authenticated users can view by default
 }
 
 export function canManageTaxSchedule(u: UserCtx): boolean {
+  // Same override-before-PA ordering bug as canViewFinance, fixed the
+  // same way on 15 Jul 2026 — isPA() checked first, unconditionally.
+  if (isPA(u)) return false;
   const o = ov(u, "can_manage_tax_schedule");
   if (o !== null) return o;
-  if (isPA(u)) return false;
   if (isAdminTier(u)) return true;
   return false;
 }
