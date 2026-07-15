@@ -40,6 +40,7 @@ type DailyPosition = {
 };
 
 type DeptBudget = { id: string; department: string; budget_month: string; category: string; budgeted_amount: number; actual_amount: number; notes: string | null };
+type DeptBudgetSummary = { department: string; budgeted_total: number; actual_total: number };
 
 const COMPANY_DEPTS: Record<string, string[]> = {
   "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit", "Unze Trading Ops"],
@@ -119,6 +120,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [mfSaving, setMfSaving] = useState(false);
 
   const [budgets, setBudgets] = useState<DeptBudget[]>([]);
+  const [budgetSummary, setBudgetSummary] = useState<DeptBudgetSummary[]>([]);
   const [showBudgets, setShowBudgets] = useState(false);
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [budgetMonth, setBudgetMonth] = useState(currentMonthISO());
@@ -284,15 +286,29 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     }
     setPositions(rawPositions);
 
-    const { data: budgetData } = await supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", budgetMonth).order("department");
+    const [{ data: budgetData }, { data: summaryData }] = await Promise.all([
+      supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", budgetMonth).order("department"),
+      supabase.rpc("get_department_budget_summary", { p_company_id: companyId, p_month: budgetMonth }),
+    ]);
     setBudgets(budgetData || []);
+    setBudgetSummary(summaryData || []);
 
     setLoading(false);
   }
 
+  // Found during the 15 Jul 2026 audit: totals (grand total + per-
+  // department subtotals) used to be summed in JS from the raw budgets
+  // fetch (rule 0 violation) — now computed in get_department_budget_summary().
+  // The raw per-category rows are still fetched separately above since
+  // each one is individually editable inline.
   async function loadBudgets(month?: string) {
-    const { data } = await supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", month || budgetMonth).order("department");
+    const m = month || budgetMonth;
+    const [{ data }, { data: summaryData }] = await Promise.all([
+      supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", m).order("department"),
+      supabase.rpc("get_department_budget_summary", { p_company_id: companyId, p_month: m }),
+    ]);
     setBudgets(data || []);
+    setBudgetSummary(summaryData || []);
   }
 
   async function handleAddBudget(e: React.FormEvent) {
@@ -749,8 +765,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         {(() => {
           const validDepts = COMPANY_DEPTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
           const validCats = COMPANY_CATS[companyId] || ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
-          const totalB = budgets.reduce((s, b) => s + b.budgeted_amount, 0);
-          const totalA = budgets.reduce((s, b) => s + b.actual_amount, 0);
+          // Totals come from get_department_budget_summary() (DB-side
+          // sums); reducing this small, already-aggregated ~8-row summary
+          // for the grand total is the same accepted pattern used for the
+          // receivables RAG summary elsewhere in the app — not a raw-row sum.
+          const totalB = budgetSummary.reduce((s, r) => s + r.budgeted_total, 0);
+          const totalA = budgetSummary.reduce((s, r) => s + r.actual_total, 0);
           const groups = new Map<string, DeptBudget[]>();
           for (const b of budgets) { if (!groups.has(b.department)) groups.set(b.department, []); groups.get(b.department)!.push(b); }
           return (
@@ -827,8 +847,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             )}
 
             {Array.from(groups.entries()).map(([deptName, items]) => {
-              const dB = items.reduce((s, i) => s + i.budgeted_amount, 0);
-              const dA = items.reduce((s, i) => s + i.actual_amount, 0);
+              const deptTotals = budgetSummary.find((r) => r.department === deptName);
+              const dB = deptTotals?.budgeted_total ?? 0;
+              const dA = deptTotals?.actual_total ?? 0;
               const over = dA > dB;
               return (
                 <div key={deptName} style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "10px", overflow: "hidden", marginBottom: "8px" }}>

@@ -24,6 +24,7 @@ type Budget = {
   actual_amount: number;
   notes: string | null;
 };
+type BudgetSummary = { department: string; budgeted_total: number; actual_total: number };
 
 const COMPANY_DEPARTMENTS: Record<string, string[]> = {
   "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit", "Unze Trading Ops"],
@@ -131,6 +132,7 @@ export default function FinancePage() {
 
   const [showBudgets, setShowBudgets] = useState(false);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [budgetSummary, setBudgetSummary] = useState<BudgetSummary[]>([]);
   const [budgetMonth, setBudgetMonth] = useState(new Date().toISOString().slice(0, 7));
   const [budgetCompany, setBudgetCompany] = useState(COMPANIES[0]?.id || "");
   const [showBudgetForm, setShowBudgetForm] = useState(false);
@@ -177,11 +179,19 @@ export default function FinancePage() {
     checkAndRedirect();
   }, [router]);
 
+  // Found during the 15 Jul 2026 audit: totals used to be summed in JS
+  // from the raw budgets fetch (rule 0 violation) — now computed by
+  // get_department_budget_summary(). Raw per-category rows are still
+  // fetched for the editable list; only the SUMS moved server-side.
   async function loadBudgets(cId?: string, month?: string) {
     const c = cId || budgetCompany;
     const m = month || budgetMonth;
-    const { data } = await supabase.from("department_budgets").select("*").eq("company_id", c).eq("budget_month", m).order("department");
+    const [{ data }, { data: summaryData }] = await Promise.all([
+      supabase.from("department_budgets").select("*").eq("company_id", c).eq("budget_month", m).order("department"),
+      supabase.rpc("get_department_budget_summary", { p_company_id: c, p_month: m }),
+    ]);
     setBudgets(data || []);
+    setBudgetSummary(summaryData || []);
   }
 
   async function handleBulkUpload(e: React.FormEvent) {
@@ -240,8 +250,12 @@ export default function FinancePage() {
 
   const budgetGroups = new Map<string, Budget[]>();
   for (const b of budgets) { if (!budgetGroups.has(b.department)) budgetGroups.set(b.department, []); budgetGroups.get(b.department)!.push(b); }
-  const totalBudgeted = budgets.reduce((s, b) => s + b.budgeted_amount, 0);
-  const totalActual = budgets.reduce((s, b) => s + b.actual_amount, 0);
+  // Totals come from get_department_budget_summary() (DB-side sums);
+  // reducing this small, already-aggregated ~8-row summary for the
+  // grand total mirrors the accepted pattern used for the receivables
+  // RAG summary elsewhere — not a raw-row sum.
+  const totalBudgeted = budgetSummary.reduce((s, r) => s + r.budgeted_total, 0);
+  const totalActual = budgetSummary.reduce((s, r) => s + r.actual_total, 0);
   const variance = totalBudgeted - totalActual;
 
   if (checking) return null;
@@ -468,8 +482,9 @@ export default function FinancePage() {
 
                   {/* Budget entries by department */}
                   {Array.from(budgetGroups.entries()).map(([deptName, items]) => {
-                    const dB = items.reduce((s, i) => s + i.budgeted_amount, 0);
-                    const dA = items.reduce((s, i) => s + i.actual_amount, 0);
+                    const deptTotals = budgetSummary.find((r) => r.department === deptName);
+                    const dB = deptTotals?.budgeted_total ?? 0;
+                    const dA = deptTotals?.actual_total ?? 0;
                     const over = dA > dB;
                     return (
                       <div key={deptName} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", marginBottom: "8px" }}>

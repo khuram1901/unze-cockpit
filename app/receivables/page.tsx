@@ -96,6 +96,18 @@ export default function ReceivablesPage() {
     totalAmount: number;
     recGreen: number; recAmber: number; recRed: number; recRedCount: number;
   }>({ customerRows: [], totalAmount: 0, recGreen: 0, recAmber: 0, recRed: 0, recRedCount: 0 });
+  // Found during the 15 Jul 2026 audit: aging totals/per-customer aging
+  // were summed in JS from raw bill rows (rule 0 violation). Two RPCs
+  // for this already existed (migration 056) but weren't wired up —
+  // now used instead of the JS loops.
+  const [agingTotals, setAgingTotals] = useState<Record<"0-30" | "31-60" | "61-90" | "90+", number>>({ "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 });
+  const [customerAging, setCustomerAging] = useState<Map<string, "0-30" | "31-60" | "61-90" | "90+">>(new Map());
+  // Also fixes: this used to only ever group the most recent 100
+  // collected bills (the client fetch was capped), so plant totals were
+  // silently incomplete once more than 100 bills had been collected in
+  // total — get_collected_receivables_by_plant() computes true totals
+  // over ALL collected bills.
+  const [collectedByPlant, setCollectedByPlant] = useState<{ plant: string; count: number; total: number; bills: { id: string; utility: string; amount: number; received_date: string | null }[] }[]>([]);
   const [loading, setLoading] = useState(true);
   const [canEdit, setCanEdit] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -164,12 +176,15 @@ export default function ReceivablesPage() {
       }
     }
 
-    const [stagesRes, billsRes, collectedRes, plantsRes, ragRes] = await Promise.all([
+    const [stagesRes, billsRes, collectedRes, plantsRes, ragRes, agingTotalsRes, agingByCustomerRes, collectedByPlantRes] = await Promise.all([
       supabase.from("receivable_stages").select("*").order("stage_order"),
       supabase.from("receivables").select("*").neq("status", "Collected").order("date_submitted"),
       supabase.from("receivables").select("*").eq("status", "Collected").order("received_date", { ascending: false }).limit(100),
       supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
       supabase.rpc("get_receivable_rag_by_customer"),
+      supabase.rpc("get_receivable_aging_totals"),
+      supabase.rpc("get_receivable_aging_by_customer"),
+      supabase.rpc("get_collected_receivables_by_plant"),
     ]);
     setStages(stagesRes.data || []);
     setBills(billsRes.data || []);
@@ -194,6 +209,31 @@ export default function ReceivablesPage() {
       totalAmount: ragRows.reduce((s, r) => s + r.totalAmount, 0),
       recGreen: totGreen, recAmber: totAmber, recRed: totRed, recRedCount: totRedCt,
     });
+
+    const totalsMap: Record<"0-30" | "31-60" | "61-90" | "90+", number> = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+    for (const r of (agingTotalsRes.data || []) as { bucket: "0-30" | "31-60" | "61-90" | "90+"; total: number }[]) {
+      totalsMap[r.bucket] = Number(r.total) || 0;
+    }
+    setAgingTotals(totalsMap);
+
+    const custAging = new Map<string, "0-30" | "31-60" | "61-90" | "90+">();
+    for (const r of (agingByCustomerRes.data || []) as { customer: string; b0_30: number; b31_60: number; b61_90: number; b90_plus: number }[]) {
+      if (Number(r.b90_plus) > 0) custAging.set(r.customer, "90+");
+      else if (Number(r.b61_90) > 0) custAging.set(r.customer, "61-90");
+      else if (Number(r.b31_60) > 0) custAging.set(r.customer, "31-60");
+      else custAging.set(r.customer, "0-30");
+    }
+    setCustomerAging(custAging);
+
+    setCollectedByPlant(
+      ((collectedByPlantRes.data || []) as { plant_name: string; bill_count: number; total_amount: number; bills: { id: string; utility: string; amount: number; received_date: string | null }[] | null }[])
+        .map((r) => ({
+          plant: r.plant_name,
+          count: Number(r.bill_count) || 0,
+          total: Number(r.total_amount) || 0,
+          bills: (r.bills || []).map((b) => ({ ...b, amount: Number(b.amount) || 0 })),
+        }))
+    );
 
     setLoading(false);
   }
@@ -365,63 +405,12 @@ export default function ReceivablesPage() {
   // RAG summary from Postgres RPC — no client-side aggregation
   const { customerRows, totalAmount, recGreen, recAmber, recRed, recRedCount } = ragSummary;
 
-  function calendarDaysSince(dateStr: string): number {
-    const start = new Date(dateStr + "T00:00:00");
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    if (start > now) return 0;
-    return Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-  }
-  function agingBucket(dateStr: string): "0-30" | "31-60" | "61-90" | "90+" {
-    const days = calendarDaysSince(dateStr);
-    if (days <= 30) return "0-30";
-    if (days <= 60) return "31-60";
-    if (days <= 90) return "61-90";
-    return "90+";
-  }
   const AGING_COLOURS: Record<string, string> = {
     "0-30": COLOURS.GREEN,
     "31-60": COLOURS.AMBER,
     "61-90": COLOURS.RED,
     "90+": COLOURS.RED,
   };
-
-  const agingTotals = { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
-  for (const bill of bills) {
-    agingTotals[agingBucket(bill.date_submitted)] += Number(bill.amount) || 0;
-  }
-
-  const customerAging = (() => {
-    const map = new Map<string, { "0-30": number; "31-60": number; "61-90": number; "90+": number }>();
-    for (const bill of bills) {
-      const key = bill.utility || "Unknown";
-      if (!map.has(key)) map.set(key, { "0-30": 0, "31-60": 0, "61-90": 0, "90+": 0 });
-      const row = map.get(key)!;
-      row[agingBucket(bill.date_submitted)] += Number(bill.amount) || 0;
-    }
-    const result = new Map<string, string>();
-    for (const [cust, buckets] of map) {
-      if (buckets["90+"] > 0) result.set(cust, "90+");
-      else if (buckets["61-90"] > 0) result.set(cust, "61-90");
-      else if (buckets["31-60"] > 0) result.set(cust, "31-60");
-      else result.set(cust, "0-30");
-    }
-    return result;
-  })();
-
-  const collectedByPlant = (() => {
-    const map = new Map<string, { plant: string; count: number; total: number; bills: Receivable[] }>();
-    for (const bill of collectedBills) {
-      const plant = plants.find((p) => p.id === bill.plant_id);
-      const key = plant?.name || "Unknown";
-      if (!map.has(key)) map.set(key, { plant: key, count: 0, total: 0, bills: [] });
-      const row = map.get(key)!;
-      row.count++;
-      row.total += Number(bill.amount) || 0;
-      row.bills.push(bill);
-    }
-    return Array.from(map.values()).sort((a, b) => b.total - a.total);
-  })();
 
   if (checking) return null;
 
