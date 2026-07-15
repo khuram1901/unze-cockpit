@@ -26,10 +26,7 @@ const { NAVY, SLATE, BORDER, CANVAS, HAIRLINE, CARD_ALT, INK_700, INK_400, GREEN
 // distinct colour per company for the executive summary card below.
 type FolderitHomeCardCompany = { groupKey: string; label: string; colour: string };
 const FOLDERIT_HOME_CARD_COMPANIES: FolderitHomeCardCompany[] = [
-  { groupKey: UTPL_COMPANY_ID, label: "UTPL", colour: BLUE },
   { groupKey: IFPL_COMPANY_ID, label: "IFPL", colour: GREEN },
-  { groupKey: "restaurants", label: "Restaurant", colour: AMBER },
-  { groupKey: DIR_COMPANY_ID, label: "Family Documents", colour: NAVY },
 ];
 
 /* ───────────────────────── Types ───────────────────────── */
@@ -580,7 +577,7 @@ export default function KamranDashboardPage() {
   async function loadExecutiveData(dateToView: string) {
     setExecLoading(true);
 
-    const cacheKey = `exec_home_${dateToView}`;
+    const cacheKey = `ceo_kamran_${dateToView}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -990,7 +987,7 @@ export default function KamranDashboardPage() {
         supabase.rpc("get_department_kpi_counts", {
           p_slug: cfg.slug,
           p_department_name: cfg.departmentName,
-          p_company_id: UTPL_COMPANY_ID,
+          p_company_id: IFPL_COMPANY_ID,
           p_today: todayStr,
         })
       ),
@@ -1216,11 +1213,11 @@ export default function KamranDashboardPage() {
     loadExecutiveData(selectedDate);
     const channel = supabase
       .channel("ceo-dashboard-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "production_entries" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "dispatch_entries" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "breakage_entries" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "machine_issues" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "production_entries" }, () => { sessionStorage.removeItem(`ceo_kamran_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "dispatch_entries" }, () => { sessionStorage.removeItem(`ceo_kamran_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "breakage_entries" }, () => { sessionStorage.removeItem(`ceo_kamran_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "machine_issues" }, () => { sessionStorage.removeItem(`ceo_kamran_${selectedDate}`); loadExecutiveData(selectedDate); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => { sessionStorage.removeItem(`ceo_kamran_${selectedDate}`); loadExecutiveData(selectedDate); })
       .on("postgres_changes", { event: "*", schema: "public", table: "monthly_production_targets" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
       .on("postgres_changes", { event: "*", schema: "public", table: "monthly_dispatch_targets" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
       .on("postgres_changes", { event: "*", schema: "public", table: "monthly_cash_plan" }, () => { sessionStorage.removeItem(`exec_home_${selectedDate}`); loadExecutiveData(selectedDate); })
