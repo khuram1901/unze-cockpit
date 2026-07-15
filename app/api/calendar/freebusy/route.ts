@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const supabase = createServiceClient();
     const { data: tokens } = await supabase
       .from("google_oauth_tokens")
-      .select("*")
+      .select("id, user_email, access_token, refresh_token, token_expiry, created_at")
       .order("created_at");
 
     if (!tokens || tokens.length === 0) {

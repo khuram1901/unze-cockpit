@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("guarantee_facilities")
-    .select("*")
+    .select("id, bank_name, facility_name, facility_type, total_limit, notes, active")
     .order("bank_name");
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ facilities: data || [] });

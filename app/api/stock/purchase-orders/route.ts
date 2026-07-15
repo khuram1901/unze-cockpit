@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from("purchase_orders")
-    .select("*")
+    .select("id, plant_id, plant_name, customer_name, po_number, po_label, ordered_31, ordered_36, ordered_40, ordered_45, ordered_meter, variance_pct, status, is_system_unallocated, start_date, notes, opening_produced_31, opening_produced_36, opening_produced_40, opening_produced_45, opening_produced_meter")
     .order("created_at", { ascending: false });
 
   if (plantId) query = query.eq("plant_id", plantId);

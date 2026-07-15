@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     const { data: templates } = await supabase
       .from("recurring_tasks")
-      .select("*")
+      .select("id, description, frequency, day_of_week, day_of_month, last_created_at, company_id, assigned_to, assigned_to_email, assigned_to_department, due_days_after, priority, project, assigned_by")
       .eq("active", true);
 
     if (!templates || templates.length === 0) {

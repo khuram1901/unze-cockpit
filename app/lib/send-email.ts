@@ -131,7 +131,7 @@ export async function sendNotificationEmail({
     const supabaseForTokens = createServiceClient();
     const { data: notifToken } = await supabaseForTokens
       .from("google_oauth_tokens")
-      .select("*")
+      .select("id, user_email, access_token, refresh_token, token_expiry")
       .order("updated_at", { ascending: false })
       .limit(1)
       .single();

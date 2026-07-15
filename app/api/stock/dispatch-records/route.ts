@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("dispatch_records")
-    .select("*")
+    .select("id, authority_letter_id, dispatch_date, qty_31, qty_36, qty_40, qty_45, qty_meter, released_by, vehicle_number, notes")
     .eq("authority_letter_id", letterId)
     .order("dispatch_date", { ascending: false });
 

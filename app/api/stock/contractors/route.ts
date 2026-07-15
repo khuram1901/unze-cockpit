@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     // Return contractors linked to a specific PO
     const { data, error } = await supabase
       .from("po_contractors")
-      .select("contractor_id, contractors(*)")
+      .select("contractor_id, contractors(id, name, cnic_or_id, contact_phone, contact_address)")
       .eq("po_id", poId)
       .order("created_at", { ascending: true });
 
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   // Search all contractors (for lookup/add) — no cap, Khuram wants every
   // contractor to show regardless of list size (was hard-limited to 50).
-  let query = supabase.from("contractors").select("*").order("name");
+  let query = supabase.from("contractors").select("id, name, cnic_or_id, contact_phone, contact_address").order("name");
   if (search) query = query.ilike("name", `%${search}%`);
 
   const { data, error } = await query;
