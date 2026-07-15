@@ -149,11 +149,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
   const [periodFilter, setPeriodFilter] = useState<"all" | "week" | "month" | "quarter">("all");
-  // Single collapsed "Filters" button (badge shows how many are active)
-  // instead of a permanent row of 7 dropdowns plus a separate "More
-  // Filters" toggle — the redesign Khuram approved folds every filter
-  // into one panel, opened on demand.
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Filter panel used to be collapsed behind a "Filters" toggle button —
+  // Khuram asked for that reverted, so the full dropdown row is always
+  // visible again now. filtersOpen is kept (always true) rather than
+  // ripped out everywhere it's referenced, to keep this change small.
+  const [filtersOpen] = useState(true);
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [dueFilter, setDueFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
@@ -264,7 +264,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     setSubtaskFilter("all");
     setStatusFilter("all");
     setSearchQuery("");
-    setFiltersOpen(false);
   }
 
   useEffect(() => {
@@ -1142,26 +1141,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%" }}
             />
           </div>
-          <button
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            style={{
-              display: "flex", alignItems: "center", gap: "7px",
-              border: `1px solid ${filtersOpen ? COLOURS.BLUE : COLOURS.HAIRLINE}`,
-              backgroundColor: filtersOpen ? COLOURS.INFO_SOFT : COLOURS.CARD,
-              color: filtersOpen ? COLOURS.BLUE : COLOURS.NAVY,
-              borderRadius: RADII.SM, padding: "6px 14px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
-            }}
-          >
-            Filters
-            {activeFilterCount > 0 && (
-              <span style={{
-                backgroundColor: filtersOpen ? COLOURS.BLUE : COLOURS.NAVY, color: "white",
-                borderRadius: "999px", fontSize: "10.5px", fontWeight: 700, padding: "1px 7px", minWidth: "16px", textAlign: "center",
-              }}>
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
           {filtersActive && (
             <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
               Reset
