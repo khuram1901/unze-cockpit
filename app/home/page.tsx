@@ -961,23 +961,42 @@ export default function HomePage() {
     const computedDailyOpsData = Array.from(opsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
     setDailyOpsData(computedDailyOpsData);
 
-    const [deptOwnersRes, ...deptDataResults] = await Promise.all([
+    // Per-department KPI counts (migration 130) — replaces fetching every department's
+    // raw rows and filtering/counting them in JS. This also fixes a real bug: the old
+    // fetch filtered every department's table by company_id only, so for admin/it/ops
+    // (all backed by "tasks") it never filtered by assigned_to_department — Admin, IT,
+    // and Ops health cards were all silently computed from the exact same unfiltered
+    // set of UTPL tasks. The RPC filters tasks-backed departments by department name.
+    const [deptOwnersRes, ...deptCountsResults] = await Promise.all([
       supabase.from("department_owners").select("department_name, primary_owner_name").eq("active", true),
       ...DEPARTMENT_CONFIGS.map((cfg) =>
-        supabase.from(cfg.table).select(cfg.selectColumns ?? "*").eq("company_id", UTPL_COMPANY_ID)
+        supabase.rpc("get_department_kpi_counts", {
+          p_slug: cfg.slug,
+          p_department_name: cfg.departmentName,
+          p_company_id: UTPL_COMPANY_ID,
+          p_today: todayStr,
+        })
       ),
     ]);
     const ownerMap = new Map((deptOwnersRes.data || []).map((o: { department_name: string; primary_owner_name: string | null }) => [o.department_name, o.primary_owner_name || "—"]));
 
+    // "Open" count shown in each card's subtitle — the KPI id(s) that best represent
+    // outstanding work for that department's own status vocabulary.
+    const OPEN_COUNT_KEYS: Record<string, string[]> = {
+      audit: ["planned", "in_progress"],
+      hr: ["open"],
+      taxation: ["pending"],
+      admin: ["open"],
+      it: ["open"],
+      ops: ["open"],
+    };
+
     const healthResults: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[] = [];
     for (let i = 0; i < DEPARTMENT_CONFIGS.length; i++) {
       const deptConfig = DEPARTMENT_CONFIGS[i];
-      const deptRows = (deptDataResults[i].data || []) as unknown as Record<string, unknown>[];
-      const status = getDepartmentHealthStatus(deptRows, deptConfig);
-      const openCount = deptRows.filter((r) => {
-        const s = (r.status as string) || "";
-        return s !== "Completed" && s !== "Cancelled" && s !== "Closed" && s !== "Resolved";
-      }).length;
+      const counts = (deptCountsResults[i].data || {}) as Record<string, number>;
+      const status = getDepartmentHealthStatus(counts, deptConfig);
+      const openCount = (OPEN_COUNT_KEYS[deptConfig.slug] || []).reduce((s, key) => s + (counts[key] || 0), 0);
       healthResults.push({
         slug: deptConfig.slug,
         title: deptConfig.title,

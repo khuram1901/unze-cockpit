@@ -20,7 +20,6 @@ export type KPIDef = {
   id: string;
   label: string;
   table?: string;
-  countFn: (rows: Record<string, unknown>[]) => number;
   color: string;
 };
 
@@ -30,7 +29,7 @@ export type DepartmentConfig = {
   departmentName: string;
   allowedRoles: string[];
   table: string;
-  /** Minimum columns the KPI lambdas + open-count filter need. Omit to fetch all. */
+  /** Columns the department's data table displays. Omit selectColumns to fetch all. */
   selectColumns?: string;
   columns: ColumnDef[];
   formFields: FormField[];
@@ -38,14 +37,6 @@ export type DepartmentConfig = {
   statusField: string;
   statusOptions: string[];
 };
-
-const today = new Date().toISOString().slice(0, 10);
-
-function daysBetween(dateStr: string | null): number {
-  if (!dateStr) return 0;
-  const d = new Date(dateStr + "T00:00:00");
-  return Math.floor((Date.now() - d.getTime()) / 86400000);
-}
 
 export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
   {
@@ -77,11 +68,11 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "planned", label: "Planned", countFn: (rows) => rows.filter((r) => r.status === "Planned").length, color: COLOURS.BLUE },
-      { id: "in_progress", label: "In Progress", countFn: (rows) => rows.filter((r) => r.status === "In Progress").length, color: COLOURS.AMBER },
-      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: COLOURS.GREEN },
-      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.target_date && (r.target_date as string) < today).length, color: COLOURS.RED },
-      { id: "avg_completion", label: "Avg Completion", countFn: (rows) => { const active = rows.filter((r) => r.status !== "Cancelled"); if (active.length === 0) return 0; return Math.round(active.reduce((s, r) => s + (Number(r.completion_pct) || 0), 0) / active.length); }, color: COLOURS.PURPLE },
+      { id: "planned", label: "Planned", color: COLOURS.BLUE },
+      { id: "in_progress", label: "In Progress", color: COLOURS.AMBER },
+      { id: "completed", label: "Completed", color: COLOURS.GREEN },
+      { id: "overdue", label: "Overdue", color: COLOURS.RED },
+      { id: "avg_completion", label: "Avg Completion", color: COLOURS.PURPLE },
     ],
   },
   {
@@ -107,10 +98,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "open", label: "Open Positions", countFn: (rows) => rows.filter((r) => r.status === "Open" || r.status === "Interviewing").length, color: COLOURS.AMBER },
-      { id: "filled", label: "Filled", countFn: (rows) => rows.filter((r) => r.status === "Filled").length, color: COLOURS.GREEN },
-      { id: "long_open", label: "Open 60+ Days", countFn: (rows) => rows.filter((r) => (r.status === "Open" || r.status === "Interviewing") && daysBetween(r.date_opened as string | null) > 60).length, color: COLOURS.RED },
-      { id: "total", label: "Total", countFn: (rows) => rows.length, color: COLOURS.BLUE },
+      { id: "open", label: "Open Positions", color: COLOURS.AMBER },
+      { id: "filled", label: "Filled", color: COLOURS.GREEN },
+      { id: "long_open", label: "Open 60+ Days", color: COLOURS.RED },
+      { id: "total", label: "Total", color: COLOURS.BLUE },
     ],
   },
   {
@@ -144,10 +135,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "pending", label: "Pending", countFn: (rows) => rows.filter((r) => r.resolution_status === "pending").length, color: COLOURS.AMBER },
-      { id: "hearing_soon", label: "Hearing < 7 Days", countFn: (rows) => rows.filter((r) => r.resolution_status === "pending" && r.hearing_deadline && daysBetween(r.hearing_deadline as string) <= 0 && daysBetween(r.hearing_deadline as string) > -7).length, color: COLOURS.RED },
-      { id: "high_exposure", label: "Exposure > 500K", countFn: (rows) => rows.filter((r) => r.resolution_status === "pending" && (r.financial_exposure as number) > 500000).length, color: COLOURS.RED },
-      { id: "resolved", label: "Resolved", countFn: (rows) => rows.filter((r) => r.resolution_status !== "pending").length, color: COLOURS.GREEN },
+      { id: "pending", label: "Pending", color: COLOURS.AMBER },
+      { id: "hearing_soon", label: "Hearing < 7 Days", color: COLOURS.RED },
+      { id: "high_exposure", label: "Exposure > 500K", color: COLOURS.RED },
+      { id: "resolved", label: "Resolved", color: COLOURS.GREEN },
     ],
   },
   {
@@ -176,10 +167,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "open", label: "Open Tasks", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled").length, color: COLOURS.AMBER },
-      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.due_date && (r.due_date as string) < today).length, color: COLOURS.RED },
-      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: COLOURS.GREEN },
-      { id: "total", label: "Total", countFn: (rows) => rows.length, color: COLOURS.BLUE },
+      { id: "open", label: "Open Tasks", color: COLOURS.AMBER },
+      { id: "overdue", label: "Overdue", color: COLOURS.RED },
+      { id: "completed", label: "Completed", color: COLOURS.GREEN },
+      { id: "total", label: "Total", color: COLOURS.BLUE },
     ],
   },
   {
@@ -206,10 +197,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "open", label: "Open Tasks", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled").length, color: COLOURS.AMBER },
-      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.due_date && (r.due_date as string) < today).length, color: COLOURS.RED },
-      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: COLOURS.GREEN },
-      { id: "total", label: "Total", countFn: (rows) => rows.length, color: COLOURS.BLUE },
+      { id: "open", label: "Open Tasks", color: COLOURS.AMBER },
+      { id: "overdue", label: "Overdue", color: COLOURS.RED },
+      { id: "completed", label: "Completed", color: COLOURS.GREEN },
+      { id: "total", label: "Total", color: COLOURS.BLUE },
     ],
   },
   {
@@ -236,10 +227,10 @@ export const DEPARTMENT_CONFIGS: DepartmentConfig[] = [
       { key: "notes", label: "Notes", type: "textarea" },
     ],
     kpis: [
-      { id: "open", label: "Open Tasks", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled").length, color: COLOURS.AMBER },
-      { id: "overdue", label: "Overdue", countFn: (rows) => rows.filter((r) => r.status !== "Completed" && r.status !== "Cancelled" && r.due_date && (r.due_date as string) < today).length, color: COLOURS.RED },
-      { id: "completed", label: "Completed", countFn: (rows) => rows.filter((r) => r.status === "Completed").length, color: COLOURS.GREEN },
-      { id: "total", label: "Total", countFn: (rows) => rows.length, color: COLOURS.BLUE },
+      { id: "open", label: "Open Tasks", color: COLOURS.AMBER },
+      { id: "overdue", label: "Overdue", color: COLOURS.RED },
+      { id: "completed", label: "Completed", color: COLOURS.GREEN },
+      { id: "total", label: "Total", color: COLOURS.BLUE },
     ],
   },
 ];
@@ -248,13 +239,13 @@ export function getDepartmentConfig(slug: string): DepartmentConfig | undefined 
   return DEPARTMENT_CONFIGS.find((d) => d.slug === slug);
 }
 
-export function getDepartmentHealthStatus(rows: Record<string, unknown>[], config: DepartmentConfig): "GREEN" | "AMBER" | "RED" {
+export function getDepartmentHealthStatus(counts: Record<string, number>, config: DepartmentConfig): "GREEN" | "AMBER" | "RED" {
   const redKpis = config.kpis.filter((k) => k.color === COLOURS.RED);
-  const hasRed = redKpis.some((k) => k.countFn(rows) > 0);
+  const hasRed = redKpis.some((k) => (counts[k.id] || 0) > 0);
   if (hasRed) return "RED";
 
   const amberKpis = config.kpis.filter((k) => k.color === COLOURS.AMBER);
-  const hasAmber = amberKpis.some((k) => k.countFn(rows) > 0);
+  const hasAmber = amberKpis.some((k) => (counts[k.id] || 0) > 0);
   if (hasAmber) return "AMBER";
 
   return "GREEN";

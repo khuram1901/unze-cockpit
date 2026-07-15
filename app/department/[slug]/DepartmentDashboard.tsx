@@ -29,6 +29,7 @@ type UserTask = {
 export default function DepartmentDashboard({ config }: { config: DepartmentConfig }) {
   const isMobile = useMobile();
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [kpiCounts, setKpiCounts] = useState<Record<string, number>>({});
   const [myTasks, setMyTasks] = useState<UserTask[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
@@ -42,9 +43,12 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
   async function loadData() {
     setLoading(true);
     setMyTasks([]);
+    // Row-level display columns only — the KPI tiles above the table come
+    // from get_department_kpi_counts (migration 130), not from these rows.
+    const displayColumns = Array.from(new Set(["id", config.statusField, ...config.columns.map((c) => c.key)])).join(", ");
     let query = supabase
       .from(config.table)
-      .select("*")
+      .select(displayColumns)
       .order("created_at", { ascending: false });
 
     if (config.table === "tasks") {
@@ -53,8 +57,17 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
       query = query.eq("company_id", UTPL_COMPANY_ID);
     }
 
-    const { data } = await query;
-    setRows(data || []);
+    const [{ data }, { data: countsData }] = await Promise.all([
+      query,
+      supabase.rpc("get_department_kpi_counts", {
+        p_slug: config.slug,
+        p_department_name: config.departmentName,
+        p_company_id: UTPL_COMPANY_ID,
+        p_today: new Date().toISOString().slice(0, 10),
+      }),
+    ]);
+    setRows((data as unknown as Record<string, unknown>[]) || []);
+    setKpiCounts((countsData as Record<string, number>) || {});
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user?.email) {
@@ -178,7 +191,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
             <CountCard
               key={kpi.id}
               label={kpi.label}
-              value={kpi.countFn(rows)}
+              value={kpiCounts[kpi.id] || 0}
               color={kpi.color}
             />
           ))}
