@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
-import { UTPL_COMPANY_ID } from "../../lib/constants";
+import { COMPANIES, getCompanyById } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
@@ -20,6 +20,7 @@ type Position = {
   status: string;
   notes: string | null;
   created_at: string;
+  company_id: string | null;
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -57,10 +58,19 @@ export default function HRDashboard() {
   const [dept, setDept] = useState("");
   const [dateOpened, setDateOpened] = useState(today);
   const [notes, setNotes] = useState("");
+  // Found during the 15 Jul 2026 full-app audit: this page had no
+  // company concept at all — every position was hardcoded to UTPL on
+  // insert, and the read query only ever fetched UTPL rows, so IFPL (or
+  // any other company's) recruitment couldn't even be logged or seen.
+  // Existing rows can't be retroactively re-attributed (there was never
+  // any signal recorded for which company they actually belonged to) —
+  // flagged to Khuram; going forward every new position records a real
+  // company.
+  const [companyId, setCompanyId] = useState("");
 
   async function loadData() {
     setLoading(true);
-    const { data } = await supabase.from("recruitment_positions").select("*").eq("company_id", UTPL_COMPANY_ID).order("created_at", { ascending: false });
+    const { data } = await supabase.from("recruitment_positions").select("*").order("created_at", { ascending: false });
     setItems(data || []);
 
     const { data: userData } = await supabase.auth.getUser();
@@ -83,16 +93,17 @@ export default function HRDashboard() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
+    if (!companyId) { showMsg("Company is required."); return; }
     setSaving(true);
     const { error } = await supabase.from("recruitment_positions").insert({
-      company_id: UTPL_COMPANY_ID, position_title: title, department: dept || null,
+      company_id: companyId, position_title: title, department: dept || null,
       date_opened: dateOpened || null, notes: notes || null, status: "Open",
     });
     setSaving(false);
     if (error) { showMsg("Error: " + error.message); return; }
     logAction("Created", "recruitment_positions", title);
     showMsg("Position added.");
-    setTitle(""); setDept(""); setDateOpened(today); setNotes("");
+    setTitle(""); setDept(""); setDateOpened(today); setNotes(""); setCompanyId("");
     setShowForm(false);
     loadData();
   }
@@ -206,6 +217,7 @@ export default function HRDashboard() {
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, marginBottom: "14px" }}>
           <form onSubmit={handleAdd}>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
+              <label style={lbl}>Company <select style={inp} value={companyId} onChange={(e) => setCompanyId(e.target.value)} required><option value="">Select</option>{COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
               <label style={lbl}>Position Title <input style={inp} value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Finance Manager" /></label>
               <label style={lbl}>Department <select style={inp} value={dept} onChange={(e) => setDept(e.target.value)} required><option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></label>
               <label style={lbl}>Date Opened <DateInput style={inp} value={dateOpened} onChange={(e) => setDateOpened(e.target.value)} required /></label>
@@ -254,7 +266,7 @@ export default function HRDashboard() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{item.position_title}</div>
                     <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                      {item.department || "—"} · Opened: {formatDateUK(item.date_opened)} · {days}d
+                      {getCompanyById(item.company_id || "")?.shortCode || "—"} · {item.department || "—"} · Opened: {formatDateUK(item.date_opened)} · {days}d
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
