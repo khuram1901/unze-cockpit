@@ -115,6 +115,9 @@ export default function TaskDetailPanel({
   // keeps working; task_assignees holds the full list.
   const [members, setMembers] = useState<MemberLite[]>([]);
   const [editOwnerIds, setEditOwnerIds] = useState<string[]>([]);
+  // Owner(s) card is collapsed to chips by default now (mockup Khuram
+  // approved) — the full checkbox grid only appears once "Edit" is clicked.
+  const [ownersEditOpen, setOwnersEditOpen] = useState(false);
 
   // No effect needed to reset editDesc/editPriority/editProject/
   // editCompanyId when switching tasks — TaskDetailModal keys this
@@ -211,21 +214,20 @@ export default function TaskDetailPanel({
     }
   }
 
+  // Owner chips — collapsed view of editOwnerIds against the loaded
+  // members list, used both to render the read-only chip row and to
+  // work out initials/primary tagging.
+  const selectedOwners = editOwnerIds.map((id) => members.find((m) => m.id === id)).filter((m): m is MemberLite => !!m);
+  function initials(name: string) {
+    return name.split(" ").map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+  }
+
   return (
     <div style={{ padding: "12px 16px", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
       {dlg.element}
-      <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "6px" }}>
-        Type: <strong style={{ color: COLOURS.NAVY }}>{task.task_type || "Task"}</strong>
-        {" · "}Assigned by: <strong style={{ color: COLOURS.NAVY }}>{task.assigned_by || "—"}</strong>
-        {" · "}Issue date (locked): {formatDateUK(task.assigned_date)}
-        {" · "}Project: {task.project || "—"}
-        {task.meeting_id && (
-          <span> · <a href={`/my-minutes?meeting=${task.meeting_id}`} style={{ color: COLOURS.BLUE, fontWeight: 600, textDecoration: "none" }}>View Minutes →</a></span>
-        )}
-      </div>
-      {task.notes && <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "6px" }}>Notes: {task.notes}</div>}
+
       {task.reply_text && (
-        <div style={{ padding: "8px 12px", border: `1px solid ${COLOURS.GREEN}`, backgroundColor: COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, color: COLOURS.GREEN, fontSize: "13px", marginBottom: "8px" }}>
+        <div style={{ padding: "8px 12px", border: `1px solid ${COLOURS.GREEN}`, backgroundColor: COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, color: COLOURS.GREEN, fontSize: "13px", marginBottom: "10px" }}>
           <strong>Explanation:</strong> {task.reply_text}
           {task.corrective_action && <div style={{ marginTop: "4px" }}><strong>Corrective action:</strong> {task.corrective_action}</div>}
           {task.recovery_date && <div style={{ marginTop: "4px" }}><strong>Expected recovery:</strong> {formatDateUK(task.recovery_date)}</div>}
@@ -233,159 +235,206 @@ export default function TaskDetailPanel({
         </div>
       )}
       {protected_ && !isPrivileged && (
-        <div style={{ fontSize: "12px", color: COLOURS.AMBER, fontWeight: 600, marginBottom: "6px", padding: "4px 8px", backgroundColor: COLOURS.WARNING_SOFT, borderRadius: RADII.XS, border: `1px solid ${COLOURS.AMBER}` }}>
+        <div style={{ fontSize: "12px", color: COLOURS.AMBER, fontWeight: 600, marginBottom: "10px", padding: "4px 8px", backgroundColor: COLOURS.WARNING_SOFT, borderRadius: RADII.XS, border: `1px solid ${COLOURS.AMBER}` }}>
           Assigned by {task.assigned_by || "management"} — you can update status and add notes but cannot edit or delete this task.
         </div>
       )}
-
       {locked && (
-        <div style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, marginBottom: "6px", padding: "6px 10px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.XS, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600, marginBottom: "10px", padding: "6px 10px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.XS, border: `1px solid ${COLOURS.HAIRLINE}` }}>
           This task is completed and locked. Only an admin can reopen or edit it.
         </div>
       )}
 
-      {taskEditable && !locked && (
-        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", marginBottom: "10px", backgroundColor: COLOURS.CARD }}>
-          <label style={{ display: "block", marginBottom: "8px" }}>
-            <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-              <span>Description</span>
-              <span style={{ fontWeight: 500, color: editDesc.length > TASK_DESCRIPTION_LIMIT - 20 ? COLOURS.AMBER : COLOURS.SLATE }}>
-                {editDesc.length}/{TASK_DESCRIPTION_LIMIT}
-              </span>
-            </span>
-            <textarea
-              value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))}
-              onBlur={() => { if (editDesc.trim() && editDesc.trim() !== task.description) updateTaskField({ description: editDesc.trim() }); }}
-              maxLength={TASK_DESCRIPTION_LIMIT}
-              rows={2}
-              style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "7px 10px", fontSize: "13px", color: COLOURS.NAVY, fontFamily: "inherit", resize: "vertical" }}
-            />
-          </label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "10px" }}>
-            <label>
-              <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Priority</span>
-              <select value={editPriority} onChange={(e) => { setEditPriority(e.target.value); updateTaskField({ priority: e.target.value }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
-                {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </label>
-            <label>
-              <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Department / area</span>
-              <select value={editProject} onChange={(e) => { setEditProject(e.target.value); updateTaskField({ project: e.target.value || null }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
-                <option value="">-- None --</option>
-                {deptOwners.map((d) => <option key={d.id} value={d.department_name}>{d.department_name}</option>)}
-              </select>
-            </label>
-            <label>
-              <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Company</span>
-              <select value={editCompanyId} onChange={(e) => { setEditCompanyId(e.target.value); updateTaskField({ company_id: e.target.value || null }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
-                <option value="">Group / needs review</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
-          </div>
-
-          <label style={{ display: "block" }}>
-            <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>
-              Owner(s) — tick everyone this applies to; the first person ticked is the primary owner
-            </span>
-            <div style={{
-              border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 10px",
-              maxHeight: "140px", overflowY: "auto", display: "flex", flexWrap: "wrap", gap: "8px",
-              backgroundColor: "white",
-            }}>
-              {members.map((m) => {
-                const checked = editOwnerIds.includes(m.id);
-                const isPrimary = editOwnerIds[0] === m.id;
-                return (
-                  <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12.5px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer", fontWeight: checked ? 600 : 400 }}>
-                    <input type="checkbox" checked={checked} onChange={(e) => toggleEditOwner(m.id, e.target.checked)} style={{ width: "13px", height: "13px" }} />
-                    {m.name}{isPrimary && <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.BLUE }}> (primary)</span>}
-                  </label>
-                );
-              })}
-              {members.length === 0 && <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>Loading members…</span>}
+      {/* Two-column layout per the approved mockup: left is the editable
+          core of the task (description/priority/dept/company, owners,
+          comments); right is status/progress plus the WhatsApp/delete
+          actions. Stacks to one column automatically below ~760px via the
+          minmax fallback so it still works in a narrower window. */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1.35fr) minmax(240px, 1fr)", gap: "16px", alignItems: "start" }}>
+        {/* ═══ LEFT COLUMN ═══ */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {taskEditable && !locked && (
+            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", backgroundColor: COLOURS.CARD }}>
+              <label style={{ display: "block", marginBottom: "8px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                  <span>Description</span>
+                  <span style={{ fontWeight: 500, color: editDesc.length > TASK_DESCRIPTION_LIMIT - 20 ? COLOURS.AMBER : COLOURS.SLATE }}>
+                    {editDesc.length}/{TASK_DESCRIPTION_LIMIT}
+                  </span>
+                </span>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))}
+                  onBlur={() => { if (editDesc.trim() && editDesc.trim() !== task.description) updateTaskField({ description: editDesc.trim() }); }}
+                  maxLength={TASK_DESCRIPTION_LIMIT}
+                  rows={2}
+                  style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "7px 10px", fontSize: "13px", color: COLOURS.NAVY, fontFamily: "inherit", resize: "vertical" }}
+                />
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                <label>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Priority</span>
+                  <select value={editPriority} onChange={(e) => { setEditPriority(e.target.value); updateTaskField({ priority: e.target.value }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
+                    {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Department</span>
+                  <select value={editProject} onChange={(e) => { setEditProject(e.target.value); updateTaskField({ project: e.target.value || null }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
+                    <option value="">-- None --</option>
+                    {deptOwners.map((d) => <option key={d.id} value={d.department_name}>{d.department_name}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Company</span>
+                  <select value={editCompanyId} onChange={(e) => { setEditCompanyId(e.target.value); updateTaskField({ company_id: e.target.value || null }); }} style={{ width: "100%", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px", fontSize: "13px", color: COLOURS.NAVY }}>
+                    <option value="">Group</option>
+                    {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </label>
+              </div>
             </div>
-          </label>
-        </div>
-      )}
-
-      <TaskStatus task={task} currentRole={currentRole} onChanged={onChanged} onClose={onClose} myEmail={myEmail} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
-
-      {/* Captures intent only — still needs the WhatsApp Business API setup
-          before anything actually sends by itself. See migration 105. */}
-      <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12.5px", color: COLOURS.NAVY, marginTop: "10px", cursor: locked ? "default" : "pointer" }}>
-        <input type="checkbox" checked={autoRemind} disabled={locked} onChange={toggleAutoRemind} style={{ width: "15px", height: "15px", accentColor: COLOURS.GREEN, cursor: locked ? "default" : "pointer" }} />
-        Auto-remind on WhatsApp if this goes overdue
-      </label>
-
-      {((canDelete ?? isPrivileged) || taskDeletable) && (
-        <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "flex-end", gap: "6px" }}>
-          {task.assigned_to && memberPhones[task.assigned_to] && (
-            <a
-              href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
-              target="_blank" rel="noopener noreferrer"
-              style={{ backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: RADII.SM, padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", textDecoration: "none", minHeight: "34px", display: "inline-flex", alignItems: "center" }}
-              title="Send WhatsApp reminder to assignee"
-            >
-              WhatsApp
-            </a>
           )}
-          {taskDeletable && (
-            <button
-              onClick={async () => {
-                if (!await dlg.confirm(`Delete task "${task.description}"? This cannot be undone.`, true)) return;
-                await supabase.from("tasks").delete().eq("id", task.id);
-                onChanged();
-              }}
-              style={{ backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.SM, padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", minHeight: "34px" }}
-              title="Permanently delete this task"
-            >
-              Delete Task
-            </button>
-          )}
-        </div>
-      )}
 
-      {/* Comments — flat, oldest first, no edit/delete (append-only log) */}
-      <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
-        <div style={{ fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: COLOURS.INK_400, marginBottom: "8px" }}>
-          Comments{comments.length > 0 ? ` (${comments.length})` : ""}
-        </div>
-        {comments.map((c) => (
-          <div key={c.id} style={{ marginBottom: "10px" }}>
-            <div style={{ display: "flex", gap: "8px", alignItems: "baseline", marginBottom: "2px" }}>
-              <span style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY }}>{c.commented_by || "Unknown"}</span>
-              <span style={{ fontSize: "11px", color: COLOURS.INK_400 }}>{formatDateUK(c.created_at)}</span>
+          {/* Owner(s) — collapsed to avatar-initial chips; "Edit" expands
+              the full checkbox grid on demand instead of always showing it. */}
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", backgroundColor: COLOURS.CARD }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE }}>Owner(s)</span>
+              {taskEditable && !locked && (
+                <span onClick={() => setOwnersEditOpen(!ownersEditOpen)} style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600, cursor: "pointer" }}>
+                  {ownersEditOpen ? "Done" : "Edit →"}
+                </span>
+              )}
             </div>
-            <div style={{ fontSize: "13px", color: COLOURS.NAVY, lineHeight: 1.5 }}>{c.comment_text}</div>
+
+            {!ownersEditOpen && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {selectedOwners.map((m, i) => (
+                  <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "4px 10px 4px 4px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <span style={{
+                      width: "22px", height: "22px", borderRadius: "50%", backgroundColor: i === 0 ? COLOURS.BLUE : COLOURS.INK_300,
+                      color: "white", fontSize: "10px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {initials(m.name)}
+                    </span>
+                    <span style={{ fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 600 }}>{m.name}</span>
+                    {i === 0 && <span style={{ fontSize: "9px", fontWeight: 700, color: COLOURS.BLUE, letterSpacing: "0.04em" }}>PRIMARY</span>}
+                  </div>
+                ))}
+                {selectedOwners.length === 0 && task.assigned_to && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "4px 10px 4px 4px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <span style={{ width: "22px", height: "22px", borderRadius: "50%", backgroundColor: COLOURS.BLUE, color: "white", fontSize: "10px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {initials(task.assigned_to)}
+                    </span>
+                    <span style={{ fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 600 }}>{task.assigned_to}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {ownersEditOpen && taskEditable && !locked && (
+              <div style={{
+                border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 10px",
+                maxHeight: "140px", overflowY: "auto", display: "flex", flexWrap: "wrap", gap: "8px",
+                backgroundColor: "white",
+              }}>
+                {members.map((m) => {
+                  const checked = editOwnerIds.includes(m.id);
+                  const isPrimary = editOwnerIds[0] === m.id;
+                  return (
+                    <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12.5px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer", fontWeight: checked ? 600 : 400 }}>
+                      <input type="checkbox" checked={checked} onChange={(e) => toggleEditOwner(m.id, e.target.checked)} style={{ width: "13px", height: "13px" }} />
+                      {m.name}{isPrimary && <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.BLUE }}> (primary)</span>}
+                    </label>
+                  );
+                })}
+                {members.length === 0 && <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>Loading members…</span>}
+              </div>
+            )}
           </div>
-        ))}
-        {comments.length === 0 && (
-          <div style={{ fontSize: "12.5px", color: COLOURS.INK_400, marginBottom: "10px" }}>No comments yet.</div>
-        )}
-        {!locked && (
-          <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
-            <input
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); postComment(); } }}
-              placeholder="Add a comment…"
-              style={{ flex: 1, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "8px 14px", fontSize: "13px", color: COLOURS.NAVY }}
-            />
-            <button
-              onClick={postComment}
-              disabled={postingComment || !newComment.trim()}
-              style={{
-                backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.PILL,
-                padding: "8px 16px", fontSize: "12.5px", fontWeight: 600, cursor: postingComment || !newComment.trim() ? "not-allowed" : "pointer",
-                opacity: postingComment || !newComment.trim() ? 0.6 : 1,
-              }}
-            >
-              Post
-            </button>
+
+          {/* Comments — flat, oldest first, no edit/delete (append-only log) */}
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", backgroundColor: COLOURS.CARD }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: COLOURS.INK_400, marginBottom: "8px" }}>
+              Comments{comments.length > 0 ? ` (${comments.length})` : ""}
+            </div>
+            {comments.map((c) => (
+              <div key={c.id} style={{ marginBottom: "10px" }}>
+                <div style={{ display: "flex", gap: "8px", alignItems: "baseline", marginBottom: "2px" }}>
+                  <span style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY }}>{c.commented_by || "Unknown"}</span>
+                  <span style={{ fontSize: "11px", color: COLOURS.INK_400 }}>{formatDateUK(c.created_at)}</span>
+                </div>
+                <div style={{ fontSize: "13px", color: COLOURS.NAVY, lineHeight: 1.5 }}>{c.comment_text}</div>
+              </div>
+            ))}
+            {comments.length === 0 && (
+              <div style={{ fontSize: "12.5px", color: COLOURS.INK_400, marginBottom: "10px" }}>No comments yet.</div>
+            )}
+            {!locked && (
+              <div style={{ display: "flex", gap: "8px", marginTop: "6px" }}>
+                <input
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); postComment(); } }}
+                  placeholder="Add a comment…"
+                  style={{ flex: 1, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "8px 14px", fontSize: "13px", color: COLOURS.NAVY }}
+                />
+                <button
+                  onClick={postComment}
+                  disabled={postingComment || !newComment.trim()}
+                  style={{
+                    backgroundColor: COLOURS.NAVY, color: "white", border: "none", borderRadius: RADII.PILL,
+                    padding: "8px 16px", fontSize: "12.5px", fontWeight: 600, cursor: postingComment || !newComment.trim() ? "not-allowed" : "pointer",
+                    opacity: postingComment || !newComment.trim() ? 0.6 : 1,
+                  }}
+                >
+                  Post
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* ═══ RIGHT COLUMN ═══ */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <TaskStatus task={task} currentRole={currentRole} onChanged={onChanged} onClose={onClose} myEmail={myEmail} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
+
+          {/* Captures intent only — still needs the WhatsApp Business API
+              setup before anything actually sends by itself. See migration 105. */}
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12.5px", color: COLOURS.NAVY, cursor: locked ? "default" : "pointer", padding: "0 2px" }}>
+            <input type="checkbox" checked={autoRemind} disabled={locked} onChange={toggleAutoRemind} style={{ width: "15px", height: "15px", accentColor: COLOURS.GREEN, cursor: locked ? "default" : "pointer" }} />
+            Auto-remind on WhatsApp if overdue
+          </label>
+
+          {((canDelete ?? isPrivileged) || taskDeletable) && (
+            <div style={{ display: "flex", gap: "6px" }}>
+              {task.assigned_to && memberPhones[task.assigned_to] && (
+                <a
+                  href={whatsappLink(memberPhones[task.assigned_to], taskReminderMessage(task.description, task.due_date, task.assigned_by)) || "#"}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ backgroundColor: COLOURS.GREEN, color: "white", border: "none", borderRadius: RADII.SM, padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", textDecoration: "none", minHeight: "34px", display: "inline-flex", alignItems: "center" }}
+                  title="Send WhatsApp reminder to assignee"
+                >
+                  WhatsApp
+                </a>
+              )}
+              {taskDeletable && (
+                <button
+                  onClick={async () => {
+                    if (!await dlg.confirm(`Delete task "${task.description}"? This cannot be undone.`, true)) return;
+                    await supabase.from("tasks").delete().eq("id", task.id);
+                    onChanged();
+                  }}
+                  style={{ backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.SM, padding: "6px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer", minHeight: "34px" }}
+                  title="Permanently delete this task"
+                >
+                  Delete Task
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

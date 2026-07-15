@@ -2,6 +2,7 @@
 
 import Modal from "../lib/Modal";
 import TaskDetailPanel from "./TaskDetailPanel";
+import { formatDateUK } from "../lib/dateUtils";
 import { COLOURS, RADII, StatusBadge, PriorityBadge } from "../lib/SharedUI";
 
 // The finalised Tasks mockup opens task detail as a centred modal popup,
@@ -69,7 +70,7 @@ export default function TaskDetailModal({
   if (!task) return null;
 
   return (
-    <Modal open={open} onClose={onClose}>
+    <Modal open={open} onClose={onClose} maxWidth="820px">
       <div style={{ padding: "18px 22px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
         <div style={{ flex: 1 }}>
           <h2
@@ -77,13 +78,25 @@ export default function TaskDetailModal({
           >
             {task.description}
           </h2>
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginBottom: "8px" }}>
             <StatusBadge status={task.status} />
             {task.priority && <PriorityBadge priority={task.priority} />}
             {task.stage && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10.5px", fontWeight: 600, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.XS, padding: "2px 8px" }}>
                 → {task.stage}
               </span>
+            )}
+          </div>
+          {/* Compact meta line — moved up here from TaskDetailPanel's body
+              so it reads as context for the title rather than competing
+              with the two-column layout underneath. */}
+          <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+            {task.task_type || "Task"}
+            {" · Assigned by "}<strong style={{ color: COLOURS.NAVY, fontWeight: 600 }}>{task.assigned_by || "—"}</strong>
+            {" · Issued "}{formatDateUK(task.assigned_date)}
+            {task.project && <span>{" · "}{task.project}</span>}
+            {task.meeting_id && (
+              <span> · <a href={`/my-minutes?meeting=${task.meeting_id}`} style={{ color: COLOURS.BLUE, fontWeight: 600, textDecoration: "none" }}>View Minutes →</a></span>
             )}
           </div>
         </div>
