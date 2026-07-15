@@ -63,7 +63,7 @@ type PastEntry = {
   qty_36: number;
   qty_45: number;
   qty_meter: number;
-  type: "Production" | "Dispatch" | "Breakage";
+  type: "Production" | "Dispatch" | "Breakage" | "Scrap";
 };
 
 async function authedFetch(url: string, opts: RequestInit = {}) {
@@ -246,16 +246,20 @@ export default function ProductionForm() {
     fourteenAgo.setDate(fourteenAgo.getDate() - 14);
     const since = fourteenAgo.toISOString().slice(0, 10);
 
-    const [prodRes, dispRes, brkRes] = await Promise.all([
+    const [prodRes, dispRes, brkRes, scrapRes] = await Promise.all([
       supabase.from("production_entries").select("id, entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
       supabase.from("dispatch_entries").select("id, entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
       supabase.from("breakage_entries").select("id, entry_date, qty_31, qty_36, qty_45, qty_meter").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
+      // scrap_processed_entries has no qty_meter column — default to 0
+      // so it fits the shared PastEntry shape used for the duplicate check.
+      supabase.from("scrap_processed_entries").select("id, entry_date, qty_31, qty_36, qty_45").eq("plant_id", plantId).gte("entry_date", since).order("entry_date", { ascending: false }),
     ]);
 
     const entries: PastEntry[] = [
       ...(prodRes.data || []).map((r) => ({ ...r, type: "Production" as const })),
       ...(dispRes.data || []).map((r) => ({ ...r, type: "Dispatch" as const })),
       ...(brkRes.data || []).map((r) => ({ ...r, type: "Breakage" as const })),
+      ...(scrapRes.data || []).map((r) => ({ ...r, qty_meter: 0, type: "Scrap" as const })),
     ];
     entries.sort((a, b) => b.entry_date.localeCompare(a.entry_date) || a.type.localeCompare(b.type));
     setPastEntries(entries);
@@ -266,7 +270,7 @@ export default function ProductionForm() {
   const selectedPlant = plants.find((p) => p.id === plantId);
   const isMeter = selectedPlant?.type === "meter";
 
-  function hasEntryFor(type: "Production" | "Dispatch" | "Breakage") {
+  function hasEntryFor(type: "Production" | "Dispatch" | "Breakage" | "Scrap") {
     return pastEntries.some((e) => e.entry_date === entryDate && e.type === type);
   }
 
@@ -282,7 +286,10 @@ export default function ProductionForm() {
   }
 
   async function deleteEntry(entry: PastEntry) {
-    const table = entry.type === "Production" ? "production_entries" : entry.type === "Dispatch" ? "dispatch_entries" : "breakage_entries";
+    const table = entry.type === "Production" ? "production_entries"
+      : entry.type === "Dispatch" ? "dispatch_entries"
+      : entry.type === "Scrap" ? "scrap_processed_entries"
+      : "breakage_entries";
     const { error } = await supabase.from(table).delete().eq("id", entry.id);
     if (error) { showMsg("history", "Error deleting: " + error.message, false); return; }
     logAction("Deleted", table, `Deleted ${entry.type} entry for ${entry.entry_date}`);
@@ -507,6 +514,14 @@ export default function ProductionForm() {
   // ---- Scrap ----
   async function submitScrap(nothing = false) {
     if (!plantId) return;
+    // Found during the 15 Jul 2026 audit: unlike production/dispatch/
+    // breakage, scrap had no duplicate-submission guard at all — the
+    // same plant/day could be submitted twice, silently double-counting
+    // scrap. Matches the same client-side pre-check the other three use.
+    if (hasEntryFor("Scrap")) {
+      showMsg("scrap", "Scrap already entered for this plant and date. Delete the existing entry first to re-enter.", false);
+      return;
+    }
     if (!nothing && !scr31 && !scr36 && !scr45) {
       showMsg("scrap", "Enter a number, or use 'Nothing to report'.", false);
       return;
@@ -523,7 +538,15 @@ export default function ProductionForm() {
       notes, entered_by: enteredBy,
     });
     setSavingSection("");
-    if (error) { showMsg("scrap", "Error: " + error.message, false); return; }
+    if (error) {
+      // Belt-and-braces: migration 125 adds a UNIQUE(plant_id, entry_date)
+      // constraint at the database level too, same as the other three
+      // entry types, in case two submissions race each other.
+      const dup = error.code === "23505";
+      showMsg("scrap", dup ? "Scrap already entered for this plant and date. Delete the existing entry first to re-enter." : "Error: " + error.message, false);
+      if (dup) loadHistory();
+      return;
+    }
     logAction("Created", "scrap_processed_entries", `Scrap entry for ${entryDate}`); showMsg("scrap", nothing ? "Logged: nothing to report ✓" : "Scrap saved ✓", true);
     setScr31(""); setScr36(""); setScr45("");
   }
