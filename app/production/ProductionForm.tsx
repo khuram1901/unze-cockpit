@@ -411,13 +411,13 @@ export default function ProductionForm() {
     const enteredBy = await currentEmail();
 
     // Save to dispatch_entries (legacy — keeps existing dashboard working)
-    const { error: dispError } = await supabase.from("dispatch_entries").insert({
+    const { data: dispRow, error: dispError } = await supabase.from("dispatch_entries").insert({
       plant_id: plantId, plant_name: selectedPlant?.name || "",
       entry_date: entryDate,
       qty_31: qty31, qty_36: qty36, qty_45: qty45, qty_meter: qtyMeter,
       nothing_to_report: nothing,
       entered_by: enteredBy, notes,
-    });
+    }).select("id").single();
 
     if (dispError) {
       setSavingSection("");
@@ -442,11 +442,16 @@ export default function ProductionForm() {
       });
       const recJson = await recRes.json();
       if (recJson.error) {
+        // Found during the 15 Jul 2026 full-app audit: this used to leave
+        // the dispatch_entries row committed even when the stock-system
+        // write failed, silently putting the legacy dashboard and the
+        // stock system out of sync with no way to tell later. Now rolls
+        // back the dispatch_entries row too, so a failed dispatch is
+        // fully undone rather than half-saved — the user sees a clear
+        // "nothing was saved" message and can just retry the whole thing.
+        if (dispRow?.id) await supabase.from("dispatch_entries").delete().eq("id", dispRow.id);
         setSavingSection("");
-        showMsg("dispatch", `Dispatch saved to daily log but stock record failed: ${recJson.error}`, false);
-        setDisp31(""); setDisp36(""); setDisp45(""); setDispMeter("");
-        setSelectedLetterId(""); setLetterLookup(null); setReleasedBy(""); setVehicleNumber("");
-        logAction("Created", "dispatch_entries", `Dispatch entry for ${entryDate}`);
+        showMsg("dispatch", `Dispatch record failed, so nothing was saved: ${recJson.error}. Please try again.`, false);
         loadHistory();
         return;
       }
