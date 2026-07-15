@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, cardStyle, SHADOWS, SectionTitle, useConfirm, SkeletonRows, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
+import { formatDateUK } from "../lib/dateUtils";
 
 // The same recurring_tasks table and scheduling engine as the standalone
 // /recurring-tasks page — this is that page's content brought in as a
@@ -32,6 +33,7 @@ type Template = {
 
 type Member = { name: string; email: string | null; department: string | null; first_name: string | null; last_name: string | null };
 type Company = { id: string; name: string; short_code: string | null };
+type CycleStatus = { next_due_date: string | null; missed_cycles: number };
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -71,6 +73,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
   const [templates, setTemplates] = useState<Template[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [cycleStatus, setCycleStatus] = useState<Map<string, CycleStatus>>(new Map());
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -99,14 +102,21 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
 
   async function loadData() {
     setLoading(true);
-    const [tmplRes, memRes, companiesRes] = await Promise.all([
+    const today = new Date().toISOString().slice(0, 10);
+    const [tmplRes, memRes, companiesRes, cycleRes] = await Promise.all([
       supabase.from("recurring_tasks").select("id, description, assigned_to, assigned_to_email, assigned_to_department, assigned_by, priority, project, frequency, day_of_week, day_of_month, due_days_after, active, last_created_at, company_id").order("created_at", { ascending: false }),
       supabase.from("members").select("name, email, department, first_name, last_name"),
       supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
+      supabase.rpc("get_recurring_task_cycle_status", { p_today: today }),
     ]);
     setTemplates(tmplRes.data || []);
     setMembers(memRes.data || []);
     setCompanies(companiesRes.data || []);
+    const statusMap = new Map<string, CycleStatus>();
+    for (const row of (cycleRes.data || []) as { id: string; next_due_date: string | null; missed_cycles: number }[]) {
+      statusMap.set(row.id, { next_due_date: row.next_due_date, missed_cycles: row.missed_cycles });
+    }
+    setCycleStatus(statusMap);
     setLoading(false);
   }
 
@@ -290,7 +300,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                       {t.assigned_to || "Unassigned"} · {t.frequency}{t.frequency === "weekly" ? ` (${DAYS[t.day_of_week || 0]})` : t.frequency === "monthly" ? ` (day ${t.day_of_month})` : ""} · Due after {t.due_days_after}d · {t.priority}
                       {t.last_created_at && ` · Last: ${t.last_created_at.slice(0, 10)}`}
                     </div>
-                    <div style={{ marginTop: "4px" }}>
+                    <div style={{ marginTop: "4px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
                       {t.company_id ? (
                         <span style={{ fontSize: "10.5px", fontWeight: 700, padding: "1px 7px", borderRadius: RADII.PILL, color: COLOURS.SLATE, backgroundColor: COLOURS.HAIRLINE }}>
                           {companies.find((c) => c.id === t.company_id)?.name || "Company set"}
@@ -300,6 +310,21 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
                           No company set
                         </span>
                       )}
+                      {(() => {
+                        const cs = cycleStatus.get(t.id);
+                        if (!t.active || !cs || !cs.next_due_date) return null;
+                        const overdue = cs.missed_cycles > 0;
+                        return (
+                          <span style={{
+                            fontSize: "10.5px", fontWeight: 700, padding: "1px 7px", borderRadius: RADII.PILL,
+                            color: "white", backgroundColor: overdue ? COLOURS.RED : COLOURS.GREEN,
+                          }}>
+                            {overdue
+                              ? `${cs.missed_cycles} cycle${cs.missed_cycles > 1 ? "s" : ""} overdue`
+                              : `On time · Next ${formatDateUK(cs.next_due_date)}`}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                   {isPrivileged && (
