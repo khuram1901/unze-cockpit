@@ -468,12 +468,22 @@ export default function SidebarLayout({
         </>
       )}
 
-      {/* ── Main content ── */}
+      {/* ── Main content ──
+          The sidebar above is position:fixed, so it's out of normal flow —
+          this div is really the ONLY flex child of the root row, meaning
+          flex:1 alone resolves it to the FULL viewport width, and then
+          marginLeft pushes it sidebarW px further right, hanging exactly
+          that much content off the right edge of the screen on every page
+          (this is what Khuram saw: KPI tiles/columns clipped, nothing
+          wrapping, on Bank Facilities/Executive/Operations/Tasks alike).
+          Giving it an explicit width of "the rest of the viewport" fixes
+          it at the source instead of per-page. */}
       <div style={{
         flex: 1,
         minWidth: 0,
+        width: isMobile ? "100%" : `calc(100% - ${sidebarW}px)`,
         marginLeft: isMobile ? 0 : `${sidebarW}px`,
-        transition: "margin-left 0.2s ease",
+        transition: "margin-left 0.2s ease, width 0.2s ease",
         display: "flex", flexDirection: "column", minHeight: "100vh",
       }}>
         {/* Content header */}
