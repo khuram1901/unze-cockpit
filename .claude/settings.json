@@ -1,5 +1,5 @@
 {
   "hooks": {
-    "sessionEnd": ".claude/hooks/session-end.sh"
+    "SessionEnd": ".claude/hooks/session-end.sh"
   }
 }
