@@ -56,7 +56,7 @@ Full context lives in:
    - When adding any new feature that shows a date: ask "did I wrap this in formatDateUK?" before finishing.
    - `app/layout.tsx` has `lang="en-GB"` on the root `<html>`. **Never change this back to `lang="en"`.**
    - **Never use `<input type="date">` anywhere in the codebase.** Safari ignores `lang="en-GB"` for native date pickers and always shows MM/DD/YYYY. Instead, always use `<DateInput>` from `app/lib/DateInput.tsx`. It shows DD/MM/YYYY, auto-inserts slashes, validates the entry, and calls `onChange` with a `YYYY-MM-DD` string — identical interface to a native date input.
-2. **Design system in `lib/SharedUI.tsx` only.** Colours: NAVY `#1e293b`, SLATE `#64748b`, BORDER `#e2e8f0`, GREEN `#16a34a`, AMBER `#d97706`, RED `#dc2626`. Never introduce new colours without asking.
+2. **Design system in `lib/SharedUI.tsx` only.** Colours (post-rebrand, corrected 15/07/2026 — this list had gone stale and didn't match the live palette): NAVY `#0F1720`, SLATE `#64748B`, BORDER `#EEF0F3`, GREEN `#0F7B5F`, AMBER `#B4791F`, RED `#B3261E`. Never introduce new colours without asking.
 3. **Inline styles, not Tailwind classes.** The codebase is intentionally inline-styled.
 4. **British English** in user-facing copy ("colours" not "colors").
 5. **No sensitive data in code.** Supabase keys, API keys, tokens live in Vercel/env vars only.
