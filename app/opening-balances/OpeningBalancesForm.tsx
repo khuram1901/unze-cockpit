@@ -82,19 +82,26 @@ export default function OpeningBalancesForm() {
           .order("customer_name"),
         supabase
           .from("opening_stock_allocations")
-          .select("po_id, qty_31, qty_36, qty_45, qty_meter")
+          // Found during the 15 Jul 2026 full-app audit: qty_40 was
+          // missing from this select, so an existing 40ft allocation
+          // never loaded back into the form (always showed blank) — and
+          // if the user then saved any OTHER quantity for that same PO,
+          // the upsert below wrote qty_40 back as 0, silently wiping
+          // whatever 40ft figure was actually saved. Adding it here is
+          // half the fix; the other half is the row filter further down.
+          .select("po_id, qty_31, qty_36, qty_40, qty_45, qty_meter")
           .eq("plant_id", plantId),
       ]);
       const poList = (poData || []) as PO[];
       setPos(poList);
-      const existingMap = new Map((existing || []).map((r: { po_id: string; qty_31: number; qty_36: number; qty_45: number; qty_meter: number }) => [r.po_id, r]));
+      const existingMap = new Map((existing || []).map((r: { po_id: string; qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number }) => [r.po_id, r]));
       setAllocRows(poList.map((po) => {
         const ex = existingMap.get(po.id);
         return {
           po_id: po.id,
           qty_31:    ex ? String(ex.qty_31)    : "",
           qty_36:    ex ? String(ex.qty_36)    : "",
-          qty_40:    ex ? String((ex as unknown as Record<string,number>).qty_40 || "") : "",
+          qty_40:    ex ? String(ex.qty_40)    : "",
           qty_45:    ex ? String(ex.qty_45)    : "",
           qty_meter: ex ? String(ex.qty_meter) : "",
         };
@@ -154,8 +161,11 @@ export default function OpeningBalancesForm() {
     setAllocSaving(true);
     setAllocMessage("");
 
+    // Found during the 15 Jul 2026 full-app audit: qty_40 was missing
+    // from this check, so a PO with ONLY a 40ft quantity got dropped
+    // from the save entirely (silently untouched, not even upserted).
     const rows = allocRows
-      .filter((r) => Number(r.qty_31) > 0 || Number(r.qty_36) > 0 || Number(r.qty_45) > 0 || Number(r.qty_meter) > 0);
+      .filter((r) => Number(r.qty_31) > 0 || Number(r.qty_36) > 0 || Number(r.qty_40) > 0 || Number(r.qty_45) > 0 || Number(r.qty_meter) > 0);
 
     if (rows.length === 0) {
       setAllocMessage("No quantities entered — nothing saved.");
