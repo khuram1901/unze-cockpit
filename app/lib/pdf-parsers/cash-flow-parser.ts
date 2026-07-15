@@ -1,5 +1,7 @@
 import { extractTextFromPDF } from "./extract-text";
 
+export type PdcBucket = { dueDate: string; amount: number; label: string | null };
+
 export type CashFlowParsed = {
   openingBalanceTotal: number;
   paymentsTotal: number;
@@ -7,6 +9,7 @@ export type CashFlowParsed = {
   closingBalanceUnzeTrading: number;
   loanPostDatedCHQs: number;
   closingAfterLoanPostDated: number;
+  pdcBuckets: PdcBucket[];
   date: string | null;
   company: "unze" | "imperial" | "unknown";
   rawText: string;
@@ -77,6 +80,56 @@ function findAmount(text: string, label: string): number {
   return 0;
 }
 
+// Imperial's PDC table is a series of "(Total )?Balance DD/MM/YYYY\n<amount>"
+// rows (a near-term bucket, then a single far-future catch-all — or more,
+// on a day with a more spread-out schedule), ending in an untotalled
+// "Total PDC's Balance" grand-total line which this deliberately does NOT
+// match (no date directly follows "Balance" there — "PDC's" sits in
+// between), so the grand total is never mistaken for another bucket.
+function extractImperialPdcBuckets(text: string): PdcBucket[] {
+  const startIdx = text.search(/Date\s*Post\s*Dated\s*CHQs/i);
+  const totalIdx = text.search(/Total\s+PDC/i);
+  if (startIdx < 0) return [];
+  const end = totalIdx > startIdx ? totalIdx : text.length;
+  const block = text.slice(startIdx, end);
+  const buckets: PdcBucket[] = [];
+  const re = /((?:Total\s+)?Balance)\s+(\d{2})\/(\d{2})\/(\d{4})\s*\n\s*([\d,]+(?:\.\d+)?)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block))) {
+    buckets.push({ label: m[1].trim(), dueDate: `${m[4]}-${m[3]}-${m[2]}`, amount: parseAmount(m[5]) });
+  }
+  return buckets;
+}
+
+// Unze's PDC table is one row per cheque: a date line, a payee description
+// (occasionally wrapping to a second line), then the amount, ending in an
+// untotalled "Total <amount>" line. Splitting on each date and taking the
+// LAST number before the next date (or the closing "Total" line) as that
+// row's amount copes with the description wrapping without needing to
+// parse the free-text payee name precisely.
+function extractUnzePdcBuckets(text: string): PdcBucket[] {
+  const startIdx = text.search(/Loan\s*&\s*Post\s*Dated/i);
+  const endIdx = text.search(/Closing Balance After/i);
+  if (startIdx < 0 || endIdx < 0) return [];
+  const block = text.slice(startIdx, endIdx);
+  const dateMatches = [...block.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
+  const totalIdx = block.search(/\bTotal\b/i);
+  const buckets: PdcBucket[] = [];
+  for (let i = 0; i < dateMatches.length; i++) {
+    const m = dateMatches[i];
+    const chunkStart = m.index! + m[0].length;
+    const nextDateIdx = i + 1 < dateMatches.length ? dateMatches[i + 1].index! : -1;
+    const chunkEnd = nextDateIdx >= 0 ? nextDateIdx : (totalIdx >= 0 ? totalIdx : block.length);
+    const chunk = block.slice(chunkStart, Math.max(chunkEnd, chunkStart));
+    const numMatches = [...chunk.matchAll(/([\d,]+(?:\.\d+)?)/g)];
+    const numMatch = numMatches[numMatches.length - 1];
+    if (!numMatch) continue;
+    const label = chunk.slice(0, numMatch.index).replace(/\s+/g, " ").trim() || null;
+    buckets.push({ dueDate: `${m[3]}-${m[2]}-${m[1]}`, amount: parseAmount(numMatch[1]), label });
+  }
+  return buckets;
+}
+
 function findTotalInSection(text: string, startLabel: string, endLabel: string): number {
   const startIdx = text.indexOf(startLabel);
   const endIdx = text.indexOf(endLabel);
@@ -126,6 +179,7 @@ function parseUnzeTrading(text: string, date: string | null): CashFlowParsed {
     closingBalanceUnzeTrading: findAmount(text, "Closing Balance Unze Trading"),
     loanPostDatedCHQs: loanTotal,
     closingAfterLoanPostDated: findAmount(text, "Closing Balance After Loan & Post Dated CHQ's Unze Trading"),
+    pdcBuckets: extractUnzePdcBuckets(text),
     date,
     company: "unze",
     rawText: text,
@@ -202,6 +256,7 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     closingBalanceUnzeTrading: closingBalance,
     loanPostDatedCHQs: pdcTotal,
     closingAfterLoanPostDated: closingAfterPDC,
+    pdcBuckets: extractImperialPdcBuckets(text),
     date,
     company: "imperial",
     rawText: text,
