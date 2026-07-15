@@ -53,7 +53,7 @@
 | `VAPID_PUBLIC_KEY` | Web push notifications | Yes |
 | `VAPID_PRIVATE_KEY` | Web push notifications | Yes |
 | `VAPID_EMAIL` | Web push contact email | Yes |
-| `ENCRYPTION_KEY` | 32-byte key for encrypting OAuth tokens in DB | Yes |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte key for encrypting OAuth tokens in DB (falls back to `SUPABASE_SERVICE_ROLE_KEY` if unset — confirmed 15 Jul 2026 this is the variable actually set in Vercel; this doc previously said `ENCRYPTION_KEY`, which doesn't match the code) | Yes |
 | `NEXT_PUBLIC_APP_URL` | Used by taxAlertEngine for email links | Yes |
 
 ---
