@@ -78,7 +78,7 @@ export default function TaskStatus({
 }) {
   const toast = useToast();
   const [status, setStatus] = useState(task.status);
-  const [memberNames, setMemberNames] = useState<{ name: string; email: string | null; department: string | null; phone_e164: string | null }[]>([]);
+  const [memberNames, setMemberNames] = useState<{ id: string; name: string; email: string | null; department: string | null; business_unit: string | null; phone_e164: string | null }[]>([]);
   const [replyText, setReplyText] = useState(task.reply_text || "");
   const [correctiveAction, setCorrectiveAction] = useState(task.corrective_action || "");
   const [recoveryDate, setRecoveryDate] = useState(task.recovery_date || "");
@@ -121,8 +121,8 @@ export default function TaskStatus({
 
   useEffect(() => {
     if (canEditDate) {
-      supabase.from("members").select("name, email, department, phone_e164").order("name").then(({ data }) => {
-        if (data) setMemberNames(data.map((m) => ({ name: m.name || "", email: m.email, department: m.department, phone_e164: m.phone_e164 || null })));
+      supabase.from("members").select("id, name, email, department, business_unit, phone_e164").order("name").then(({ data }) => {
+        if (data) setMemberNames(data.map((m) => ({ id: m.id, name: m.name || "", email: m.email, department: m.department, business_unit: m.business_unit, phone_e164: m.phone_e164 || null })));
       });
     }
   }, [canEditDate]);
@@ -731,8 +731,20 @@ export default function TaskStatus({
                   assigned_to: e.target.value,
                   assigned_to_email: m?.email || null,
                   assigned_to_department: m?.department || null,
+                  assigned_to_business_unit: m?.business_unit || null,
                   updated_at: new Date().toISOString(),
                 }).eq("id", task.id);
+                // Found during the 15 Jul 2026 audit: this control used
+                // to only touch tasks.assigned_to/assigned_to_email,
+                // leaving the task_assignees co-assignee list stale —
+                // stale people kept seeing the task, "+N" chips went
+                // wrong. "Reassign to" replaces the owner list with just
+                // this one person, matching the Owner(s) editor's
+                // pattern in TaskDetailPanel.tsx.
+                if (m?.id) {
+                  await supabase.from("task_assignees").delete().eq("task_id", task.id);
+                  await supabase.from("task_assignees").insert({ task_id: task.id, member_id: m.id, member_name: m.name, member_email: m.email });
+                }
                 logAction("Updated", "tasks", `Reassigned to ${e.target.value}`, task.id);
                 onChanged();
               }}

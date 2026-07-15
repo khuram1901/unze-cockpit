@@ -50,6 +50,7 @@ type MeetingRequest = {
 };
 
 type Member = {
+  id: string;
   first_name: string | null;
   last_name: string | null;
   name: string | null;
@@ -148,7 +149,7 @@ export default function PADashboardPage() {
     const [tasksRes, meetingsRes, membersRes, companiesRes] = await Promise.all([
       supabase.from("tasks").select(TASK_COLS).order("created_at", { ascending: false }).limit(300),
       supabase.from("meeting_requests").select("id, requested_by_name, meeting_title, requested_date, priority, status").eq("status", "Pending").order("created_at", { ascending: false }),
-      supabase.from("members").select("first_name, last_name, name, email, department, phone_e164").eq("is_active", true),
+      supabase.from("members").select("id, first_name, last_name, name, email, department, phone_e164").eq("is_active", true),
       supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
     ]);
 
@@ -230,6 +231,14 @@ export default function PADashboardPage() {
         notes: `Reassigned from ${task?.assigned_to || "unassigned"} to ${newPerson} by ${currentUserName || "PA"}`,
         updated_at: new Date().toISOString(),
       }).eq("id", id);
+      // Found during the 15 Jul 2026 audit: this only updated
+      // tasks.assigned_to, leaving task_assignees stale (co-assignee
+      // list out of sync). "Reassign to" replaces the owner list with
+      // just this one person, matching TaskDetailPanel.tsx's pattern.
+      if (member?.id) {
+        await supabase.from("task_assignees").delete().eq("task_id", id);
+        await supabase.from("task_assignees").insert({ task_id: id, member_id: member.id, member_name: newPerson, member_email: member.email });
+      }
     }
     logAction("Updated", "tasks", `Bulk reassigned ${selectedTasks.size} tasks to ${newPerson} (from: ${Array.from(previousAssignees).join(", ")})`);
     setSelectedTasks(new Set());
@@ -382,16 +391,22 @@ export default function PADashboardPage() {
                 {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
               </select>
               <DateInput value={task.due_date || ""} onChange={(e) => updateTask(task.id, { due_date: e.target.value || null })} style={controlStyle} />
-              <select value={task.assigned_to || ""} onChange={(e) => {
+              <select value={task.assigned_to || ""} onChange={async (e) => {
                 const m = members.find((mem) => memberName(mem) === e.target.value);
                 const prevOwner = task.assigned_to || "unassigned";
                 const newOwner = e.target.value;
                 const delegationNote = `Reassigned from ${prevOwner} to ${newOwner} by ${currentUserName || "PA"}`;
                 const existingNotes = task.notes || "";
-                updateTask(task.id, {
+                await updateTask(task.id, {
                   assigned_to: newOwner, assigned_to_email: m?.email || null, assigned_to_department: m?.department || null,
                   notes: existingNotes ? `${existingNotes}\n[${new Date().toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}] ${delegationNote}` : delegationNote,
                 });
+                // Found during the 15 Jul 2026 audit: only tasks.assigned_to
+                // was updated, leaving task_assignees stale.
+                if (m?.id) {
+                  await supabase.from("task_assignees").delete().eq("task_id", task.id);
+                  await supabase.from("task_assignees").insert({ task_id: task.id, member_id: m.id, member_name: newOwner, member_email: m.email });
+                }
               }} style={controlStyle}>
                 <option value="">Reassign...</option>
                 {members.map((m) => { const n = memberName(m); return <option key={n} value={n}>{n}</option>; })}
