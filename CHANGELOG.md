@@ -4,6 +4,25 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-15 — Full app audit: High-severity findings fixed (1 of 2)
+
+Continued down the audit in severity order. Fixed 10 of 14 High findings, each verified with `tsc --noEmit`/`eslint` and committed separately:
+
+- Task delete permission no longer always evaluates true (`canDeleteTask(ctx, null)` → `isPrivileged(ctx)` in `TasksPageClient.tsx`).
+- Fixed an override-before-PA ordering bug in `app/lib/permissions.ts` present in 7 functions (`canViewFinance`, `canViewReceivables`, `canViewGuarantees`, `canManageGuarantees`, `canManageTaxNotices`, `canViewTaxAccounts`, `canManageTaxSchedule`) — a mis-set Access Matrix override could previously let the PA see financial data, which is a hard rule. `isPA()` now always checked first.
+- `/api/investments/dividends` now has a server-side role check (was open to any authenticated request).
+- Password login now checks the `members` row actually exists before letting someone in — matches the same guard already in place for Google sign-in.
+- Scrap entries now have the same duplicate-submission guard as Production/Dispatch/Breakage (migration 125 also deduped 4 existing zero-quantity live duplicates); also fixed a bug where deleting a scrap row would have wrongly deleted from `breakage_entries`.
+- Letter-expiry checks (ProductionForm, dispatch-records API, dashboard, stock page) now compare against Pakistan-time "today" instead of the server's UTC today (`todayPakistanISO()` in `lib/dateUtils.ts`) — a letter expiring today could previously look valid for several hours it wasn't.
+- Reassigning a task's owner via the dropdown (Tasks page and PA page) now keeps `task_assignees` in sync, matching the pattern already used elsewhere — previously the co-assignee list could silently disagree with the single-owner field.
+- Confirmed with Khuram: the correct env var name is `TOKEN_ENCRYPTION_KEY`, not `ENCRYPTION_KEY` — corrected in `BLUEPRINT.md`.
+- WhatsApp task reminder/chase messages now format dates as DD/MM/YYYY instead of raw `YYYY-MM-DD`.
+- **Rule-0 cleanup**: moved JS-side aggregation into the database across department budgets (Finance pages), receivables aging/collected-by-plant, monthly production/dispatch target actuals, and the audit log page's KPI counts + department donut (the audit log was undercounting everything — live table has 1,011 rows against a 500-row fetch cap). New RPCs added in migrations 126–128.
+
+Migrations 125–128 are written to `supabase/` and still need to be applied manually via the Supabase SQL Editor. 4 High findings remain (cash-closing formula inconsistency, duplicate threshold logic, legacy report emails, duplicate Recurring Tasks pages), then Medium/Low findings from the audit.
+
+---
+
 ## 2026-07-15 — Full app audit: all Critical findings fixed
 
 Ran a full audit of the app (every page, every rule in this file, checked against the live database) and produced `Full-App-Audit-2026-07-15.md`. Then fixed every Critical-severity finding, one at a time, verifying with `tsc`/`eslint` and committing separately for each:
