@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
-import { UTPL_COMPANY_ID } from "../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, HD_COMPANY_ID, BRNH_COMPANY_ID, DIR_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
@@ -53,11 +53,33 @@ type EditForm = {
 
 const STATUSES = ["pending", "won", "lost", "settled"];
 const NOTICE_TYPES = ["income tax", "sales tax", "withholding tax", "FBR notice", "provincial tax", "customs", "other"];
-const COMPANIES = ["Unze Trading PVT Limited", "Imperial Footwear Pvt Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang", "Directors"];
+const COMPANIES = ["Unze Trading PVT Limited", "Imperial Footwear PVT Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang", "Directors"];
+
+// Found during the 15 Jul 2026 full-app audit: every notice was written
+// to the database with company_id hardcoded to UTPL regardless of which
+// company was actually picked here — the dropdown's choice only ever
+// reached the free-text company_name column. This resolves the real
+// company_id from that same choice so notices are attributed correctly.
+// "K&K Jhang" has no matching row in the companies table at all (not a
+// real company entity in the system yet) — flagged to Khuram; until
+// that's resolved it's left as null ("needs review"), same convention
+// FinanceManager.tsx uses for company_id gaps, rather than guessing.
+const COMPANY_ID_BY_NAME: Record<string, string | null> = {
+  "Unze Trading PVT Limited":      UTPL_COMPANY_ID,
+  "Imperial Footwear PVT Limited": IFPL_COMPANY_ID,
+  "Haute Dolci":                   HD_COMPANY_ID,
+  "Barahn PVT Limited":            BRNH_COMPANY_ID,
+  "K&K Jhang":                     null,
+  "Directors":                     DIR_COMPANY_ID,
+};
+function resolveCompanyId(companyName: string | null | undefined): string | null {
+  if (!companyName) return null;
+  return COMPANY_ID_BY_NAME[companyName] ?? null;
+}
 
 function normaliseCompanyName(name: string): string {
   const n = name.trim();
-  if (n.toLowerCase().startsWith("imperial footwear")) return "Imperial Footwear Pvt Limited";
+  if (n.toLowerCase().startsWith("imperial footwear")) return "Imperial Footwear PVT Limited";
   return n;
 }
 const CONSULTANTS = ["Rana Munir", "Rana Shehbaz", "Hashim Butt", "Others"];
@@ -203,7 +225,7 @@ export default function TaxationDashboard() {
     e.preventDefault();
     setSaving(true);
     const { error } = await supabase.from("legal_notices").insert({
-      company_id: UTPL_COMPANY_ID, title: formData.title, notice_type: formData.notice_type || null,
+      company_id: resolveCompanyId(formData.company_name), title: formData.title, notice_type: formData.notice_type || null,
       company_name: formData.company_name || null, consultant_name: formData.consultant_name || null,
       received_date: formData.received_date || null, hearing_deadline: formData.hearing_deadline || null,
       financial_exposure: formData.financial_exposure ? Number(formData.financial_exposure) : null,
@@ -255,6 +277,11 @@ export default function TaxationDashboard() {
       notes: editForm.notes || null,
       notice_type: editForm.notice_type || null,
       company_name: editForm.company_name || null,
+      // Found during the 15 Jul 2026 full-app audit: editing a notice's
+      // company here only ever updated the display text, never
+      // company_id — so a mislabelled notice couldn't even be corrected
+      // through this form. Now keeps both in sync.
+      company_id: resolveCompanyId(editForm.company_name),
       received_date: editForm.received_date || null,
     };
     const { error } = await supabase.from("legal_notices").update(patch).eq("id", id);
@@ -479,7 +506,7 @@ export default function TaxationDashboard() {
                 const recordedBy = row["Recorded By"].trim();
                 const userNotes = row["Notes"]?.trim() || "";
                 await supabase.from("legal_notices").insert({
-                  company_id: UTPL_COMPANY_ID, title: row["Title"].trim(),
+                  company_id: resolveCompanyId(normaliseCompanyName(row["Company"].trim())), title: row["Title"].trim(),
                   company_name: row["Company"].trim(), notice_type: row["Type"].trim(),
                   consultant_name: row["Consultant"]?.trim() || null, hearing_deadline: row["Hearing Date"]?.trim() || null,
                   financial_exposure: row["Exposure (PKR)"] ? Number(row["Exposure (PKR)"]) : null,
