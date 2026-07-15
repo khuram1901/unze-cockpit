@@ -5,7 +5,7 @@ import { COLOURS, SHADOWS, PageHeader } from "../lib/SharedUI";
 import { useUserCtx } from "../lib/useUserCtx";
 import {
   canCreateAssignments as checkCanCreate,
-  canSeeAllTasks, canReviewTasks, canImportExport, canDeleteTask,
+  canSeeAllTasks, canReviewTasks, canImportExport, isPrivileged,
 } from "../lib/permissions";
 import Modal from "../lib/Modal";
 import NewTaskForm from "./NewTaskForm";
@@ -21,7 +21,16 @@ export default function TasksPageClient() {
   const canCreate = ctx ? checkCanCreate(ctx) : false;
   const seeAll = ctx ? canSeeAllTasks(ctx) : false;
   const review = ctx ? canReviewTasks(ctx) : false;
-  const canDelete = ctx ? canDeleteTask(ctx, null) : false;
+  // Found during the 15 Jul 2026 audit: this used to call
+  // canDeleteTask(ctx, null), which is always true for ANY logged-in
+  // user — isTaskProtected(null) returns false, so "!isTaskProtected"
+  // defaults to allowed with no task to check against. This flag is a
+  // page-level "does this role generally have delete rights" signal
+  // (TaskDetailPanel.tsx falls back to isPrivileged when it's undefined
+  // anyway), so it should just BE isPrivileged — the real per-task
+  // protected-creator check still happens per-row via canDeleteTask
+  // with the actual task's assigned_by_email.
+  const canDelete = ctx ? isPrivileged(ctx) : false;
   const impExp = ctx ? canImportExport(ctx) : false;
 
   return (
