@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   const supabase = createServiceClient();
   const { data: tokenRow } = await supabase
-    .from("google_oauth_tokens").select("*").eq("user_email", TARGET_EMAIL).single();
+    .from("google_oauth_tokens").select("id, access_token, refresh_token, token_expiry, updated_at").eq("user_email", TARGET_EMAIL).single();
 
   if (!tokenRow) {
     return Response.json({ error: `No token for ${TARGET_EMAIL} — reconnect Google on the Calendar page` }, { status: 400 });

@@ -37,7 +37,7 @@ async function handleCheckInbox(isCron: boolean) {
     for (const targetEmail of TARGET_EMAILS) {
       const { data: tokenRow } = await supabase
         .from("google_oauth_tokens")
-        .select("*")
+        .select("id, access_token, refresh_token, token_expiry, updated_at")
         .eq("user_email", targetEmail)
         .single();
 

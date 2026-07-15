@@ -43,7 +43,7 @@ export async function getAuthenticatedClient() {
   // account this integration is actually meant to be.
   const { data, error } = await supabase
     .from("google_oauth_tokens")
-    .select("*")
+    .select("id, access_token, refresh_token, token_expiry")
     .eq("user_email", GOOGLE_INTEGRATION_EMAIL)
     .single();
 
