@@ -81,7 +81,7 @@ export default function MonthlyOperationsTargetsPage() {
         setCanEdit(canEditOperationsTargets(ctx));
       }
     }
-    const { data: plantsData } = await supabase.from("plants").select("*").eq("active", true).order("name");
+    const { data: plantsData } = await supabase.from("plants").select("id, name, type, active").eq("active", true).order("name");
     if (plantsData) setPlants(plantsData);
     await loadTargets(targetMonth);
     setLoading(false);
@@ -95,8 +95,8 @@ export default function MonthlyOperationsTargetsPage() {
     // plant used to be summed in JS from raw daily entries (rule 0
     // violation) — now computed by get_monthly_plant_actuals().
     const [prodRes, dispRes, actualsRes] = await Promise.all([
-      supabase.from("monthly_production_targets").select("*").eq("target_month", month).order("plant_name"),
-      supabase.from("monthly_dispatch_targets").select("*").eq("target_month", month).order("plant_name"),
+      supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter, submitted_by, notes, created_at").eq("target_month", month).order("plant_name"),
+      supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter, submitted_by, notes, created_at").eq("target_month", month).order("plant_name"),
       supabase.rpc("get_monthly_plant_actuals", { p_month_start: mStart, p_month_end: mEnd }),
     ]);
     setProductionTargets(prodRes.data || []);

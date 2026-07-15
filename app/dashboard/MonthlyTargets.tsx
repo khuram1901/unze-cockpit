@@ -61,7 +61,7 @@ export default function MonthlyTargets() {
         setCanEdit(canEditOperationsTargets(ctx));
       }
     }
-    const { data: pd } = await supabase.from("plants").select("*").eq("active", true).order("name");
+    const { data: pd } = await supabase.from("plants").select("id, name, type, active").eq("active", true).order("name");
     if (pd) setPlants(pd);
     await loadTargets(targetMonth);
     setLoaded(true);
@@ -71,8 +71,8 @@ export default function MonthlyTargets() {
     const mStart = getMonthStart(month);
     const mEnd = getMonthEnd(month);
     const [prodRes, dispRes, prodEntries, dispEntries] = await Promise.all([
-      supabase.from("monthly_production_targets").select("*").eq("target_month", month).order("plant_name"),
-      supabase.from("monthly_dispatch_targets").select("*").eq("target_month", month).order("plant_name"),
+      supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter, submitted_by, notes").eq("target_month", month).order("plant_name"),
+      supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter, submitted_by, notes").eq("target_month", month).order("plant_name"),
       supabase.from("production_entries").select("plant_id, qty_31, qty_36, qty_45, qty_meter").gte("entry_date", mStart).lte("entry_date", mEnd),
       supabase.from("dispatch_entries").select("plant_id, qty_31, qty_36, qty_45, qty_meter").gte("entry_date", mStart).lte("entry_date", mEnd),
     ]);

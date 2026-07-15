@@ -177,9 +177,9 @@ export default function ReceivablesPage() {
     }
 
     const [stagesRes, billsRes, collectedRes, plantsRes, ragRes, agingTotalsRes, agingByCustomerRes, collectedByPlantRes] = await Promise.all([
-      supabase.from("receivable_stages").select("*").order("stage_order"),
-      supabase.from("receivables").select("*").neq("status", "Collected").order("date_submitted"),
-      supabase.from("receivables").select("*").eq("status", "Collected").order("received_date", { ascending: false }).limit(100),
+      supabase.from("receivable_stages").select("id, stage_order, stage_name, working_day_budget").order("stage_order"),
+      supabase.from("receivables").select("id, utility, plant_id, invoice_ref, ic_ref, grn_ref, amount, currency, date_submitted, current_stage_order, current_stage_entered_date, status, notes, bill_type, received_date").neq("status", "Collected").order("date_submitted"),
+      supabase.from("receivables").select("id, utility, plant_id, invoice_ref, ic_ref, grn_ref, amount, currency, date_submitted, current_stage_order, current_stage_entered_date, status, notes, bill_type, received_date").eq("status", "Collected").order("received_date", { ascending: false }).limit(100),
       supabase.from("plants").select("id, name, type").eq("active", true).order("name"),
       supabase.rpc("get_receivable_rag_by_customer"),
       supabase.rpc("get_receivable_aging_totals"),

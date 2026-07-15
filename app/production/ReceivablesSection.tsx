@@ -116,10 +116,10 @@ export default function ReceivablesSection({
   const loadData = useCallback(async () => {
     setLoading(true);
     const [stagesRes, billsRes] = await Promise.all([
-      supabase.from("receivable_stages").select("*").order("stage_order"),
+      supabase.from("receivable_stages").select("id, stage_order, stage_name, working_day_budget").order("stage_order"),
       supabase
         .from("receivables")
-        .select("*")
+        .select("id, utility, plant_id, invoice_ref, ic_ref, grn_ref, amount, currency, date_submitted, current_stage_order, current_stage_entered_date, status, received_date, notes")
         .eq("plant_id", plantId)
         .neq("status", "Collected")
         .order("date_submitted", { ascending: false }),

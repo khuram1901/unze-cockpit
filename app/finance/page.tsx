@@ -187,7 +187,7 @@ export default function FinancePage() {
     const c = cId || budgetCompany;
     const m = month || budgetMonth;
     const [{ data }, { data: summaryData }] = await Promise.all([
-      supabase.from("department_budgets").select("*").eq("company_id", c).eq("budget_month", m).order("department"),
+      supabase.from("department_budgets").select("id, company_id, department, budget_month, category, budgeted_amount, actual_amount, notes").eq("company_id", c).eq("budget_month", m).order("department"),
       supabase.rpc("get_department_budget_summary", { p_company_id: c, p_month: m }),
     ]);
     setBudgets(data || []);

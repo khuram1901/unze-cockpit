@@ -255,19 +255,19 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     const [obRes, planRes, posRes] = await Promise.all([
       supabase
         .from("cash_opening_balance")
-        .select("*")
+        .select("id, as_of_date, opening_amount, currency")
         .eq("company_id", companyId)
         .order("as_of_date", { ascending: true })
         .limit(1),
       supabase
         .from("monthly_cash_plan")
-        .select("*")
+        .select("id, plan_month, tentative_receivables, tentative_payouts")
         .eq("company_id", companyId)
         .eq("plan_month", currentMonthISO())
         .maybeSingle(),
       supabase
         .from("daily_cash_position")
-        .select("*")
+        .select("id, position_date, opening_balance, total_receipts, total_payments, closing_balance, post_dated_total, closing_after_post_dated")
         .eq("company_id", companyId)
         .order("position_date", { ascending: false })
         .limit(30),
@@ -284,7 +284,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     setPositions(posRes.data || []);
 
     const [{ data: budgetData }, { data: summaryData }] = await Promise.all([
-      supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", budgetMonth).order("department"),
+      supabase.from("department_budgets").select("id, department, budget_month, category, budgeted_amount, actual_amount, notes").eq("company_id", companyId).eq("budget_month", budgetMonth).order("department"),
       supabase.rpc("get_department_budget_summary", { p_company_id: companyId, p_month: budgetMonth }),
     ]);
     setBudgets(budgetData || []);
@@ -301,7 +301,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   async function loadBudgets(month?: string) {
     const m = month || budgetMonth;
     const [{ data }, { data: summaryData }] = await Promise.all([
-      supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", m).order("department"),
+      supabase.from("department_budgets").select("id, department, budget_month, category, budgeted_amount, actual_amount, notes").eq("company_id", companyId).eq("budget_month", m).order("department"),
       supabase.rpc("get_department_budget_summary", { p_company_id: companyId, p_month: m }),
     ]);
     setBudgets(data || []);
