@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { google } from "googleapis";
-import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
+import { parseCashFlowPDF, type PdcBucket } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
 import { reconcile, matchBankPositionToCashFlow } from "../../../lib/pdf-parsers/reconcile";
 
@@ -282,6 +282,7 @@ export async function GET(request: NextRequest) {
                   raw_pdf_filename: group.cashFlow.filename,
                   uploaded_by: "gmail-auto",
                 }, { onConflict: "company_id,position_date" });
+                await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
                 dateSet.add(positionDate);
                 results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (cash flow only)`, date: positionDate, account: targetEmail });
               }
@@ -319,6 +320,7 @@ export async function GET(request: NextRequest) {
                   post_dated_total: cashFlow.loanPostDatedCHQs, closing_after_post_dated: cashFlow.closingAfterLoanPostDated,
                   raw_pdf_filename: pdfAttachments[0].filename, uploaded_by: "gmail-auto",
                 }, { onConflict: "company_id,position_date" });
+                await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
                 dateSet.add(positionDate);
                 results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (single PDF)`, date: positionDate, account: targetEmail });
               } else {
@@ -394,6 +396,23 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Replaces that (company, day)'s bucket rows on every save rather than
+// appending — a re-processed day should show that day's PDC schedule
+// exactly, not accumulate duplicates alongside it.
+async function savePdcBuckets(
+  supabase: ReturnType<typeof createServiceClient>,
+  companyId: string,
+  positionDate: string,
+  buckets: PdcBucket[]
+) {
+  await supabase.from("pdc_maturity_buckets").delete().eq("company_id", companyId).eq("position_date", positionDate);
+  if (buckets.length > 0) {
+    await supabase.from("pdc_maturity_buckets").insert(
+      buckets.map((b) => ({ company_id: companyId, position_date: positionDate, due_date: b.dueDate, amount: b.amount, label: b.label }))
+    );
+  }
+}
+
 async function saveToDatabase(
   positionDate: string,
   cashFlow: Awaited<ReturnType<typeof parseCashFlowPDF>>[number],
@@ -421,6 +440,8 @@ async function saveToDatabase(
     },
     { onConflict: "company_id,position_date" }
   );
+
+  await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
 
   await supabase.from("bank_position_snapshots").upsert(
     {

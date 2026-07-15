@@ -1,11 +1,29 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
-import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
+import { parseCashFlowPDF, type PdcBucket } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
 import { reconcile, matchBankPositionToCashFlow } from "../../../lib/pdf-parsers/reconcile";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, getCompanyById } from "../../../lib/constants";
 import { requireAuth } from "../../../lib/api-auth";
 import { archiveSourceDocument } from "../../../lib/document-archive";
+
+// Replaces that (company, day)'s bucket rows on every save rather than
+// appending — a re-processed day should show that day's PDC schedule
+// exactly, not accumulate duplicates alongside it. Same helper as
+// check-inbox/route.ts's automated ingestion path.
+async function savePdcBuckets(
+  supabase: ReturnType<typeof createServiceClient>,
+  companyId: string,
+  positionDate: string,
+  buckets: PdcBucket[]
+) {
+  await supabase.from("pdc_maturity_buckets").delete().eq("company_id", companyId).eq("position_date", positionDate);
+  if (buckets.length > 0) {
+    await supabase.from("pdc_maturity_buckets").insert(
+      buckets.map((b) => ({ company_id: companyId, position_date: positionDate, due_date: b.dueDate, amount: b.amount, label: b.label }))
+    );
+  }
+}
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -125,6 +143,8 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+
+      await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
 
       const { error: bankError } = await supabase.from("bank_position_snapshots").upsert(
         {
