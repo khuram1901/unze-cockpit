@@ -2903,8 +2903,8 @@ function ExecutiveDashboardBody({
         </>
       )}
 
-      {/* ── INVESTMENTS ── */}
-      {investmentData && (
+      {/* Investments and UK Pension removed — not shown on Kamran's dashboard */}
+      {false && investmentData && (
         <>
           <SectionTitle title="Investments — PSX Portfolio" />
           <a href="/investments" style={{ textDecoration: "none", display: "block" }}>
@@ -2963,8 +2963,8 @@ function ExecutiveDashboardBody({
         </>
       )}
 
-      {/* ── UK PENSION — AVIVA ── */}
-      {pensionSummary && (
+      {/* UK Pension removed — not shown on Kamran's dashboard */}
+      {false && pensionSummary && (
         <div
           onClick={() => { window.location.href = "/investments"; }}
           style={{
