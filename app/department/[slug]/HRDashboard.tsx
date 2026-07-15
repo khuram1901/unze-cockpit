@@ -70,7 +70,7 @@ export default function HRDashboard() {
 
   async function loadData() {
     setLoading(true);
-    const { data } = await supabase.from("recruitment_positions").select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.from("recruitment_positions").select("id, position_title, department, date_opened, status, notes, created_at, company_id").order("created_at", { ascending: false });
     setItems(data || []);
 
     const { data: userData } = await supabase.auth.getUser();

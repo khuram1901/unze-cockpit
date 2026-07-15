@@ -182,7 +182,9 @@ export default function TaxationDashboard() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from("legal_notices").select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.from("legal_notices")
+      .select("id, title, company_name, notice_type, consultant_name, received_date, hearing_deadline, financial_exposure, our_action_required, consultant_action_required, resolution_status, notes, created_at, is_active, notice_status, legal_stage")
+      .order("created_at", { ascending: false });
     setItems((data || []) as Notice[]);
 
     const { data: userData } = await supabase.auth.getUser();

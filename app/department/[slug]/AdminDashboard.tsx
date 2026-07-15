@@ -78,7 +78,9 @@ export default function AdminDashboard() {
         setCanDelete(canReviewTasks(ctx));
       }
     }
-    const { data } = await supabase.from("tasks").select("*").eq("assigned_to_department", "Admin").order("created_at", { ascending: false });
+    const { data } = await supabase.from("tasks")
+      .select("id, description, project, assigned_to, due_date, priority, status, notes, created_at, assigned_by_email")
+      .eq("assigned_to_department", "Admin").order("created_at", { ascending: false });
     setItems(data || []);
     setLoading(false);
   }

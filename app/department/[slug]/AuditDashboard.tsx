@@ -137,7 +137,8 @@ export default function AuditDashboard() {
   async function loadData() {
     setLoading(true);
     const { data } = await supabase
-      .from("audit_plan_items").select("*")
+      .from("audit_plan_items")
+      .select("id, company_id, audit_area, audit_type, scope, planned_date, target_date, assigned_to, status, audit_stage, completion_pct, findings_count, notes, created_at")
       .order("created_at", { ascending: false });
     setItems(data || []);
 
