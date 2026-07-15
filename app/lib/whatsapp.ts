@@ -1,3 +1,5 @@
+import { formatDateUK } from "./dateUtils";
+
 export function whatsappLink(phone: string | null, message: string): string | null {
   if (!phone) return null;
   const clean = phone.replace(/[^0-9+]/g, "");
@@ -41,7 +43,9 @@ export function dispatchNotificationMessage({
   msg += `*Letter No:* ${letterNumber}\n`;
   msg += `*PO:* ${customerName} — ${poNumber}\n`;
   msg += `*Plant:* ${plantName}\n`;
-  msg += `*Date:* ${dispatchDate}\n`;
+  // Found during the 15 Jul 2026 audit: these dates were interpolated
+  // raw (YYYY-MM-DD) — violated the DD/MM/YYYY rule for WhatsApp messages.
+  msg += `*Date:* ${formatDateUK(dispatchDate)}\n`;
   msg += `*Quantity:* ${sizes}\n`;
   if (vehicleNumber) msg += `*Vehicle:* ${vehicleNumber}\n`;
   msg += `*Released by:* ${releasedBy}\n\n`;
@@ -51,7 +55,7 @@ export function dispatchNotificationMessage({
 
 export function taskReminderMessage(description: string, dueDate: string | null, assignedBy: string | null): string {
   let msg = `Task Reminder: ${description}`;
-  if (dueDate) msg += `\nDue: ${dueDate}`;
+  if (dueDate) msg += `\nDue: ${formatDateUK(dueDate)}`;
   if (assignedBy) msg += `\nAssigned by: ${assignedBy}`;
   msg += `\n\nPlease check Unze Group Dashboard for details.`;
   return msg;
@@ -60,7 +64,7 @@ export function taskReminderMessage(description: string, dueDate: string | null,
 export function taskChaseMessage(description: string, assignedTo: string | null, dueDate: string | null): string {
   let msg = `Hi ${assignedTo || "there"}, this is a reminder about your task:`;
   msg += `\n\n${description}`;
-  if (dueDate) msg += `\nDue: ${dueDate}`;
+  if (dueDate) msg += `\nDue: ${formatDateUK(dueDate)}`;
   msg += `\n\nPlease update the status on Unze Group Dashboard.`;
   return msg;
 }

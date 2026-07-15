@@ -428,7 +428,10 @@ export default function PADashboardPage() {
               <button onClick={() => chaseTask(task)} style={actionBtn(COLOURS.BLUE)} title="Send chase email notification">Chase</button>
               {(() => {
                 const m = members.find((mem) => memberName(mem) === task.assigned_to);
-                const waLink = m ? whatsappLink(m.phone_e164, taskChaseMessage(task.description, task.assigned_to, task.due_date ? formatDateUK(task.due_date) : null)) : null;
+                // taskChaseMessage() now formats the date itself (DD/MM/YYYY
+                // rule fix, 15 Jul 2026) — pass the raw due_date, not a
+                // pre-formatted string, or it gets formatted twice.
+                const waLink = m ? whatsappLink(m.phone_e164, taskChaseMessage(task.description, task.assigned_to, task.due_date)) : null;
                 return waLink ? (
                   <a href={waLink} target="_blank" rel="noopener noreferrer" style={{ ...actionBtn(COLOURS.GREEN), textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "3px" }} title="Send WhatsApp reminder">
                     WA
