@@ -11,6 +11,7 @@ import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES } from "../
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
 import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpiThresholds";
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
@@ -839,7 +840,9 @@ export default function HomePage() {
       const cumulativeTarget = (targetTotalForMonth / 4) * quarter;
       const cumulativeActual = sumBetween(entries, plantId, selectedMonthStart, checkpointEnd);
       const achievement = cumulativeTarget > 0 ? (cumulativeActual / cumulativeTarget) * 100 : 0;
-      return achievement < 85;
+      // Shared with DashboardView.tsx's per-plant status badges (lib/kpiThresholds.ts) so the
+      // two screens can never disagree about what counts as "behind" (15 Jul 2026 audit fix).
+      return achievementStatus(achievement, cumulativeTarget > 0) === "red";
     }
 
     for (const plant of plants) {
@@ -878,10 +881,12 @@ export default function HomePage() {
       const brokenMTD = kpiRow?.mtd_broken ?? sumBetween(monthlyBreakage, plant.id, selectedMonthStart, dateToView);
       if (producedMTD > 0) {
         const rate = (brokenMTD / producedMTD) * 100;
-        if (rate > 1.5) {
+        // Shared with DashboardView.tsx's per-plant breakage badges (lib/kpiThresholds.ts) —
+        // same reasoning as behindAtQuarter above (15 Jul 2026 audit fix).
+        if (breakageStatus(rate, producedMTD > 0) === "red") {
           foundEscalations.push({
             plantId: plant.id, plantName: plant.name, metric: "Breakage",
-            detail: `Breakage rate ${rate.toFixed(2)}% (${brokenMTD} broken of ${producedMTD} produced) exceeds 1.5% limit.`,
+            detail: `Breakage rate ${rate.toFixed(2)}% (${brokenMTD} broken of ${producedMTD} produced) exceeds ${BREAKAGE_RED_OVER}% limit.`,
             sourceLabel: `kpi_escalation:breakage:${plant.id}:${selectedMonth}`,
           });
         }

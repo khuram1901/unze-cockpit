@@ -9,6 +9,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Cart
 import { downloadCSV } from "../lib/exportUtils";
 import MonthlyTargets from "./MonthlyTargets";
 import { canSeeAllTasks, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { achievementStatus, breakageStatus as sharedBreakageStatus, ACHIEVEMENT_AMBER_MIN, BREAKAGE_RED_OVER, type KpiStatus } from "../lib/kpiThresholds";
 import {
   COLOURS, RADII, SHADOWS,
   cardStyle, SectionTitle, StatusBadge,
@@ -47,7 +48,7 @@ type MonthlyTarget = {
   target_meter: number | null;
 };
 
-type Status = "green" | "amber" | "red" | "none";
+type Status = KpiStatus;
 
 type MetricKPI = {
   monthlyTarget: number;
@@ -163,12 +164,6 @@ function getMonthWeekNumber(d: string): number {
   if (day <= 21) return 3;
   return 4;
 }
-function achievementStatus(a: number, hasTarget: boolean): Status {
-  if (!hasTarget) return "none";
-  if (a >= 95) return "green";
-  if (a >= 85) return "amber";
-  return "red";
-}
 function kpiStatusColor(s: Status) {
   if (s === "green") return GREEN;
   if (s === "amber") return AMBER;
@@ -185,8 +180,6 @@ function statusLabel(s: Status) {
   if (s === "none") return "No Target";
   return s.toUpperCase();
 }
-
-const THRESHOLD = 85;
 
 // ── Kicker label shared style ──────────────────────────────────────
 const kickerStyle: React.CSSProperties = {
@@ -361,16 +354,13 @@ export default function DashboardView() {
           monthlyTarget, monthActual: mtdActual, monthAchievement,
           quarterTarget, quarterActual: mtdActual, quarterAchievement,
           status: achievementStatus(monthAchievement, hasTarget),
-          behindThisCheckpoint: hasTarget && quarterAchievement < THRESHOLD,
+          behindThisCheckpoint: hasTarget && quarterAchievement < ACHIEVEMENT_AMBER_MIN,
           weekNumber,
         };
       };
 
       const breakageRate = r.mtd_produced > 0 ? (r.mtd_broken / r.mtd_produced) * 100 : 0;
-      let breakageStatus: Status = "green";
-      if (r.mtd_produced === 0) breakageStatus = "none";
-      else if (breakageRate > 1.5) breakageStatus = "red";
-      else if (breakageRate > 1.0) breakageStatus = "amber";
+      const plantBreakageStatus = sharedBreakageStatus(breakageRate, r.mtd_produced > 0);
 
       return {
         plant: { id: r.plant_id, name: r.plant_name, type: r.plant_type },
@@ -381,7 +371,7 @@ export default function DashboardView() {
         todayBroken:     { s31: r.on_date_broken_31,     s36: r.on_date_broken_36,     s45: r.on_date_broken_45 },
         production: buildKPI(r.mtd_produced, monthlyProdTarget),
         dispatch:   buildKPI(r.mtd_dispatched, monthlyDispTarget),
-        breakageRate, breakageStatus,
+        breakageRate, breakageStatus: plantBreakageStatus,
         enteredProductionToday: r.entered_on_date,
         enteredDispatchToday:   r.entered_on_date,
         productionDaysMissing: r.entered_on_date ? 0 : 1,
@@ -731,19 +721,20 @@ export default function DashboardView() {
         <div style={{ ...cardStyle, padding: "22px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", marginBottom: "16px" }}>
             <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "15px", fontWeight: 600, color: NAVY }}>Breakage rate by plant</div>
-            <span style={{ fontSize: "11px", color: SLATE, marginLeft: "auto" }}>Limit 1.5%</span>
+            <span style={{ fontSize: "11px", color: SLATE, marginLeft: "auto" }}>Limit {BREAKAGE_RED_OVER}%</span>
           </div>
           {summaries.map((s) => {
             const rate = s.breakageRate;
             const color = kpiStatusColor(s.breakageStatus);
-            const barWidth = s.breakageStatus === "none" ? 0 : Math.min(rate / 3 * 100, 100);
+            const chartScale = BREAKAGE_RED_OVER * 2;
+            const barWidth = s.breakageStatus === "none" ? 0 : Math.min(rate / chartScale * 100, 100);
             return (
               <div key={s.plant.id} style={{ display: "grid", gridTemplateColumns: "100px 1fr 80px", gap: "12px", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
                 <span style={{ fontSize: "12.5px", color: NAVY, fontWeight: 500 }}>{s.plant.name.replace(" Plant", "")}</span>
                 <div style={{ position: "relative", height: "4px", background: TRACK, borderRadius: "999px", overflow: "hidden" }}>
                   <div style={{ position: "absolute", inset: 0, width: `${barWidth}%`, background: color, borderRadius: "999px" }} />
-                  {/* 1.5% threshold marker at 50% of 3% scale */}
-                  <div style={{ position: "absolute", top: "-4px", bottom: "-4px", left: "50%", width: "1px", background: RED, opacity: 0.4 }} />
+                  {/* Threshold marker sits at BREAKAGE_RED_OVER on this 2x-BREAKAGE_RED_OVER scale, i.e. always 50% */}
+                  <div style={{ position: "absolute", top: "-4px", bottom: "-4px", left: `${(BREAKAGE_RED_OVER / chartScale) * 100}%`, width: "1px", background: RED, opacity: 0.4 }} />
                 </div>
                 <span style={{
                   fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)",
@@ -759,7 +750,7 @@ export default function DashboardView() {
             );
           })}
           <div style={{ marginTop: "12px", paddingTop: "10px", fontSize: "11px", color: SLATE, display: "flex", justifyContent: "space-between" }}>
-            <span>Vertical mark = 1.5% limit</span>
+            <span>Vertical mark = {BREAKAGE_RED_OVER}% limit</span>
             <span>Below limit is <span style={{ color: GREEN, fontWeight: 500 }}>healthy</span></span>
           </div>
         </div>
