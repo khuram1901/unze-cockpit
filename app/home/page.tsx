@@ -646,7 +646,16 @@ export default function HomePage() {
         month_end: selectedMonthEnd,
       }),
       supabase.from("machine_issues").select("id, plant_name, machine_name, issue_status, expected_resolution, issue_description, action_taken, created_at").neq("issue_status", "Resolved").order("created_at", { ascending: false }),
-      supabase.from("tasks").select("id, description, project, priority, due_date, assigned_to, assigned_by, assigned_date, status, task_type, reply_required, reply_text, assigned_to_department, assigned_to_business_unit, created_at, updated_at, source_type, source_record_id, source_label, exception_type, explanation_required").order("created_at", { ascending: false }).limit(200),
+      // Found during the 15 Jul 2026 full-app audit: this used to be
+      // `.order("created_at", {ascending:false}).limit(200)` — on an
+      // exception/management-by-exception dashboard, a plain "most
+      // recently created" cap silently drops the OLDEST, most-neglected
+      // open tasks first (exactly the ones this page exists to surface)
+      // once the table passes 200 rows. Fetches every task that still
+      // needs attention (not Completed/Cancelled), regardless of age,
+      // plus Completed tasks from the current month only (all that's
+      // needed for the completedThisMonth stat below) — no arbitrary cap.
+      supabase.from("tasks").select("id, description, project, priority, due_date, assigned_to, assigned_by, assigned_date, status, task_type, reply_required, reply_text, assigned_to_department, assigned_to_business_unit, created_at, updated_at, source_type, source_record_id, source_label, exception_type, explanation_required").or(`status.not.in.(Completed,Cancelled),and(status.eq.Completed,updated_at.gte.${currentMonthStart})`).order("created_at", { ascending: false }),
       supabase.from("department_owners").select("department_name, primary_owner_name, primary_owner_email").eq("department_name", "Unze Trading Ops").single(),
       supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
       supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
