@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     // Get all open tasks
     const { data: tasks } = await supabase
       .from("tasks")
-      .select("*")
+      .select("description, assigned_to, due_date, status, source_type")
       .not("status", "in", '("Completed","Cancelled")')
       .order("due_date");
 

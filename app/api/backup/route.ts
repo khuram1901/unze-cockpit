@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     const { data: token } = await supabase
       .from("google_oauth_tokens")
-      .select("*")
+      .select("id, access_token, refresh_token, token_expiry")
       .eq("user_email", BACKUP_RECIPIENT)
       .single();
 

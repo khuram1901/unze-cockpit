@@ -183,7 +183,7 @@ export default function MeetingsPage() {
 
     const { data: pendingData } = await supabase
       .from("pending_minutes")
-      .select("*")
+      .select("id, gmail_message_id, subject, from_address, email_date, raw_text, status, created_at")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
     setPendingMinutes(pendingData || []);
