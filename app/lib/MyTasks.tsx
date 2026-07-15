@@ -95,11 +95,6 @@ export default function MyTasks() {
                   <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {t.description}
                   </div>
-                  {seeAll && (
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "1px" }}>
-                      {t.assigned_to || "Unassigned"} {t.assigned_to_department ? `· ${t.assigned_to_department}` : ""}
-                    </div>
-                  )}
                 </div>
                 <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
                   {t.due_date && (
