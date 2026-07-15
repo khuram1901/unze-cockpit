@@ -88,11 +88,16 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
+    // maxResults: 20 used to cap this well below what a real 30-day, two-company
+    // backfill needs (up to ~2 emails/company/weekday ≈ 80+ in a month), and
+    // with no pagination, re-running the cron never reached older messages
+    // past the first 20 once those were marked read — raised to 150 so a
+    // single run (or the odd manual re-run) can genuinely cover 30 days.
     const messagesRes = await gmail.users.messages.list({
       userId: "me",
       labelIds: [cockpitLabel.id],
       q: "newer_than:30d",
-      maxResults: 20,
+      maxResults: 150,
     });
 
     const messageIds = messagesRes.data.messages || [];
