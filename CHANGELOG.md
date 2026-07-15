@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-15 — Full app audit: High-severity findings fixed (2 of 2, all 14 done)
+
+Finished the remaining High findings from the audit:
+
+- **Rule-0 cleanup, final piece**: the audit log page's KPI counts (Today/Created/Updated/Deleted/Total) and department donut were computed from only the last 500 rows fetched — live table has 1,011 rows, so every number was already wrong. New `get_audit_log_stats()`/`get_audit_log_department_breakdown()` RPCs (migration 128) compute these over the full table instead.
+- **Imperial (IFPL) cash-closing formula was wrong**: `FinanceManager.tsx` computed closing-after-post-dated-cheques as `closing + post_dated` for Imperial only, while every other reader of the field (home dashboard, CEO digest, daily cash PDF) used the raw stored value. Checked all 19 live Imperial rows against the real bank statement data — every one was stored as `closing - post_dated`, same as UTPL, so '+' was never correct. The Finance page's Net Position card for IFPL was showing a materially different, wrong number from what appeared everywhere else. Fixed to always subtract, for both companies.
+- **Deduplicated achievement/breakage status rules**: the CEO dashboard and Ops dashboard each hardcoded their own copy of the 95%/85% achievement bands and 1.0%/1.5% breakage bands. Numbers agreed today but had no shared source, so a future edit to one could silently diverge from the other. Moved into `app/lib/kpiThresholds.ts`, both pages now import from there.
+- **Retired the legacy daily-pdf/weekly/monthly-po report emails**: these three cron routes did their aggregation in JavaScript (rule-0 violations) to build reports that migration 081 had already replaced with RPCs folded into the CEO digest — but the old routes and their crons were never actually removed, so the wider Admin/Executive/Ops-Manager team kept getting a separate, JS-computed version of the same ground the digest already covers for Khuram. Discussed with Khuram — retired all three outright (routes, crons, dead trigger-type entries, and the non-functional "Weekly report" Settings toggle) rather than fixing the JS in place.
+- **Deleted the standalone Recurring Tasks page** (`app/recurring-tasks/page.tsx`) — it had drifted behind the merged Recurring tab in the Tasks page (missing company field, no per-template edit) and was already unlinked from the sidebar. Discussed with Khuram — deleted outright, no redirect.
+
+All 14 High-severity findings from `Full-App-Audit-2026-07-15.md` are now fixed. Migrations 125–128 still need to be applied manually via the Supabase SQL Editor. Medium and Low findings are next.
+
+---
+
 ## 2026-07-15 — Full app audit: High-severity findings fixed (1 of 2)
 
 Continued down the audit in severity order. Fixed 10 of 14 High findings, each verified with `tsc --noEmit`/`eslint` and committed separately:
