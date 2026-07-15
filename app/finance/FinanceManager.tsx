@@ -9,7 +9,7 @@ import { COLOURS, SectionTitle, useToast, useConfirm } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import * as XLSX from "xlsx";
-import { ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ReferenceLine, LabelList } from "recharts";
 import DateInput from "../lib/DateInput";
 import { canEditFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { UTPL_COMPANY_ID } from "../lib/constants";
@@ -601,43 +601,49 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           balance may look like considering the PDC commitment." Built from
           get_pdc_outlook() (migration 132) — reads the latest report's
           cash-in-hand plus that report's dated PDC buckets, and walks the
-          balance down week by week as each bucket comes due. Numbers, not
-          just a chart, per his explicit ask ("need numbers per week so we
-          can see the amount and effective balance"). ── */}
+          balance down week by week as each bucket comes due. Was a plain
+          table (per his first ask for exact per-week numbers); switched to
+          a bar+line combo chart on 15 Jul per his follow-up — same numbers,
+          less space, easier to read at a glance. Exact PKR figures are
+          still one hover away via the tooltip, and the effective-balance
+          line is labelled directly on the chart. ── */}
       {pdcOutlook.length > 0 && (
         <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: CARD, marginBottom: "14px" }}>
           <SectionTitle title="PDC Outlook — Next 8 Weeks" style={{ margin: "0 0 4px" }} />
-          <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "14px" }}>
+          <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "6px" }}>
             Starting from today&apos;s cash in hand ({latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}), assuming every scheduled PDC clears on time and nothing else changes.
           </div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-                  <th style={{ textAlign: "left", padding: "6px 10px", color: SLATE, fontWeight: 600 }}>Week</th>
-                  <th style={{ textAlign: "left", padding: "6px 10px", color: SLATE, fontWeight: 600 }}>Period</th>
-                  <th style={{ textAlign: "right", padding: "6px 10px", color: SLATE, fontWeight: 600 }}>PDC Due</th>
-                  <th style={{ textAlign: "right", padding: "6px 10px", color: SLATE, fontWeight: 600 }}>Effective Balance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pdcOutlook.map((w) => (
-                  <tr key={w.week_number} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
-                    <td style={{ padding: "7px 10px", fontWeight: 600, color: NAVY }}>Week {w.week_number}</td>
-                    <td style={{ padding: "7px 10px", color: SLATE, fontFamily: MONO }}>
-                      {formatDateUK(w.week_start)} – {formatDateUK(w.week_end)}
-                    </td>
-                    <td style={{ padding: "7px 10px", textAlign: "right", color: w.pdc_due > 0 ? AMBER : SLATE, fontWeight: w.pdc_due > 0 ? 600 : 400 }}>
-                      {w.pdc_due > 0 ? `PKR ${fmt(w.pdc_due)}` : "—"}
-                    </td>
-                    <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: w.effective_balance < 0 ? RED : NAVY }}>
-                      PKR {fmt(w.effective_balance)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={pdcOutlook.map((w) => ({
+              week: `Wk ${w.week_number}`,
+              period: `${formatDateUK(w.week_start)}–${formatDateUK(w.week_end)}`,
+              pdc_due: w.pdc_due,
+              effective_balance: w.effective_balance,
+            }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
+              <XAxis dataKey="week" tick={{ fontSize: 11, fill: SLATE }} />
+              <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => Math.abs(v) >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
+              <Tooltip
+                formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.period || ""}
+              />
+              <Legend wrapperStyle={{ fontSize: "12px" }} />
+              <ReferenceLine y={0} stroke={RED} strokeDasharray="4 4" />
+              <Bar dataKey="pdc_due" fill={AMBER} name="PDC Due" radius={[3, 3, 0, 0]} />
+              <Line type="monotone" dataKey="effective_balance" stroke={NAVY} strokeWidth={2} dot={{ r: 3 }} name="Effective Balance">
+                <LabelList
+                  dataKey="effective_balance"
+                  position="top"
+                  formatter={(v) => {
+                    const n = Number(v);
+                    if (isNaN(n)) return "";
+                    return Math.abs(n) >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${(n / 1000).toFixed(0)}K`;
+                  }}
+                  style={{ fontSize: 10, fill: NAVY }}
+                />
+              </Line>
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
       )}
 
