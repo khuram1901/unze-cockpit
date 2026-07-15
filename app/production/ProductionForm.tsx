@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
-import { formatDateUK } from "../lib/dateUtils";
+import { formatDateUK, todayPakistanISO } from "../lib/dateUtils";
 import { canAccessDailyEntry, type UserCtx, type PermOverrides } from "../lib/permissions";
 import DateInput from "../lib/DateInput";
 import { COLOURS, RADII, cardStyle, tableHeaderStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle } from "../lib/SharedUI";
@@ -39,8 +39,11 @@ type LetterLookup = {
 
 function isLetterExpired(letter: LetterLookup): boolean {
   if (!letter.expiry_date) return false;
-  // Compare YYYY-MM-DD strings directly — no time component, no timezone issue
-  return letter.expiry_date < new Date().toISOString().slice(0, 10);
+  // Found during the 15 Jul 2026 audit: this used to compare against
+  // UTC "today" (new Date().toISOString()), so for ~5 hours after local
+  // midnight a letter that's technically expired locally still showed
+  // as valid. Now compares against Pakistan local "today" instead.
+  return letter.expiry_date < todayPakistanISO();
 }
 
 const REASONS = [
@@ -228,7 +231,7 @@ export default function ProductionForm() {
     authedFetch(`/api/stock/authority-letters?plantId=${plantId}&listAll=true`)
       .then((r) => r.json())
       .then((json) => {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayPakistanISO();
         const active = (json.letters || []).filter((l: LetterLookup) => {
           const hasBalance = (l.remaining_31 + l.remaining_36 + l.remaining_45 + l.remaining_meter) > 0;
           const notExpired = !l.expiry_date || l.expiry_date >= today;

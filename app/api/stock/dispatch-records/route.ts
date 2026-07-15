@@ -3,6 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { sendNotificationEmail } from "../../../lib/send-email";
 import { dispatchNotificationMessage, whatsappLink } from "../../../lib/whatsapp";
+import { todayPakistanISO } from "../../../lib/dateUtils";
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -53,8 +54,12 @@ export async function POST(request: NextRequest) {
   if (!letter) return Response.json({ error: "Authority letter not found" }, { status: 404 });
 
   // Hard block: expired letter
+  // Found during the 15 Jul 2026 audit: this used to compare against
+  // UTC "today" (server clock, always UTC on Vercel) — for ~5 hours
+  // after Pakistan local midnight, an already-expired letter would
+  // still pass this check. Now anchored to Pakistan local time.
   if (letter.expiry_date) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayPakistanISO();
     if (letter.expiry_date < today) {
       return Response.json({ error: `Authority letter expired on ${letter.expiry_date.split("-").reverse().join("/")} — dispatch not allowed` }, { status: 422 });
     }

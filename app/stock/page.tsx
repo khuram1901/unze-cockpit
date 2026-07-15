@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, PageHeader, SectionTitle, SkeletonRows, ErrorBanner, useToast } from "../lib/SharedUI";
 import DateInput from "../lib/DateInput";
-import { formatDateUK } from "../lib/dateUtils";
+import { formatDateUK, todayPakistanISO } from "../lib/dateUtils";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -79,9 +79,17 @@ function totalPoles(...nums: number[]) {
 
 function expiryStatus(expiry_date: string | null): "expired" | "expiring-soon" | "ok" | null {
   if (!expiry_date) return null;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const exp = new Date(expiry_date); exp.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  // Found during the 15 Jul 2026 audit: this used to compare against
+  // new Date() in whatever timezone the VIEWER'S OWN device happens to
+  // be set to — correct for someone on a Pakistan-set clock, silently
+  // wrong for anyone whose device timezone is off or different. Now
+  // anchored to Pakistan local time regardless of the viewer's device,
+  // parsed as plain calendar dates so there's no local-midnight skew.
+  const [ty, tm, td] = todayPakistanISO().split("-").map(Number);
+  const [ey, em, ed] = expiry_date.slice(0, 10).split("-").map(Number);
+  const todayMs = Date.UTC(ty, tm - 1, td);
+  const expMs = Date.UTC(ey, em - 1, ed);
+  const diffDays = Math.round((expMs - todayMs) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return "expired";
   if (diffDays <= 14) return "expiring-soon";
   return "ok";

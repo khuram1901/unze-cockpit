@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import TaskStatus from "../tasks/TaskStatus";
-import { formatDateUK } from "../lib/dateUtils";
+import { formatDateUK, todayPakistanISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { downloadCSV } from "../lib/exportUtils";
@@ -819,7 +819,10 @@ export default function DashboardView() {
                   const rem = l.remaining_31 + l.remaining_36 + l.remaining_45 + l.remaining_meter;
                   return auth > 0 && rem / auth < 0.1;
                 });
-                const today_str = new Date().toISOString().slice(0, 10);
+                // Found during the 15 Jul 2026 audit: was UTC "today"
+                // (new Date().toISOString()) — anchored to Pakistan
+                // local time now, same as the other letter-expiry fixes.
+                const today_str = todayPakistanISO();
                 const expiredWithBalance = allLetters.filter(l => {
                   if (!l.expiry_date || l.expiry_date >= today_str) return false;
                   return (l.remaining_31 + l.remaining_36 + l.remaining_45 + l.remaining_meter) > 0;
