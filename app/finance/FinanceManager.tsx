@@ -607,45 +607,71 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           less space, easier to read at a glance. Exact PKR figures are
           still one hover away via the tooltip, and the effective-balance
           line is labelled directly on the chart. ── */}
-      {pdcOutlook.length > 0 && (
-        <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: CARD, marginBottom: "14px" }}>
-          <SectionTitle title="PDC Outlook — Next 8 Weeks" style={{ margin: "0 0 4px" }} />
-          <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "6px" }}>
-            Starting from today&apos;s cash in hand ({latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}), assuming every scheduled PDC clears on time and nothing else changes.
-          </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={pdcOutlook.map((w) => ({
-              week: `Wk ${w.week_number}`,
-              period: `${formatDateUK(w.week_start)}–${formatDateUK(w.week_end)}`,
-              pdc_due: w.pdc_due,
-              effective_balance: w.effective_balance,
-            }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
-              <XAxis dataKey="week" tick={{ fontSize: 11, fill: SLATE }} />
-              <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => Math.abs(v) >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : v} />
-              <Tooltip
-                formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]}
-                labelFormatter={(_, payload) => payload?.[0]?.payload?.period || ""}
-              />
-              <Legend wrapperStyle={{ fontSize: "12px" }} />
-              <ReferenceLine y={0} stroke={RED} strokeDasharray="4 4" />
-              <Bar dataKey="pdc_due" fill={AMBER} name="PDC Due" radius={[3, 3, 0, 0]} />
-              <Line type="monotone" dataKey="effective_balance" stroke={NAVY} strokeWidth={2} dot={{ r: 3 }} name="Effective Balance">
-                <LabelList
-                  dataKey="effective_balance"
-                  position="top"
-                  formatter={(v) => {
-                    const n = Number(v);
-                    if (isNaN(n)) return "";
-                    return Math.abs(n) >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${(n / 1000).toFixed(0)}K`;
-                  }}
-                  style={{ fontSize: 10, fill: NAVY }}
+      {pdcOutlook.length > 0 && (() => {
+        // Build chart data — X-axis label is a compressed date range e.g. "15–21 Jul"
+        // or "29 Jul–4 Aug" when the week crosses a month boundary.
+        const pdcChartData = pdcOutlook.map((w) => ({
+          xLabel: (() => {
+            const [, sm, sd] = w.week_start.split("-");
+            const [, em, ed] = w.week_end.split("-");
+            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const startDay = parseInt(sd, 10);
+            const endDay   = parseInt(ed, 10);
+            const startMon = months[parseInt(sm, 10) - 1];
+            const endMon   = months[parseInt(em, 10) - 1];
+            return sm === em
+              ? `${startDay}–${endDay} ${endMon}`
+              : `${startDay} ${startMon}–${endDay} ${endMon}`;
+          })(),
+          period: `${formatDateUK(w.week_start)} – ${formatDateUK(w.week_end)}`,
+          pdc_due: w.pdc_due,
+          effective_balance: w.effective_balance,
+        }));
+
+        const PdcXTick = ({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) => (
+          <g transform={`translate(${x},${y})`}>
+            <text x={0} y={0} dy={12} textAnchor="middle" fill={SLATE} fontSize={10.5} fontFamily="Inter, sans-serif">
+              {payload?.value}
+            </text>
+          </g>
+        );
+
+        return (
+          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: CARD, marginBottom: "14px" }}>
+            <SectionTitle title="PDC Outlook — Next 8 Weeks" style={{ margin: "0 0 4px" }} />
+            <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "6px" }}>
+              Starting from today&apos;s cash in hand ({latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}), assuming every scheduled PDC clears on time and nothing else changes.
+            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={pdcChartData} margin={{ top: 24, right: 16, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
+                <XAxis dataKey="xLabel" tick={<PdcXTick />} interval={0} height={36} />
+                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => Math.abs(v) >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)} width={52} />
+                <Tooltip
+                  formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.period || ""}
+                  contentStyle={{ fontSize: "12px", borderRadius: "8px", border: `1px solid ${HAIRLINE}` }}
                 />
-              </Line>
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+                <ReferenceLine y={0} stroke={RED} strokeDasharray="4 4" />
+                <Bar dataKey="pdc_due" fill={AMBER} name="PDC Due" radius={[3, 3, 0, 0]} />
+                <Line type="monotone" dataKey="effective_balance" stroke={NAVY} strokeWidth={2} dot={{ r: 3, fill: NAVY }} name="Effective Balance">
+                  <LabelList
+                    dataKey="effective_balance"
+                    position="top"
+                    formatter={(v: unknown) => {
+                      const n = Number(v);
+                      if (isNaN(n)) return "";
+                      return Math.abs(n) >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${(n / 1000).toFixed(0)}K`;
+                    }}
+                    style={{ fontSize: 11, fontWeight: 600, fill: NAVY }}
+                  />
+                </Line>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
 
       {/* ── ROW: INGESTION + PDF UPLOAD side by side (Admin only) ── */}
       {userIsAdmin && (
