@@ -253,7 +253,7 @@ export default function InvestmentsPage() {
       // Single RPC: totals, per-ticker rows, losers, day-change, dividend count — all in DB
       supabase.rpc("get_portfolio_summary_full", { p_as_of: asOf, p_alert_pct: -3, p_div_days: 7 }),
       // Holdings still needed for individual lot edit/delete UI
-      supabase.from("holdings").select("*").order("ticker"),
+      supabase.from("holdings").select("id, ticker, company_name, quantity, buy_price, buy_date, target_price, notes").order("ticker"),
       // Chart history — for the portfolio value graph only
       supabase.from("price_history").select("ticker, price, as_of_date").order("as_of_date", { ascending: true }),
       supabase.from("price_history").select("created_at").order("created_at", { ascending: false }).limit(1).single(),

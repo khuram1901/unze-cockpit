@@ -233,7 +233,7 @@ export default function MembersManager() {
     (mp || []).forEach((r) => { if (!g[r.member_id]) g[r.member_id] = new Set(); g[r.member_id].add(r.plant_id); });
     setAssignments(g);
 
-    const { data: deptData } = await supabase.from("department_owners").select("*").order("department_name");
+    const { data: deptData } = await supabase.from("department_owners").select("id, department_name, primary_owner_member_id, primary_owner_name").order("department_name");
     setDepartments(deptData || []);
 
     const OPEN_STATUSES = ["Not Started", "In Progress", "Waiting Reply"];

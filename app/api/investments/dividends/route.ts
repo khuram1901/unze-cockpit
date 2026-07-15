@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
   // mode=all — management view
   const { data, error } = await supabase
     .from("stock_dividends")
-    .select("*")
+    .select("id, ticker, dividend_per_share, ex_dividend_date, payment_date, announced_date, status, source, confirmed, notes, entered_by, entered_at")
     .order("ex_dividend_date", { ascending: false });
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ dividends: data ?? [] });
