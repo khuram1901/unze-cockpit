@@ -697,7 +697,11 @@ export default function HomePage() {
       const [cashOpenRes, cashPlanRes, cashPosRes, pdcRes, lyRes, forecastRes, deptBudgetRes] = await Promise.all([
         supabase.from("cash_opening_balance").select("id, as_of_date, opening_amount, currency").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
         supabase.from("monthly_cash_plan").select("id, plan_month, tentative_receivables, tentative_payouts").eq("company_id", company.id).eq("plan_month", currentMonthForCash).maybeSingle(),
-        supabase.from("daily_cash_position").select("id, position_date, opening_balance, total_receipts, total_payments, closing_balance, post_dated_total, closing_after_post_dated").eq("company_id", company.id).lte("position_date", dateToView).order("position_date", { ascending: false }).limit(30),
+        // Rolling last 30 calendar days ending at dateToView (not real "today" —
+        // this page can view a past date), and not a row-count limit — see
+        // FinanceManager.tsx for why (gaps in the data used to make a plain
+        // .limit(30) reach back well past a month).
+        supabase.from("daily_cash_position").select("id, position_date, opening_balance, total_receipts, total_payments, closing_balance, post_dated_total, closing_after_post_dated").eq("company_id", company.id).lte("position_date", dateToView).gte("position_date", new Date(new Date(dateToView).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)).order("position_date", { ascending: false }),
         supabase.rpc("get_pdc_outlook", { p_company_id: company.id, p_today: dateToView }),
         supabase.rpc("get_company_cash_yearly_comparison", { p_company_id: company.id, p_month: currentMonthForCash }),
         supabase.from("monthly_budgets").select("category, flow_type, budgeted_amount, budget_month").eq("company_id", company.id).gte("budget_month", currentMonthForCash).order("budget_month", { ascending: true }),

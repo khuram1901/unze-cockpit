@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
-import { formatDateUK, formatMonthUK, todayISO, currentMonthISO } from "../lib/dateUtils";
+import { formatDateUK, formatMonthUK, todayISO, currentMonthISO, daysAgoISO } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, SectionTitle, useToast, useConfirm } from "../lib/SharedUI";
@@ -272,8 +272,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         .from("daily_cash_position")
         .select("id, position_date, opening_balance, total_receipts, total_payments, closing_balance, post_dated_total, closing_after_post_dated")
         .eq("company_id", companyId)
-        .order("position_date", { ascending: false })
-        .limit(30),
+        // Rolling last 30 calendar days (today minus 30 through today), not a
+        // row-count limit — a row-count limit drifts further back than 30
+        // days whenever there are gaps (weekends, missed reports), and Khuram
+        // wants the window to always be "the last 30 days," full stop.
+        .gte("position_date", daysAgoISO(30))
+        .order("position_date", { ascending: false }),
       supabase.rpc("get_pdc_outlook", { p_company_id: companyId, p_today: todayISO() }),
     ]);
     if (obRes.error) console.error("Opening balance error:", obRes.error);

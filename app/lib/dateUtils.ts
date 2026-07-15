@@ -65,3 +65,13 @@ export function todayPakistanISO(): string {
 export function currentMonthISO(): string {
   return new Date().toISOString().slice(0, 7);
 }
+
+// ISO date (YYYY-MM-DD) for "n calendar days before today" — e.g. daysAgoISO(30)
+// on 15/07 returns 15/06. Use this for rolling windows (cash position history,
+// etc.) instead of a row-count .limit(), which drifts further back than
+// intended whenever there are gaps (weekends, missing days) in the data.
+export function daysAgoISO(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
