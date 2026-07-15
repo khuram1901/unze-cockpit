@@ -91,25 +91,24 @@ export default function MonthlyOperationsTargetsPage() {
     const mStart = getMonthStart(month);
     const mEnd = getMonthEnd(month);
 
-    const [prodRes, dispRes, prodEntries, dispEntries] = await Promise.all([
+    // Found during the 15 Jul 2026 audit: prod/dispatch actuals per
+    // plant used to be summed in JS from raw daily entries (rule 0
+    // violation) — now computed by get_monthly_plant_actuals().
+    const [prodRes, dispRes, actualsRes] = await Promise.all([
       supabase.from("monthly_production_targets").select("*").eq("target_month", month).order("plant_name"),
       supabase.from("monthly_dispatch_targets").select("*").eq("target_month", month).order("plant_name"),
-      supabase.from("production_entries").select("plant_id, qty_31, qty_36, qty_45, qty_meter").gte("entry_date", mStart).lte("entry_date", mEnd),
-      supabase.from("dispatch_entries").select("plant_id, qty_31, qty_36, qty_45, qty_meter").gte("entry_date", mStart).lte("entry_date", mEnd),
+      supabase.rpc("get_monthly_plant_actuals", { p_month_start: mStart, p_month_end: mEnd }),
     ]);
     setProductionTargets(prodRes.data || []);
     setDispatchTargets(dispRes.data || []);
 
     const pa: Record<string, number> = {};
-    for (const r of (prodEntries.data || [])) {
-      pa[r.plant_id] = (pa[r.plant_id] || 0) + (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0) + (r.qty_meter || 0);
+    const da: Record<string, number> = {};
+    for (const r of (actualsRes.data || []) as { plant_id: string; prod_actual: number; disp_actual: number }[]) {
+      pa[r.plant_id] = Number(r.prod_actual) || 0;
+      da[r.plant_id] = Number(r.disp_actual) || 0;
     }
     setProdActuals(pa);
-
-    const da: Record<string, number> = {};
-    for (const r of (dispEntries.data || [])) {
-      da[r.plant_id] = (da[r.plant_id] || 0) + (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0) + (r.qty_meter || 0);
-    }
     setDispActuals(da);
   }
 
