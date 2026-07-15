@@ -64,6 +64,8 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
   if (isPACtx && card.permKey === "can_view_pa_dashboard") return false;
   if ((isMainAdmin(ctx) || isCEO(ctx)) && (card.permKey === "can_view_executive_dashboard" || card.permKey === "can_view_pa_dashboard")) return false;
+  // Kamran (secondary CEO) does not see Opening Balances or Unze Trading finance
+  if (isSecondaryCEO(ctx) && (card.permKey === "can_edit_finance" || card.permKey === "can_view_finance_utpl")) return false;
   if (card.permKey === "can_view_finance_utpl") {
     if (!canViewFinance(ctx)) return false;
     const scope = financeCompanies(ctx);
