@@ -1,25 +1,15 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { requireAuth } from "../../../lib/api-auth";
+import { createServiceClient } from "../../../lib/supabase-server";
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader) return NextResponse.json({ error: "No auth" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (auth instanceof Response) return auth;
 
-  const userClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: authHeader } } },
-  );
-  const { data: { user } } = await userClient.auth.getUser();
-  if (!user?.email) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-
-  const serviceClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const serviceClient = createServiceClient();
 
   const { data: member } = await serviceClient
-    .from("members").select("id").eq("email", user.email).maybeSingle();
+    .from("members").select("id").eq("email", auth.email).maybeSingle();
   if (!member) return NextResponse.json({ overrides: null });
 
   const { data: perms } = await serviceClient

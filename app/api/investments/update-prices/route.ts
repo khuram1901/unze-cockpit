@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { requireAuth } from "../../../lib/api-auth";
+import { createServiceClient } from "../../../lib/supabase-server";
 import { canRefreshInvestmentPrices, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -55,23 +56,14 @@ export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   const isCron = authHeader === `Bearer ${CRON_SECRET}`;
 
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const sb = createServiceClient();
 
   if (!isCron) {
-    if (!authHeader) return NextResponse.json({ error: "No auth" }, { status: 401 });
-    const userClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: { user } } = await userClient.auth.getUser();
-    if (!user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireAuth(req);
+    if (auth instanceof Response) return auth;
 
     const { data: member } = await sb
-      .from("members").select("id, role, department, company").eq("email", user.email).maybeSingle();
+      .from("members").select("id, role, department, company").eq("email", auth.email).maybeSingle();
     let overrides: PermOverrides | null = null;
     if (member) {
       const { data: perms } = await sb
@@ -79,7 +71,7 @@ export async function GET(req: Request) {
       overrides = (perms as PermOverrides) || null;
     }
     const ctx: UserCtx = {
-      email: user.email,
+      email: auth.email,
       role: member?.role ?? null,
       department: member?.department ?? null,
       company: member?.company ?? null,
