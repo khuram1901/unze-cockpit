@@ -19,6 +19,27 @@ async function requireInvestmentAdmin(
   return Response.json({ error: "Forbidden" }, { status: 403 });
 }
 
+// Viewing dividends is slightly wider than managing them — matches
+// canViewInvestments() in lib/permissions.ts (Admin/CEO + PA, view-only
+// for PA). Found during the 15 Jul 2026 audit: GET here had no role
+// check at all, so any logged-in user — not just Admin/CEO/PA — could
+// read dividend figures.
+async function requireInvestmentViewer(
+  supabase: ReturnType<typeof createServiceClient>,
+  email: string
+): Promise<true | Response> {
+  const lc = email.toLowerCase();
+  if (lc === "khuram1901@gmail.com" || lc === "k.saleem@unzegroup.com") return true;
+  const { data: m } = await supabase
+    .from("members")
+    .select("role")
+    .eq("email", lc)
+    .maybeSingle();
+  const role = m?.role ?? null;
+  if (role === "Admin" || role === "CEO" || role === "Executive") return true;
+  return Response.json({ error: "Forbidden" }, { status: 403 });
+}
+
 // GET — return all dividends (windowed for UI, all for management)
 // ?mode=upcoming&days=14&daysBack=14  → RPC with holdings join, ex-dividend date
 //                                       within [today-daysBack, today+days]
@@ -28,6 +49,9 @@ export async function GET(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
+  const guard = await requireInvestmentViewer(supabase, auth.email);
+  if (guard !== true) return guard;
+
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode") ?? "upcoming";
   const days = parseInt(searchParams.get("days") ?? "14", 10);
