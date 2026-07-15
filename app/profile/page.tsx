@@ -47,7 +47,6 @@ export default function ProfilePage() {
     notif_escalations: true,
     notif_meetings: true,
     notif_daily_digest: true,
-    notif_weekly_report: true,
   });
   const [savingNotif, setSavingNotif] = useState(false);
 
@@ -81,7 +80,7 @@ export default function ProfilePage() {
     // Load notification preferences
     if (user?.email) {
       const { data: member } = await supabase.from("members")
-        .select("role, notif_task_assigned, notif_task_overdue, notif_escalations, notif_meetings, notif_daily_digest, notif_weekly_report")
+        .select("role, notif_task_assigned, notif_task_overdue, notif_escalations, notif_meetings, notif_daily_digest")
         .eq("email", user.email).maybeSingle();
       if (member) {
         setUserRole(member.role || "");
@@ -91,7 +90,6 @@ export default function ProfilePage() {
           notif_escalations: member.notif_escalations ?? true,
           notif_meetings: member.notif_meetings ?? true,
           notif_daily_digest: member.notif_daily_digest ?? true,
-          notif_weekly_report: member.notif_weekly_report ?? true,
         });
       }
     }
@@ -653,7 +651,6 @@ export default function ProfilePage() {
                   { key: "notif_escalations" as const, label: "Escalations", desc: "KPI and receivable escalation alerts" },
                   { key: "notif_meetings" as const, label: "Meeting notifications", desc: "Meeting minutes and approvals" },
                   { key: "notif_daily_digest" as const, label: "Daily digest", desc: "Morning summary email" },
-                  { key: "notif_weekly_report" as const, label: "Weekly report", desc: "Friday weekly pulse report" },
                 ]).map((pref) => {
                   const isOn = notifPrefs[pref.key];
                   const otherOn = Object.entries(notifPrefs).filter(([k]) => k !== pref.key).some(([, v]) => v);

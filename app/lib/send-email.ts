@@ -80,13 +80,17 @@ function buildRawEmail(to: string, from: string, subject: string, htmlBody: stri
 // else on a shared report (PA, Ops Managers, Shakeel on tax alerts, etc.)
 // still gets their email exactly as before. Password resets, account
 // invites, and anything not in this list are never affected.
+//
+// 15 Jul 2026: the standalone daily-pdf/weekly/monthly-po report routes
+// (which used to send "daily_report"/"weekly_report"/"monthly_po_report")
+// were retired entirely — their content was already folded into the CEO
+// digest above, and Khuram confirmed the wider Admin/Executive/Ops Manager
+// audience they used to reach didn't need to keep getting them separately.
+// Those three trigger types are removed here since nothing sends them any more.
 const DIGEST_COVERED_TRIGGER_TYPES = [
   TRIGGER_TASK_ASSIGNED,
   TRIGGER_ESCALATION,
   "daily_digest",          // app/api/notifications/digest/route.ts (5am PKT admin/exec digest)
-  "daily_report",          // app/api/reports/daily-pdf/route.ts
-  "weekly_report",         // app/api/reports/weekly/route.ts
-  "monthly_po_report",     // app/api/reports/monthly-po/route.ts
   "investment_daily_summary", // app/api/investments/daily-summary/route.ts
   "tax_deadline_alert",    // app/lib/taxAlertEngine.ts — CEO escalation branch only (Shakeel's alerts use a different recipient, so his are unaffected)
 ];

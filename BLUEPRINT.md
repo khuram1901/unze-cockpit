@@ -1748,14 +1748,11 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 | `/api/meetings/check-inbox` | Every 10 min | Check Gmail for meeting minutes emails |
 | `/api/tasks/recurring` | 00:30 daily | Generate recurring tasks from templates |
 | `/api/notifications/digest` | 00:00 daily | Send notification digest |
-| `/api/reports/daily-pdf` | 03:30 daily | Generate and email daily PDF report |
-| `/api/reports/weekly` | 05:00 Fridays | Generate and email weekly digest |
 | `/api/backup` | 18:00 daily | Database backup |
 | `/api/investments/update-prices` | 04:30 Mon–Fri | PSX opening prices (9:30am PKT) |
 | `/api/investments/update-prices` | 11:00 Mon–Fri | PSX closing prices (4:00pm PKT) |
 | `/api/investments/daily-summary` | 05:00 Mon–Fri | Portfolio summary email + snapshot |
 | `/api/investments/fetch-dividends` | 06:00 Mon–Fri | PSX dividend auto-fetch |
-| `/api/reports/monthly-po` | 06:00 1st of month | Monthly PO progress report |
 | `/api/cron/tax-alerts` | 00:00 and 06:00 daily | Tax deadline alert computation |
 | `/api/investments/fetch-pension-prices` | 23:00 Mon–Fri | Fetch UK pension fund NAV prices from Morningstar |
 | `/api/folderit/sync` | Every 30 min | Sync Folderit inbox files + resolution invites into DB |

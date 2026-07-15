@@ -21,14 +21,6 @@
       "schedule": "30 0 * * *"
     },
     {
-      "path": "/api/reports/weekly",
-      "schedule": "0 5 * * 5"
-    },
-    {
-      "path": "/api/reports/daily-pdf",
-      "schedule": "30 3 * * *"
-    },
-    {
       "path": "/api/backup",
       "schedule": "0 18 * * *"
     },
@@ -43,10 +35,6 @@
     {
       "path": "/api/investments/update-prices",
       "schedule": "15 6 * * 1-5"
-    },
-    {
-      "path": "/api/reports/monthly-po",
-      "schedule": "0 6 1 * *"
     },
     {
       "path": "/api/investments/daily-summary",
