@@ -274,6 +274,7 @@ export default function StockManagePage() {
   const [editContractorId, setEditContractorId] = useState<string | null>(null);
   const [editContractorForm, setEditContractorForm] = useState(emptyContractor);
   const [savingEditContractor, setSavingEditContractor] = useState(false);
+  const [deletingContractorId, setDeletingContractorId] = useState<string | null>(null);
 
   // ── Dispatch records ──
   const [viewDispatchLetterId, setViewDispatchLetterId] = useState<string | null>(null);
@@ -600,6 +601,18 @@ export default function StockManagePage() {
     if (json.error) { toast(json.error, "error"); return; }
     toast("Contractor updated", "success");
     setEditContractorId(null);
+    loadContractors();
+  }
+
+  async function deleteContractor(c: Contractor) {
+    const ok = await confirm(`Permanently delete contractor "${c.name}"? This cannot be undone.`, true);
+    if (!ok) return;
+    setDeletingContractorId(c.id);
+    const res = await authedFetch("/api/stock/contractors", { method: "DELETE", body: JSON.stringify({ id: c.id }) });
+    const json = await res.json();
+    setDeletingContractorId(null);
+    if (json.error) { toast(json.error, "error"); return; }
+    toast("Contractor deleted", "success");
     loadContractors();
   }
 
@@ -1607,6 +1620,13 @@ export default function StockManagePage() {
                         </div>
                         <div style={{ display: "flex", gap: "6px" }}>
                           <button onClick={() => startEditContractor(c)} style={{ ...ghostBtn() }}>Edit</button>
+                          <button
+                            onClick={() => deleteContractor(c)}
+                            disabled={deletingContractorId === c.id}
+                            style={{ ...ghostBtn(), color: COLOURS.RED, borderColor: COLOURS.RED, opacity: deletingContractorId === c.id ? 0.6 : 1 }}
+                          >
+                            {deletingContractorId === c.id ? "Deleting…" : "Delete"}
+                          </button>
                         </div>
                       </div>
                     )}
