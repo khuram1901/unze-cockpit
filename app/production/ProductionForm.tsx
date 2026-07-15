@@ -170,7 +170,7 @@ export default function ProductionForm() {
 
       const { data: allPlants } = await supabase
         .from("plants")
-        .select("*")
+        .select("id, name, type, active")
         .eq("active", true)
         .order("name");
 

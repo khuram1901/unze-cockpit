@@ -68,7 +68,7 @@ export default function ExceptionsPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("tasks")
-      .select("*")
+      .select("id, task_type, description, project, priority, due_date, assigned_date, assigned_to, assigned_to_department, status, reply_text, corrective_action, recovery_date, impact_on_monthly_target, source_type, source_label, exception_type, created_at, updated_at")
       .in("source_type", ESCALATION_SOURCES)
       .order("created_at", { ascending: false });
     if (error) {

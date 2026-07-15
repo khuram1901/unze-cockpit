@@ -139,7 +139,7 @@ export default function CalendarPage() {
     }
 
     const [reqRes, membersRes] = await Promise.all([
-      supabase.from("meeting_requests").select("*").order("created_at", { ascending: false }),
+      supabase.from("meeting_requests").select("id, requested_by_name, requested_by_email, requested_by_department, meeting_title, meeting_purpose, meeting_type, requested_date, preferred_time, duration_minutes, priority, status, attendees, decision_required, approved_by, calendar_event_id, created_at").order("created_at", { ascending: false }),
       supabase.from("members").select("first_name, last_name, name, email, department, role, is_hod"),
     ]);
 

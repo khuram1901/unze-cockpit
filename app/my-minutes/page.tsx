@@ -100,7 +100,7 @@ function MyMinutesPage() {
 
     if (privUser) {
       // Admin / CEO / PA / override-granted: see ALL meetings
-      const { data } = await supabase.from("meetings").select("*").order("meeting_date", { ascending: false });
+      const { data } = await supabase.from("meetings").select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at").order("meeting_date", { ascending: false });
       meetingsData = data || [];
     } else {
       // Everyone else: see meetings they attended OR have tasks assigned from
@@ -135,7 +135,7 @@ function MyMinutesPage() {
       if (meetingIds.size > 0) {
         const { data } = await supabase
           .from("meetings")
-          .select("*")
+          .select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at")
           .in("id", Array.from(meetingIds))
           .order("meeting_date", { ascending: false });
         meetingsData = data || [];
@@ -157,7 +157,7 @@ function MyMinutesPage() {
     setCompanies(companiesData || []);
 
     // Load meeting tasks
-    const { data: mtData } = await supabase.from("meeting_tasks").select("*");
+    const { data: mtData } = await supabase.from("meeting_tasks").select("id, meeting_id, task_id");
     setMeetingTasks(mtData || []);
 
     // Load tasks linked to meetings

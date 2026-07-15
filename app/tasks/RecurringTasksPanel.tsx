@@ -100,7 +100,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
   async function loadData() {
     setLoading(true);
     const [tmplRes, memRes, companiesRes] = await Promise.all([
-      supabase.from("recurring_tasks").select("*").order("created_at", { ascending: false }),
+      supabase.from("recurring_tasks").select("id, description, assigned_to, assigned_to_email, assigned_to_department, assigned_by, priority, project, frequency, day_of_week, day_of_month, due_days_after, active, last_created_at, company_id").order("created_at", { ascending: false }),
       supabase.from("members").select("name, email, department, first_name, last_name"),
       supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
     ]);

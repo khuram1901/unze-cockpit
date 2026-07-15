@@ -83,7 +83,7 @@ export default function AuditLogPage() {
     setLoading(true);
     const { data } = await supabase
       .from("audit_log")
-      .select("*")
+      .select("id, user_email, user_name, action, table_name, record_id, details, created_at")
       .order("created_at", { ascending: false })
       .limit(500);
     setLogs(data || []);
