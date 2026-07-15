@@ -108,7 +108,19 @@ function LoginPageInner() {
       .from("members")
       .select("role, department")
       .eq("email", email)
-      .single();
+      .maybeSingle();
+
+    // Found during the 15 Jul 2026 audit: Google sign-in (app/auth/callback)
+    // already rejects and signs out any account with no matching members
+    // row, but password login didn't — a stale or deleted member could
+    // still log in and land on /home with default (Member) permissions.
+    // Now matches the same rule Google sign-in already enforces.
+    if (!member) {
+      await supabase.auth.signOut();
+      setLoading(false);
+      setMessage("Error: This account isn't registered. Contact your Unze Group administrator.");
+      return;
+    }
 
     router.push(getLandingRoute(member, email));
   }
