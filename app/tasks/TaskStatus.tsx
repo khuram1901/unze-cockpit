@@ -64,12 +64,14 @@ export default function TaskStatus({
   task,
   currentRole,
   onChanged,
+  onClose,
   myEmail,
   canEditDueDate: canEditDateProp,
 }: {
   task: Task;
   currentRole: string;
   onChanged: () => void;
+  onClose?: () => void;
   myEmail?: string | null;
   canEditDueDate?: boolean;
   canEditTask?: boolean;
@@ -198,6 +200,15 @@ export default function TaskStatus({
     setStatus(newStatus);
     setSavedMessage("Saved ✓");
     onChanged();
+
+    // Khuram: "when i mark the task is completed then the window should
+    // close." The cycle's done — nothing left to do in this task's detail
+    // view once it's Completed, so close it instead of leaving it open on
+    // a now-locked, greyed-out screen.
+    if (newStatus === "Completed" && onClose) {
+      setTimeout(() => onClose(), 500);
+      return;
+    }
     setTimeout(() => setSavedMessage(""), 2000);
   }
 

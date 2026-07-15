@@ -106,6 +106,7 @@ export default function TaskDetailModal({
           myEmail={myEmail}
           memberPhones={memberPhones}
           onChanged={onChanged}
+          onClose={onClose}
         />
       </div>
     </Modal>

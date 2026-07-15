@@ -66,6 +66,7 @@ export default function TaskDetailPanel({
   myEmail,
   memberPhones,
   onChanged,
+  onClose,
 }: {
   task: Task;
   currentRole: string;
@@ -75,6 +76,7 @@ export default function TaskDetailPanel({
   myEmail: string | null;
   memberPhones: Record<string, string>;
   onChanged: () => void;
+  onClose?: () => void;
 }) {
   const dlg = useConfirm();
   const userCtx = { email: myEmail, role: currentRole };
@@ -308,7 +310,7 @@ export default function TaskDetailPanel({
         </div>
       )}
 
-      <TaskStatus task={task} currentRole={currentRole} onChanged={onChanged} myEmail={myEmail} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
+      <TaskStatus task={task} currentRole={currentRole} onChanged={onChanged} onClose={onClose} myEmail={myEmail} canEditDueDate={(canReview ?? isPrivileged) || taskEditable} canEditTask={taskEditable} />
 
       {/* Captures intent only — still needs the WhatsApp Business API setup
           before anything actually sends by itself. See migration 105. */}
