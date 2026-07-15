@@ -2708,8 +2708,8 @@ function ExecutiveDashboardBody({
         );
       })()}
 
-      {/* ── FINANCE ── */}
-      {showFinance && companyFinance.length === 2 && (() => {
+      {/* ── FINANCE (IFPL only — Company Comparison removed) ── */}
+      {showFinance && companyFinance.length === 2 && false && (() => {
         const [a, b] = companyFinance;
         const latestA = a.cashPositions[0];
         const latestB = b.cashPositions[0];
@@ -2754,85 +2754,103 @@ function ExecutiveDashboardBody({
         <CompanyFinancePanel key={cfd.companyId} data={cfd} />
       ))}
 
-      {/* ── RECEIVABLES ── */}
-      <SectionTitle title="Receivables — Bills in Progress" />
-      {receivableRows.length === 0 ? (
-        <p style={{ color: SLATE, fontSize: "13px" }}>No receivable bills in progress.</p>
-      ) : (
-        <div style={panelCard(recRed > 0)}>
-          <div style={{ fontSize: "13px", fontWeight: 700, marginBottom: "10px", color: NAVY }}>
-            Receivables: <span style={{ color: recRed > 0 ? RED : GREEN }}>{recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}</span>
-          </div>
-          <div style={miniGrid}>
-            <Mini label="Total Tracked" value={fmtMoney(recTotal)} color={BLUE} />
-            <Mini label="On Time" value={fmtMoney(recGreen)} color={GREEN} />
-            <Mini label="Due Soon" value={fmtMoney(recAmber)} color={AMBER} />
-            <Mini label="Stuck" value={fmtMoney(recRed)} color={RED} />
-          </div>
-          <div style={{ fontSize: "13px", color: NAVY, marginTop: "4px", marginBottom: "8px", lineHeight: "1.6" }}>
-            <span style={{ fontWeight: 700 }}>Aging:</span>{" "}
-            <span style={{ color: GREEN }}>PKR {fmtMoney(recAgingTotals["0-30"])} (0-30d)</span>{" · "}
-            <span style={{ color: AMBER }}>PKR {fmtMoney(recAgingTotals["31-60"])} (31-60d)</span>{" · "}
-            <span style={{ color: RED }}>PKR {fmtMoney(recAgingTotals["61-90"])} (61-90d)</span>{" · "}
-            <span style={{ color: RED, fontWeight: 700 }}>PKR {fmtMoney(recAgingTotals["90+"])} (90+d)</span>
-          </div>
-          {recAgingByCustomer.length > 0 && (
-            <div style={{ overflowX: "auto", marginBottom: "8px" }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "380px" }}>
-                <thead>
-                  <tr>
-                    <th style={th}>Customer</th>
-                    <th style={{ ...th, textAlign: "right" }}>0-30d</th>
-                    <th style={{ ...th, textAlign: "right" }}>31-60d</th>
-                    <th style={{ ...th, textAlign: "right" }}>61-90d</th>
-                    <th style={{ ...th, textAlign: "right" }}>90+d</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recAgingByCustomer.map((r) => {
-                    const maxAmt = Math.max(...recAgingByCustomer.map((c) => Math.max(c["0-30"], c["31-60"], c["61-90"], c["90+"])), 1);
-                    return (
-                      <tr key={r.customer}>
-                        <td style={tdBold}>{r.customer}</td>
-                        {(["0-30", "31-60", "61-90", "90+"] as const).map((bucket) => {
-                          const amt = r[bucket];
-                          const intensity = amt > 0 ? Math.max(0.08, Math.min(0.5, amt / maxAmt)) : 0;
-                          const bgColor = bucket === "0-30" ? `rgba(15,123,95,${intensity})` : bucket === "31-60" ? `rgba(180,121,31,${intensity})` : `rgba(179,38,30,${intensity})`;
-                          return (
-                            <td key={bucket} style={{ ...td, textAlign: "right", backgroundColor: amt > 0 ? bgColor : "transparent", fontWeight: amt > 0 ? 600 : 400 }}>
-                              {amt > 0 ? fmtMoney(amt) : "—"}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+      {/* ── PDC OUTLOOK — Next 8 Weeks ── */}
+      {showFinance && companyFinance.length > 0 && companyFinance[0].pdcOutlook.length > 0 && (() => {
+        const pdcOutlook = companyFinance[0].pdcOutlook;
+        const latestPosition = companyFinance[0].cashPositions[0] ?? null;
+        const pdcChartData = pdcOutlook.map((w) => ({
+          xLabel: (() => {
+            const [, sm, sd] = w.week_start.split("-");
+            const [, em, ed] = w.week_end.split("-");
+            const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const startDay = parseInt(sd, 10);
+            const endDay   = parseInt(ed, 10);
+            const startMon = months[parseInt(sm, 10) - 1];
+            const endMon   = months[parseInt(em, 10) - 1];
+            return sm === em ? `${startDay}–${endDay} ${endMon}` : `${startDay} ${startMon}–${endDay} ${endMon}`;
+          })(),
+          period: `${formatDateUK(w.week_start)} – ${formatDateUK(w.week_end)}`,
+          pdc_due: w.pdc_due,
+          effective_balance: w.effective_balance,
+        }));
+        const PdcXTick = ({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) => (
+          <g transform={`translate(${x},${y})`}>
+            <text x={0} y={0} dy={12} textAnchor="middle" fill={SLATE} fontSize={10.5} fontFamily="Inter, sans-serif">{payload?.value}</text>
+          </g>
+        );
+        return (
+          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: COLOURS.CARD, marginBottom: "14px" }}>
+            <SectionTitle title="PDC Outlook — Next 8 Weeks" />
+            <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "6px" }}>
+              Starting from today&apos;s cash in hand ({latestPosition ? `PKR ${fmtMoney(latestPosition.closing_balance)}` : "—"}), assuming every scheduled PDC clears on time.
             </div>
-          )}
-          {receivableRows.length > 0 && (
-            <div style={{ overflowX: "auto" }}><table style={{ borderCollapse: "collapse", width: "100%", marginTop: "12px", minWidth: "420px" }}>
-              <thead>
-                <tr>
-                  <th style={th}>Customer</th><th style={th}>On Time</th><th style={th}>Due Soon</th><th style={th}>Stuck</th><th style={th}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receivableRows.map((r) => (
-                  <tr key={r.customer}>
-                    <td style={tdBold}>{r.customer}</td>
-                    <td style={{ ...td, color: GREEN }}>{fmtMoney(r.greenAmount)}</td>
-                    <td style={{ ...td, color: AMBER }}>{fmtMoney(r.amberAmount)}</td>
-                    <td style={{ ...td, color: RED }}>{fmtMoney(r.redAmount)}</td>
-                    <td style={td}>{fmtMoney(r.totalAmount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
-          )}
-        </div>
-      )}
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={pdcChartData} margin={{ top: 24, right: 16, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} />
+                <XAxis dataKey="xLabel" tick={<PdcXTick />} interval={0} height={36} />
+                <YAxis tick={{ fontSize: 11, fill: SLATE }} tickFormatter={(v) => Math.abs(v) >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)} width={52} />
+                <Tooltip
+                  formatter={(value, name) => [`PKR ${Number(value).toLocaleString()}`, name]}
+                  labelFormatter={(_, payload) => payload?.[0]?.payload?.period || ""}
+                  contentStyle={{ fontSize: "12px", borderRadius: "8px", border: `1px solid ${HAIRLINE}` }}
+                />
+                <Legend wrapperStyle={{ fontSize: "12px" }} />
+                <ReferenceLine y={0} stroke={RED} strokeDasharray="4 4" />
+                <Bar dataKey="pdc_due" fill={AMBER} name="PDC Due" radius={[3, 3, 0, 0]} />
+                <Line type="monotone" dataKey="effective_balance" stroke={NAVY} strokeWidth={2} dot={{ r: 3, fill: NAVY }} name="Effective Balance">
+                  <LabelList
+                    dataKey="effective_balance"
+                    position="top"
+                    formatter={(v: unknown) => {
+                      const n = Number(v);
+                      if (isNaN(n)) return "";
+                      return Math.abs(n) >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : `${(n / 1000).toFixed(0)}K`;
+                    }}
+                    style={{ fontSize: 11, fontWeight: 600, fill: NAVY }}
+                  />
+                </Line>
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
+
+      {/* ── CASH FLOW FORECAST — Imperial Footwear ── */}
+      {showFinance && companyFinance.length > 0 && companyFinance[0].forecast.length > 0 && (() => {
+        const forecast = companyFinance[0].forecast;
+        const inflows  = forecast.filter((f) => f.category === "inflow" || (f.budgeted_amount ?? 0) > 0);
+        const outflows = forecast.filter((f) => f.category === "outflow" || (f.budgeted_amount ?? 0) < 0);
+        const totalIn  = inflows.reduce((s, f) => s + Math.abs(f.budgeted_amount ?? 0), 0);
+        const totalOut = outflows.reduce((s, f) => s + Math.abs(f.budgeted_amount ?? 0), 0);
+        const net      = totalIn - totalOut;
+        const month    = forecast[0]?.budget_month ? formatMonthUK(forecast[0].budget_month) : "This Month";
+        const fRow = (label: string, value: string, opts?: { bold?: boolean; color?: string; borderTop?: boolean }) => (
+          <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderTop: opts?.borderTop ? `1px solid ${HAIRLINE}` : undefined }}>
+            <span style={{ fontSize: "13px", color: SLATE, fontWeight: opts?.bold ? 600 : 400 }}>{label}</span>
+            <span style={{ fontSize: "13px", fontWeight: opts?.bold ? 700 : 500, color: opts?.color ?? NAVY, fontFamily: "var(--font-mono,'JetBrains Mono',monospace)" }}>{value}</span>
+          </div>
+        );
+        return (
+          <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: COLOURS.CARD, marginBottom: "14px" }}>
+            <SectionTitle title={`Cash Flow Forecast — Imperial Footwear · ${month}`} />
+            <div style={{ display: "flex", gap: "24px", marginBottom: "16px", flexWrap: "wrap" }}>
+              <div><div style={{ fontSize: "10.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>Planned Inflows</div>
+                <div style={{ fontSize: "24px", fontWeight: 700, color: GREEN, fontFamily: "var(--font-display,'Inter Tight',sans-serif)", letterSpacing: "-0.02em" }}>PKR {fmtMoney(totalIn)}</div></div>
+              <div><div style={{ fontSize: "10.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>Planned Outflows</div>
+                <div style={{ fontSize: "24px", fontWeight: 700, color: RED, fontFamily: "var(--font-display,'Inter Tight',sans-serif)", letterSpacing: "-0.02em" }}>PKR {fmtMoney(totalOut)}</div></div>
+              <div><div style={{ fontSize: "10.5px", color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>Net</div>
+                <div style={{ fontSize: "24px", fontWeight: 700, color: net >= 0 ? GREEN : RED, fontFamily: "var(--font-display,'Inter Tight',sans-serif)", letterSpacing: "-0.02em" }}>{net >= 0 ? "+" : ""}PKR {fmtMoney(Math.abs(net))}</div></div>
+            </div>
+            <div style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: "12px" }}>
+              {inflows.map((f) => fRow(f.category || "Inflow", `PKR ${fmtMoney(Math.abs(f.budgeted_amount ?? 0))}`, { color: GREEN }))}
+              {outflows.map((f) => fRow(f.category || "Outflow", `PKR ${fmtMoney(Math.abs(f.budgeted_amount ?? 0))}`, { color: RED }))}
+              {fRow("Net", `${net >= 0 ? "+" : ""}PKR ${fmtMoney(Math.abs(net))}`, { bold: true, borderTop: true, color: net >= 0 ? GREEN : RED })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Receivables, Folder-it, Department Scorecard removed from Kamran's dashboard */}
 
       {/* ── BANK FACILITIES ── */}
       {showFinance && facilitySynopsis.length > 0 && (
@@ -3020,104 +3038,7 @@ function ExecutiveDashboardBody({
         </div>
       )}
 
-      {/* ── FOLDER-IT ── */}
-      {/* Khuram: "a long card just like the investment size, where you
-          show me number of approvals outstanding, company name and
-          number of documents not filed keep it brief and within one
-          card." Same execCard shell as Investments — one stat up top
-          (approvals outstanding, personal), then a brief per-company
-          "not filed" breakdown below it, all in a single card. */}
-      {folderitSummary && (
-        <>
-          <SectionTitle title="Folder-it" />
-          <a href="/folderit" style={{ textDecoration: "none", display: "block" }}>
-            <div style={{ ...execCard(AMBER), marginBottom: "12px", cursor: "pointer" }}>
-              <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
-                Pending My Approval
-              </div>
-              <div style={{ fontSize: "28px", fontWeight: 600, color: folderitSummary.pendingApproval > 0 ? AMBER : SLATE, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
-                {folderitSummary.pendingApproval}
-              </div>
-
-              {folderitCompanyBreakdown.length > 0 && (
-                <div style={{ borderTop: `1px solid ${HAIRLINE}`, marginTop: "16px", paddingTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {FOLDERIT_HOME_CARD_COMPANIES.map((c) => {
-                    const row = folderitCompanyBreakdown.find((r) => r.group_key === c.groupKey);
-                    const count = row?.inbox_count ?? 0;
-                    return (
-                      <div key={c.groupKey} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: c.colour, flexShrink: 0 }} />
-                          <span style={{ fontSize: "13px", color: NAVY, fontWeight: 500 }}>{c.label}</span>
-                        </div>
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: count > 0 ? c.colour : SLATE, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>
-                          {count} not filed
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div style={{ fontSize: "13px", color: SLATE, marginTop: "12px" }}>Click to view Folder-it →</div>
-            </div>
-          </a>
-        </>
-      )}
-
-      {/* ── DEPARTMENT SCORECARD ── */}
-      <SectionTitle title="Department Scorecard" />
-      <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", overflow: "hidden", marginBottom: "12px", backgroundColor: COLOURS.CARD }}>
-        {scorecardRows.map((d, i) => {
-          const statusColor = d.status === "GREEN" ? GREEN : d.status === "AMBER" ? AMBER : RED;
-          const softBg = d.status === "GREEN" ? COLOURS.SUCCESS_SOFT : d.status === "AMBER" ? COLOURS.WARNING_SOFT : COLOURS.DANGER_SOFT;
-          const isLegalStub = d.title === "Legal" && d.owner === "Not yet built";
-          const hasPerf = !!d.perf && d.perf.total > 0;
-          const inner = (
-            <div style={{
-              display: "flex", alignItems: "center", gap: "12px",
-              padding: "12px 16px",
-              borderBottom: i < scorecardRows.length - 1 ? `1px solid ${HAIRLINE}` : "none",
-            }}>
-              {/* Left status dot */}
-              <span style={{
-                width: "8px", height: "8px", borderRadius: "50%",
-                backgroundColor: statusColor, flexShrink: 0,
-              }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "13px", fontWeight: 500, color: NAVY }}>{d.title}</div>
-                {d.owner && d.owner !== "—" && (
-                  <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px" }}>{d.owner}</div>
-                )}
-              </div>
-              {/* Task counts */}
-              {hasPerf && (
-                <span style={{ fontSize: "12px", color: SLATE, flexShrink: 0 }}>
-                  <span style={{ color: d.perf!.red > 0 ? RED : SLATE }}>{d.perf!.red}↑</span>
-                  {" / "}
-                  <span style={{ color: d.perf!.amber > 0 ? AMBER : SLATE }}>{d.perf!.amber} active</span>
-                </span>
-              )}
-              {/* Right soft chip */}
-              <span style={{
-                fontSize: "10.5px", fontWeight: 600, color: statusColor, flexShrink: 0,
-                padding: "3px 8px", borderRadius: "999px", backgroundColor: softBg,
-                letterSpacing: "0.04em",
-              }}>{d.status}</span>
-            </div>
-          );
-          return isLegalStub ? (
-            <div key={d.slug} style={{ opacity: 0.55 }}>{inner}</div>
-          ) : (
-            <a key={d.slug} href={`/department/${d.slug}`} style={{ textDecoration: "none", color: "inherit", display: "block", transition: "background-color 0.12s" }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = COLOURS.CARD_ALT; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            >{inner}</a>
-          );
-        })}
-      </div>
-
-      <DrillDownPerformance departmentRows={departmentRows} deptPeopleMap={deptPeopleMap} />
+      {/* Folder-it and Department Scorecard removed from Kamran's dashboard */}
     </>
   );
 }
