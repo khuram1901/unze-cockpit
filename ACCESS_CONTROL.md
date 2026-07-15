@@ -49,7 +49,6 @@ Legend: ✅ full · 👁️ view only · 🔸 own-department only · ❌ none
 | `/members` | ✅ | ✅ | ✅ | 👁️ | 👁️ | 👁️ |
 | `/department/[audit\|hr\|taxation\|admin]` | ✅ | ✅ | ✅ | 🔸 own dept | ❌ | ❌ |
 | `/audit-log` | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
-| `/recurring-tasks` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `/monthly-operations-targets` | ✅ | ✅ | ✅ | 👁️ | ❌ | ❌ |
 | `/opening-balances` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | `/exceptions` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |

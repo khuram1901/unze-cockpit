@@ -69,7 +69,9 @@ export const PAGE_REGISTRY: PageCard[] = [
   // Calendar hidden from the sidebar for everyone (2026-07) — feature isn't
   // finished yet. Route still exists at /calendar, just not linked here.
   // Recurring Tasks removed from the sidebar (2026-07) — merged into the
-  // Tasks page as a tab, so the standalone entry is redundant.
+  // Tasks page as a tab. The standalone /recurring-tasks page itself was
+  // deleted (15/07/2026 audit fix) since it had drifted behind the merged
+  // panel (no company field, no per-template edit).
   { permKey: "_folderit", title: "Folder-it", subtitle: "Documents pending approval & filing", href: "/folderit", icon: "📁", group: "My Workspace" },
   { permKey: "can_see_all_minutes", title: "Meetings", subtitle: "Minutes, approvals, action items", href: "/meetings", icon: "💬", group: "My Workspace", badgeKey: "meetings" },
   { permKey: "_my_minutes", title: "My Minutes", subtitle: "Meeting minutes you attended", href: "/my-minutes", icon: "🗒️", group: "My Workspace", badgeKey: "minutes" },

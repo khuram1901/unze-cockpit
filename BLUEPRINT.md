@@ -159,8 +159,6 @@ app/
 │
 ├── my-minutes/page.tsx               My Minutes — personal meeting minutes (all users)
 │
-├── recurring-tasks/page.tsx          Recurring task templates — frequency, assignee, day settings
-│
 ├── members/
 │   ├── page.tsx                      Members page shell
 │   ├── MembersManager.tsx            Member list, invite, edit role/dept, delete
@@ -927,7 +925,7 @@ Automatic, append-only audit trail of every `due_date` change. Columns: `task_id
 #### `recurring_tasks`
 Templates for recurring task generation. Fields: description, assigned_to/email/dept, frequency ('weekly'/'monthly'/'quarterly'), day_of_week, day_of_month, due_days_after, active.
 **RLS (migration 072):** Uses `is_privileged()` — PA (Executive role) can read and write. Previously was `is_admin_or_exec()` which blocked PA since migration 027.
-**Now also managed from the Tasks page's Recurring tab** (`RecurringTasksPanel.tsx`, 14/07/2026) — same table, same CRUD, same cron engine, just reachable from `/tasks` as well as the standalone `/recurring-tasks` page (which still works unchanged).
+**Managed from the Tasks page's Recurring tab** (`RecurringTasksPanel.tsx`, 14/07/2026) — same table, same CRUD, same cron engine. The old standalone `/recurring-tasks` page was deleted (15/07/2026 audit fix) — it had drifted behind the merged panel (missing company field, no per-template edit) and was already unlinked from the sidebar.
 
 #### Task monthly/quarterly chart RPCs (migration 102)
 `get_tasks_monthly_chart(p_company_id uuid default null, p_group_only boolean default false)` and `get_tasks_quarterly_chart(...)` — replace the client-side for-loops that used to build the Monthly ("Created vs Completed") and Quarterly (overdue/active/completed) bar chart data in `TasksList.tsx`. Same visibility rule and Company-filter params as the migration 101 RPCs.
@@ -1450,7 +1448,7 @@ Items within each group are sorted A–Z case-insensitively at render time.
 - My Minutes (`/my-minutes`)
 - Tasks (`/tasks`)
 
-Calendar and Recurring Tasks were removed from the sidebar (14/07/2026) — Calendar hidden for everyone until it's finished (route still exists at `/calendar`, just unlinked), Recurring Tasks merged into the Tasks page's Recurring tab (the standalone `/recurring-tasks` route still works, just not linked here either).
+Calendar and Recurring Tasks were removed from the sidebar (14/07/2026) — Calendar hidden for everyone until it's finished (route still exists at `/calendar`, just unlinked). Recurring Tasks merged into the Tasks page's Recurring tab; the standalone `/recurring-tasks` route itself was deleted (15/07/2026 audit fix) since it had drifted behind the merged panel.
 
 ### Settings
 - Members (`/members`)
@@ -1564,9 +1562,6 @@ Past Meetings tab + Decision Log tab. AI extraction via Claude. Meeting Action T
 
 #### `/my-minutes`
 Personal meeting minutes. Copy protection for non-privileged users.
-
-#### `/recurring-tasks`
-Recurring task templates. PA (Executive) can read/write since migration 072 fixed RLS.
 
 #### `/members`
 Members list, invite, edit, delete. Access Matrix tab (per-member boolean overrides). 38 permission columns across 9 groups: Dashboards, Finance, Recv., Tasks, Depts, Tax Mgmt, Prod., Members, Admin. Columns added: can_view_guarantees, can_manage_guarantees, can_view_investments, can_edit_investments, can_view_dept_tax_accounts, can_manage_tax_schedule, can_manage_tax_notices, can_view_stock, can_manage_stock, can_edit_operations_targets, can_manage_meetings. finance_company_scope is a select (UTPL/IFPL/both) that only appears when can_view_finance is on. Protected members (Admin/CEO/PA) show locked (border-only) cells. Each override highlights in blue.

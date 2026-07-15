@@ -13,7 +13,7 @@ Use this as the reference for all future restyling sessions.
 | `Calendar.html` | `app/calendar/page.tsx` | |
 | `Meetings.html` | `app/meetings/page.tsx` | |
 | `My Minutes.html` | `app/my-minutes/page.tsx` | |
-| `Recurring Tasks.html` | `app/recurring-tasks/page.tsx` | |
+| `Recurring Tasks.html` | `app/tasks/RecurringTasksPanel.tsx` (standalone page deleted 15/07/2026, merged into Tasks page's Recurring tab) | |
 | `Members.html` | `app/members/page.tsx` and `MembersManager.tsx` | |
 | `My Profile.html` | `app/profile/page.tsx` | |
 | `Opening Balances.html` | `app/opening-balances/page.tsx` | |
