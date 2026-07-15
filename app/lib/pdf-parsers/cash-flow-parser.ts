@@ -37,10 +37,31 @@ function extractInlineAmount(text: string, label: string): number | null {
   return isNeg ? -parseAmount(m[1]) : parseAmount(m[1]);
 }
 
+// Picks the most-frequent DD/MM/YYYY date in the text, not just the first
+// match. Found via a real Imperial PDF (3 Jul 2026): its "Today Opening/
+// Closing Balance" header was mistakenly printed with the previous day's
+// date (02/07/2026), while every one of its ~30 actual payment/receipt
+// transaction rows correctly said 03/07/2026 — a mislabel in the bank's own
+// report, not something we can fix at the source. Taking the first match
+// picked up the wrong header date, silently mis-filed that whole day under
+// the previous day's slot (and got skipped as a duplicate once that slot
+// was already taken), so the real day vanished from the app entirely.
+// Going with whichever date appears most often is far more reliable than a
+// single header line, for both companies' report formats.
 function extractDate(text: string): string | null {
-  const m = text.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  if (!m) return null;
-  return `${m[3]}-${m[2]}-${m[1]}`;
+  const matches = [...text.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
+  if (matches.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const m of matches) {
+    const iso = `${m[3]}-${m[2]}-${m[1]}`;
+    counts.set(iso, (counts.get(iso) || 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [iso, count] of counts) {
+    if (count > bestCount) { best = iso; bestCount = count; }
+  }
+  return best;
 }
 
 function findAmount(text: string, label: string): number {
