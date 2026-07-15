@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { sendNotificationEmail } from "../../../lib/send-email";
 import { requireAuth } from "../../../lib/api-auth";
+import { canAddMembers, assignableRoles, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://unze-cockpit.vercel.app";
 
@@ -17,6 +18,37 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceClient();
+
+    // Found during the 15 Jul 2026 full-app audit: this route only
+    // checked "is someone logged in" — any authenticated member could
+    // call it directly to create auth accounts and trigger "Welcome,
+    // you are Admin" invite emails for arbitrary addresses/roles. The
+    // real `members` row insert happens client-side and is now properly
+    // role-checked at the database level (migration 121), but this
+    // route's own side effects (creating the Supabase Auth account,
+    // sending the invite email) need their own server-side gate too.
+    const { data: actorMember } = await supabase
+      .from("members").select("id, role, department, company").eq("email", auth.email).maybeSingle();
+    let actorOverrides: PermOverrides | null = null;
+    if (actorMember) {
+      const { data: perms } = await supabase
+        .from("member_permissions").select("*").eq("member_id", actorMember.id).maybeSingle();
+      actorOverrides = (perms as PermOverrides) || null;
+    }
+    const actorCtx: UserCtx = {
+      email: auth.email,
+      role: actorMember?.role ?? null,
+      department: actorMember?.department ?? null,
+      company: actorMember?.company ?? null,
+      overrides: actorOverrides,
+    };
+    if (!canAddMembers(actorCtx)) {
+      return Response.json({ error: "You don't have permission to add members." }, { status: 403 });
+    }
+    if (role && !assignableRoles(actorCtx).includes(role)) {
+      return Response.json({ error: `You don't have permission to assign the "${role}" role.` }, { status: 403 });
+    }
+
     const displayName = `${firstName || ""} ${lastName || ""}`.trim() || email;
 
     // Create auth user with a temporary password and send invite

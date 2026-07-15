@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { rateLimitByIP, rateLimitResponse } from "../../../lib/rate-limit";
 import { requireAuth } from "../../../lib/api-auth";
+import { canChangePasswordFor, type UserCtx, type PermOverrides } from "../../../lib/permissions";
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -20,6 +21,37 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
     const normalised = email.trim().toLowerCase();
+
+    // Found during the 15 Jul 2026 full-app audit: this route previously
+    // only checked "is someone logged in," with the actual "who's allowed
+    // to change whose password" logic (canChangePasswordFor) living only
+    // client-side in MembersManager.tsx — so any authenticated member
+    // could call this route directly and set any other account's
+    // password, including Admin/CEO. This mirrors the same check
+    // server-side, using the exact function the UI already trusts.
+    const { data: actorMember } = await supabase
+      .from("members").select("id, role, department, company").eq("email", auth.email).maybeSingle();
+    let actorOverrides: PermOverrides | null = null;
+    if (actorMember) {
+      const { data: perms } = await supabase
+        .from("member_permissions").select("*").eq("member_id", actorMember.id).maybeSingle();
+      actorOverrides = (perms as PermOverrides) || null;
+    }
+    const actorCtx: UserCtx = {
+      email: auth.email,
+      role: actorMember?.role ?? null,
+      department: actorMember?.department ?? null,
+      company: actorMember?.company ?? null,
+      overrides: actorOverrides,
+    };
+
+    const { data: targetMember } = await supabase
+      .from("members").select("role").eq("email", normalised).maybeSingle();
+    const targetCtx: UserCtx = { email: normalised, role: targetMember?.role ?? null };
+
+    if (!canChangePasswordFor(actorCtx, targetCtx)) {
+      return Response.json({ error: "You don't have permission to change this account's password." }, { status: 403 });
+    }
 
     // Find the auth user by paginating (handles >1000 users)
     let authUser: { id: string } | null = null;
