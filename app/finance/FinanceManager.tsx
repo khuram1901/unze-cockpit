@@ -277,14 +277,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     if (posRes.error) console.error("Positions error:", posRes.error);
     setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
     setPlan(planRes.data || null);
-    const isImperial = companyId === "77921705-8a15-4406-847a-b234f84b5ec3";
-    const rawPositions: DailyPosition[] = posRes.data || [];
-    if (isImperial) {
-      for (const p of rawPositions) {
-        p.closing_after_post_dated = p.closing_balance + p.post_dated_total;
-      }
-    }
-    setPositions(rawPositions);
+    // closing_after_post_dated is trusted as stored for both companies — see the save
+    // handler below for why (15 Jul 2026 fix: this used to be recomputed here as
+    // closing + post_dated for Imperial only, which contradicted every Imperial row
+    // ever ingested from a real bank statement PDF).
+    setPositions(posRes.data || []);
 
     const [{ data: budgetData }, { data: summaryData }] = await Promise.all([
       supabase.from("department_budgets").select("*").eq("company_id", companyId).eq("budget_month", budgetMonth).order("department"),
@@ -449,10 +446,12 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     }
 
     setSaving(true);
-    const isImperial = companyId === "77921705-8a15-4406-847a-b234f84b5ec3";
-    const closingAfterPD = isImperial
-      ? Number(dpClosing) + Number(dpPostDated)
-      : Number(dpClosing) - Number(dpPostDated);
+    // Post-dated cheques reduce available cash for both companies — confirmed against every
+    // Imperial row ever ingested from a real bank statement PDF (parseImperial() in
+    // cash-flow-parser.ts derives closingAfterPDC as closing minus the PDC total, never a
+    // sum). A previous version of this formula added post-dated cheques for Imperial only,
+    // which never matched any real Imperial data (fixed 15 Jul 2026).
+    const closingAfterPD = Number(dpClosing) - Number(dpPostDated);
     const { error } = await supabase.from("daily_cash_position").upsert(
       {
         company_id: companyId,
