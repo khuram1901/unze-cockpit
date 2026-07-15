@@ -629,16 +629,28 @@ UNIQUE(member_id). **RLS:** Admin-tier only can read/write.
 | opening_balance | numeric | |
 | total_receipts | numeric | |
 | total_payments | numeric | |
-| closing_balance | numeric | |
-| post_dated_total | numeric | |
-| closing_after_post_dated | numeric | IFPL: +post_dated; UTPL: −post_dated |
+| closing_balance | numeric | "Cash in hand" — the headline figure shown on Finance/Home. Never netted with PDC. |
+| post_dated_total | numeric | Total value of post-dated cheques issued and outstanding (a future commitment, not cash out of hand yet) |
+| closing_after_post_dated | numeric | Always `closing_balance − post_dated_total`, both companies (fixed 15 Jul 2026 — IFPL previously wrongly added). Kept for reference only; per Khuram's 15 Jul correction, PDC is a separate commitment to track week-by-week (see PDC Outlook below), not something to net into the cash figure. |
 | raw_pdf_filename | text | |
-| uploaded_by | text | |
-| reconciled | boolean | DEFAULT false |
+| uploaded_by | text | `gmail-auto` / `drive-auto` / a user's email (manual) |
+| reconciled | boolean | true once the matching `bank_position_snapshots` row for the same date confirms the same closing figure |
 | created_at | timestamptz | |
 
 **RLS:** `can_see_company_finance(company_id)` — Admin/CEO + scoped Finance managers.
-**Pages:** `finance/FinanceManager.tsx` reads and writes.
+**Pages:** `finance/FinanceManager.tsx` reads and writes. Home dashboard and Finance page both fetch a rolling last-30-calendar-days window (`daysAgoISO(30)` from `lib/dateUtils.ts`) — not a row-count `.limit()`, which used to drift further back than 30 days whenever there were gaps.
+
+#### `pdc_maturity_buckets` (migration 132)
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| company_id | uuid FK → companies | NOT NULL |
+| position_date | date | Which day's report this bucket came from — replaced (delete-then-insert) on every re-save for that company+date, so re-processing a day doesn't duplicate |
+| due_date | date | When this specific PDC bucket matures |
+| amount | numeric | |
+| label | text | Free-text label from the source PDF (e.g. "Balance", a payee name) |
+
+Every dated PDC bucket parsed out of each day's cash-flow PDF (`extractImperialPdcBuckets`/`extractUnzePdcBuckets` in `lib/pdf-parsers/cash-flow-parser.ts`), not just the single lump `post_dated_total`. Feeds `get_pdc_outlook(p_company_id, p_today)` (migration 132), which reads the latest `closing_balance` as starting cash-in-hand and walks 8 weeks forward, summing buckets due each week and running the balance down — shown as a bar (PDC due) + line (effective balance) combo chart on both the Finance page and the Executive Dashboard company panels.
 
 #### `monthly_cash_plan`
 | Column | Type | Notes |
@@ -1662,8 +1674,9 @@ Deadlines (Pakistan fiscal year Jul–Jun):
 - Editing: Ops dept only. Finance managers view-only.
 
 ### Finance Rules
-- **IFPL post-dated**: `closing_after_post_dated = closing_balance + post_dated_total`
-- **UTPL post-dated**: `closing_after_post_dated = closing_balance − post_dated_total`
+- **Both companies**: `closing_after_post_dated = closing_balance − post_dated_total` (fixed 15 Jul 2026 — IFPL previously wrongly added `+`)
+- **Cash vs PDC are shown separately, never netted**: `closing_balance` ("Cash in Hand") is the headline figure; `post_dated_total` ("PDC Outstanding") is a future commitment, not cash out of hand. See PDC Outlook (§9 Finance Data Flow) for the week-by-week view.
+- **Rolling 30 days, not current month**: Finance page and Home dashboard cash-position history/chart both use a strict today-minus-30-to-today date filter, not a row-count limit and not calendar-month.
 
 ### Meeting Rules
 - "General" label → "Executive Office" everywhere — never use "General"
@@ -1681,15 +1694,18 @@ Deadlines (Pakistan fiscal year Jul–Jun):
 ## 9. Data Flows
 
 ### Finance Data Flow
-Three ingestion paths — all end in `daily_cash_position` + `bank_position_snapshots`:
+Three ingestion paths — all end in `daily_cash_position` + `bank_position_snapshots` (+ `pdc_maturity_buckets`, migration 132) + an archived copy of the source PDF in `document_archive`/Storage bucket `source-documents` (`lib/document-archive.ts`) so figures can always be re-derived from the original file:
 
-**Path 1 — Google Drive (primary, fully automated)**
-1. Gmail receives cash sheet PDF → Google Apps Script drops to Drive `Cockpit Cash Sheets/Drop Here`
-2. `/api/finance/check-drive` cron (every 10 min) parses, saves, moves to Processed
+**Path 1 — Gmail direct, via the "Cockpit Cache" Gmail label** (primary in practice)
+1. `/api/finance/check-inbox` cron (every 10 min) searches Gmail (`k.saleem@unzegroup.com`) for the label containing "cockpit", `newer_than:30d`, up to 150 messages (raised from 20 on 15 Jul 2026 — with no pagination, a two-company month of daily emails comfortably exceeds 20, and a low cap meant older messages could never be reached even by re-running it)
+2. Parses each PDF pair (or cash-flow-only), skips dates that already exist in `daily_cash_position`, marks the Gmail message read
+3. Because it re-checks the whole 30-day window every run (not just unread), a full clean re-ingest for a company is possible any time: delete that company's rows from the three tables above for the date range, then re-trigger this endpoint — it will re-fetch and re-parse everything fresh with whatever the current parser code is. Did this for IFPL on 15 Jul 2026 to fix a historical date-mislabelling bug (see `lib/pdf-parsers/cash-flow-parser.ts` `extractDate()` comment) rather than patching individual rows by hand.
 
-**Path 2 — Manual upload** via `/finance/upload`
+**Path 2 — Google Drive inbox folder**
+1. Google Apps Script drops PDFs to Drive `Cockpit Cash Sheets/Drop Here`
+2. `/api/finance/check-drive` cron (every 10 min) parses, saves, then **moves the file to the Processed folder** — meaning once a file has been handled, check-drive can never re-fetch it again for a historical re-ingest (unlike Path 1's Gmail search, which doesn't depend on the message being unread/unmoved). For a clean historical re-ingest, use Path 1.
 
-**Path 3 — Gmail direct (legacy)** via `/api/finance/check-inbox`
+**Path 3 — Manual upload** via `/finance/upload` (`/api/finance/parse-cash-flow`) — requires both a cash-flow and a bank-position PDF together.
 
 ### Production/Stock Data Flow
 Daily entry → `production_entries` + `production_allocations`; dispatch → `dispatch_entries` + `dispatch_records` (dual write); PO auto-close on fulfillment.

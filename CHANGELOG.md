@@ -4,6 +4,23 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-15 — Cash-flow feedback round: layout, deletes, recurring-cycle status, PDC Outlook, cron/data fixes
+
+Worked through Khuram's live feedback after the audit fixes shipped, in the order he raised it:
+
+- **Pages hanging off the right edge (every page)**: `SidebarLayout.tsx`'s fixed-position sidebar was removed from normal flex flow, so the sole remaining flex child (`flex: 1` + `marginLeft`) was sized to the full viewport width instead of viewport-minus-sidebar. One-line fix: explicit `width: calc(100% - sidebarW)`.
+- **Couldn't delete a contractor** in Manage PO: contractors had no DELETE endpoint at all (POs and Authority Letters already did). Added it — Khuram and Nadeem Khan already had sufficient permission level, so no access change was needed, just the missing feature.
+- **Recurring tasks now show cycle status**: new `get_recurring_task_cycle_status()` RPC (migration 131) + a colour badge on each template — red "N cycles overdue" / green "On time · Next DD/MM/YYYY".
+- **Imperial cash-flow data was wrong/missing**: root-caused to `extractDate()` picking the *first* DD/MM/YYYY match in the PDF text, but one bank-generated PDF (3 Jul) had its header mistakenly printed with the previous day's date while ~30 correctly-dated transaction rows sat below it — so the whole day silently filed under the wrong date and got skipped as a duplicate. Fixed to pick the *most frequent* date in the text instead. Verified against all of Khuram's real uploaded PDFs.
+- **PDC Outlook built** (Khuram: "treat this as a cash flow statement, not a net balance statement — cash in hand is cash in hand, PDC is a future commitment"): new `pdc_maturity_buckets` table + `get_pdc_outlook()` RPC (migration 132), parser now extracts every dated PDC bucket (not just one lump sum), Finance page and Home dashboard both split "Cash in Hand" from "PDC Outstanding" and show an 8-week-ahead view. Originally a numbers table (per Khuram's ask for exact per-week figures); converted to a bar (PDC due) + line (effective balance) combo chart on his follow-up request — same numbers via tooltip, less space.
+- **Cash history now a true rolling 30 days**: Finance page and Home dashboard previously used `.limit(30)` (30 most recent *rows*), which drifts past 30 calendar days whenever there are gaps (weekends, missed reports). Both now filter by date (`daysAgoISO(30)` in `lib/dateUtils.ts`).
+- **Gmail cron investigated** ("cron isn't updating the app"): it *was* running (OAuth token refreshing on schedule, most days landing correctly) but had two real bugs — the message-list cap (`maxResults: 20`, no pagination) meant it could never reach further back than the 20 newest cockpit-labelled emails, and historical IFPL data had been corrupted by the `extractDate()` bug above (2 July's real data got overwritten by 3 July's mislabelled data). Fixed the cap (→150) and did a full clean re-ingest for Imperial: deleted the last 30 days of `daily_cash_position`/`bank_position_snapshots`/`pdc_maturity_buckets` for IFPL and re-ran `/api/finance/check-inbox`, which re-fetched and re-parsed everything fresh. Verified after: every day in the last 30 reconciled `true`, 2/3 July now correct and separate. Two weekday gaps remain (18 & 25 June) — no cockpit-labelled email exists for those dates at all, not a processing bug.
+- **Negative Imperial cash balance**: checked by hand against the real PDFs — the maths (opening + receipts − payments = closing) matches exactly, and on days with both PDFs it independently matches the bank statement too. Not a parsing bug. Khuram confirmed afterwards the negative figure is in fact correct.
+
+`BLUEPRINT.md` Finance section updated to match (corrected the stale IFPL `+post_dated` rule, documented `pdc_maturity_buckets`, `document_archive`, and the real Path 1/Path 2 Gmail-vs-Drive ingestion behaviour). Migrations 131–132 applied and confirmed live. All commits pushed.
+
+---
+
 ## 2026-07-15 — Full app audit: High-severity findings fixed (2 of 2, all 14 done)
 
 Finished the remaining High findings from the audit:
