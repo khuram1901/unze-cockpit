@@ -19,12 +19,13 @@
 // ──────────────────────────────────────────────────────────────────
 
 export const CEO_EMAIL = "k.saleem@unzegroup.com";
+export const CEO2_EMAIL = "kamran@unze.co.uk";   // Kamran Saleem — second CEO, IFPL-scoped
 export const ADMIN_EMAIL = "khuram1901@gmail.com";
 export const PA_EMAIL = "pa.ceo@unze.co.uk";
 export const OPS_HOD_EMAIL = "nadeem.khan@unze.co.uk";
 
-export const LOCKED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, PA_EMAIL];
-export const PROTECTED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL];
+export const LOCKED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, CEO2_EMAIL, PA_EMAIL];
+export const PROTECTED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, CEO2_EMAIL];
 
 export type PermOverrides = Record<string, boolean | string | null>;
 
@@ -45,7 +46,14 @@ function ov(u: UserCtx, key: string): boolean | null {
 }
 
 // ── Identity ──────────────────────────────────────────────────────
-export function isCEO(u: UserCtx) { return lc(u.email) === CEO_EMAIL; }
+export function isCEO(u: UserCtx) {
+  const e = lc(u.email);
+  return e === CEO_EMAIL || e === CEO2_EMAIL;
+}
+// True only for Khuram — used where a single "primary" CEO is needed
+export function isPrimaryCEO(u: UserCtx) { return lc(u.email) === CEO_EMAIL; }
+// True only for Kamran — used to route him to his own dashboard
+export function isSecondaryCEO(u: UserCtx) { return lc(u.email) === CEO2_EMAIL; }
 export function isMainAdmin(u: UserCtx) { return lc(u.email) === ADMIN_EMAIL; }
 export function isPA(u: UserCtx) { return lc(u.email) === PA_EMAIL || u.role === "Executive"; }
 

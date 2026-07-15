@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase, loadMyPermissions } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
-import { canSeeAllTasks, type UserCtx, type PermOverrides } from "./permissions";
+import { canSeeAllTasks, isSecondaryCEO, type UserCtx, type PermOverrides } from "./permissions";
 import { COLOURS } from "./SharedUI";
 
 type Member = {
@@ -211,18 +211,18 @@ export default function AuthWrapper({
   }
 
   const currentRole = member?.role || "Member";
-  const displayRoleLabel = email === "k.saleem@unzegroup.com" ? "CEO" : currentRole;
+  const isCEOUser = userCtx ? (userCtx.email === "k.saleem@unzegroup.com" || userCtx.email === "kamran@unze.co.uk") : false;
+  const displayRoleLabel = isCEOUser ? "CEO" : currentRole;
 
-  const roleColor =
-    email === "k.saleem@unzegroup.com"
-      ? COLOURS.BLUE
-      : currentRole === "Admin"
-      ? "#111827"
-      : currentRole === "Executive"
-      ? COLOURS.PURPLE
-      : currentRole === "Manager"
-      ? COLOURS.GREEN
-      : SLATE;
+  const roleColor = isCEOUser
+    ? COLOURS.BLUE
+    : currentRole === "Admin"
+    ? "#111827"
+    : currentRole === "Executive"
+    ? COLOURS.PURPLE
+    : currentRole === "Manager"
+    ? COLOURS.GREEN
+    : SLATE;
 
   return (
     <SidebarLayout

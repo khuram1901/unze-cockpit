@@ -18,7 +18,7 @@ import {
   canViewAuditLog, canViewExceptions, canImportExport,
   canAccessDailyEntry, canViewPADashboard, canViewInvestments,
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
-  isMainAdmin, isCEO,
+  isMainAdmin, isCEO, isSecondaryCEO,
   type UserCtx,
 } from "./permissions";
 
@@ -169,9 +169,11 @@ export default function SidebarLayout({
   const visibleCards = userCtx ? PAGE_REGISTRY.filter((card) => isCardVisible(card, userCtx)) : [];
 
   const isPAUser = userCtx ? (userCtx.role === "Executive" || (userCtx.email || "").toLowerCase() === "pa.ceo@unze.co.uk") : false;
+  const isKamran = userCtx ? isSecondaryCEO(userCtx) : false;
+  const homeHref = isPAUser ? "/pa" : isKamran ? "/ceo-kamran" : "/home";
 
   const alwaysItems: PageCard[] = [
-    { permKey: "_home", title: "Executive Dashboard", subtitle: "", href: isPAUser ? "/pa" : "/home", icon: "🏠", group: "_top" },
+    { permKey: "_home", title: isKamran ? "CEO Dashboard" : "Executive Dashboard", subtitle: "", href: homeHref, icon: "🏠", group: "_top" },
   ];
 
   const sidebarW = isMobile ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;
