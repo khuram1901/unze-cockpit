@@ -4,6 +4,27 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-15 — Full app audit: all Critical findings fixed
+
+Ran a full audit of the app (every page, every rule in this file, checked against the live database) and produced `Full-App-Audit-2026-07-15.md`. Then fixed every Critical-severity finding, one at a time, verifying with `tsc`/`eslint` and committing separately for each:
+
+- Investments: PA keeps view-only access, refresh-prices restricted to CEO/Admin only (matches Khuram's 15 Jul decision).
+- Removed the full-database wipe route (`app/api/admin/wipe-data`) entirely — no longer reachable at all.
+- Google OAuth (Gmail/Calendar/Drive) now only accepts a connection from k.saleem@unzegroup.com — a stranger can no longer hijack the shared integration.
+- Tasks can no longer be created already "Completed" — must go through Submitted → HOD sign-off (enforced both in the form and by a DB trigger, migration 119).
+- The mini-subtask checklist now respects the Completed-task lock.
+- `set-password` and `members/invite` API routes now check server-side permissions (`canChangePasswordFor`, `canAddMembers`, `assignableRoles`) instead of trusting the UI alone — plus a matching RLS tightening on `members` (migration 121) so the same rule applies even if someone calls the database directly.
+- Submitted-task routing now skips offboarded managers and walks up the reporting chain instead of stalling.
+- Fixed a real data-loss bug in Opening Balances: 40ft container quantities were being silently dropped.
+- Fixed a company mislabelling bug on the tax notices dashboard and the HR dashboard (Taxation/HR data could be saved against the wrong company).
+- Dispatch entries no longer get orphaned if the stock-system write fails after the daily-log write succeeds — the whole dispatch now rolls back together.
+- The home dashboard's task fetch no longer silently drops older stuck/overdue tasks past a 200-row cap.
+- **Rewrote database write policies on ~20 tables** (migration 124) that were previously "allow anyone logged in" — tasks, pension/investments, tax accounts, meetings, machine issues, dispatch/production entries, department budgets, and others. Each was tightened to match the access rule already enforced in the app itself (PA exclusion on financial data, Ops-department-only production entry, admin-only budget edits, etc.), closing the "bypass the app and hit the database directly" gap. Also added an explicit `to authenticated` scope on every new policy so none of these are reachable by a signed-out request either.
+
+All fixes verified with `tsc --noEmit` and `eslint` before committing; migrations 118–124 are written to `supabase/` and still need to be applied manually via the Supabase SQL Editor. High/Medium/Low findings from the audit are next.
+
+---
+
 ## 2026-07-15 — Task detail modal redesigned (two-column layout)
 
 Khuram, after a screenshot of a Completed task: "we now need to design the task window. this is messier can you re design this and show me first before coding it." Showed a mockup first (per the established pattern), got "much better," then implemented it exactly:
