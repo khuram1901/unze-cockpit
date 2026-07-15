@@ -39,6 +39,8 @@ type DailyPosition = {
   closing_after_post_dated: number;
 };
 
+type PdcWeek = { week_number: number; week_start: string; week_end: string; pdc_due: number; effective_balance: number };
+
 type DeptBudget = { id: string; department: string; budget_month: string; category: string; budgeted_amount: number; actual_amount: number; notes: string | null };
 type DeptBudgetSummary = { department: string; budgeted_total: number; actual_total: number };
 
@@ -74,6 +76,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [opening, setOpening] = useState<OpeningBalance | null>(null);
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
   const [positions, setPositions] = useState<DailyPosition[]>([]);
+  const [pdcOutlook, setPdcOutlook] = useState<PdcWeek[]>([]);
 
   // Which edit modal is open: null, 'opening', or 'plan'
   const [openModal, setOpenModal] = useState<null | "opening" | "plan">(null);
@@ -252,7 +255,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         setUserIsAdmin(isAdminTier(ctx));
       }
     }
-    const [obRes, planRes, posRes] = await Promise.all([
+    const [obRes, planRes, posRes, pdcRes] = await Promise.all([
       supabase
         .from("cash_opening_balance")
         .select("id, as_of_date, opening_amount, currency")
@@ -271,17 +274,22 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         .eq("company_id", companyId)
         .order("position_date", { ascending: false })
         .limit(30),
+      supabase.rpc("get_pdc_outlook", { p_company_id: companyId, p_today: todayISO() }),
     ]);
     if (obRes.error) console.error("Opening balance error:", obRes.error);
     if (planRes.error) console.error("Monthly plan error:", planRes.error);
     if (posRes.error) console.error("Positions error:", posRes.error);
+    if (pdcRes.error) console.error("PDC outlook error:", pdcRes.error);
     setOpening(obRes.data && obRes.data.length > 0 ? obRes.data[0] : null);
     setPlan(planRes.data || null);
     // closing_after_post_dated is trusted as stored for both companies — see the save
     // handler below for why (15 Jul 2026 fix: this used to be recomputed here as
     // closing + post_dated for Imperial only, which contradicted every Imperial row
-    // ever ingested from a real bank statement PDF).
+    // ever ingested from a real bank statement PDF). It's kept in the data model for
+    // reference, but per Khuram's 15 Jul correction it's no longer treated as "the"
+    // balance anywhere in this UI — see Cash in Hand / PDC Outstanding split below.
     setPositions(posRes.data || []);
+    setPdcOutlook((pdcRes.data || []) as PdcWeek[]);
 
     const [{ data: budgetData }, { data: summaryData }] = await Promise.all([
       supabase.from("department_budgets").select("id, department, budget_month, category, budgeted_amount, actual_amount, notes").eq("company_id", companyId).eq("budget_month", budgetMonth).order("department"),
@@ -538,7 +546,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+          gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5, 1fr)",
           gap: "12px",
           marginBottom: "8px",
         }}
@@ -563,13 +571,71 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           valueColor={RED}
           onEdit={canEditAll ? openPlanModal : undefined}
         />
+        {/* 15 Jul 2026, per Khuram: cash in hand and PDC are two different
+            things — a PDC he's issued isn't out of his hand yet, so it must
+            never be silently blended into the headline balance. This card
+            used to show closing_after_post_dated (cash minus every
+            outstanding PDC); it's now the plain actual closing balance,
+            with PDC Outstanding broken out as its own card next to it. */}
         <SummaryCard
-          label="Net Position"
-          value={latestPosition ? `PKR ${fmt(latestPosition.closing_after_post_dated)}` : "—"}
+          label="Cash in Hand"
+          value={latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}
           sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
           isHero
         />
+        <SummaryCard
+          label="PDC Outstanding"
+          value={latestPosition ? `PKR ${fmt(latestPosition.post_dated_total)}` : "—"}
+          sub="Issued, not yet cleared — see outlook below"
+          valueColor={AMBER}
+        />
       </div>
+
+      {/* ── PDC OUTLOOK — next 8 weeks ──
+          Khuram: "treat it as a cash flow statement rather than a net
+          balance statement... show me, for the next 8 weeks, what my
+          balance may look like considering the PDC commitment." Built from
+          get_pdc_outlook() (migration 132) — reads the latest report's
+          cash-in-hand plus that report's dated PDC buckets, and walks the
+          balance down week by week as each bucket comes due. Numbers, not
+          just a chart, per his explicit ask ("need numbers per week so we
+          can see the amount and effective balance"). ── */}
+      {pdcOutlook.length > 0 && (
+        <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "20px 24px", backgroundColor: CARD, marginBottom: "14px" }}>
+          <SectionTitle title="PDC Outlook — Next 8 Weeks" style={{ margin: "0 0 4px" }} />
+          <div style={{ fontSize: "12.5px", color: SLATE, marginBottom: "14px" }}>
+            Starting from today&apos;s cash in hand ({latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}), assuming every scheduled PDC clears on time and nothing else changes.
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
+                  <th style={{ textAlign: "left", padding: "6px 10px", color: SLATE, fontWeight: 600 }}>Week</th>
+                  <th style={{ textAlign: "left", padding: "6px 10px", color: SLATE, fontWeight: 600 }}>Period</th>
+                  <th style={{ textAlign: "right", padding: "6px 10px", color: SLATE, fontWeight: 600 }}>PDC Due</th>
+                  <th style={{ textAlign: "right", padding: "6px 10px", color: SLATE, fontWeight: 600 }}>Effective Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pdcOutlook.map((w) => (
+                  <tr key={w.week_number} style={{ borderBottom: `1px solid ${HAIRLINE}` }}>
+                    <td style={{ padding: "7px 10px", fontWeight: 600, color: NAVY }}>Week {w.week_number}</td>
+                    <td style={{ padding: "7px 10px", color: SLATE, fontFamily: MONO }}>
+                      {formatDateUK(w.week_start)} – {formatDateUK(w.week_end)}
+                    </td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", color: w.pdc_due > 0 ? AMBER : SLATE, fontWeight: w.pdc_due > 0 ? 600 : 400 }}>
+                      {w.pdc_due > 0 ? `PKR ${fmt(w.pdc_due)}` : "—"}
+                    </td>
+                    <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 700, color: w.effective_balance < 0 ? RED : NAVY }}>
+                      PKR {fmt(w.effective_balance)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── ROW: INGESTION + PDF UPLOAD side by side (Admin only) ── */}
       {userIsAdmin && (
