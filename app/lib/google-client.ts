@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { createServiceClient } from "./supabase-server";
 import { encrypt, safeDecrypt } from "./crypto";
+import { GOOGLE_INTEGRATION_EMAIL } from "./constants";
 
 const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -34,15 +35,20 @@ export async function exchangeCodeForTokens(code: string) {
 
 export async function getAuthenticatedClient() {
   const supabase = createServiceClient();
+  // Found during the 15 Jul 2026 full-app audit: this used to grab
+  // whichever token row was most recently saved, with no email filter —
+  // so anyone who completed their own Google consent screen against
+  // /api/google/callback would silently become the account the whole
+  // app's Gmail/Calendar/Drive integration ran as. Now pinned to the one
+  // account this integration is actually meant to be.
   const { data, error } = await supabase
     .from("google_oauth_tokens")
     .select("*")
-    .order("created_at", { ascending: false })
-    .limit(1)
+    .eq("user_email", GOOGLE_INTEGRATION_EMAIL)
     .single();
 
   if (error || !data) {
-    throw new Error("No Google OAuth tokens found. Please connect your Gmail first.");
+    throw new Error(`No Google OAuth tokens found for ${GOOGLE_INTEGRATION_EMAIL}. Please connect Google on the Calendar page first.`);
   }
 
   const oauth2Client = getOAuth2Client();

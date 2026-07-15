@@ -2,8 +2,8 @@ import { NextRequest } from "next/server";
 import { google } from "googleapis";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { safeDecrypt, encrypt } from "../../../lib/crypto";
+import { GOOGLE_INTEGRATION_EMAIL as TARGET_EMAIL } from "../../../lib/constants";
 
-const TARGET_EMAIL = "k.saleem@unzegroup.com";
 const ROOT_FOLDER_NAME = "Cockpit Cash Sheets";
 const INBOX_FOLDER_NAME = "Drop Here";
 const PROCESSED_FOLDER_NAME = "Processed";

@@ -6,9 +6,7 @@ import { parseCashFlowPDF } from "../../../lib/pdf-parsers/cash-flow-parser";
 import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-parser";
 import { reconcile, matchBankPositionToCashFlow } from "../../../lib/pdf-parsers/reconcile";
 import { archiveSourceDocument } from "../../../lib/document-archive";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID } from "../../../lib/constants";
-
-const TARGET_EMAIL = "k.saleem@unzegroup.com";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, GOOGLE_INTEGRATION_EMAIL as TARGET_EMAIL } from "../../../lib/constants";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");

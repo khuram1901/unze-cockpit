@@ -2,9 +2,9 @@ import { NextRequest } from "next/server";
 import { google } from "googleapis";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { safeDecrypt, encrypt } from "../../../lib/crypto";
+import { GOOGLE_INTEGRATION_EMAIL as TARGET_EMAIL } from "../../../lib/constants";
 
 const LABEL_NAME = "cockpit-cash";
-const TARGET_EMAIL = "k.saleem@unzegroup.com";
 
 // Keywords that identify cash sheet emails — matches subject or sender
 const FILTER_SUBJECT_QUERY = "Cash Flow OR Bank Position OR cash sheet";

@@ -1,3 +1,16 @@
+// The one Google account (Gmail/Calendar/Drive) the app's shared Google
+// integration is meant to run as. Found during the 15 Jul 2026 full-app
+// audit: /api/google/auth and /api/google/callback had no concept of a
+// fixed identity at all — anyone could complete their own Google
+// consent screen against those routes and their token would silently
+// become the one getAuthenticatedClient() uses for the whole app
+// (it just grabbed the most-recently-saved token, no email filter).
+// Meanwhile four separate finance routes each hardcoded this same email
+// as a local TARGET_EMAIL constant, assuming it was already the one in
+// use. Centralised here and enforced in both the OAuth flow and the
+// token lookup so the assumption those routes made is actually true.
+export const GOOGLE_INTEGRATION_EMAIL = "k.saleem@unzegroup.com";
+
 export const UTPL_COMPANY_ID = "15884c2d-48a4-4d43-be90-0ef6e130790c";
 export const IFPL_COMPANY_ID = "77921705-8a15-4406-847a-b234f84b5ec3";
 export const BRNH_COMPANY_ID = "6401ba75-f297-4617-84c1-305bcaf35a50";

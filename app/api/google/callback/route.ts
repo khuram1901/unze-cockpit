@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { encrypt } from "../../../lib/crypto";
 import { saveTokens } from "../../../lib/google-client";
+import { GOOGLE_INTEGRATION_EMAIL } from "../../../lib/constants";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -45,6 +46,19 @@ export async function GET(request: NextRequest) {
     });
     const userInfo = await userInfoRes.json();
     const email = userInfo.email || "unknown";
+
+    // Found during the 15 Jul 2026 full-app audit: this callback had no
+    // concept of a fixed identity at all — anyone could complete their
+    // own Google consent screen here, and their token would silently
+    // become the one getAuthenticatedClient() uses for the whole app's
+    // Gmail/Calendar/Drive integration (it just grabbed the most
+    // recently saved token). Khuram's decision: only this one account
+    // may ever be connected. Anyone else's consent is rejected outright
+    // — no token is saved.
+    if (email.toLowerCase() !== GOOGLE_INTEGRATION_EMAIL.toLowerCase()) {
+      console.error(`Google OAuth callback: rejected connection attempt from ${email}, only ${GOOGLE_INTEGRATION_EMAIL} may connect this integration`);
+      return Response.redirect(new URL(`${returnTo}?google=wrong_account`, request.url));
+    }
 
     const supabase = createServiceClient();
 

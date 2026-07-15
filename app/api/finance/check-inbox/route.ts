@@ -5,7 +5,7 @@ import { parseBankPositionPDF } from "../../../lib/pdf-parsers/bank-position-par
 import { reconcile, matchBankPositionToCashFlow } from "../../../lib/pdf-parsers/reconcile";
 
 import { createServiceClient } from "../../../lib/supabase-server";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID } from "../../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, GOOGLE_INTEGRATION_EMAIL } from "../../../lib/constants";
 import { safeDecrypt, encrypt } from "../../../lib/crypto";
 import { archiveSourceDocument } from "../../../lib/document-archive";
 
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = createServiceClient();
-    const TARGET_EMAILS = ["k.saleem@unzegroup.com"];
+    const TARGET_EMAILS = [GOOGLE_INTEGRATION_EMAIL];
 
     // Get existing dates for BOTH companies so we skip already-processed ones
     const { data: existingUtpl } = await supabase
