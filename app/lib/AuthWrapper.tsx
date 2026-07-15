@@ -106,27 +106,19 @@ export default function AuthWrapper({
     const role = member.role;
     const isAdmin = userCtx ? canSeeAllTasks(userCtx) : (role === "Admin" || role === "Executive");
 
-    const { data: tasks } = await supabase
-      .from("tasks")
-      .select("id, status, due_date, assigned_to_email, assigned_to")
-      .eq("assigned_to_email", email);
-    if (!tasks) return;
-
-    const open = tasks.filter((t: Record<string, unknown>) => t.status !== "Completed" && t.status !== "Cancelled");
-    const overdue = open.filter((t: Record<string, unknown>) => t.due_date && (t.due_date as string) < todayStr);
-    const waiting = open.filter((t: Record<string, unknown>) => t.status === "Waiting Reply");
+    const { data } = await supabase.rpc("get_notification_badge_counts", {
+      p_email: email,
+      p_today: todayStr,
+      p_is_admin: isAdmin,
+    });
+    const counts = data?.[0];
+    if (!counts) return;
 
     const items: { label: string; count: number; href: string }[] = [];
-    if (overdue.length > 0) items.push({ label: "Overdue tasks", count: overdue.length, href: "/tasks" });
-    if (waiting.length > 0) items.push({ label: "Waiting reply", count: waiting.length, href: "/tasks" });
-
-    if (isAdmin) {
-      const { data: machines } = await supabase.from("machine_issues").select("id").eq("issue_status", "Down");
-      if (machines && machines.length > 0) items.push({ label: "Machines down", count: machines.length, href: "/dashboard" });
-
-      const { data: pendingMins } = await supabase.from("pending_minutes").select("id").eq("status", "pending");
-      if (pendingMins && pendingMins.length > 0) items.push({ label: "Minutes pending", count: pendingMins.length, href: "/meetings" });
-    }
+    if (counts.overdue_count > 0) items.push({ label: "Overdue tasks", count: counts.overdue_count, href: "/tasks" });
+    if (counts.waiting_count > 0) items.push({ label: "Waiting reply", count: counts.waiting_count, href: "/tasks" });
+    if (isAdmin && counts.machines_down_count > 0) items.push({ label: "Machines down", count: counts.machines_down_count, href: "/dashboard" });
+    if (isAdmin && counts.pending_minutes_count > 0) items.push({ label: "Minutes pending", count: counts.pending_minutes_count, href: "/meetings" });
 
     setNotifItems(items);
     setNotifCount(items.reduce((s, i) => s + i.count, 0));
