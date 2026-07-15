@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
@@ -52,6 +52,16 @@ const ACTION_COLOURS: Record<string, { bg: string; text: string }> = {
   Deleted: { bg: "#fee2e2", text: COLOURS.RED },
 };
 
+type AuditStats = {
+  total_count: number;
+  today_count: number;
+  created_count: number;
+  updated_count: number;
+  deleted_count: number;
+};
+
+const EMPTY_STATS: AuditStats = { total_count: 0, today_count: 0, created_count: 0, updated_count: 0, deleted_count: 0 };
+
 export default function AuditLogPage() {
   const { checking } = useRequireCapability("audit_log");
   const isMobile = useMobile();
@@ -59,8 +69,15 @@ export default function AuditLogPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
   const [groupBy, setGroupBy] = useState<"time" | "department" | "person">("time");
+  // KPI counts and the department donut are computed in the database (get_audit_log_stats /
+  // get_audit_log_department_breakdown) over the FULL table — the live table already has
+  // 1,000+ rows, more than the 500-row display fetch below, so these can never be derived
+  // correctly by counting only the rows shown on screen.
+  const [stats, setStats] = useState<AuditStats>(EMPTY_STATS);
+  const [deptBreakdown, setDeptBreakdown] = useState<{ department: string; entry_count: number }[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { loadLogs(); }, []);
+  useEffect(() => { loadLogs(); loadStats(""); }, []);
 
   async function loadLogs() {
     setLoading(true);
@@ -71,6 +88,21 @@ export default function AuditLogPage() {
       .limit(500);
     setLogs(data || []);
     setLoading(false);
+  }
+
+  async function loadStats(search: string) {
+    const [statsRes, deptRes] = await Promise.all([
+      supabase.rpc("get_audit_log_stats", { p_search: search || null }),
+      supabase.rpc("get_audit_log_department_breakdown", { p_search: search || null }),
+    ]);
+    setStats(statsRes.data?.[0] || EMPTY_STATS);
+    setDeptBreakdown(deptRes.data || []);
+  }
+
+  function handleFilterChange(v: string) {
+    setFilter(v);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => loadStats(v), 300);
   }
 
   const filtered = filter
@@ -84,33 +116,25 @@ export default function AuditLogPage() {
       )
     : logs;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayLogs = filtered.filter((l) => l.created_at.slice(0, 10) === todayStr);
-  const created = filtered.filter((l) => l.action === "Created").length;
-  const updated = filtered.filter((l) => l.action.startsWith("Updated")).length;
-  const deleted = filtered.filter((l) => l.action === "Deleted").length;
-
-  // Action donut
+  // Action donut — driven by the DB-computed stats, not the capped 500-row fetch above.
   const actionDonut = [
-    { name: "Created", value: created, color: COLOURS.GREEN },
-    { name: "Updated", value: updated, color: COLOURS.AMBER },
-    { name: "Deleted", value: deleted, color: COLOURS.RED },
+    { name: "Created", value: stats.created_count, color: COLOURS.GREEN },
+    { name: "Updated", value: stats.updated_count, color: COLOURS.AMBER },
+    { name: "Deleted", value: stats.deleted_count, color: COLOURS.RED },
   ].filter((d) => d.value > 0);
 
-  // Department donut
-  const deptMap = new Map<string, number>();
-  for (const l of filtered) {
-    const d = getDept(l.table_name);
-    deptMap.set(d, (deptMap.get(d) || 0) + 1);
-  }
+  // Department donut — driven by get_audit_log_department_breakdown (full table), not the
+  // capped 500-row fetch above.
   const deptColors: Record<string, string> = {
     Tasks: COLOURS.AMBER, Members: COLOURS.BLUE, Audit: COLOURS.PURPLE, Taxation: COLOURS.RED,
     HR: COLOURS.TEAL, Meetings: COLOURS.NAVY, Finance: COLOURS.GREEN, Production: COLOURS.GREEN,
     Dispatch: COLOURS.TEAL, Breakage: COLOURS.RED, Machines: COLOURS.RED,
   };
-  const deptDonut = Array.from(deptMap.entries())
-    .map(([name, value]) => ({ name, value, color: deptColors[name] || COLOURS.SLATE }))
-    .sort((a, b) => b.value - a.value);
+  const deptDonut = deptBreakdown.map((d) => ({
+    name: d.department,
+    value: d.entry_count,
+    color: deptColors[d.department] || COLOURS.SLATE,
+  }));
 
   // Group by department
   const deptGroups = new Map<string, LogEntry[]>();
@@ -166,16 +190,16 @@ export default function AuditLogPage() {
           {/* KPI Row */}
           {!loading && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-              <CountCard label="Today" value={todayLogs.length} color={COLOURS.BLUE} />
-              <CountCard label="Created" value={created} color={COLOURS.GREEN} />
-              <CountCard label="Updated" value={updated} color={COLOURS.AMBER} />
-              <CountCard label="Deleted" value={deleted} color={COLOURS.RED} />
-              <CountCard label="Total" value={filtered.length} color={COLOURS.NAVY} />
+              <CountCard label="Today" value={stats.today_count} color={COLOURS.BLUE} />
+              <CountCard label="Created" value={stats.created_count} color={COLOURS.GREEN} />
+              <CountCard label="Updated" value={stats.updated_count} color={COLOURS.AMBER} />
+              <CountCard label="Deleted" value={stats.deleted_count} color={COLOURS.RED} />
+              <CountCard label="Total" value={stats.total_count} color={COLOURS.NAVY} />
             </div>
           )}
 
           {/* Charts row */}
-          {!loading && filtered.length > 0 && (
+          {!loading && stats.total_count > 0 && (
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
               {actionDonut.length > 0 && (
                 <div style={{ border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "8px", padding: "14px", backgroundColor: "var(--bg-card, #ffffff)" }}>
@@ -222,7 +246,7 @@ export default function AuditLogPage() {
 
           {/* Search + Group toggle */}
           <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center", position: "sticky", top: 0, zIndex: 10, backgroundColor: "var(--bg-page, #f8fafc)", paddingTop: "4px", paddingBottom: "4px" }}>
-            <input type="text" placeholder="Search..." value={filter} onChange={(e) => setFilter(e.target.value)}
+            <input type="text" placeholder="Search..." value={filter} onChange={(e) => handleFilterChange(e.target.value)}
               style={{ flex: "1 1 200px", maxWidth: "300px", padding: "7px 12px", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "6px", fontSize: "16px", boxSizing: "border-box" }} />
             <div style={{ display: "flex", gap: "3px" }}>
               {(["time", "department", "person"] as const).map((g) => (
