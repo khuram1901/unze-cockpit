@@ -329,14 +329,15 @@ export function canEditInvestments(u: UserCtx) {
 
 // Narrower than canEditInvestments — view + trigger a live price pull
 // only, NOT add/edit/delete holdings or manual price overrides. Khuram
-// (12 Jul 2026): "I want her to have viewing access and the ability to
-// refresh the rates... eventually we will remove the access later" —
-// deliberately scoped to just this, toggleable off any time via the
-// Access Matrix (Finance > Inv Refresh) without a code change.
+// granted this to PA verbally on 12 Jul 2026, then during the full-app
+// audit on 15 Jul 2026 decided to pull refresh back to admin-tier-only
+// while PA keeps view access (see canViewInvestments). Still toggleable
+// per-member via the Access Matrix (Finance > Inv Refresh) without a
+// code change, in case it's needed again for a specific person.
 export function canRefreshInvestmentPrices(u: UserCtx) {
   const o = ov(u, "can_refresh_investment_prices");
   if (o !== null) return o;
-  return isCEO(u) || isMainAdmin(u) || isPA(u);
+  return isCEO(u) || isMainAdmin(u);
 }
 
 // ── Operations targets editing ───────────────────────────────────

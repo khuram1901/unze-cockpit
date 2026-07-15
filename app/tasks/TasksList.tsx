@@ -797,7 +797,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           </div>
         </div>
 
-        <MiniSubtaskToggle task={task} onChanged={refreshAll} />
+        <MiniSubtaskToggle task={task} onChanged={refreshAll} myEmail={myEmail} currentRole={currentRole} />
       </div>
     );
   }

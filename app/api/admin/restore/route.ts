@@ -8,8 +8,7 @@ const BACKUPS_BUCKET = "backups";
 const ADMIN_EMAIL = "khuram1901@gmail.com";
 
 // Tables without a single "id" primary key need their natural/composite key
-// for upsert conflict resolution. Mirrors the SPECIAL_DELETES map in
-// /api/admin/wipe-data — keep both in sync if table schemas change.
+// for upsert conflict resolution.
 const CONFLICT_COLUMNS: Record<string, string> = {
   meeting_tasks: "meeting_id,task_id",
 };
@@ -23,8 +22,16 @@ type RestoreBody = {
 // Restores tables from a backup snapshot via upsert-by-id, so existing rows
 // are overwritten with the backup's version and rows that no longer exist
 // in the backup are left alone (never auto-deletes — a restore should never
-// be more destructive than necessary). Run /api/admin/wipe-data first if a
-// true clean-slate restore is needed.
+// be more destructive than necessary).
+//
+// Note: the /api/admin/wipe-data route this comment used to mention was
+// removed during the 15 Jul 2026 full-app audit — it was a pre-launch
+// reset tool, live in production, protected only by the same CRON_SECRET
+// used by ~15 unrelated routine cron jobs. Khuram decided it's no longer
+// needed now the app is live and asked for it to be deleted outright
+// rather than hardened. If a true clean-slate restore is ever needed
+// again, that would need a new, more carefully scoped tool built at
+// the time — not a shared-secret table wipe sitting live year-round.
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const isCronAuth = !!process.env.CRON_SECRET && authHeader === `Bearer ${process.env.CRON_SECRET}`;

@@ -157,7 +157,7 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_edit_operations_targets": return admin || exec || lc(m.email) === OPS_HOD_EMAIL;
     case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com" || exec;
     case "can_edit_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
-    case "can_refresh_investment_prices": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com" || exec;
+    case "can_refresh_investment_prices": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
     case "can_view_folderit_hr": return admin;
     default: return false;
   }

@@ -272,8 +272,7 @@ api/
 │   ├── cron-health/route.ts          GET — checks health of 6 integrations (Gmail, Calendar, etc.)
 │   ├── list-backups/route.ts         GET — lists backup files in Supabase Storage
 │   ├── list-documents/route.ts       GET — lists source documents archive
-│   ├── restore/route.ts              POST — restores a backup
-│   └── wipe-data/route.ts            POST — wipes selected table data (admin only)
+│   └── restore/route.ts              POST — restores a backup
 ├── auth/
 │   ├── change-password/route.ts      POST — change own password
 │   ├── reset-password/route.ts       POST — request password reset email

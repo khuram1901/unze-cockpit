@@ -4,6 +4,19 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-15 — Task detail modal redesigned (two-column layout)
+
+Khuram, after a screenshot of a Completed task: "we now need to design the task window. this is messier can you re design this and show me first before coding it." Showed a mockup first (per the established pattern), got "much better," then implemented it exactly:
+
+- **Bug fix first:** marking a task Completed now auto-closes the modal after the "Saved ✓" flash, instead of leaving it open on a now-locked, greyed-out task (`TaskStatus.tsx`'s `saveStatus()` calls the new `onClose` prop, threaded down through `TaskDetailPanel.tsx` from `TaskDetailModal.tsx`).
+- **TaskDetailModal.tsx:** the long dot-separated meta sentence (type, assigned by, issue date, project, meeting link) moved out of the panel body and into a compact line under the title in the header, where it reads as context rather than clutter. Modal widened from 620px to 820px to fit the new two-column body.
+- **TaskDetailPanel.tsx:** rebuilt as a two-column grid. Left column: description/priority/department/company editor (unchanged fields), Owner(s) — now collapsed to avatar-initial chips with a "PRIMARY" tag on the first person and an "Edit →" toggle that expands the full checkbox picker on demand instead of always showing it, and Comments (moved up from the bottom). Right column: TaskStatus, then the WhatsApp/Delete actions underneath it. Locked/protected banners and the Explanation success banner stay full-width above the grid.
+- **TaskStatus.tsx:** the previously flat, unbroken stack of sections is now three visually distinct cards — "Status" (status control, Mark Complete/Reopen buttons, Stage, due-date editor with history), "Subtasks" (progress bar, checklist, add-subtask), and "Time & notes" (time tracking, notes log, add-note, reassign, and the Waiting-Reply explanation form). No business logic changed — same permissions, same locking, same routing — purely visual grouping.
+
+`tsc --noEmit` clean; `eslint` shows only pre-existing findings (`set-state-in-effect` on `loadSubtasks`, `exhaustive-deps` on `loadComments`/`loadSubtasks`) already flagged in earlier sessions, nothing new.
+
+---
+
 ## 2026-07-15 — Submitted-task routing fixed everywhere; Completed tasks locked
 
 Two related fixes, both about a task's lifecycle after Submitted:

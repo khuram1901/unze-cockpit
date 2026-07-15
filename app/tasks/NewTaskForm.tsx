@@ -45,13 +45,18 @@ const PROJECT_AREAS = [
   "BINC",
 ];
 
+// "Completed" is deliberately NOT offered as a starting status — found
+// during the 15 Jul 2026 full-app audit that offering it here let anyone
+// hand themselves a pre-closed task, skipping HOD review entirely (the
+// only door to Completed is meant to be Submitted -> HOD "Mark Complete").
+// createTaskCore() also rejects it server-side now, so this isn't just a
+// UI-level restriction.
 const STATUSES = [
   "Not Started",
   "In Progress",
   "Waiting Reply",
   "Stuck",
   "Submitted",
-  "Completed",
   "Cancelled",
 ];
 

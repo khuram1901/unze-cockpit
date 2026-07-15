@@ -72,6 +72,14 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
   if (!input.assignedTo) {
     return { ok: false, error: "An assignee is required." };
   }
+  // A task can only reach Completed by going through Submitted -> HOD
+  // "Mark Complete" (see supabase/114/115/117). That gate only runs on
+  // UPDATE, so without this check anyone creating a task could just hand
+  // themselves a pre-closed one at INSERT time and skip HOD review
+  // entirely — found during the 15 Jul 2026 full-app audit.
+  if (input.status === "Completed") {
+    return { ok: false, error: "A task can't be created already Completed — it must go through Submitted and HOD sign-off first." };
+  }
 
   const supabase = createServiceClient();
 

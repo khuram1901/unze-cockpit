@@ -237,7 +237,7 @@ export default function TasksBoard({
                       </div>
                       {totalCount > 0 && (
                         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: "none", borderRadius: "0 0 10px 10px" }}>
-                          <MiniSubtaskToggle task={t} onChanged={onChanged} />
+                          <MiniSubtaskToggle task={t} onChanged={onChanged} myEmail={myEmail} currentRole={currentRole} />
                         </div>
                       )}
                     </div>
