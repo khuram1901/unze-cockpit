@@ -56,6 +56,7 @@ const WIDGET_GROUP_TO_PAGE: Record<string, string> = {
   "HR": "HR",
   "Tax Notices": "Tax Notices",
   "IT": "IT",
+  "Bank Facilities": "Bank Facilities",
 };
 
 function lc(s: string | null | undefined) { return (s || "").toLowerCase(); }

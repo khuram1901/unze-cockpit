@@ -64,6 +64,15 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "dept_it.kpi_charts", label: "KPI cards", page: "IT" },
   { key: "dept_it.records_table", label: "Records / Tasks table", page: "IT" },
 
+  // ── Bank Facilities (app/finance/guarantees/page.tsx) ─────────────
+  // Ops chases guarantee releases and needs to see the list, but the PKR
+  // figures (amounts, cash margin, bank charges, facility limits) are
+  // normally Finance-only — canViewGuaranteeFinancials() computes the
+  // role-based default (Admin/CEO or Finance manager), this widget lets
+  // Khuram override that default per person on top, same as everywhere
+  // else in the app.
+  { key: "guarantees.financials", label: "Financial Figures (amounts, limits, margins)", page: "Bank Facilities", tip: "Guarantee amounts, cash margin, bank charges, facility limits & utilisation — all PKR figures. Defaults to Finance managers/Admin/CEO only; toggle to grant or deny it for a specific person." },
+
   // ── Finance panel cards, one row per company (app/home/page.tsx: CompanyFinancePanel) ──
   { key: "finance.cash_in_hand", label: "Cash in Hand", page: "Finance Panels", perCompany: true },
   { key: "finance.pdc_outstanding", label: "PDC Outstanding", page: "Finance Panels", perCompany: true },

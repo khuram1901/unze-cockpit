@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import AuthWrapper from "../../lib/AuthWrapper";
 import { useRequireCapability, loadUserCtx } from "../../lib/useRouteGuard";
-import { supabase } from "../../lib/supabase";
-import { canViewGuaranteeFinancials, canManageGuarantees } from "../../lib/permissions";
+import { supabase, loadMyWidgetOverrides } from "../../lib/supabase";
+import { canViewGuaranteeFinancials, canManageGuarantees, widgetVisible } from "../../lib/permissions";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, cardStyle, useToast, useConfirm, primaryButtonStyle, inputStyle, labelStyle } from "../../lib/SharedUI";
 import { formatDateUK } from "../../lib/dateUtils";
@@ -482,8 +482,19 @@ export default function GuaranteesPage() {
     // Resolve financials permission and load data in one pass
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.email) {
-        loadUserCtx(user.email).then((ctx) => {
-          setShowFinancials(canViewGuaranteeFinancials(ctx));
+        loadUserCtx(user.email).then(async (ctx) => {
+          const roleFinancials = canViewGuaranteeFinancials(ctx);
+          // 16 Jul 2026, per Khuram: he wants to grant/deny the PKR figures
+          // to specific people regardless of their role/department (e.g. an
+          // Ops lead he trusts). canViewGuaranteeFinancials() still supplies
+          // the sensible role-based default (Finance managers/Admin/CEO);
+          // the "guarantees.financials" widget override on top of it is what
+          // makes that a per-person choice via Members → Access Control.
+          const widgetOverrides = await loadMyWidgetOverrides();
+          const financialsVisible = widgetOverrides
+            ? widgetVisible({ ...ctx, widgetOverrides }, "guarantees.financials", roleFinancials)
+            : roleFinancials;
+          setShowFinancials(financialsVisible);
           setCanManage(canManageGuarantees(ctx));
           load();
         });
@@ -853,8 +864,11 @@ export default function GuaranteesPage() {
           </div>
         )}
 
-        {/* ── Bank facility utilisation ── */}
-        {canManage && (
+        {/* ── Bank facility utilisation ── shown to anyone with financials
+            visibility, not just people who can manage — edit/delete
+            buttons inside BankFacilityCard stay gated on canManage
+            separately, so this just becomes read-only for them. */}
+        {(canManage || showFinancials) && (
           <div style={{ marginBottom: "18px" }}>
             <SectionTitle title="Bank Facility Utilisation" />
 
