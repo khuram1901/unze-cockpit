@@ -10,7 +10,7 @@ import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtil
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
-import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, widgetVisible, financeCompanies, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpiThresholds";
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
@@ -613,6 +613,7 @@ export default function HomePage() {
 
     const { data: { user } } = await supabase.auth.getUser();
     let showFinanceForUser = false;
+    let scopeForUser: "both" | "UTPL" | "IFPL" | "none" = "none";
     if (user?.email) {
       const { data: memberData } = await supabase
         .from("members")
@@ -626,6 +627,7 @@ export default function HomePage() {
         const userCtx: UserCtx = { email: user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
         showFinanceForUser = canViewFinance(userCtx);
         setShowFinance(showFinanceForUser);
+        scopeForUser = financeCompanies(userCtx);
       }
     }
 
@@ -690,9 +692,18 @@ export default function HomePage() {
     const lastYearMonth = `${nowForHist.getFullYear() - 1}-${String(nowForHist.getMonth() + 1).padStart(2, "0")}`;
 
     const allCompanyFinance: CompanyFinanceData[] = [];
-    const FINANCE_COMPANIES = COMPANIES.filter(c =>
-      c.shortCode === "UTPL" || c.shortCode === "IFPL"
-    );
+    // Scoped to whichever compan(ies) this viewer is allowed to see — see
+    // financeCompanies() in lib/permissions.ts. A "both"-scope CEO gets
+    // UTPL + IFPL; someone matrix-scoped to one company (e.g. Kamran →
+    // IFPL) only ever fetches/sees that one, so Company Comparison and the
+    // multi-company sections below naturally reduce to a single company
+    // instead of needing a separate dashboard page per person.
+    const FINANCE_COMPANIES = COMPANIES.filter(c => {
+      if (scopeForUser === "both") return c.shortCode === "UTPL" || c.shortCode === "IFPL";
+      if (scopeForUser === "UTPL") return c.shortCode === "UTPL";
+      if (scopeForUser === "IFPL") return c.shortCode === "IFPL";
+      return false;
+    });
     for (const company of FINANCE_COMPANIES) {
       const [cashOpenRes, cashPlanRes, cashPosRes, pdcRes, lyRes, forecastRes, deptBudgetRes] = await Promise.all([
         supabase.from("cash_opening_balance").select("id, as_of_date, opening_amount, currency").eq("company_id", company.id).order("as_of_date", { ascending: true }).limit(1),
@@ -2866,7 +2877,10 @@ function ExecutiveDashboardBody({
       ))}
 
       {/* ── RECEIVABLES ── */}
-      {wv("home.receivables", true) && (<>
+      {/* Receivable bills are tied to a production plant_id, which only
+          exists for Unze Trading (UTPL) — Imperial Footwear has no
+          equivalent, so this is scope-gated rather than a toggle default. */}
+      {!!ctx && (financeCompanies(ctx) === "both" || financeCompanies(ctx) === "UTPL") && wv("home.receivables", true) && (<>
       <SectionTitle title="Receivables — Bills in Progress" />
       {receivableRows.length === 0 ? (
         <p style={{ color: SLATE, fontSize: "13px" }}>No receivable bills in progress.</p>
