@@ -49,6 +49,11 @@ const WIDGET_GROUP_TO_PAGE: Record<string, string> = {
   "Executive Dashboard": "Executive Dashboard",
   "Finance Panels": "Executive Dashboard",
   "Operations Dashboard": "Operations Dashboard",
+  "Admin": "Admin",
+  "Audit": "Audit",
+  "HR": "HR",
+  "Tax Notices": "Tax Notices",
+  "IT": "IT",
 };
 
 function lc(s: string | null | undefined) { return (s || "").toLowerCase(); }

@@ -6,9 +6,10 @@ import { formatDateUK } from "../../lib/dateUtils";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useConfirm } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
-import { canReviewTasks, canCreateAssignments, canDeleteTask, isTaskProtected, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { canReviewTasks, canCreateAssignments, canDeleteTask, isTaskProtected, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import NewTaskForm from "../../tasks/NewTaskForm";
+import { useUserCtx } from "../../lib/useUserCtx";
 
 type Task = {
   id: string;
@@ -63,6 +64,8 @@ export default function AdminDashboard() {
   const [canDelete, setCanDelete] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const { ctx: widgetCtx } = useUserCtx();
+  const wv = (key: string, defaultVisible: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
 
   async function loadData() {
     setLoading(true);
@@ -159,7 +162,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Alert Banner */}
-      {!loading && overdueTasks.length > 0 && (
+      {wv("dept_admin.attention_banner", true) && !loading && overdueTasks.length > 0 && (
         <div style={WARNING_BANNER_STYLE}>
           <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -188,7 +191,7 @@ export default function AdminDashboard() {
       )}
 
       {/* KPI Cards */}
-      {!loading && (
+      {wv("dept_admin.kpi_charts", true) && !loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
           {[
             { label: "Open",        value: openTasks.length },
@@ -205,7 +208,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Two donuts side by side */}
-      {!loading && (donutData.length > 0 || companyDonutData.length > 0) && (
+      {wv("dept_admin.kpi_charts", true) && !loading && (donutData.length > 0 || companyDonutData.length > 0) && (
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
           {donutData.length > 0 && (
             <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "16px 20px", backgroundColor: COLOURS.CARD }}>
@@ -251,6 +254,8 @@ export default function AdminDashboard() {
       )}
 
       {/* Priority filter + section title */}
+      {wv("dept_admin.records_table", true) && (
+      <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", gap: "8px", flexWrap: "wrap" }}>
         <SectionTitle title="Tasks by Company" />
         <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
@@ -387,6 +392,8 @@ export default function AdminDashboard() {
             </div>
           );
         })
+      )}
+      </>
       )}
     </main>
   );

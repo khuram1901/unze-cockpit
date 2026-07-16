@@ -15,8 +15,9 @@ import {
 } from "../../lib/SharedUI";
 import { DepartmentConfig } from "../../lib/department-config";
 import { logAction } from "../../lib/audit-log";
-import { canSeeAllTasks, canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { canSeeAllTasks, canCreateAssignments, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import NewTaskForm from "../../tasks/NewTaskForm";
+import { useUserCtx } from "../../lib/useUserCtx";
 
 type UserTask = {
   id: string;
@@ -39,6 +40,8 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const { ctx: widgetCtx } = useUserCtx();
+  const wv = (key: string, defaultVisible: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
 
   async function loadData() {
     setLoading(true);
@@ -180,7 +183,7 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
       )}
 
       {/* KPI Cards */}
-      {!loading && (
+      {wv("dept_it.kpi_charts", true) && !loading && (
         <div style={{
           display: "grid",
           gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(150px, 1fr))",
@@ -267,6 +270,8 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
       )}
 
       {/* Add Record Button + Form — for the department's own primary table */}
+      {wv("dept_it.records_table", true) && (
+      <>
       {config.table !== "tasks" && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
           <SectionTitle title="Records" />
@@ -473,6 +478,8 @@ export default function DepartmentDashboard({ config }: { config: DepartmentConf
             </tbody>
           </table>
         </div>
+      )}
+      </>
       )}
     </main>
   );

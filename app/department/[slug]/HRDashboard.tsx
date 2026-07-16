@@ -8,9 +8,10 @@ import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
-import { canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { canCreateAssignments, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 import NewTaskForm from "../../tasks/NewTaskForm";
+import { useUserCtx } from "../../lib/useUserCtx";
 
 type Position = {
   id: string;
@@ -53,6 +54,8 @@ export default function HRDashboard() {
   const [message, setMessage] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
+  const { ctx: widgetCtx } = useUserCtx();
+  const wv = (key: string, defaultVisible: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
 
   const [title, setTitle] = useState("");
   const [dept, setDept] = useState("");
@@ -140,7 +143,7 @@ export default function HRDashboard() {
       )}
 
       {/* Alert Banner */}
-      {!loading && longOpen.length > 0 && (
+      {wv("dept_hr.attention_banner", true) && !loading && longOpen.length > 0 && (
         <div style={WARNING_BANNER_STYLE}>
           <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -169,7 +172,7 @@ export default function HRDashboard() {
       )}
 
       {/* KPI + Donut */}
-      {!loading && (
+      {wv("dept_hr.kpi_charts", true) && !loading && (
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px" }}>
             {[
@@ -208,6 +211,8 @@ export default function HRDashboard() {
       )}
 
       {/* Add button + form */}
+      {wv("dept_hr.records_table", true) && (
+      <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
         <SectionTitle title="Positions" />
         <button onClick={() => setShowForm(!showForm)} style={{ backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL, padding: "8px 16px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>{showForm ? "Cancel" : "+ Add"}</button>
@@ -226,6 +231,8 @@ export default function HRDashboard() {
             <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL, padding: "8px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Save"}</button>
           </form>
         </div>
+      )}
+      </>
       )}
 
       {/* Issue Task — independent of the recruitment positions above */}
@@ -247,7 +254,7 @@ export default function HRDashboard() {
       )}
 
       {/* Records */}
-      {loading ? (
+      {wv("dept_hr.records_table", true) && (loading ? (
         <p style={{ color: COLOURS.SLATE }}>Loading…</p>
       ) : items.length === 0 ? (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, color: COLOURS.SLATE }}>No positions yet.</div>
@@ -289,7 +296,7 @@ export default function HRDashboard() {
             );
           })}
         </div>
-      )}
+      ))}
     </main>
   );
 }

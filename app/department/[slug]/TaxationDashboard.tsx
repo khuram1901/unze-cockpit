@@ -12,11 +12,12 @@ import {
   useToast, useConfirm, labelStyle, inputStyle, primaryButtonStyle,
 } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
-import { canCreateAssignments, canManageTaxNotices, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { canCreateAssignments, canManageTaxNotices, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { downloadCSV } from "../../lib/exportUtils";
 import ImportExportButtons from "../../lib/ImportExportButtons";
 import NewTaskForm from "../../tasks/NewTaskForm";
+import { useUserCtx } from "../../lib/useUserCtx";
 
 type Notice = {
   id: string;
@@ -179,6 +180,8 @@ export default function TaxationDashboard() {
   const [bannerOpen, setBannerOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [formData, setFormData] = useState<Record<string, string>>({});
+  const { ctx: widgetCtx } = useUserCtx();
+  const wv = (key: string, defaultVisible: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -353,7 +356,7 @@ export default function TaxationDashboard() {
       )}
 
       {/* Alert Banner */}
-      {!loading && hearingSoon.length > 0 && (
+      {wv("dept_tax.attention_banner", true) && !loading && hearingSoon.length > 0 && (
         <div style={WARNING_BANNER_STYLE}>
           <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -385,7 +388,7 @@ export default function TaxationDashboard() {
       )}
 
       {/* KPI Row */}
-      {!loading && (
+      {wv("dept_tax.kpi_charts", true) && !loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
           <CountCard label="Pending" value={pending.length} color={COLOURS.AMBER} />
           <CountCard label="Hearing Soon" value={hearingSoon.length} color={COLOURS.RED} />
@@ -401,7 +404,7 @@ export default function TaxationDashboard() {
       )}
 
       {/* Charts */}
-      {!loading && items.length > 0 && (() => {
+      {wv("dept_tax.kpi_charts", true) && !loading && items.length > 0 && (() => {
         const companyDonut = Array.from(
           pending.reduce((map, n) => {
             const c = normaliseCompanyName(n.company_name || "Unknown");
@@ -479,6 +482,8 @@ export default function TaxationDashboard() {
       })()}
 
       {/* Notices header */}
+      {wv("dept_tax.records_table", true) && (
+      <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", gap: "8px", flexWrap: "wrap" }}>
         <SectionTitle title="Notices by Company" />
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -559,6 +564,8 @@ export default function TaxationDashboard() {
           </form>
         </div>
       )}
+      </>
+      )}
 
       {/* Issue Task */}
       {userCtx && canCreateAssignments(userCtx) && (
@@ -575,7 +582,7 @@ export default function TaxationDashboard() {
       )}
 
       {/* Active / Inactive filter tabs */}
-      {!loading && items.length > 0 && (
+      {wv("dept_tax.records_table", true) && !loading && items.length > 0 && (
         <div style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
           <button style={tabStyle(activeFilter === "all")} onClick={() => setActiveFilter("all")}>All ({items.length})</button>
           <button style={tabStyle(activeFilter === "active")} onClick={() => setActiveFilter("active")}>Active ({items.filter((i) => i.is_active).length})</button>
@@ -584,7 +591,7 @@ export default function TaxationDashboard() {
       )}
 
       {/* Notices grouped by company */}
-      {loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : filteredItems.length === 0 ? (
+      {wv("dept_tax.records_table", true) && (loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : filteredItems.length === 0 ? (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, color: COLOURS.SLATE }}>
           {activeFilter === "all" ? "No notices yet." : `No ${activeFilter} notices.`}
         </div>
@@ -761,7 +768,7 @@ export default function TaxationDashboard() {
             })}
           </>
         );
-      })()}
+      })())}
     </main>
   );
 }

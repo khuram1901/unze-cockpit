@@ -8,11 +8,12 @@ import DateInput from "../../lib/DateInput";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
-import { canCreateAssignments, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { canCreateAssignments, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { downloadCSV } from "../../lib/exportUtils";
 import ImportExportButtons from "../../lib/ImportExportButtons";
 import NewTaskForm from "../../tasks/NewTaskForm";
+import { useUserCtx } from "../../lib/useUserCtx";
 
 const AUDIT_STAGES: { label: string; pct: number }[] = [
   { label: "Audit Planning", pct: 0 },
@@ -120,6 +121,8 @@ export default function AuditDashboard() {
   const [bannerOpen, setBannerOpen] = useState(false);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { ctx: widgetCtx } = useUserCtx();
+  const wv = (key: string, defaultVisible: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
 
   // Add form state
   const [auditArea, setAuditArea] = useState("");
@@ -371,7 +374,7 @@ export default function AuditDashboard() {
       )}
 
       {/* ═══ ZONE 1: ALERT BANNER ═══ */}
-      {!loading && overdue > 0 && (
+      {wv("dept_audit.attention_banner", true) && !loading && overdue > 0 && (
         <div style={WARNING_BANNER_STYLE}>
           <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -400,7 +403,7 @@ export default function AuditDashboard() {
       )}
 
       {/* ═══ ZONE 2: KPI CARDS (always all items) ═══ */}
-      {!loading && (
+      {wv("dept_audit.kpi_charts", true) && !loading && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
           <CountCard label="Planned" value={planned} color={COLOURS.BLUE} />
           <CountCard label="In Progress" value={inProgress} color={COLOURS.AMBER} />
@@ -411,7 +414,7 @@ export default function AuditDashboard() {
       )}
 
       {/* ═══ ZONE 3: THREE CHART PANELS (filtered) ═══ */}
-      {!loading && filteredActive.length > 0 && (
+      {wv("dept_audit.kpi_charts", true) && !loading && filteredActive.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
           {/* Stage Pipeline */}
           <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD }}>
@@ -472,6 +475,8 @@ export default function AuditDashboard() {
       )}
 
       {/* ═══ ZONE 4: RECORDS ═══ */}
+      {wv("dept_audit.records_table", true) && (
+      <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
         <SectionTitle title="Audit Records" />
         <ImportExportButtons
@@ -630,6 +635,8 @@ export default function AuditDashboard() {
             </div>
           );
         })
+      )}
+      </>
       )}
     </main>
   );

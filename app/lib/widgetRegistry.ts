@@ -44,6 +44,26 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "dashboard.kpis_table", label: "KPIs (tabbed detail)", page: "Operations Dashboard", tip: "Production/Dispatch/Breakage/Tasks tab switcher and table" },
   { key: "dashboard.monthly_targets", label: "Monthly Targets", page: "Operations Dashboard" },
 
+  // ── Department dashboards (app/department/[slug]/*.tsx) ──────────
+  { key: "dept_admin.attention_banner", label: "Alert banner", page: "Admin", tip: "Overdue/urgent items dropdown at the top" },
+  { key: "dept_admin.kpi_charts", label: "KPI cards + charts", page: "Admin" },
+  { key: "dept_admin.records_table", label: "Tasks by Company (table)", page: "Admin" },
+
+  { key: "dept_audit.attention_banner", label: "Alert banner", page: "Audit", tip: "Overdue/urgent items dropdown at the top" },
+  { key: "dept_audit.kpi_charts", label: "KPI cards + charts", page: "Audit" },
+  { key: "dept_audit.records_table", label: "Audit Records (table)", page: "Audit" },
+
+  { key: "dept_hr.attention_banner", label: "Alert banner", page: "HR", tip: "Overdue/urgent items dropdown at the top" },
+  { key: "dept_hr.kpi_charts", label: "KPI cards + chart", page: "HR" },
+  { key: "dept_hr.records_table", label: "Positions (table)", page: "HR" },
+
+  { key: "dept_tax.attention_banner", label: "Alert banner", page: "Tax Notices", tip: "Overdue/urgent items dropdown at the top" },
+  { key: "dept_tax.kpi_charts", label: "KPI cards + charts", page: "Tax Notices" },
+  { key: "dept_tax.records_table", label: "Notices by Company (table)", page: "Tax Notices" },
+
+  { key: "dept_it.kpi_charts", label: "KPI cards", page: "IT" },
+  { key: "dept_it.records_table", label: "Records / Tasks table", page: "IT" },
+
   // ── Finance panel cards, one row per company (app/home/page.tsx: CompanyFinancePanel) ──
   { key: "finance.cash_in_hand", label: "Cash in Hand", page: "Finance Panels", perCompany: true },
   { key: "finance.pdc_outstanding", label: "PDC Outstanding", page: "Finance Panels", perCompany: true },
