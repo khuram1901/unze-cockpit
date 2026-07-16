@@ -9,7 +9,8 @@ import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, SectionTitle, CountCard, SkeletonRows, inputStyle, labelStyle } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
-import { canEditReceivables, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canEditReceivables, isAdminTier, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { useUserCtx } from "../lib/useUserCtx";
 
 type Stage = { id: string; stage_order: number; stage_name: string; working_day_budget: number };
 type Receivable = {
@@ -116,6 +117,8 @@ export default function ReceivablesPage() {
   const [message, setMessage] = useState("");
   const [showCollected, setShowCollected] = useState(false);
   const [dragBillId, setDragBillId] = useState<string | null>(null);
+  const { ctx: widgetCtx } = useUserCtx();
+  const wv = (key: string, defaultVisible: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
 
   const [editBillId, setEditBillId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ utility: "", amount: "", date_submitted: "", invoice_ref: "", ic_ref: "", grn_ref: "", notes: "", bill_type: "Normal" });
@@ -497,7 +500,7 @@ export default function ReceivablesPage() {
         )}
 
         {/* KPI cards */}
-        {!loading && (
+        {wv("receivables.kpi_cards", true) && !loading && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
             {[
               { label: "Total Bills", value: bills.length },
@@ -514,7 +517,7 @@ export default function ReceivablesPage() {
         )}
 
         {/* KANBAN STAGE BOARD */}
-        {loading ? (
+        {wv("receivables.stage_board", true) && (loading ? (
           <SkeletonRows count={4} height="60px" />
         ) : (
           <>
@@ -710,10 +713,10 @@ export default function ReceivablesPage() {
               </div>
             </div>
           </>
-        )}
+        ))}
 
         {/* Collected Bills by Plant */}
-        {!loading && collectedBills.length > 0 && (
+        {wv("receivables.collected_by_plant", true) && !loading && collectedBills.length > 0 && (
           <div style={{ ...cardStyle, padding: "14px", marginBottom: "14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showCollected ? "10px" : "0" }}>
               <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
@@ -745,7 +748,7 @@ export default function ReceivablesPage() {
         )}
 
         {/* Pipeline Stage Summary Bar */}
-        {!loading && stages.length > 0 && bills.length > 0 && (
+        {wv("receivables.pipeline_summary", true) && !loading && stages.length > 0 && bills.length > 0 && (
           <div style={{ ...cardStyle, padding: "12px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px", color: COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Pipeline Stages</div>
             <div style={{ display: "flex", borderRadius: RADII.PILL, overflow: "hidden", height: "24px", backgroundColor: COLOURS.HAIRLINE }}>
@@ -784,7 +787,7 @@ export default function ReceivablesPage() {
         )}
 
         {/* Collection Velocity */}
-        {!loading && stages.length > 0 && bills.length > 0 && (
+        {wv("receivables.collection_velocity", true) && !loading && stages.length > 0 && bills.length > 0 && (
           <div style={{ ...cardStyle, padding: "12px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "10px", color: COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Collection Velocity (avg days in stage)</div>
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${stages.length}, 1fr)`, gap: "6px" }}>
@@ -809,7 +812,7 @@ export default function ReceivablesPage() {
         )}
 
         {/* Bills in Progress — Customer Summary */}
-        {!loading && customerRows.length > 0 && (
+        {wv("receivables.customer_summary", true) && !loading && customerRows.length > 0 && (
           <div style={{ ...cardStyle, padding: "14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "10px", color: COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
               Bills in Progress: <span style={{ color: recRed > 0 ? COLOURS.RED : COLOURS.GREEN }}>{recRed > 0 ? `${recRedCount} BILL(S) STUCK` : "ALL ON TRACK"}</span>
@@ -856,7 +859,7 @@ export default function ReceivablesPage() {
         )}
 
         {/* Bill Aging Report */}
-        {!loading && bills.length > 0 && (
+        {wv("receivables.aging_report", true) && !loading && bills.length > 0 && (
           <div style={{ ...cardStyle, padding: "14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "10px", color: COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Bill Aging Report</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px" }}>

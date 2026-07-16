@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, authFetch, loadMyPermissions } from "../lib/supabase";
 import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, useToast } from "../lib/SharedUI";
-import { canManageTaxSchedule, isPA, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canManageTaxSchedule, isPA, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
 import TaxComplianceSummary from "./TaxComplianceSummary";
 import { useMobile } from "../lib/useMobile";
 import { formatDateUK } from "../lib/dateUtils";
+import { useUserCtx } from "../lib/useUserCtx";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -163,6 +164,8 @@ export default function AccountsTaxDashboard() {
   const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { ctx: widgetCtx } = useUserCtx();
+  const wv = (key: string, defaultVisible: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
 
   const [selectedYear, setSelectedYear] = useState(getCurrentTaxYear);
   const [availableYears, setAvailableYears] = useState<string[]>([getCurrentTaxYear()]);
@@ -656,7 +659,7 @@ export default function AccountsTaxDashboard() {
       </div>
 
       {/* ── Tax Compliance Summary ── */}
-      {!loading && (
+      {wv("accounts_tax.compliance_summary", true) && !loading && (
         <TaxComplianceSummary
           scheduleEntries={scheduleEntries}
           returnFilings={returnFilings}
@@ -672,6 +675,7 @@ export default function AccountsTaxDashboard() {
           {/* ══════════════════════════════════════════════════════
               AREA 1 — ACCOUNTS SCHEDULE
           ══════════════════════════════════════════════════════ */}
+          {wv("accounts_tax.schedule", true) && (
           <div style={{ marginBottom: "8px" }}>
             <SectionTitle title="Accounts Schedule" style={{ margin: "0 0 12px" }} />
 
@@ -940,10 +944,12 @@ export default function AccountsTaxDashboard() {
               );
             })()}
           </div>
+          )}
 
           {/* ══════════════════════════════════════════════════════
               AREA 2 — RETURN FILINGS
           ══════════════════════════════════════════════════════ */}
+          {wv("accounts_tax.filings", true) && (
           <div>
             <SectionTitle title="Return Filings" style={{ margin: "0 0 4px" }} />
             <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px" }}>Monthly and quarterly tax return filing status — due 15th of each period</div>
@@ -1147,6 +1153,7 @@ export default function AccountsTaxDashboard() {
               );
             })()}
           </div>
+          )}
         </>
       )}
     </main>

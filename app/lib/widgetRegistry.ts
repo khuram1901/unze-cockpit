@@ -64,6 +64,20 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "dept_it.kpi_charts", label: "KPI cards", page: "IT" },
   { key: "dept_it.records_table", label: "Records / Tasks table", page: "IT" },
 
+  // ── Receivables (app/receivables/page.tsx) ────────────────────────
+  { key: "receivables.kpi_cards", label: "KPI cards", page: "Receivables", tip: "Total Bills / Outstanding / Stuck / Collected" },
+  { key: "receivables.stage_board", label: "Stage Board (kanban)", page: "Receivables" },
+  { key: "receivables.collected_by_plant", label: "Collected Bills by Plant", page: "Receivables" },
+  { key: "receivables.pipeline_summary", label: "Pipeline Stages (bar)", page: "Receivables" },
+  { key: "receivables.collection_velocity", label: "Collection Velocity", page: "Receivables", tip: "Average days spent in each stage" },
+  { key: "receivables.customer_summary", label: "Bills in Progress — by Customer", page: "Receivables" },
+  { key: "receivables.aging_report", label: "Bill Aging Report", page: "Receivables" },
+
+  // ── Accounts & Returns (app/accounts-tax/AccountsTaxDashboard.tsx) ─
+  { key: "accounts_tax.compliance_summary", label: "Tax Compliance Summary", page: "Accounts & Returns" },
+  { key: "accounts_tax.schedule", label: "Accounts Schedule", page: "Accounts & Returns", tip: "Quarterly accounts schedule, KPI cards and status table" },
+  { key: "accounts_tax.filings", label: "Return Filings", page: "Accounts & Returns", tip: "Monthly/quarterly tax return filing status" },
+
   // ── Bank Facilities (app/finance/guarantees/page.tsx) ─────────────
   // Ops chases guarantee releases and needs to see the list, but the PKR
   // figures (amounts, cash margin, bank charges, facility limits) are
