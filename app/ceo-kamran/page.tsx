@@ -10,7 +10,7 @@ import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtil
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
-import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, isSecondaryCEO, isMainAdmin, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, isSecondaryCEO, isMainAdmin, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpiThresholds";
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
@@ -2240,6 +2240,10 @@ function ExecutiveDashboardBody({
   quickMachineResolve: (issueId: string) => Promise<void>;
 }) {
   const userName = ctx?.email ? ctx.email.split("@")[0] : "";
+  // Widget-level visibility (see app/lib/widgetRegistry.ts) — shares the
+  // same widget keys as the Executive Dashboard (app/home/page.tsx) so one
+  // toggle in the Access Matrix controls the equivalent chart on both pages.
+  const wv = (key: string, defaultVisible: boolean) => !!ctx && widgetVisible(ctx, key, defaultVisible);
   const today = todayStr;
   const minDate = getThirtyDaysAgo();
   const selectedMonth = getMonthFromDate(selectedDate);
@@ -2571,7 +2575,7 @@ function ExecutiveDashboardBody({
 
       {/* ── CHARTS ROW (exactly 2 items so the grid never wraps to a half-empty row) ── */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-        {dailyOpsData.length > 1 && (
+        {dailyOpsData.length > 1 && wv("home.production_trend_chart", true) && (
           <div style={{ ...execCard(NAVY), padding: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Daily Production Trend — This Month</div>
             <ResponsiveContainer width="100%" height={220}>
@@ -2593,7 +2597,7 @@ function ExecutiveDashboardBody({
           </div>
         )}
 
-        {(() => {
+        {wv("home.receipts_payments_chart", true) && (() => {
           const monthMap = new Map<string, { month: string; receipts: number; payments: number }>();
           for (const cfd of companyFinance) {
             for (const p of cfd.cashPositions) {
@@ -2653,7 +2657,7 @@ function ExecutiveDashboardBody({
       </div>
 
       {/* ── CASH FLOW WATERFALL (full-width, separate row so the 2-col charts grid above never wraps) ── */}
-      {(() => {
+      {wv("home.cash_flow_waterfall", true) && (() => {
         const waterfallData: { company: string; opening: number; receipts: number; payments: number; postDated: number; closing: number }[] = [];
         for (const cfd of companyFinance) {
           const latest = cfd.cashPositions[0];
@@ -2750,7 +2754,7 @@ function ExecutiveDashboardBody({
           </div>
         );
       })()}
-      {showFinance && companyFinance.map((cfd) => (
+      {showFinance && wv("home.finance_by_company", true) && companyFinance.map((cfd) => (
         <CompanyFinancePanel key={cfd.companyId} data={cfd} />
       ))}
 
@@ -2853,7 +2857,7 @@ function ExecutiveDashboardBody({
       {/* Receivables, Folder-it, Department Scorecard removed from Kamran's dashboard */}
 
       {/* ── BANK FACILITIES ── */}
-      {showFinance && facilitySynopsis.length > 0 && (
+      {showFinance && facilitySynopsis.length > 0 && wv("home.bank_facilities", true) && (
         <>
           <SectionTitle title="Bank Facilities" />
           <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", overflow: "hidden", marginBottom: "12px", backgroundColor: COLOURS.CARD }}>
@@ -2904,7 +2908,7 @@ function ExecutiveDashboardBody({
       )}
 
       {/* ── TAX COMPLIANCE SUMMARY ── */}
-      {taxSummaryYear !== "" && (
+      {taxSummaryYear !== "" && wv("home.tax_compliance", true) && (
         <>
           <SectionTitle title="Tax Compliance" />
           <TaxComplianceSummary
