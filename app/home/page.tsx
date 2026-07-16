@@ -10,7 +10,7 @@ import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtil
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
-import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpiThresholds";
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
@@ -408,7 +408,7 @@ export default function HomePage() {
   const isMobile = useMobile();
   const { ctx, loading: ctxLoading } = useUserCtx();
   const [loading, setLoading] = useState(true);
-  const isExec = !!ctx && isAdminTier(ctx);
+  const isExec = !!ctx && canViewExecutiveDashboard(ctx);
 
   useEffect(() => {
     if (!ctxLoading && ctx && isPA(ctx)) {
