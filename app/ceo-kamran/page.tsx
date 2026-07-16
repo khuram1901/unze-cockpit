@@ -14,7 +14,7 @@ import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, 
 import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpiThresholds";
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
-import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ComposedChart, ReferenceLine, LabelList } from "recharts";
 import DateInput from "../lib/DateInput";
 import TaxComplianceSummary from "../accounts-tax/TaxComplianceSummary";
 
@@ -2922,121 +2922,6 @@ function ExecutiveDashboardBody({
       )}
 
       {/* Investments and UK Pension removed — not shown on Kamran's dashboard */}
-      {false && investmentData && (
-        <>
-          <SectionTitle title="Investments — PSX Portfolio" />
-          <a href="/investments" style={{ textDecoration: "none", display: "block" }}>
-            <div style={{
-              ...execCard(investmentData.gainLoss >= 0 ? GREEN : RED),
-              marginBottom: "12px",
-              cursor: "pointer",
-            }}
-            >
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: "16px", marginBottom: investmentData.losers.length > 0 ? "16px" : "0" }}>
-                <div>
-                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Invested</div>
-                  <div style={{ fontSize: "28px", fontWeight: 600, color: NAVY, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Rs {fmtMoney(investmentData.totalCost)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Current Value</div>
-                  <div style={{ fontSize: "28px", fontWeight: 600, color: BLUE, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>Rs {fmtMoney(investmentData.totalValue)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Gain / Loss</div>
-                  <div style={{ fontSize: "28px", fontWeight: 600, color: investmentData.gainLoss >= 0 ? GREEN : RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
-                    {investmentData.gainLoss >= 0 ? "+" : ""}Rs {fmtMoney(Math.abs(investmentData.gainLoss))}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "10.5px", color: SLATE, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Return</div>
-                  <div style={{ fontSize: "28px", fontWeight: 600, color: investmentData.gainLossPct >= 0 ? GREEN : RED, lineHeight: 1, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", fontFamily: "var(--font-display, 'Inter Tight', sans-serif)" }}>
-                    {investmentData.gainLossPct >= 0 ? "+" : ""}{investmentData.gainLossPct.toFixed(2)}%
-                  </div>
-                </div>
-              </div>
-              {investmentData.losers.length > 0 && (
-                <div style={{ borderTop: `1px solid ${DANGER_SOFT}`, paddingTop: "8px", fontSize: "13px", color: RED }}>
-                  <span style={{ fontWeight: 700 }}>{investmentData.losers.length} stock{investmentData.losers.length > 1 ? "s" : ""} down &gt;5%:</span>{" "}
-                  {investmentData.losers.map((l, i) => (
-                    <span key={l.ticker}>{i > 0 ? ", " : ""}{l.ticker} ({l.pct.toFixed(1)}%)</span>
-                  ))}
-                </div>
-              )}
-              <div style={{ fontSize: "13px", color: SLATE, marginTop: "6px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                {investmentData.priceDate && (
-                  <span>{investmentData.stockCount} stocks · Prices as of {formatDateUK(investmentData.priceDate)} · Click to view portfolio →</span>
-                )}
-                {investmentData.dividendCount > 0 && (
-                  <span style={{
-                    fontSize: "12px", fontWeight: 700,
-                    backgroundColor: COLOURS.AMBER, color: "white",
-                    padding: "2px 9px", borderRadius: "10px",
-                  }}>
-                    {investmentData.dividendCount} dividend{investmentData.dividendCount > 1 ? "s" : ""} due this week
-                  </span>
-                )}
-              </div>
-            </div>
-          </a>
-        </>
-      )}
-
-      {/* UK Pension removed — not shown on Kamran's dashboard */}
-      {false && pensionSummary && (
-        <div
-          onClick={() => { window.location.href = "/investments"; }}
-          style={{
-            backgroundColor: COLOURS.CARD,
-            border: `1px solid ${HAIRLINE}`,
-            borderTop: `3px solid ${NAVY}`,
-            borderRadius: RADII.CARD,
-            padding: "14px 18px",
-            cursor: "pointer",
-            marginBottom: "12px",
-          }}
-        >
-          <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "6px" }}>
-            UK Pension — Aviva
-          </div>
-          <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "28px", fontWeight: 600, color: NAVY, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", lineHeight: 1, marginBottom: "4px" }}>
-            £{pensionSummary.gbp.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-          </div>
-          <div style={{ fontSize: "12px", color: SLATE, marginBottom: "12px" }}>
-            PKR {Math.round(pensionSummary.pkr).toLocaleString("en-PK")} · 2 Aviva funds
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "10px" }}>
-            {/* Row 1: Net gain */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "11px", color: SLATE }}>Net gain</div>
-              <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", color: pensionSummary.netGain >= 0 ? COLOURS.GREEN : COLOURS.RED }}>
-                {pensionSummary.netGain >= 0 ? "+" : ""}£{Math.abs(pensionSummary.netGain).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </div>
-            </div>
-            {/* Row 2: Total return */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "11px", color: SLATE }}>Total return</div>
-              <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", color: pensionSummary.totalReturn >= 0 ? COLOURS.GREEN : COLOURS.RED }}>
-                {pensionSummary.totalReturn >= 0 ? "+" : ""}{pensionSummary.totalReturn.toLocaleString("en-GB", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
-              </div>
-            </div>
-            {/* Row 3: Contributed */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "11px", color: SLATE }}>Contributed</div>
-              <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", color: COLOURS.NAVY }}>
-                £{pensionSummary.contributed.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </div>
-            </div>
-            {/* Row 4: Fees paid */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: "11px", color: SLATE }}>Fees paid</div>
-              <div style={{ fontSize: "13px", fontWeight: 600, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", color: COLOURS.RED }}>
-                £{pensionSummary.feesPaid.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Folder-it and Department Scorecard removed from Kamran's dashboard */}
     </>
