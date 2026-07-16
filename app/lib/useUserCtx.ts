@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase, loadMyPermissions } from "./supabase";
-import type { UserCtx, PermOverrides } from "./permissions";
+import { supabase, loadMyPermissions, loadMyWidgetOverrides } from "./supabase";
+import type { UserCtx, PermOverrides, WidgetOverrides } from "./permissions";
 
 export function useUserCtx(): { ctx: UserCtx | null; loading: boolean } {
   const [ctx, setCtx] = useState<UserCtx | null>(null);
@@ -19,6 +19,9 @@ export function useUserCtx(): { ctx: UserCtx | null; loading: boolean } {
       let overrides: PermOverrides | null = null;
       const permData = await loadMyPermissions();
       if (permData) overrides = permData as PermOverrides;
+      let widgetOverrides: WidgetOverrides | null = null;
+      const widgetData = await loadMyWidgetOverrides();
+      if (widgetData) widgetOverrides = widgetData;
       if (!active) return;
       setCtx({
         email: user.email,
@@ -26,6 +29,7 @@ export function useUserCtx(): { ctx: UserCtx | null; loading: boolean } {
         department: m?.department ?? null,
         company: m?.company ?? null,
         overrides,
+        widgetOverrides,
       });
       setLoading(false);
     }

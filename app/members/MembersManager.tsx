@@ -8,6 +8,7 @@ import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, Secti
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import AccessMatrix from "./AccessMatrix";
+import WidgetVisibilityPanel from "./WidgetVisibilityPanel";
 import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, isMainAdmin, canAddMembers, canImportExport, PROTECTED_EMAILS, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Member = {
@@ -1045,7 +1046,10 @@ export default function MembersManager() {
           TAB: ACCESS MATRIX
       ══════════════════════════════════════════════ */}
       {activeTab === "matrix" && isAdmin && (
-        <AccessMatrix members={members} isMobile={isMobile} />
+        <>
+          <AccessMatrix members={members} isMobile={isMobile} />
+          <WidgetVisibilityPanel members={members} isMobile={isMobile} />
+        </>
       )}
 
       {/* ══════════════════════════════════════════════

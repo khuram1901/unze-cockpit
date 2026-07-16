@@ -56,12 +56,19 @@ export const MATRIX_LOCKED_EMAILS = [ADMIN_EMAIL];
 
 export type PermOverrides = Record<string, boolean | string | null>;
 
+// Widget-level visibility — see supabase/136_widget_visibility.sql and
+// app/lib/widgetRegistry.ts. Keyed by widget key (e.g. "home.cash_flow_waterfall"),
+// value true/false when Khuram has explicitly set it for this person; absent
+// means "use the widget's own default".
+export type WidgetOverrides = Record<string, boolean>;
+
 export type UserCtx = {
   email: string | null | undefined;
   role: string | null | undefined;
   department?: string | null;
   company?: string | null;
   overrides?: PermOverrides | null;
+  widgetOverrides?: WidgetOverrides | null;
 };
 
 function lc(s: string | null | undefined) { return (s || "").toLowerCase(); }
@@ -483,4 +490,18 @@ export function canDeleteTask(u: UserCtx, assignedByEmail: string | null | undef
 // server-side.
 export function canReopenCompletedTask(u: UserCtx): boolean {
   return isAdminTier(u);
+}
+
+// ── Widget-level visibility ───────────────────────────────────────
+// One level below page-level access: canViewExecutiveDashboard() etc.
+// decide whether someone can reach a page at all; this decides which
+// individual sections/widgets they see once there. defaultVisible is
+// what applies when no override row exists for this member+widget —
+// normally isAdminTier(u), but callers can pass a narrower default for
+// widgets that shouldn't be on for everyone with page access (e.g.
+// something Finance-scoped within a page open to more than Finance).
+export function widgetVisible(u: UserCtx, key: string, defaultVisible: boolean): boolean {
+  const v = u.widgetOverrides?.[key];
+  if (v === true || v === false) return v;
+  return defaultVisible;
 }

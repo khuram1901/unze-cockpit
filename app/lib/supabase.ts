@@ -37,3 +37,22 @@ export async function loadMyPermissions(token?: string): Promise<Record<string, 
     return null;
   }
 }
+
+export async function loadMyWidgetOverrides(token?: string): Promise<Record<string, boolean> | null> {
+  try {
+    let accessToken = token;
+    if (!accessToken) {
+      const { data: { session } } = await supabase.auth.getSession();
+      accessToken = session?.access_token || undefined;
+    }
+    if (!accessToken) return null;
+    const res = await fetch("/api/me/widgets", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.overrides || null;
+  } catch {
+    return null;
+  }
+}

@@ -10,7 +10,7 @@ import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtil
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
-import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpiThresholds";
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
@@ -2348,6 +2348,9 @@ function ExecutiveDashboardBody({
   quickMachineResolve: (issueId: string) => Promise<void>;
 }) {
   const userName = ctx?.email ? ctx.email.split("@")[0] : "";
+  // Widget-level visibility (see app/lib/widgetRegistry.ts) — falls back to
+  // hiding the widget if ctx somehow isn't loaded yet, rather than showing it.
+  const wv = (key: string, defaultVisible: boolean) => !!ctx && widgetVisible(ctx, key, defaultVisible);
   const today = todayStr;
   const minDate = getThirtyDaysAgo();
   const selectedMonth = getMonthFromDate(selectedDate);
@@ -2679,7 +2682,7 @@ function ExecutiveDashboardBody({
 
       {/* ── CHARTS ROW (exactly 2 items so the grid never wraps to a half-empty row) ── */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-        {dailyOpsData.length > 1 && (
+        {dailyOpsData.length > 1 && wv("home.production_trend_chart", true) && (
           <div style={{ ...execCard(NAVY), padding: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "10px" }}>Daily Production Trend — This Month</div>
             <ResponsiveContainer width="100%" height={220}>
@@ -2701,7 +2704,7 @@ function ExecutiveDashboardBody({
           </div>
         )}
 
-        {(() => {
+        {wv("home.receipts_payments_chart", true) && (() => {
           const monthMap = new Map<string, { month: string; receipts: number; payments: number }>();
           for (const cfd of companyFinance) {
             for (const p of cfd.cashPositions) {
@@ -2761,7 +2764,7 @@ function ExecutiveDashboardBody({
       </div>
 
       {/* ── CASH FLOW WATERFALL (full-width, separate row so the 2-col charts grid above never wraps) ── */}
-      {(() => {
+      {wv("home.cash_flow_waterfall", true) && (() => {
         const waterfallData: { company: string; opening: number; receipts: number; payments: number; postDated: number; closing: number }[] = [];
         for (const cfd of companyFinance) {
           const latest = cfd.cashPositions[0];
@@ -2817,7 +2820,7 @@ function ExecutiveDashboardBody({
       })()}
 
       {/* ── FINANCE ── */}
-      {showFinance && companyFinance.length === 2 && (() => {
+      {showFinance && companyFinance.length === 2 && wv("home.company_comparison", true) && (() => {
         const [a, b] = companyFinance;
         const latestA = a.cashPositions[0];
         const latestB = b.cashPositions[0];
@@ -2858,11 +2861,12 @@ function ExecutiveDashboardBody({
           </div>
         );
       })()}
-      {showFinance && companyFinance.map((cfd) => (
+      {showFinance && wv("home.finance_by_company", true) && companyFinance.map((cfd) => (
         <CompanyFinancePanel key={cfd.companyId} data={cfd} />
       ))}
 
       {/* ── RECEIVABLES ── */}
+      {wv("home.receivables", true) && (<>
       <SectionTitle title="Receivables — Bills in Progress" />
       {receivableRows.length === 0 ? (
         <p style={{ color: SLATE, fontSize: "13px" }}>No receivable bills in progress.</p>
@@ -2941,9 +2945,10 @@ function ExecutiveDashboardBody({
           )}
         </div>
       )}
+      </>)}
 
       {/* ── BANK FACILITIES ── */}
-      {showFinance && facilitySynopsis.length > 0 && (
+      {showFinance && facilitySynopsis.length > 0 && wv("home.bank_facilities", true) && (
         <>
           <SectionTitle title="Bank Facilities" />
           <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", overflow: "hidden", marginBottom: "12px", backgroundColor: COLOURS.CARD }}>
@@ -2994,7 +2999,7 @@ function ExecutiveDashboardBody({
       )}
 
       {/* ── TAX COMPLIANCE SUMMARY ── */}
-      {taxSummaryYear !== "" && (
+      {taxSummaryYear !== "" && wv("home.tax_compliance", true) && (
         <>
           <SectionTitle title="Tax Compliance" />
           <TaxComplianceSummary
@@ -3012,7 +3017,7 @@ function ExecutiveDashboardBody({
       )}
 
       {/* ── INVESTMENTS ── */}
-      {investmentData && (
+      {investmentData && wv("home.investments", true) && (
         <>
           <SectionTitle title="Investments — PSX Portfolio" />
           <a href="/investments" style={{ textDecoration: "none", display: "block" }}>
@@ -3072,7 +3077,7 @@ function ExecutiveDashboardBody({
       )}
 
       {/* ── UK PENSION — AVIVA ── */}
-      {pensionSummary && (
+      {pensionSummary && wv("home.uk_pension", true) && (
         <div
           onClick={() => { window.location.href = "/investments"; }}
           style={{
@@ -3135,7 +3140,7 @@ function ExecutiveDashboardBody({
           card." Same execCard shell as Investments — one stat up top
           (approvals outstanding, personal), then a brief per-company
           "not filed" breakdown below it, all in a single card. */}
-      {folderitSummary && (
+      {folderitSummary && wv("home.folderit", true) && (
         <>
           <SectionTitle title="Folder-it" />
           <a href="/folderit" style={{ textDecoration: "none", display: "block" }}>
@@ -3174,6 +3179,7 @@ function ExecutiveDashboardBody({
       )}
 
       {/* ── DEPARTMENT SCORECARD ── */}
+      {wv("home.department_scorecard", true) && (<>
       <SectionTitle title="Department Scorecard" />
       <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", overflow: "hidden", marginBottom: "12px", backgroundColor: COLOURS.CARD }}>
         {scorecardRows.map((d, i) => {
@@ -3226,6 +3232,7 @@ function ExecutiveDashboardBody({
       </div>
 
       <DrillDownPerformance departmentRows={departmentRows} deptPeopleMap={deptPeopleMap} />
+      </>)}
     </>
   );
 }
