@@ -11,8 +11,9 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import * as XLSX from "xlsx";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ReferenceLine, LabelList } from "recharts";
 import DateInput from "../lib/DateInput";
-import { canEditFinance, isAdminTier, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canEditFinance, isAdminTier, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { UTPL_COMPANY_ID } from "../lib/constants";
+import { useUserCtx } from "../lib/useUserCtx";
 
 type OpeningBalance = {
   id: string;
@@ -72,6 +73,17 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [userRole, setUserRole] = useState<string>("Member");
   const [userCanEdit, setUserCanEdit] = useState(false);
   const [userIsAdmin, setUserIsAdmin] = useState(false);
+
+  // Reuses the SAME per-company widget keys as CompanyFinancePanel on the
+  // Executive Dashboard (finance.cash_in_hand, finance.pdc_outstanding, …) —
+  // this page used to have zero widget instrumentation, so a toggle set for
+  // someone on /home had no effect here even though it's the same card
+  // (found 16 Jul 2026: Kamran could still see Unze Trading's Cash in Hand
+  // via this page's "Cash Position Overview" row after it was hidden on
+  // /home). One key, gates both places.
+  const { ctx: widgetCtx } = useUserCtx();
+  const wv = (baseKey: string, defaultVisible: boolean) =>
+    !!widgetCtx && widgetVisible(widgetCtx, `${baseKey}.${companyId}`, defaultVisible);
 
   const [opening, setOpening] = useState<OpeningBalance | null>(null);
   const [plan, setPlan] = useState<MonthlyPlan | null>(null);
@@ -581,18 +593,22 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
             used to show closing_after_post_dated (cash minus every
             outstanding PDC); it's now the plain actual closing balance,
             with PDC Outstanding broken out as its own card next to it. */}
-        <SummaryCard
-          label="Cash in Hand"
-          value={latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}
-          sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
-          isHero
-        />
-        <SummaryCard
-          label="PDC Outstanding"
-          value={latestPosition ? `PKR ${fmt(latestPosition.post_dated_total)}` : "—"}
-          sub="Issued, not yet cleared — see outlook below"
-          valueColor={AMBER}
-        />
+        {wv("finance.cash_in_hand", true) && (
+          <SummaryCard
+            label="Cash in Hand"
+            value={latestPosition ? `PKR ${fmt(latestPosition.closing_balance)}` : "—"}
+            sub={latestPosition ? formatDateUK(latestPosition.position_date) : "No entries yet"}
+            isHero
+          />
+        )}
+        {wv("finance.pdc_outstanding", true) && (
+          <SummaryCard
+            label="PDC Outstanding"
+            value={latestPosition ? `PKR ${fmt(latestPosition.post_dated_total)}` : "—"}
+            sub="Issued, not yet cleared — see outlook below"
+            valueColor={AMBER}
+          />
+        )}
       </div>
 
       {/* ── PDC OUTLOOK — next 8 weeks ──
