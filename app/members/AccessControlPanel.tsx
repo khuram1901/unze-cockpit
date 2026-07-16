@@ -22,13 +22,23 @@ import { PERM_COLUMNS, roleDefault, type MatrixMember, type ColDef } from "./Acc
 
 type TogglePage = { permKey: string; title: string; group: string };
 
+// permKeys that appear in PAGE_REGISTRY but aren't real member_permissions
+// columns — SidebarLayout computes them on the fly from can_view_finance +
+// finance_company_scope instead of storing them directly, so there's
+// nothing to write to. Excluded here; replaced with a single real
+// "Finance" toggle below (can_view_finance is a genuine column). Company
+// scope (which of UTPL/IFPL that resolves to) is still set via the Scope
+// selector in the Full Permission Matrix below.
+const SYNTHETIC_PERM_KEYS = ["can_view_finance_utpl", "can_view_finance_ifpl"];
+
 // Executive Dashboard isn't in PAGE_REGISTRY (it's an always-shown sidebar
 // link, not a permission-gated card — see SidebarLayout's alwaysItems) but
 // it absolutely is still gated by a real permission underneath
 // (canViewExecutiveDashboard), so it belongs in this list same as any page.
 const TOGGLEABLE_PAGES: TogglePage[] = [
   { permKey: "can_view_executive_dashboard", title: "Executive Dashboard", group: "Overview" },
-  ...PAGE_REGISTRY.filter((c) => !c.permKey.startsWith("_") && c.permKey !== "can_view_pa_dashboard")
+  { permKey: "can_view_finance", title: "Finance (Unze Trading / Imperial)", group: "Finance" },
+  ...PAGE_REGISTRY.filter((c) => !c.permKey.startsWith("_") && c.permKey !== "can_view_pa_dashboard" && !SYNTHETIC_PERM_KEYS.includes(c.permKey))
     .map((c) => ({ permKey: c.permKey, title: c.title, group: c.group })),
 ];
 
