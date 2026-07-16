@@ -22,7 +22,7 @@ import { PERM_COLUMNS, roleDefault, type MatrixMember, type ColDef } from "./Acc
 // Khuram, she's the only person in that role, so it isn't worth
 // generalising.
 
-type TogglePage = { permKey: string; title: string; group: string };
+type TogglePage = { permKey: string; title: string; group: string; tip?: string };
 
 // permKeys that appear in PAGE_REGISTRY but aren't real member_permissions
 // columns — SidebarLayout computes them on the fly from can_view_finance +
@@ -33,6 +33,22 @@ type TogglePage = { permKey: string; title: string; group: string };
 // selector in the Full Permission Matrix below.
 const SYNTHETIC_PERM_KEYS = ["can_view_finance_utpl", "can_view_finance_ifpl"];
 
+// 16 Jul 2026, per Khuram: PAGE_REGISTRY's "Meetings" card is keyed on
+// can_see_all_minutes, which is really about content visibility on the My
+// Minutes page (see everyone's minutes vs only your own) — it does NOT
+// gate the /meetings admin page itself (that's hard-locked to Admin/
+// CEO/Executive, non-overridable). The old "Meetings" label implied it
+// controlled the admin page, which it never did. Relabelled here with a
+// tip that explains the real behaviour; the Full Permission Matrix's
+// duplicate "Mins" column is hidden now that this is the one place to
+// change it.
+const TITLE_OVERRIDES: Record<string, { title: string; tip: string }> = {
+  can_see_all_minutes: {
+    title: "Minutes Visibility",
+    tip: "Controls the My Minutes page only: On = sees every meeting's minutes company-wide. Off = sees only minutes from meetings they attended. Does not affect the separate Meetings admin page, which stays Admin/CEO/Executive-only regardless of this toggle.",
+  },
+};
+
 // Executive Dashboard isn't in PAGE_REGISTRY (it's an always-shown sidebar
 // link, not a permission-gated card — see SidebarLayout's alwaysItems) but
 // it absolutely is still gated by a real permission underneath
@@ -41,7 +57,12 @@ const TOGGLEABLE_PAGES: TogglePage[] = [
   { permKey: "can_view_executive_dashboard", title: "Executive Dashboard", group: "Overview" },
   { permKey: "can_view_finance", title: "Finance (Unze Trading / Imperial)", group: "Finance" },
   ...PAGE_REGISTRY.filter((c) => !c.permKey.startsWith("_") && c.permKey !== "can_view_pa_dashboard" && !SYNTHETIC_PERM_KEYS.includes(c.permKey))
-    .map((c) => ({ permKey: c.permKey, title: c.title, group: c.group })),
+    .map((c) => ({
+      permKey: c.permKey,
+      title: TITLE_OVERRIDES[c.permKey]?.title || c.title,
+      group: c.group,
+      tip: TITLE_OVERRIDES[c.permKey]?.tip,
+    })),
 ];
 
 // Widget registry "page" groups that nest under a given toggleable page's
@@ -263,6 +284,7 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                           <button
                             key={page.permKey}
                             onClick={() => setSelectedPageKey(page.permKey)}
+                            title={page.tip}
                             style={{
                               fontSize: "12.5px", fontWeight: active ? 700 : 500, padding: "6px 12px",
                               borderRadius: "999px", cursor: "pointer",
@@ -279,6 +301,12 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                   </div>
                 ))}
               </div>
+
+              {activeGroup.page.tip && (
+                <div style={{ fontSize: "12.5px", color: COLOURS.SLATE, backgroundColor: "var(--border-light, #f1f5f9)", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px" }}>
+                  {activeGroup.page.tip}
+                </div>
+              )}
 
               {/* Legend */}
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "12.5px", color: COLOURS.SLATE, alignItems: "center", marginBottom: "10px" }}>

@@ -87,7 +87,16 @@ export const PERM_COLUMNS = [
 
 export type ColDef = (typeof PERM_COLUMNS)[number];
 
-const GROUPS = [...new Set(PERM_COLUMNS.map((c) => c.group))];
+// 16 Jul 2026, per Khuram: can_see_all_minutes showed up twice — as "Mins"
+// here and as a "Meetings" page in the new Access Control panel — same
+// underlying column, two different names, confusing. Access Control now
+// owns it exclusively (relabelled "Minutes Visibility" there), so it's
+// hidden from this grid. Kept in PERM_COLUMNS itself (not removed) since
+// AccessControlPanel's roleDefault/findCol lookups still depend on the
+// column definition existing here.
+const MATRIX_VISIBLE_COLUMNS = PERM_COLUMNS.filter((c) => c.key !== "can_see_all_minutes");
+
+const GROUPS = [...new Set(MATRIX_VISIBLE_COLUMNS.map((c) => c.group))];
 
 const GROUP_COLOURS: Record<string, string> = {
   Dashboards: "#6366f1",
@@ -301,7 +310,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                   <colgroup>
                     <col style={{ width: isMobile ? 130 : 160 }} />
                     <col style={{ width: 56 }} />
-                    {PERM_COLUMNS.map((col) => (
+                    {MATRIX_VISIBLE_COLUMNS.map((col) => (
                       <col key={col.key} style={{ width: col.key === "finance_company_scope" ? 64 : Math.max(52, col.label.length * 9 + 18) }} />
                     ))}
                   </colgroup>
@@ -317,7 +326,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                         backgroundColor: "var(--border-light, #f1f5f9)", borderBottom: "none",
                       }} />
                       {GROUPS.map((g) => {
-                        const cols = PERM_COLUMNS.filter((c) => c.group === g);
+                        const cols = MATRIX_VISIBLE_COLUMNS.filter((c) => c.group === g);
                         return (
                           <th key={g} colSpan={cols.length} style={{
                             position: "sticky", top: 0, zIndex: 10,
@@ -346,8 +355,8 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                         backgroundColor: "var(--border-light, #f1f5f9)", textAlign: "center",
                         fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY,
                       }}>Role</th>
-                      {PERM_COLUMNS.map((col, i) => {
-                        const isGroupStart = i === 0 || PERM_COLUMNS[i - 1].group !== col.group;
+                      {MATRIX_VISIBLE_COLUMNS.map((col, i) => {
+                        const isGroupStart = i === 0 || MATRIX_VISIBLE_COLUMNS[i - 1].group !== col.group;
                         return (
                           <th key={col.key} title={col.tip} style={{
                             position: "sticky", top: 28, zIndex: 10,
@@ -398,8 +407,8 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                               backgroundColor: roleBadgeColor(m), borderRadius: "6px", padding: "2px 6px",
                             }}>{effectiveLabel(m)}</span>
                           </td>
-                          {PERM_COLUMNS.map((col, i) => {
-                            const isGroupStart = i === 0 || PERM_COLUMNS[i - 1].group !== col.group;
+                          {MATRIX_VISIBLE_COLUMNS.map((col, i) => {
+                            const isGroupStart = i === 0 || MATRIX_VISIBLE_COLUMNS[i - 1].group !== col.group;
                             const eff = effectiveValue(col, m, overrides);
                             const hasOverride = overrides?.[col.key] !== null && overrides?.[col.key] !== undefined;
                             const isLoading = saving === m.id + col.key;
