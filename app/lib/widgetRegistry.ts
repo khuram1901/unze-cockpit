@@ -12,15 +12,22 @@ export type WidgetDef = {
   label: string;
   page: string; // grouping label shown in the matrix picker
   tip?: string;
+  // Rendered once per company in FINANCE_COMPANIES (lib/constants.ts)
+  // instead of once overall — the picker expands it into one row per
+  // company, and the actual key used at runtime is `${key}.${companyId}`.
+  // Adding a company to FINANCE_COMPANIES automatically gets a row here
+  // for every perCompany widget — nothing else to update.
+  perCompany?: boolean;
 };
 
 export const WIDGET_REGISTRY: WidgetDef[] = [
   // ── Executive Dashboard (app/home/page.tsx) ──────────────────────
+  { key: "home.attention_banner", label: "Items Needing Attention", page: "Executive Dashboard", tip: "The overdue tasks / escalations / stuck receivables banner at the top of the page" },
   { key: "home.production_trend_chart", label: "Daily Production Trend", page: "Executive Dashboard", tip: "This month's produced/dispatched/broken line chart" },
   { key: "home.receipts_payments_chart", label: "Monthly Receipts vs Payments", page: "Executive Dashboard" },
   { key: "home.cash_flow_waterfall", label: "Cash Flow Waterfall", page: "Executive Dashboard", tip: "Opening → receipts → payments → closing, per company" },
-  { key: "home.company_comparison", label: "Company Comparison", page: "Executive Dashboard", tip: "Side-by-side UTPL vs IFPL cash balance/receipts/payments" },
-  { key: "home.finance_by_company", label: "Finance Panels (per company)", page: "Executive Dashboard", tip: "Cash in hand, PDC, money in/out cards for each company" },
+  { key: "home.company_comparison", label: "Company Comparison", page: "Executive Dashboard", tip: "Side-by-side cash balance/receipts/payments — only ever appears when someone's scope covers 2+ companies" },
+  { key: "home.finance_by_company", label: "Finance Panels (per company) — whole section", page: "Executive Dashboard", tip: "Master switch for the panel below; turn off to hide all of a company's finance cards at once regardless of the individual toggles" },
   { key: "home.receivables", label: "Receivables — Bills in Progress", page: "Executive Dashboard" },
   { key: "home.bank_facilities", label: "Bank Facilities", page: "Executive Dashboard" },
   { key: "home.tax_compliance", label: "Tax Compliance", page: "Executive Dashboard" },
@@ -28,6 +35,16 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "home.uk_pension", label: "UK Pension", page: "Executive Dashboard" },
   { key: "home.folderit", label: "Folder-it", page: "Executive Dashboard" },
   { key: "home.department_scorecard", label: "Department Scorecard", page: "Executive Dashboard", tip: "RAG status per department + task load chart" },
+
+  // ── Finance panel cards, one row per company (app/home/page.tsx: CompanyFinancePanel) ──
+  { key: "finance.cash_in_hand", label: "Cash in Hand", page: "Finance Panels", perCompany: true },
+  { key: "finance.pdc_outstanding", label: "PDC Outstanding", page: "Finance Panels", perCompany: true },
+  { key: "finance.money_in", label: "Money In (MTD)", page: "Finance Panels", perCompany: true },
+  { key: "finance.money_out", label: "Money Out (MTD)", page: "Finance Panels", perCompany: true },
+  { key: "finance.pdc_due_alert", label: "PDC Due Within 4 Weeks alert", page: "Finance Panels", perCompany: true },
+  { key: "finance.forecast", label: "Forecast (month-end projection + breakdown)", page: "Finance Panels", perCompany: true },
+  { key: "finance.plan_details", label: "Actual vs Plan Details", page: "Finance Panels", perCompany: true },
+  { key: "finance.vs_last_year", label: "vs Same Month Last Year", page: "Finance Panels", perCompany: true },
 ];
 
 export const WIDGET_PAGES = [...new Set(WIDGET_REGISTRY.map((w) => w.page))];

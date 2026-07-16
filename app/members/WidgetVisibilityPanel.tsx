@@ -3,19 +3,23 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { COLOURS, useToast } from "../lib/SharedUI";
-import { WIDGET_REGISTRY, WIDGET_PAGES } from "../lib/widgetRegistry";
+import { WIDGET_REGISTRY } from "../lib/widgetRegistry";
+import { FINANCE_COMPANIES } from "../lib/constants";
 import type { MatrixMember } from "./AccessMatrix";
 
-// Per-member, per-widget visibility — one level below the Access Matrix's
-// page-level toggles. "Default" means no row exists in
-// member_widget_overrides for this member+widget, so the widget's own
-// built-in default applies (see widgetVisible() in lib/permissions.ts).
-// "Show"/"Hide" write an explicit override row; picking "Default" again
-// deletes the row rather than storing it, keeping the table sparse.
+// Per-company widget visibility — the simple (one-per-page) widgets are
+// handled inline in AccessControlPanel.tsx now, nested under their page.
+// This panel exists specifically for the perCompany:true entries in
+// widgetRegistry.ts (Cash in Hand, PDC Outstanding, etc.), which need one
+// toggle PER company rather than one toggle overall — reading from
+// FINANCE_COMPANIES (lib/constants.ts) so a newly added company's finance
+// pipeline automatically gets a row here with no code change.
 
 function fullName(m: MatrixMember) {
   return `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || m.email || "Unnamed";
 }
+
+const PER_COMPANY_WIDGETS = WIDGET_REGISTRY.filter((w) => w.perCompany);
 
 export default function WidgetVisibilityPanel({ members, isMobile }: { members: MatrixMember[]; isMobile: boolean }) {
   const toast = useToast();
@@ -24,6 +28,7 @@ export default function WidgetVisibilityPanel({ members, isMobile }: { members: 
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(FINANCE_COMPANIES[0]?.id || "");
 
   const rows = [...members].sort((a, b) => fullName(a).localeCompare(fullName(b)));
 
@@ -72,9 +77,9 @@ export default function WidgetVisibilityPanel({ members, isMobile }: { members: 
         transition: "background-color 0.2s",
       }}>
         <div>
-          <div style={{ fontSize: "17px", fontWeight: 700, color: open ? "white" : COLOURS.NAVY }}>Dashboard Widgets</div>
+          <div style={{ fontSize: "17px", fontWeight: 700, color: open ? "white" : COLOURS.NAVY }}>Finance Widgets (per company)</div>
           <div style={{ fontSize: "14px", color: open ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
-            Turn individual dashboard sections on or off per person
+            Cash in Hand, PDC, Forecast — set independently for each company&apos;s finance panel
           </div>
         </div>
         <span style={{ fontSize: "20px", color: open ? "white" : COLOURS.SLATE }}>{open ? "▲" : "▼"}</span>
@@ -82,29 +87,49 @@ export default function WidgetVisibilityPanel({ members, isMobile }: { members: 
 
       {open && (
         <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", padding: "18px" }}>
-          <div style={{ marginBottom: "16px" }}>
-            <label style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>
-              Team member
-            </label>
-            <select
-              value={selectedId}
-              onChange={(e) => setSelectedId(e.target.value)}
-              style={{
-                width: isMobile ? "100%" : "320px", padding: "9px 12px", fontSize: "14px",
-                border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #fff)",
-                color: COLOURS.NAVY,
-              }}
-            >
-              <option value="">Select a member…</option>
-              {rows.map((m) => (
-                <option key={m.id} value={m.id}>{fullName(m)} — {m.role}</option>
-              ))}
-            </select>
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "16px" }}>
+            <div>
+              <label style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>
+                Team member
+              </label>
+              <select
+                value={selectedId}
+                onChange={(e) => setSelectedId(e.target.value)}
+                style={{
+                  width: isMobile ? "100%" : "280px", padding: "9px 12px", fontSize: "14px",
+                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #fff)",
+                  color: COLOURS.NAVY,
+                }}
+              >
+                <option value="">Select a member…</option>
+                {rows.map((m) => (
+                  <option key={m.id} value={m.id}>{fullName(m)} — {m.role}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>
+                Company
+              </label>
+              <select
+                value={selectedCompanyId}
+                onChange={(e) => setSelectedCompanyId(e.target.value)}
+                style={{
+                  width: isMobile ? "100%" : "220px", padding: "9px 12px", fontSize: "14px",
+                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #fff)",
+                  color: COLOURS.NAVY,
+                }}
+              >
+                {FINANCE_COMPANIES.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {!selectedId && (
             <div style={{ fontSize: "13.5px", color: COLOURS.SLATE, fontStyle: "italic" }}>
-              Pick a member above to see and change what they see on each dashboard.
+              Pick a member above to see and change their per-company finance widgets.
             </div>
           )}
 
@@ -112,50 +137,46 @@ export default function WidgetVisibilityPanel({ members, isMobile }: { members: 
             <div style={{ fontSize: "13.5px", color: COLOURS.SLATE }}>Loading…</div>
           )}
 
-          {selectedId && !loading && selectedMember && WIDGET_PAGES.map((page) => (
-            <div key={page} style={{ marginBottom: "20px" }}>
-              <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                {page}
-              </div>
-              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", overflow: "hidden" }}>
-                {WIDGET_REGISTRY.filter((w) => w.page === page).map((w, i, arr) => {
-                  const current: "default" | "show" | "hide" =
-                    overrides[w.key] === true ? "show" : overrides[w.key] === false ? "hide" : "default";
-                  return (
-                    <div key={w.key} style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "10px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none",
-                      opacity: saving === w.key ? 0.5 : 1,
-                    }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY }}>{w.label}</div>
-                        {w.tip && <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "1px" }}>{w.tip}</div>}
-                      </div>
-                      <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-                        {(["default", "show", "hide"] as const).map((opt) => (
-                          <button
-                            key={opt}
-                            onClick={() => setWidget(w.key, opt)}
-                            disabled={saving === w.key}
-                            style={{
-                              fontSize: "11.5px", fontWeight: 600, padding: "5px 10px", borderRadius: "6px",
-                              border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.BORDER}`,
-                              backgroundColor: current === opt ? COLOURS.NAVY : "transparent",
-                              color: current === opt ? "white" : COLOURS.SLATE,
-                              cursor: saving === w.key ? "default" : "pointer",
-                              textTransform: "capitalize",
-                            }}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
+          {selectedId && !loading && selectedMember && selectedCompanyId && (
+            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", overflow: "hidden" }}>
+              {PER_COMPANY_WIDGETS.map((w, i, arr) => {
+                const widgetKey = `${w.key}.${selectedCompanyId}`;
+                const current: "default" | "show" | "hide" =
+                  overrides[widgetKey] === true ? "show" : overrides[widgetKey] === false ? "hide" : "default";
+                return (
+                  <div key={w.key} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "10px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none",
+                    opacity: saving === widgetKey ? 0.5 : 1,
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY }}>{w.label}</div>
+                      {w.tip && <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "1px" }}>{w.tip}</div>}
                     </div>
-                  );
-                })}
-              </div>
+                    <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                      {(["default", "show", "hide"] as const).map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => setWidget(widgetKey, opt)}
+                          disabled={saving === widgetKey}
+                          style={{
+                            fontSize: "11.5px", fontWeight: 600, padding: "5px 10px", borderRadius: "6px",
+                            border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.BORDER}`,
+                            backgroundColor: current === opt ? COLOURS.NAVY : "transparent",
+                            color: current === opt ? "white" : COLOURS.SLATE,
+                            cursor: saving === widgetKey ? "default" : "pointer",
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

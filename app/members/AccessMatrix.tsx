@@ -21,7 +21,7 @@ export type MatrixMember = {
 
 type PermRow = Record<string, boolean | string | null>;
 
-const PERM_COLUMNS = [
+export const PERM_COLUMNS = [
   // ── Dashboards ──────────────────────────────────────────────
   { key: "can_view_executive_dashboard", label: "Exec", group: "Dashboards", tip: "Access the Executive command-centre dashboard" },
   { key: "can_view_operations_dashboard", label: "Ops", group: "Dashboards", tip: "Access the Operations/production dashboard" },
@@ -85,7 +85,7 @@ const PERM_COLUMNS = [
   { key: "can_view_folderit_hr", label: "HR", group: "Folderit", tip: "View and open HR documents (Policies & SOPs, etc.) on the Folderit page — off by default for everyone except Admin/CEO" },
 ] as const;
 
-type ColDef = (typeof PERM_COLUMNS)[number];
+export type ColDef = (typeof PERM_COLUMNS)[number];
 
 const GROUPS = [...new Set(PERM_COLUMNS.map((c) => c.group))];
 
@@ -104,7 +104,7 @@ const GROUP_COLOURS: Record<string, string> = {
 
 function lc(s: string | null | undefined) { return (s || "").toLowerCase(); }
 
-function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
+export function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
   const ctx: UserCtx = { email: m.email, role: m.role, department: m.department, company: m.company };
   const admin = isAdminTier(ctx);
   const exec = m.role === "Executive";
@@ -253,9 +253,9 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
         transition: "background-color 0.2s",
       }}>
         <div>
-          <div style={{ fontSize: "17px", fontWeight: 700, color: open ? "white" : COLOURS.NAVY }}>Access Control Matrix</div>
+          <div style={{ fontSize: "17px", fontWeight: 700, color: open ? "white" : COLOURS.NAVY }}>Full Permission Matrix (advanced)</div>
           <div style={{ fontSize: "14px", color: open ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
-            Toggle individual permissions per team member
+            Every member × every permission at once — for edit/delete/scope rights not covered by page access above. Most day-to-day changes belong in Access Control instead.
           </div>
         </div>
         <span style={{ color: open ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{open ? "▲" : "▼"}</span>

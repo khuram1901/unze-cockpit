@@ -7,7 +7,7 @@ import { supabase, authFetch, loadMyPermissions } from "../lib/supabase";
 import EscalationTrafficLights from "../lib/EscalationTrafficLights";
 import { COLOURS, RADII, StatusBadge, SectionTitle, RAGStatus, ragColour, FreshnessBadge, WARNING_BANNER_STYLE, WARNING_TITLE_COLOR, displayRole } from "../lib/SharedUI";
 import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtils";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES } from "../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES, FINANCE_COMPANIES as ALL_FINANCE_COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
 import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, widgetVisible, financeCompanies, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -698,8 +698,8 @@ export default function HomePage() {
     // IFPL) only ever fetches/sees that one, so Company Comparison and the
     // multi-company sections below naturally reduce to a single company
     // instead of needing a separate dashboard page per person.
-    const FINANCE_COMPANIES = COMPANIES.filter(c => {
-      if (scopeForUser === "both") return c.shortCode === "UTPL" || c.shortCode === "IFPL";
+    const FINANCE_COMPANIES = ALL_FINANCE_COMPANIES.filter(c => {
+      if (scopeForUser === "both") return true;
       if (scopeForUser === "UTPL") return c.shortCode === "UTPL";
       if (scopeForUser === "IFPL") return c.shortCode === "IFPL";
       return false;
@@ -2461,7 +2461,7 @@ function ExecutiveDashboardBody({
   }
   const overdueGuarantees = showFinance ? guaranteeAlerts : [];
 
-  const hasAttention = overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || stuckReceivables.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0 || taxUrgent.length > 0 || overdueGuarantees.length > 0;
+  const hasAttention = wv("home.attention_banner", true) && (overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || stuckReceivables.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0 || taxUrgent.length > 0 || overdueGuarantees.length > 0);
 
   const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0 || stuckReceivables.length > 0 || taxOverdue.length > 0 || cashAlerts.length > 0 || overdueGuarantees.length > 0;
 
@@ -2873,7 +2873,7 @@ function ExecutiveDashboardBody({
         );
       })()}
       {showFinance && wv("home.finance_by_company", true) && companyFinance.map((cfd) => (
-        <CompanyFinancePanel key={cfd.companyId} data={cfd} />
+        <CompanyFinancePanel key={cfd.companyId} data={cfd} ctx={ctx} />
       ))}
 
       {/* ── RECEIVABLES ── */}
@@ -3512,7 +3512,13 @@ function PerformanceTable({ rows }: { rows: PerformanceRow[] }) {
 }
 void PerformanceTable;
 
-function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
+function CompanyFinancePanel({ data, ctx }: { data: CompanyFinanceData; ctx: UserCtx | null }) {
+  // Per-company widget visibility — see app/lib/widgetRegistry.ts
+  // (perCompany: true entries). Same base key across every company, keyed
+  // by companyId at the call site so one entry in the registry covers
+  // UTPL, IFPL, and any company added later with no code change.
+  const wv = (baseKey: string, defaultVisible: boolean) =>
+    !!ctx && widgetVisible(ctx, `${baseKey}.${data.companyId}`, defaultVisible);
   const financeMonth = formatDate(new Date()).slice(0, 7);
   const monthPositions = data.cashPositions.filter((p) => p.position_date.slice(0, 7) === financeMonth);
   const actualReceiptsMTD = monthPositions.reduce((s, p) => s + p.total_receipts, 0);
@@ -3591,26 +3597,26 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
                 (cash minus every outstanding PDC); it's now the plain
                 actual closing balance, with PDC Outstanding broken out as
                 its own card next to it. */}
-            {summaryCard(
+            {wv("finance.cash_in_hand", true) && summaryCard(
               "Cash in Hand",
               latest ? `PKR ${fmtMoney(latest.closing_balance)}` : "—",
               latest ? `Updated ${formatDateUK(latest.position_date)}` : "No data",
               !latest ? BLUE : latest.closing_balance < 0 ? RED : GREEN,
               { primary: true, freshnessDate: latest ? latest.position_date : null }
             )}
-            {summaryCard(
+            {wv("finance.pdc_outstanding", true) && summaryCard(
               "PDC Outstanding",
               latest ? `PKR ${fmtMoney(latest.post_dated_total)}` : "—",
               "Issued, not yet cleared",
               AMBER
             )}
-            {summaryCard(
+            {wv("finance.money_in", true) && summaryCard(
               "Money In (MTD)",
               `PKR ${fmtMoney(actualReceiptsMTD)}`,
               plannedRecv > 0 ? `${Math.round(recvPct)}% of expected` : "No plan set",
               plannedRecv > 0 ? (recvStatus === "RED" ? RED : recvStatus === "AMBER" ? AMBER : GREEN) : SLATE
             )}
-            {summaryCard(
+            {wv("finance.money_out", true) && summaryCard(
               "Money Out (MTD)",
               `PKR ${fmtMoney(actualPaymentsMTD)}`,
               plannedPay > 0 ? `${Math.round(payPct)}% of expected` : "No plan set",
@@ -3622,7 +3628,7 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
               (migration 132). Only shown when there's something to flag,
               same "management by exception" pattern as the rest of this
               page — a clean outlook is silent, not a reassuring zero. */}
-          {(() => {
+          {wv("finance.pdc_due_alert", true) && (() => {
             const dueWithin4Weeks = data.pdcOutlook.filter((w) => w.week_number <= 4).reduce((s, w) => s + w.pdc_due, 0);
             if (dueWithin4Weeks <= 0) return null;
             return (
@@ -3637,6 +3643,8 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
             );
           })()}
 
+          {wv("finance.forecast", true) && (
+            <>
           <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 4px", fontSize: "13px" }}>
             <span style={{ color: SLATE }}>Projected month-end</span>
             <span style={{ fontWeight: 700, color: projected >= 0 ? GREEN : RED }}>PKR {fmtMoney(projected)}</span>
@@ -3647,19 +3655,6 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
               <span style={{ fontWeight: 700, color: forecastNet >= 0 ? GREEN : RED }}>PKR {fmtMoney(forecastNet)}</span>
             </div>
           )}
-
-          {(plannedRecv > 0 || plannedPay > 0) && expandSection("plan", "Actual vs Plan Details", (
-            <div style={{ fontSize: "13px" }}>
-              {fRow("Received so far", `PKR ${fmtMoney(actualReceiptsMTD)}`)}
-              {fRow(`Expected by day ${de} of ${dim}`, `PKR ${fmtMoney(Math.round(expRecv))}`, { indent: true })}
-              {fRow("Receipts status", recvStatus === "GREEN" ? "On track" : recvStatus === "AMBER" ? "Slightly behind" : "Behind", { bold: true, color: ragColour(recvStatus) })}
-              <div style={{ height: "6px" }} />
-              {fRow("Paid out so far", `PKR ${fmtMoney(actualPaymentsMTD)}`)}
-              {fRow(`Expected by day ${de} of ${dim}`, `PKR ${fmtMoney(Math.round(expPay))}`, { indent: true })}
-              {fRow("Payments status", payStatus === "GREEN" ? "On track" : payStatus === "AMBER" ? "Slightly over" : "Over budget", { bold: true, color: ragColour(payStatus) })}
-            </div>
-          ))}
-
           {data.forecast.length > 0 && expandSection("forecast", `Forecast Breakdown — ${data.forecast[0]?.budget_month === financeMonth ? "This Month" : formatMonthUK(data.forecast[0]?.budget_month || null)}`, (
             <div style={{ fontSize: "13px" }}>
               <div style={{ fontSize: "11px", fontWeight: 700, color: GREEN, marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.04em" }}>Money In</div>
@@ -3672,8 +3667,22 @@ function CompanyFinancePanel({ data }: { data: CompanyFinanceData }) {
               {fRow("Net", `PKR ${fmtMoney(forecastNet)}`, { bold: true, borderTop: true, color: forecastNet >= 0 ? GREEN : RED })}
             </div>
           ))}
+            </>
+          )}
 
-          {data.lastYearReceipts !== null && expandSection("lastyear", "vs Same Month Last Year", (
+          {wv("finance.plan_details", true) && (plannedRecv > 0 || plannedPay > 0) && expandSection("plan", "Actual vs Plan Details", (
+            <div style={{ fontSize: "13px" }}>
+              {fRow("Received so far", `PKR ${fmtMoney(actualReceiptsMTD)}`)}
+              {fRow(`Expected by day ${de} of ${dim}`, `PKR ${fmtMoney(Math.round(expRecv))}`, { indent: true })}
+              {fRow("Receipts status", recvStatus === "GREEN" ? "On track" : recvStatus === "AMBER" ? "Slightly behind" : "Behind", { bold: true, color: ragColour(recvStatus) })}
+              <div style={{ height: "6px" }} />
+              {fRow("Paid out so far", `PKR ${fmtMoney(actualPaymentsMTD)}`)}
+              {fRow(`Expected by day ${de} of ${dim}`, `PKR ${fmtMoney(Math.round(expPay))}`, { indent: true })}
+              {fRow("Payments status", payStatus === "GREEN" ? "On track" : payStatus === "AMBER" ? "Slightly over" : "Over budget", { bold: true, color: ragColour(payStatus) })}
+            </div>
+          ))}
+
+          {wv("finance.vs_last_year", true) && data.lastYearReceipts !== null && expandSection("lastyear", "vs Same Month Last Year", (
             <div style={{ fontSize: "13px" }}>
               {fRow("Received last year", `PKR ${fmtMoney(data.lastYearReceipts)}`)}
               {fRow("Received this year", `PKR ${fmtMoney(actualReceiptsMTD)}`)}

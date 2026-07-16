@@ -35,6 +35,16 @@ export const COMPANIES: CompanyConfig[] = [
   { id: DIR_COMPANY_ID,  name: "Directors",                      shortCode: "DIR",  slug: "directors",    currency: "PKR" },
 ];
 
+// Companies with a finance data pipeline (cash positions, PDC, budgets,
+// receivables) wired up. Single source of truth for both the Executive
+// Dashboard's finance fetch loop (app/home/page.tsx) and the per-company
+// widget picker (app/lib/widgetRegistry.ts) so they can never drift apart —
+// add a company's finance pipeline once, both the dashboard and the matrix
+// toggle list pick it up automatically.
+export const FINANCE_COMPANIES: CompanyConfig[] = COMPANIES.filter(
+  (c) => c.shortCode === "UTPL" || c.shortCode === "IFPL"
+);
+
 export function getCompanyBySlug(slug: string): CompanyConfig | undefined {
   return COMPANIES.find((c) => c.slug === slug);
 }
