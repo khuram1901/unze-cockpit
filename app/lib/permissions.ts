@@ -10,22 +10,49 @@
 // role-based default. Pass them in UserCtx.overrides.
 //
 // Roles:
-//   Admin      — everything; locked, undeletable, role unchangeable
-//   CEO        — k.saleem by email; same as Admin, different dashboard
+//   Admin      — khuram1901@gmail.com only. Everything, unconditionally.
+//                The one account that is fully locked in the Access
+//                Matrix (no toggle can ever change it) and whose role
+//                can never be reassigned.
+//   CEO        — added 16 Jul 2026 (was previously two hardcoded email
+//                addresses — k.saleem@unzegroup.com, kamran@unze.co.uk —
+//                baked directly into isCEO()/isSecondaryCEO() with no
+//                override hook at all, so Khuram could not use the
+//                Access Matrix to control what Kamran saw; every change
+//                had to go through a direct database edit). CEO is now a
+//                normal role: full rights by default (same ballpark as
+//                Admin), but every one of those defaults is a real
+//                member_permissions override like Manager/Member get, so
+//                it's fully matrix-controllable per person. Both
+//                k.saleem@unzegroup.com (Khuram's second account) and
+//                kamran@unze.co.uk are role=CEO. A handful of things stay
+//                Admin-only no matter what (see isMainAdmin() call sites):
+//                assigning the Admin role to someone, editing/deleting
+//                the Admin account, and system backups/restore.
 //   Executive  — THE PA (Sundas). Almost-admin EXCEPT finance,
 //                receivables, executive dashboard, and HR/Tax/Audit depts
 //   Manager    — department-scoped
 //   Member     — own tasks only
 // ──────────────────────────────────────────────────────────────────
 
-export const CEO_EMAIL = "k.saleem@unzegroup.com";
-export const CEO2_EMAIL = "kamran@unze.co.uk";   // Kamran Saleem — second CEO, IFPL-scoped
+export const CEO_EMAIL = "k.saleem@unzegroup.com";   // Khuram's second account — role CEO
+export const CEO2_EMAIL = "kamran@unze.co.uk";       // Kamran Saleem — role CEO, IFPL-scoped via the matrix
 export const ADMIN_EMAIL = "khuram1901@gmail.com";
 export const PA_EMAIL = "pa.ceo@unze.co.uk";
 export const OPS_HOD_EMAIL = "nadeem.khan@unze.co.uk";
 
-export const LOCKED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, CEO2_EMAIL, PA_EMAIL];
-export const PROTECTED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, CEO2_EMAIL];
+// Both of Khuram's own accounts: undeletable, role can never be reassigned
+// away, email can never be changed. Kamran and the PA are deliberately
+// NOT here any more — as of 16 Jul 2026 they're ordinary (if senior)
+// accounts whose role and permissions Khuram can actually edit.
+export const PROTECTED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL];
+
+// Fully locked in the Access Matrix UI — every toggle greyed out, nothing
+// clickable. Narrowed to true Admin only (16 Jul 2026); it used to also
+// cover both CEO emails and the PA, which is what made Kamran's row
+// completely uneditable through the UI despite him having real, distinct
+// permissions underneath.
+export const MATRIX_LOCKED_EMAILS = [ADMIN_EMAIL];
 
 export type PermOverrides = Record<string, boolean | string | null>;
 
@@ -46,19 +73,19 @@ function ov(u: UserCtx, key: string): boolean | null {
 }
 
 // ── Identity ──────────────────────────────────────────────────────
-export function isCEO(u: UserCtx) {
-  const e = lc(u.email);
-  return e === CEO_EMAIL || e === CEO2_EMAIL;
-}
-// True only for Khuram — used where a single "primary" CEO is needed
+// Role-based since 16 Jul 2026 (was email-based — see the CEO role note
+// in the header comment above for why that was a problem).
+export function isCEO(u: UserCtx) { return u.role === "CEO"; }
+// True only for Khuram's k.saleem account — for routing/identity purposes
+// (which dashboard, which Gmail/Drive integration owns), not permissions.
 export function isPrimaryCEO(u: UserCtx) { return lc(u.email) === CEO_EMAIL; }
-// True only for Kamran — used to route him to his own dashboard
+// True only for Kamran — used to route him to his own dashboard.
 export function isSecondaryCEO(u: UserCtx) { return lc(u.email) === CEO2_EMAIL; }
 export function isMainAdmin(u: UserCtx) { return lc(u.email) === ADMIN_EMAIL; }
 export function isPA(u: UserCtx) { return lc(u.email) === PA_EMAIL || u.role === "Executive"; }
 
 export function isAdminTier(u: UserCtx) {
-  return isCEO(u) || isMainAdmin(u) || u.role === "Admin";
+  return isMainAdmin(u) || u.role === "Admin" || isCEO(u);
 }
 
 export function isPrivileged(u: UserCtx) {
@@ -258,7 +285,11 @@ export function canImportExport(u: UserCtx) {
 
 // ── Member administration rules ───────────────────────────────────
 export function assignableRoles(u: UserCtx): string[] {
-  if (isAdminTier(u)) return ["Admin", "Executive", "Manager", "Member"];
+  // Assigning the Admin role is the one thing CEO-tier can't do, even
+  // though CEO otherwise defaults to full rights — see the CEO role note
+  // at the top of this file.
+  if (isMainAdmin(u) || u.role === "Admin") return ["Admin", "CEO", "Executive", "Manager", "Member"];
+  if (isCEO(u)) return ["CEO", "Executive", "Manager", "Member"];
   if (u.role === "Executive") return ["Manager", "Member"];
   return [];
 }
@@ -276,8 +307,11 @@ export function canChangePasswordFor(actor: UserCtx, target: UserCtx): boolean {
 }
 
 export function canEditMember(actor: UserCtx, target: UserCtx): boolean {
-  if (LOCKED_EMAILS.includes(lc(target.email)) && lc(actor.email) !== lc(target.email)) {
-    return isAdminTier(actor);
+  // Khuram's own two accounts: only the true Admin account can edit them
+  // (not just any CEO-tier actor) — tightened 16 Jul 2026 alongside making
+  // CEO a real, assignable role.
+  if (PROTECTED_EMAILS.includes(lc(target.email)) && lc(actor.email) !== lc(target.email)) {
+    return isMainAdmin(actor) || actor.role === "Admin";
   }
   const o = ov(actor, "can_edit_members");
   if (o !== null) return o;
@@ -400,7 +434,10 @@ export function canViewFolderitHr(u: UserCtx): boolean {
 }
 
 // ── Task ownership ──────────────────────────────────────────────
-const PROTECTED_CREATOR_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, PA_EMAIL];
+// Kamran (CEO2_EMAIL) added 16 Jul 2026 — his tasks get the same
+// protection Khuram's and the PA's already did; a pre-existing gap since
+// isCEO() covered him for other checks but this list never had.
+const PROTECTED_CREATOR_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, CEO2_EMAIL, PA_EMAIL];
 
 // Khuram: "no task can be completed until it's submitted to their HOD, and
 // only the HOD can mark the task completed... rest of the members submit
