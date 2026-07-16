@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { COLOURS, useToast } from "../lib/SharedUI";
 import {
-  CEO_EMAIL, ADMIN_EMAIL, PA_EMAIL, PROTECTED_EMAILS, OPS_HOD_EMAIL,
+  ADMIN_EMAIL, PA_EMAIL, MATRIX_LOCKED_EMAILS, OPS_HOD_EMAIL,
   isAdminTier, type UserCtx,
 } from "../lib/permissions";
 
@@ -155,9 +155,9 @@ function roleDefault(col: ColDef, m: MatrixMember): boolean | string | null {
     case "can_manage_stock": return admin || (manager && dept === "Unze Trading Ops");
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
     case "can_edit_operations_targets": return admin || exec || lc(m.email) === OPS_HOD_EMAIL;
-    case "can_view_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com" || exec;
-    case "can_edit_investments": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
-    case "can_refresh_investment_prices": return lc(m.email) === "k.saleem@unzegroup.com" || lc(m.email) === "khuram1901@gmail.com";
+    case "can_view_investments": return admin || exec;
+    case "can_edit_investments": return admin;
+    case "can_refresh_investment_prices": return admin;
     case "can_view_folderit_hr": return admin;
     default: return false;
   }
@@ -178,7 +178,6 @@ function fullName(m: MatrixMember) {
 
 function effectiveLabel(m: MatrixMember): string {
   const e = lc(m.email);
-  if (e === CEO_EMAIL) return "CEO";
   if (e === ADMIN_EMAIL) return "Admin";
   if (e === PA_EMAIL || m.role === "Executive") return "PA";
   return m.role;
@@ -186,9 +185,9 @@ function effectiveLabel(m: MatrixMember): string {
 
 function roleBadgeColor(m: MatrixMember): string {
   const e = lc(m.email);
-  if (e === CEO_EMAIL) return COLOURS.BLUE;
   if (e === ADMIN_EMAIL) return "#111827";
   if (m.role === "Admin") return "#111827";
+  if (m.role === "CEO") return COLOURS.BLUE;
   if (m.role === "Executive") return COLOURS.PURPLE;
   if (m.role === "Manager") return COLOURS.GREEN;
   return COLOURS.SLATE;
@@ -241,7 +240,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
 
   const rows = [...members].sort((a, b) => fullName(a).localeCompare(fullName(b)));
 
-  const isProtected = (m: MatrixMember) => PROTECTED_EMAILS.includes(lc(m.email));
+  const isProtected = (m: MatrixMember) => MATRIX_LOCKED_EMAILS.includes(lc(m.email));
   const isSelf = (m: MatrixMember) => lc(m.email) === lc(myEmail);
 
   return (
@@ -446,7 +445,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
                                     border: "2px solid #111827",
                                     backgroundColor: on ? COLOURS.GREEN : `var(--border-color, ${COLOURS.HAIRLINE})`,
                                     display: "flex", alignItems: "center", justifyContent: "center",
-                                  }} title="Locked — Admin/CEO permissions cannot be changed">
+                                  }} title="Locked — Admin's permissions cannot be changed">
                                     {on && <span style={{ color: "white", fontSize: 11, fontWeight: 700 }}>✓</span>}
                                   </div>
                                 ) : (

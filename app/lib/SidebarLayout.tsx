@@ -64,8 +64,15 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
   if (isPACtx && card.permKey === "can_view_pa_dashboard") return false;
   if ((isMainAdmin(ctx) || isCEO(ctx)) && (card.permKey === "can_view_executive_dashboard" || card.permKey === "can_view_pa_dashboard")) return false;
-  // Kamran (secondary CEO) does not see Opening Balances or Unze Trading finance
-  if (isSecondaryCEO(ctx) && (card.permKey === "can_edit_finance" || card.permKey === "can_view_finance_utpl")) return false;
+  // Opening Balances reuses the "can_edit_finance" permKey (it has no
+  // permission key of its own yet) and isn't scoped by company like the
+  // Finance pages are, so it can't be handled by the scope check below —
+  // Kamran is hardcoded out of it specifically. Everything else that used
+  // to be hardcoded to his email here (hiding Unze Trading finance) is now
+  // handled by the scope check below instead, driven by his
+  // finance_company_scope matrix setting (16 Jul 2026) rather than his
+  // identity — so it works for anyone scoped to one company, not just him.
+  if (isSecondaryCEO(ctx) && card.permKey === "can_edit_finance") return false;
   if (card.permKey === "can_view_finance_utpl") {
     if (!canViewFinance(ctx)) return false;
     const scope = financeCompanies(ctx);

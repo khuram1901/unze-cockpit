@@ -8,7 +8,7 @@ import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, Secti
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import AccessMatrix from "./AccessMatrix";
-import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, canAddMembers, canImportExport, LOCKED_EMAILS, PROTECTED_EMAILS, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, isMainAdmin, canAddMembers, canImportExport, PROTECTED_EMAILS, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Member = {
   id: string;
@@ -81,9 +81,9 @@ function isValidEmail(e: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.tr
 function fullName(f: string | null, l: string | null, n?: string | null) {
   return `${f || ""} ${l || ""}`.trim() || n || "Unnamed";
 }
-function roleChip(r: string, email?: string | null): React.CSSProperties {
-  if (email === "k.saleem@unzegroup.com") return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.BLUE, border: `1px solid ${COLOURS.BLUE}` };
+function roleChip(r: string): React.CSSProperties {
   if (r === "Admin")     return { backgroundColor: COLOURS.NAVY, color: "#FFFFFF", border: `1px solid ${COLOURS.NAVY}` };
+  if (r === "CEO")       return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.BLUE, border: `1px solid ${COLOURS.BLUE}` };
   if (r === "Executive") return { backgroundColor: "#EEE8F9", color: COLOURS.PURPLE, border: `1px solid ${COLOURS.PURPLE}` };
   if (r === "Manager")   return { backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, border: `1px solid ${COLOURS.GREEN}` };
   return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.INK_700, border: `1px solid ${COLOURS.HAIRLINE}` };
@@ -126,7 +126,7 @@ function OrgNode({ member, allMembers, depth, visited }: { member: Member; allMe
   // — falls back to a generic HOD/role label for anyone who doesn't have
   // one yet. No separate "Director" flag needed: it's just whatever title
   // Kamran's account is given, same as Khuram's is "CEO".
-  const rankLabel = member.position_title || (member.is_hod ? "HOD" : (member.role === "Admin" || member.role === "Executive") ? member.role : null);
+  const rankLabel = member.position_title || (member.is_hod ? "HOD" : (member.role === "Admin" || member.role === "CEO" || member.role === "Executive") ? member.role : null);
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       <div style={{
@@ -142,7 +142,7 @@ function OrgNode({ member, allMembers, depth, visited }: { member: Member; allMe
         {rankLabel && (
           <span style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.AMBER, textTransform: "uppercase" as const }}>{rankLabel}</span>
         )}
-        <span style={{ fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" as const }}>{member.department || (member.role === "Admin" || member.role === "Executive" ? "" : "No department")}</span>
+        <span style={{ fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" as const }}>{member.department || (member.role === "Admin" || member.role === "CEO" || member.role === "Executive" ? "" : "No department")}</span>
       </div>
       {children.length > 0 && (
         <>
@@ -308,11 +308,15 @@ export default function MembersManager() {
     if (updates.email !== undefined && !isValidEmail(updates.email || "")) { toast.show("Valid email required.", "error"); loadData(); return; }
     const member = members.find((m) => m.id === id);
     const target: UserCtx = { email: member?.email, role: member?.role };
-    if (member?.email && LOCKED_EMAILS.includes(member.email.toLowerCase()) && member.email.toLowerCase() !== myEmail.toLowerCase()) {
-      if (!isAdminTier(me)) { toast.show("You cannot edit this protected account.", "error"); loadData(); return; }
+    // Khuram's own two accounts (khuram1901@gmail.com, k.saleem@unzegroup.com):
+    // only the true Admin account can touch them, and their role/email can
+    // never change — tightened 16 Jul 2026 so a CEO-tier actor other than
+    // Khuram himself can't edit them either.
+    if (member?.email && PROTECTED_EMAILS.includes(member.email.toLowerCase()) && member.email.toLowerCase() !== myEmail.toLowerCase()) {
+      if (!isMainAdmin(me) && me.role !== "Admin") { toast.show("You cannot edit this protected account.", "error"); loadData(); return; }
     }
-    if (member?.email && PROTECTED_EMAILS.includes(member.email)) {
-      if (updates.role !== undefined && updates.role !== "Admin") { toast.show("This account must remain Admin.", "error"); loadData(); return; }
+    if (member?.email && PROTECTED_EMAILS.includes(member.email.toLowerCase())) {
+      if (updates.role !== undefined && updates.role !== member.role) { toast.show("This account's role cannot be changed.", "error"); loadData(); return; }
       if (updates.email !== undefined) { toast.show("This account's email cannot be changed.", "error"); loadData(); return; }
     }
     if (updates.role !== undefined && !myAssignableRoles.includes(updates.role)) {
@@ -368,7 +372,11 @@ export default function MembersManager() {
   }
 
   const me: UserCtx = { email: myEmail, role: myRole, overrides: myOverrides };
-  const isAdmin = myRole === "Admin" || myRole === "Executive";
+  // Includes CEO (16 Jul 2026) — without this, migrating k.saleem@unzegroup.com's
+  // role from "Admin" to "CEO" would have silently locked him out of the
+  // Members page's add/edit/matrix/org-chart UI, since this used to check
+  // the literal string "Admin".
+  const isAdmin = myRole === "Admin" || myRole === "CEO" || myRole === "Executive";
   const myAssignableRoles = assignableRoles(me);
 
   // Offboard access: Admin/Exec (everyone), or a HOD acting on their own
@@ -493,7 +501,7 @@ export default function MembersManager() {
 
   const counts = { total: members.length, admin: 0, manager: 0, member: 0 };
   members.forEach((m) => {
-    if (m.role === "Admin" || m.role === "Executive") counts.admin++;
+    if (m.role === "Admin" || m.role === "CEO" || m.role === "Executive") counts.admin++;
     else if (m.role === "Manager") counts.manager++;
     else counts.member++;
   });
@@ -711,7 +719,7 @@ export default function MembersManager() {
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                     {(() => {
-                      const isA = role === "Admin";
+                      const isA = role === "Admin" || role === "CEO";
                       const isE = role === "Executive";
                       const isM = role === "Manager";
                       const d = department;
@@ -849,8 +857,8 @@ export default function MembersManager() {
                       <span style={{
                         fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: RADII.PILL,
                         width: "fit-content",
-                        ...roleChip(m.role, m.email),
-                      }}>{m.email === "k.saleem@unzegroup.com" ? "CEO" : m.role}</span>
+                        ...roleChip(m.role),
+                      }}>{m.role}</span>
                       {m.is_active === false && (
                         <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.SLATE, backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "2px 8px", width: "fit-content" }}>Inactive</span>
                       )}
@@ -900,7 +908,7 @@ export default function MembersManager() {
                           assigned to someone else is hidden here entirely, not just
                           shown unticked — the only way to move them is to untick them
                           under their current manager first. */}
-                      {(m.is_hod || m.role === "Admin" || m.role === "Executive") && (() => {
+                      {(m.is_hod || m.role === "Admin" || m.role === "CEO" || m.role === "Executive") && (() => {
                         const pickable = members.filter((x) => x.id !== m.id && x.is_active !== false && (!x.manager_id || x.manager_id === m.id));
                         const elsewhereCount = members.filter((x) => x.id !== m.id && x.is_active !== false && x.manager_id && x.manager_id !== m.id).length;
                         return (
