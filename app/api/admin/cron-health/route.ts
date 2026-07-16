@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     .eq("email", authResult.email)
     .single();
 
-  if (!member || member.role !== "Admin") {
+  if (!member || (member.role !== "Admin" && member.role !== "CEO")) {
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
 

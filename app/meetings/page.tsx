@@ -914,7 +914,7 @@ export default function MeetingsPage() {
                     <select value={item.owner_name} onChange={(e) => updateActionItem(i, { owner_name: e.target.value })}
                       style={{ ...smallField, borderColor: !item.owner_name ? COLOURS.RED : undefined }}>
                       <option value="">Select owner</option>
-                      {memberDetails.filter((m) => m.role === "Manager" || m.role === "Executive" || m.role === "Admin").map((m) => (
+                      {memberDetails.filter((m) => m.role === "Manager" || m.role === "Executive" || m.role === "Admin" || m.role === "CEO").map((m) => (
                         <option key={m.name} value={m.name}>{m.name} ({m.role})</option>
                       ))}
                       {item.owner_name && !memberDetails.find((m) => m.name === item.owner_name) && (

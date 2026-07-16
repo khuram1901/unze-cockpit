@@ -3,7 +3,7 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
 function canManage(role: string, department: string | null) {
-  return role === "Admin" || role === "Executive" ||
+  return role === "Admin" || role === "CEO" || role === "Executive" ||
     (role === "Manager" && department === "Unze Trading Ops");
 }
 

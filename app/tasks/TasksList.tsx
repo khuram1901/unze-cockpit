@@ -182,7 +182,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [bulkApplying, setBulkApplying] = useState(false);
   const [bulkMembers, setBulkMembers] = useState<{ id: string; name: string; email: string | null; department: string | null; business_unit: string | null }[]>([]);
 
-  const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "Executive");
+  const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "CEO" || currentRole === "Executive");
 
   async function loadTasks() {
     const { data: userData } = await supabase.auth.getUser();

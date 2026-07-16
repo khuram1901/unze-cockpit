@@ -7,7 +7,7 @@ function isOpsManager(role: string, department: string | null) {
 }
 
 function isPrivileged(role: string) {
-  return role === "Admin" || role === "Executive";
+  return role === "Admin" || role === "CEO" || role === "Executive";
 }
 
 function canManagePOs(role: string, department: string | null) {

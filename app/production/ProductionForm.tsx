@@ -159,7 +159,7 @@ export default function ProductionForm() {
       const role = me?.role || "Member";
       const department = me?.department || null;
       setUserEmail(email);
-      setUserIsAdmin(role === "Admin");
+      setUserIsAdmin(role === "Admin" || role === "CEO");
       setUserIsOpsManager(role === "Manager" && department === "Unze Trading Ops");
 
       let overrides: PermOverrides | null = null;

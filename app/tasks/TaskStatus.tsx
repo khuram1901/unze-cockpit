@@ -107,7 +107,7 @@ export default function TaskStatus({
   // routed to them; Khuram, Kamran, and the Executive are a blanket
   // override on top of that, not limited to tasks routed to them).
   const canComplete = status === "Submitted" && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email);
-  const canEditDate = canEditDateProp ?? (currentRole === "Admin" || currentRole === "Executive");
+  const canEditDate = canEditDateProp ?? (currentRole === "Admin" || currentRole === "CEO" || currentRole === "Executive");
 
   // Khuram: "once the task is completed then it should be greyed out...
   // not allowed to be edited afterwards, unless the administration who

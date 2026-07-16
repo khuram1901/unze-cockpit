@@ -104,7 +104,7 @@ export default function AuthWrapper({
     if (!email || !member) return;
     const todayStr = new Date().toISOString().slice(0, 10);
     const role = member.role;
-    const isAdmin = userCtx ? canSeeAllTasks(userCtx) : (role === "Admin" || role === "Executive");
+    const isAdmin = userCtx ? canSeeAllTasks(userCtx) : (role === "Admin" || role === "CEO" || role === "Executive");
 
     const { data } = await supabase.rpc("get_notification_badge_counts", {
       p_email: email,

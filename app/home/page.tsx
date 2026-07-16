@@ -1625,7 +1625,7 @@ export default function HomePage() {
         setManagerBriefingTitle(`Finance Briefing${companyLabel !== "All" ? ` · ${companyLabel}` : ""}`);
       }
 
-      if (userRole === "Admin") {
+      if (userRole === "Admin" || userRole === "CEO") {
         authFetch("/api/admin/cron-health")
           .then((r) => r.json())
           .then((d) => { if (d.checks) setCronHealth(d.checks); })

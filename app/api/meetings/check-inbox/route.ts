@@ -213,7 +213,7 @@ async function handleCheckInbox(isCron: boolean) {
       const { data: admins } = await supabase
         .from("members")
         .select("email, role")
-        .in("role", ["Admin", "Executive"]);
+        .in("role", ["Admin", "CEO", "Executive"]);
 
       const notifyEmails = new Set((admins || []).map((a) => a.email));
       notifyEmails.add("pa.ceo@unze.co.uk");

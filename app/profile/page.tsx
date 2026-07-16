@@ -14,7 +14,7 @@ import {
 // ── role chip — mirrors MembersManager pattern ───────────────────
 function roleChip(r: string, email?: string): React.CSSProperties {
   if (email === "k.saleem@unzegroup.com") return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.BLUE, border: `1px solid ${COLOURS.BLUE}` };
-  if (r === "Admin")     return { backgroundColor: COLOURS.NAVY, color: "#FFFFFF", border: `1px solid ${COLOURS.NAVY}` };
+  if (r === "Admin" || r === "CEO") return { backgroundColor: COLOURS.NAVY, color: "#FFFFFF", border: `1px solid ${COLOURS.NAVY}` };
   if (r === "Executive") return { backgroundColor: "#EEE8F9", color: COLOURS.PURPLE, border: `1px solid ${COLOURS.PURPLE}` };
   if (r === "Manager")   return { backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, border: `1px solid ${COLOURS.GREEN}` };
   return { backgroundColor: COLOURS.CARD_ALT, color: COLOURS.INK_700, border: `1px solid ${COLOURS.HAIRLINE}` };
@@ -637,7 +637,7 @@ export default function ProfilePage() {
                   Notification preferences
                 </div>
                 <div style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>
-                  {userRole !== "Admin" ? "At least one must stay on." : "Admin can disable all."}
+                  {userRole !== "Admin" && userRole !== "CEO" ? "At least one must stay on." : "Admin can disable all."}
                 </div>
               </div>
               <div style={{
@@ -654,7 +654,7 @@ export default function ProfilePage() {
                 ]).map((pref) => {
                   const isOn = notifPrefs[pref.key];
                   const otherOn = Object.entries(notifPrefs).filter(([k]) => k !== pref.key).some(([, v]) => v);
-                  const canTurnOff = userRole === "Admin" || otherOn;
+                  const canTurnOff = userRole === "Admin" || userRole === "CEO" || otherOn;
                   return (
                     <label key={pref.key} style={{
                       display: "flex",
