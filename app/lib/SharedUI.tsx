@@ -106,6 +106,12 @@ export const cardAltStyle: React.CSSProperties = {
 // ─────────────────────────────────────────────────────────────────
 export function displayRole(role: string, email?: string | null): string {
   if (email === "k.saleem@unzegroup.com") return "CEO";
+  // Kamran is hardcoded as a second CEO in lib/permissions.ts (isSecondaryCEO)
+  // with near-full admin access, but his `members.role` DB value is "Member"
+  // (found 15 Jul 2026 — that field was never actually used for his access,
+  // only email matching is). Without this, anywhere his role is displayed
+  // (Members list, etc.) wrongly implied he had almost no access.
+  if (email === "kamran@unze.co.uk") return "CEO — IFPL";
   return role;
 }
 
