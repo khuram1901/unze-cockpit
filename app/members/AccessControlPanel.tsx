@@ -38,6 +38,7 @@ const TOGGLEABLE_PAGES: TogglePage[] = [
 const WIDGET_GROUP_TO_PAGE: Record<string, string> = {
   "Executive Dashboard": "Executive Dashboard",
   "Finance Panels": "Executive Dashboard",
+  "Operations Dashboard": "Operations Dashboard",
 };
 
 function lc(s: string | null | undefined) { return (s || "").toLowerCase(); }

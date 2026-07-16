@@ -8,7 +8,8 @@ import { useMobile } from "../lib/useMobile";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { downloadCSV } from "../lib/exportUtils";
 import MonthlyTargets from "./MonthlyTargets";
-import { canSeeAllTasks, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { canSeeAllTasks, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { useUserCtx } from "../lib/useUserCtx";
 import { achievementStatus, breakageStatus as sharedBreakageStatus, ACHIEVEMENT_AMBER_MIN, BREAKAGE_RED_OVER, type KpiStatus } from "../lib/kpiThresholds";
 import {
   COLOURS, RADII, SHADOWS,
@@ -230,6 +231,9 @@ function ProgressBar({ pct, color, height = 6 }: { pct: number; color: string; h
 
 export default function DashboardView() {
   const isMobile = useMobile();
+  const { ctx } = useUserCtx();
+  // Widget-level visibility (see app/lib/widgetRegistry.ts).
+  const wv = (key: string, defaultVisible: boolean) => !!ctx && widgetVisible(ctx, key, defaultVisible);
   const [summaries, setSummaries] = useState<PlantSummary[]>([]);
   const [machineIssues, setMachineIssues] = useState<MachineIssue[]>([]);
   const [myTasks, setMyTasks] = useState<Task[]>([]);
@@ -532,7 +536,7 @@ export default function DashboardView() {
     <div style={{ maxWidth: "100%", overflowX: "hidden" }}>
 
       {/* ═══ ZONE 1: ALERT BANNER ═══ */}
-      {hasBannerItems ? (
+      {wv("dashboard.attention_banner", true) && (hasBannerItems ? (
         <div style={{
           background:    bannerBg,
           border:        `1px solid ${bannerBdr}`,
@@ -633,10 +637,11 @@ export default function DashboardView() {
           </div>
           <span style={{ fontSize: "13px", fontWeight: 600, color: GREEN }}>All clear — no machines down, all plants reported, no overdue tasks.</span>
         </div>
-      )}
+      ))}
 
       {/* ═══ HERO + KPI CARDS ═══ */}
       {/* Good Stock hero (dark card) + 5 compact KPIs */}
+      {wv("dashboard.hero_kpi_cards", true) && (
       <div style={{
         display: "grid",
         gridTemplateColumns: isMobile ? "1fr" : "minmax(200px, 1.4fr) repeat(5, 1fr)",
@@ -681,8 +686,10 @@ export default function DashboardView() {
         <KpiCard label="Broken Stock"     value={totalClosingBrokenStock} color={totalClosingBrokenStock > 0 ? RED : SLATE} />
         <KpiCard label="Machine Issues"   value={machineIssues.length}   color={machineIssues.length > 0 ? RED : GREEN} />
       </div>
+      )}
 
       {/* ═══ ZONE 2: CHARTS ROW ═══ */}
+      {wv("dashboard.this_month_charts", true) && (<>
       <SectionTitle title="This Month" style={{ marginTop: 0 }} />
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.4fr 1fr", gap: "16px", marginBottom: "16px" }}>
 
@@ -755,8 +762,10 @@ export default function DashboardView() {
           </div>
         </div>
       </div>
+      </>)}
 
       {/* ═══ ZONE 2b: STOCK BY CUSTOMER PO ═══ */}
+      {wv("dashboard.stock_by_customer_po", true) && (
       <div style={{ marginBottom: "16px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
           <SectionTitle title="Stock by Customer PO" style={{ margin: 0 }} />
@@ -970,8 +979,10 @@ export default function DashboardView() {
           );
         })}
       </div>
+      )}
 
       {/* ═══ ZONE 3: TABBED KPI DETAIL ═══ */}
+      {wv("dashboard.kpis_table", true) && (<>
       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "0", flexWrap: "wrap" }}>
         <SectionTitle title="KPIs" style={{ margin: "32px 0 0" }} />
         <div style={{ flex: 1 }} />
@@ -1124,12 +1135,17 @@ export default function DashboardView() {
           )
         )}
       </div>
+      </>)}
 
       {/* Monthly Targets */}
+      {wv("dashboard.monthly_targets", true) && (
+      <>
       <SectionTitle title="Monthly Targets" />
       <div style={{ ...cardStyle, padding: "22px 24px" }}>
         <MonthlyTargets />
       </div>
+      </>
+      )}
     </div>
   );
 }

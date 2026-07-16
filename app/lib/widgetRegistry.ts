@@ -36,6 +36,14 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "home.folderit", label: "Folder-it", page: "Executive Dashboard" },
   { key: "home.department_scorecard", label: "Department Scorecard", page: "Executive Dashboard", tip: "RAG status per department + task load chart" },
 
+  // ── Operations Dashboard (app/dashboard/DashboardView.tsx) ───────
+  { key: "dashboard.attention_banner", label: "Attention Needed banner", page: "Operations Dashboard", tip: "Machines down / plants not reported / overdue tasks alert" },
+  { key: "dashboard.hero_kpi_cards", label: "Good Stock hero + KPI cards", page: "Operations Dashboard", tip: "The dark Good Stock card and the 5 compact KPI tiles beside it" },
+  { key: "dashboard.this_month_charts", label: "This Month (charts)", page: "Operations Dashboard", tip: "Plant comparison and breakage rate charts" },
+  { key: "dashboard.stock_by_customer_po", label: "Stock by Customer PO", page: "Operations Dashboard" },
+  { key: "dashboard.kpis_table", label: "KPIs (tabbed detail)", page: "Operations Dashboard", tip: "Production/Dispatch/Breakage/Tasks tab switcher and table" },
+  { key: "dashboard.monthly_targets", label: "Monthly Targets", page: "Operations Dashboard" },
+
   // ── Finance panel cards, one row per company (app/home/page.tsx: CompanyFinancePanel) ──
   { key: "finance.cash_in_hand", label: "Cash in Hand", page: "Finance Panels", perCompany: true },
   { key: "finance.pdc_outstanding", label: "PDC Outstanding", page: "Finance Panels", perCompany: true },
