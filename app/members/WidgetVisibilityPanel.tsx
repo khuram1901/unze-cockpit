@@ -13,7 +13,15 @@ import type { MatrixMember } from "./AccessMatrix";
 // widgetRegistry.ts (Cash in Hand, PDC Outstanding, etc.), which need one
 // toggle PER company rather than one toggle overall — reading from
 // FINANCE_COMPANIES (lib/constants.ts) so a newly added company's finance
-// pipeline automatically gets a row here with no code change.
+// pipeline automatically gets a section here with no code change.
+//
+// 16 Jul 2026: this used to have a single "which company?" dropdown
+// defaulting to Unze Trading. Khuram set Cash in Hand off for Kamran
+// intending it for Imperial, but the dropdown was still on Unze Trading —
+// the override landed on the wrong company and had zero effect, since
+// Kamran only ever sees Imperial's panel. Replaced the dropdown with every
+// company shown at once, side by side, so there's no company to silently
+// get wrong.
 
 function fullName(m: MatrixMember) {
   return `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || m.email || "Unnamed";
@@ -28,7 +36,6 @@ export default function WidgetVisibilityPanel({ members, isMobile }: { members: 
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(FINANCE_COMPANIES[0]?.id || "");
 
   const rows = [...members].sort((a, b) => fullName(a).localeCompare(fullName(b)));
 
@@ -87,44 +94,24 @@ export default function WidgetVisibilityPanel({ members, isMobile }: { members: 
 
       {open && (
         <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", padding: "18px" }}>
-          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "16px" }}>
-            <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>
-                Team member
-              </label>
-              <select
-                value={selectedId}
-                onChange={(e) => setSelectedId(e.target.value)}
-                style={{
-                  width: isMobile ? "100%" : "280px", padding: "9px 12px", fontSize: "14px",
-                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #fff)",
-                  color: COLOURS.NAVY,
-                }}
-              >
-                <option value="">Select a member…</option>
-                {rows.map((m) => (
-                  <option key={m.id} value={m.id}>{fullName(m)} — {m.role}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>
-                Company
-              </label>
-              <select
-                value={selectedCompanyId}
-                onChange={(e) => setSelectedCompanyId(e.target.value)}
-                style={{
-                  width: isMobile ? "100%" : "220px", padding: "9px 12px", fontSize: "14px",
-                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #fff)",
-                  color: COLOURS.NAVY,
-                }}
-              >
-                {FINANCE_COMPANIES.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
+          <div style={{ marginBottom: "18px" }}>
+            <label style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>
+              Team member
+            </label>
+            <select
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+              style={{
+                width: isMobile ? "100%" : "320px", padding: "9px 12px", fontSize: "14px",
+                border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", backgroundColor: "var(--bg-card, #fff)",
+                color: COLOURS.NAVY,
+              }}
+            >
+              <option value="">Select a member…</option>
+              {rows.map((m) => (
+                <option key={m.id} value={m.id}>{fullName(m)} — {m.role}</option>
+              ))}
+            </select>
           </div>
 
           {!selectedId && (
@@ -137,46 +124,51 @@ export default function WidgetVisibilityPanel({ members, isMobile }: { members: 
             <div style={{ fontSize: "13.5px", color: COLOURS.SLATE }}>Loading…</div>
           )}
 
-          {selectedId && !loading && selectedMember && selectedCompanyId && (
-            <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", overflow: "hidden" }}>
-              {PER_COMPANY_WIDGETS.map((w, i, arr) => {
-                const widgetKey = `${w.key}.${selectedCompanyId}`;
-                const current: "default" | "show" | "hide" =
-                  overrides[widgetKey] === true ? "show" : overrides[widgetKey] === false ? "hide" : "default";
-                return (
-                  <div key={w.key} style={{
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                    padding: "10px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none",
-                    opacity: saving === widgetKey ? 0.5 : 1,
-                  }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY }}>{w.label}</div>
-                      {w.tip && <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "1px" }}>{w.tip}</div>}
+          {selectedId && !loading && selectedMember && FINANCE_COMPANIES.map((company) => (
+            <div key={company.id} style={{ marginBottom: "18px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                {company.name}
+              </div>
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", overflow: "hidden" }}>
+                {PER_COMPANY_WIDGETS.map((w, i, arr) => {
+                  const widgetKey = `${w.key}.${company.id}`;
+                  const current: "default" | "show" | "hide" =
+                    overrides[widgetKey] === true ? "show" : overrides[widgetKey] === false ? "hide" : "default";
+                  return (
+                    <div key={w.key} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "10px 14px", borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none",
+                      opacity: saving === widgetKey ? 0.5 : 1,
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY }}>{w.label}</div>
+                        {w.tip && <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "1px" }}>{w.tip}</div>}
+                      </div>
+                      <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
+                        {(["default", "show", "hide"] as const).map((opt) => (
+                          <button
+                            key={opt}
+                            onClick={() => setWidget(widgetKey, opt)}
+                            disabled={saving === widgetKey}
+                            style={{
+                              fontSize: "11.5px", fontWeight: 600, padding: "5px 10px", borderRadius: "6px",
+                              border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.BORDER}`,
+                              backgroundColor: current === opt ? COLOURS.NAVY : "transparent",
+                              color: current === opt ? "white" : COLOURS.SLATE,
+                              cursor: saving === widgetKey ? "default" : "pointer",
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: "4px", flexShrink: 0 }}>
-                      {(["default", "show", "hide"] as const).map((opt) => (
-                        <button
-                          key={opt}
-                          onClick={() => setWidget(widgetKey, opt)}
-                          disabled={saving === widgetKey}
-                          style={{
-                            fontSize: "11.5px", fontWeight: 600, padding: "5px 10px", borderRadius: "6px",
-                            border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.BORDER}`,
-                            backgroundColor: current === opt ? COLOURS.NAVY : "transparent",
-                            color: current === opt ? "white" : COLOURS.SLATE,
-                            cursor: saving === widgetKey ? "default" : "pointer",
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>
