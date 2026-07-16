@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { COLOURS, useToast } from "../lib/SharedUI";
 import { MATRIX_LOCKED_EMAILS, isAdminTier, type UserCtx } from "../lib/permissions";
-import { PAGE_REGISTRY, GROUP_COLOURS } from "../lib/pageRegistry";
+import { PAGE_REGISTRY, GROUP_COLOURS, GROUP_ORDER } from "../lib/pageRegistry";
 import { WIDGET_REGISTRY, type WidgetDef } from "../lib/widgetRegistry";
 import { PERM_COLUMNS, roleDefault, type MatrixMember, type ColDef } from "./AccessMatrix";
 
@@ -98,8 +98,6 @@ const COLUMN_GROUPS: { page: TogglePage; cols: GridCol[] }[] = TOGGLEABLE_PAGES.
   };
 });
 
-const FLAT_COLS: GridCol[] = COLUMN_GROUPS.flatMap((g) => g.cols);
-
 // Three states per cell, cycled by clicking: Default (inherits the role's
 // normal behaviour, whatever it computes to) → On/Show (explicit
 // override) → Off/Hide (explicit override) → back to Default. Matches the
@@ -113,14 +111,19 @@ function nextState(s: TriState): TriState {
   return s === "default" ? "on" : s === "on" ? "off" : "default";
 }
 
-const MEMBER_COL_W = 160;
-const ROLE_COL_W = 52;
-const CELL_COL_W = 34;
+const MEMBER_COL_W = 180;
+const ROLE_COL_W = 70;
 
 export default function AccessControlPanel({ members, isMobile }: { members: MatrixMember[]; isMobile: boolean }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // 16 Jul 2026, per Khuram: the first version of this showed every page
+  // and every widget as columns at once — 50+ columns, unreadable. This
+  // version shows one page at a time via tabs, with only that page's
+  // widgets as columns, so the table stays a handful of columns wide and
+  // the text is legible without rotating it sideways.
+  const [selectedPageKey, setSelectedPageKey] = useState<string>(TOGGLEABLE_PAGES[0].permKey);
   const [pagePerms, setPagePerms] = useState<Record<string, Record<string, boolean | string | null>>>({});
   const [widgetOverrides, setWidgetOverrides] = useState<Record<string, Record<string, boolean>>>({});
   const [saving, setSaving] = useState<string | null>(null);
@@ -218,6 +221,10 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
     setSaving(null);
   }
 
+  const activeGroup = COLUMN_GROUPS.find((g) => g.page.permKey === selectedPageKey) || COLUMN_GROUPS[0];
+  const activeCols = activeGroup.cols;
+  const groupsPresent = GROUP_ORDER.filter((g) => TOGGLEABLE_PAGES.some((p) => p.group === g));
+
   return (
     <div style={{ marginTop: "12px" }}>
       {toast.element}
@@ -230,21 +237,49 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
         <div>
           <div style={{ fontSize: "17px", fontWeight: 700, color: open ? "white" : COLOURS.NAVY }}>Access Control</div>
           <div style={{ fontSize: "14px", color: open ? "rgba(255,255,255,0.7)" : COLOURS.SLATE }}>
-            Every member × every page and widget — scroll sideways. Wide bands = pages, narrow columns = the individual widgets on that page.
+            Pick a page below, then every member × that page&apos;s widgets in one short table.
           </div>
         </div>
         <span style={{ fontSize: "20px", color: open ? "white" : COLOURS.SLATE }}>{open ? "▲" : "▼"}</span>
       </div>
 
       {open && (
-        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "var(--bg-card, #ffffff)" }}>
+        <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderTop: "none", borderRadius: "0 0 8px 8px", backgroundColor: "var(--bg-card, #ffffff)", padding: "16px" }}>
           {!loaded ? (
             <div style={{ padding: "40px", textAlign: "center", color: COLOURS.SLATE }}>Loading…</div>
           ) : (
             <>
+              {/* Page tabs, grouped */}
+              <div style={{ marginBottom: "16px" }}>
+                {groupsPresent.map((group) => (
+                  <div key={group} style={{ marginBottom: "8px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>{group}</div>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {TOGGLEABLE_PAGES.filter((p) => p.group === group).map((page) => {
+                        const active = page.permKey === selectedPageKey;
+                        return (
+                          <button
+                            key={page.permKey}
+                            onClick={() => setSelectedPageKey(page.permKey)}
+                            style={{
+                              fontSize: "12.5px", fontWeight: active ? 700 : 500, padding: "6px 12px",
+                              borderRadius: "999px", cursor: "pointer",
+                              border: `1px solid ${active ? (GROUP_COLOURS[group] || COLOURS.NAVY) : COLOURS.BORDER}`,
+                              backgroundColor: active ? (GROUP_COLOURS[group] || COLOURS.NAVY) : "transparent",
+                              color: active ? "white" : COLOURS.SLATE,
+                            }}
+                          >
+                            {page.title}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {/* Legend */}
-              <div style={{ padding: "8px 12px", display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "13px", color: COLOURS.SLATE, borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
-                <span style={{ fontWeight: 700 }}>Legend:</span>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", fontSize: "12.5px", color: COLOURS.SLATE, alignItems: "center", marginBottom: "10px" }}>
                 <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
                   <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: COLOURS.GREEN, display: "inline-block" }} /> On / Show
                 </span>
@@ -252,7 +287,7 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                   <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: `var(--border-color, ${COLOURS.HAIRLINE})`, border: "1px solid #cbd5e1", display: "inline-block" }} /> Off / Hide
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                  <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: COLOURS.GREEN, opacity: 0.3, display: "inline-block" }} /> Default (page column shows the role&apos;s normal behaviour)
+                  <span style={{ width: 14, height: 14, borderRadius: 3, backgroundColor: COLOURS.GREEN, opacity: 0.3, display: "inline-block" }} /> Default
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
                   <span style={{ width: 14, height: 14, borderRadius: 3, border: "2px solid #111827", display: "inline-block" }} /> Locked
@@ -260,68 +295,31 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                 <span>Click a cell to cycle Default → On → Off → Default.</span>
               </div>
 
-              <div style={{ overflow: "auto", maxHeight: "calc(100vh - 220px)" }}>
-                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: "8px", overflow: "auto", maxHeight: "calc(100vh - 320px)" }}>
+                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
                   <colgroup>
                     <col style={{ width: isMobile ? 130 : MEMBER_COL_W }} />
                     <col style={{ width: ROLE_COL_W }} />
-                    {FLAT_COLS.map((c, i) => <col key={i} style={{ width: CELL_COL_W }} />)}
+                    {activeCols.map((c, i) => <col key={i} style={{ minWidth: 110 }} />)}
                   </colgroup>
                   <thead>
-                    {/* Page band row */}
                     <tr>
-                      <th style={{ ...stickyTh, left: 0, zIndex: 14, width: isMobile ? 130 : MEMBER_COL_W, backgroundColor: "var(--border-light, #f1f5f9)", borderBottom: "none" }} />
-                      <th style={{ ...stickyTh, left: isMobile ? 130 : MEMBER_COL_W, zIndex: 14, width: ROLE_COL_W, backgroundColor: "var(--border-light, #f1f5f9)", borderBottom: "none" }} />
-                      {COLUMN_GROUPS.map((g) => (
-                        <th key={g.page.permKey} colSpan={g.cols.length} title={g.page.title} style={{
-                          position: "sticky", top: 0, zIndex: 10,
-                          padding: "6px 2px",
-                          backgroundColor: GROUP_COLOURS[g.page.group] || COLOURS.SLATE,
-                          color: "white",
-                          textAlign: "center",
-                          fontSize: "10.5px",
-                          fontWeight: 700,
-                          letterSpacing: "0.2px",
-                          borderLeft: "2px solid var(--bg-card, #ffffff)",
-                          borderBottom: "none",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}>{g.page.title}</th>
-                      ))}
-                    </tr>
-                    {/* Column label row — vertical text so narrow widget columns still fit a real label */}
-                    <tr>
-                      <th style={{ ...stickyTh, top: 26, left: 0, zIndex: 14, width: isMobile ? 130 : MEMBER_COL_W, backgroundColor: "var(--border-light, #f1f5f9)", textAlign: "left", fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>Member</th>
-                      <th style={{ ...stickyTh, top: 26, left: isMobile ? 130 : MEMBER_COL_W, zIndex: 14, width: ROLE_COL_W, backgroundColor: "var(--border-light, #f1f5f9)", textAlign: "center", fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>Role</th>
-                      {FLAT_COLS.map((c, i) => {
-                        const isPageStart = c.kind === "access";
-                        const label = c.kind === "access" ? "Access" : c.widget.label;
-                        const tip = c.kind === "access" ? `Can this member reach ${c.page.title}?` : (c.widget.tip || c.widget.label);
+                      <th style={{ ...stickyTh, left: 0, zIndex: 4, width: isMobile ? 130 : MEMBER_COL_W, backgroundColor: "var(--border-light, #f1f5f9)", textAlign: "left", fontSize: "13.5px", fontWeight: 700, color: COLOURS.NAVY }}>Member</th>
+                      <th style={{ ...stickyTh, left: isMobile ? 130 : MEMBER_COL_W, zIndex: 4, width: ROLE_COL_W, backgroundColor: "var(--border-light, #f1f5f9)", textAlign: "center", fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>Role</th>
+                      {activeCols.map((c, i) => {
+                        const isAccess = c.kind === "access";
+                        const label = isAccess ? "Access" : c.widget.label;
+                        const tip = isAccess ? `Can this member reach ${c.page.title}?` : (c.widget.tip || c.widget.label);
                         return (
                           <th key={i} title={tip} style={{
-                            position: "sticky", top: 26, zIndex: 10,
-                            padding: "6px 2px 8px",
-                            height: "150px",
-                            textAlign: "center",
-                            verticalAlign: "bottom",
-                            cursor: "help",
-                            fontSize: "11px",
-                            fontWeight: isPageStart ? 700 : 500,
-                            color: isPageStart ? COLOURS.NAVY : COLOURS.SLATE,
+                            ...stickyTh, textAlign: "center", cursor: "help",
+                            fontSize: "12.5px", fontWeight: isAccess ? 700 : 500,
+                            color: isAccess ? COLOURS.NAVY : COLOURS.SLATE,
                             backgroundColor: "var(--border-light, #f1f5f9)",
-                            borderBottom: `2px solid ${COLOURS.BORDER}`,
-                            borderLeft: isPageStart ? `2px solid ${COLOURS.BORDER}` : undefined,
+                            borderLeft: isAccess ? `2px solid ${COLOURS.BORDER}` : undefined,
+                            padding: "8px 8px",
                           }}>
-                            <div style={{
-                              writingMode: "vertical-rl",
-                              transform: "rotate(180deg)",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              maxHeight: "140px",
-                              margin: "0 auto",
-                            }}>{label}</div>
+                            {label}
                           </th>
                         );
                       })}
@@ -336,28 +334,28 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                       return (
                         <tr key={m.id} style={{ backgroundColor: locked ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)" }}>
                           <td style={{
-                            ...stickyTd, left: 0, zIndex: 3,
+                            ...stickyTd, left: 0, zIndex: 2,
                             backgroundColor: locked ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                             borderRight: `1px solid ${COLOURS.BORDER}`, borderBottom: `1px solid ${COLOURS.BORDER}`,
-                            padding: "4px 6px",
+                            padding: "8px 10px",
                           }}>
                             <div style={{ fontWeight: 600, color: COLOURS.NAVY, fontSize: "13.5px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={self ? "Cannot modify your own access" : locked ? "Locked — cannot be changed" : undefined}>
                               {fullName(m)}
                             </div>
                           </td>
                           <td style={{
-                            ...stickyTd, left: isMobile ? 130 : MEMBER_COL_W, zIndex: 3,
+                            ...stickyTd, left: isMobile ? 130 : MEMBER_COL_W, zIndex: 2,
                             backgroundColor: locked ? "var(--bg-card-hover, #f8fafc)" : "var(--bg-card, #ffffff)",
                             borderRight: `1px solid ${COLOURS.BORDER}`, borderBottom: `1px solid ${COLOURS.BORDER}`,
-                            textAlign: "center", padding: "4px 2px",
+                            textAlign: "center", padding: "8px 4px",
                           }}>
-                            <span style={{ display: "inline-block", fontSize: "9.5px", fontWeight: 700, color: "white", backgroundColor: roleBadgeColor(m), borderRadius: "6px", padding: "2px 5px" }}>
+                            <span style={{ display: "inline-block", fontSize: "10.5px", fontWeight: 700, color: "white", backgroundColor: roleBadgeColor(m), borderRadius: "6px", padding: "2px 6px" }}>
                               {m.role}
                             </span>
                           </td>
-                          {FLAT_COLS.map((c, i) => {
-                            const isPageStart = c.kind === "access";
-                            const borderLeft = isPageStart ? `2px solid ${COLOURS.BORDER}` : undefined;
+                          {activeCols.map((c, i) => {
+                            const isAccess = c.kind === "access";
+                            const borderLeft = isAccess ? `2px solid ${COLOURS.BORDER}` : undefined;
 
                             if (c.kind === "access") {
                               const cellKey = m.id + c.page.permKey;
@@ -368,8 +366,8 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                               return (
                                 <td key={i} style={{ ...cellStyle, borderLeft }}>
                                   {locked ? (
-                                    <div style={{ width: 18, height: 18, margin: "0 auto", borderRadius: 4, border: "2px solid #111827", backgroundColor: on ? COLOURS.GREEN : `var(--border-color, ${COLOURS.HAIRLINE})`, display: "flex", alignItems: "center", justifyContent: "center" }} title="Locked — cannot be changed">
-                                      {on && <span style={{ color: "white", fontSize: 10, fontWeight: 700 }}>✓</span>}
+                                    <div style={{ width: 22, height: 22, margin: "0 auto", borderRadius: 5, border: "2px solid #111827", backgroundColor: on ? COLOURS.GREEN : `var(--border-color, ${COLOURS.HAIRLINE})`, display: "flex", alignItems: "center", justifyContent: "center" }} title="Locked — cannot be changed">
+                                      {on && <span style={{ color: "white", fontSize: 12, fontWeight: 700 }}>✓</span>}
                                     </div>
                                   ) : (
                                     <button
@@ -377,8 +375,8 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                                       disabled={isLoading || !canToggle}
                                       title={isLoading ? "Saving…" : !canToggle ? "Cannot modify your own access" : overridden ? `Override: ${on ? "On" : "Off"} — click to cycle` : `Default: ${on ? "on" : "off"} — click to override`}
                                       style={{
-                                        width: 18, height: 18, padding: 0, margin: "0 auto",
-                                        borderRadius: 4, cursor: canToggle ? "pointer" : "not-allowed",
+                                        width: 22, height: 22, padding: 0, margin: "0 auto",
+                                        borderRadius: 5, cursor: canToggle ? "pointer" : "not-allowed",
                                         border: overridden ? "2px solid #3b82f6" : "1px solid #cbd5e1",
                                         backgroundColor: on ? COLOURS.GREEN : `var(--border-color, ${COLOURS.HAIRLINE})`,
                                         opacity: isLoading ? 0.3 : overridden ? 1 : 0.4,
@@ -386,7 +384,7 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                                         transition: "all 0.15s",
                                       }}
                                     >
-                                      {on && <span style={{ color: "white", fontSize: 10, fontWeight: 700 }}>✓</span>}
+                                      {on && <span style={{ color: "white", fontSize: 12, fontWeight: 700 }}>✓</span>}
                                     </button>
                                   )}
                                 </td>
@@ -401,15 +399,15 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                             return (
                               <td key={i} style={{ ...cellStyle, borderLeft }}>
                                 {locked ? (
-                                  <div style={{ width: 16, height: 16, margin: "0 auto", borderRadius: 3, border: overridden ? "2px solid #3b82f6" : "1px solid #cbd5e1", backgroundColor: overridden ? (on ? COLOURS.GREEN : COLOURS.HAIRLINE) : "transparent" }} title="Locked — cannot be changed" />
+                                  <div style={{ width: 20, height: 20, margin: "0 auto", borderRadius: 4, border: overridden ? "2px solid #3b82f6" : "1px solid #cbd5e1", backgroundColor: overridden ? (on ? COLOURS.GREEN : COLOURS.HAIRLINE) : "transparent" }} title="Locked — cannot be changed" />
                                 ) : (
                                   <button
                                     onClick={() => canToggle && cycleWidget(m, c.widget)}
                                     disabled={isLoading || !canToggle}
                                     title={isLoading ? "Saving…" : !canToggle ? "Cannot modify your own access" : overridden ? `${on ? "Shown" : "Hidden"} (override) — click to cycle` : "Default — click to override"}
                                     style={{
-                                      width: 16, height: 16, padding: 0, margin: "0 auto",
-                                      borderRadius: 3, cursor: canToggle ? "pointer" : "not-allowed",
+                                      width: 20, height: 20, padding: 0, margin: "0 auto",
+                                      borderRadius: 4, cursor: canToggle ? "pointer" : "not-allowed",
                                       border: overridden ? "2px solid #3b82f6" : "1px solid #cbd5e1",
                                       backgroundColor: overridden ? (on ? COLOURS.GREEN : `var(--border-color, ${COLOURS.HAIRLINE})`) : "transparent",
                                       opacity: isLoading ? 0.3 : 1,
@@ -417,8 +415,8 @@ export default function AccessControlPanel({ members, isMobile }: { members: Mat
                                       transition: "all 0.15s",
                                     }}
                                   >
-                                    {overridden && on && <span style={{ color: "white", fontSize: 9, fontWeight: 700 }}>✓</span>}
-                                    {overridden && !on && <span style={{ color: COLOURS.SLATE, fontSize: 9, fontWeight: 700 }}>×</span>}
+                                    {overridden && on && <span style={{ color: "white", fontSize: 11, fontWeight: 700 }}>✓</span>}
+                                    {overridden && !on && <span style={{ color: COLOURS.SLATE, fontSize: 11, fontWeight: 700 }}>×</span>}
                                   </button>
                                 )}
                               </td>
