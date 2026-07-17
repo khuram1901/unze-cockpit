@@ -99,6 +99,7 @@ export default function ImperialPnlPage() {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<"sales" | "variance" | "margin" | "contribution">("sales");
   const [sortDesc, setSortDesc] = useState(true);
+  const [leagueTab, setLeagueTab] = useState<"top" | "watch" | "all">("top");
 
   const [insights, setInsights] = useState<Insight[]>([]);
   const [actions, setActions] = useState<string[]>([]);
@@ -290,26 +291,61 @@ export default function ImperialPnlPage() {
     { fy: "25-26*", sales: toM(4_282_500_000 > 0 ? league.reduce((s, l) => s + l.act_sales, 0) : 0), current: true },
   ];
 
-  // League rows with computed columns, sorted per the header the user
-  // clicked, searchable, cost centres pinned to the bottom.
-  const leagueRows = tradingBranches
+  // League rows with computed columns; the table shows Top 10 by default,
+  // with Watch list / All tabs — summary first, detail on demand.
+  const allLeagueRows = tradingBranches
     .map((l) => ({
       branch: l.branch,
       channel: l.channel,
       sales: l.act_sales,
+      projSales: l.proj_sales,
+      gp: l.act_gp,
       variance: l.proj_sales ? ((l.act_sales - l.proj_sales) / l.proj_sales) * 100 : null,
       margin: l.act_sales ? (l.act_gp / l.act_sales) * 100 : null,
       contribution: l.act_final,
     }))
-    .filter((l) => !search || l.branch.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       const va = a[sortKey] ?? -Infinity;
       const vb = b[sortKey] ?? -Infinity;
       return sortDesc ? (vb as number) - (va as number) : (va as number) - (vb as number);
     });
+  const watchRows = allLeagueRows.filter((l) => l.contribution < -100_000 || (l.variance !== null && l.variance < -20));
+  const searchActive = search.trim().length > 0;
+  const searched = allLeagueRows.filter((l) => l.branch.toLowerCase().includes(search.toLowerCase()));
+  const visibleRows = searchActive ? searched : leagueTab === "top" ? allLeagueRows.slice(0, 10) : leagueTab === "watch" ? watchRows : allLeagueRows;
+  const restRows = !searchActive && leagueTab === "top" ? allLeagueRows.slice(10) : [];
+  const restSales = restRows.reduce((s, r) => s + r.sales, 0);
+  const restGp = restRows.reduce((s, r) => s + r.gp, 0);
+  const restContribution = restRows.reduce((s, r) => s + r.contribution, 0);
+
   const costCentres = league.filter((l) => l.channel === "Cost centre");
   const costCentreTotal = costCentres.reduce((s, l) => s + l.act_final, 0);
-  const maxLeagueSales = Math.max(1, ...leagueRows.map((l) => l.sales));
+  const maxLeagueSales = Math.max(1, ...allLeagueRows.map((l) => l.sales));
+  const maxContribution = Math.max(1, ...allLeagueRows.map((l) => Math.abs(l.contribution)));
+
+  // Channel totals + stars for the summary cards — filter-independent
+  // (always the whole company over the selected period).
+  const onlineTotal = tradingBranches.filter((l) => l.channel === "Online PK");
+  const retailTotal = tradingBranches.filter((l) => l.channel !== "Online PK");
+  const onlineSales = onlineTotal.reduce((s, l) => s + l.act_sales, 0);
+  const onlineContribution = onlineTotal.reduce((s, l) => s + l.act_final, 0);
+  const retailSales = retailTotal.reduce((s, l) => s + l.act_sales, 0);
+  const retailContribution = retailTotal.reduce((s, l) => s + l.act_final, 0);
+  const companySales = onlineSales + retailSales;
+  const companyProjSales = tradingBranches.reduce((s, l) => s + l.proj_sales, 0);
+  const companyGp = tradingBranches.reduce((s, l) => s + l.act_gp, 0);
+  const companyFinal = tradingBranches.reduce((s, l) => s + l.act_final, 0) + costCentreTotal;
+
+  const retailByContribution = [...retailTotal].sort((a, b) => b.act_final - a.act_final);
+  const topStore = retailByContribution[0];
+  const bestMargin = [...tradingBranches]
+    .filter((l) => l.act_sales > 20_000_000)
+    .sort((a, b) => (b.act_gp / b.act_sales) - (a.act_gp / a.act_sales))[0];
+  const bestBeat = [...tradingBranches]
+    .filter((l) => l.proj_sales > 5_000_000)
+    .sort((a, b) => (b.act_sales / b.proj_sales) - (a.act_sales / a.proj_sales))[0];
+  const worstLosses = watchRows.filter((l) => l.contribution < -100_000).sort((a, b) => a.contribution - b.contribution).slice(0, 3);
+  const worstOffPlan = watchRows.filter((l) => l.variance !== null && l.variance < -20).sort((a, b) => (a.variance as number) - (b.variance as number)).slice(0, 2);
 
   const marginChip = (pct: number | null) => {
     if (pct === null) return { bg: COLOURS.TRACK, fg: COLOURS.SLATE, label: "—" };
@@ -555,21 +591,64 @@ export default function ImperialPnlPage() {
             {/* ── Branch league ── */}
             {show("imperial_pnl.branch_league") && (
             <div style={{ ...cardStyle, marginBottom: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
-                <div style={sectionTitle}>Branch league — {MONTH_LABEL(monthFrom)} to {MONTH_LABEL(monthTo)}</div>
+              <div style={sectionTitle}>Branch league — {MONTH_LABEL(monthFrom)} to {MONTH_LABEL(monthTo)}</div>
+              <div style={sectionCaption}>Summary first, detail on demand — the full list only when you ask for it</div>
+
+              {/* Summary cards: channel totals, stars, watch list */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px", marginBottom: "12px" }}>
+                <div style={{ background: COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, padding: "9px 11px" }}>
+                  <div style={{ fontSize: "11px", color: COLOURS.GREEN, fontWeight: 700, marginBottom: "2px" }}>CHANNEL TOTALS</div>
+                  <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7 }}>
+                    Online PK: {fmtM(onlineSales)} → <b>{onlineContribution >= 0 ? "+" : ""}{fmtM(onlineContribution)}</b><br />
+                    {retailTotal.length} retail stores: {fmtM(retailSales)} → <b>{retailContribution >= 0 ? "+" : ""}{fmtM(retailContribution)}</b><br />
+                    <span style={{ color: COLOURS.RED }}>HO + warehouses: {fmtM(costCentreTotal)}</span>
+                  </div>
+                </div>
+                <div style={{ background: COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, padding: "9px 11px" }}>
+                  <div style={{ fontSize: "11px", color: COLOURS.GREEN, fontWeight: 700, marginBottom: "2px" }}>STARS</div>
+                  <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7 }}>
+                    {topStore && <>{topStore.branch} +{fmtM(topStore.act_final)} (top store)<br /></>}
+                    {bestMargin && <>{bestMargin.branch} {fmtPct((bestMargin.act_gp / bestMargin.act_sales) * 100)} GP (best margin)<br /></>}
+                    {bestBeat && <>{bestBeat.branch} +{fmtPct((bestBeat.act_sales / bestBeat.proj_sales - 1) * 100)} vs plan (best beat)</>}
+                  </div>
+                </div>
+                <div style={{ background: watchRows.length > 0 ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT, borderRadius: RADII.SM, padding: "9px 11px" }}>
+                  <div style={{ fontSize: "11px", color: watchRows.length > 0 ? COLOURS.RED : COLOURS.GREEN, fontWeight: 700, marginBottom: "2px" }}>
+                    {watchRows.length > 0 ? `WATCH LIST — ${watchRows.length} STORE${watchRows.length > 1 ? "S" : ""}` : "WATCH LIST — CLEAR"}
+                  </div>
+                  <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7 }}>
+                    {watchRows.length === 0 && "No loss-making or badly off-plan stores in this period."}
+                    {worstLosses.length > 0 && <>{worstLosses.length} loss-making: {worstLosses.map((l) => `${l.branch} ${fmtM(l.contribution)}`).join(", ")}<br /></>}
+                    {worstOffPlan.length > 0 && <>Far off plan: {worstOffPlan.map((l) => `${l.branch} ${fmtPct(l.variance as number)}`).join(", ")}</>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabs + search */}
+              <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap", marginBottom: "8px" }}>
+                <button style={chipBtn(!searchActive && leagueTab === "top")} onClick={() => { setLeagueTab("top"); setSearch(""); }}>Top 10</button>
+                <button
+                  style={{ ...chipBtn(!searchActive && leagueTab === "watch"), color: !searchActive && leagueTab === "watch" ? "white" : COLOURS.RED }}
+                  onClick={() => { setLeagueTab("watch"); setSearch(""); }}
+                >
+                  Watch list ({watchRows.length})
+                </button>
+                <button style={chipBtn(!searchActive && leagueTab === "all")} onClick={() => { setLeagueTab("all"); setSearch(""); }}>All {allLeagueRows.length}</button>
+                <span style={{ flex: 1 }} />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search branches…"
-                  style={{ padding: "5px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "12px", width: "160px" }}
+                  style={{ padding: "5px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "12px", width: "150px" }}
                 />
               </div>
-              <div style={sectionCaption}>Click a column heading to sort · click a row to filter the whole page to that branch</div>
+
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", fontSize: "13px", borderCollapse: "collapse", minWidth: "560px" }}>
+                <table style={{ width: "100%", fontSize: "13px", borderCollapse: "collapse", minWidth: "600px" }}>
                   <thead>
                     <tr style={{ color: COLOURS.SLATE, textAlign: "left", fontSize: "11px" }}>
-                      <th style={{ fontWeight: 600, padding: "4px 0", width: "170px" }}>Branch</th>
+                      <th style={{ fontWeight: 600, padding: "4px 0", width: "26px" }}>#</th>
+                      <th style={{ fontWeight: 600, width: "160px" }}>Branch</th>
                       {sortHeader("sales", "Net sales")}
                       {sortHeader("variance", "vs plan")}
                       {sortHeader("margin", "GP %")}
@@ -577,37 +656,66 @@ export default function ImperialPnlPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {leagueRows.map((r) => {
+                    {visibleRows.length === 0 && (
+                      <tr><td colSpan={6} style={{ padding: "10px 0", color: COLOURS.SLATE, fontSize: "13px" }}>No branches match.</td></tr>
+                    )}
+                    {visibleRows.map((r) => {
                       const chip = marginChip(r.margin);
                       const selected = branchFilter === r.branch;
+                      const rank = allLeagueRows.indexOf(r) + 1;
                       return (
                         <tr
                           key={r.branch}
                           onClick={() => { setBranchFilter(selected ? "All" : r.branch); setChannelFilter("All"); }}
                           style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer", background: selected ? COLOURS.INFO_SOFT : r.contribution < -100_000 || (r.variance !== null && r.variance < -20) ? COLOURS.WARNING_SOFT : "transparent" }}
                         >
+                          <td style={{ color: COLOURS.INK_400, fontSize: "12px" }}>{rank}</td>
                           <td style={{ padding: "7px 0", fontWeight: 600 }}>{r.branch}{r.channel === "Online PK" ? " 🌐" : ""}</td>
                           <td>
                             {fmtM(r.sales)}{" "}
-                            <span style={{ display: "inline-block", background: COLOURS.BLUE, height: "5px", width: `${Math.max(2, Math.round((r.sales / maxLeagueSales) * 90))}px`, borderRadius: "3px", verticalAlign: "middle" }} />
+                            <span style={{ display: "inline-block", background: COLOURS.BLUE, height: "5px", width: `${Math.max(2, Math.round((r.sales / maxLeagueSales) * 80))}px`, borderRadius: "3px", verticalAlign: "middle" }} />
                           </td>
                           <td style={{ color: r.variance === null ? COLOURS.SLATE : r.variance >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 600 }}>
                             {r.variance === null ? "—" : `${r.variance >= 0 ? "+" : ""}${fmtPct(r.variance)}`}
                           </td>
                           <td><span style={{ background: chip.bg, color: chip.fg, borderRadius: RADII.PILL, padding: "2px 9px", fontSize: "12px", fontWeight: 600 }}>{chip.label}</span></td>
                           <td style={{ color: r.contribution >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 600 }}>
-                            {r.contribution >= 0 ? "+" : ""}{fmtM(r.contribution)}
+                            {r.contribution >= 0 ? "+" : ""}{fmtM(r.contribution)}{" "}
+                            <span style={{ display: "inline-block", background: r.contribution >= 0 ? COLOURS.GREEN : COLOURS.RED, height: "5px", width: `${Math.max(2, Math.round((Math.abs(r.contribution) / maxContribution) * 50))}px`, borderRadius: "3px", verticalAlign: "middle", opacity: 0.7 }} />
                           </td>
                         </tr>
                       );
                     })}
-                    {costCentres.length > 0 && !search && (
-                      <tr style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
-                        <td style={{ padding: "7px 0", fontWeight: 600, color: COLOURS.INK_400 }}>{costCentres.map((c) => c.branch).join(" + ")}</td>
-                        <td style={{ color: COLOURS.INK_400 }}>cost centres</td>
+                    {restRows.length > 0 && (
+                      <tr onClick={() => setLeagueTab("all")} style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer", background: COLOURS.CARD_ALT }}>
+                        <td></td>
+                        <td style={{ padding: "7px 0", fontWeight: 600, color: COLOURS.SLATE }}>{restRows.length} other stores</td>
+                        <td style={{ color: COLOURS.SLATE }}>{fmtM(restSales)}</td>
+                        <td style={{ color: COLOURS.INK_400 }}>—</td>
+                        <td style={{ color: COLOURS.SLATE }}>{restSales > 0 ? fmtPct((restGp / restSales) * 100) : "—"}</td>
+                        <td style={{ color: restContribution >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 600 }}>{restContribution >= 0 ? "+" : ""}{fmtM(restContribution)} · tap for all</td>
+                      </tr>
+                    )}
+                    {costCentres.length > 0 && !searchActive && leagueTab !== "watch" && (
+                      <tr style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, background: COLOURS.CARD_ALT }}>
+                        <td></td>
+                        <td style={{ padding: "7px 0", fontWeight: 600, color: COLOURS.INK_400 }}>Cost centres (HO + {costCentres.length - 1} warehouse{costCentres.length > 2 ? "s" : ""})</td>
+                        <td style={{ color: COLOURS.INK_400 }}>—</td>
                         <td style={{ color: COLOURS.INK_400 }}>—</td>
                         <td style={{ color: COLOURS.INK_400 }}>—</td>
                         <td style={{ color: COLOURS.RED, fontWeight: 600 }}>{fmtM(costCentreTotal)}</td>
+                      </tr>
+                    )}
+                    {!searchActive && leagueTab !== "watch" && (
+                      <tr style={{ borderTop: `2px solid ${COLOURS.NAVY}`, background: COLOURS.CARD_ALT }}>
+                        <td></td>
+                        <td style={{ padding: "7px 0", fontWeight: 700 }}>Whole company</td>
+                        <td style={{ fontWeight: 700 }}>{fmtM(companySales)}</td>
+                        <td style={{ color: companySales >= companyProjSales ? COLOURS.GREEN : COLOURS.RED, fontWeight: 700 }}>
+                          {companyProjSales > 0 ? `${companySales >= companyProjSales ? "+" : ""}${fmtPct(((companySales - companyProjSales) / companyProjSales) * 100)}` : "—"}
+                        </td>
+                        <td style={{ fontWeight: 700 }}>{companySales > 0 ? fmtPct((companyGp / companySales) * 100) : "—"}</td>
+                        <td style={{ color: companyFinal >= 0 ? COLOURS.GREEN : COLOURS.RED, fontWeight: 700 }}>{companyFinal >= 0 ? "+" : ""}{fmtM(companyFinal)}</td>
                       </tr>
                     )}
                   </tbody>

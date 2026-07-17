@@ -30,6 +30,12 @@ The audit page is now organised around the audit manager's "Audit activities" Ex
 
 ---
 
+## 2026-07-18 (evening) — Imperial branch league decluttered: summary cards + Top 10 / Watch / All tabs
+
+Khuram found the 33-row branch league messy. Rebuilt to the approved mockup, per the house "management by exception" rule: three summary cards on top (channel totals Online vs retail vs cost centres; stars — top store, best margin over 20m sales, best plan-beat; watch list naming the loss-makers and worst off-plan stores), then the table defaults to **Top 10** with **Watch list (n)** and **All 33** tabs. A "N other stores" roll-up row (tap to expand), the cost-centres row, and a bold whole-company total row keep every rupee accounted for whatever tab is open. Rank numbers added, contribution gets a mini bar like sales, searching switches to the full list automatically, and all previous behaviour (sortable headers, click-a-row-to-filter, RAG margin chips) is retained. Summary cards are filter-independent — always the whole company for the selected period. tsc + eslint clean.
+
+---
+
 ## 2026-07-18 (verification pass) — Full P&L stack check + anon RPC lockdown
 
 Khuram asked for a check that all SQL is applied, code pushed, and everything enabled. Verified: git main = origin (5ba5025), all 15 database objects from migrations 142–145 present (10 RPCs, 4 tables, permission column), RLS enabled on all 4 new tables, live data intact (11 Imperial months / 10,785 rows, Unze 440 rows). The security advisor scan then surfaced a real issue: security-definer functions default to EXECUTE for PUBLIC, so the `anon` role could call every P&L RPC through the REST API without logging in. Migration 149 revokes anon/public execute on all 16 P&L read RPCs (139-145 vintage) and grants authenticated + service_role — applied and verified (`anon_can_run=false` across the board). Honest caveat recorded in the migration: `authenticated` still means any logged-in member could call these RPCs directly outside the page permission gates; fixing that properly means permission checks inside each function, across the app's whole RPC surface — flagged for a future pass.
