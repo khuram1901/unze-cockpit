@@ -131,6 +131,7 @@ export default function ProfitAndLossPage() {
   const [showMarket, setShowMarket] = useState(false);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [actions, setActions] = useState<string[]>([]);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [insightError, setInsightError] = useState("");
 
@@ -194,6 +195,24 @@ export default function ProfitAndLossPage() {
     return () => { active = false; };
   }, [companyId, hasUnze, monthFrom, monthTo, plantFilter]);
 
+  // Saved AI commentary for this exact period + plant — shown as-is on
+  // every visit; only Regenerate replaces it (Khuram's request).
+  useEffect(() => {
+    if (!hasUnze || !monthFrom || !monthTo) return;
+    let active = true;
+    async function loadSaved() {
+      const { data } = await supabase.rpc("get_pnl_commentary", { p_company: "UTPL", p_scope: plantFilter, p_from: monthFrom, p_to: monthTo });
+      if (!active) return;
+      const row = data && data[0];
+      setInsights((row?.insights || []) as Insight[]);
+      setActions((row?.actions || []) as string[]);
+      setGeneratedAt(row?.generated_at || null);
+      setInsightError("");
+    }
+    loadSaved();
+    return () => { active = false; };
+  }, [hasUnze, monthFrom, monthTo, plantFilter]);
+
   async function handleUpload() {
     if (uploadFiles.length === 0) return;
     setUploading(true);
@@ -229,6 +248,7 @@ export default function ProfitAndLossPage() {
       if (!res.ok) throw new Error(body.error || "Failed to generate commentary");
       setInsights((body.insights || []) as Insight[]);
       setActions((body.actions || []) as string[]);
+      setGeneratedAt(body.generated_at || new Date().toISOString());
     } catch (err) {
       setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
     }
@@ -694,7 +714,11 @@ export default function ProfitAndLossPage() {
                         {generating ? "Analysing…" : insights.length > 0 ? "Regenerate" : "Generate"}
                       </button>
                     </div>
-                    <div style={sectionCaption}>Fresh analysis of the selected plant and period, tied to market context</div>
+                    <div style={sectionCaption}>
+                      {generatedAt
+                        ? `Saved analysis from ${formatDateUK(generatedAt.slice(0, 10))} for this exact period and plant — press Regenerate to refresh it`
+                        : "Analysis of the selected plant and period, tied to market context — saved once generated"}
+                    </div>
                     {insightError && <p style={{ fontSize: "12px", color: COLOURS.RED }}>{insightError}</p>}
                     {insights.length === 0 && !insightError && !generating && (
                       <p style={{ fontSize: "12px", color: COLOURS.SLATE }}>Press Generate — each run reads the live numbers for the current filters.</p>

@@ -81,7 +81,12 @@ export async function POST(request: NextRequest) {
         expense_lines: lineRes.data || [],
         note: "Amounts are PKR. Every figure has projection (plan) and actual — variance vs plan is central. Highly seasonal retail: Nov-Mar are the peak months.",
       };
-      businessContext = `The company: Imperial Footwear (brand "Unze London") — Pakistani footwear retailer with ~32 branches across malls and cities plus a large Online PK channel (~24% of sales). Highly seasonal (wedding season Nov-Dec, Eid ~Mar). Head Office and warehouses are cost centres. You are briefing the CEO on plan-vs-actual discipline, branch performance, channel mix and seasonality risk.`;
+      businessContext = `The company: Imperial Footwear (brand "Unze London") — Pakistani footwear retailer with ~32 branches across malls and cities plus a large Online PK channel (~24% of sales). Highly seasonal (wedding season Nov-Dec, Eid ~Mar). Head Office and warehouses are cost centres. You are briefing the CEO on plan-vs-actual discipline, branch performance, channel mix and seasonality risk.
+
+Market context (Pakistan retail, as of July 2026):
+- Footwear market growing ~6.5% CAGR; overall retail ~8.2% CAGR. Competitors with strong retail presence: Bata, Service, Stylo, Hush Puppies.
+- E-commerce is the growth engine: Pakistan online sales projected past PKR 1.2 trillion in 2026, 85%+ of orders from mobile, social commerce (Facebook/Instagram/TikTok/WhatsApp) heading toward ~35% of online retail; fashion is the top category on marketplaces. Cash on delivery still dominates (~95%).
+- Cost pressure on physical stores: CPI inflation 11.0% (June 2026), SBP policy rate 11.5%, elevated energy costs — mall rents, wages and electricity squeeze store margins while online scales cheaper.`;
     } else {
       if (!companyId) return Response.json({ error: "companyId is required" }, { status: 400 });
       const plantFilter = typeof plant === "string" && plant ? plant : "All";
@@ -118,7 +123,27 @@ export async function POST(request: NextRequest) {
     if (!toolUse || toolUse.type !== "tool_use") {
       return Response.json({ error: "No insights generated" }, { status: 500 });
     }
-    return Response.json(toolUse.input);
+    const result = toolUse.input as { insights: unknown; actions: unknown };
+
+    // Persist so the same period+scope shows this exact analysis on every
+    // return visit — regeneration upserts over the old row.
+    const companyKey = company === "IFPL" ? "IFPL" : "UTPL";
+    const scopeKey = company === "IFPL"
+      ? `${typeof channel === "string" && channel ? channel : "All"}|${typeof branch === "string" && branch ? branch : "All"}`
+      : (typeof plant === "string" && plant ? plant : "All");
+    const generatedAt = new Date().toISOString();
+    await db.from("pnl_commentary").upsert({
+      company: companyKey,
+      scope_key: scopeKey,
+      month_from: from,
+      month_to: to,
+      insights: result.insights,
+      actions: result.actions,
+      generated_by: auth.email,
+      generated_at: generatedAt,
+    }, { onConflict: "company,scope_key,month_from,month_to" });
+
+    return Response.json({ ...result, generated_at: generatedAt });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json({ error: message }, { status: 500 });

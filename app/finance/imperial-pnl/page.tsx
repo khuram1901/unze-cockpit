@@ -32,7 +32,8 @@ type KpiRow = {
 type LeagueRow = { branch: string; channel: string; proj_sales: number; act_sales: number; act_gp: number; act_final: number };
 type LineTotal = { line: string; category: string; projection: number; actual: number };
 type ValidationRow = { month: string; file_name: string; status: string; checks_passed: number; checks_failed: number; warnings: number; uploaded_at: string };
-type UploadResult = { month: string; accepted: boolean; summary: string };
+type CheckDetail = { name: string; expected: number; reported: number; diff: number; blocking: boolean };
+type UploadResult = { month: string; accepted: boolean; summary: string; failed?: CheckDetail[]; warnings?: CheckDetail[] };
 type Insight = { title: string; detail: string; severity: "good" | "watch" | "urgent" };
 
 // Net sales by financial year from the workbook's Sales Growth sheet
@@ -101,8 +102,10 @@ export default function ImperialPnlPage() {
 
   const [insights, setInsights] = useState<Insight[]>([]);
   const [actions, setActions] = useState<string[]>([]);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [insightError, setInsightError] = useState("");
+  const [showMarket, setShowMarket] = useState(false);
 
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -151,6 +154,24 @@ export default function ImperialPnlPage() {
     return () => { active = false; };
   }, [monthFrom, monthTo, channelFilter, branchFilter]);
 
+  // Saved AI commentary for this exact period + scope — shown as-is on
+  // every visit; only Regenerate replaces it.
+  useEffect(() => {
+    if (!monthFrom || !monthTo) return;
+    let active = true;
+    async function loadSaved() {
+      const { data } = await supabase.rpc("get_pnl_commentary", { p_company: "IFPL", p_scope: `${channelFilter}|${branchFilter}`, p_from: monthFrom, p_to: monthTo });
+      if (!active) return;
+      const row = data && data[0];
+      setInsights((row?.insights || []) as Insight[]);
+      setActions((row?.actions || []) as string[]);
+      setGeneratedAt(row?.generated_at || null);
+      setInsightError("");
+    }
+    loadSaved();
+    return () => { active = false; };
+  }, [monthFrom, monthTo, channelFilter, branchFilter]);
+
   // The workbook (~9.4 MB) is over Vercel's 4.5 MB request-body cap, so the
   // file itself is parsed HERE in the browser (parser loaded on demand) and
   // only the extracted rows go to the server as JSON.
@@ -177,7 +198,20 @@ export default function ImperialPnlPage() {
         setUploadResults([{ month: "", accepted: false, summary: body.error || `Upload failed (${res.status})` }]);
         return;
       }
-      setUploadResults((body.results || []) as UploadResult[]);
+      // Attach the exact check figures from the local parse so a rejected
+      // month shows precisely which reconciliation broke and by how much —
+      // that's what accounts need to fix the file and re-upload.
+      const detail = (month: string, blocking: boolean) => {
+        const m = months.find((x) => x.month === month);
+        return (m?.checks || [])
+          .filter((c) => !c.passed && c.blocking === blocking)
+          .map((c) => ({ name: c.name, expected: c.expected, reported: c.reported, diff: c.diff, blocking: c.blocking }));
+      };
+      setUploadResults(((body.results || []) as UploadResult[]).map((r) => ({
+        ...r,
+        failed: detail(r.month, true),
+        warnings: detail(r.month, false),
+      })));
       const { data } = await supabase.rpc("ifpl_kpi_by_month", { p_from: "2000-01-01", p_to: "2100-01-01", p_channel: "All", p_branch: "All" });
       setAllMonths(((data || []) as KpiRow[]).map((r) => r.month));
     } catch (err) {
@@ -201,6 +235,7 @@ export default function ImperialPnlPage() {
       if (!res.ok) throw new Error(body.error || "Failed to generate commentary");
       setInsights((body.insights || []) as Insight[]);
       setActions((body.actions || []) as string[]);
+      setGeneratedAt(body.generated_at || new Date().toISOString());
     } catch (err) {
       setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
     }
@@ -338,8 +373,24 @@ export default function ImperialPnlPage() {
               </span>
             </div>
             {uploadResults.map((r, i) => (
-              <div key={i} style={{ marginTop: "8px", padding: "8px 12px", borderRadius: RADII.SM, background: r.accepted ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, fontSize: "12px", fontWeight: 600, color: r.accepted ? COLOURS.GREEN : COLOURS.RED }}>
-                {r.month ? MONTH_LABEL(r.month) + " — " : ""}{r.accepted ? "Accepted — " : "Rejected — "}{r.summary}
+              <div key={i} style={{ marginTop: "8px", padding: "8px 12px", borderRadius: RADII.SM, background: r.accepted ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT }}>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: r.accepted ? COLOURS.GREEN : COLOURS.RED }}>
+                  {r.month ? MONTH_LABEL(r.month) + " — " : ""}{r.accepted ? "Accepted — " : "Rejected — "}{r.summary}
+                </div>
+                {(r.failed || []).length > 0 && (
+                  <div style={{ fontSize: "12px", color: COLOURS.RED, lineHeight: 1.6, marginTop: "4px" }}>
+                    {(r.failed || []).map((c, j) => (
+                      <div key={j}>✗ {c.name}: should be {fmtM(c.expected)}, file shows {fmtM(c.reported)} (out by {fmtM(c.diff)})</div>
+                    ))}
+                  </div>
+                )}
+                {(r.warnings || []).length > 0 && (
+                  <div style={{ fontSize: "12px", color: COLOURS.AMBER, lineHeight: 1.6, marginTop: "4px" }}>
+                    {(r.warnings || []).map((c, j) => (
+                      <div key={j}>⚠ {c.name}: should be {fmtM(c.expected)}, file shows {fmtM(c.reported)} (out by {fmtM(c.diff)}) — accepted anyway, worth checking</div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -609,7 +660,11 @@ export default function ImperialPnlPage() {
                     {generating ? "Analysing…" : insights.length > 0 ? "Regenerate" : "Generate"}
                   </button>
                 </div>
-                <div style={sectionCaption}>Fresh analysis of the selected scope and period</div>
+                <div style={sectionCaption}>
+                  {generatedAt
+                    ? `Saved analysis from ${formatDateUK(generatedAt.slice(0, 10))} for this exact period and scope — press Regenerate to refresh it`
+                    : "Analysis of the selected scope and period, tied to retail market context — saved once generated"}
+                </div>
                 {insightError && <p style={{ fontSize: "12px", color: COLOURS.RED }}>{insightError}</p>}
                 {insights.length === 0 && !insightError && !generating && (
                   <p style={{ fontSize: "12px", color: COLOURS.SLATE }}>Press Generate — each run reads the live numbers for the current filters.</p>
@@ -658,7 +713,24 @@ export default function ImperialPnlPage() {
                     Last upload {formatDateUK(validationRows[validationRows.length - 1].uploaded_at.slice(0, 10))}
                   </span>
                 )}
+                <span style={{ width: "1px", height: "16px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
+                <button onClick={() => setShowMarket(!showMarket)} style={{ ...chipBtn(showMarket), padding: "3px 11px", fontSize: "11px" }}>
+                  {showMarket ? "Hide market context" : "Market context"}
+                </button>
               </div>
+              {showMarket && (
+                <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7, marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "10px" }}>
+                  <div style={{ fontWeight: 700, fontSize: "11px", color: COLOURS.GREEN, marginBottom: "3px" }}>DEMAND — TAILWINDS</div>
+                  <div>· Pakistan&apos;s footwear market growing ~6.5% a year; overall retail ~8.2% — driven by a young population, urbanisation and a growing middle class. (<a href="https://www.6wresearch.com/industry-report/pakistan-footwear-market-2020-2026" target="_blank" rel="noopener noreferrer" style={{ color: COLOURS.BLUE }}>6Wresearch</a>, <a href="https://www.6wresearch.com/industry-report/pakistan-retail-industry-market-outlook" target="_blank" rel="noopener noreferrer" style={{ color: COLOURS.BLUE }}>retail outlook</a>)</div>
+                  <div>· E-commerce is the growth engine: online sales projected past PKR 1.2 trillion in 2026, 85%+ of orders on mobile, fashion the top marketplace category — plays directly to Online PK&apos;s strength. (<a href="https://www.digitalmediatrend.com/pakistan-e-commerce-in-2026-pakistans-e-commerce-growth-and-market-share/" target="_blank" rel="noopener noreferrer" style={{ color: COLOURS.BLUE }}>Digital Media Trend</a>, <a href="https://www.statista.com/outlook/emo/ecommerce/pakistan" target="_blank" rel="noopener noreferrer" style={{ color: COLOURS.BLUE }}>Statista</a>)</div>
+                  <div>· Social commerce (Facebook/Instagram/TikTok/WhatsApp selling) heading toward ~35% of online retail; cash on delivery still ~95% of orders.</div>
+                  <div style={{ fontWeight: 700, fontSize: "11px", color: COLOURS.RED, margin: "8px 0 3px" }}>COSTS — HEADWINDS</div>
+                  <div>· CPI inflation 11.0% (June 2026); SBP policy rate 11.5% — squeezes consumer wallets and keeps borrowing dear. (<a href="https://tradingeconomics.com/pakistan/inflation-cpi" target="_blank" rel="noopener noreferrer" style={{ color: COLOURS.BLUE }}>Trading Economics</a>)</div>
+                  <div>· Store economics under pressure: mall rents, wages and electricity rising while online scales cheaper — visible in your own numbers (rent + wages are the two biggest overheads).</div>
+                  <div>· Established competitors with deep retail networks: Bata, Service, Stylo, Hush Puppies. (<a href="https://www.pacra.com/view/storage/app/Footwear%20-%20PACRA%20Research%20-%20Sep'25_1757929234.pdf" target="_blank" rel="noopener noreferrer" style={{ color: COLOURS.BLUE }}>PACRA sector study</a>)</div>
+                  <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "8px" }}>Researched 18/07/2026 — directional context, not live data.</div>
+                </div>
+              )}
             </div>
             )}
           </>

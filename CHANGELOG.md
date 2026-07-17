@@ -30,6 +30,18 @@ The audit page is now organised around the audit manager's "Audit activities" Ex
 
 ---
 
+## 2026-07-18 (later) — Saved AI commentary, exact upload errors, retail market context
+
+Three more of Khuram's requests on the P&L pages:
+
+- **AI commentary is now saved per period + scope** (migration 145: `pnl_commentary` table, unique on company/scope/from/to, read via `get_pnl_commentary` RPC). Returning to the same filters shows the saved analysis with "Saved analysis from DD/MM/YYYY"; only pressing Regenerate replaces it (upsert). Applies to both pages — Unze keyed by plant, Imperial by channel|branch.
+- **Imperial upload now shows exact check failures**: each rejected month lists every blocking check with "should be X, file shows Y (out by Z)" so accounts can fix the file and re-upload; accepted-with-warnings months show the same detail in amber. Figures come from the client-side parse — no extra round trip.
+- **Retail market context added to Imperial** (researched 18/07/2026, sourced): footwear ~6.5%/retail ~8.2% CAGR, e-commerce past PKR 1.2tn in 2026 with fashion the top category (tailwind for Online PK), social commerce ~35%, CPI 11%/rate 11.5% + rising store costs as headwinds, competitor set (Bata, Service, Stylo, Hush Puppies). Collapsible footer next to the data strip, and the same facts feed the IFPL AI prompt.
+
+tsc + eslint clean.
+
+---
+
 ## 2026-07-18 — P&L naming + access controls: "Imperial P&L" / "Unze P&L", matrix toggle, per-section widget toggles
 
 Khuram's follow-up requests, all three delivered:

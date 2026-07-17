@@ -46,6 +46,24 @@ const formatMonthLabel = (ym: string) => {
   return `${months[parseInt(m)]} ${y}`;
 };
 
+const DEPT_ACCENT: Record<string, string> = {
+  "Finance": COLOURS.GREEN,
+  "HR": COLOURS.AMBER,
+  "Admin": COLOURS.SLATE,
+  "Audit": COLOURS.RED,
+  "Taxation": COLOURS.RED,
+  "IT": COLOURS.BLUE,
+  "Unze Trading Ops": COLOURS.BLUE,
+  "Executive Office": COLOURS.NAVY,
+};
+const deptAccent = (dept: string) => DEPT_ACCENT[dept] || COLOURS.SLATE;
+
+function taskDotColour(status: string) {
+  if (status === "Completed") return COLOURS.GREEN;
+  if (status === "In Progress") return COLOURS.RED;
+  return COLOURS.AMBER;
+}
+
 export default function MyMinutesPageWrapper() {
   return <Suspense fallback={<p>Loading...</p>}><MyMinutesPage /></Suspense>;
 }
@@ -369,187 +387,169 @@ function MyMinutesPage() {
               const stats = getTaskStatsFor(allDeptMeetings);
 
               return (
-                <div key={dept} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "12px" }}>
+                <div key={dept} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "10px" }}>
 
-                  {/* Department header with task stats dashboard */}
+                  {/* Department header — compact left-accent row */}
                   <div
                     onClick={() => toggleDept(dept)}
                     style={{
-                      padding: "16px 20px", cursor: "pointer",
-                      backgroundColor: isDeptOpen ? COLOURS.NAVY : COLOURS.CARD,
-                      display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap",
+                      padding: "10px 14px", cursor: "pointer",
+                      backgroundColor: isDeptOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+                      display: "flex", alignItems: "center", gap: "10px",
+                      borderLeft: `3px solid ${deptAccent(dept)}`,
                       borderBottom: isDeptOpen ? `1px solid ${COLOURS.BORDER}` : "none",
                     }}
                   >
+                    <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: deptAccent(dept), flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "16px", fontWeight: 700, color: isDeptOpen ? "white" : COLOURS.NAVY }}>{dept}</div>
-                      <div style={{ fontSize: "12px", color: isDeptOpen ? "rgba(255,255,255,0.55)" : COLOURS.SLATE, marginTop: "2px" }}>
-                        {allDeptMeetings.length} meeting{allDeptMeetings.length !== 1 ? "s" : ""} · {months.length} month{months.length !== 1 ? "s" : ""}
-                        {stats.total > 0 && <span> · {stats.total} task{stats.total !== 1 ? "s" : ""} total</span>}
-                      </div>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{dept}</span>
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "8px" }}>
+                        {allDeptMeetings.length} meeting{allDeptMeetings.length !== 1 ? "s" : ""}
+                      </span>
                     </div>
                     {/* Task stats pills */}
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: "4px", alignItems: "center", flexWrap: "wrap" }}>
                       {stats.open > 0 && (
-                        <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: RADII.PILL, backgroundColor: isDeptOpen ? "rgba(239,68,68,0.25)" : COLOURS.DANGER_SOFT, color: isDeptOpen ? "#fca5a5" : COLOURS.RED }}>
+                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.DANGER_SOFT, color: COLOURS.RED }}>
                           {stats.open} in progress
                         </span>
                       )}
                       {stats.pending > 0 && (
-                        <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: RADII.PILL, backgroundColor: isDeptOpen ? "rgba(245,158,11,0.25)" : COLOURS.WARNING_SOFT, color: isDeptOpen ? "#fcd34d" : COLOURS.AMBER }}>
+                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.WARNING_SOFT, color: COLOURS.AMBER }}>
                           {stats.pending} pending
                         </span>
                       )}
                       {stats.completed > 0 && (
-                        <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: RADII.PILL, backgroundColor: isDeptOpen ? "rgba(34,197,94,0.2)" : COLOURS.SUCCESS_SOFT, color: isDeptOpen ? "#86efac" : COLOURS.GREEN }}>
-                          {stats.completed} completed
+                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }}>
+                          {stats.completed} done
                         </span>
                       )}
                       {stats.total === 0 && (
-                        <span style={{ fontSize: "11px", color: isDeptOpen ? "rgba(255,255,255,0.4)" : COLOURS.SLATE }}>no tasks</span>
+                        <span style={{ fontSize: "10px", color: COLOURS.SLATE }}>no tasks</span>
                       )}
                     </div>
-                    <span style={{ color: isDeptOpen ? "white" : COLOURS.SLATE, fontSize: "16px", flexShrink: 0 }}>{isDeptOpen ? "▲" : "▼"}</span>
+                    <span style={{ color: COLOURS.SLATE, fontSize: "10px", flexShrink: 0 }}>{isDeptOpen ? "▲" : "▼"}</span>
                   </div>
 
                   {/* Month sub-groups */}
                   {isDeptOpen && (
-                    <div style={{ padding: "10px 12px", backgroundColor: COLOURS.CARD_ALT }}>
+                    <div>
                       {months.map(([month, monthMeetings]) => {
                         const monthKey = `${dept}:${month}`;
                         const isMonthOpen = expandedMonths.has(monthKey);
                         const monthStats = getTaskStatsFor(monthMeetings);
 
                         return (
-                          <div key={monthKey} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "8px" }}>
-                            {/* Month header */}
+                          <div key={monthKey} style={{ borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                            {/* Month header — indented compact row */}
                             <div
                               onClick={() => toggleMonth(monthKey)}
                               style={{
-                                padding: "10px 16px", cursor: "pointer",
-                                display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px",
+                                padding: "7px 14px 7px 28px", cursor: "pointer",
+                                display: "flex", alignItems: "center", gap: "8px",
                                 backgroundColor: isMonthOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
                                 borderBottom: isMonthOpen ? `1px solid ${COLOURS.BORDER}` : "none",
                               }}
                             >
-                              <div>
-                                <span style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{formatMonthLabel(month)}</span>
-                                <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "10px" }}>
-                                  {monthMeetings.length} meeting{monthMeetings.length !== 1 ? "s" : ""}
-                                  {monthStats.open > 0 && <span style={{ color: COLOURS.RED, fontWeight: 700 }}> · {monthStats.open} in progress</span>}
-                                  {monthStats.pending > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {monthStats.pending} pending</span>}
-                                  {monthStats.completed > 0 && <span style={{ color: COLOURS.GREEN, fontWeight: 700 }}> · {monthStats.completed} done</span>}
-                                </span>
-                              </div>
-                              <span style={{ color: COLOURS.SLATE, fontSize: "14px", flexShrink: 0 }}>{isMonthOpen ? "▲" : "▼"}</span>
+                              <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>📅</span>
+                              <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, flex: 1 }}>{formatMonthLabel(month)}</span>
+                              <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>
+                                {monthMeetings.length} mtg{monthMeetings.length !== 1 ? "s" : ""}
+                                {monthStats.open > 0 && <span style={{ color: COLOURS.RED }}> · {monthStats.open} in progress</span>}
+                                {monthStats.pending > 0 && <span style={{ color: COLOURS.AMBER }}> · {monthStats.pending} pending</span>}
+                                {monthStats.completed > 0 && <span style={{ color: COLOURS.GREEN }}> · {monthStats.completed} done</span>}
+                              </span>
+                              <span style={{ color: COLOURS.SLATE, fontSize: "10px", flexShrink: 0 }}>{isMonthOpen ? "▲" : "▼"}</span>
                             </div>
 
                             {/* Individual meetings within month */}
                             {isMonthOpen && (
-                              <div style={{ padding: "8px" }}>
+                              <div style={{ paddingLeft: "14px" }}>
                                 {monthMeetings.map((meeting) => {
                                   const isOpen = expandedId === meeting.id;
                                   const mTasks = getTasksForMeeting(meeting.id);
                                   const completedCount = mTasks.filter((t) => t.status === "Completed").length;
-                                  const openCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
+                                  const pct = mTasks.length ? Math.round((completedCount / mTasks.length) * 100) : 0;
 
                                   return (
-                                    <div key={meeting.id} style={{ ...cardStyle, padding: 0, overflow: "hidden", marginBottom: "6px" }}>
-                                      {/* Meeting header row */}
+                                    <div key={meeting.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
+                                      {/* Compact meeting row */}
                                       <div onClick={() => setExpandedId(isOpen ? null : meeting.id)} style={{
-                                        padding: "12px 16px", cursor: "pointer",
-                                        display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+                                        display: "flex", alignItems: "center", gap: "10px",
+                                        padding: "8px 14px", cursor: "pointer",
                                         backgroundColor: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
                                       }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                                            <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "12px", color: COLOURS.SLATE }}>{formatDateUK(meeting.meeting_date)}</span>
-                                            <span style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{meeting.title}</span>
-                                            {meeting.company && (
-                                              <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.BLUE, fontWeight: 600 }}>{meeting.company}</span>
-                                            )}
-                                          </div>
-                                          <div style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>
-                                            {meeting.attendees && <span>{meeting.attendees.length} attendee{meeting.attendees.length > 1 ? "s" : ""}</span>}
-                                            {mTasks.length > 0 && (
-                                              <>
-                                                <span> · </span>
-                                                <span style={{ color: COLOURS.AMBER }}>{mTasks.length} task{mTasks.length > 1 ? "s" : ""}</span>
-                                                {openCount > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {openCount} open</span>}
-                                              </>
-                                            )}
-                                          </div>
-                                          {mTasks.length > 0 && (
-                                            <div style={{ marginTop: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
-                                              <div style={{ flex: 1, maxWidth: "100px", height: "4px", backgroundColor: COLOURS.TRACK, borderRadius: "2px", overflow: "hidden" }}>
-                                                <div style={{ height: "100%", width: `${(completedCount / mTasks.length) * 100}%`, backgroundColor: completedCount === mTasks.length ? COLOURS.GREEN : COLOURS.AMBER, borderRadius: "2px", transition: "width 0.3s" }} />
-                                              </div>
-                                              <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{completedCount}/{mTasks.length} done</span>
+                                        <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px" }}>{formatDateUK(meeting.meeting_date)}</span>
+                                        <span style={{ flex: 1, fontSize: "12px", fontWeight: 500, color: COLOURS.NAVY, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meeting.title}</span>
+                                        {meeting.company && (
+                                          <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>{meeting.company}</span>
+                                        )}
+                                        {mTasks.length > 0 ? (
+                                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                                            <div style={{ width: "48px", height: "4px", backgroundColor: COLOURS.TRACK, borderRadius: "2px", overflow: "hidden" }}>
+                                              <div style={{ height: "100%", width: `${pct}%`, backgroundColor: pct === 100 ? COLOURS.GREEN : pct > 0 ? COLOURS.AMBER : COLOURS.BORDER, borderRadius: "2px", transition: "width 0.3s" }} />
                                             </div>
-                                          )}
-                                        </div>
-                                        <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>{isOpen ? "▲" : "▼"}</span>
+                                            <span style={{ fontSize: "11px", color: COLOURS.SLATE, minWidth: "28px", textAlign: "right" }}>{completedCount}/{mTasks.length}</span>
+                                          </div>
+                                        ) : (
+                                          <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>no tasks</span>
+                                        )}
+                                        <span style={{ fontSize: "10px", color: COLOURS.SLATE, flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
                                       </div>
 
                                       {/* Expanded meeting content */}
                                       {isOpen && (
-                                        <div style={{ padding: "20px 22px 24px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT, ...(!isAdmin ? { userSelect: "none", WebkitUserSelect: "none" } as React.CSSProperties : {}) }}
+                                        <div style={{ borderTop: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT, ...(!isAdmin ? { userSelect: "none", WebkitUserSelect: "none" } as React.CSSProperties : {}) }}
                                           onCopy={!isAdmin ? (e) => e.preventDefault() : undefined}>
-                                          {isAdmin && (
-                                            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
-                                              <button onClick={() => downloadMinutesPDF(meeting, mTasks)} style={{ ...primaryButtonStyle, padding: "6px 14px", display: "flex", alignItems: "center", gap: "6px" }}>
-                                                PDF Download
-                                              </button>
-                                            </div>
-                                          )}
 
-                                          {/* Executive Summary */}
-                                          {meeting.executive_summary && (
-                                            <div style={{ padding: "16px 20px", backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, marginBottom: "16px" }}>
-                                              <div style={{ fontSize: "10.5px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500, color: COLOURS.SLATE, marginBottom: "8px" }}>Summary</div>
-                                              <div style={{ fontSize: "13px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{meeting.executive_summary}</div>
+                                          {/* Summary + attendees + PDF */}
+                                          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: meeting.executive_summary ? "8px" : "0" }}>
                                               {meeting.attendees && meeting.attendees.length > 0 && (
-                                                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "12px", paddingTop: "12px", borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
+                                                <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", flex: 1 }}>
                                                   {meeting.attendees.map((a, i) => (
-                                                    <span key={i} style={{ fontSize: "11.5px", padding: "4px 10px", backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, color: COLOURS.INK_700 }}>{a}</span>
+                                                    <span key={i} style={{ fontSize: "11px", padding: "2px 8px", backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.PILL, color: COLOURS.SLATE }}>{a}</span>
                                                   ))}
                                                 </div>
                                               )}
+                                              {isAdmin && (
+                                                <button onClick={() => downloadMinutesPDF(meeting, mTasks)} style={{ ...primaryButtonStyle, padding: "4px 10px", fontSize: "11px", flexShrink: 0 }}>PDF</button>
+                                              )}
                                             </div>
-                                          )}
+                                            {meeting.executive_summary && (
+                                              <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{meeting.executive_summary}</div>
+                                            )}
+                                          </div>
 
-                                          {/* Decisions / Risks / Opportunities */}
+                                          {/* Decisions / Risks / Opps — compact inline */}
                                           {((meeting.decisions?.length ?? 0) > 0 || (meeting.risks?.length ?? 0) > 0 || (meeting.opportunities?.length ?? 0) > 0) && (
-                                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "0", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
                                               {meeting.decisions && meeting.decisions.length > 0 && (
-                                                <div style={{ padding: "16px 20px", backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, position: "relative", overflow: "hidden" }}>
-                                                  <div style={{ position: "absolute", top: "16px", bottom: "16px", left: 0, width: "3px", borderRadius: "0 3px 3px 0", backgroundColor: COLOURS.GREEN }} />
-                                                  <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.GREEN, marginBottom: "10px", paddingLeft: "8px" }}>Decisions</div>
+                                                <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
+                                                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.GREEN, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Decisions ({meeting.decisions.length})</div>
                                                   {meeting.decisions.map((d, i) => (
-                                                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "5px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                                                      <span style={{ color: COLOURS.GREEN, flexShrink: 0, marginTop: "2px" }}>•</span>{d}
+                                                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
+                                                      <span style={{ color: COLOURS.GREEN, flexShrink: 0 }}>•</span>{d}
                                                     </div>
                                                   ))}
                                                 </div>
                                               )}
                                               {meeting.risks && meeting.risks.length > 0 && (
-                                                <div style={{ padding: "16px 20px", backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, position: "relative", overflow: "hidden" }}>
-                                                  <div style={{ position: "absolute", top: "16px", bottom: "16px", left: 0, width: "3px", borderRadius: "0 3px 3px 0", backgroundColor: COLOURS.RED }} />
-                                                  <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.RED, marginBottom: "10px", paddingLeft: "8px" }}>Risks</div>
+                                                <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
+                                                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.RED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Risks ({meeting.risks.length})</div>
                                                   {meeting.risks.map((r, i) => (
-                                                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "5px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                                                      <span style={{ color: COLOURS.RED, flexShrink: 0, marginTop: "2px" }}>•</span>{r}
+                                                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
+                                                      <span style={{ color: COLOURS.RED, flexShrink: 0 }}>•</span>{r}
                                                     </div>
                                                   ))}
                                                 </div>
                                               )}
                                               {meeting.opportunities && meeting.opportunities.length > 0 && (
-                                                <div style={{ padding: "16px 20px", backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, position: "relative", overflow: "hidden" }}>
-                                                  <div style={{ position: "absolute", top: "16px", bottom: "16px", left: 0, width: "3px", borderRadius: "0 3px 3px 0", backgroundColor: COLOURS.BLUE }} />
-                                                  <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.BLUE, marginBottom: "10px", paddingLeft: "8px" }}>Opportunities</div>
+                                                <div style={{ padding: "10px 14px" }}>
+                                                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.BLUE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Opportunities ({meeting.opportunities.length})</div>
                                                   {meeting.opportunities.map((o, i) => (
-                                                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "5px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                                                      <span style={{ color: COLOURS.BLUE, flexShrink: 0, marginTop: "2px" }}>•</span>{o}
+                                                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
+                                                      <span style={{ color: COLOURS.BLUE, flexShrink: 0 }}>•</span>{o}
                                                     </div>
                                                   ))}
                                                 </div>
@@ -557,19 +557,19 @@ function MyMinutesPage() {
                                             </div>
                                           )}
 
-                                          {/* Action Items / Tasks */}
+                                          {/* Action Items — compact task rows */}
                                           <div>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                                              <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.AMBER }}>Action Items ({mTasks.length})</div>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                                              <span style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.AMBER, textTransform: "uppercase", letterSpacing: "0.07em" }}>Action Items ({mTasks.length})</span>
                                               {isAdmin && (
-                                                <button onClick={() => setAddingTaskFor(addingTaskFor === meeting.id ? null : meeting.id)} style={{ ...primaryButtonStyle, padding: "4px 12px" }}>
+                                                <button onClick={() => setAddingTaskFor(addingTaskFor === meeting.id ? null : meeting.id)} style={{ ...primaryButtonStyle, padding: "3px 10px", fontSize: "11px" }}>
                                                   {addingTaskFor === meeting.id ? "Cancel" : "+ Add Task"}
                                                 </button>
                                               )}
                                             </div>
 
                                             {addingTaskFor === meeting.id && (
-                                              <div style={{ ...cardStyle, padding: "12px", marginBottom: "8px" }}>
+                                              <div style={{ padding: "10px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
                                                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr 1fr 1fr", gap: "6px", marginBottom: "8px" }}>
                                                   <div>
                                                     <label style={labelStyle}>Description ({newTaskDesc.length}/{TASK_DESCRIPTION_LIMIT})</label>
@@ -609,31 +609,23 @@ function MyMinutesPage() {
                                               </div>
                                             )}
 
-                                            {mTasks.length > 0 ? (
-                                              <div style={{ backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
-                                                {mTasks.map((t) => (
-                                                  <a key={t.id} href={`/tasks?task=${t.id}`} style={{
-                                                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                                                    padding: "10px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
-                                                    textDecoration: "none", color: "inherit",
-                                                  }}
-                                                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD_ALT; }}
-                                                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD; }}>
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                      <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
-                                                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                                                        {t.assigned_to || "Unassigned"}{t.due_date && ` · Due: ${formatDateUK(t.due_date)}`}
-                                                      </div>
-                                                    </div>
-                                                    <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
-                                                      <StatusBadge status={t.status} />
-                                                      <span style={{ fontSize: "12px", color: COLOURS.BLUE, fontWeight: 600 }}>Open →</span>
-                                                    </div>
-                                                  </a>
-                                                ))}
-                                              </div>
-                                            ) : (
-                                              <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>No action items recorded.</div>
+                                            {mTasks.length > 0 ? mTasks.map((t) => (
+                                              <a key={t.id} href={`/tasks?task=${t.id}`} style={{
+                                                display: "flex", alignItems: "center", gap: "10px",
+                                                padding: "7px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                                                textDecoration: "none", backgroundColor: COLOURS.CARD,
+                                              }}
+                                              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD_ALT; }}
+                                              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD; }}>
+                                                <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: taskDotColour(t.status), flexShrink: 0 }} />
+                                                <span style={{ flex: 1, fontSize: "12px", color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</span>
+                                                <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>{t.assigned_to || "—"}</span>
+                                                <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px", textAlign: "right" }}>{t.due_date ? formatDateUK(t.due_date) : "—"}</span>
+                                                <StatusBadge status={t.status} />
+                                                <span style={{ fontSize: "11px", color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>Open →</span>
+                                              </a>
+                                            )) : (
+                                              <div style={{ padding: "10px 14px", fontSize: "12px", color: COLOURS.SLATE }}>No action items recorded.</div>
                                             )}
                                           </div>
                                         </div>
