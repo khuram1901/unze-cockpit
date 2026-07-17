@@ -471,6 +471,12 @@ export default function HomePage() {
   // executive "Needs Your Attention" banner without creating a task.
   const [stuckReceivables, setStuckReceivables] = useState<{ key: string; primary: string; secondary: string }[]>([]);
   const [execLoading, setExecLoading] = useState(true);
+  // Khuram (17/07/2026): "every refresh or fetching data it should update
+  // the date and time, so we know when was fetched to measure accuracy."
+  // Set from the real fetch time on a fresh load, or from the cache
+  // entry's own timestamp on a cache-hit (so it reflects when the data
+  // actually came from the database, not just when this render happened).
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [companyFinance, setCompanyFinance] = useState<CompanyFinanceData[]>([]);
   const [receivableRows, setReceivableRows] = useState<ReceivableCustomerRow[]>([]);
@@ -603,6 +609,7 @@ export default function HomePage() {
             setTaxSummaryYear2(payload.taxSummaryYear2 ?? "");
             setTaxSignoffs2(new Map(payload.taxSignoffs2 ?? []));
           }
+          setLastUpdated(new Date(ts));
           setExecLoading(false);
           return;
         }
@@ -1281,6 +1288,7 @@ export default function HomePage() {
       // sessionStorage full — skip cache
     }
 
+    setLastUpdated(new Date());
     setExecLoading(false);
   }
 
@@ -1719,6 +1727,7 @@ export default function HomePage() {
         ) : isExec ? (
           <ExecutiveDashboardBody
             ctx={ctx}
+            lastUpdated={lastUpdated}
             selectedDate={selectedDate}
             setSelectedDate={setSelectedDate}
             summaries={summaries}
@@ -2312,13 +2321,14 @@ export default function HomePage() {
 /* ───────────────────────── Executive Dashboard Body (CEO-only) ───────────────────────── */
 
 function ExecutiveDashboardBody({
-  ctx, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations, stuckReceivables,
+  ctx, lastUpdated, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations, stuckReceivables,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
   facilitySynopsis, guaranteeAlerts, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
   taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve,
 }: {
   ctx: UserCtx | null;
+  lastUpdated: Date | null;
   selectedDate: string;
   setSelectedDate: (d: string) => void;
   summaries: PlantExecutiveSummary[];
@@ -2606,6 +2616,11 @@ function ExecutiveDashboardBody({
           <div style={{ marginTop: "5px", color: SLATE, fontSize: "15px" }}>
             {selectedMonth} · Q{currentQuarter}
           </div>
+          {lastUpdated && (
+            <div style={{ marginTop: "5px", color: SLATE, fontSize: "11px" }}>
+              Data fetched {formatDateUK(lastUpdated.toISOString().slice(0, 10))} at {lastUpdated.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+            </div>
+          )}
         </div>
       </div>
 

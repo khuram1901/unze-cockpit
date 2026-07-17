@@ -186,6 +186,12 @@ export default function InvestmentsPage() {
   const [updating, setUpdating] = useState(false);
   const [updateResult, setUpdateResult] = useState<string | null>(null);
   const [lastPriceUpdate, setLastPriceUpdate] = useState<string | null>(null);
+  // Khuram (17/07/2026): "every refresh or fetching data it should update
+  // the date and time, so we know when was fetched to measure accuracy."
+  // Distinct from lastPriceUpdate above (which is about PSX price
+  // freshness) — this is about the page's own data fetch, set at the end
+  // of every load() run (mount, date change, or a future manual refresh).
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -280,6 +286,7 @@ export default function InvestmentsPage() {
         : null
     );
     setLoading(false);
+    setLastFetchedAt(new Date());
   }, []);
 
   const loadPensionData = useCallback(async () => {
@@ -610,6 +617,11 @@ export default function InvestmentsPage() {
               Back to today
             </button>
           )}
+          {lastFetchedAt && (
+            <span style={{ fontSize: "12.5px", color: `var(--text-secondary, ${COLOURS.SLATE})`, marginLeft: "auto" }}>
+              Data fetched {formatDateUK(lastFetchedAt.toISOString().slice(0, 10))} at {lastFetchedAt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
         </div>
 
         {/* Historical date notice */}
@@ -669,7 +681,7 @@ export default function InvestmentsPage() {
             {/* Last updated */}
             {lastPriceUpdate && (
               <div style={{ fontSize: "14px", color: `var(--text-secondary, ${COLOURS.SLATE})`, marginBottom: "12px", textAlign: "right" }}>
-                Prices last updated: {new Date(lastPriceUpdate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} at {new Date(lastPriceUpdate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                Prices last updated: {formatDateUK(lastPriceUpdate.slice(0, 10))} at {new Date(lastPriceUpdate).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
               </div>
             )}
 
