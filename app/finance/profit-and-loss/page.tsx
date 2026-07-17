@@ -326,8 +326,8 @@ export default function ProfitAndLossPage() {
                           {["All plants", "FEDMIC", "MEPCO", "PESCO", "HO"].map((p) => <option key={p} value={p}>{p}</option>)}
                         </select>
                         <span style={{ width: "1px", height: "20px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
-                        <button style={chipBtn(!allocateHo)} onClick={() => setAllocateHo(false)}>As reported</button>
-                        <button style={chipBtn(allocateHo)} onClick={() => setAllocateHo(true)}>Allocated to plants</button>
+                        <button style={chipBtn(true)} disabled title="Currently uploaded months already have HO's cost allocated into each plant. This toggle is disabled to avoid double-counting until the unallocated source files are uploaded.">As reported</button>
+                        <button style={{ ...chipBtn(false), opacity: 0.4, cursor: "not-allowed" }} disabled title="Disabled — see note above.">Allocated to plants (needs unallocated files)</button>
                       </div>
                     </div>
 
