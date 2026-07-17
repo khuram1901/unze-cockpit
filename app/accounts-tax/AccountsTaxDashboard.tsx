@@ -173,7 +173,10 @@ export default function AccountsTaxDashboard() {
   const [scheduleEntries, setScheduleEntries] = useState<Map<string, ScheduleStatus>>(new Map());
   const [returnFilings, setReturnFilings] = useState<Map<string, boolean>>(new Map());
 
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  // Tracks which sections are EXPANDED (not collapsed) — starting empty
+  // means every section defaults to closed on mount/page-open, per the
+  // house rule that collapsible items always start closed.
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [selectedReturnQuarter, setSelectedReturnQuarter] = useState<Quarter>(() => getCurrentQuarter(new Date()));
 
   const [savingSchedule, setSavingSchedule] = useState<Set<string>>(new Set());
@@ -434,7 +437,7 @@ export default function AccountsTaxDashboard() {
   }
 
   function toggleSection(key: string) {
-    setCollapsedSections((prev) => {
+    setExpandedSections((prev) => {
       const s = new Set(prev);
       if (s.has(key)) s.delete(key); else s.add(key);
       return s;
@@ -763,7 +766,7 @@ export default function AccountsTaxDashboard() {
               const steps = QUARTERLY_STEPS;
               const entities = QUARTERLY_ENTITIES;
               const summary = getSectionSummary(sec.key, entities, steps);
-              const collapsed = collapsedSections.has(sec.key);
+              const collapsed = !expandedSections.has(sec.key);
 
               return (
                 <div key={sec.key} style={{ border: `1px solid ${HAIRLINE}`, borderTop: `3px solid ${NAVY}`, borderRadius: RADII.CARD, backgroundColor: CARD, overflow: "hidden", marginBottom: "10px" }}>
@@ -938,7 +941,7 @@ export default function AccountsTaxDashboard() {
               const steps = ANNUAL_STEPS;
               const entities = ANNUAL_ENTITIES;
               const summary = getSectionSummary(sectionKey, entities, steps);
-              const collapsed = collapsedSections.has(sectionKey);
+              const collapsed = !expandedSections.has(sectionKey);
 
               return (
                 <div style={{ border: `1px solid ${HAIRLINE}`, borderTop: `3px solid ${NAVY}`, borderRadius: RADII.CARD, backgroundColor: CARD, overflow: "hidden", marginBottom: "10px" }}>

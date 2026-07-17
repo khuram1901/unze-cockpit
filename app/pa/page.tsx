@@ -109,7 +109,7 @@ export default function PADashboardPage() {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [viewPerson, setViewPerson] = useState<string | null>(null);
-  const [bannerOpen, setBannerOpen] = useState(true);
+  const [bannerOpen, setBannerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"upcoming" | "people" | "all">("upcoming");
   const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState(false);

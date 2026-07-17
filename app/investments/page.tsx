@@ -232,7 +232,7 @@ export default function InvestmentsPage() {
   // Dividend state
   const [dayChange, setDayChange] = useState<{ value: number; pct: number } | null>(null);
   const [dividends, setDividends] = useState<DividendRow[]>([]);
-  const [divSectionOpen, setDivSectionOpen] = useState(true);
+  const [divSectionOpen, setDivSectionOpen] = useState(false);
   const [showDivForm, setShowDivForm] = useState(false);
   const [editingDivId, setEditingDivId] = useState<string | null>(null);
   const [divTicker, setDivTicker] = useState("");

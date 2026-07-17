@@ -169,8 +169,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
-  const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set());
-  const [collapsedPeople, setCollapsedPeople] = useState<Set<string>>(new Set());
+  // Tracks which department/person groups are EXPANDED — starting empty
+  // means every group defaults to closed on mount, per the house rule
+  // that collapsible items always start closed.
+  const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
+  const [expandedPeople, setExpandedPeople] = useState<Set<string>>(new Set());
   // Multi-assignee: every task's full owner list, and which tasks the
   // current user is a co-assignee on (not just the primary assigned_to_email)
   // — needed both to display "+N" on rows and so "My Tasks" catches tasks
@@ -666,14 +669,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   });
 
   function toggleDept(dept: string) {
-    setCollapsedDepts((prev) => {
+    setExpandedDepts((prev) => {
       const next = new Set(prev);
       if (next.has(dept)) next.delete(dept); else next.add(dept);
       return next;
     });
   }
   function togglePerson(key: string) {
-    setCollapsedPeople((prev) => {
+    setExpandedPeople((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
@@ -1324,7 +1327,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           {deptNodes.length === 0 ? (
             <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks to show.</div>
           ) : deptNodes.map((d) => {
-            const isDeptCollapsed = collapsedDepts.has(d.dept);
+            const isDeptCollapsed = !expandedDepts.has(d.dept);
             const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
             if (deptFiltered.length === 0 && filter !== "all") return null;
 
@@ -1358,7 +1361,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
                 {!isDeptCollapsed && persons.map(([person, ptasks]) => {
                   const key = `${d.dept}::${person}`;
-                  const isPersonCollapsed = collapsedPeople.has(key);
+                  const isPersonCollapsed = !expandedPeople.has(key);
                   return (
                     <div key={key} style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
                       <div
