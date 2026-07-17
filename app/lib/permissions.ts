@@ -91,6 +91,25 @@ export function isSecondaryCEO(u: UserCtx) { return lc(u.email) === CEO2_EMAIL; 
 export function isMainAdmin(u: UserCtx) { return lc(u.email) === ADMIN_EMAIL; }
 export function isPA(u: UserCtx) { return lc(u.email) === PA_EMAIL || u.role === "Executive"; }
 
+// Khuram has two real login identities (khuram1901@gmail.com = Admin,
+// k.saleem@unzegroup.com = CEO) that are the same person for any "does
+// this belong to me" comparison. Found 18 Jul 2026: a task got routed
+// (on Submit) to whichever of his accounts is set as a report's
+// manager_id — if he happened to be logged in as the OTHER account, the
+// "Mine" task filter compared his session email to that literal string
+// and the task silently never showed up as his, even though he could
+// still find and act on it via "Everyone" (isPrivileged() covers that
+// part). Anywhere the UI decides "is this task/record mine" by exact
+// email equality, compare against this list instead of the raw session
+// email so it doesn't matter which of his two accounts routed it or
+// which one he's currently logged into.
+export function myIdentityEmails(email: string | null | undefined): string[] {
+  const e = lc(email);
+  if (!e) return [];
+  if (e === ADMIN_EMAIL || e === CEO_EMAIL) return [ADMIN_EMAIL, CEO_EMAIL];
+  return [e];
+}
+
 export function isAdminTier(u: UserCtx) {
   return isMainAdmin(u) || u.role === "Admin" || isCEO(u);
 }

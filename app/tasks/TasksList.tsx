@@ -7,7 +7,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
-import { canCompleteSubmittedTask, canReopenCompletedTask } from "../lib/permissions";
+import { canCompleteSubmittedTask, canReopenCompletedTask, myIdentityEmails } from "../lib/permissions";
 import { routeSubmittedTask } from "../lib/taskRouting";
 import TeamStats from "./TeamStats";
 import TaskDetailModal from "./TaskDetailModal";
@@ -619,8 +619,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // picked. Anyone without full visibility already only sees their own +
   // ones they assigned via RLS, so "Everyone" for them means "everything
   // I can see", not "the whole company".
+  const myIdentities = myIdentityEmails(myEmail);
   const myTasksSource = myTasksScope === "mine"
-    ? allOpen.filter((t) => t.assigned_to_email === myEmail || myCoAssignedTaskIds.has(t.id))
+    ? allOpen.filter((t) => (t.assigned_to_email && myIdentities.includes(t.assigned_to_email.toLowerCase())) || myCoAssignedTaskIds.has(t.id))
     : allOpen;
   function myTaskGroup(task: Task): string {
     if (isOverdue(task)) return "Overdue";

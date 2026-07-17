@@ -10,7 +10,7 @@ import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtil
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES, FINANCE_COMPANIES as ALL_FINANCE_COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
-import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, widgetVisible, financeCompanies, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, widgetVisible, financeCompanies, myIdentityEmails, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpiThresholds";
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
@@ -91,6 +91,8 @@ type Task = {
   source_label: string | null;
   exception_type: string | null;
   explanation_required: boolean | null;
+  assigned_to_email: string | null;
+  submitted_by_name: string | null;
 };
 
 type MonthlyTarget = {
@@ -668,7 +670,7 @@ export default function HomePage() {
       // needs attention (not Completed/Cancelled), regardless of age,
       // plus Completed tasks from the current month only (all that's
       // needed for the completedThisMonth stat below) — no arbitrary cap.
-      supabase.from("tasks").select("id, description, project, priority, due_date, assigned_to, assigned_by, assigned_date, status, task_type, reply_required, reply_text, assigned_to_department, assigned_to_business_unit, created_at, updated_at, source_type, source_record_id, source_label, exception_type, explanation_required").or(`status.not.in.(Completed,Cancelled),and(status.eq.Completed,updated_at.gte.${currentMonthStart})`).order("created_at", { ascending: false }),
+      supabase.from("tasks").select("id, description, project, priority, due_date, assigned_to, assigned_by, assigned_date, status, task_type, reply_required, reply_text, assigned_to_department, assigned_to_business_unit, created_at, updated_at, source_type, source_record_id, source_label, exception_type, explanation_required, assigned_to_email, submitted_by_name").or(`status.not.in.(Completed,Cancelled),and(status.eq.Completed,updated_at.gte.${currentMonthStart})`).order("created_at", { ascending: false }),
       supabase.from("department_owners").select("department_name, primary_owner_name, primary_owner_email").eq("department_name", "Unze Trading Ops").single(),
       supabase.from("monthly_production_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
       supabase.from("monthly_dispatch_targets").select("id, plant_id, plant_name, target_month, target_31, target_36, target_45, target_meter").eq("target_month", selectedMonth),
@@ -2388,6 +2390,16 @@ function ExecutiveDashboardBody({
 
   const overdueTasks = tasks.filter((t) => isOverdueTask(t));
   const waitingReplies = tasks.filter((t) => t.status === "Waiting Reply");
+  // Khuram, 18 Jul 2026: "when the task is updated as submitted it does
+  // not come to their manager or hod" — the Submit routing (migration 143)
+  // was reassigning the task correctly, but nothing on this dashboard ever
+  // surfaced "Submitted" tasks at all, and Khuram has two login identities
+  // (Admin + CEO — see myIdentityEmails) so a task routed to whichever one
+  // he wasn't currently logged in as looked like it belonged to someone
+  // else. Scoped to either of his identities so it shows regardless of
+  // which account routed it or which one he's on right now.
+  const myEmails = myIdentityEmails(ctx?.email ?? null);
+  const submittedForMe = tasks.filter((t) => t.status === "Submitted" && !!t.assigned_to_email && myEmails.includes(t.assigned_to_email.toLowerCase()));
   const dueThisWeekTasks = tasks.filter((t) => isDueThisWeekTask(t));
   const completedThisMonth = tasks.filter(
     (t) => t.status === "Completed" &&
@@ -2471,7 +2483,7 @@ function ExecutiveDashboardBody({
   }
   const overdueGuarantees = showFinance ? guaranteeAlerts : [];
 
-  const hasAttention = wv("home.attention_banner", true) && (overdueTasks.length > 0 || waitingReplies.length > 0 || escalations.length > 0 || stuckReceivables.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0 || taxUrgent.length > 0 || overdueGuarantees.length > 0);
+  const hasAttention = wv("home.attention_banner", true) && (overdueTasks.length > 0 || waitingReplies.length > 0 || submittedForMe.length > 0 || escalations.length > 0 || stuckReceivables.length > 0 || missingPlants.length > 0 || downMachines.length > 0 || cashAlerts.length > 0 || taxUrgent.length > 0 || overdueGuarantees.length > 0);
 
   const hasCritical = overdueTasks.length > 0 || downMachines.length > 0 || escalations.length > 0 || stuckReceivables.length > 0 || taxOverdue.length > 0 || cashAlerts.length > 0 || overdueGuarantees.length > 0;
 
@@ -2481,6 +2493,10 @@ function ExecutiveDashboardBody({
   if (overdueTasks.length > 0) attentionRows.push({
     id: "overdue", label: "Overdue Tasks", count: overdueTasks.length, color: RED,
     items: overdueTasks.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.assigned_to || "Unassigned"} · Due: ${formatDateUK(t.due_date)}`, badge: t.priority, taskId: t.id, actionType: "complete" as const })),
+  });
+  if (submittedForMe.length > 0) attentionRows.push({
+    id: "submitted-signoff", label: "Submitted — Awaiting Your Sign-off", count: submittedForMe.length, color: AMBER,
+    items: submittedForMe.map((t) => ({ key: t.id, primary: t.description, secondary: `${t.submitted_by_name ? `Submitted by ${t.submitted_by_name}` : "Submitted"} · ${t.assigned_to || "—"}`, badge: t.priority, taskId: t.id, actionType: "complete" as const })),
   });
   if (downMachines.length > 0) attentionRows.push({
     id: "machines", label: "Machines Down", count: downMachines.length, color: RED,
