@@ -84,20 +84,46 @@ function cleanLabel(raw: string): string {
 }
 
 // Branch name normalisation — strips "UNZE LONDON", parentheses and the
-// file's known typos so the same branch always lands under one name.
-const BRANCH_FIXES: Record<string, string> = {
-  "Head Office Alloaction": "Head Office",
-  "Head Office Allocation": "Head Office",
-  "Warehouse Alloaction": "Warehouse",
-  "Warehouse Allocation": "Warehouse",
-  "Libert Store": "Liberty Store",
-  "Sailkot Store 1": "Sialkot Store",
-  "Phalila Mandi Bahaudin": "Phalia Mandi Bahauddin",
+// file's typos AND spelling drift. The accountant renames branches between
+// month sheets ("Mardan"→"MARDAN", "Emporium Mall"→"Emporium", "Sailkot"→
+// "Sialkot", "Warehouse"→"Warehouse Gajjumatta"), which split one store's
+// year across two names — confirmed against the live data 17/07/2026, the
+// variants never overlap in the same month. Matching is case-insensitive on
+// a collapsed key, with a canonical map for the known drifts.
+const BRANCH_CANON: Record<string, string> = {
+  "head office alloaction": "Head Office",
+  "head office allocation": "Head Office",
+  "warehouse alloaction": "Warehouse",
+  "warehouse allocation": "Warehouse",
+  "warehouse gajjumatta": "Warehouse",
+  "libert store": "Liberty Store",
+  "liberty": "Liberty Store",
+  "sailkot store 1": "Sialkot Store",
+  "sailkot store": "Sialkot Store",
+  "sialkot store 1": "Sialkot Store",
+  "phalila mandi bahaudin": "Phalia Mandi Bahauddin",
+  "phalia mandi bahaudin": "Phalia Mandi Bahauddin",
+  "emporium": "Emporium Mall",
+  "koh i noor": "Kooh I Noor",
+  "fsd hurrianwala": "Hurrianwala",
 };
+// Known branches keep one fixed casing whatever the sheet uses.
+const BRANCH_CASING: Record<string, string> = {};
+for (const name of [
+  "ONLINE PK", "DHA", "Iqbal Town", "Packages Mall", "LDS Jhang", "Mall of Multan",
+  "Peshawar 1", "Islamabad", "Faisalabad", "Sialkot Store", "Emporium Mall",
+  "Packages Mall Mega Store", "Manga Warehouse", "Lucky One Mall",
+  "Phalia Mandi Bahauddin", "Gujranwala", "Lake City", "Rahim Yar Khan",
+  "Dolmen Mall", "Amanah Mall", "Liberty Store", "Giga Mall", "Tariq Road",
+  "Head Office", "Warehouse", "V Mall Sialkot", "Bahria Town", "Sahiwal",
+  "Hyderabad", "Hurrianwala", "Capital Square", "Hakim Mall", "Sufi City",
+  "Mardan", "Usman Mall", "Swat", "Kharian", "Kooh I Noor",
+]) BRANCH_CASING[name.toLowerCase()] = name;
+
 function cleanBranch(raw: string): string {
-  let b = raw.replace(/UNZE LONDON/gi, "").replace(/[()\n]/g, " ").replace(/\s+/g, " ").trim();
-  if (BRANCH_FIXES[b]) b = BRANCH_FIXES[b];
-  return b;
+  const b = raw.replace(/UNZE LONDON/gi, "").replace(/[()\n\r]/g, " ").replace(/\s+/g, " ").trim();
+  const key = b.toLowerCase();
+  return BRANCH_CANON[key] || BRANCH_CASING[key] || b;
 }
 // Summary blocks at the right edge of each month sheet — validation only,
 // never stored. Oct-25 names its online summary "UNZE LONDON Online", so

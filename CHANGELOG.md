@@ -4,6 +4,12 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-17 (late night) — Imperial live: first upload verified, branch spelling drift merged
+
+Deployed and verified live in the browser. First workbook upload through the page: **11/11 months accepted** (Jul-25→May-26), page totals match the pre-verified figures exactly (net sales 4,282.5m, GP 40%, final profit +371.6m). One real issue found in the live league table: the accountant renames branches between month sheets ("Mardan"/"MARDAN", "Emporium Mall"→"Emporium" in Mar-26 only, "Sailkot"/"Sialkot", "Usman Mall"/"USMAN MALL", "Koh/Kooh I Noor", "Warehouse"→"Warehouse Gajjumatta"), splitting one store's year across two rows — confirmed the variants never overlap in the same month. Parser now canonicalises branch names case-insensitively with a known-drift map (43 raw names → 37 real branches), and the already-uploaded rows were merged in the database with the same mapping. Attention banner now shows Usman Mall's true variance (−45.9%, was showing −54.1% against a partial year). The parser fix needs a push so future uploads stay clean; the live data is already corrected.
+
+---
+
 ## 2026-07-17 (night) — Imperial upload fix: parse in the browser (Vercel 4.5 MB body cap)
 
 First live upload attempt of PL-CURRENT.xlsx (9.4 MB) hung: Vercel rejects request bodies over 4.5 MB before they ever reach the route, and the page's error handling left the button stuck on "Checking every month…". Two fixes: (1) the parser now runs in the BROWSER — loaded on demand via dynamic import, it reads the file locally and posts only the extracted rows (~1.5 MB JSON) to `/api/pnl/upload-ifpl`, which now takes JSON, re-derives acceptance from the blocking checks server-side, and sanitises every field; (2) `handleUpload` wraps everything in try/finally so any failure shows a message and resets the button. Verified with tsc + eslint.
