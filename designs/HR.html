@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>HR — Unze OS</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/page-shell.css"/>
+<style>
+  /* KPI variant with colored accent rule on top */
+  .kpi-tinted { padding: 20px 22px; position: relative; overflow: hidden; }
+  .kpi-tinted::before { content: ''; position: absolute; top: 0; left: 20px; right: 20px; height: 3px; border-radius: 0 0 3px 3px; }
+  .kpi-tinted--open::before    { background: var(--warning); }
+  .kpi-tinted--filled::before  { background: var(--success); }
+  .kpi-tinted--stale::before   { background: var(--danger); }
+  .kpi-tinted--total::before   { background: var(--accent); }
+
+  /* Form card */
+  .form-card { padding: 0; overflow: hidden; }
+  .form-card__head {
+    padding: 16px 24px;
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--card-alt);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .form-card__title { font-family: var(--font-display); font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .form-card__mark { width: 26px; height: 26px; border-radius: 7px; background: var(--card); border: 1px solid var(--hairline); display: grid; place-items: center; color: var(--ink-700); }
+  .form-card__mark svg { width: 13px; height: 13px; }
+  .form-card__meta { font-size: 11.5px; color: var(--ink-500); margin-top: 2px; }
+  .form-card__body { padding: 24px; }
+
+  /* Field grid patterns */
+  .fg-3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+  .fg-4 { display: grid; grid-template-columns: 2fr 1.4fr 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+  .fg-full { margin-bottom: 16px; }
+
+  .fld-label { font-size: 12px; font-weight: 500; color: var(--ink-700); margin-bottom: 6px; }
+  .fld-input, .fld-select {
+    width: 100%; box-sizing: border-box;
+    padding: 11px 14px;
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    font-size: 13.5px;
+    color: var(--ink-900);
+    font-family: var(--font-sans);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px;
+  }
+  .fld-input--placeholder { color: var(--ink-400); }
+  .fld-select svg { width: 12px; height: 12px; color: var(--ink-500); flex: none; }
+  .fld-textarea {
+    width: 100%; box-sizing: border-box;
+    min-height: 76px;
+    padding: 11px 14px;
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    font-size: 13.5px;
+    color: var(--ink-400);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    resize: vertical;
+  }
+  .fld-hint { font-size: 11px; color: var(--ink-500); margin-top: 6px; line-height: 1.4; }
+
+  .form-actions {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: 20px;
+    border-top: 1px solid var(--hairline);
+    margin-top: 4px;
+  }
+  .form-actions__hint { font-size: 12px; color: var(--ink-500); }
+  .form-actions__hint b { color: var(--ink-900); font-family: var(--font-mono); font-size: 11.5px; }
+  .form-actions__buttons { display: flex; gap: 10px; }
+
+  /* Priority visual */
+  .pri-select {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pri-select .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Positions list section */
+  .positions-list { padding: 0; overflow: hidden; }
+  .positions-list__head {
+    padding: 14px 24px;
+    background: var(--card-alt);
+    border-bottom: 1px solid var(--hairline);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .positions-list__title { font-family: var(--font-display); font-size: 14px; font-weight: 600; }
+  .empty-inline { padding: 48px 24px; text-align: center; color: var(--ink-500); }
+  .empty-inline__icon { width: 48px; height: 48px; border-radius: 14px; background: var(--card-alt); border: 1px solid var(--hairline); display: grid; place-items: center; margin: 0 auto 14px; color: var(--ink-500); }
+  .empty-inline__icon svg { width: 20px; height: 20px; }
+  .empty-inline__title { font-size: 13px; color: var(--ink-900); font-weight: 500; margin-bottom: 4px; }
+  .empty-inline__body { font-size: 12px; color: var(--ink-500); }
+
+  /* Split for two form panels */
+  .split-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 1200px) { .split-forms { grid-template-columns: 1fr; } }
+
+  /* Compact "toggle open form" button */
+  .add-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px;
+    background: var(--ink-900); color: #fff;
+    border-radius: var(--r-pill);
+    font-size: 12px; font-weight: 500;
+  }
+  .add-btn svg { width: 12px; height: 12px; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage__header">
+    <div>
+      <div class="stage__kicker">Unze OS · Design v1 · Page 20 of ?</div>
+      <h1 class="stage__title">HR — Human resources</h1>
+    </div>
+    <div class="stage__sub">
+      Reuses KPI cards, form patterns, and empty states. Introduces a subtle top-rule KPI variant for tinted-status counts and a two-form split for "Add position" + "Create task" side by side.
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- DESKTOP -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Desktop · 1440 × auto</span><span class="frame__dim" id="desktop-scale-caption">Web · Next.js</span></div>
+      <div class="desktop-scaler" id="desktop-scaler"><div class="desktop-inner" id="desktop-inner"><div class="desktop-app">
+
+        <aside class="side">
+          <div class="side__brand"><div class="side__brand-mark">U</div><div><div class="side__brand-name">Unze Group</div><div style="font-size:10px; color: var(--ink-500);">Operations</div></div></div>
+
+          <div class="side__group">Overview</div>
+          <a class="side__item"><svg class="icon"><use href="#i-home"/></svg>Executive</a>
+
+          <div class="side__group">Finance</div>
+          <a class="side__item"><svg class="icon"><use href="#i-cash"/></svg>Cash flow</a>
+          <a class="side__item"><svg class="icon"><use href="#i-bank"/></svg>Bank facilities</a>
+          <a class="side__item"><svg class="icon"><use href="#i-briefcase"/></svg>Imperial Footwear</a>
+          <a class="side__item"><svg class="icon"><use href="#i-briefcase"/></svg>Unze Trading</a>
+
+          <div class="side__group">Departments</div>
+          <a class="side__item"><svg class="icon"><use href="#i-users"/></svg>Admin</a>
+          <a class="side__item"><svg class="icon"><use href="#i-shield"/></svg>Audit</a>
+          <a class="side__item side__item--active"><svg class="icon"><use href="#i-user"/></svg>HR</a>
+          <a class="side__item"><svg class="icon"><use href="#i-scale"/></svg>Taxation</a>
+
+
+          <div class="side__group">Preferences</div>
+          <a class="side__item" data-theme-toggle style="cursor:pointer;"><svg class="icon"><use href="#i-moon"/></svg>Dark mode</a>
+          <div class="side__user"><div class="side__avatar">KS</div><div><div class="side__user-name">Khuram Saleem</div><div class="side__user-role">CEO · Unze Group</div></div></div>
+        </aside>
+
+        <main class="main">
+          <nav class="crumb"><span>Home</span><svg><use href="#i-chevron"/></svg><span>Departments</span><svg><use href="#i-chevron"/></svg><span class="crumb__current">HR</span></nav>
+
+          <div class="main__top">
+            <div>
+              <h1 class="main__title">HR</h1>
+              <div class="main__meta">Human resources dashboard · positions, hiring pipeline, and department tasks</div>
+            </div>
+            <div class="main__actions">
+              <button class="btn"><svg class="icon"><use href="#i-download"/></svg>Export</button>
+              <button class="btn btn--primary"><svg class="icon"><use href="#i-plus"/></svg>New position</button>
+            </div>
+          </div>
+
+          <!-- KPIs -->
+          <div class="kpi-row">
+            <div class="card kpi kpi-tinted kpi-tinted--open">
+              <div class="kpi__label"><span class="dot dot--warning"></span>Open positions</div>
+              <div class="kpi__num" style="color: var(--warning);">0</div>
+              <div class="kpi__sub">Actively hiring</div>
+            </div>
+            <div class="card kpi kpi-tinted kpi-tinted--filled">
+              <div class="kpi__label"><span class="dot dot--success"></span>Filled</div>
+              <div class="kpi__num" style="color: var(--success);">0</div>
+              <div class="kpi__sub">This tax year</div>
+            </div>
+            <div class="card kpi kpi-tinted kpi-tinted--stale">
+              <div class="kpi__label"><span class="dot dot--danger"></span>Open &gt; 30 days</div>
+              <div class="kpi__num" style="color: var(--danger);">0</div>
+              <div class="kpi__sub">Aging beyond target</div>
+            </div>
+            <div class="card kpi kpi-tinted kpi-tinted--total">
+              <div class="kpi__label"><span class="dot dot--info"></span>Total roles</div>
+              <div class="kpi__num">0</div>
+              <div class="kpi__sub">All departments</div>
+            </div>
+          </div>
+
+          <!-- Two form panels side by side -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Quick actions</h2>
+            <div class="sec-head__meta">Post a position or create a task without leaving the page</div>
+          </div>
+
+          <div class="split-forms">
+            <!-- POSITIONS -->
+            <div class="card form-card">
+              <div class="form-card__head">
+                <div>
+                  <div class="form-card__title">
+                    <span class="form-card__mark"><svg><use href="#i-user"/></svg></span>
+                    Add position
+                  </div>
+                  <div class="form-card__meta">Post an open role to the hiring pipeline</div>
+                </div>
+                <button class="btn btn--sm">Cancel</button>
+              </div>
+              <div class="form-card__body">
+                <div class="fg-3" style="grid-template-columns: 2fr 1.2fr 1fr;">
+                  <div>
+                    <div class="fld-label">Position title</div>
+                    <div class="fld-input fld-input--placeholder">e.g. Finance Manager</div>
+                  </div>
+                  <div>
+                    <div class="fld-label">Department</div>
+                    <div class="fld-select"><span style="color: var(--ink-400);">Select</span><svg><use href="#i-chevron-down"/></svg></div>
+                  </div>
+                  <div>
+                    <div class="fld-label">Date opened</div>
+                    <div class="fld-select"><span>05 / 07 / 2026</span><svg><use href="#i-calendar"/></svg></div>
+                  </div>
+                </div>
+                <div class="fg-full">
+                  <div class="fld-label">Notes</div>
+                  <textarea class="fld-textarea" placeholder="Job description, salary band, reporting line, must-have credentials…">Job description, salary band, reporting line, must-have credentials…</textarea>
+                </div>
+
+                <div class="form-actions">
+                  <div class="form-actions__hint">Position will appear in the Hiring pipeline below and count towards <b>Open positions</b>.</div>
+                  <div class="form-actions__buttons">
+                    <button class="btn">Discard</button>
+                    <button class="btn btn--primary">Save position</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- NEW TASK -->
+            <div class="card form-card">
+              <div class="form-card__head">
+                <div>
+                  <div class="form-card__title">
+                    <span class="form-card__mark"><svg><use href="#i-check-circle"/></svg></span>
+                    Create task
+                  </div>
+                  <div class="form-card__meta">Assign an HR task to any team member</div>
+                </div>
+                <button class="btn btn--sm">Cancel</button>
+              </div>
+              <div class="form-card__body">
+                <div class="fg-full">
+                  <div class="fld-label">What needs to be done?</div>
+                  <textarea class="fld-textarea" style="min-height: 56px;" placeholder="Example: Follow up on MEPCO production shortfall and report recovery plan.">Example: Follow up on MEPCO production shortfall and report recovery plan.</textarea>
+                </div>
+
+                <div class="fg-3">
+                  <div>
+                    <div class="fld-label">Department / project area</div>
+                    <div class="fld-select"><span style="color: var(--ink-400);">— Select department / area —</span><svg><use href="#i-chevron-down"/></svg></div>
+                  </div>
+                  <div>
+                    <div class="fld-label">Priority</div>
+                    <div class="fld-select">
+                      <span class="pri-select"><span class="dot dot--warning"></span>Medium</span>
+                      <svg><use href="#i-chevron-down"/></svg>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="fld-label">Starting status</div>
+                    <div class="fld-select"><span>Not started</span><svg><use href="#i-chevron-down"/></svg></div>
+                  </div>
+                </div>
+
+                <div class="fg-4">
+                  <div>
+                    <div class="fld-label">Assigned to</div>
+                    <div class="fld-select"><span style="color: var(--ink-400);">— Select a member —</span><svg><use href="#i-chevron-down"/></svg></div>
+                  </div>
+                  <div>
+                    <div class="fld-label">Assigned by</div>
+                    <div class="fld-input">Khuram Saleem</div>
+                  </div>
+                  <div>
+                    <div class="fld-label">Assigned date</div>
+                    <div class="fld-select"><span>05 / 07 / 2026</span><svg><use href="#i-calendar"/></svg></div>
+                  </div>
+                  <div>
+                    <div class="fld-label">Due date</div>
+                    <div class="fld-select"><span style="color: var(--ink-400);">DD / MM / YYYY</span><svg><use href="#i-calendar"/></svg></div>
+                  </div>
+                </div>
+
+                <div class="fg-full">
+                  <div class="fld-label">Notes / context</div>
+                  <textarea class="fld-textarea" placeholder="Add background, numbers, document references, or expectations for the assignee.">Add background, numbers, document references, or expectations for the assignee.</textarea>
+                </div>
+
+                <div class="form-actions">
+                  <div class="form-actions__hint">Task will show in the assignee's queue and in <b>Tasks &gt; HR</b>.</div>
+                  <div class="form-actions__buttons">
+                    <button class="btn">Discard</button>
+                    <button class="btn btn--primary">Create task</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Positions list -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Hiring pipeline</h2>
+            <div class="sec-head__actions">
+              <span class="segtabs">
+                <span class="segtabs__tab segtabs__tab--active">All</span>
+                <span class="segtabs__tab">Open</span>
+                <span class="segtabs__tab">Filled</span>
+                <span class="segtabs__tab">On hold</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="card positions-list">
+            <div class="positions-list__head">
+              <div class="positions-list__title">Positions <span style="color: var(--ink-500); font-weight: 500; font-size: 11px; margin-left: 6px;">0 records</span></div>
+              <span class="search-inline"><svg><use href="#i-search"/></svg><span>Search positions…</span></span>
+            </div>
+            <div class="empty-inline">
+              <div class="empty-inline__icon"><svg class="icon"><use href="#i-user"/></svg></div>
+              <div class="empty-inline__title">No positions yet</div>
+              <div class="empty-inline__body">Post a position using the form above — it will appear here and start the aging clock.</div>
+            </div>
+          </div>
+
+          <!-- Suggested next steps (adds value vs your current dead-ends) -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Suggested — from meeting minutes</h2>
+            <div class="sec-head__meta">3 items surfaced from last week's HR discussion</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+            <div class="card" style="padding: 18px 20px; position: relative; overflow: hidden;">
+              <div style="position: absolute; left: 0; top: 18px; bottom: 18px; width: 3px; background: var(--accent); border-radius: 0 3px 3px 0;"></div>
+              <div style="padding-left: 10px;">
+                <div style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 500; margin-bottom: 6px;">Suggested position</div>
+                <div style="font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-bottom: 6px;">Chief Financial Officer</div>
+                <div style="font-size: 11.5px; color: var(--ink-500); line-height: 1.45;">Prioritised in Weekly Discussion 08/06. Critical vacancy — currently blocking finance oversight.</div>
+                <div style="margin-top: 12px; display: flex; gap: 6px;">
+                  <button class="btn btn--sm btn--primary">Post role →</button>
+                  <button class="btn btn--sm">Dismiss</button>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="padding: 18px 20px; position: relative; overflow: hidden;">
+              <div style="position: absolute; left: 0; top: 18px; bottom: 18px; width: 3px; background: var(--accent); border-radius: 0 3px 3px 0;"></div>
+              <div style="padding-left: 10px;">
+                <div style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 500; margin-bottom: 6px;">Suggested position</div>
+                <div style="font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-bottom: 6px;">Head of Internal Audit</div>
+                <div style="font-size: 11.5px; color: var(--ink-500); line-height: 1.45;">Vacant since Q1 · previous incumbent moved to Executive Office. Impacts audit velocity.</div>
+                <div style="margin-top: 12px; display: flex; gap: 6px;">
+                  <button class="btn btn--sm btn--primary">Post role →</button>
+                  <button class="btn btn--sm">Dismiss</button>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="padding: 18px 20px; position: relative; overflow: hidden;">
+              <div style="position: absolute; left: 0; top: 18px; bottom: 18px; width: 3px; background: var(--accent); border-radius: 0 3px 3px 0;"></div>
+              <div style="padding-left: 10px;">
+                <div style="font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 500; margin-bottom: 6px;">Suggested position</div>
+                <div style="font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-bottom: 6px;">Personal Assistant to CEO</div>
+                <div style="font-size: 11.5px; color: var(--ink-500); line-height: 1.45;">Requested by Executive Office. Full-time, based Karachi HQ.</div>
+                <div style="margin-top: 12px; display: flex; gap: 6px;">
+                  <button class="btn btn--sm btn--primary">Post role →</button>
+                  <button class="btn btn--sm">Dismiss</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div></div></div>
+    </div>
+
+    <!-- MOBILE -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Mobile · 390 × auto</span><span class="frame__dim">iOS / Android / PWA</span></div>
+      <div class="phone">
+        <div class="status-bar"><span>9:42</span><div class="status-bar__right"><span>●●●●</span><span style="margin-left:6px;">100%</span></div></div>
+        <div class="m-nav"><span class="m-nav__back"><svg><use href="#i-chevron-left"/></svg>Home</span><div class="m-nav__actions"><svg><use href="#i-search"/></svg></div></div>
+        <div class="m-page-head">
+          <div class="m-page-head__kicker">Departments</div>
+          <h1 class="m-page-head__title">HR</h1>
+          <div class="m-page-head__sub">Human resources dashboard.</div>
+        </div>
+
+        <!-- KPIs 2x2 -->
+        <div class="m-kpi-grid">
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--warning"></span>Open</div><div class="m-kpi__num" style="color:var(--warning);">0</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--success"></span>Filled</div><div class="m-kpi__num" style="color:var(--success);">0</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--danger"></span>Open&gt;30d</div><div class="m-kpi__num" style="color:var(--danger);">0</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--info"></span>Total</div><div class="m-kpi__num">0</div></div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="m-section-head"><div class="m-section-head__title">Quick actions</div></div>
+        <div style="padding: 0 20px; display: flex; gap: 10px;">
+          <button class="btn btn--primary" style="flex: 1; justify-content: center;"><svg class="icon"><use href="#i-plus"/></svg>Position</button>
+          <button class="btn btn--primary" style="flex: 1; justify-content: center;"><svg class="icon"><use href="#i-plus"/></svg>Task</button>
+        </div>
+
+        <!-- Add position (compact) -->
+        <div class="m-card" style="margin-top: 12px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+            <span class="form-card__mark"><svg class="icon" style="width: 13px; height: 13px;"><use href="#i-user"/></svg></span>
+            <div style="font-family: var(--font-display); font-size: 14.5px; font-weight: 600;">Add position</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div>
+              <div class="fld-label">Position title</div>
+              <div class="fld-input fld-input--placeholder">e.g. Finance Manager</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div>
+                <div class="fld-label">Department</div>
+                <div class="fld-select"><span style="color: var(--ink-400);">Select</span><svg><use href="#i-chevron-down"/></svg></div>
+              </div>
+              <div>
+                <div class="fld-label">Date opened</div>
+                <div class="fld-select"><span>05/07/26</span><svg><use href="#i-calendar"/></svg></div>
+              </div>
+            </div>
+            <div>
+              <div class="fld-label">Notes</div>
+              <textarea class="fld-textarea" style="min-height: 60px;" placeholder="JD, salary band, reporting line…">JD, salary band, reporting line…</textarea>
+            </div>
+            <button class="btn btn--primary" style="width: 100%; justify-content: center; margin-top: 4px;">Save position</button>
+          </div>
+        </div>
+
+        <!-- Hiring pipeline -->
+        <div class="m-section-head"><div class="m-section-head__title">Hiring pipeline</div><a class="m-section-head__link">0 records</a></div>
+        <div class="m-filter">
+          <span class="m-filter__chip m-filter__chip--active">All 0</span>
+          <span class="m-filter__chip">Open 0</span>
+          <span class="m-filter__chip">Filled 0</span>
+          <span class="m-filter__chip">On hold 0</span>
+        </div>
+        <div class="m-card" style="text-align: center; padding: 32px 20px;">
+          <div class="empty-inline__icon" style="width: 44px; height: 44px; border-radius: 12px;"><svg class="icon" style="width: 18px; height: 18px;"><use href="#i-user"/></svg></div>
+          <div style="font-size: 13px; font-weight: 500; margin-top: 12px;">No positions yet</div>
+          <div style="font-size: 11.5px; color: var(--ink-500); margin-top: 4px; line-height: 1.5;">Tap "Position" above to post one.</div>
+        </div>
+
+        <!-- Suggested -->
+        <div class="m-section-head"><div class="m-section-head__title">Suggested</div><a class="m-section-head__link">3 from meetings →</a></div>
+        <div style="padding: 0 20px; display: flex; flex-direction: column; gap: 8px;">
+          <div class="m-card" style="margin: 0; padding: 14px 16px; position: relative; overflow: hidden;">
+            <div style="position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; background: var(--accent); border-radius: 0 3px 3px 0;"></div>
+            <div style="padding-left: 10px;">
+              <div style="font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 500;">Suggested</div>
+              <div style="font-family: var(--font-display); font-size: 13.5px; font-weight: 600; margin-top: 4px;">Chief Financial Officer</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 4px;">Weekly Discussion 08/06 · critical</div>
+              <button class="btn btn--sm btn--primary" style="margin-top: 10px;">Post role →</button>
+            </div>
+          </div>
+          <div class="m-card" style="margin: 0; padding: 14px 16px; position: relative; overflow: hidden;">
+            <div style="position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; background: var(--accent); border-radius: 0 3px 3px 0;"></div>
+            <div style="padding-left: 10px;">
+              <div style="font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 500;">Suggested</div>
+              <div style="font-family: var(--font-display); font-size: 13.5px; font-weight: 600; margin-top: 4px;">Head of Internal Audit</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 4px;">Vacant since Q1</div>
+              <button class="btn btn--sm btn--primary" style="margin-top: 10px;">Post role →</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="fab"><svg><use href="#i-plus"/></svg></div>
+        <div class="tabbar">
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-home"/></svg><span class="tabbar__lbl">Home</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-cash"/></svg><span class="tabbar__lbl">Cash</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-doc"/></svg><span class="tabbar__lbl">Tasks</span></div>
+          <div class="tabbar__item tabbar__item--active"><svg class="icon" style="width:20px;height:20px;"><use href="#i-user"/></svg><span class="tabbar__lbl">HR</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-bell"/></svg><span class="tabbar__lbl">Alerts</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="reflow-panel">
+    <div class="sec-head" style="margin-bottom: 4px;"><h2 class="sec-head__title" style="font-size: 22px;">Reflow &amp; new components</h2><div class="sec-head__meta">Desktop → Mobile</div></div>
+    <div class="reflow-panel__grid">
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">01 · NEW</div><div class="reflow-card__title">Tinted KPI (top rule)</div><div class="reflow-card__body">Standard KPI card with a 3px accent-colored rule at the top inset from the sides. Warm-amber = at-risk (open), green = filled, red = stale, blue = summary. Reused anywhere a row of KPIs needs subtle inline categorization.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">02 · NEW</div><div class="reflow-card__title">Two-form split</div><div class="reflow-card__body">Two form cards side by side on desktop (Add position + Create task). Each with a tinted head (icon + title + meta) and a footer with hint + Discard/Save. Reusable for any page that offers multiple quick-action forms.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">03 · NEW</div><div class="reflow-card__title">Priority-in-select</div><div class="reflow-card__body">Priority dropdown shows a colored status dot + label ("● Medium"). Selection preview is inline so the user sees the color before opening the menu.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">04 · NEW</div><div class="reflow-card__title">Suggested-from-source card</div><div class="reflow-card__body">Accent-ruled card surfacing pre-computed suggestions from other pages (e.g. positions mentioned in meeting minutes). Reduces dead-end empty states into gentle onboarding.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">05</div><div class="reflow-card__title">Two-form → stacked + quick-action buttons</div><div class="reflow-card__body">Desktop shows both forms open at once. Mobile shows the "Add position" form inline and offers two big buttons up top (Position / Task) that toggle a full-screen form. Same fields, less pressure.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">06</div><div class="reflow-card__title">Reuses everything else</div><div class="reflow-card__body">Sidebar, breadcrumb, section header, KPI card, empty inline state, segtabs — all from the shared shell. Only new visual atoms are the KPI top-rule variant and the priority-in-select pattern.</div></div>
+    </div>
+  </div>
+</div>
+<script src="assets/page-shell.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+{
+  "regions": ["sin1"],
+  "crons": [
+    {
+      "path": "/api/finance/check-inbox",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/finance/check-drive",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/meetings/check-inbox",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/notifications/digest",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/tasks/recurring",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/backup",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/investments/update-prices",
+      "schedule": "30 4 * * 1-5"
+    },
+    {
+      "path": "/api/investments/update-prices",
+      "schedule": "0 11 * * 1-5"
+    },
+    {
+      "path": "/api/investments/update-prices",
+      "schedule": "15 6 * * 1-5"
+    },
+    {
+      "path": "/api/investments/daily-summary",
+      "schedule": "0 5 * * 1-5"
+    },
+    {
+      "path": "/api/investments/fetch-dividends",
+      "schedule": "15 6 * * 1-5"
+    },
+    {
+      "path": "/api/cron/tax-alerts",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/tax-alerts",
+      "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/investments/fetch-pension-prices",
+      "schedule": "15 6 * * 1-5"
+    },
+    {
+      "path": "/api/folderit/sync",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/notifications/ceo-digest",
+      "schedule": "30 6 * * 1-5"
+    }
+  ]
+}

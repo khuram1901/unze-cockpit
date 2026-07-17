@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Calendar — Unze OS</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/page-shell.css"/>
+<style>
+  /* Google-connected status banner */
+  .gcal-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 20px;
+    padding: 12px 18px;
+    background: var(--success-soft);
+    border: 1px solid #C7E2D5;
+    border-radius: 12px;
+    margin-bottom: 20px;
+  }
+  .gcal-banner__left { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--ink-900); }
+  .gcal-banner__left b { color: var(--success); }
+  .gcal-banner__mark { width: 26px; height: 26px; border-radius: 8px; background: var(--success); color: #fff; display: grid; place-items: center; }
+  .gcal-banner__mark svg { width: 14px; height: 14px; }
+  .gcal-banner__link { font-size: 12px; color: var(--accent); font-weight: 500; }
+
+  /* Week grid card */
+  .week-card { padding: 0; overflow: hidden; }
+  .week-toolbar {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--card-alt);
+  }
+  .week-toolbar__title { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+  .week-toolbar__nav { display: inline-flex; gap: 6px; align-items: center; }
+  .week-toolbar__view { display: inline-flex; background: var(--card); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 3px; gap: 2px; }
+  .week-toolbar__view span { padding: 4px 12px; font-size: 11.5px; border-radius: var(--r-pill); color: var(--ink-500); cursor: default; }
+  .week-toolbar__view span.active { background: var(--ink-900); color: #fff; font-weight: 500; }
+
+  /* Grid */
+  .week-grid {
+    display: grid;
+    grid-template-columns: 50px repeat(7, 1fr);
+    background: var(--card);
+  }
+  .week-grid__day-head {
+    padding: 12px 8px;
+    text-align: center;
+    border-bottom: 1px solid var(--hairline);
+    border-left: 1px solid var(--hairline);
+  }
+  .week-grid__day-head:first-of-type { border-left: 0; }
+  .week-grid__day-name { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-500); font-weight: 500; }
+  .week-grid__day-num { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-top: 2px; letter-spacing: -0.01em; }
+  .week-grid__day-num--today { color: var(--accent); }
+
+  .week-grid__time-corner { border-bottom: 1px solid var(--hairline); }
+  .week-grid__time {
+    padding: 6px 6px 0 0;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--ink-400);
+    height: 44px;
+    border-right: 1px solid var(--hairline);
+  }
+  .week-grid__cell {
+    height: 44px;
+    border-top: 1px solid var(--hairline);
+    border-left: 1px solid var(--hairline);
+    position: relative;
+    padding: 2px;
+  }
+  .week-grid__cell:hover { background: var(--card-alt); }
+
+  /* Meeting block */
+  .meeting {
+    position: absolute;
+    left: 3px; right: 3px;
+    background: var(--success-soft);
+    border-left: 3px solid var(--success);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 10.5px;
+    color: var(--ink-900);
+    line-height: 1.35;
+    overflow: hidden;
+  }
+  .meeting--gcal { background: #E7EAF9; border-left-color: var(--accent); }
+  .meeting--pending { background: var(--warning-soft); border-left-color: var(--warning); }
+  .meeting__title { font-weight: 500; font-size: 10.5px; }
+  .meeting__meta { color: var(--ink-500); font-size: 9.5px; margin-top: 1px; }
+
+  /* Legend */
+  .week-legend { display: flex; gap: 16px; padding: 12px 20px; background: var(--card-alt); border-top: 1px solid var(--hairline); font-size: 11px; color: var(--ink-500); }
+  .week-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+  .week-legend__sw { width: 12px; height: 12px; border-radius: 3px; border-left: 3px solid; }
+
+  /* Empty pending requests */
+  .empty-inline { padding: 32px 24px; text-align: center; color: var(--ink-500); font-size: 12.5px; }
+
+  /* Past requests table */
+  .req-table { padding: 0; overflow: hidden; }
+  table.reqs { width: 100%; border-collapse: collapse; }
+  table.reqs th, table.reqs td { padding: 12px 20px; text-align: left; font-size: 13px; }
+  table.reqs thead th { font-size: 10.5px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-500); background: var(--card-alt); border-bottom: 1px solid var(--hairline); }
+  table.reqs tbody tr + tr td { border-top: 1px solid var(--hairline); }
+  table.reqs td.date { font-family: var(--font-mono); font-size: 12px; color: var(--ink-500); }
+
+  /* ================================================================
+     MOBILE
+     ================================================================ */
+  .m-week-strip {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    padding: 0 20px 12px;
+  }
+  .m-week-day {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 0 8px;
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    position: relative;
+  }
+  .m-week-day--today { background: var(--ink-900); color: #fff; border-color: var(--ink-900); }
+  .m-week-day--has-event::after {
+    content: ''; position: absolute; bottom: 5px; left: 50%;
+    transform: translateX(-50%);
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--success);
+  }
+  .m-week-day--today.m-week-day--has-event::after { background: var(--card); }
+  .m-week-day__name { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-500); font-weight: 500; }
+  .m-week-day--today .m-week-day__name { color: rgba(255,255,255,0.55); }
+  .m-week-day__num { font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+
+  .m-meeting-list { padding: 0 20px; }
+  .m-meeting {
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .m-meeting::before {
+    content: ''; position: absolute; top: 14px; bottom: 14px; left: 0; width: 3px; border-radius: 0 3px 3px 0;
+    background: var(--success);
+  }
+  .m-meeting--gcal::before { background: var(--accent); }
+  .m-meeting--pending::before { background: var(--warning); }
+  .m-meeting__time {
+    text-align: right;
+    padding-left: 8px;
+  }
+  .m-meeting__hour { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .m-meeting__ampm { font-size: 10px; color: var(--ink-500); text-transform: uppercase; letter-spacing: 0.06em; }
+  .m-meeting__body { min-width: 0; }
+  .m-meeting__title { font-size: 13px; font-weight: 500; }
+  .m-meeting__meta { font-size: 11px; color: var(--ink-500); margin-top: 2px; }
+  .m-meeting__chev { color: var(--ink-500); }
+  .m-meeting__chev svg { width: 14px; height: 14px; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage__header">
+    <div>
+      <div class="stage__kicker">Unze OS · Design v1 · Page 15 of ?</div>
+      <h1 class="stage__title">Calendar — Tasks &amp; deadlines</h1>
+    </div>
+    <div class="stage__sub">
+      Introduces the week grid, Google-connected banner, and meeting block components. Mobile becomes a 7-day strip + agenda list — much better than a squeezed grid on a phone.
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- DESKTOP -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Desktop · 1440 × auto</span><span class="frame__dim" id="desktop-scale-caption">Web · Next.js</span></div>
+      <div class="desktop-scaler" id="desktop-scaler"><div class="desktop-inner" id="desktop-inner"><div class="desktop-app">
+
+        <aside class="side">
+          <div class="side__brand"><div class="side__brand-mark">U</div><div><div class="side__brand-name">Unze Group</div><div style="font-size:10px; color: var(--ink-500);">Operations</div></div></div>
+          <div class="side__group">Overview</div>
+          <a class="side__item"><svg class="icon"><use href="#i-home"/></svg>Executive</a>
+          <div class="side__group">Finance</div>
+          <a class="side__item"><svg class="icon"><use href="#i-cash"/></svg>Cash flow</a>
+          <a class="side__item"><svg class="icon"><use href="#i-doc"/></svg>Receivables</a>
+          <div class="side__group">Tasks &amp; meetings</div>
+          <a class="side__item side__item--active"><svg class="icon"><use href="#i-calendar"/></svg>Calendar</a>
+          <a class="side__item"><svg class="icon"><use href="#i-users"/></svg>Meetings</a>
+          <a class="side__item"><svg class="icon"><use href="#i-doc"/></svg>My minutes</a>
+          <a class="side__item"><svg class="icon"><use href="#i-repeat"/></svg>Recurring tasks</a>
+          <a class="side__item"><svg class="icon"><use href="#i-check-circle"/></svg>Tasks</a>
+
+          <div class="side__group">Preferences</div>
+          <a class="side__item" data-theme-toggle style="cursor:pointer;"><svg class="icon"><use href="#i-moon"/></svg>Dark mode</a>
+          <div class="side__user"><div class="side__avatar">KS</div><div><div class="side__user-name">Khuram Saleem</div><div class="side__user-role">CEO · Unze Group</div></div></div>
+        </aside>
+
+        <main class="main">
+          <nav class="crumb"><span>Home</span><svg><use href="#i-chevron"/></svg><span>Tasks &amp; meetings</span><svg><use href="#i-chevron"/></svg><span class="crumb__current">Calendar</span></nav>
+
+          <div class="main__top">
+            <div>
+              <h1 class="main__title">Calendar</h1>
+              <div class="main__meta">Tasks and deadlines view · this week's availability</div>
+            </div>
+            <div class="main__actions">
+              <button class="btn"><svg class="icon"><use href="#i-refresh"/></svg>Sync now</button>
+              <button class="btn btn--primary"><svg class="icon"><use href="#i-plus"/></svg>Request meeting</button>
+            </div>
+          </div>
+
+          <!-- Google banner -->
+          <div class="gcal-banner">
+            <div class="gcal-banner__left">
+              <div class="gcal-banner__mark"><svg><use href="#i-check"/></svg></div>
+              <span>Showing calendar for <b><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="147f3a677578717179546166756e73667b61643a777b79">[email&#160;protected]</a></b> · 13 events this week</span>
+            </div>
+            <a class="gcal-banner__link">Reconnect Google</a>
+          </div>
+
+          <!-- Week grid -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Weekly availability</h2>
+            <div class="sec-head__meta">Free / busy · click any empty slot to request a meeting</div>
+          </div>
+
+          <div class="card week-card">
+            <div class="week-toolbar">
+              <div>
+                <div class="week-toolbar__title">Sun 28 / 06 — Sat 04 / 07</div>
+                <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">Week 27 · GMT+5</div>
+              </div>
+              <div class="week-toolbar__nav">
+                <div class="week-toolbar__view">
+                  <span>Day</span>
+                  <span class="active">Week</span>
+                  <span>Month</span>
+                </div>
+                <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-chevron-left"/></svg>Prev</button>
+                <button class="btn btn--sm">Today</button>
+                <button class="btn btn--sm">Next<svg class="icon" style="width:12px;height:12px;"><use href="#i-chevron"/></svg></button>
+              </div>
+            </div>
+
+            <div class="week-grid">
+              <div class="week-grid__time-corner"></div>
+              <div class="week-grid__day-head"><div class="week-grid__day-name">Sun</div><div class="week-grid__day-num">28</div></div>
+              <div class="week-grid__day-head"><div class="week-grid__day-name">Mon</div><div class="week-grid__day-num">29</div></div>
+              <div class="week-grid__day-head"><div class="week-grid__day-name">Tue</div><div class="week-grid__day-num">30</div></div>
+              <div class="week-grid__day-head"><div class="week-grid__day-name">Wed</div><div class="week-grid__day-num week-grid__day-num--today">01</div></div>
+              <div class="week-grid__day-head"><div class="week-grid__day-name">Thu</div><div class="week-grid__day-num">02</div></div>
+              <div class="week-grid__day-head"><div class="week-grid__day-name">Fri</div><div class="week-grid__day-num">03</div></div>
+              <div class="week-grid__day-head"><div class="week-grid__day-name">Sat</div><div class="week-grid__day-num">04</div></div>
+
+              <!-- 08:00 row -->
+              <div class="week-grid__time">08:00</div>
+              <div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div>
+
+              <!-- 09:00 -->
+              <div class="week-grid__time">09:00</div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"><div class="meeting meeting--gcal" style="top: 2px; height: 40px;"><div class="meeting__title">Site call</div><div class="meeting__meta">Google · 09:00</div></div></div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"></div>
+
+              <!-- 10:00 — HOD's meeting spans -->
+              <div data-om-id="b5d2aa07:om-div-84" data-om-text-id="txt:Calendar.html:14332:14337" data-om-id="28509c42:om-div-83" data-om-text-id="txt:Calendar.html:14065:14070" data-om-id="deb5d868:om-div-83" data-om-text-id="txt:Calendar.html:13864:13869" class="week-grid__time">10:00</div>
+              <div data-om-id="b5d2aa07:om-div-85" data-om-id="28509c42:om-div-84" data-om-id="deb5d868:om-div-84" class="week-grid__cell"></div>
+              <div data-om-id="b5d2aa07:om-div-86" data-om-id="28509c42:om-div-85" data-om-id="deb5d868:om-div-85" class="week-grid__cell"></div>
+              <div data-om-id="b5d2aa07:om-div-87" data-om-id="28509c42:om-div-86" data-om-id="deb5d868:om-div-86" class="week-grid__cell"><div data-om-id="b5d2aa07:om-div-88" data-om-id="28509c42:om-div-87" data-om-id="deb5d868:om-div-87" class="meeting" style="top: 2px; height: 88px;"><div data-om-id="b5d2aa07:om-div-89" data-om-text-id="txt:Calendar.html:14984:14997" data-om-id="28509c42:om-div-88" data-om-text-id="txt:Calendar.html:14509:14522" data-om-id="deb5d868:om-div-88" data-om-text-id="txt:Calendar.html:14100:14113" class="meeting__title">HOD's meeting</div><div class="meeting__meta">10:00 – 11:30</div></div></div>
+              <div class="week-grid__cell"><div class="meeting meeting--pending" style="top: 2px; height: 40px;"><div class="meeting__title">Meeting with</div><div class="meeting__meta">Pending · 10:00</div></div></div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"></div>
+
+              <!-- 11:00 -->
+              <div class="week-grid__time">11:00</div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"><div class="meeting" style="top: 2px; height: 40px;"><div class="meeting__title">Meeting with</div><div class="meeting__meta">Approved · 11:00</div></div></div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"><div class="meeting" style="top: 2px; height: 40px;"><div class="meeting__title">Meeting with</div><div class="meeting__meta">Approved · 11:00</div></div></div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"><div class="meeting" style="top: 2px; height: 40px;"><div class="meeting__title">Meeting with</div><div class="meeting__meta">Approved · 11:00</div></div></div>
+              <div class="week-grid__cell"></div>
+
+              <!-- 12:00 -->
+              <div class="week-grid__time">12:00</div>
+              <div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div>
+
+              <!-- 13:00 -->
+              <div class="week-grid__time">13:00</div>
+              <div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div>
+
+              <!-- 14:00 -->
+              <div class="week-grid__time">14:00</div>
+              <div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div>
+
+              <!-- 15:00 -->
+              <div class="week-grid__time">15:00</div>
+              <div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div>
+
+              <!-- 16:00 — one meeting -->
+              <div class="week-grid__time">16:00</div>
+              <div class="week-grid__cell"></div>
+              <div class="week-grid__cell"><div class="meeting" style="top: 2px; height: 40px;"><div class="meeting__title">Meeting with</div><div class="meeting__meta">Approved · 16:00</div></div></div>
+              <div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div>
+
+              <!-- 17:00 -->
+              <div class="week-grid__time">17:00</div>
+              <div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div>
+
+              <!-- 18:00 -->
+              <div class="week-grid__time">18:00</div>
+              <div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div><div class="week-grid__cell"></div>
+            </div>
+
+            <div class="week-legend">
+              <span class="week-legend__item"><span class="week-legend__sw" style="background: #E7EAF9; border-left-color: var(--accent);"></span>Google Calendar event</span>
+              <span class="week-legend__item"><span class="week-legend__sw" style="background: var(--success-soft); border-left-color: var(--success);"></span>Approved</span>
+              <span class="week-legend__item"><span class="week-legend__sw" style="background: var(--warning-soft); border-left-color: var(--warning);"></span>Pending</span>
+              <span class="week-legend__item" style="margin-left: auto;">Free — click to request</span>
+            </div>
+          </div>
+
+          <!-- Pending requests -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Pending meeting requests</h2>
+            <div class="sec-head__meta">Waiting on your approval</div>
+          </div>
+          <div class="card">
+            <div class="empty-inline">
+              <div style="font-size: 13px; font-weight: 500; color: var(--ink-900);">No pending meeting requests</div>
+              <div style="font-size: 12px; color: var(--ink-500); margin-top: 6px;">New requests will appear here for you to approve or decline.</div>
+            </div>
+          </div>
+
+          <!-- Past requests -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Past requests <span style="color: var(--ink-500); font-weight: 500; font-size: 15px;">· 6</span></h2>
+          </div>
+
+          <div class="card req-table">
+            <table class="reqs">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Requested by</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Approved by</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Meeting with Admin Department</td>
+                  <td>Sundas Hussain</td>
+                  <td class="date">03/07/2026</td>
+                  <td><span class="st-pill st-pill--approved">Approved</span></td>
+                  <td>Khuram Saleem</td>
+                </tr>
+                <tr>
+                  <td>Meeting with Unze Trading Accounts</td>
+                  <td>Sundas Hussain</td>
+                  <td class="date">02/07/2026</td>
+                  <td><span class="st-pill st-pill--approved">Approved</span></td>
+                  <td>Khuram Saleem</td>
+                </tr>
+                <tr>
+                  <td>Meeting with Shahid Masoud</td>
+                  <td>Sundas Hussain</td>
+                  <td class="date">01/07/2026</td>
+                  <td><span class="st-pill st-pill--approved">Approved</span></td>
+                  <td>Khuram Saleem</td>
+                </tr>
+                <tr>
+                  <td>HOD's Meeting</td>
+                  <td>Sundas Hussain</td>
+                  <td class="date">01/07/2026</td>
+                  <td><span class="st-pill st-pill--approved">Approved</span></td>
+                  <td>Khuram Saleem</td>
+                </tr>
+                <tr>
+                  <td>Meeting with Unze Operations</td>
+                  <td>Sundas Hussain</td>
+                  <td class="date">30/06/2026</td>
+                  <td><span class="st-pill st-pill--approved">Approved</span></td>
+                  <td>Khuram Saleem</td>
+                </tr>
+                <tr>
+                  <td>Meeting with Shahida Naseem</td>
+                  <td>Sundas Hussain</td>
+                  <td class="date">30/06/2026</td>
+                  <td><span class="st-pill st-pill--approved">Approved</span></td>
+                  <td>Khuram Saleem</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </main>
+      </div></div></div>
+    </div>
+
+    <!-- MOBILE -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Mobile · 390 × auto</span><span class="frame__dim">iOS / Android / PWA</span></div>
+      <div class="phone">
+        <div class="status-bar"><span>9:42</span><div class="status-bar__right"><span>●●●●</span><span style="margin-left:6px;">100%</span></div></div>
+        <div class="m-nav"><span class="m-nav__back"><svg><use href="#i-chevron-left"/></svg>Home</span><div class="m-nav__actions"><svg><use href="#i-search"/></svg><svg><use href="#i-plus"/></svg></div></div>
+        <div class="m-page-head"><div class="m-page-head__kicker">Tasks &amp; meetings</div><h1 class="m-page-head__title">Calendar</h1><div class="m-page-head__sub">13 events · this week</div></div>
+
+        <!-- Google banner compact -->
+        <div style="margin: 4px 20px 12px; padding: 10px 12px; background: var(--success-soft); border: 1px solid #C7E2D5; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
+          <div style="width: 24px; height: 24px; border-radius: 8px; background: var(--success); color: #fff; display: grid; place-items: center; flex: none;"><svg class="icon" style="width: 13px; height: 13px;"><use href="#i-check"/></svg></div>
+          <div style="font-size: 11.5px; color: var(--ink-700); flex: 1;">Synced with <b style="color: var(--ink-900);">Google Cal</b> · 13 events</div>
+          <a style="font-size: 11px; color: var(--accent); font-weight: 500;">Sync</a>
+        </div>
+
+        <!-- 7-day strip -->
+        <div class="m-week-strip">
+          <div class="m-week-day"><span class="m-week-day__name">Sun</span><span class="m-week-day__num">28</span></div>
+          <div class="m-week-day"><span class="m-week-day__name">Mon</span><span class="m-week-day__num">29</span></div>
+          <div class="m-week-day m-week-day--has-event"><span class="m-week-day__name">Tue</span><span class="m-week-day__num">30</span></div>
+          <div class="m-week-day m-week-day--today m-week-day--has-event"><span class="m-week-day__name">Wed</span><span class="m-week-day__num">01</span></div>
+          <div class="m-week-day"><span class="m-week-day__name">Thu</span><span class="m-week-day__num">02</span></div>
+          <div class="m-week-day m-week-day--has-event"><span class="m-week-day__name">Fri</span><span class="m-week-day__num">03</span></div>
+          <div class="m-week-day"><span class="m-week-day__name">Sat</span><span class="m-week-day__num">04</span></div>
+        </div>
+
+        <!-- Wed agenda -->
+        <div class="m-section-head"><div class="m-section-head__title">Wed 01 Jul</div><a class="m-section-head__link">2 events</a></div>
+        <div class="m-meeting-list">
+          <div class="m-meeting">
+            <div class="m-meeting__time">
+              <div class="m-meeting__hour">10:00</div>
+              <div class="m-meeting__ampm">→ 11:30</div>
+            </div>
+            <div class="m-meeting__body">
+              <div class="m-meeting__title">HOD's meeting</div>
+              <div class="m-meeting__meta">Head office · 8 attendees</div>
+            </div>
+            <div class="m-meeting__chev"><svg><use href="#i-chevron"/></svg></div>
+          </div>
+          <div class="m-meeting m-meeting--gcal">
+            <div class="m-meeting__time">
+              <div class="m-meeting__hour">09:00</div>
+              <div class="m-meeting__ampm">→ 09:45</div>
+            </div>
+            <div class="m-meeting__body">
+              <div class="m-meeting__title">Site call — MEPCO</div>
+              <div class="m-meeting__meta">Google Meet · Recurring</div>
+            </div>
+            <div class="m-meeting__chev"><svg><use href="#i-chevron"/></svg></div>
+          </div>
+        </div>
+
+        <!-- Tue agenda -->
+        <div class="m-section-head"><div class="m-section-head__title">Tue 30 Jun</div><a class="m-section-head__link">1 event</a></div>
+        <div class="m-meeting-list">
+          <div class="m-meeting">
+            <div class="m-meeting__time">
+              <div class="m-meeting__hour">11:00</div>
+              <div class="m-meeting__ampm">→ 11:30</div>
+            </div>
+            <div class="m-meeting__body">
+              <div class="m-meeting__title">Meeting with Admin Dept</div>
+              <div class="m-meeting__meta">Approved · Sundas Hussain</div>
+            </div>
+            <div class="m-meeting__chev"><svg><use href="#i-chevron"/></svg></div>
+          </div>
+        </div>
+
+        <!-- Fri agenda -->
+        <div class="m-section-head"><div class="m-section-head__title">Fri 03 Jul</div><a class="m-section-head__link">1 event</a></div>
+        <div class="m-meeting-list">
+          <div class="m-meeting">
+            <div class="m-meeting__time">
+              <div class="m-meeting__hour">11:00</div>
+              <div class="m-meeting__ampm">→ 12:00</div>
+            </div>
+            <div class="m-meeting__body">
+              <div class="m-meeting__title">Meeting with Shahida Naseem</div>
+              <div class="m-meeting__meta">Approved · Sundas Hussain</div>
+            </div>
+            <div class="m-meeting__chev"><svg><use href="#i-chevron"/></svg></div>
+          </div>
+        </div>
+
+        <!-- Pending requests -->
+        <div class="m-section-head"><div class="m-section-head__title">Pending requests</div></div>
+        <div class="m-card" style="text-align: center; padding: 28px 20px;">
+          <div style="font-size: 12.5px; font-weight: 500;">No pending requests</div>
+          <div style="font-size: 11px; color: var(--ink-500); margin-top: 4px;">New ones will appear here to approve.</div>
+        </div>
+
+        <div class="fab"><svg><use href="#i-plus"/></svg></div>
+        <div class="tabbar">
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-home"/></svg><span class="tabbar__lbl">Home</span></div>
+          <div class="tabbar__item tabbar__item--active"><svg class="icon" style="width:20px;height:20px;"><use href="#i-calendar"/></svg><span class="tabbar__lbl">Cal</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-check-circle"/></svg><span class="tabbar__lbl">Tasks</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-users"/></svg><span class="tabbar__lbl">Teams</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-bell"/></svg><span class="tabbar__lbl">Alerts</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="reflow-panel">
+    <div class="sec-head" style="margin-bottom: 4px;"><h2 class="sec-head__title" style="font-size: 22px;">Reflow &amp; new components</h2><div class="sec-head__meta">Desktop → Mobile</div></div>
+    <div class="reflow-panel__grid">
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">01 · NEW</div><div class="reflow-card__title">Week grid</div><div class="reflow-card__body">50px time column + 7 day columns, 44px per hour row. Empty cells get a subtle hover tint. Reusable for any time-based scheduling view (shifts, machine slots, etc.).</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">02 · NEW</div><div class="reflow-card__title">Meeting block</div><div class="reflow-card__body">Positioned absolutely inside a day cell. 3px left border indicates source: green = internal approved, blue = Google Cal, amber = pending. Title + meta line inside.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">03 · NEW</div><div class="reflow-card__title">Connected banner</div><div class="reflow-card__body">Slim success-tinted banner confirming Google connection with event count. Reusable for any integration that's "healthy and connected".</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">04 · NEW</div><div class="reflow-card__title">7-day strip (mobile)</div><div class="reflow-card__body">One tile per weekday, active day inverts to dark, days with events get a small dot indicator below the number. Compact enough to fit 390px + touch-friendly.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">05</div><div class="reflow-card__title">Week grid → agenda list</div><div class="reflow-card__body">Grid doesn't work on a phone. Mobile shows the 7-day strip up top, then a per-day agenda list below: each meeting is a card with time on the left, title/meta in the middle, chev on the right.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">06</div><div class="reflow-card__title">Empty pending state</div><div class="reflow-card__body">Instead of your current one-liner "No pending meeting requests", the new empty state has a title + explanatory subtext, same treatment on both breakpoints.</div></div>
+    </div>
+  </div>
+</div>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="assets/page-shell.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

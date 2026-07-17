@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8" />
+<title>Tasks — Redesign Mockup v3 (Static Preview)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Inter+Tight:wght@500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --NAVY:#0F1720; --INK700:#334155; --SLATE:#64748B; --INK400:#94A3B8;
+    --CARD:#FFFFFF; --CARD_ALT:#FBFAF7; --HAIRLINE:#EEF0F3; --TRACK:#F1F3F6;
+    --BLUE:#3B4CCA; --GREEN:#0F7B5F; --AMBER:#B4791F; --RED:#B3261E;
+    --SUCCESS_SOFT:#E7F2ED; --WARNING_SOFT:#FBF1DE; --DANGER_SOFT:#F8E4E2; --INFO_SOFT:#EEF1FC;
+    --HD_SOFT:#F3EEF9; --HD:#6E45B8;
+    --BG_PAGE:#f4f6f9;
+    --R_XS:6px; --R_SM:10px; --R_CARD:14px; --R_PILL:999px;
+  }
+  *{box-sizing:border-box; font-family:'Inter', sans-serif;}
+  body{margin:0; background:var(--BG_PAGE); color:var(--INK700); font-size:14px;}
+  .wrap{max-width:1180px; margin:0 auto; padding:26px 32px 60px;}
+  .banner-note{background:var(--INFO_SOFT); color:var(--BLUE); border:1px solid #D7DCF7; border-radius:var(--R_SM); padding:10px 16px; font-size:12.5px; margin-bottom:18px;}
+  h1{font-family:'Inter Tight', sans-serif; font-size:24px; font-weight:700; letter-spacing:-0.02em; color:var(--NAVY); margin:0 0 2px;}
+  .subtitle{color:var(--SLATE); font-size:13px; margin:0 0 16px;}
+
+  .viewtabs{display:flex; gap:4px; margin-bottom:14px; flex-wrap:wrap; border-bottom:1px solid var(--HAIRLINE); padding-bottom:10px;}
+  .vtab{border:1px solid var(--HAIRLINE); background:var(--CARD); color:var(--NAVY); border-radius:var(--R_PILL); padding:6px 16px; font-size:13px; font-weight:600; cursor:pointer;}
+  .vtab.active{background:var(--NAVY); color:#fff; border-color:var(--NAVY);}
+  .vtab.disabled{color:var(--INK400); cursor:default;}
+
+  .subrow{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;}
+  .pillgroup{display:flex; gap:4px; background:var(--TRACK); border-radius:var(--R_PILL); padding:3px;}
+  .pillgroup .p{padding:5px 14px; border-radius:var(--R_PILL); font-size:12.5px; font-weight:600; cursor:pointer; color:var(--SLATE);}
+  .pillgroup .p.active{background:var(--CARD); color:var(--NAVY); box-shadow:0 1px 2px rgba(15,23,32,0.08);}
+  .complabel{font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--INK400); margin-right:2px;}
+
+  .comptab{border:1px solid var(--HAIRLINE); background:var(--CARD); color:var(--NAVY); border-radius:var(--R_SM); padding:6px 14px; font-size:12.5px; font-weight:700; cursor:pointer;}
+  .comptab.active{background:var(--NAVY); color:#fff; border-color:var(--NAVY);}
+  .comptab.grp{border-style:dashed; color:var(--SLATE);}
+
+  .depttags{display:flex; gap:6px; flex-wrap:wrap;}
+  .tag{border:1px solid var(--HAIRLINE); background:var(--CARD); color:var(--NAVY); border-radius:var(--R_PILL); padding:4px 12px; font-size:12px; font-weight:600; cursor:pointer;}
+  .tag.active{background:var(--NAVY); color:#fff; border-color:var(--NAVY);}
+
+  .quickadd{display:flex; align-items:center; gap:8px; background:var(--CARD); border:1px solid var(--HAIRLINE); border-radius:var(--R_PILL); padding:6px 8px 6px 6px; margin-bottom:8px; flex-wrap:wrap;}
+  .quickadd select{border:1px solid var(--HAIRLINE); border-radius:var(--R_PILL); padding:7px 12px; font-size:12.5px; font-weight:600; color:var(--INK400); background:var(--CARD_ALT); cursor:pointer;}
+  .quickadd select.filled{color:var(--NAVY); border-color:transparent;}
+  .quickadd select.filled.comp-utpl, .quickadd select.filled.comp-ifpl, .quickadd select.filled.comp-brnh, .quickadd select.filled.comp-hd{border-color:transparent;}
+  .quickadd input{flex:1; min-width:180px; border:none; outline:none; font-size:14px; color:var(--NAVY); background:transparent; padding:6px 4px;}
+  .quickadd input::placeholder{color:var(--INK400);}
+  .quickadd button{background:var(--NAVY); color:#fff; border:none; border-radius:var(--R_PILL); padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer;}
+  .quickadd button:disabled{background:var(--TRACK); color:var(--INK400); cursor:not-allowed;}
+  .quickadd-hint{font-size:11.5px; color:var(--INK400); margin:0 0 14px 6px;}
+  .quickadd-hint.ready{color:var(--GREEN); font-weight:600;}
+
+  .dates-chip{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--SLATE); flex-shrink:0; white-space:nowrap;}
+  .dates-chip .d-late{color:var(--RED); font-weight:700;}
+  .dates-chip .d-done{color:var(--GREEN); font-weight:700;}
+
+  /* ---- TEAM VIEW ---- */
+  .teamview{display:none;}
+  .team-row{display:grid; grid-template-columns:1.6fr 0.7fr 0.7fr 0.7fr 1fr; gap:10px; align-items:center; padding:11px 16px; border-bottom:1px solid var(--HAIRLINE); background:var(--CARD);}
+  .team-row:first-child{border-top-left-radius:var(--R_CARD); border-top-right-radius:var(--R_CARD);}
+  .team-row.head{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--INK400); background:var(--CARD_ALT);}
+  .team-person{display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:600; color:var(--NAVY);}
+  .team-num{font-family:'Inter Tight',sans-serif; font-size:15px; font-weight:600; color:var(--NAVY);}
+  .team-num.bad{color:var(--RED);}
+  .team-num.good{color:var(--GREEN);}
+  .team-list{background:var(--CARD); border:1px solid var(--HAIRLINE); border-radius:var(--R_CARD); overflow:hidden; margin-bottom:14px;}
+
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin-bottom:18px;}
+  .kpi{background:var(--CARD); border:1px solid var(--HAIRLINE); border-radius:var(--R_CARD); padding:11px 15px;}
+  .kpi .lbl{font-size:10.5px; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:var(--SLATE); margin-bottom:5px;}
+  .kpi .val{font-family:'Inter Tight',sans-serif; font-size:22px; font-weight:600; letter-spacing:-0.02em; color:var(--NAVY);}
+  .kpi.overdue .val{color:var(--RED);}
+
+  /* pill badges — match SharedUI StatusBadge / PriorityBadge exactly */
+  .pill{display:inline-block; font-size:11px; font-weight:600; padding:3px 10px; border-radius:var(--R_PILL); white-space:nowrap;}
+  .pr-urgent, .pr-high{color:var(--RED); background:var(--DANGER_SOFT);}
+  .pr-medium, .pr-normal{color:var(--BLUE); background:var(--INFO_SOFT);}
+  .pr-low{color:var(--SLATE); background:var(--HAIRLINE);}
+  .st-notstarted{color:var(--SLATE); background:var(--HAIRLINE);}
+  .st-inprogress{color:var(--AMBER); background:var(--WARNING_SOFT);}
+  .st-waiting{color:var(--RED); background:var(--DANGER_SOFT);}
+  .st-submitted{color:var(--BLUE); background:var(--HAIRLINE);}
+  .st-completed{color:var(--GREEN); background:var(--SUCCESS_SOFT);}
+  .st-stuck{color:var(--SLATE); background:var(--HAIRLINE); border:1px dashed var(--SLATE);}
+  .history-row{font-size:12px; color:var(--SLATE); padding:5px 0; border-bottom:1px solid var(--HAIRLINE);}
+  .history-row:last-child{border-bottom:none;}
+  .history-row b{color:var(--NAVY); font-weight:600;}
+  .comp-utpl{color:var(--BLUE); background:var(--INFO_SOFT);}
+  .comp-ifpl{color:var(--GREEN); background:var(--SUCCESS_SOFT);}
+  .comp-brnh{color:var(--AMBER); background:var(--WARNING_SOFT);}
+  .comp-hd{color:var(--HD); background:var(--HD_SOFT);}
+  .comp-grp{color:var(--SLATE); background:var(--HAIRLINE);}
+  .stage-chip{display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:600; color:var(--SLATE); border:1px solid var(--HAIRLINE); border-radius:var(--R_XS); padding:2px 8px;}
+
+  /* ---- MY TASKS VIEW ---- */
+  .mt-section{margin-bottom:16px;}
+  .mt-head{display:flex; align-items:center; gap:8px; margin-bottom:6px;}
+  .mt-head .dot{width:8px; height:8px; border-radius:50%;}
+  .mt-head .lbl{font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--NAVY);}
+  .mt-head .cnt{font-size:12px; color:var(--SLATE); font-weight:600;}
+  .mt-list{background:var(--CARD); border:1px solid var(--HAIRLINE); border-radius:var(--R_CARD); overflow:hidden;}
+  .mt-row{display:flex; align-items:center; gap:8px; padding:9px 14px; border-bottom:1px solid var(--HAIRLINE); flex-wrap:wrap;}
+  .mt-row:last-child{border-bottom:none;}
+  .mt-row .title{flex:1; font-size:13.5px; color:var(--NAVY); font-weight:500; min-width:180px;}
+  .mt-row .due{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--SLATE); flex-shrink:0; width:78px; text-align:right;}
+  .mt-row .due.late{color:var(--RED); font-weight:700;}
+  .empty-mt{padding:14px; text-align:center; color:var(--INK400); font-size:12.5px;}
+
+  /* ---- BOARD VIEW (compact) ---- */
+  .board{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px;}
+  .col h3{font-size:11.5px; font-weight:700; color:var(--SLATE); text-transform:uppercase; letter-spacing:0.05em; margin:0 0 8px; display:flex; justify-content:space-between;}
+  .card{background:var(--CARD); border:1px solid var(--HAIRLINE); border-radius:10px; padding:9px 11px; margin-bottom:6px;}
+  .card .toprow{display:flex; gap:5px; flex-wrap:wrap; margin-bottom:6px;}
+  .card p.desc{font-size:12.5px; color:var(--NAVY); margin:0 0 6px; line-height:1.35; font-weight:500;}
+  .card .foot{display:flex; justify-content:space-between; align-items:center; gap:6px;}
+  .card .who{display:flex; align-items:center; gap:5px; min-width:0;}
+  .avatar{width:18px; height:18px; border-radius:50%; background:var(--INFO_SOFT); color:var(--BLUE); font-size:8.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .who .name{font-size:11px; color:var(--SLATE); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .due-chip{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--SLATE); flex-shrink:0;}
+  .due-chip.late{color:var(--RED); font-weight:700;}
+  .due-chip.today{color:var(--AMBER); font-weight:700;}
+  .due-chip.done{color:var(--GREEN); font-weight:600;}
+  .empty-col{border:1px dashed var(--HAIRLINE); border-radius:10px; padding:14px 10px; text-align:center; color:var(--INK400); font-size:11.5px;}
+
+  /* ---- LIST VIEW ---- */
+  .listview{display:none;}
+  .list-group-head{font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--INK400); padding:12px 4px 6px;}
+  .lrow{display:flex; align-items:center; gap:8px; padding:9px 10px; border-bottom:1px solid var(--HAIRLINE); background:var(--CARD); cursor:pointer; flex-wrap:wrap;}
+  .lrow .chev{font-size:10px; color:var(--INK400); width:12px; flex-shrink:0;}
+  .lrow .t{flex:1; font-size:13.5px; color:var(--NAVY); font-weight:500; min-width:200px;}
+  .lrow .who{font-size:12px; color:var(--SLATE); width:110px; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .lrow .due{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--SLATE); width:70px; text-align:right; flex-shrink:0;}
+  .lrow .due.late{color:var(--RED); font-weight:700;}
+  .sub-panel{padding:8px 10px 12px 34px; background:var(--CARD_ALT); border-bottom:1px solid var(--HAIRLINE); display:none;}
+  .mini-badge{font-size:10.5px; font-weight:700; color:var(--SLATE); background:var(--TRACK); border-radius:var(--R_XS); padding:2px 7px; flex-shrink:0;}
+  .lrow{position:relative;}
+  .lrow .t{cursor:pointer;}
+  .card-sub-toggle{font-size:10.5px; font-weight:600; color:var(--SLATE); margin-top:5px; padding-top:5px; border-top:1px solid var(--HAIRLINE); cursor:pointer; display:flex; align-items:center; gap:4px;}
+  .card-sub-toggle:hover{color:var(--NAVY);}
+  .card-sub-panel{display:none; margin-top:6px; padding-top:6px; border-top:1px solid var(--HAIRLINE);}
+
+  .callout{background:var(--CARD); border:1px solid var(--HAIRLINE); border-radius:var(--R_CARD); padding:16px 20px; margin-top:22px;}
+  .callout h4{font-family:'Inter Tight',sans-serif; font-size:14px; font-weight:700; color:var(--NAVY); margin:0 0 6px;}
+  .callout p{font-size:13px; color:var(--SLATE); margin:0 0 8px; line-height:1.5;}
+  .callout p:last-child{margin-bottom:0;}
+  .callout b{color:var(--NAVY); font-weight:600;}
+
+  .detail-link{font-size:11.5px; font-weight:700; color:var(--BLUE); cursor:pointer; flex-shrink:0; white-space:nowrap;}
+  .detail-link:hover{text-decoration:underline;}
+
+  /* ---- TASK DETAIL MODAL ---- */
+  .modal-backdrop{display:none; position:fixed; inset:0; background:rgba(15,23,32,0.45); z-index:50; align-items:flex-start; justify-content:center; overflow-y:auto; padding:40px 16px;}
+  .modal-backdrop.open{display:flex;}
+  .modal{background:var(--CARD); border-radius:var(--R_CARD); width:100%; max-width:620px; padding:0; overflow:hidden;}
+  .modal-head{padding:18px 22px; border-bottom:1px solid var(--HAIRLINE); display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
+  .modal-head h2{font-family:'Inter Tight',sans-serif; font-size:17px; font-weight:600; color:var(--NAVY); margin:0 0 8px; line-height:1.35;}
+  .modal-close{background:none; border:none; font-size:20px; color:var(--INK400); cursor:pointer; line-height:1; padding:2px;}
+  .modal-meta{display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+  .modal-body{padding:18px 22px; max-height:70vh; overflow-y:auto;}
+  .modal-section{margin-bottom:20px;}
+  .modal-section:last-child{margin-bottom:0;}
+  .modal-label{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--INK400); margin-bottom:6px;}
+  .modal-meta-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; font-size:13px;}
+  .modal-meta-grid .k{color:var(--SLATE); margin-bottom:2px; font-size:11px; text-transform:uppercase; letter-spacing:0.05em;}
+  .modal-meta-grid .v{color:var(--NAVY); font-weight:500;}
+  .desc-text{font-size:13.5px; color:var(--INK700); line-height:1.6; margin:0;}
+
+  .subtask-progress{height:6px; background:var(--TRACK); border-radius:3px; overflow:hidden; margin-bottom:8px;}
+  .subtask-progress div{height:100%; background:var(--GREEN); transition:width 0.2s;}
+  .subtask-count{font-size:12px; color:var(--SLATE); margin-bottom:10px;}
+  .subtask-row{display:flex; align-items:center; gap:10px; padding:6px 0;}
+  .subtask-row input[type=checkbox]{width:16px; height:16px; accent-color:var(--GREEN); cursor:pointer; flex-shrink:0;}
+  .subtask-row label{font-size:13.5px; color:var(--NAVY); cursor:pointer;}
+  .subtask-row.checked label{color:var(--SLATE); text-decoration:line-through;}
+  .add-subtask{display:flex; gap:8px; margin-top:8px;}
+  .add-subtask input{flex:1; border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:7px 10px; font-size:13px; color:var(--NAVY);}
+  .add-subtask button{border:1px solid var(--HAIRLINE); background:var(--CARD_ALT); border-radius:var(--R_SM); padding:7px 14px; font-size:12.5px; font-weight:600; color:var(--NAVY); cursor:pointer;}
+
+  .gate-note{margin-top:12px; padding:9px 12px; background:var(--WARNING_SOFT); color:var(--AMBER); border-radius:var(--R_SM); font-size:12px; font-weight:600;}
+  .gate-note.ready{background:var(--SUCCESS_SOFT); color:var(--GREEN);}
+  .complete-btn{margin-top:10px; width:100%; padding:10px; border-radius:var(--R_SM); border:none; font-size:13.5px; font-weight:700; cursor:not-allowed; background:var(--TRACK); color:var(--INK400);}
+  .complete-btn.ready{cursor:pointer; background:var(--GREEN); color:#fff;}
+
+  .comment{display:flex; gap:9px; margin-bottom:14px;}
+  .c-avatar{width:26px; height:26px; border-radius:50%; background:var(--INFO_SOFT); color:var(--BLUE); font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .c-body{flex:1;}
+  .c-head{display:flex; gap:8px; align-items:baseline; margin-bottom:2px;}
+  .c-name{font-size:12.5px; font-weight:600; color:var(--NAVY);}
+  .c-time{font-size:11px; color:var(--INK400);}
+  .c-text{font-size:13px; color:var(--INK700); line-height:1.5;}
+  .add-comment{display:flex; gap:8px; margin-top:6px;}
+  .add-comment input{flex:1; border:1px solid var(--HAIRLINE); border-radius:var(--R_PILL); padding:8px 14px; font-size:13px; color:var(--NAVY);}
+  .add-comment button{background:var(--NAVY); color:#fff; border:none; border-radius:var(--R_PILL); padding:8px 16px; font-size:12.5px; font-weight:600; cursor:pointer;}
+
+  .tools-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+  .tools-row select, .tools-row input[type=number]{border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:6px 10px; font-size:12.5px; color:var(--NAVY); background:var(--CARD_ALT);}
+  .tools-row input[type=number]{width:64px;}
+  .btn-whatsapp{background:var(--GREEN); color:#fff; border:none; border-radius:var(--R_SM); padding:7px 14px; font-size:12.5px; font-weight:700; cursor:pointer;}
+  .btn-delete{background:var(--CARD); color:var(--RED); border:1px solid var(--RED); border-radius:var(--R_SM); padding:7px 14px; font-size:12.5px; font-weight:700; cursor:pointer;}
+  .protected-note{font-size:11.5px; color:var(--AMBER); background:var(--WARNING_SOFT); border:1px solid #F1D9A9; border-radius:var(--R_SM); padding:6px 10px; margin-bottom:10px;}
+  .meeting-chip{font-size:11px; font-weight:600; color:var(--BLUE); background:var(--INFO_SOFT); border-radius:var(--R_XS); padding:2px 9px; white-space:nowrap; flex-shrink:0;}
+  .auto-remind{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--NAVY); margin-bottom:6px;}
+  .auto-remind input{width:15px; height:15px; accent-color:var(--GREEN);}
+
+  .recur-list{display:flex; flex-direction:column; gap:8px; margin-bottom:14px;}
+  .recur-card{background:var(--CARD); border:1px solid var(--HAIRLINE); border-radius:var(--R_CARD); padding:12px 16px; display:flex; align-items:center; gap:12px;}
+  .recur-freq{font-size:11px; font-weight:700; color:var(--BLUE); background:var(--INFO_SOFT); border-radius:var(--R_PILL); padding:3px 11px; flex-shrink:0;}
+  .recur-title{flex:1; font-size:13.5px; font-weight:600; color:var(--NAVY);}
+  .recur-sub{font-size:12px; color:var(--SLATE); margin-top:2px;}
+  .recurview{display:none;}
+
+  .date-field{position:relative; display:flex; align-items:center; gap:5px;}
+  .date-field input{flex:1;}
+  .date-cal-btn{background:var(--CARD_ALT); border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:7px 12px; height:32px; cursor:pointer; font-size:12px; font-weight:600; flex-shrink:0; color:var(--SLATE);}
+  .cal-popover{position:absolute; top:calc(100% + 4px); left:0; background:var(--CARD); border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); box-shadow:0 8px 24px rgba(15,23,32,0.14); padding:10px; z-index:20; width:220px;}
+  .cal-head{display:flex; justify-content:space-between; align-items:center; font-size:12.5px; font-weight:700; color:var(--NAVY); margin-bottom:8px;}
+  .cal-head span:first-child, .cal-head span:last-child{cursor:pointer; padding:2px 8px; border-radius:var(--R_XS);}
+  .cal-head span:first-child:hover, .cal-head span:last-child:hover{background:var(--TRACK);}
+  .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:2px; text-align:center;}
+  .cal-dow{font-size:10px; color:var(--INK400); font-weight:700; padding:2px 0;}
+  .cal-day{font-size:12px; color:var(--NAVY); padding:5px 0; border-radius:6px; cursor:pointer;}
+  .cal-day:hover{background:var(--INFO_SOFT); color:var(--BLUE); font-weight:700;}
+
+  .kpi.clickable{cursor:pointer;}
+  .kpi.clickable:hover{border-color:var(--BLUE);}
+  .dept-breakdown{background:var(--CARD); border:1px solid var(--HAIRLINE); border-radius:var(--R_CARD); overflow:hidden; margin:-8px 0 18px; display:none;}
+  .db-row{display:grid; grid-template-columns:1.6fr 0.8fr 0.8fr; gap:10px; align-items:center; padding:9px 16px; border-bottom:1px solid var(--HAIRLINE);}
+  .db-row.head{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--INK400); background:var(--CARD_ALT);}
+  .db-row:last-child{border-bottom:none;}
+
+  .card.dragging{opacity:0.4;}
+  .col-body{min-height:30px;}
+
+  /* ================= ATTENTION BANNER ================= */
+  .attn-banner{background:var(--DANGER_SOFT); border:1px solid #F1C6C1; border-left:4px solid var(--RED); border-radius:var(--R_CARD); padding:14px 18px; margin-bottom:18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
+  .attn-banner .attn-title{display:flex; align-items:center; gap:8px; font-weight:700; font-size:13.5px; color:var(--RED); flex-shrink:0;}
+  .attn-stats{display:flex; gap:22px; flex-wrap:wrap; flex:1;}
+  .attn-stat{display:flex; align-items:baseline; gap:6px;}
+  .attn-stat .n{font-family:'Inter Tight',sans-serif; font-size:17px; font-weight:700; color:var(--NAVY);}
+  .attn-stat .l{font-size:11.5px; color:var(--SLATE); font-weight:600;}
+  .attn-banner .viewall{font-size:12.5px; font-weight:700; color:var(--RED); cursor:pointer; flex-shrink:0; white-space:nowrap;}
+  .attn-banner .viewall:hover{text-decoration:underline;}
+
+  /* ================= KPI CARDS (colour-accent, no icons) ================= */
+  .ikpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin-bottom:6px;}
+  .ikpi{background:var(--CARD); border:1px solid var(--HAIRLINE); border-left:3px solid var(--HAIRLINE); border-radius:var(--R_CARD); padding:14px 16px;}
+  .ikpi.clickable{cursor:pointer;}
+  .ikpi.clickable:hover{border-color:var(--BLUE); border-left-color:var(--BLUE);}
+  .ikpi.accent-blue{border-left-color:var(--BLUE);} .ikpi.accent-red{border-left-color:var(--RED);}
+  .ikpi.accent-amber{border-left-color:var(--AMBER);} .ikpi.accent-green{border-left-color:var(--GREEN);}
+  .ikpi.accent-grey{border-left-color:var(--SLATE);}
+  .ikpi .lbl{font-size:10.5px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:var(--SLATE); margin-bottom:3px;}
+  .ikpi .val{font-family:'Inter Tight',sans-serif; font-size:21px; font-weight:700; color:var(--NAVY); letter-spacing:-0.02em;}
+  .ikpi .trend{font-size:11px; font-weight:600; margin-top:3px;}
+  .ikpi .trend.up-bad{color:var(--RED);} .ikpi .trend.up-good{color:var(--GREEN);} .ikpi .trend.flat{color:var(--INK400);}
+  .illustrative-star{color:var(--INK400); font-weight:400; cursor:help;}
+
+  /* ================= FILTER ROW (text-label dropdowns, no icons) ================= */
+  .filter-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:16px 0 10px;}
+  .ifilter{display:flex; align-items:center; gap:7px; border:1px solid var(--HAIRLINE); background:var(--CARD); border-radius:var(--R_SM); padding:7px 12px; font-size:12.5px; font-weight:600; color:var(--NAVY); cursor:pointer;}
+  .ifilter .ifilter-label{font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--INK400);}
+  .ifilter .chev-down{font-size:9px; color:var(--INK400); margin-left:2px;}
+  .ifilter:hover{border-color:var(--INK400);}
+  .ifilter.more{color:var(--SLATE); border-style:dashed;}
+  .ifilter.more.active-more{color:var(--BLUE); border-color:var(--BLUE); border-style:solid; background:var(--INFO_SOFT);}
+  .ifilter.reset{color:var(--RED); border-color:transparent; background:none; text-decoration:underline; font-weight:600;}
+  .ifilter.reset:hover{color:#8f1e18;}
+  .ifilter-select{border:none; outline:none; background:transparent; font-size:12.5px; font-weight:600; color:var(--NAVY); cursor:pointer; font-family:'Inter',sans-serif; max-width:150px;}
+
+  /* ================= TOOLBAR: search + group-by + export/import ================= */
+  .toolbar-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px;}
+  .search-box{display:flex; align-items:center; gap:7px; border:1px solid var(--HAIRLINE); background:var(--CARD); border-radius:var(--R_PILL); padding:8px 14px; flex:1; min-width:200px; max-width:320px;}
+  .search-box input{border:none; outline:none; background:transparent; font-size:13px; color:var(--NAVY); width:100%;}
+  .groupby{display:flex; align-items:center; gap:6px; border:1px solid var(--HAIRLINE); background:var(--CARD); border-radius:var(--R_SM); padding:7px 12px; font-size:12.5px; font-weight:600; color:var(--NAVY); cursor:pointer;}
+  .toolbar-spacer{flex:1;}
+  .tb-btn{border:1px solid var(--HAIRLINE); background:var(--CARD); border-radius:var(--R_SM); padding:7px 14px; font-size:12.5px; font-weight:600; color:var(--NAVY); cursor:pointer;}
+
+  /* ================= KANBAN CARD FOOTER (text, no icons) ================= */
+  .card-icon-row{display:flex; align-items:center; gap:10px; margin-top:7px; padding-top:7px; border-top:1px solid var(--HAIRLINE);}
+  .cic{display:flex; align-items:center; gap:3px; font-size:10.5px; color:var(--SLATE); font-weight:600;}
+  .cic.late{color:var(--RED);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="banner-note">
+    v5 static preview — one single page, no sidebar (per your note — the screenshot was just for layout inspiration). Same fonts (Inter / Inter Tight / JetBrains Mono) and same colour palette as the rest of your app (StatusBadge / PriorityBadge / company-badge conventions) throughout. "vs yesterday" trend arrows are illustrative placeholders — flagged below, not something the app tracks yet. Nothing here is saved or connected to the database.
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+    <div>
+      <h1>Tasks</h1>
+      <p class="subtitle" id="subtitle">My Tasks</p>
+    </div>
+    <button onclick="openModal('modal-newtask')" style="background:var(--NAVY); color:#fff; border:none; border-radius:var(--R_PILL); padding:10px 20px; font-size:13.5px; font-weight:700; cursor:pointer; flex-shrink:0;">+ New Task</button>
+  </div>
+
+  <div class="viewtabs">
+    <div class="vtab active" onclick="showView('mytasks',this)">My Tasks</div>
+    <div class="vtab" onclick="showView('board',this)">Board</div>
+    <div class="vtab" onclick="showView('list',this)">List</div>
+    <div class="vtab" onclick="showView('team',this)">Team</div>
+    <div class="vtab" onclick="showView('recur',this)">Recurring</div>
+    <div class="vtab disabled">Weekly</div>
+    <div class="vtab disabled">Monthly</div>
+    <div class="vtab disabled">Quarterly</div>
+    <div class="vtab disabled">Timeline</div>
+  </div>
+
+  <div class="attn-banner">
+    <div class="attn-title">Needs Your Attention</div>
+    <div class="attn-stats">
+      <div class="attn-stat"><span class="n" style="color:var(--RED);">4</span><span class="l">Critical (Urgent, open)</span></div>
+      <div class="attn-stat"><span class="n" style="color:var(--RED);">26</span><span class="l">Overdue</span></div>
+      <div class="attn-stat"><span class="n" style="color:var(--AMBER);">15</span><span class="l">Due Today</span></div>
+      <div class="attn-stat"><span class="n" style="color:var(--SLATE);">0</span><span class="l">Stuck</span></div>
+    </div>
+    <span class="viewall" onclick="toggleDeptBreakdown()">View breakdown →</span>
+  </div>
+
+  <div class="subrow" id="subrow-mytasks">
+    <span class="complabel">Viewing</span>
+    <div class="pillgroup">
+      <div class="p active" onclick="setScope(this)">My tasks (Nadeem Khan)</div>
+      <div class="p" onclick="setScope(this)">Everyone</div>
+    </div>
+  </div>
+
+  <div class="filter-row" id="subrow-company" style="display:none;">
+    <label class="ifilter"><span class="ifilter-label">Company</span>
+      <select class="ifilter-select" id="filterCompany" onchange="setCompany(this.value)">
+        <option value="all">All companies</option>
+        <option value="UTPL">UTPL</option>
+        <option value="IFPL">IFPL</option>
+        <option value="Baranh">Baranh</option>
+        <option value="HD">Haute Dolci</option>
+        <option value="Group">Group / needs review</option>
+      </select>
+    </label>
+    <label class="ifilter"><span class="ifilter-label">Department</span>
+      <select class="ifilter-select" id="filterDept" onchange="setDept(this.value)">
+        <option value="all">All departments</option>
+        <option value="Finance">Finance</option>
+        <option value="HR">HR</option>
+        <option value="Admin">Admin</option>
+        <option value="Ops">Operations</option>
+        <option value="Exec">Executive Office</option>
+      </select>
+    </label>
+    <label class="ifilter"><span class="ifilter-label">Priority</span>
+      <select class="ifilter-select" id="filterPriority">
+        <option>All priorities</option>
+        <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
+      </select>
+    </label>
+    <label class="ifilter"><span class="ifilter-label">Owner</span>
+      <select class="ifilter-select" id="filterOwner">
+        <option>All owners</option>
+        <option>Sundas Hussain</option><option>Nadeem Khan</option><option>Zuhair Khalid</option>
+        <option>Muhammad Akhlaq</option><option>Muhammad Shakeel</option><option>Usman Arshad</option>
+      </select>
+    </label>
+    <div class="ifilter more" onclick="toggleMoreFilters()" id="moreFiltersBtn">More Filters</div>
+    <div class="ifilter reset" onclick="resetFilters()">Reset Filters</div>
+  </div>
+
+  <div class="filter-row" id="moreFiltersPanel" style="display:none;">
+    <label class="ifilter"><span class="ifilter-label">Stage</span>
+      <select class="ifilter-select" id="filterStage">
+        <option>All stages</option>
+        <option>Submitted to Civil Dept</option><option>Back to FD Dept</option><option>Payment released</option>
+      </select>
+    </label>
+    <label class="ifilter"><span class="ifilter-label">Due date</span>
+      <select class="ifilter-select" id="filterDue">
+        <option>Any due date</option>
+        <option>Overdue</option><option>Due today</option><option>Due this week</option><option>No due date</option>
+      </select>
+    </label>
+    <label class="ifilter"><span class="ifilter-label">Source</span>
+      <select class="ifilter-select" id="filterSource">
+        <option>All sources</option>
+        <option>Meeting-sourced only</option><option>Manually created</option><option>Recurring-generated</option>
+      </select>
+    </label>
+    <label class="ifilter"><span class="ifilter-label">Subtasks</span>
+      <select class="ifilter-select" id="filterSubtaskState">
+        <option>Any subtask state</option>
+        <option>Has subtasks</option><option>All subtasks complete</option><option>No subtasks</option>
+      </select>
+    </label>
+  </div>
+  <p class="subrow" id="filter-note-priorityowner" style="font-size:11px; color:var(--INK400); margin:-6px 0 8px; display:none;">Company and Department dropdowns actually filter the Board cards below, and Reset Filters clears every dropdown back to "All" in one click. Priority, Owner, and all four "More Filters" show the real set of options a full build would offer, so you can stack as many filters as you like at once (e.g. Company = UTPL + Priority = Urgent + Overdue), but aren't wired to actually filter in this static file yet.</p>
+
+  <div class="toolbar-row" id="toolbar-boardlist" style="display:none;">
+    <div class="search-box"><input placeholder="Search tasks…" /></div>
+    <div class="groupby">Group by: Status <span class="chev-down">▾</span></div>
+    <div class="toolbar-spacer"></div>
+    <div class="tb-btn">Export CSV</div>
+    <div class="tb-btn">Import CSV</div>
+  </div>
+
+  <div class="ikpis">
+    <div class="ikpi clickable accent-blue" onclick="toggleDeptBreakdown()">
+      <div class="lbl">Open</div><div class="val">53</div><div class="trend flat">↔ vs yesterday <span class="illustrative-star" title="Illustrative — no historical daily snapshot exists yet to compute a real trend">*</span></div>
+    </div>
+    <div class="ikpi clickable accent-red" onclick="toggleDeptBreakdown()">
+      <div class="lbl">Overdue</div><div class="val" style="color:var(--RED);">26</div><div class="trend up-bad">↑ vs yesterday <span class="illustrative-star" title="Illustrative — no historical daily snapshot exists yet to compute a real trend">*</span></div>
+    </div>
+    <div class="ikpi accent-amber">
+      <div class="lbl">Due Today</div><div class="val" style="color:var(--AMBER);">15</div><div class="trend flat">Real count, pulled live</div>
+    </div>
+    <div class="ikpi accent-blue">
+      <div class="lbl">Waiting Reply</div><div class="val">0</div><div class="trend flat">Real count, pulled live</div>
+    </div>
+    <div class="ikpi accent-grey">
+      <div class="lbl">Stuck</div><div class="val">0</div><div class="trend flat">New status — nothing set yet</div>
+    </div>
+    <div class="ikpi accent-green">
+      <div class="lbl">Completed</div><div class="val" style="color:var(--GREEN);">20</div><div class="trend up-good">↑ vs yesterday <span class="illustrative-star" title="Illustrative — no historical daily snapshot exists yet to compute a real trend">*</span></div>
+    </div>
+  </div>
+  <p style="font-size:11px; color:var(--INK400); margin:6px 0 8px;">* Open/Overdue/Completed "vs yesterday" arrows are illustrative placeholders — Due Today, Waiting Reply and Stuck are genuinely live. To make the starred ones real we'd need a small daily-snapshot table (one row per day, per KPI) — a cheap add, but not built yet.</p>
+
+  <div class="dept-breakdown" id="deptBreakdown">
+    <div class="db-row head"><div>Department</div><div>Open</div><div>Overdue</div></div>
+    <div class="db-row"><div>Unze Trading Ops (UTPL)</div><div class="team-num">12</div><div class="team-num bad">11</div></div>
+    <div class="db-row"><div>HR</div><div class="team-num">12</div><div class="team-num bad">8</div></div>
+    <div class="db-row"><div>Finance</div><div class="team-num">6</div><div class="team-num bad">6</div></div>
+    <div class="db-row"><div>Executive Office</div><div class="team-num">9</div><div class="team-num good">0</div></div>
+    <div class="db-row"><div>Unassigned / needs review</div><div class="team-num">9</div><div class="team-num good">0</div></div>
+    <div class="db-row"><div>Admin</div><div class="team-num">5</div><div class="team-num bad">1</div></div>
+  </div>
+
+  <!-- ============ MY TASKS ============ -->
+  <div id="view-mytasks">
+    <div class="mt-section">
+      <div class="mt-head"><div class="dot" style="background:var(--RED);"></div><span class="lbl">Overdue</span><span class="cnt">3</span></div>
+      <div class="mt-list">
+        <div class="mt-row">
+          <span class="pill st-inprogress">In Progress</span>
+          <div class="title">Receivable — MEPCO bill 5,100,300 PKR</div>
+          <span class="stage-chip">→ Back to FD Dept</span>
+          <span class="pill comp-utpl">UTPL</span>
+          <span class="due late">04/07 · 9d</span>
+        </div>
+        <div class="mt-row">
+          <span class="pill st-notstarted">Not Started</span>
+          <div class="title">Receivable — PESCO bill 12,662,983 PKR</div>
+          <span class="stage-chip">→ Back to FD Dept</span>
+          <span class="pill comp-utpl">UTPL</span>
+          <span class="due late">04/07 · 9d</span>
+        </div>
+        <div class="mt-row">
+          <span class="pill st-notstarted">Not Started</span>
+          <div class="title">Receivable — PESCO bill 2,379,391 PKR</div>
+          <span class="stage-chip">→ Submitted to Civil</span>
+          <span class="pill comp-utpl">UTPL</span>
+          <span class="due late">11/07 · 2d</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-section">
+      <div class="mt-head"><div class="dot" style="background:var(--AMBER);"></div><span class="lbl">Due today</span><span class="cnt">0</span></div>
+      <div class="mt-list"><div class="empty-mt">Nothing due today. Nice.</div></div>
+    </div>
+
+    <div class="mt-section">
+      <div class="mt-head"><div class="dot" style="background:var(--BLUE);"></div><span class="lbl">This week</span><span class="cnt">1</span></div>
+      <div class="mt-list">
+        <div class="mt-row">
+          <span class="pill st-inprogress">In Progress</span>
+          <div class="title">Mold Cleaning</div>
+          <span class="pill comp-utpl">UTPL</span>
+          <span class="due">16/07</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-section">
+      <div class="mt-head"><div class="dot" style="background:var(--SLATE);"></div><span class="lbl">Next week / later</span><span class="cnt">0</span></div>
+      <div class="mt-list"><div class="empty-mt">Nothing further out yet.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ BOARD ============ -->
+  <div id="view-board" style="display:none;">
+    <div class="board">
+
+      <div class="col" data-status="notstarted" ondragover="allowDrop(event)" ondrop="onCardDrop(event, this)"><h3>Not started <span>5</span></h3>
+        <div class="card" data-company="Group" data-dept="HR">
+          <div class="toprow"><span class="pill pr-urgent">Urgent</span><span class="pill comp-grp">Group</span></div>
+          <p class="desc">Prioritise recruitment: CFO, Internal Audit, PA</p>
+          <div class="foot"><div class="who"><div class="avatar">ZK</div><span class="name">Zuhair Khalid</span></div><span class="due-chip late">08/06 · 35d</span></div>
+        </div>
+        <div class="card" data-company="Group" data-dept="Admin">
+          <div class="toprow"><span class="pill pr-high">High</span><span class="pill comp-grp">Group</span></div>
+          <p class="desc">Coordinate EOBI registration, Faisalabad</p>
+          <div class="foot"><div class="who"><div class="avatar">MA</div><span class="name">M. Akhlaq</span></div><span class="due-chip">No date</span></div>
+        </div>
+        <div class="card" data-company="UTPL" data-dept="Ops">
+          <div onclick="openModal('modal-pesco')" style="cursor:pointer;">
+            <div class="toprow"><span class="pill pr-high">High</span><span class="pill comp-utpl">UTPL</span></div>
+            <p class="desc">PESCO chain — 3 bills</p>
+            <span class="stage-chip" style="margin-bottom:6px; display:inline-flex;">→ Back to FD Dept · stage 2 of 3</span>
+            <div class="foot"><div class="who"><div class="avatar">NK</div><span class="name">Nadeem Khan</span></div><span class="due-chip late">04/07 · 9d</span></div>
+            <div class="card-icon-row"><span class="cic">1 comment</span><span class="cic">1/3 subtasks</span></div>
+          </div>
+          <div class="card-sub-toggle" onclick="event.stopPropagation(); toggleSub('cs1')"><span id="cs1-arrow">▸</span> Subtasks <span class="mini-badge" id="mini-cs1">1/3</span></div>
+          <div id="cs1" class="card-sub-panel">
+            <div class="subtask-block" data-mini="mini-cs1">
+              <div class="subtask-row checked"><input type="checkbox" checked onchange="onSubtaskToggle(this)"><label>Stage 1 — Submitted to Civil Dept</label></div>
+              <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Stage 2 — Back to FD Dept</label></div>
+              <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Stage 3 — Payment released</label></div>
+              <div class="add-subtask"><input placeholder="Add a subtask…" /><button>+</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" data-company="Group" data-dept="Exec">
+          <div class="toprow"><span class="pill pr-normal">Normal</span><span class="pill comp-grp">Group</span></div>
+          <p class="desc">Stock Sheet (recurring)</p>
+          <div class="foot"><div class="who"><div class="avatar">SH</div><span class="name">Sundas Hussain</span></div><span class="due-chip">14/07</span></div>
+        </div>
+      </div>
+
+      <div class="col" data-status="inprogress" ondragover="allowDrop(event)" ondrop="onCardDrop(event, this)"><h3>In progress <span>5</span></h3>
+        <div class="card" data-company="Group" data-dept="Finance">
+          <div onclick="openModal('modal-ar')" style="cursor:pointer;">
+            <div class="toprow"><span class="pill pr-high">High</span><span class="pill comp-grp">Group</span></div>
+            <p class="desc">A&amp;R Hotels accounting handover</p>
+            <div class="foot"><div class="who"><div class="avatar">MS</div><span class="name">M. Shakeel</span></div><span class="due-chip late">02/07 · 11d</span></div>
+            <div class="card-icon-row"><span class="cic">2 comments</span><span class="cic">2/4 subtasks</span></div>
+          </div>
+          <div class="card-sub-toggle" onclick="event.stopPropagation(); toggleSub('cs2')">▸ Subtasks <span class="mini-badge" id="mini-cs2">2/4</span></div>
+          <div id="cs2" class="card-sub-panel">
+            <div class="subtask-block" data-mini="mini-cs2">
+              <div class="subtask-row checked"><input type="checkbox" checked onchange="onSubtaskToggle(this)"><label>Upload receipts to Folderit</label></div>
+              <div class="subtask-row checked"><input type="checkbox" checked onchange="onSubtaskToggle(this)"><label>Prepare P&amp;L and balance sheet</label></div>
+              <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Verify with Muhammad Shakeel</label></div>
+              <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Submit for CEO approval</label></div>
+              <div class="add-subtask"><input placeholder="Add a subtask…" /><button>+</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" data-company="UTPL" data-dept="Ops">
+          <div class="toprow"><span class="pill pr-high">High</span><span class="pill comp-utpl">UTPL</span></div>
+          <p class="desc">MEPCO bill 5,100,300 PKR</p>
+          <span class="stage-chip" style="margin-bottom:6px; display:inline-flex;">→ Back to FD Dept</span>
+          <div class="foot"><div class="who"><div class="avatar">NK</div><span class="name">Nadeem Khan</span></div><span class="due-chip late">04/07 · 9d</span></div>
+        </div>
+        <div class="card" data-company="Group" data-dept="Admin">
+          <div class="toprow"><span class="pill pr-high">High</span><span class="pill comp-grp">Group</span></div>
+          <p class="desc">Dispose of artificial turf</p>
+          <div class="foot"><div class="who"><div class="avatar">MA</div><span class="name">M. Akhlaq</span></div><span class="due-chip late">10/07 · 3d</span></div>
+        </div>
+        <div class="card" data-company="UTPL" data-dept="Ops">
+          <div class="toprow"><span class="pill pr-high">High</span><span class="pill comp-utpl">UTPL</span></div>
+          <p class="desc">Mold Cleaning</p>
+          <div class="foot"><div class="who"><div class="avatar">UA</div><span class="name">Usman Arshad</span></div><span class="due-chip">16/07</span></div>
+        </div>
+        <div class="card" data-company="Group" data-dept="Exec">
+          <div class="toprow"><span class="pill pr-medium">Medium</span><span class="pill comp-grp">Group</span></div>
+          <p class="desc">Call Irshad re: Glass</p>
+          <div class="foot"><div class="who"><div class="avatar">SH</div><span class="name">Sundas Hussain</span></div><span class="due-chip today">13/07</span></div>
+        </div>
+      </div>
+
+      <div class="col" data-status="waiting" ondragover="allowDrop(event)" ondrop="onCardDrop(event, this)"><h3>Waiting reply <span>0</span></h3><div class="empty-col">Nothing waiting on an explanation.</div></div>
+      <div class="col" data-status="stuck" ondragover="allowDrop(event)" ondrop="onCardDrop(event, this)"><h3>Stuck <span>0</span></h3><div class="empty-col">Nothing blocked — new status, not used yet.</div></div>
+      <div class="col" data-status="submitted" ondragover="allowDrop(event)" ondrop="onCardDrop(event, this)"><h3>Submitted <span>0</span></h3><div class="empty-col">No responses pending review.</div></div>
+
+      <div class="col" data-status="completed" ondragover="allowDrop(event)" ondrop="onCardDrop(event, this)"><h3>Completed <span>2</span></h3>
+        <div class="card" style="opacity:0.75;" data-company="UTPL" data-dept="Ops">
+          <div class="toprow"><span class="pill st-completed">Completed</span><span class="pill comp-utpl">UTPL</span></div>
+          <p class="desc" style="text-decoration:line-through;">FESCO bill 12,976,500 PKR cleared</p>
+          <div class="foot"><div class="who"><div class="avatar">NK</div><span class="name">Nadeem Khan</span></div><span class="due-chip done">Completed 09/07</span></div>
+        </div>
+        <div class="card" style="opacity:0.75;" data-company="Group" data-dept="Finance">
+          <div class="toprow"><span class="pill st-completed">Completed</span><span class="pill comp-grp">Group</span></div>
+          <p class="desc" style="text-decoration:line-through;">Amex direct login set up</p>
+          <div class="foot"><div class="who"><div class="avatar">MS</div><span class="name">M. Shakeel</span></div><span class="due-chip done">Completed 05/07</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ LIST ============ -->
+  <div id="view-list" class="listview">
+
+    <div class="list-group-head">UTPL · Operations (3)</div>
+    <div class="lrow" onclick="openModal('modal-pesco')">
+      <span class="chev" onclick="event.stopPropagation(); toggleSub('s1')">▸</span>
+      <span class="pill st-inprogress">In Progress</span>
+      <div class="t">PESCO / MEPCO receivable chain, ~25.4M PKR</div>
+      <span class="stage-chip">→ Back to FD Dept</span>
+      <span class="mini-badge" id="mini-s1">1/3</span>
+      <span class="who">Nadeem Khan</span>
+      <span class="dates-chip">Issued 02/07 → Due <span class="d-late">04/07</span></span>
+    </div>
+    <div id="s1" class="sub-panel">
+      <div class="subtask-block" data-mini="mini-s1">
+        <div class="subtask-row checked"><input type="checkbox" checked onchange="onSubtaskToggle(this)"><label>Stage 1 — Submitted to Civil Dept</label></div>
+        <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Stage 2 — Back to FD Dept (2 bills stuck)</label></div>
+        <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Stage 3 — Payment released</label></div>
+        <div class="add-subtask"><input placeholder="Add a subtask…" /><button>+ Add</button></div>
+      </div>
+    </div>
+    <div class="lrow">
+      <span class="chev"></span>
+      <span class="pill st-inprogress">In Progress</span>
+      <div class="t">Mold Cleaning</div>
+      <span class="who">Usman Arshad</span>
+      <span class="dates-chip">Issued 01/07 → Due 16/07</span>
+    </div>
+
+    <div class="list-group-head">Group · Finance (1)</div>
+    <div class="lrow" onclick="openModal('modal-ar')">
+      <span class="chev" onclick="event.stopPropagation(); toggleSub('s2')">▸</span>
+      <span class="pill st-inprogress">In Progress</span>
+      <div class="t">Take over A&amp;R Hotels accounting from Shahida Naseem</div>
+      <span class="mini-badge" id="mini-s2">2/4</span>
+      <span class="who">M. Shakeel</span>
+      <span class="dates-chip">Issued 02/07 → Due <span class="d-late">02/07</span></span>
+    </div>
+    <div id="s2" class="sub-panel">
+      <div class="subtask-block" data-mini="mini-s2">
+        <div class="subtask-row checked"><input type="checkbox" checked onchange="onSubtaskToggle(this)"><label>Upload receipts and expenses to Folderit</label></div>
+        <div class="subtask-row checked"><input type="checkbox" checked onchange="onSubtaskToggle(this)"><label>Prepare full P&amp;L and balance sheet</label></div>
+        <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Verify figures with Muhammad Shakeel</label></div>
+        <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Submit for CEO approval via Folderit</label></div>
+        <div class="add-subtask"><input placeholder="Add a subtask…" /><button>+ Add</button></div>
+      </div>
+    </div>
+
+    <div class="list-group-head">Group · HR (2)</div>
+    <div class="lrow">
+      <span class="chev"></span>
+      <span class="pill st-notstarted">Not Started</span>
+      <div class="t">Prioritise recruitment: CFO, Internal Audit, PA</div>
+      <span class="meeting-chip">From: Weekly Discussion and Updates →</span>
+      <span class="who">Zuhair Khalid</span>
+      <span class="dates-chip">Issued 29/06 → Due <span class="d-late">08/06</span></span>
+    </div>
+    <div class="lrow">
+      <span class="chev"></span>
+      <span class="pill st-notstarted">Not Started</span>
+      <div class="t">Ensure timely payroll processing this month</div>
+      <span class="meeting-chip">From: Weekly Discussion and Updates →</span>
+      <span class="who">Zuhair Khalid</span>
+      <span class="dates-chip">Issued 29/06 → Due <span class="d-late">15/06</span></span>
+    </div>
+
+  </div>
+
+  <!-- ============ TEAM ============ -->
+  <div id="view-team" class="teamview">
+    <div class="team-list">
+      <div class="team-row head"><div>Person</div><div>Open</div><div>Overdue</div><div>Completed</div><div>On-time rate</div></div>
+      <div class="team-row"><div class="team-person"><div class="avatar" style="width:24px;height:24px;">SH</div>Sundas Hussain</div><div class="team-num">18</div><div class="team-num good">0</div><div class="team-num">3</div><div style="font-size:12px; color:var(--INK400);">Not trackable yet</div></div>
+      <div class="team-row"><div class="team-person"><div class="avatar" style="width:24px;height:24px;">MS</div>Muhammad Shakeel</div><div class="team-num">1</div><div class="team-num bad">1</div><div class="team-num">5</div><div style="font-size:12px; color:var(--INK400);">Not trackable yet</div></div>
+      <div class="team-row"><div class="team-person"><div class="avatar" style="width:24px;height:24px;">MA</div>Muhammad Akhlaq</div><div class="team-num">6</div><div class="team-num bad">1</div><div class="team-num">3</div><div style="font-size:12px; color:var(--INK400);">Not trackable yet</div></div>
+      <div class="team-row"><div class="team-person"><div class="avatar" style="width:24px;height:24px;">UA</div>Usman Arshad</div><div class="team-num">1</div><div class="team-num good">0</div><div class="team-num">1</div><div style="font-size:12px; color:var(--INK400);">Not trackable yet</div></div>
+      <div class="team-row"><div class="team-person"><div class="avatar" style="width:24px;height:24px;">ZK</div>Zuhair Khalid</div><div class="team-num bad">10</div><div class="team-num bad">7</div><div class="team-num">0</div><div style="font-size:12px; color:var(--INK400);">Not trackable yet</div></div>
+      <div class="team-row"><div class="team-person"><div class="avatar" style="width:24px;height:24px;">NK</div>Nadeem Khan</div><div class="team-num bad">11</div><div class="team-num bad">11</div><div class="team-num">4</div><div style="font-size:12px; color:var(--INK400);">Not trackable yet</div></div>
+    </div>
+    <div class="callout" style="margin-top:0;">
+      <h4>Why "on-time rate" says "not trackable yet"</h4>
+      <p>Open and overdue counts above are real, pulled straight from your database right now — Sundas has 18 open tasks and none overdue, Nadeem Khan has 11 open and all 11 are overdue, Zuhair Khalid has 7 of 10 overdue. That part already works today.</p>
+      <p>What I can't compute yet is whether the 20 completed tasks were finished on time or late, because there's no completion-date field to compare against the due date — only a generic "last edited" timestamp, which isn't reliable for this. The moment the completion-date field from the previous page ships, this column turns into a real percentage, and this becomes the actual "who's efficient" view you asked for.</p>
+    </div>
+  </div>
+
+  <!-- ============ RECURRING ============ -->
+  <div id="view-recur" class="recurview">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <p style="font-size:13px; color:var(--SLATE); margin:0;">Standing tasks that regenerate automatically on a schedule — daily, weekly, or monthly.</p>
+      <button style="background:var(--NAVY); color:#fff; border:none; border-radius:var(--R_PILL); padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer;">+ New recurring task</button>
+    </div>
+    <div class="recur-list">
+      <div class="recur-card">
+        <span class="recur-freq">Weekly · Mon</span>
+        <div style="flex:1;">
+          <div class="recur-title">Weekly Production Report</div>
+          <div class="recur-sub">Operations · Nadeem Khan · due 2 days after creation</div>
+        </div>
+        <span class="pill pr-high">High</span>
+        <span class="pill comp-utpl">UTPL</span>
+      </div>
+      <div class="recur-card">
+        <span class="recur-freq">Monthly · Day 25</span>
+        <div style="flex:1;">
+          <div class="recur-title">Monthly Payroll Review</div>
+          <div class="recur-sub">Finance · Muhammad Shakeel · due same day</div>
+        </div>
+        <span class="pill pr-medium">Medium</span>
+        <span class="pill comp-grp">Group</span>
+      </div>
+      <div class="recur-card">
+        <span class="recur-freq">Weekly · Fri</span>
+        <div style="flex:1;">
+          <div class="recur-title">IT Security Check</div>
+          <div class="recur-sub">IT · due 1 day after creation</div>
+        </div>
+        <span class="pill pr-medium">Medium</span>
+        <span class="pill comp-grp">Group</span>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:0;">
+      <h4>What changed here</h4>
+      <p>Same engine as today's Recurring Tasks page — daily/weekly/monthly frequency, day-of-week or day-of-month picker, due-days-after, priority — just brought in as a tab on this page instead of a separate destination, and re-skinned to match everything else here (company/department tags, priority pills). Nothing about how templates fire or regenerate tasks changes.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <h4>Nothing from today's page is being removed</h4>
+    <p>Everything currently on <span style="font-family:'JetBrains Mono',monospace;">/tasks</span> stays — it's just moving to a clearer home rather than disappearing. The overdue banner, KPI row, and CSV import/export sit at the top exactly as today (mocked in above). Weekly, Monthly, Quarterly and Timeline are untouched — same charts, same logic, just sitting as tabs next to the new views. Recurring templates move from a separate page into a "Recurring" tab right here (see above) — same scheduling engine, easier to get to.</p>
+    <p>Everything that used to live inside each expanded task row now lives inside the task detail panel instead: the Waiting Reply explanation / corrective action / recovery date form, the reviewer's Accept &amp; Close / Reopen buttons, the protected-task warning for management-assigned tasks, the WhatsApp reminder button, time tracking, the reassign dropdown, and delete (all still behind the same permission checks — PA/Member/Admin/Executive roles work exactly as they do today). The department-owner auto-suggestion when picking a department on task creation, and the "View Minutes →" link for meeting-sourced tasks, both carry over too. Nothing here changes who can see or do what — only where you go to do it.</p>
+  </div>
+
+  <div class="callout">
+    <h4>What changed based on ClickUp</h4>
+    <p><b>Stage is now separate from Status.</b> Status stays the simple lifecycle you already use — Not Started, In Progress, Waiting Reply, Submitted, Completed, Cancelled — and still drives the board columns and the accountability workflow. Stage is new: an optional, free-text pipeline label for tasks that move through steps of their own, like the receivable chain's "Submitted to Civil Dept → Back to FD Dept → Payment Released". Most tasks won't need one; it only shows up when a department sets one.</p>
+    <p><b>Completion date is now tracked automatically.</b> Today the database only has a due date and a created date — there's no record of when a task was actually finished. The rebuild adds a completion timestamp, stamped the moment a task is marked Completed, so completed cards show "Completed 09/07" instead of just a due date. That also unlocks reporting you don't have yet, like average days-late-to-close by department.</p>
+    <p><b>Colours are now pulled from your actual component styles</b> — Status and Priority pills use the exact colour pairings from <span style="font-family:'JetBrains Mono',monospace;">StatusBadge</span> / <span style="font-family:'JetBrains Mono',monospace;">PriorityBadge</span> in <span style="font-family:'JetBrains Mono',monospace;">SharedUI.tsx</span>, and the company tags (UTPL blue, IFPL green, Baranh amber, Haute Dolci purple) are the same badge colours already used on your Folder-it page, not new ones I invented.</p>
+    <p><b>Two ways into subtasks now, on the two wired-up examples (A&amp;R Hotels in List view, and PESCO/MEPCO in both List and Board).</b> Click directly on the task title or card and the full detail panel opens — description, metadata, subtasks, comments, all in one place. Click the small caret (▸ in List, "Subtasks" in Board) instead, and a compact tick-box checklist expands right there on the main screen, with its own "+ add subtask" line — no need to open anything for a quick tick-off, and the "x/y" count next to the task updates as you go.</p>
+    <p>The "Mark task complete" button only lives in the full panel, since that's a formal status change — tick every box (inline or in the panel) and it unlocks. Tasks with no subtasks skip the lock entirely. One honest caveat: in this static mockup the inline checklist and the full-panel checklist are separate demo copies, so ticking one won't move the other here — in the real build they'd read from the same underlying list and always match.</p>
+    <p><b>Company and department are now required tags, not optional fields.</b> Try the quick-add bar above — the "+ Add" button stays greyed out until you've picked both a company tag and a department tag; the hint underneath tells you why. I kept them as two dropdowns rather than a fully custom tag-picker, because a dropdown that must be filled behaves exactly like a compulsory tag in practice and is much less to build — but colours it like the company badges the moment you pick one, so it still reads as tagging, not paperwork. If you'd rather have a genuinely free-form tag picker (type-to-search, add new tags on the fly), that's a bigger build — happy to do it, just tell me.</p>
+    <p><b>Issue date sits next to due date now</b>, in List view and My Tasks (Board stays due-date-only, on purpose, since you asked for smaller cards) — see the "Issued 02/07 → Due 04/07" line on each row.</p>
+    <p><b>New Team tab</b> answers "which employee is on time and which isn't" directly — see it above. Open and overdue counts are already real and pulled from your database; on-time completion rate is honestly marked "not trackable yet" until the completion-date field ships, at which point it becomes a real percentage per person.</p>
+  </div>
+
+  <div class="callout">
+    <h4>Latest round: WhatsApp, Recurring, meeting-sourced tasks, priority</h4>
+    <p><b>WhatsApp — one honest limitation to flag.</b> Every "WhatsApp reminder" button on this page (and the one on today's page) is a manual click-to-open link — it opens WhatsApp with a message already typed, but someone has to click it. A message that fires by itself the moment a task goes overdue, with nobody clicking anything, needs the WhatsApp Business API setup from our earlier conversation — the Meta account, access token and approved template, which is still sitting on your side. I've added the piece that's ready now: an "Auto-remind on WhatsApp if this goes overdue" toggle on each task (see both example panels), so the intent is captured and wired up the moment that API access exists. Nothing sends automatically today.</p>
+    <p><b>Meeting-sourced tasks now show where they came from.</b> The A&amp;R Hotels task panel and the two HR rows in List view are all genuinely from your database with <span style="font-family:'JetBrains Mono',monospace;">assigned_by = "Meeting Minutes"</span> — I've added a small "📅 From: [meeting name] →" chip on each, linking back to the minutes exactly like today's "View Minutes →" link, just styled as a chip instead of plain text.</p>
+    <p><b>Recurring got its own tab</b> (see "Recurring" above) instead of living on a separate page — same daily/weekly/monthly engine, day-of-week/day-of-month picker and due-days-after logic as today, now shown as cards with company/department tags and a priority pill, with a "+ New recurring task" button in the same visual language as everything else here.</p>
+    <p><b>Priority is now part of quick-add</b>, not just the full form — a third dropdown next to Company and Department, defaulting to Medium.</p>
+  </div>
+
+  <div class="callout">
+    <h4>Fixed: one creation path, and subtasks live in it</h4>
+    <p>You were right on both counts. The separate "Fast add" bar is gone — there's now exactly one way to create a task, the "+ New Task" button at the top, and it opens the full form every time. Two entry points that didn't do the same thing was a genuine glitch, not a deliberate choice — thanks for catching it.</p>
+    <p>The New Task form now has a Subtasks section, right under the main fields — type a step, hit Add or press Enter, and it appears in the list immediately, with a Remove option if you change your mind. Add as many as the task needs before you ever click "Create task". Try it in the modal now: description, company, department, assignee, due date, subtasks, all in one place, one form.</p>
+  </div>
+
+  <div class="callout">
+    <h4>Calendar picker, real drag-and-drop, department breakdown</h4>
+    <p><b>Calendar button on both date fields</b> in the New Task form — click the 📅 next to Due date or Assigned date and a small calendar pops up to pick a day, instead of only typing digits. This is a custom calendar, not the browser's native date input, on purpose: your own project rules ban native date inputs because Safari ignores the DD/MM/YYYY setting and shows dates the American way. Same DD/MM/YYYY output either way, typing still works too.</p>
+    <p><b>Board view is now a real Kanban</b> — drag any card in Board view and drop it on a different column; it moves there and that becomes its new status (a completed card also greys out and gets struck through, same as the rest of the app). Try dragging "Mold Cleaning" from Not Started into In Progress.</p>
+    <p><b>Department breakdown for Open and Overdue</b> — click either KPI card and a breakdown table drops down underneath, department by department. The numbers are real, pulled straight from your database right now: Unze Trading Ops has 12 open and 11 of those overdue, HR has 12 open and 8 overdue, Finance has 6 open and all 6 overdue, Executive Office and the still-unassigned-to-a-company tasks have 9 open each with none overdue, Admin has 5 open and 1 overdue.</p>
+  </div>
+
+  <div class="callout">
+    <h4>Assigned date locked, due date protected</h4>
+    <p><b>Assigned date is no longer editable, anywhere.</b> The New Task form now shows it as a plain, greyed-out "13/07/2026 — today, locked" instead of a field — it's set by the system the moment you create the task and nobody can change it, including you. That's a factual record of when the task was raised, so it should never be adjustable.</p>
+    <p><b>On the due date, you'd actually already built this rule</b> — I checked the live code: today, only Admin, Executive, and reviewer roles can see or use the due-date editor at all; a regular assignee like Nadeem Khan has no way to touch it, and every change is already written to the audit log. So the protection you're remembering is real and still there in this redesign — the two example panels above show both sides of it: the A&amp;R Hotels panel (an Admin/Executive view) has a "Move due date" control, logged and permission-gated; the PESCO/MEPCO panel (Nadeem Khan's own task) shows the due date as plain locked text with no way to edit it.</p>
+    <p>What today's system doesn't have, and what I'd add to make this airtight, is an <b>original due date</b> — captured once, the moment the task is created, and never touched again no matter how many times a manager legitimately reschedules it afterwards. You can already see this on the A&amp;R Hotels panel: "Original due: 28/06/2026 · moved once by Khuram Saleem on 29/06." Even if a manager has good reason to push a deadline back, the true original commitment stays visible and comparable forever — which is exactly the "we'll never know what the true due date was" problem you're describing, solved permanently rather than just access-controlled.</p>
+  </div>
+
+  <div class="callout">
+    <h4>Due date history, and the new Stuck status</h4>
+    <p>Updated the due-date design per your latest note — I've opened it up exactly as you described: <b>Issue date and Original due date are both permanently locked</b> (shown at the top of both example panels now), <b>anyone with access to the task can move the Current due date</b> back and forth as work actually changes, and every single move gets written to a <b>Due date history</b> log right there on the task — who moved it, from what date, to what date, and when. A&amp;R Hotels shows one real move: "28/06/2026 → 02/07/2026 — moved by Khuram Saleem, 29/06/2026." Nadeem Khan's PESCO/MEPCO task has never been moved, so its history just says "No moves yet." This replaces the earlier Admin/Executive-only restriction with something I think is actually stronger for your purposes: instead of stopping people from moving it, nothing can ever hide that it moved.</p>
+    <p><b>Stuck is now a real status</b>, sitting between Waiting Reply and Submitted on the Board (see the new column) and its own KPI card at the top — genuinely showing 0 right now, since nothing has ever been allowed to be set to it before. I kept Not Started, In Progress, Waiting Reply, Submitted, and Completed exactly as they are rather than removing any of them — Submitted specifically is the step where someone has already sent in their explanation and it's sitting with the reviewer waiting for Accept &amp; Close or Reopen, which is a different moment than a task simply being Stuck. If you'd rather fold Submitted into Stuck rather than keep it separate, tell me and I'll simplify it down.</p>
+    <p>One small open question: I gave "Stuck" a neutral grey/dashed look for now because it doesn't have a colour of its own yet in your design system, and your own rule says not to introduce a new colour without asking first. Want me to pick one (my instinct would be a muted grey-purple, distinct from Waiting Reply's red and In Progress's amber), or are you happy with grey?</p>
+  </div>
+
+  <div class="callout">
+    <h4>Latest round: no sidebar — one single page, your fonts and colours</h4>
+    <p>Removed the left sidebar entirely and put navigation back where it was — My Tasks / Board / List / Team / Recurring as tabs across the top, with Weekly / Monthly / Quarterly / Timeline greyed out next to them as "Coming soon," exactly like before. The screenshot was only ever meant as layout inspiration for the KPI cards, attention banner and filter row below — not a instruction to restructure the whole page around a sidebar.</p>
+    <p>Everything else from that layout is kept as one flowing page: the red "Needs Your Attention" banner (4 critical, 26 overdue, 15 due today, 0 stuck — all real, live numbers), the icon-badged KPI row underneath it, the icon-based filter row (Company 🏢 / Department 🗂 / Priority 🚩 / Owner 👤) above Board and List, and the search + Group by + Export/Import toolbar. Fonts are unchanged — still Inter / Inter Tight / JetBrains Mono, the same three the rest of the app uses. Colours are still pulled from your actual SharedUI palette (StatusBadge / PriorityBadge / company-badge conventions), not the screenshot's own pastel tones.</p>
+    <p>One honest flag, unchanged from last round: the "vs yesterday" arrows on Open/Overdue/Completed are illustrative (marked with a "*" and tooltip) since there's no daily-snapshot table yet to compute a real trend — Due Today, Waiting Reply and Stuck are genuinely live. Everything from every earlier round — subtasks, task detail modals, locked assigned/original-due dates with full history, drag-and-drop Kanban, the calendar popover, Team view, Recurring tab, WhatsApp auto-remind toggle — is untouched.</p>
+  </div>
+
+  <div class="callout">
+    <h4>Latest round: dropdowns instead of pill "pockets", and a real More Filters panel</h4>
+    <p>You were right — showing every company and every department as its own clickable pill was creating separate little "pockets" rather than one clean filter. Company and Department are now single dropdown boxes, matching the screenshot's cleaner look — pick one option from the list instead of scanning a row of buttons. These two dropdowns actually filter the Board cards below (try switching Company to "UTPL" or Department to "Finance").</p>
+    <p><b>"More Filters" now actually opens a panel</b> — click it and four more dropdowns appear: Stage, Due date (Overdue / Due today / Due this week / No due date), Source (Meeting-sourced / Manually created / Recurring-generated), and Subtask state. The idea is you can stack several at once — e.g. Company = UTPL, Priority = Urgent, Overdue — the same way a real filter bar lets you combine conditions rather than picking just one thing at a time. Priority, Owner, and everything inside More Filters show the real set of options a full build would have, but aren't wired to actually filter cards yet in this static file — Company and Department are the two proven end-to-end so far.</p>
+    <p><b>Kept the "Needs Your Attention" banner exactly as placed</b> in your screenshot — glad that one landed well as-is.</p>
+  </div>
+
+  <div class="callout">
+    <h4>Latest round: no emojis, and a working Reset Filters</h4>
+    <p>Removed every emoji from the page — the KPI cards, attention banner, filter labels, calendar buttons, and card footers. KPI cards now use a thin colour-accent border on the left instead of an icon square (blue/red/amber/green/grey, matching each stat), filter dropdowns have a small text label above them (Company, Department, Priority, Owner) instead of an icon, and the calendar-picker buttons now say "Pick" instead of showing a calendar glyph. This matches the plain, text-first style the rest of your app already uses.</p>
+    <p><b>Reset Filters</b> now sits next to "More Filters" — one click sets every dropdown (Company, Department, Priority, Owner, and all four inside More Filters) back to "All" and un-filters the Board cards.</p>
+  </div>
+
+</div><!-- /wrap -->
+
+<!-- ============ TASK DETAIL MODAL — A&R Hotels ============ -->
+<div class="modal-backdrop" id="modal-ar" onclick="if(event.target===this) closeModal('modal-ar');">
+  <div class="modal">
+    <div class="modal-head">
+      <div style="flex:1;">
+        <h2>Take over A&amp;R Hotels accounting from Shahida Naseem</h2>
+        <div class="modal-meta">
+          <span class="pill st-inprogress">In Progress</span>
+          <span class="pill pr-high">High</span>
+          <span class="pill comp-grp">Group</span>
+          <span class="stage-chip">Finance</span>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-ar')" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="modal-body">
+
+      <div class="modal-section">
+        <div class="modal-meta-grid">
+          <div><div class="k">Assignees</div><div class="v">Muhammad Shakeel, Khuram Saleem</div></div>
+          <div><div class="k">Department</div><div class="v">Finance</div></div>
+          <div><div class="k">Issue date <span style="font-weight:400; color:var(--INK400);">(locked)</span></div><div class="v">02/07/2026</div></div>
+          <div><div class="k">Original due date <span style="font-weight:400; color:var(--INK400);">(locked)</span></div><div class="v">28/06/2026</div></div>
+        </div>
+        <div style="margin-top:10px;"><span class="meeting-chip">From: Finance Handover and Compliance Review Meeting →</span></div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Current due date <span style="font-weight:400; color:var(--INK400); text-transform:none;">— anyone with access can move it, every move is kept below</span></div>
+        <div class="date-field" style="max-width:220px; margin-bottom:10px;">
+          <input id="arDue" value="02/07/2026" placeholder="DD/MM/YYYY" style="border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:7px 10px; font-size:13px; color:var(--RED); font-weight:700; font-family:'JetBrains Mono',monospace;" />
+          <button type="button" class="date-cal-btn" onclick="toggleCalendar('arDue')" aria-label="Pick new due date">Pick</button>
+          <div class="cal-popover" id="cal-arDue" style="display:none;"></div>
+        </div>
+        <div class="modal-label" style="margin-bottom:4px;">Due date history</div>
+        <div class="history-row"><b>28/06/2026</b> → <b>02/07/2026</b> — moved by Khuram Saleem, 29/06/2026</div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Description</div>
+        <p class="desc-text">Review current state of accounts, upload all receipts, invoices, and expenses to Folderit, prepare full P&amp;L and balance sheet, verify with Muhammad Shakeel, and submit for CEO approval via Folderit workflow.</p>
+      </div>
+
+      <div class="modal-section subtask-block">
+        <div class="modal-label">Subtasks</div>
+        <div class="subtask-progress"><div class="subtask-progress-fill" style="width:50%;"></div></div>
+        <div class="subtask-count">2 of 4 complete</div>
+
+        <div class="subtask-row checked"><input type="checkbox" checked onchange="onSubtaskToggle(this)"><label>Upload receipts and expenses to Folderit</label></div>
+        <div class="subtask-row checked"><input type="checkbox" checked onchange="onSubtaskToggle(this)"><label>Prepare full P&amp;L and balance sheet</label></div>
+        <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Verify figures with Muhammad Shakeel</label></div>
+        <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Submit for CEO approval via Folderit</label></div>
+
+        <div class="add-subtask">
+          <input placeholder="Add a subtask…" />
+          <button>+ Add</button>
+        </div>
+
+        <div class="gate-note">Complete all subtasks before this task can be marked Completed.</div>
+        <button class="complete-btn" disabled>Mark task complete</button>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Status &amp; tools — everything from today's page</div>
+        <div class="protected-note">Assigned by management — you can update status and add notes but can't edit or delete this task. (Same protected-task rule as today.)</div>
+        <label class="auto-remind"><input type="checkbox" checked /> Auto-remind on WhatsApp if this goes overdue</label>
+        <div class="tools-row">
+          <select><option>Reassign to…</option><option>Muhammad Shakeel</option><option>Sania Saleem</option></select>
+          <span style="font-size:12px; color:var(--SLATE);">Time spent</span>
+          <input type="number" value="90" /><span style="font-size:12px; color:var(--SLATE);">min</span>
+          <button class="btn-whatsapp">WhatsApp reminder now</button>
+          <button class="btn-delete">Delete task</button>
+        </div>
+        <p style="font-size:11.5px; color:var(--INK400); margin:0;">If this were Waiting Reply instead of In Progress, the explanation / corrective action / recovery date form and the reviewer's Accept &amp; Close / Reopen buttons would appear right here — unchanged from today, just living in this panel instead of inline in the list.</p>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Comments</div>
+
+        <div class="comment">
+          <div class="c-avatar">MS</div>
+          <div class="c-body">
+            <div class="c-head"><span class="c-name">Muhammad Shakeel</span><span class="c-time">08/07/2026, 4:12pm</span></div>
+            <div class="c-text">P&amp;L draft is ready, sharing with Khuram for review before Friday.</div>
+          </div>
+        </div>
+        <div class="comment">
+          <div class="c-avatar" style="background:var(--WARNING_SOFT); color:var(--AMBER);">KS</div>
+          <div class="c-body">
+            <div class="c-head"><span class="c-name">Khuram Saleem</span><span class="c-time">09/07/2026, 9:03am</span></div>
+            <div class="c-text">Please also loop in the auditor once verified.</div>
+          </div>
+        </div>
+
+        <div class="add-comment">
+          <input placeholder="Add a comment…" />
+          <button>Post</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============ TASK DETAIL MODAL — PESCO/MEPCO chain ============ -->
+<div class="modal-backdrop" id="modal-pesco" onclick="if(event.target===this) closeModal('modal-pesco');">
+  <div class="modal">
+    <div class="modal-head">
+      <div style="flex:1;">
+        <h2>PESCO / MEPCO receivable chain — ~25.4M PKR</h2>
+        <div class="modal-meta">
+          <span class="pill st-inprogress">In Progress</span>
+          <span class="pill pr-high">High</span>
+          <span class="pill comp-utpl">UTPL</span>
+          <span class="stage-chip">→ Back to FD Dept</span>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-pesco')" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="modal-body">
+
+      <div class="modal-section">
+        <div class="modal-meta-grid">
+          <div><div class="k">Assignees</div><div class="v">Nadeem Khan</div></div>
+          <div><div class="k">Department</div><div class="v">Operations</div></div>
+          <div><div class="k">Issue date (locked)</div><div class="v">02/07/2026</div></div>
+          <div><div class="k">Original due date <span style="font-weight:400; color:var(--INK400);">(locked)</span></div><div class="v" style="color:var(--RED);">04/07/2026 · 9d late</div></div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Current due date <span style="font-weight:400; color:var(--INK400); text-transform:none;">— never moved, so it matches the original</span></div>
+        <div class="date-field" style="max-width:220px; margin-bottom:10px;">
+          <input id="pescoDue" value="04/07/2026" placeholder="DD/MM/YYYY" style="border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:7px 10px; font-size:13px; color:var(--RED); font-weight:700; font-family:'JetBrains Mono',monospace;" />
+          <button type="button" class="date-cal-btn" onclick="toggleCalendar('pescoDue')" aria-label="Pick new due date">Pick</button>
+          <div class="cal-popover" id="cal-pescoDue" style="display:none;"></div>
+        </div>
+        <div class="modal-label" style="margin-bottom:4px;">Due date history</div>
+        <div class="history-row" style="color:var(--INK400);">No moves yet.</div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Description</div>
+        <p class="desc-text">Six PESCO/MEPCO bills are stuck moving between the Civil and FD departments before payment can be released. Track each bill through to final collection and notify Finance once funds clear.</p>
+      </div>
+
+      <div class="modal-section subtask-block">
+        <div class="modal-label">Subtasks — pipeline stages</div>
+        <div class="subtask-progress"><div class="subtask-progress-fill" style="width:33%;"></div></div>
+        <div class="subtask-count">1 of 3 complete</div>
+
+        <div class="subtask-row checked"><input type="checkbox" checked onchange="onSubtaskToggle(this)"><label>Stage 1 — Submitted to Civil Dept</label></div>
+        <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Stage 2 — Back to FD Dept (2 bills stuck here)</label></div>
+        <div class="subtask-row"><input type="checkbox" onchange="onSubtaskToggle(this)"><label>Stage 3 — Payment released</label></div>
+
+        <div class="add-subtask">
+          <input placeholder="Add a subtask…" />
+          <button>+ Add</button>
+        </div>
+
+        <div class="gate-note">Complete all subtasks before this task can be marked Completed.</div>
+        <button class="complete-btn" disabled>Mark task complete</button>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Status &amp; tools — everything from today's page</div>
+        <label class="auto-remind"><input type="checkbox" checked /> Auto-remind on WhatsApp if this goes overdue</label>
+        <div class="tools-row">
+          <select><option>Reassign to…</option><option>Nadeem Khan</option><option>Usman Arshad</option></select>
+          <span style="font-size:12px; color:var(--SLATE);">Time spent</span>
+          <input type="number" value="45" /><span style="font-size:12px; color:var(--SLATE);">min</span>
+          <button class="btn-whatsapp">WhatsApp reminder now</button>
+          <button class="btn-delete">Delete task</button>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Comments</div>
+
+        <div class="comment">
+          <div class="c-avatar">NK</div>
+          <div class="c-body">
+            <div class="c-head"><span class="c-name">Nadeem Khan</span><span class="c-time">11/07/2026, 2:40pm</span></div>
+            <div class="c-text">Civil Dept cleared 2 of 6 bills, chasing FD for the rest this week.</div>
+          </div>
+        </div>
+
+        <div class="add-comment">
+          <input placeholder="Add a comment…" />
+          <button>Post</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============ NEW TASK MODAL ============ -->
+<div class="modal-backdrop" id="modal-newtask" onclick="if(event.target===this) closeModal('modal-newtask');">
+  <div class="modal">
+    <div class="modal-head">
+      <div style="flex:1;">
+        <h2>New task</h2>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-newtask')" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="modal-body">
+
+      <div class="modal-section">
+        <div class="modal-label">What needs to be done? *</div>
+        <textarea id="ntDesc" oninput="onNewTaskChange()" placeholder="e.g. Follow up on MEPCO production shortfall and report recovery plan" style="width:100%; min-height:64px; border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:9px 12px; font-size:13.5px; color:var(--NAVY); font-family:'Inter',sans-serif; resize:vertical;"></textarea>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-meta-grid">
+          <div>
+            <div class="k">Company *</div>
+            <select id="ntCompany" onchange="onNewTaskChange()" style="width:100%; border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:7px 10px; font-size:13px; color:var(--NAVY); margin-top:2px;">
+              <option value="">Select…</option><option>UTPL</option><option>IFPL</option><option>Baranh</option><option>Haute Dolci</option>
+            </select>
+          </div>
+          <div>
+            <div class="k">Department *</div>
+            <select id="ntDept" onchange="onNewTaskChange()" style="width:100%; border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:7px 10px; font-size:13px; color:var(--NAVY); margin-top:2px;">
+              <option value="">Select…</option><option>Finance</option><option>HR</option><option>Admin</option><option>Operations</option><option>IT</option><option>Sales &amp; Marketing</option>
+            </select>
+          </div>
+          <div>
+            <div class="k">Assigned to *</div>
+            <select id="ntAssignee" onchange="onNewTaskChange()" style="width:100%; border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:7px 10px; font-size:13px; color:var(--NAVY); margin-top:2px;">
+              <option value="">Select a member…</option>
+              <option>Sundas Hussain</option><option>Nadeem Khan</option><option>Zuhair Khalid</option>
+              <option>Muhammad Akhlaq</option><option>Muhammad Shakeel</option><option>Usman Arshad</option>
+              <option>Sania Saleem</option><option>Asif Shakoor</option>
+            </select>
+          </div>
+          <div>
+            <div class="k">Priority</div>
+            <select id="ntPriority" style="width:100%; border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:7px 10px; font-size:13px; color:var(--NAVY); margin-top:2px;">
+              <option>Medium</option><option>Urgent</option><option>High</option><option>Low</option>
+            </select>
+          </div>
+          <div>
+            <div class="k">Assigned date</div>
+            <div style="margin-top:2px; padding:7px 10px; border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); background:var(--CARD_ALT); font-size:13px; font-family:'JetBrains Mono',monospace; color:var(--SLATE);">
+              13/07/2026 <span style="font-family:'Inter',sans-serif; color:var(--INK400); font-size:11px;">— today, locked</span>
+            </div>
+          </div>
+          <div>
+            <div class="k">Due date *</div>
+            <div class="date-field" style="margin-top:2px;">
+              <input id="ntDueDate" oninput="onNewTaskChange()" placeholder="DD/MM/YYYY" style="border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:7px 10px; font-size:13px; color:var(--NAVY); font-family:'JetBrains Mono',monospace;" />
+              <button type="button" class="date-cal-btn" onclick="toggleCalendar('ntDueDate')" aria-label="Pick due date">Pick</button>
+              <div class="cal-popover" id="cal-ntDueDate" style="display:none;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Subtasks (optional) — add as many steps as this task needs, right now</div>
+        <div id="ntSubtaskList"></div>
+        <div class="add-subtask">
+          <input id="ntSubtaskInput" placeholder="Add a subtask…" onkeydown="if(event.key==='Enter'){event.preventDefault(); addNewTaskSubtask();}" />
+          <button onclick="addNewTaskSubtask()">+ Add</button>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-label">Notes / context (optional)</div>
+        <textarea placeholder="Background, numbers, document references, instructions…" style="width:100%; min-height:50px; border:1px solid var(--HAIRLINE); border-radius:var(--R_SM); padding:9px 12px; font-size:13.5px; color:var(--NAVY); font-family:'Inter',sans-serif; resize:vertical;"></textarea>
+      </div>
+
+      <div class="gate-note" id="ntGateNote">Description, company, department, assignee and due date are all required before this can be saved.</div>
+      <button class="complete-btn" id="ntSaveBtn" disabled>Create task</button>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function showView(v, el){
+  document.getElementById('view-mytasks').style.display = v==='mytasks' ? 'block' : 'none';
+  document.getElementById('view-board').style.display = v==='board' ? 'block' : 'none';
+  document.getElementById('view-list').style.display = v==='list' ? 'block' : 'none';
+  document.getElementById('view-team').style.display = v==='team' ? 'block' : 'none';
+  document.getElementById('view-recur').style.display = v==='recur' ? 'block' : 'none';
+  document.getElementById('subrow-mytasks').style.display = v==='mytasks' ? 'flex' : 'none';
+  document.getElementById('subrow-company').style.display = (v==='board' || v==='list') ? 'flex' : 'none';
+  document.getElementById('filter-note-priorityowner').style.display = (v==='board' || v==='list') ? 'block' : 'none';
+  document.getElementById('toolbar-boardlist').style.display = (v==='board' || v==='list') ? 'flex' : 'none';
+  document.getElementById('subtitle').textContent = v==='mytasks' ? 'My Tasks' : v==='board' ? 'Board — all companies' : v==='list' ? 'List — all companies' : v==='team' ? 'Team — on-time performance' : 'Recurring templates';
+  document.querySelectorAll('.vtab').forEach(function(t){ if(!t.classList.contains('disabled')) t.classList.remove('active'); });
+  el.classList.add('active');
+}
+function setScope(el){
+  document.querySelectorAll('#subrow-mytasks .p').forEach(function(p){ p.classList.remove('active'); });
+  el.classList.add('active');
+}
+function resetFilters(){
+  ['filterCompany','filterDept','filterPriority','filterOwner','filterStage','filterDue','filterSource','filterSubtaskState'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.selectedIndex = 0;
+  });
+  setCompany('all');
+  setDept('all');
+  document.getElementById('moreFiltersPanel').style.display = 'none';
+  document.getElementById('moreFiltersBtn').classList.remove('active-more');
+}
+function toggleMoreFilters(){
+  var panel = document.getElementById('moreFiltersPanel');
+  var open = panel.style.display === 'flex';
+  panel.style.display = open ? 'none' : 'flex';
+  document.getElementById('moreFiltersBtn').classList.toggle('active-more', !open);
+}
+function setCompany(c){
+  document.querySelectorAll('.card').forEach(function(card){
+    card.style.display = (c==='all' || card.getAttribute('data-company')===c) ? '' : 'none';
+  });
+}
+function setDept(d){
+  document.querySelectorAll('.card').forEach(function(card){
+    card.style.display = (d==='all' || card.getAttribute('data-dept')===d) ? '' : 'none';
+  });
+}
+function toggleSub(id){
+  var el = document.getElementById(id);
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+/* ---- Kanban drag-and-drop ---- */
+var dragCard = null;
+function onDragStart(ev){
+  dragCard = ev.currentTarget;
+  ev.currentTarget.classList.add('dragging');
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', 'card');
+}
+function onDragEnd(ev){
+  ev.currentTarget.classList.remove('dragging');
+}
+function allowDrop(ev){ ev.preventDefault(); }
+function onCardDrop(ev, col){
+  ev.preventDefault();
+  if (!dragCard) return;
+  var empty = col.querySelector('.empty-col');
+  if (empty) empty.remove();
+  col.appendChild(dragCard);
+
+  var status = col.getAttribute('data-status');
+  var isCompleted = status === 'completed';
+  var desc = dragCard.querySelector('p.desc');
+  if (desc) desc.style.textDecoration = isCompleted ? 'line-through' : 'none';
+  dragCard.style.opacity = isCompleted ? '0.75' : '1';
+  var due = dragCard.querySelector('.due-chip');
+  if (due && isCompleted) { due.textContent = 'Completed 13/07'; due.className = 'due-chip done'; }
+
+  document.querySelectorAll('#view-board .col').forEach(function(c){
+    var count = c.querySelectorAll('.card').length;
+    var span = c.querySelector('h3 span');
+    if (span) span.textContent = count;
+    if (count === 0 && !c.querySelector('.empty-col')) {
+      var div = document.createElement('div');
+      div.className = 'empty-col';
+      div.textContent = 'Drop a task here.';
+      c.appendChild(div);
+    }
+  });
+  dragCard = null;
+}
+document.querySelectorAll('#view-board .card').forEach(function(c){
+  c.setAttribute('draggable', 'true');
+  c.addEventListener('dragstart', onDragStart);
+  c.addEventListener('dragend', onDragEnd);
+});
+
+/* ---- Department breakdown toggle ---- */
+function toggleDeptBreakdown(){
+  var el = document.getElementById('deptBreakdown');
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+/* ---- Calendar popover ---- */
+var calState = {};
+function toggleCalendar(fieldId){
+  var pop = document.getElementById('cal-' + fieldId);
+  var isOpen = pop.style.display === 'block';
+  document.querySelectorAll('.cal-popover').forEach(function(p){ p.style.display = 'none'; });
+  if (!isOpen) {
+    if (!calState[fieldId]) calState[fieldId] = { year: 2026, month: 6 };
+    pop.style.display = 'block';
+    renderCalendar(fieldId);
+  }
+}
+function shiftMonth(fieldId, delta){
+  var st = calState[fieldId];
+  st.month += delta;
+  if (st.month < 0) { st.month = 11; st.year--; }
+  if (st.month > 11) { st.month = 0; st.year++; }
+  renderCalendar(fieldId);
+}
+function renderCalendar(fieldId){
+  var st = calState[fieldId];
+  var pop = document.getElementById('cal-' + fieldId);
+  var monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var first = new Date(st.year, st.month, 1);
+  var startDay = first.getDay();
+  var daysInMonth = new Date(st.year, st.month + 1, 0).getDate();
+  var html = '<div class="cal-head"><span onclick="shiftMonth(\'' + fieldId + '\',-1)">&lsaquo;</span><span>' + monthNames[st.month] + ' ' + st.year + '</span><span onclick="shiftMonth(\'' + fieldId + '\',1)">&rsaquo;</span></div>';
+  html += '<div class="cal-grid">';
+  ['S','M','T','W','T','F','S'].forEach(function(d){ html += '<div class="cal-dow">' + d + '</div>'; });
+  for (var i = 0; i < startDay; i++) html += '<div></div>';
+  for (var d = 1; d <= daysInMonth; d++) {
+    html += '<div class="cal-day" onclick="pickDate(\'' + fieldId + '\',' + st.year + ',' + st.month + ',' + d + ')">' + d + '</div>';
+  }
+  html += '</div>';
+  pop.innerHTML = html;
+}
+function pickDate(fieldId, year, month, day){
+  var dd = String(day).padStart(2, '0');
+  var mm = String(month + 1).padStart(2, '0');
+  document.getElementById(fieldId).value = dd + '/' + mm + '/' + year;
+  document.getElementById('cal-' + fieldId).style.display = 'none';
+  if (fieldId === 'ntDueDate') onNewTaskChange();
+}
+document.addEventListener('click', function(ev){
+  if (!ev.target.closest('.date-field')) {
+    document.querySelectorAll('.cal-popover').forEach(function(p){ p.style.display = 'none'; });
+  }
+});
+
+function addNewTaskSubtask(){
+  var input = document.getElementById('ntSubtaskInput');
+  var text = input.value.trim();
+  if (!text) return;
+  var list = document.getElementById('ntSubtaskList');
+  var row = document.createElement('div');
+  row.className = 'subtask-row';
+  row.style.justifyContent = 'space-between';
+  var span = document.createElement('span');
+  span.style.display = 'flex'; span.style.alignItems = 'center'; span.style.gap = '8px';
+  span.innerHTML = '<input type="checkbox" disabled><label>' + text.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</label>';
+  var remove = document.createElement('span');
+  remove.textContent = 'Remove';
+  remove.style.cssText = 'cursor:pointer;color:var(--RED);font-size:11.5px;font-weight:600;';
+  remove.onclick = function(){ row.remove(); };
+  row.appendChild(span);
+  row.appendChild(remove);
+  list.appendChild(row);
+  input.value = '';
+  input.focus();
+}
+function onNewTaskChange(){
+  var desc = document.getElementById('ntDesc').value.trim();
+  var comp = document.getElementById('ntCompany').value;
+  var dept = document.getElementById('ntDept').value;
+  var who = document.getElementById('ntAssignee').value;
+  var due = document.getElementById('ntDueDate').value.trim();
+  var ready = desc && comp && dept && who && due;
+  var btn = document.getElementById('ntSaveBtn');
+  var note = document.getElementById('ntGateNote');
+  btn.disabled = !ready;
+  btn.classList.toggle('ready', !!ready);
+  note.classList.toggle('ready', !!ready);
+  note.textContent = ready
+    ? 'All required fields filled — ready to create.'
+    : 'Description, company, department, assignee and due date are all required before this can be saved.';
+}
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+}
+function onSubtaskToggle(box){
+  var block = box.closest('.subtask-block');
+  var row = box.closest('.subtask-row');
+  row.classList.toggle('checked', box.checked);
+  var boxes = block.querySelectorAll('input[type=checkbox]');
+  var total = boxes.length, done = 0;
+  boxes.forEach(function(b){ if(b.checked) done++; });
+
+  var bar = block.querySelector('.subtask-progress-fill');
+  if (bar) bar.style.width = Math.round((done/total)*100) + '%';
+  var countEl = block.querySelector('.subtask-count');
+  if (countEl) countEl.textContent = done + ' of ' + total + ' complete';
+
+  var allDone = done === total;
+  var btn = block.querySelector('.complete-btn');
+  var note = block.querySelector('.gate-note');
+  if (btn) { btn.disabled = !allDone; btn.classList.toggle('ready', allDone); }
+  if (note) {
+    note.classList.toggle('ready', allDone);
+    note.textContent = allDone
+      ? 'All subtasks complete — this task can now be marked Completed.'
+      : 'Complete all subtasks before this task can be marked Completed.';
+  }
+
+  var miniId = block.getAttribute('data-mini');
+  if (miniId) {
+    var mini = document.getElementById(miniId);
+    if (mini) mini.textContent = done + '/' + total;
+  }
+}
+</script>
+</body>
+</html>

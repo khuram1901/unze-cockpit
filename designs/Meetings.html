@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Meetings — Unze OS</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/page-shell.css"/>
+<style>
+  /* Month group */
+  .month-group { padding: 0; overflow: hidden; }
+  .month-group + .month-group { margin-top: 12px; }
+  .month-group__head {
+    padding: 14px 22px;
+    background: var(--ink-900);
+    color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .month-group__title { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+  .month-group__meta { font-size: 11.5px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+  .month-group__chev { color: rgba(255,255,255,0.5); }
+  .month-group__chev svg { width: 14px; height: 14px; }
+
+  /* Meeting item */
+  .meeting-item { padding: 20px 22px; border-bottom: 1px solid var(--hairline); }
+  .meeting-item:last-child { border-bottom: 0; }
+  .meeting-item__head {
+    display: grid;
+    grid-template-columns: 90px 1fr auto;
+    gap: 20px;
+    align-items: baseline;
+  }
+  .meeting-item__date { font-family: var(--font-mono); font-size: 12px; color: var(--ink-500); }
+  .meeting-item__title-blk .title { font-family: var(--font-display); font-size: 15px; font-weight: 600; display: inline-flex; align-items: baseline; gap: 10px; }
+  .meeting-item__title-blk .title .tag {
+    padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 500;
+    background: var(--card-alt); color: var(--ink-500); font-family: var(--font-sans);
+  }
+  .meeting-item__progress-line {
+    display: flex; align-items: center; gap: 12px;
+    margin-top: 8px;
+    font-size: 11.5px; color: var(--ink-500);
+  }
+  .meeting-item__progress {
+    flex: 1; max-width: 200px;
+    height: 4px; background: var(--track); border-radius: 999px; overflow: hidden;
+  }
+  .meeting-item__progress-fill { height: 100%; background: var(--warning); border-radius: 999px; }
+  .meeting-item__actions { display: flex; gap: 8px; }
+
+  /* Meeting body */
+  .meeting-body { padding: 20px 22px 24px; background: var(--card-alt); }
+  .meeting-summary {
+    padding: 16px 20px;
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .meeting-summary__label { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-500); font-weight: 500; margin-bottom: 8px; }
+  .meeting-summary__text { font-size: 13px; color: var(--ink-700); line-height: 1.6; }
+
+  .attendees { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+  .attendee-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    background: var(--card-alt);
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    font-size: 11.5px;
+    color: var(--ink-700);
+  }
+  .attendee-chip .role { color: var(--accent); font-size: 9.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  /* 3-column: decisions / risks / opportunities */
+  .dro-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .dro-col {
+    padding: 16px 20px;
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+  }
+  .dro-col::before {
+    content: '';
+    position: absolute;
+    top: 16px; bottom: 16px; left: 0;
+    width: 3px; border-radius: 0 3px 3px 0;
+  }
+  .dro-col--decisions::before { background: var(--success); }
+  .dro-col--risks::before { background: var(--danger); }
+  .dro-col--opportunities::before { background: var(--accent); }
+  .dro-col__head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-left: 8px;
+    margin-bottom: 12px;
+  }
+  .dro-col__title { font-family: var(--font-display); font-size: 13.5px; font-weight: 600; }
+  .dro-col__title--decisions { color: var(--success); }
+  .dro-col__title--risks { color: var(--danger); }
+  .dro-col__title--opportunities { color: var(--accent); }
+  .dro-col__count {
+    font-family: var(--font-mono); font-size: 10px; color: var(--ink-500);
+    background: var(--card-alt); padding: 2px 6px; border-radius: 4px;
+  }
+  .dro-col__list { padding-left: 8px; }
+  .dro-col__item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: 12px; color: var(--ink-700); line-height: 1.5; }
+  .dro-col__item::before {
+    content: ''; flex: none;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ink-300); margin-top: 6px;
+  }
+  .dro-col--decisions .dro-col__item::before { background: var(--success); }
+  .dro-col--risks .dro-col__item::before { background: var(--danger); }
+  .dro-col--opportunities .dro-col__item::before { background: var(--accent); }
+
+  /* Action items */
+  .action-list { padding: 0; overflow: hidden; background: var(--card); border: 1px solid var(--hairline); border-radius: 12px; }
+  .action-list__head {
+    padding: 12px 18px;
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--card-alt);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .action-list__title { font-family: var(--font-display); font-size: 13.5px; font-weight: 600; }
+  .action-item {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    gap: 14px; align-items: center;
+    padding: 12px 18px;
+  }
+  .action-item + .action-item { border-top: 1px solid var(--hairline); }
+  .action-item__check {
+    width: 18px; height: 18px; border-radius: 5px;
+    border: 1.5px solid var(--ink-300); background: var(--card);
+  }
+  .action-item__title { font-size: 12.5px; color: var(--ink-900); line-height: 1.45; }
+  .action-item__meta { font-size: 10.5px; color: var(--ink-500); margin-top: 2px; }
+
+  /* Meta bar for meetings */
+  .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-chip { padding: 6px 12px; font-size: 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--hairline); color: var(--ink-700); }
+  .filter-chip--active { background: var(--ink-900); color: #fff; border-color: var(--ink-900); font-weight: 500; }
+
+  /* Segmented view toggle */
+  .view-toggle { display: inline-flex; background: var(--card); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 3px; gap: 2px; }
+  .view-toggle span { padding: 5px 12px; font-size: 12px; border-radius: var(--r-pill); color: var(--ink-500); }
+  .view-toggle span.active { background: var(--ink-900); color: #fff; font-weight: 500; }
+
+  /* Collapsed meeting */
+  .meeting-item--collapsed .meeting-body { display: none; }
+  .meeting-item--collapsed .meeting-item__head { padding-bottom: 0; }
+  .meeting-item__collapsed-line {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 6px;
+    font-size: 11.5px; color: var(--ink-500);
+  }
+
+  /* ================================================================
+     MOBILE
+     ================================================================ */
+  .m-mtg-item { background: var(--card); border: 1px solid var(--hairline); border-radius: 14px; margin: 0 20px 8px; padding: 14px 16px; }
+  .m-mtg-item__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .m-mtg-item__date { font-family: var(--font-mono); font-size: 11px; color: var(--ink-500); }
+  .m-mtg-item__title { font-family: var(--font-display); font-size: 13.5px; font-weight: 600; margin-bottom: 6px; line-height: 1.35; }
+  .m-mtg-item__meta { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--ink-500); flex-wrap: wrap; }
+  .m-mtg-item__meta .tag { background: var(--card-alt); border: 1px solid var(--hairline); padding: 2px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 500; color: var(--ink-700); }
+  .m-mtg-item__progress { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .m-mtg-item__progress-track { flex: 1; height: 4px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .m-mtg-item__progress-fill { height: 100%; background: var(--warning); border-radius: 999px; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage__header">
+    <div>
+      <div class="stage__kicker">Unze OS · Design v1 · Page 16 of ?</div>
+      <h1 class="stage__title">Meetings — Minutes &amp; action items</h1>
+    </div>
+    <div class="stage__sub">
+      A long-form document view. Introduces month-grouped meeting cards, the 3-column decisions/risks/opportunities layout, action item list, and attendee chips.
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- DESKTOP -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Desktop · 1440 × auto</span><span class="frame__dim" id="desktop-scale-caption">Web · Next.js</span></div>
+      <div class="desktop-scaler" id="desktop-scaler"><div class="desktop-inner" id="desktop-inner"><div class="desktop-app">
+
+        <aside class="side">
+          <div class="side__brand"><div class="side__brand-mark">U</div><div><div class="side__brand-name">Unze Group</div><div style="font-size:10px; color: var(--ink-500);">Operations</div></div></div>
+          <div class="side__group">Overview</div>
+          <a class="side__item"><svg class="icon"><use href="#i-home"/></svg>Executive</a>
+          <div class="side__group">Tasks &amp; meetings</div>
+          <a class="side__item"><svg class="icon"><use href="#i-calendar"/></svg>Calendar</a>
+          <a class="side__item side__item--active"><svg class="icon"><use href="#i-users"/></svg>Meetings</a>
+          <a class="side__item"><svg class="icon"><use href="#i-doc"/></svg>My minutes</a>
+          <a class="side__item"><svg class="icon"><use href="#i-repeat"/></svg>Recurring tasks</a>
+          <a class="side__item"><svg class="icon"><use href="#i-check-circle"/></svg>Tasks</a>
+
+          <div class="side__group">Preferences</div>
+          <a class="side__item" data-theme-toggle style="cursor:pointer;"><svg class="icon"><use href="#i-moon"/></svg>Dark mode</a>
+          <div class="side__user"><div class="side__avatar">KS</div><div><div class="side__user-name">Khuram Saleem</div><div class="side__user-role">CEO · Unze Group</div></div></div>
+        </aside>
+
+        <main class="main">
+          <nav class="crumb"><span>Home</span><svg><use href="#i-chevron"/></svg><span>Tasks &amp; meetings</span><svg><use href="#i-chevron"/></svg><span class="crumb__current">Meetings</span></nav>
+          <div class="main__top">
+            <div>
+              <h1 class="main__title">Meetings</h1>
+              <div class="main__meta">Minutes, approvals, action items · 4 meetings on record</div>
+            </div>
+            <div class="main__actions">
+              <button class="btn"><svg class="icon"><use href="#i-download"/></svg>Export PDF</button>
+              <button class="btn btn--primary"><svg class="icon"><use href="#i-plus"/></svg>New meeting</button>
+            </div>
+          </div>
+
+          <!-- KPI Row -->
+          <div class="kpi-row">
+            <div class="card kpi"><div class="kpi__label"><span class="dot dot--warning"></span>Pending review</div><div class="kpi__num">0</div><div class="kpi__sub">Awaiting sign-off</div></div>
+            <div class="card kpi"><div class="kpi__label"><span class="dot dot--neutral"></span>This month</div><div class="kpi__num">0</div><div class="kpi__sub">Held in July</div></div>
+            <div class="card kpi"><div class="kpi__label"><span class="dot dot--danger"></span>Open tasks</div><div class="kpi__num" style="color: var(--danger);">30</div><div class="kpi__sub">Across all meetings</div></div>
+            <div class="card kpi"><div class="kpi__label"><span class="dot dot--neutral"></span>Total meetings</div><div class="kpi__num">4</div><div class="kpi__sub">All-time</div></div>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Past meetings</h2>
+            <div class="sec-head__actions">
+              <div class="view-toggle">
+                <span class="active">By date</span>
+                <span>By department</span>
+              </div>
+              <button class="btn btn--sm">Decision log · 26</button>
+            </div>
+          </div>
+
+          <div class="filter-bar">
+            <span class="filter-chip filter-chip--active">All</span>
+            <span class="filter-chip">Executive Office</span>
+            <span class="filter-chip">Finance</span>
+            <span class="filter-chip">Unze Trading</span>
+            <span class="search-inline" style="margin-left: auto;"><svg><use href="#i-search"/></svg><span>Search title, summary, attendee…</span></span>
+          </div>
+
+          <!-- June 2026 -->
+          <div class="card month-group">
+            <div class="month-group__head">
+              <div>
+                <div class="month-group__title">June 2026</div>
+                <div class="month-group__meta">1 meeting · 13 open tasks</div>
+              </div>
+              <span class="month-group__chev"><svg><use href="#i-chevron-up"/></svg></span>
+            </div>
+
+            <!-- Meeting: expanded -->
+            <div class="meeting-item">
+              <div class="meeting-item__head">
+                <div class="meeting-item__date">08 / 06 / 2026</div>
+                <div class="meeting-item__title-blk">
+                  <div class="meeting-item__title">
+                    <span>Weekly Discussion &amp; Updates</span>
+                    <span class="tag">Executive Office</span>
+                  </div>
+                  <div class="meeting-item__progress-line">
+                    <span>Action items 0 / 13</span>
+                    <div class="meeting-item__progress"><div class="meeting-item__progress-fill" style="width: 0%;"></div></div>
+                    <span style="color: var(--warning); font-weight: 500;">13 open</span>
+                  </div>
+                </div>
+                <div class="meeting-item__actions">
+                  <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-download"/></svg>PDF</button>
+                  <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-chevron-up"/></svg></button>
+                </div>
+              </div>
+
+              <div class="meeting-body">
+                <div class="meeting-summary">
+                  <div class="meeting-summary__label">Summary</div>
+                  <div class="meeting-summary__text">The meeting focused on addressing operational challenges across recruitment, attendance, payroll, and cultural issues in retail and restaurant sectors. Key directions from the CEO emphasised strict adherence to SOPs, leveraging AI tools for efficiency, and prioritising employee satisfaction. Recruitment processes need to be streamlined with mandatory reference checks and documentation completion before employee code issuance. Attendance marking issues require real-time IP-based solutions and stricter managerial accountability.</div>
+                  <div class="attendees">
+                    <span class="attendee-chip"><span class="role">CEO</span>Khuram Saleem</span>
+                    <span class="attendee-chip">Sundas</span>
+                    <span class="attendee-chip">Zuhair</span>
+                    <span class="attendee-chip">Salman</span>
+                    <span class="attendee-chip">Ghanwa</span>
+                    <span class="attendee-chip">Mujeeba</span>
+                    <span class="attendee-chip">Asim</span>
+                    <span class="attendee-chip">Shazib</span>
+                    <span class="attendee-chip">Rida</span>
+                    <span class="attendee-chip">Javeria</span>
+                  </div>
+                </div>
+
+                <div class="dro-grid">
+                  <div class="dro-col dro-col--decisions">
+                    <div class="dro-col__head">
+                      <div class="dro-col__title dro-col__title--decisions">Decisions</div>
+                      <span class="dro-col__count">7</span>
+                    </div>
+                    <div class="dro-col__list">
+                      <div class="dro-col__item">No employee code issuance until documentation is complete.</div>
+                      <div class="dro-col__item">Written reference checks are mandatory for all recruitment.</div>
+                      <div class="dro-col__item">Attendance marking issues will be resolved through live IP solutions.</div>
+                      <div class="dro-col__item">Audit reports will include HR-specific insights to identify gaps and propose solutions.</div>
+                      <div class="dro-col__item">Paid ChatGPT subscriptions will be provided to key staff.</div>
+                      <div class="dro-col__item">Payroll processing will be prioritised for lower-tier employees, targeting the 1st of each month.</div>
+                      <div class="dro-col__item">A carrot-and-stick approach for cultural challenges in retail and restaurants.</div>
+                    </div>
+                  </div>
+
+                  <div class="dro-col dro-col--risks">
+                    <div class="dro-col__head">
+                      <div class="dro-col__title dro-col__title--risks">Risks</div>
+                      <span class="dro-col__count">6</span>
+                    </div>
+                    <div class="dro-col__list">
+                      <div class="dro-col__item">High turnover in retail and restaurant sectors undermining operational stability.</div>
+                      <div class="dro-col__item">SOP violations such as issuing employee codes before documentation completion create compliance and accountability gaps.</div>
+                      <div class="dro-col__item">Attendance machines not being real-time leads to 4 hours of daily manual CCTV checks, reducing operational efficiency.</div>
+                      <div class="dro-col__item">Investigations conducted by custodians who were themselves charged compromises audit integrity.</div>
+                      <div class="dro-col__item">Delays in salary disbursement risk employee dissatisfaction, particularly among lower-tier staff.</div>
+                      <div class="dro-col__item">Staff aligned with certain managers resisting new systems creates cultural and governance risks.</div>
+                    </div>
+                  </div>
+
+                  <div class="dro-col dro-col--opportunities">
+                    <div class="dro-col__head">
+                      <div class="dro-col__title dro-col__title--opportunities">Opportunities</div>
+                      <span class="dro-col__count">6</span>
+                    </div>
+                    <div class="dro-col__list">
+                      <div class="dro-col__item">Leveraging AI tools such as ChatGPT for recruitment, policy adherence, and decision-making to improve productivity.</div>
+                      <div class="dro-col__item">Expanding recruitment agency partnerships to 10–15 agencies to address critical hiring gaps.</div>
+                      <div class="dro-col__item">Implementing DISC and stress testing in recruitment to improve candidate quality and reduce turnover.</div>
+                      <div class="dro-col__item">Integrating HR parameters into audit reports to provide more actionable insights and improve accountability.</div>
+                      <div class="dro-col__item">Implementing live IP attendance solutions to eliminate manual CCTV checks and improve real-time monitoring.</div>
+                      <div class="dro-col__item">Filling critical vacant positions including CFO, Internal Audit, and PA to strengthen senior management capacity.</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="action-list">
+                  <div class="action-list__head">
+                    <div class="action-list__title">Action items <span style="color: var(--ink-500); font-weight: 500; font-size: 11px; margin-left: 6px;">0 / 13 done</span></div>
+                    <button class="btn btn--sm">+ Add task</button>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Develop Job Descriptions and KPIs for all roles including CCTV staff and submit for approval.</div>
+                      <div class="action-item__meta">Zuhair Khalid · Due 10/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Engage additional recruitment agencies for critical hiring positions, expanding partnerships to 10–15 agencies.</div>
+                      <div class="action-item__meta">Zuhair Khalid · Due 22/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Implement AI-driven personality and stress testing (DISC and stress testing) during recruitment processes.</div>
+                      <div class="action-item__meta">Zuhair Khalid · Due 08/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Prioritise recruitment for CFO, Internal Audit, and PA positions which are currently vacant.</div>
+                      <div class="action-item__meta">Zuhair Khalid · Due 06/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Explore and implement live IP solutions for real-time attendance updates to replace manual CCTV checks.</div>
+                      <div class="action-item__meta">Muhammad Nadeem · Due 08/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Implement a closing checklist for managers incorporating HR attendance monitoring points.</div>
+                      <div class="action-item__meta">Zuhair Khalid</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Finalise and implement SOPs for recruitment, verification, and employee exit with approval from senior management.</div>
+                      <div class="action-item__meta">Zuhair Khalid</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Include HR-specific parameters in audit reports to highlight gaps and propose solutions in a comprehensive report.</div>
+                      <div class="action-item__meta">Zuhair Khalid</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Ensure timely payroll processing and salary disbursement for lower-tier employees, targeting the 1st of each month.</div>
+                      <div class="action-item__meta">Zuhair Khalid · Due 15/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Provide paid ChatGPT subscriptions to key staff and train them on using AI for problem-solving and efficiency.</div>
+                      <div class="action-item__meta">Zuhair Khalid · Due 15/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--cancelled">Cancelled</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Obtain budget approval for group-wide event with an estimated budget of PKR 1.5 million.</div>
+                      <div class="action-item__meta">Zuhair Khalid · Due 15/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Implement stricter governance, accountability measures, and a carrot-and-stick approach to address cultural challenges in retail and restaurant sectors.</div>
+                      <div class="action-item__meta">Zuhair Khalid · Due 15/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                  <div class="action-item">
+                    <div class="action-item__check"></div>
+                    <div>
+                      <div class="action-item__title">Coordinate with plant heads to establish real-time production reporting via mobile Daily Entry form.</div>
+                      <div class="action-item__meta">Muhammad Nadeem · Due 12/06/2026</div>
+                    </div>
+                    <span class="st-pill st-pill--notstarted">Not started</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- May 2026 collapsed -->
+          <div class="card month-group">
+            <div class="month-group__head">
+              <div>
+                <div class="month-group__title">May 2026</div>
+                <div class="month-group__meta">1 meeting · 6 open tasks</div>
+              </div>
+              <span class="month-group__chev"><svg><use href="#i-chevron-down"/></svg></span>
+            </div>
+            <div class="meeting-item meeting-item--collapsed">
+              <div class="meeting-item__head">
+                <div class="meeting-item__date">22 / 05 / 2026</div>
+                <div class="meeting-item__title-blk">
+                  <div class="meeting-item__title">
+                    <span>Weekly Discussion &amp; Updates</span>
+                    <span class="tag">Executive Office</span>
+                  </div>
+                  <div class="meeting-item__progress-line">
+                    <span>Action items 2 / 8</span>
+                    <div class="meeting-item__progress"><div class="meeting-item__progress-fill" style="width: 25%;"></div></div>
+                    <span style="color: var(--warning); font-weight: 500;">6 open</span>
+                  </div>
+                </div>
+                <div class="meeting-item__actions">
+                  <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-download"/></svg>PDF</button>
+                  <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-chevron-down"/></svg></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- July 2025 collapsed -->
+          <div class="card month-group">
+            <div class="month-group__head">
+              <div>
+                <div class="month-group__title">July 2025</div>
+                <div class="month-group__meta">2 meetings · 13 open tasks</div>
+              </div>
+              <span class="month-group__chev"><svg><use href="#i-chevron-down"/></svg></span>
+            </div>
+            <div class="meeting-item meeting-item--collapsed">
+              <div class="meeting-item__head">
+                <div class="meeting-item__date">01 / 07 / 2025</div>
+                <div class="meeting-item__title-blk">
+                  <div class="meeting-item__title">
+                    <span>Finance Handover and Compliance Review Meeting</span>
+                    <span class="tag">Finance</span>
+                    <span class="tag" style="background: var(--accent-soft); color: var(--accent-ink);">Executive Office</span>
+                  </div>
+                  <div class="meeting-item__progress-line">
+                    <span>Action items 1 / 8</span>
+                    <div class="meeting-item__progress"><div class="meeting-item__progress-fill" style="width: 12%;"></div></div>
+                    <span style="color: var(--warning); font-weight: 500;">7 open</span>
+                  </div>
+                </div>
+                <div class="meeting-item__actions">
+                  <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-download"/></svg>PDF</button>
+                  <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-chevron-down"/></svg></button>
+                </div>
+              </div>
+            </div>
+            <div class="meeting-item meeting-item--collapsed">
+              <div class="meeting-item__head">
+                <div class="meeting-item__date">01 / 07 / 2025</div>
+                <div class="meeting-item__title-blk">
+                  <div class="meeting-item__title">
+                    <span>Finance Review: Cash Flow, Budget &amp; Expense Planning</span>
+                    <span class="tag">Finance</span>
+                    <span class="tag" style="background: var(--card-alt);">Unze Trading</span>
+                  </div>
+                  <div class="meeting-item__progress-line">
+                    <span>Action items 0 / 6</span>
+                    <div class="meeting-item__progress"><div class="meeting-item__progress-fill" style="width: 0%;"></div></div>
+                    <span style="color: var(--warning); font-weight: 500;">6 open</span>
+                  </div>
+                </div>
+                <div class="meeting-item__actions">
+                  <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-download"/></svg>PDF</button>
+                  <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-chevron-down"/></svg></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </main>
+      </div></div></div>
+    </div>
+
+    <!-- MOBILE -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Mobile · 390 × auto</span><span class="frame__dim">iOS / Android / PWA</span></div>
+      <div class="phone">
+        <div class="status-bar"><span>9:42</span><div class="status-bar__right"><span>●●●●</span><span style="margin-left:6px;">100%</span></div></div>
+        <div class="m-nav"><span class="m-nav__back"><svg><use href="#i-chevron-left"/></svg>Home</span><div class="m-nav__actions"><svg><use href="#i-search"/></svg><svg><use href="#i-plus"/></svg></div></div>
+        <div class="m-page-head"><div class="m-page-head__kicker">Tasks &amp; meetings</div><h1 class="m-page-head__title">Meetings</h1><div class="m-page-head__sub">4 recorded · 30 open action items</div></div>
+
+        <!-- KPIs 2x2 -->
+        <div class="m-kpi-grid">
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--warning"></span>Pending</div><div class="m-kpi__num">0</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--neutral"></span>This month</div><div class="m-kpi__num">0</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--danger"></span>Open tasks</div><div class="m-kpi__num" style="color:var(--danger);">30</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--neutral"></span>Total</div><div class="m-kpi__num">4</div></div>
+        </div>
+
+        <!-- Filter chips -->
+        <div class="m-filter">
+          <span class="m-filter__chip m-filter__chip--active">All 4</span>
+          <span class="m-filter__chip">Exec Office</span>
+          <span class="m-filter__chip">Finance</span>
+          <span class="m-filter__chip">Unze Trading</span>
+        </div>
+
+        <!-- Meetings list -->
+        <div class="m-section-head"><div class="m-section-head__title">June 2026</div><a class="m-section-head__link">1 meeting</a></div>
+
+        <div class="m-mtg-item">
+          <div class="m-mtg-item__head">
+            <span class="m-mtg-item__date">08 / 06 / 2026</span>
+            <span class="st-pill" style="background: var(--warning-soft); color: var(--warning); padding: 2px 8px; font-size: 10px;">13 open</span>
+          </div>
+          <div class="m-mtg-item__title">Weekly Discussion &amp; Updates</div>
+          <div class="m-mtg-item__meta">
+            <span class="tag">Executive Office</span>
+            <span>· 10 attendees</span>
+            <span>· 7 decisions · 6 risks</span>
+          </div>
+          <div class="m-mtg-item__progress">
+            <div class="m-mtg-item__progress-track"><div class="m-mtg-item__progress-fill" style="width: 0%;"></div></div>
+            <span style="font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-500);">0 / 13</span>
+          </div>
+        </div>
+
+        <div class="m-section-head"><div class="m-section-head__title">May 2026</div><a class="m-section-head__link">1 meeting</a></div>
+        <div class="m-mtg-item">
+          <div class="m-mtg-item__head">
+            <span class="m-mtg-item__date">22 / 05 / 2026</span>
+            <span class="st-pill" style="background: var(--warning-soft); color: var(--warning); padding: 2px 8px; font-size: 10px;">6 open</span>
+          </div>
+          <div class="m-mtg-item__title">Weekly Discussion &amp; Updates</div>
+          <div class="m-mtg-item__meta">
+            <span class="tag">Executive Office</span>
+            <span>· 2 / 8 done</span>
+          </div>
+          <div class="m-mtg-item__progress">
+            <div class="m-mtg-item__progress-track"><div class="m-mtg-item__progress-fill" style="width: 25%;"></div></div>
+            <span style="font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-500);">2 / 8</span>
+          </div>
+        </div>
+
+        <div class="m-section-head"><div class="m-section-head__title">July 2025</div><a class="m-section-head__link">2 meetings</a></div>
+        <div class="m-mtg-item">
+          <div class="m-mtg-item__head">
+            <span class="m-mtg-item__date">01 / 07 / 2025</span>
+            <span class="st-pill" style="background: var(--warning-soft); color: var(--warning); padding: 2px 8px; font-size: 10px;">7 open</span>
+          </div>
+          <div class="m-mtg-item__title">Finance Handover and Compliance Review</div>
+          <div class="m-mtg-item__meta">
+            <span class="tag">Finance</span>
+            <span class="tag" style="background: var(--accent-soft); color: var(--accent-ink);">Exec</span>
+          </div>
+          <div class="m-mtg-item__progress">
+            <div class="m-mtg-item__progress-track"><div class="m-mtg-item__progress-fill" style="width: 12%;"></div></div>
+            <span style="font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-500);">1 / 8</span>
+          </div>
+        </div>
+        <div class="m-mtg-item">
+          <div class="m-mtg-item__head">
+            <span class="m-mtg-item__date">01 / 07 / 2025</span>
+            <span class="st-pill" style="background: var(--warning-soft); color: var(--warning); padding: 2px 8px; font-size: 10px;">6 open</span>
+          </div>
+          <div class="m-mtg-item__title">Finance Review: Cash Flow, Budget &amp; Expenses</div>
+          <div class="m-mtg-item__meta">
+            <span class="tag">Finance</span>
+            <span class="tag">Unze Trading</span>
+          </div>
+          <div class="m-mtg-item__progress">
+            <div class="m-mtg-item__progress-track"><div class="m-mtg-item__progress-fill" style="width: 0%;"></div></div>
+            <span style="font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-500);">0 / 6</span>
+          </div>
+        </div>
+
+        <div class="fab"><svg><use href="#i-plus"/></svg></div>
+        <div class="tabbar">
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-home"/></svg><span class="tabbar__lbl">Home</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-calendar"/></svg><span class="tabbar__lbl">Cal</span></div>
+          <div class="tabbar__item tabbar__item--active"><svg class="icon" style="width:20px;height:20px;"><use href="#i-users"/></svg><span class="tabbar__lbl">Meets</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-check-circle"/></svg><span class="tabbar__lbl">Tasks</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-bell"/></svg><span class="tabbar__lbl">Alerts</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="reflow-panel">
+    <div class="sec-head" style="margin-bottom: 4px;"><h2 class="sec-head__title" style="font-size: 22px;">Reflow &amp; new components</h2><div class="sec-head__meta">Desktop → Mobile</div></div>
+    <div class="reflow-panel__grid">
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">01 · NEW</div><div class="reflow-card__title">Month group card</div><div class="reflow-card__body">Dark ink-900 header with title + count meta + collapse chevron, then a stack of meeting items with hairline dividers. A stronger version of the group pattern from Admin.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">02 · NEW</div><div class="reflow-card__title">Meeting item (expanded / collapsed)</div><div class="reflow-card__body">Head row is always visible (date · title + tags · progress bar · actions). Expanded state reveals summary + attendees + decisions/risks/opportunities + action items.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">03 · NEW</div><div class="reflow-card__title">Decisions / Risks / Opportunities columns</div><div class="reflow-card__body">3 accent-left-rule cards: success (decisions), danger (risks), accent (opportunities). Each has a title + count + bulleted list. On mobile they stack — with the same rule/color code preserved.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">04 · NEW</div><div class="reflow-card__title">Attendee chip</div><div class="reflow-card__body">Small rounded pill with an optional uppercase role prefix (e.g. "CEO Khuram Saleem"). Reusable for any people-tagged list — audit teams, task assignees, meeting requesters.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">05 · NEW</div><div class="reflow-card__title">Action item row</div><div class="reflow-card__body">3-col: checkbox, title + due meta, status pill (same statuses as task rows in Admin). Sits inside its own card with a header that includes progress count.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">06</div><div class="reflow-card__title">Full doc → summary card</div><div class="reflow-card__body">Desktop shows the entire minutes document expanded. Mobile compresses each meeting to a single card with date + title + tags + progress bar. Tapping opens the full expansion on a dedicated screen.</div></div>
+    </div>
+  </div>
+</div>
+<script src="assets/page-shell.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

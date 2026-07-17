@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>My Profile — Unze OS</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/page-shell.css"/>
+<style>
+  /* Profile split layout */
+  .profile-layout { display: grid; grid-template-columns: 260px 1fr; gap: 32px; align-items: start; }
+
+  /* Left sticky nav */
+  .prof-nav { position: sticky; top: 32px; }
+  .prof-nav__card { padding: 8px; }
+  .prof-nav__item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-size: 13px; color: var(--ink-700); border-radius: 8px; cursor: default; }
+  .prof-nav__item:hover { background: var(--card-alt); color: var(--ink-900); }
+  .prof-nav__item--active { background: var(--ink-900); color: #fff; font-weight: 500; }
+  .prof-nav__item svg { width: 15px; height: 15px; opacity: 0.75; }
+  .prof-nav__item--active svg { opacity: 1; }
+
+  .profile-header-card { padding: 24px; display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+  .profile-avatar-lg { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #3B4CCA, #6E7AE0); display: grid; place-items: center; color: #fff; font-size: 22px; font-weight: 600; font-family: var(--font-display); }
+  .profile-header-card__name { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
+  .profile-header-card__meta { font-size: 12.5px; color: var(--ink-500); margin-top: 4px; display: flex; align-items: center; gap: 10px; }
+
+  /* Settings section */
+  .setting-card { padding: 24px; }
+  .setting-card + .setting-card { margin-top: 16px; }
+  .setting-card__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--hairline); }
+  .setting-card__title { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.005em; display: flex; align-items: center; gap: 10px; }
+  .setting-card__mark { width: 30px; height: 30px; border-radius: 8px; background: var(--card-alt); border: 1px solid var(--hairline); display: grid; place-items: center; color: var(--ink-700); }
+  .setting-card__mark svg { width: 15px; height: 15px; }
+  .setting-card__hint { font-size: 12px; color: var(--ink-500); margin-top: 6px; }
+  .setting-card__badge { padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+  .setting-card__badge--off { background: var(--warning-soft); color: var(--warning); }
+  .setting-card__badge--on { background: var(--success-soft); color: var(--success); }
+
+  /* Field row */
+  .field-label { font-size: 12px; font-weight: 500; color: var(--ink-700); margin-bottom: 6px; }
+  .field-input {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--card-alt);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    font-size: 13.5px;
+    color: var(--ink-900);
+    font-family: var(--font-sans);
+  }
+  .field-input--email { color: var(--ink-900); font-family: var(--font-mono); font-size: 13px; }
+  .field-hint { font-size: 11.5px; color: var(--ink-500); margin-top: 6px; line-height: 1.4; }
+
+  .field-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* Notification pref */
+  .pref-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pref {
+    display: grid; grid-template-columns: 24px 1fr auto; gap: 14px; align-items: center;
+    padding: 16px 18px;
+    background: var(--card-alt);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+  }
+  .pref__check {
+    width: 20px; height: 20px; border-radius: 6px;
+    background: var(--ink-900); border: 1.5px solid var(--ink-900);
+    display: grid; place-items: center; color: #fff;
+  }
+  .pref__check--off { background: var(--card); border-color: var(--ink-300); color: transparent; }
+  .pref__check svg { width: 12px; height: 12px; }
+  .pref__title { font-size: 13.5px; font-weight: 500; }
+  .pref__desc { font-size: 11.5px; color: var(--ink-500); margin-top: 2px; }
+
+  /* Toggle */
+  .toggle {
+    width: 40px; height: 22px;
+    background: var(--ink-300);
+    border-radius: 999px;
+    position: relative;
+    transition: background 120ms;
+  }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 18px; height: 18px;
+    background: var(--card);
+    border-radius: 50%;
+    transition: transform 120ms;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+  .toggle--on { background: var(--ink-900); }
+  .toggle--on::after { transform: translateX(18px); }
+
+  /* Danger zone */
+  .danger-card { padding: 24px; border-color: #F3D2CE; background: #FDF3F1; }
+  .danger-card .setting-card__title { color: var(--danger); }
+  .danger-card .setting-card__mark { background: var(--card); border-color: #F3D2CE; color: var(--danger); }
+  .btn--danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+  .btn--danger:hover { background: #921F19; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage__header">
+    <div>
+      <div class="stage__kicker">Unze OS · Design v1 · Page 10 of ?</div>
+      <h1 class="stage__title">My Profile</h1>
+    </div>
+    <div class="stage__sub">
+      A settings-style page. Introduces the left-side sticky nav (sub-navigation within a page), settings card, field input, checkbox pref, and toggle switch.
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- DESKTOP -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Desktop · 1440 × auto</span><span class="frame__dim" id="desktop-scale-caption">Web · Next.js</span></div>
+      <div class="desktop-scaler" id="desktop-scaler"><div class="desktop-inner" id="desktop-inner"><div class="desktop-app">
+
+        <aside class="side">
+          <div class="side__brand"><div class="side__brand-mark">U</div><div><div class="side__brand-name">Unze Group</div><div style="font-size:10px; color: var(--ink-500);">Operations</div></div></div>
+          <div class="side__group">Overview</div>
+          <a class="side__item"><svg class="icon"><use href="#i-home"/></svg>Executive</a>
+          <div class="side__group">Finance</div>
+          <a class="side__item"><svg class="icon"><use href="#i-cash"/></svg>Cash flow</a>
+          <a class="side__item"><svg class="icon"><use href="#i-bank"/></svg>Bank facilities</a>
+          <div class="side__group">Departments</div>
+          <a class="side__item"><svg class="icon"><use href="#i-users"/></svg>Admin</a>
+          <a class="side__item"><svg class="icon"><use href="#i-shield"/></svg>Audit</a>
+          <a class="side__item"><svg class="icon"><use href="#i-scale"/></svg>Taxation</a>
+          <div class="side__group">Account</div>
+          <a class="side__item side__item--active"><svg class="icon"><use href="#i-user"/></svg>My profile</a>
+          <a class="side__item"><svg class="icon"><use href="#i-gear"/></svg>Preferences</a>
+
+          <div class="side__group">Preferences</div>
+          <a class="side__item" data-theme-toggle style="cursor:pointer;"><svg class="icon"><use href="#i-moon"/></svg>Dark mode</a>
+          <div class="side__user"><div class="side__avatar">KS</div><div><div class="side__user-name">Khuram Saleem</div><div class="side__user-role">CEO · Unze Group</div></div></div>
+        </aside>
+
+        <main class="main">
+          <nav class="crumb"><span>Home</span><svg><use href="#i-chevron"/></svg><span>Account</span><svg><use href="#i-chevron"/></svg><span class="crumb__current">My Profile</span></nav>
+          <div class="main__top">
+            <div>
+              <h1 class="main__title">My Profile</h1>
+              <div class="main__meta">Your account, security, and notification preferences.</div>
+            </div>
+          </div>
+
+          <div class="profile-layout">
+            <!-- Left nav -->
+            <div class="prof-nav">
+              <div class="card prof-nav__card">
+                <div class="prof-nav__item prof-nav__item--active"><svg><use href="#i-user"/></svg>Account</div>
+                <div class="prof-nav__item"><svg><use href="#i-lock"/></svg>Security</div>
+                <div class="prof-nav__item"><svg><use href="#i-bell"/></svg>Notifications</div>
+                <div class="prof-nav__item"><svg><use href="#i-gear"/></svg>Preferences</div>
+                <div class="prof-nav__item"><svg><use href="#i-trash"/></svg>Danger zone</div>
+              </div>
+            </div>
+
+            <!-- Right content -->
+            <div>
+              <!-- Profile header -->
+              <div class="card profile-header-card">
+                <div class="profile-avatar-lg">KS</div>
+                <div style="flex: 1;">
+                  <div class="profile-header-card__name">Khuram Saleem</div>
+                  <div class="profile-header-card__meta">
+                    <span>CEO · Unze Group</span>
+                    <span style="color: var(--ink-300);">·</span>
+                    <span style="font-family: var(--font-mono); font-size: 12px;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="f69dd885979a93939bb68384978c9184998386d895999b">[email&#160;protected]</a></span>
+                  </div>
+                </div>
+                <button class="btn">Edit profile</button>
+              </div>
+
+              <!-- Account -->
+              <div class="card setting-card">
+                <div class="setting-card__head">
+                  <div class="setting-card__title"><span class="setting-card__mark"><svg><use href="#i-mail"/></svg></span>Email address</div>
+                </div>
+                <div class="field-label">Primary email (used to sign in)</div>
+                <div class="field-input field-input--email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="cfa4e1bcaea3aaaaa28fbabdaeb5a8bda0babfe1aca0a2">[email&#160;protected]</a></div>
+                <div class="field-hint">Contact your Unze Group administrator to change this address. All notifications and reset links are sent here.</div>
+              </div>
+
+              <!-- 2FA -->
+              <div class="card setting-card">
+                <div class="setting-card__head">
+                  <div class="setting-card__title"><span class="setting-card__mark"><svg><use href="#i-shield"/></svg></span>Two-Factor Authentication (2FA)</div>
+                  <span class="setting-card__badge setting-card__badge--off"><span class="dot dot--warning" style="width:6px;height:6px;"></span>Not enabled</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 20px;">
+                  <div>
+                    <div style="font-size: 13.5px; font-weight: 500;">Add an extra layer of security to your account.</div>
+                    <div class="field-hint" style="margin-top: 4px;">You'll need an authenticator app like Google Authenticator or Authy. Recommended for all admin-role users.</div>
+                  </div>
+                  <button class="btn btn--primary">Enable 2FA</button>
+                </div>
+              </div>
+
+              <!-- Change password -->
+              <div class="card setting-card">
+                <div class="setting-card__head">
+                  <div class="setting-card__title"><span class="setting-card__mark"><svg><use href="#i-lock"/></svg></span>Change password</div>
+                </div>
+                <div class="field-3col">
+                  <div>
+                    <div class="field-label">Current password</div>
+                    <div class="field-input" style="color: var(--ink-400);">••••••••</div>
+                  </div>
+                  <div>
+                    <div class="field-label">New password</div>
+                    <div class="field-input" style="color: var(--ink-400);">Minimum 6 characters</div>
+                  </div>
+                  <div>
+                    <div class="field-label">Confirm new password</div>
+                    <div class="field-input" style="color: var(--ink-400);">Repeat new password</div>
+                  </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+                  <div class="field-hint">Passwords are hashed with argon2 and never stored in plain text.</div>
+                  <button class="btn btn--primary">Change password</button>
+                </div>
+              </div>
+
+              <!-- Notifications -->
+              <div class="card setting-card">
+                <div class="setting-card__head">
+                  <div class="setting-card__title"><span class="setting-card__mark"><svg><use href="#i-bell"/></svg></span>Notification preferences</div>
+                  <div class="field-hint" style="margin-top: 0;">Admin can disable all</div>
+                </div>
+                <div class="pref-grid">
+                  <div class="pref">
+                    <div class="pref__check"><svg><use href="#i-check"/></svg></div>
+                    <div><div class="pref__title">Task assigned to me</div><div class="pref__desc">When someone assigns you a new task</div></div>
+                    <div class="toggle toggle--on"></div>
+                  </div>
+                  <div class="pref">
+                    <div class="pref__check"><svg><use href="#i-check"/></svg></div>
+                    <div><div class="pref__title">Overdue task reminders</div><div class="pref__desc">When your tasks pass their due date</div></div>
+                    <div class="toggle toggle--on"></div>
+                  </div>
+                  <div class="pref">
+                    <div class="pref__check"><svg><use href="#i-check"/></svg></div>
+                    <div><div class="pref__title">Escalations</div><div class="pref__desc">KPI and receivable escalation alerts</div></div>
+                    <div class="toggle toggle--on"></div>
+                  </div>
+                  <div class="pref">
+                    <div class="pref__check"><svg><use href="#i-check"/></svg></div>
+                    <div><div class="pref__title">Meeting notifications</div><div class="pref__desc">Meeting minutes and approvals</div></div>
+                    <div class="toggle toggle--on"></div>
+                  </div>
+                  <div class="pref">
+                    <div class="pref__check"><svg><use href="#i-check"/></svg></div>
+                    <div><div class="pref__title">Daily digest</div><div class="pref__desc">Morning summary email</div></div>
+                    <div class="toggle toggle--on"></div>
+                  </div>
+                  <div class="pref">
+                    <div class="pref__check"><svg><use href="#i-check"/></svg></div>
+                    <div><div class="pref__title">Weekly report</div><div class="pref__desc">Friday weekly pulse report</div></div>
+                    <div class="toggle toggle--on"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Push -->
+              <div class="card setting-card">
+                <div class="setting-card__head">
+                  <div class="setting-card__title"><span class="setting-card__mark"><svg><use href="#i-bell"/></svg></span>Push notifications</div>
+                  <span class="setting-card__badge setting-card__badge--off"><span class="dot dot--warning" style="width:6px;height:6px;"></span>Disabled</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 20px;">
+                  <div>
+                    <div style="font-size: 13.5px; font-weight: 500;">Receive instant alerts on this device</div>
+                    <div class="field-hint" style="margin-top: 4px;">Even when the browser is in the background. Only used for urgent alerts, never marketing.</div>
+                  </div>
+                  <button class="btn btn--primary">Enable push</button>
+                </div>
+              </div>
+
+              <!-- Danger zone -->
+              <div class="card danger-card setting-card">
+                <div class="setting-card__head" style="border-color: #F3D2CE;">
+                  <div class="setting-card__title"><span class="setting-card__mark"><svg><use href="#i-alert"/></svg></span>Danger zone</div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 20px;">
+                  <div>
+                    <div style="font-size: 13.5px; font-weight: 500; color: var(--danger);">Sign out from all devices</div>
+                    <div class="field-hint" style="margin-top: 4px;">Force sign-out on every session. You'll need to log in again on each device.</div>
+                  </div>
+                  <button class="btn btn--danger">Sign out everywhere</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div></div></div>
+    </div>
+
+    <!-- MOBILE -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Mobile · 390 × auto</span><span class="frame__dim">iOS / Android / PWA</span></div>
+      <div class="phone">
+        <div class="status-bar"><span>9:42</span><div class="status-bar__right"><span>●●●●</span><span style="margin-left:6px;">100%</span></div></div>
+        <div class="m-nav"><span class="m-nav__back"><svg><use href="#i-chevron-left"/></svg>Home</span><div class="m-nav__actions"></div></div>
+        <div class="m-page-head"><div class="m-page-head__kicker">Account</div><h1 class="m-page-head__title">My Profile</h1></div>
+
+        <!-- Header card -->
+        <div style="margin: 8px 20px 16px; padding: 20px; background: var(--card); border: 1px solid var(--hairline); border-radius: 16px; display: flex; align-items: center; gap: 14px;">
+          <div class="profile-avatar-lg" style="width: 52px; height: 52px; font-size: 18px;">KS</div>
+          <div style="flex: 1;">
+            <div style="font-family: var(--font-display); font-size: 17px; font-weight: 600;">Khuram Saleem</div>
+            <div style="font-size: 11.5px; color: var(--ink-500); margin-top: 2px;">CEO · Unze Group</div>
+            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--ink-500); margin-top: 2px;"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="442f6a372528212129043136253e23362b31346a272b29">[email&#160;protected]</a></div>
+          </div>
+        </div>
+
+        <!-- Sub nav as pills -->
+        <div class="m-filter">
+          <span class="m-filter__chip m-filter__chip--active">Account</span>
+          <span class="m-filter__chip">Security</span>
+          <span class="m-filter__chip">Notifications</span>
+          <span class="m-filter__chip">Preferences</span>
+        </div>
+
+        <!-- 2FA -->
+        <div class="m-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="setting-card__mark"><svg class="icon" style="width: 15px; height: 15px;"><use href="#i-shield"/></svg></span>
+              <div style="font-family: var(--font-display); font-size: 14.5px; font-weight: 600;">2FA</div>
+            </div>
+            <span class="setting-card__badge setting-card__badge--off"><span class="dot dot--warning" style="width:6px;height:6px;"></span>Off</span>
+          </div>
+          <div style="font-size: 12px; color: var(--ink-700); line-height: 1.5; margin-bottom: 14px;">Add an extra layer of security. You'll need an authenticator app.</div>
+          <button class="btn btn--primary" style="width: 100%; justify-content: center;">Enable 2FA</button>
+        </div>
+
+        <!-- Password -->
+        <div class="m-card">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px;">
+            <span class="setting-card__mark"><svg class="icon" style="width: 15px; height: 15px;"><use href="#i-lock"/></svg></span>
+            <div style="font-family: var(--font-display); font-size: 14.5px; font-weight: 600;">Change password</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div>
+              <div class="field-label">Current</div>
+              <div class="field-input" style="color: var(--ink-400);">••••••••</div>
+            </div>
+            <div>
+              <div class="field-label">New</div>
+              <div class="field-input" style="color: var(--ink-400);">Minimum 6 characters</div>
+            </div>
+            <div>
+              <div class="field-label">Confirm</div>
+              <div class="field-input" style="color: var(--ink-400);">Repeat new password</div>
+            </div>
+            <button class="btn btn--primary" style="width: 100%; justify-content: center; margin-top: 6px;">Change password</button>
+          </div>
+        </div>
+
+        <!-- Notifications compact -->
+        <div class="m-card" style="padding: 0;">
+          <div style="padding: 14px 18px; border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 10px;">
+            <span class="setting-card__mark"><svg class="icon" style="width: 15px; height: 15px;"><use href="#i-bell"/></svg></span>
+            <div style="font-family: var(--font-display); font-size: 14px; font-weight: 600;">Notifications</div>
+          </div>
+          <div style="padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 13px; font-weight: 500;">Task assigned to me</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">When someone assigns a new task</div>
+            </div>
+            <div class="toggle toggle--on"></div>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 13px; font-weight: 500;">Overdue reminders</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">Past due date alerts</div>
+            </div>
+            <div class="toggle toggle--on"></div>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 13px; font-weight: 500;">Escalations</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">KPI &amp; receivable escalations</div>
+            </div>
+            <div class="toggle toggle--on"></div>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 13px; font-weight: 500;">Meetings</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">Minutes and approvals</div>
+            </div>
+            <div class="toggle toggle--on"></div>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 13px; font-weight: 500;">Daily digest</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">Morning summary</div>
+            </div>
+            <div class="toggle toggle--on"></div>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 13px; font-weight: 500;">Weekly report</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">Friday pulse</div>
+            </div>
+            <div class="toggle toggle--on"></div>
+          </div>
+        </div>
+
+        <!-- Danger -->
+        <div class="m-card" style="background: #FDF3F1; border-color: #F3D2CE;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <span class="setting-card__mark" style="background:var(--card);border-color:#F3D2CE;color:var(--danger);"><svg class="icon" style="width: 15px; height: 15px;"><use href="#i-alert"/></svg></span>
+            <div style="font-family: var(--font-display); font-size: 14px; font-weight: 600; color: var(--danger);">Danger zone</div>
+          </div>
+          <div style="font-size: 12px; color: var(--ink-700); line-height: 1.5; margin-bottom: 14px;">Sign out from all devices. You'll need to log in again everywhere.</div>
+          <button class="btn btn--danger" style="width: 100%; justify-content: center;">Sign out everywhere</button>
+        </div>
+
+        <div class="tabbar">
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-home"/></svg><span class="tabbar__lbl">Home</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-cash"/></svg><span class="tabbar__lbl">Cash</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-doc"/></svg><span class="tabbar__lbl">Tasks</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-bell"/></svg><span class="tabbar__lbl">Alerts</span></div>
+          <div class="tabbar__item tabbar__item--active"><svg class="icon" style="width:20px;height:20px;"><use href="#i-user"/></svg><span class="tabbar__lbl">Me</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="reflow-panel">
+    <div class="sec-head" style="margin-bottom: 4px;"><h2 class="sec-head__title" style="font-size: 22px;">Reflow &amp; new components</h2><div class="sec-head__meta">Desktop → Mobile</div></div>
+    <div class="reflow-panel__grid">
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">01 · NEW</div><div class="reflow-card__title">In-page sub-nav</div><div class="reflow-card__body">Sticky left card of sub-sections (Account, Security, Notifications, Preferences, Danger). Active item mirrors sidebar styling — dark pill on white card. Reused wherever a settings-style page needs internal chapters.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">02 · NEW</div><div class="reflow-card__title">Settings card</div><div class="reflow-card__body">Standard card + a head row (icon mark + title + optional status badge) with a hairline divider before the body. Every section on the page uses this anatomy — email, 2FA, password, notifications, push, danger.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">03 · NEW</div><div class="reflow-card__title">Toggle switch</div><div class="reflow-card__body">40×22 pill with a 18px thumb. Off state is ink-300, on state is ink-900. Used wherever a boolean lives.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">04 · NEW</div><div class="reflow-card__title">Pref card (dual-control)</div><div class="reflow-card__body">Checkbox + title/desc + toggle. The checkbox represents "is included in notification bundle"; the toggle represents "is the delivery channel on". Both are optional — most controls use just the toggle.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">05 · NEW</div><div class="reflow-card__title">Danger card</div><div class="reflow-card__body">Card with a warm-red tint (#FDF3F1) and a red mark. Contains destructive actions. Very rare — only for sign-out-all, delete-account, and similar.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">06</div><div class="reflow-card__title">Two-col → single</div><div class="reflow-card__body">Desktop 260px nav + fluid content becomes stacked. Nav collapses into a horizontal-scroll pill row (same pattern as page 06 stage filter).</div></div>
+    </div>
+  </div>
+</div>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="assets/page-shell.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

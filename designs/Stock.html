@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Stock — Unze OS</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/page-shell.css"/>
+<style>
+  /* Plant switcher (tabs) */
+  .plant-switch { display: inline-flex; background: var(--card); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 3px; gap: 2px; margin-bottom: 20px; }
+  .plant-switch__tab { padding: 8px 16px; font-size: 12.5px; border-radius: var(--r-pill); color: var(--ink-700); cursor: default; display: inline-flex; align-items: center; gap: 8px; }
+  .plant-switch__tab--active { background: var(--ink-900); color: #fff; font-weight: 500; }
+  .plant-switch__tab-count { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-400); }
+  .plant-switch__tab--active .plant-switch__tab-count { color: rgba(255,255,255,0.5); }
+
+  /* Total in stock hero card */
+  .stock-hero {
+    padding: 24px 28px;
+    background: var(--ink-900);
+    color: #fff;
+    border-radius: var(--r-lg);
+    border: 1px solid var(--ink-900);
+    margin-bottom: 20px;
+    display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center;
+  }
+  .stock-hero__label { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.55); font-weight: 500; margin-bottom: 10px; }
+  .stock-hero__total { font-family: var(--font-display); font-size: 46px; font-weight: 600; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .stock-hero__total-unit { font-family: var(--font-sans); font-size: 0.36em; color: rgba(255,255,255,0.55); font-weight: 500; margin-left: 12px; vertical-align: 0.65em; }
+  .stock-hero__breakdown { display: flex; gap: 12px; }
+  .stock-hero__chip {
+    background: rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 14px 18px;
+    min-width: 92px;
+  }
+  .stock-hero__chip .lbl { font-size: 10px; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+  .stock-hero__chip .val { font-family: var(--font-display); font-size: 26px; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.015em; }
+
+  /* Authority letter expiry alert */
+  .alert { background: #FEF7EA; border: 1px solid #F1D9A9; border-radius: var(--r-md); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+  .alert__left { display: flex; align-items: center; gap: 14px; }
+  .alert__mark { width: 30px; height: 30px; border-radius: 8px; background: var(--warning); color: #fff; display: grid; place-items: center; flex: none; }
+  .alert__mark svg { width: 15px; height: 15px; }
+  .alert__title { font-size: 13px; font-weight: 600; color: var(--ink-900); }
+  .alert__body { font-size: 12.5px; color: var(--ink-700); margin-top: 2px; }
+  .alert__body b { color: var(--ink-900); font-family: var(--font-mono); font-size: 11.5px; }
+
+  /* PO stock card */
+  .po-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+
+  .po-list { padding: 0; overflow: hidden; }
+  .po-card {
+    padding: 20px 24px;
+    position: relative;
+  }
+  .po-card + .po-card { border-top: 1px solid var(--hairline); }
+  .po-card::before {
+    content: '';
+    position: absolute;
+    top: 20px; bottom: 20px;
+    left: 0;
+    width: 3px;
+    background: var(--success);
+    border-radius: 0 3px 3px 0;
+  }
+  .po-card--partial::before { background: var(--warning); }
+  .po-card--unallocated::before { background: var(--warning); }
+
+  .po-card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 8px; }
+  .po-card__title { display: flex; align-items: baseline; gap: 10px; }
+  .po-card__customer { font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--ink-900); }
+  .po-card__po-num { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 500; }
+  .po-card__desc { font-size: 12px; color: var(--ink-500); }
+  .po-card__pct {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .po-card__pct--good { color: var(--success); }
+  .po-card__pct--partial { color: var(--warning); }
+
+  .po-card__meta-row {
+    display: grid; grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 12px;
+    margin-top: 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .po-card__meta-cell .lbl { font-size: 10px; color: var(--ink-500); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+  .po-card__meta-cell .val {
+    font-family: var(--font-display); font-size: 15px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-top: 4px;
+  }
+  .po-card__meta-cell .val--dim { color: var(--ink-500); font-weight: 500; }
+
+  .po-card__sizes {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--hairline);
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  }
+  .po-card__sizes-label { font-size: 10.5px; color: var(--ink-500); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+  .size-chip {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    padding: 5px 12px;
+    background: var(--card-alt);
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    font-size: 12px;
+  }
+  .size-chip__label { color: var(--ink-500); font-family: var(--font-mono); }
+  .size-chip__val { font-family: var(--font-display); font-weight: 600; color: var(--ink-900); font-variant-numeric: tabular-nums; }
+
+  .po-card__actions {
+    display: flex; gap: 8px;
+    margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid var(--hairline);
+  }
+
+  /* ================================================================
+     MOBILE
+     ================================================================ */
+  .m-plant-switch { display: flex; gap: 6px; padding: 0 20px 12px; overflow-x: auto; scrollbar-width: none; }
+  .m-plant-switch::-webkit-scrollbar { display: none; }
+  .m-plant-switch__tab { flex: none; padding: 6px 14px; border-radius: 999px; background: var(--card); border: 1px solid var(--hairline); font-size: 12px; color: var(--ink-700); }
+  .m-plant-switch__tab--active { background: var(--ink-900); color: #fff; border-color: var(--ink-900); font-weight: 500; }
+
+  .m-stock-hero { margin: 4px 20px 12px; padding: 22px; border-radius: 20px; background: var(--ink-900); color: #fff; }
+  .m-stock-hero__label { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.55); font-weight: 500; }
+  .m-stock-hero__total { font-family: var(--font-display); font-size: 40px; font-weight: 600; letter-spacing: -0.025em; margin-top: 10px; font-variant-numeric: tabular-nums; line-height: 1; }
+  .m-stock-hero__foot { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.1); }
+  .m-stock-hero__foot-item { display: flex; flex-direction: column; gap: 2px; }
+  .m-stock-hero__foot-lbl { color: rgba(255,255,255,0.5); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .m-stock-hero__foot-val { font-family: var(--font-display); font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .m-po { background: var(--card); border: 1px solid var(--hairline); border-radius: 16px; margin: 0 20px 10px; padding: 16px 18px; position: relative; overflow: hidden; }
+  .m-po::before { content: ''; position: absolute; top: 16px; bottom: 16px; left: 0; width: 3px; background: var(--success); border-radius: 0 3px 3px 0; }
+  .m-po--partial::before { background: var(--warning); }
+  .m-po__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+  .m-po__title { font-family: var(--font-display); font-size: 14px; font-weight: 600; }
+  .m-po__title .num { font-family: var(--font-mono); color: var(--accent); font-size: 12px; font-weight: 500; margin-left: 6px; }
+  .m-po__pct { font-family: var(--font-display); font-weight: 600; font-size: 14px; color: var(--success); }
+  .m-po__pct--partial { color: var(--warning); }
+  .m-po__desc { font-size: 11px; color: var(--ink-500); margin-bottom: 10px; }
+  .m-po__sizes { display: flex; gap: 6px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage__header">
+    <div>
+      <div class="stage__kicker">Unze OS · Design v1 · Page 14 of ?</div>
+      <h1 class="stage__title">Stock — Customer PO stock</h1>
+    </div>
+    <div class="stage__sub">
+      Uses primitives from Bank Facilities (utilisation card) + Opening Balances (accent-left-rule cards) + Investments (size chips). Introduces the size-chip pattern for per-variant qty display.
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- DESKTOP -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Desktop · 1440 × auto</span><span class="frame__dim" id="desktop-scale-caption">Web · Next.js</span></div>
+      <div class="desktop-scaler" id="desktop-scaler"><div class="desktop-inner" id="desktop-inner"><div class="desktop-app">
+
+        <aside class="side">
+          <div class="side__brand"><div class="side__brand-mark">U</div><div><div class="side__brand-name">Unze Group</div><div style="font-size:10px; color: var(--ink-500);">Operations</div></div></div>
+          <div class="side__group">Overview</div>
+          <a class="side__item"><svg class="icon"><use href="#i-home"/></svg>Executive</a>
+          <div class="side__group">Operations</div>
+          <a class="side__item"><svg class="icon"><use href="#i-factory"/></svg>Daily entry</a>
+          <a class="side__item"><svg class="icon"><use href="#i-doc"/></svg>Manage POs</a>
+          <a class="side__item"><svg class="icon"><use href="#i-chart"/></svg>Ops dashboard</a>
+          <a class="side__item side__item--active"><svg class="icon"><use href="#i-package"/></svg>Stock</a>
+          <a class="side__item"><svg class="icon"><use href="#i-clipboard"/></svg>Opening balances</a>
+          <div class="side__group">Departments</div>
+          <a class="side__item"><svg class="icon"><use href="#i-users"/></svg>Admin</a>
+          <a class="side__item"><svg class="icon"><use href="#i-shield"/></svg>Audit</a>
+
+          <div class="side__group">Preferences</div>
+          <a class="side__item" data-theme-toggle style="cursor:pointer;"><svg class="icon"><use href="#i-moon"/></svg>Dark mode</a>
+          <div class="side__user"><div class="side__avatar">KS</div><div><div class="side__user-name">Khuram Saleem</div><div class="side__user-role">CEO · Unze Group</div></div></div>
+        </aside>
+
+        <main class="main">
+          <nav class="crumb"><span>Home</span><svg><use href="#i-chevron"/></svg><span>Operations</span><svg><use href="#i-chevron"/></svg><span class="crumb__current">Stock</span></nav>
+
+          <div class="main__top">
+            <div>
+              <h1 class="main__title">Stock</h1>
+              <div class="main__meta">Customer POs, authority letters, dispatch balances · 4 plants</div>
+            </div>
+            <div class="main__actions">
+              <button class="btn"><svg class="icon"><use href="#i-download"/></svg>Export</button>
+              <button class="btn btn--primary">Manage POs &amp; Letters</button>
+            </div>
+          </div>
+
+          <!-- Plant switch -->
+          <div class="plant-switch">
+            <span class="plant-switch__tab plant-switch__tab--active">FIEDMC <span class="plant-switch__tab-count">6</span></span>
+            <span class="plant-switch__tab">MEPCO <span class="plant-switch__tab-count">2</span></span>
+            <span class="plant-switch__tab">PESCO <span class="plant-switch__tab-count">3</span></span>
+            <span class="plant-switch__tab">Smart Meter <span class="plant-switch__tab-count">1</span></span>
+          </div>
+
+          <!-- Hero stock -->
+          <div class="stock-hero">
+            <div>
+              <div class="stock-hero__label">FIEDMC — Total in stock</div>
+              <div class="stock-hero__total">12,075 <span class="stock-hero__total-unit">poles total</span></div>
+            </div>
+            <div class="stock-hero__breakdown">
+              <div class="stock-hero__chip"><div class="lbl">31 ft</div><div class="val">3,650</div></div>
+              <div class="stock-hero__chip"><div class="lbl">36 ft</div><div class="val">6,859</div></div>
+              <div class="stock-hero__chip"><div class="lbl">45 ft</div><div class="val">1,566</div></div>
+            </div>
+          </div>
+
+          <!-- Alert -->
+          <div class="alert">
+            <div class="alert__left">
+              <div class="alert__mark"><svg><use href="#i-alert"/></svg></div>
+              <div>
+                <div class="alert__title">Authority letter expiry alerts</div>
+                <div class="alert__body">Expiring soon: Letter <b>MPTG-06(3)WWD-06</b> · FESCO PO #1746 · Shahid Mehmood Electro Works · <b>1/3</b> collected</div>
+              </div>
+            </div>
+            <button class="btn btn--sm btn--primary">Renew letter</button>
+          </div>
+
+          <!-- PO list -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Purchase orders</h2>
+            <div class="sec-head__actions">
+              <button class="btn btn--sm">Expand all</button>
+              <button class="btn btn--sm">Collapse all</button>
+              <button class="btn btn--sm">Hide closed</button>
+            </div>
+          </div>
+
+          <div class="card po-list">
+            <!-- PO 1 -->
+            <div class="po-card">
+              <div class="po-card__head">
+                <div>
+                  <div class="po-card__title">
+                    <span class="po-card__customer">FESCO</span>
+                    <span class="po-card__po-num">PO #1746</span>
+                    <span class="chip chip--success" style="margin-left: 8px;">100% produced</span>
+                  </div>
+                  <div class="po-card__desc" style="margin-top: 4px;">HT Spun Poles 36 ft · Qty 2,625</div>
+                </div>
+                <div class="po-card__pct po-card__pct--good">100%</div>
+              </div>
+              <div class="po-card__meta-row">
+                <div class="po-card__meta-cell"><div class="lbl">Order size</div><div class="val val--dim">2,625</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Produced</div><div class="val" style="color: var(--success);">2,625</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Dispatched</div><div class="val val--dim">8</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">In stock</div><div class="val">2,617</div></div>
+              </div>
+              <div class="po-card__sizes">
+                <span class="po-card__sizes-label">By size in stock</span>
+                <span class="size-chip"><span class="size-chip__label">36 ft</span><span class="size-chip__val">2,617</span></span>
+              </div>
+              <div class="po-card__actions">
+                <button class="btn btn--sm">+ Authority letter</button>
+                <button class="btn btn--sm">Edit letters</button>
+                <button class="btn btn--sm">Close PO</button>
+              </div>
+            </div>
+
+            <!-- PO 2 -->
+            <div class="po-card">
+              <div class="po-card__head">
+                <div>
+                  <div class="po-card__title">
+                    <span class="po-card__customer">FESCO</span>
+                    <span class="po-card__po-num">PO #1875</span>
+                    <span class="chip chip--success" style="margin-left: 8px;">100% produced</span>
+                  </div>
+                  <div class="po-card__desc" style="margin-top: 4px;">2000 poles for 36 ft · Qty 2,000</div>
+                </div>
+                <div class="po-card__pct po-card__pct--good">100%</div>
+              </div>
+              <div class="po-card__meta-row">
+                <div class="po-card__meta-cell"><div class="lbl">Order size</div><div class="val val--dim">2,000</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Produced</div><div class="val" style="color: var(--success);">2,002</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Dispatched</div><div class="val val--dim">0</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">In stock</div><div class="val">2,002</div></div>
+              </div>
+              <div class="po-card__sizes">
+                <span class="po-card__sizes-label">By size in stock</span>
+                <span class="size-chip"><span class="size-chip__label">36 ft</span><span class="size-chip__val">2,002</span></span>
+              </div>
+              <div class="po-card__actions">
+                <button class="btn btn--sm">+ Authority letter</button>
+                <button class="btn btn--sm">Edit letters</button>
+                <button class="btn btn--sm">Close PO</button>
+              </div>
+            </div>
+
+            <!-- PO 3 -->
+            <div class="po-card">
+              <div class="po-card__head">
+                <div>
+                  <div class="po-card__title">
+                    <span class="po-card__customer">FESCO</span>
+                    <span class="po-card__po-num">PO #1240</span>
+                    <span class="chip chip--success" style="margin-left: 8px;">100% produced</span>
+                  </div>
+                  <div class="po-card__desc" style="margin-top: 4px;">LT Spun Poles 31 ft · Qty 3,050</div>
+                </div>
+                <div class="po-card__pct po-card__pct--good">100%</div>
+              </div>
+              <div class="po-card__meta-row">
+                <div class="po-card__meta-cell"><div class="lbl">Order size</div><div class="val val--dim">3,050</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Produced</div><div class="val" style="color: var(--success);">3,050</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Dispatched</div><div class="val val--dim">0</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">In stock</div><div class="val">3,050</div></div>
+              </div>
+              <div class="po-card__sizes">
+                <span class="po-card__sizes-label">By size in stock</span>
+                <span class="size-chip"><span class="size-chip__label">31 ft</span><span class="size-chip__val">3,050</span></span>
+              </div>
+              <div class="po-card__actions">
+                <button class="btn btn--sm">+ Authority letter</button>
+                <button class="btn btn--sm">Edit letters</button>
+                <button class="btn btn--sm">Close PO</button>
+              </div>
+            </div>
+
+            <!-- PO 4 partial -->
+            <div class="po-card po-card--partial">
+              <div class="po-card__head">
+                <div>
+                  <div class="po-card__title">
+                    <span class="po-card__customer">FESCO</span>
+                    <span class="po-card__po-num">PO #1477</span>
+                    <span class="chip chip--warning" style="margin-left: 8px;">100% produced · partial delivery</span>
+                  </div>
+                  <div class="po-card__desc" style="margin-top: 4px;">HT Spun Poles 36 ft · Qty 1878 + Repeat Order Qty 100 · Dated 03-01-24</div>
+                </div>
+                <div class="po-card__pct po-card__pct--partial">100%</div>
+              </div>
+              <div class="po-card__meta-row">
+                <div class="po-card__meta-cell"><div class="lbl">Order size</div><div class="val val--dim">1,978</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Produced</div><div class="val" style="color: var(--warning);">2,158</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Dispatched</div><div class="val val--dim">0</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">In stock</div><div class="val">2,158</div></div>
+              </div>
+              <div class="po-card__sizes">
+                <span class="po-card__sizes-label">By size in stock</span>
+                <span class="size-chip"><span class="size-chip__label">36 ft</span><span class="size-chip__val">2,158</span></span>
+              </div>
+              <div class="po-card__actions">
+                <button class="btn btn--sm">+ Authority letter</button>
+                <button class="btn btn--sm">Edit letters</button>
+                <button class="btn btn--sm">Close PO</button>
+              </div>
+            </div>
+
+            <!-- PO 5 -->
+            <div class="po-card">
+              <div class="po-card__head">
+                <div>
+                  <div class="po-card__title">
+                    <span class="po-card__customer">FESCO</span>
+                    <span class="po-card__po-num">PO #1384</span>
+                    <span class="chip chip--success" style="margin-left: 8px;">100% produced</span>
+                  </div>
+                  <div class="po-card__desc" style="margin-top: 4px;">HT Spun Poles 45 ft · Qty 432</div>
+                </div>
+                <div class="po-card__pct po-card__pct--good">100%</div>
+              </div>
+              <div class="po-card__meta-row">
+                <div class="po-card__meta-cell"><div class="lbl">Order size</div><div class="val val--dim">432</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Produced</div><div class="val" style="color: var(--success);">433</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Dispatched</div><div class="val val--dim">0</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">In stock</div><div class="val">433</div></div>
+              </div>
+              <div class="po-card__sizes">
+                <span class="po-card__sizes-label">By size in stock</span>
+                <span class="size-chip"><span class="size-chip__label">45 ft</span><span class="size-chip__val">433</span></span>
+              </div>
+            </div>
+
+            <!-- PO 6 -->
+            <div class="po-card">
+              <div class="po-card__head">
+                <div>
+                  <div class="po-card__title">
+                    <span class="po-card__customer">FESCO</span>
+                    <span class="po-card__po-num">PO #1874</span>
+                    <span class="chip chip--success" style="margin-left: 8px;">100% produced</span>
+                  </div>
+                  <div class="po-card__desc" style="margin-top: 4px;">HT Spun Poles 45 ft · Qty 1,133</div>
+                </div>
+                <div class="po-card__pct po-card__pct--good">100%</div>
+              </div>
+              <div class="po-card__meta-row">
+                <div class="po-card__meta-cell"><div class="lbl">Order size</div><div class="val val--dim">1,133</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Produced</div><div class="val" style="color: var(--success);">1,133</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Dispatched</div><div class="val val--dim">0</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">In stock</div><div class="val">1,133</div></div>
+              </div>
+              <div class="po-card__sizes">
+                <span class="po-card__sizes-label">By size in stock</span>
+                <span class="size-chip"><span class="size-chip__label">45 ft</span><span class="size-chip__val">1,133</span></span>
+              </div>
+            </div>
+
+            <!-- Unallocated -->
+            <div class="po-card po-card--unallocated">
+              <div class="po-card__head">
+                <div>
+                  <div class="po-card__title">
+                    <span class="po-card__customer">Unze Unallocated Stock</span>
+                    <span class="chip chip--warning" style="margin-left: 8px;">Not tied to any PO</span>
+                  </div>
+                  <div class="po-card__desc" style="margin-top: 4px;">Buffer stock — poles produced but not committed to a specific PO yet.</div>
+                </div>
+                <div class="po-card__pct po-card__pct--partial">—</div>
+              </div>
+              <div class="po-card__meta-row">
+                <div class="po-card__meta-cell"><div class="lbl">Produced</div><div class="val val--dim">0</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Dispatched</div><div class="val val--dim">0</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">In stock</div><div class="val val--dim">0</div></div>
+                <div class="po-card__meta-cell"><div class="lbl">Status</div><div class="val" style="font-size: 12px; color: var(--warning);">Empty</div></div>
+              </div>
+            </div>
+
+          </div>
+        </main>
+      </div></div></div>
+    </div>
+
+    <!-- MOBILE -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Mobile · 390 × auto</span><span class="frame__dim">iOS / Android / PWA</span></div>
+      <div class="phone">
+        <div class="status-bar"><span>9:42</span><div class="status-bar__right"><span>●●●●</span><span style="margin-left:6px;">100%</span></div></div>
+        <div class="m-nav"><span class="m-nav__back"><svg><use href="#i-chevron-left"/></svg>Home</span><div class="m-nav__actions"><svg><use href="#i-search"/></svg><svg><use href="#i-filter"/></svg></div></div>
+        <div class="m-page-head">
+          <div class="m-page-head__kicker">Operations</div>
+          <h1 class="m-page-head__title">Stock</h1>
+          <div class="m-page-head__sub">Customer POs · authority letters</div>
+        </div>
+
+        <!-- Plant switch -->
+        <div class="m-plant-switch">
+          <span class="m-plant-switch__tab m-plant-switch__tab--active">FIEDMC 6</span>
+          <span class="m-plant-switch__tab">MEPCO 2</span>
+          <span class="m-plant-switch__tab">PESCO 3</span>
+          <span class="m-plant-switch__tab">Smart Mtr 1</span>
+        </div>
+
+        <!-- Hero -->
+        <div class="m-stock-hero">
+          <div class="m-stock-hero__label">FIEDMC · Total in stock</div>
+          <div class="m-stock-hero__total">12,075</div>
+          <div class="m-stock-hero__foot">
+            <div class="m-stock-hero__foot-item">
+              <span class="m-stock-hero__foot-lbl">31 ft</span>
+              <span class="m-stock-hero__foot-val">3,650</span>
+            </div>
+            <div class="m-stock-hero__foot-item">
+              <span class="m-stock-hero__foot-lbl">36 ft</span>
+              <span class="m-stock-hero__foot-val">6,859</span>
+            </div>
+            <div class="m-stock-hero__foot-item">
+              <span class="m-stock-hero__foot-lbl">45 ft</span>
+              <span class="m-stock-hero__foot-val">1,566</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alert -->
+        <div style="margin: 4px 20px 12px; background: #FEF7EA; border: 1px solid #F1D9A9; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+          <div style="width:28px;height:28px;border-radius:8px;background:var(--warning);color:#fff;display:grid;place-items:center;flex:none;"><svg class="icon" style="width:14px;height:14px;"><use href="#i-alert"/></svg></div>
+          <div><div style="font-size:12.5px;font-weight:600;">Letter expiring soon</div><div style="font-size:11px;color:var(--ink-500);margin-top:2px;">FESCO PO #1746 · 1/3 collected</div></div>
+          <svg class="icon" style="margin-left:auto;color:var(--ink-500);"><use href="#i-chevron"/></svg>
+        </div>
+
+        <div class="m-section-head"><div class="m-section-head__title">Purchase orders</div><a class="m-section-head__link">6 open</a></div>
+
+        <!-- Mobile PO cards -->
+        <div class="m-po">
+          <div class="m-po__head">
+            <div class="m-po__title">FESCO <span class="num">#1746</span></div>
+            <div class="m-po__pct">100%</div>
+          </div>
+          <div class="m-po__desc">HT Spun Poles 36 ft · Qty 2,625</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 0; border-top: 1px solid var(--hairline); margin-top: 4px;">
+            <div><div style="font-size: 10px; color: var(--ink-500); text-transform: uppercase; letter-spacing: 0.08em;">In stock</div><div style="font-family: var(--font-display); font-size: 16px; font-weight: 600;">2,617</div></div>
+            <div><div style="font-size: 10px; color: var(--ink-500); text-transform: uppercase; letter-spacing: 0.08em;">Dispatched</div><div style="font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--ink-500);">8</div></div>
+          </div>
+          <div class="m-po__sizes">
+            <span class="size-chip" style="padding: 4px 10px;"><span class="size-chip__label">36 ft</span><span class="size-chip__val">2,617</span></span>
+          </div>
+        </div>
+
+        <div class="m-po">
+          <div class="m-po__head">
+            <div class="m-po__title">FESCO <span class="num">#1875</span></div>
+            <div class="m-po__pct">100%</div>
+          </div>
+          <div class="m-po__desc">2000 poles for 36 ft · Qty 2,000</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 0; border-top: 1px solid var(--hairline); margin-top: 4px;">
+            <div><div style="font-size: 10px; color: var(--ink-500); text-transform: uppercase; letter-spacing: 0.08em;">In stock</div><div style="font-family: var(--font-display); font-size: 16px; font-weight: 600;">2,002</div></div>
+            <div><div style="font-size: 10px; color: var(--ink-500); text-transform: uppercase; letter-spacing: 0.08em;">Dispatched</div><div style="font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--ink-500);">0</div></div>
+          </div>
+          <div class="m-po__sizes">
+            <span class="size-chip" style="padding: 4px 10px;"><span class="size-chip__label">36 ft</span><span class="size-chip__val">2,002</span></span>
+          </div>
+        </div>
+
+        <div class="m-po">
+          <div class="m-po__head">
+            <div class="m-po__title">FESCO <span class="num">#1240</span></div>
+            <div class="m-po__pct">100%</div>
+          </div>
+          <div class="m-po__desc">LT Spun Poles 31 ft · Qty 3,050</div>
+          <div class="m-po__sizes">
+            <span class="size-chip" style="padding: 4px 10px;"><span class="size-chip__label">31 ft</span><span class="size-chip__val">3,050</span></span>
+          </div>
+        </div>
+
+        <div class="m-po m-po--partial">
+          <div class="m-po__head">
+            <div class="m-po__title">FESCO <span class="num">#1477</span></div>
+            <div class="m-po__pct m-po__pct--partial">100%</div>
+          </div>
+          <div class="m-po__desc">HT 36 ft · Qty 1,878 + Repeat 100</div>
+          <div class="m-po__sizes">
+            <span class="size-chip" style="padding: 4px 10px;"><span class="size-chip__label">36 ft</span><span class="size-chip__val">2,158</span></span>
+          </div>
+        </div>
+
+        <div class="m-po">
+          <div class="m-po__head">
+            <div class="m-po__title">FESCO <span class="num">#1384</span></div>
+            <div class="m-po__pct">100%</div>
+          </div>
+          <div class="m-po__desc">HT Spun Poles 45 ft · Qty 432</div>
+          <div class="m-po__sizes">
+            <span class="size-chip" style="padding: 4px 10px;"><span class="size-chip__label">45 ft</span><span class="size-chip__val">433</span></span>
+          </div>
+        </div>
+
+        <div class="fab"><svg><use href="#i-plus"/></svg></div>
+        <div class="tabbar">
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-home"/></svg><span class="tabbar__lbl">Home</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-factory"/></svg><span class="tabbar__lbl">Entry</span></div>
+          <div class="tabbar__item tabbar__item--active"><svg class="icon" style="width:20px;height:20px;"><use href="#i-package"/></svg><span class="tabbar__lbl">Stock</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-chart"/></svg><span class="tabbar__lbl">Ops</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-bell"/></svg><span class="tabbar__lbl">Alerts</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="reflow-panel">
+    <div class="sec-head" style="margin-bottom: 4px;"><h2 class="sec-head__title" style="font-size: 22px;">Reflow &amp; new components</h2><div class="sec-head__meta">Desktop → Mobile</div></div>
+    <div class="reflow-panel__grid">
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">01 · NEW</div><div class="reflow-card__title">Stock hero card</div><div class="reflow-card__body">Full-width dark card at the top: total in stock (large number) + inline size breakdown chips. Reused for any per-plant/per-entity aggregate.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">02 · NEW</div><div class="reflow-card__title">Size chip</div><div class="reflow-card__body">Pill with mono unit label + display-font number. Used in the hero and in every PO card's "By size in stock" row.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">03 · NEW</div><div class="reflow-card__title">Plant switcher (pill tabs)</div><div class="reflow-card__body">Dark active pill with count badge. Same styling as the segmented tabs from page 06 but with an inline count. Mobile becomes a scroll strip.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">04</div><div class="reflow-card__title">PO card (reused from Opening Balances)</div><div class="reflow-card__body">Same accent-left-rule card. Green rule = fully produced; amber = partial or unallocated buffer. Meta row shows Order · Produced · Dispatched · In stock with the same 4-col grid.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">05</div><div class="reflow-card__title">Alert (reused)</div><div class="reflow-card__body">Same warm-amber alert box used across pages 01, 06, 08, 13. Now flags authority-letter expiries.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">06</div><div class="reflow-card__title">Density on mobile</div><div class="reflow-card__body">Desktop shows all 4 meta cells + all size chips + actions. Mobile trims to 2 meta cells (In stock, Dispatched) + size chips only. Actions move to a per-card ⋯ menu.</div></div>
+    </div>
+  </div>
+</div>
+<script src="assets/page-shell.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

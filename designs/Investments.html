@@ -1,0 +1,1307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Investments — Unze OS</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<style>
+  /* ============ Page frame (identical) ============ */
+  html, body { background: #EDEAE3; }
+  .stage { max-width: 1760px; margin: 0 auto; padding: 48px 40px 120px; }
+  .stage__header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 40px; gap: 32px; }
+  .stage__title { font-family: var(--font-display); font-size: 34px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+  .stage__kicker { color: var(--ink-500); font-size: 12px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; }
+  .stage__sub { color: var(--ink-500); font-size: 14px; max-width: 520px; margin-top: 4px; line-height: 1.5; text-align: right; }
+
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 32px; align-items: start; }
+  @media (max-width: 1200px) { .split { grid-template-columns: 1fr; } }
+
+  .frame { background: var(--canvas); border-radius: 24px; border: 1px solid var(--hairline); overflow: hidden; position: relative; }
+  .frame__caption { display: flex; justify-content: space-between; align-items: baseline; padding: 20px 24px; background: var(--card); border-bottom: 1px solid var(--hairline); }
+  .frame__label { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-900); }
+  .frame__dim { font-family: var(--font-mono); font-size: 11px; color: var(--ink-500); }
+
+  .desktop-scaler { position: relative; width: 100%; overflow: hidden; }
+  .desktop-inner { width: 1440px; transform-origin: top left; transform: scale(var(--desktop-scale, 1)); }
+
+  /* ============ DESKTOP APP CHROME ============ */
+  .desktop-app { display: grid; grid-template-columns: 220px 1fr; min-height: 1200px; }
+  .side { background: var(--card); border-right: 1px solid var(--hairline); padding: 24px 16px; display: flex; flex-direction: column; gap: 4px; }
+  .side__brand { padding: 4px 8px 24px; display:flex; align-items:center; gap: 10px; }
+  .side__brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--ink-900); color: #fff; display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: -0.02em; }
+  .side__brand-name { font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+  .side__group { font-size: 10px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-400); margin: 20px 8px 6px; }
+  .side__item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--ink-700); font-size: 13px; text-decoration: none; }
+  .side__item:hover { background: var(--card-alt); }
+  .side__item--active { background: var(--ink-900); color: #fff; }
+  .side__item svg { width: 16px; height: 16px; opacity: 0.8; flex: none; }
+  .side__user { margin-top: auto; display:flex; align-items:center; gap:10px; padding: 12px 10px; border-top: 1px solid var(--hairline); }
+  .side__avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #3B4CCA, #6E7AE0); display:grid; place-items:center; color:#fff; font-size:12px; font-weight:600; }
+  .side__user-name { font-size: 13px; font-weight: 600; }
+  .side__user-role { font-size: 11px; color: var(--ink-500); }
+
+  .main { padding: 32px 40px 48px; background: var(--canvas); min-width: 0; }
+
+  .crumb { display: flex; align-items: center; gap: 8px; color: var(--ink-500); font-size: 12px; margin-bottom: 20px; }
+  .crumb svg { width: 12px; height: 12px; }
+  .crumb__current { color: var(--ink-900); font-weight: 500; }
+
+  .main__top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; gap: 20px; }
+  .main__title { font-family: var(--font-display); font-size: 32px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .main__meta { font-size: 13px; color: var(--ink-500); }
+  .main__actions { display: flex; gap: 10px; align-items: center; }
+  .main__date-picker { display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 14px; font-size: 12px; }
+  .main__date-picker svg { width: 12px; height: 12px; color: var(--ink-500); }
+
+  /* Section header */
+  .sec-head { display: flex; align-items: baseline; justify-content: space-between; margin: 40px 0 16px; }
+  .sec-head:first-child { margin-top: 0; }
+  .sec-head__title { font-family: var(--font-display); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+  .sec-head__meta { font-size: 12px; color: var(--ink-500); }
+  .sec-head__actions { display: flex; gap: 8px; }
+
+  /* KPIs */
+  .kpi-row { display: grid; grid-template-columns: 1fr 1fr 1fr 0.7fr; gap: 16px; }
+  .kpi { padding: 22px 24px; }
+  .kpi__label { font-size: 10.5px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-500); display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .kpi__num { font-family: var(--font-display); font-size: 34px; font-weight: 600; letter-spacing: -0.025em; line-height: 1; font-variant-numeric: tabular-nums; color: var(--ink-900); }
+  .kpi__sub { font-size: 12px; color: var(--ink-500); margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+  .kpi__foot { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+
+  /* Alert */
+  .alert { background: #FEF7EA; border: 1px solid #F1D9A9; border-radius: var(--r-md); padding: 16px 20px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+  .alert__left { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+  .alert__mark { width: 32px; height: 32px; border-radius: 10px; background: var(--warning); color: #fff; display: grid; place-items: center; flex: none; }
+  .alert__mark svg { width: 16px; height: 16px; }
+  .alert__title { font-size: 13px; font-weight: 600; color: var(--ink-900); }
+  .alert__body { font-size: 12px; color: var(--ink-700); margin-top: 6px; line-height: 1.5; display: flex; gap: 8px; flex-wrap: wrap; }
+  .alert__ticker-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px 3px 8px;
+    border-radius: 6px;
+    background: var(--card);
+    border: 1px solid var(--hairline);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-900);
+  }
+  .alert__ticker-chip .change { color: var(--danger); font-family: var(--font-sans); font-weight: 500; }
+  .alert__actions { display: flex; gap: 10px; align-items: center; }
+
+  /* Toolbar */
+  .table-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .search-inline { display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 6px 14px; font-size: 12.5px; color: var(--ink-500); min-width: 220px; }
+  .search-inline svg { width: 14px; height: 14px; }
+  .select-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 6px 14px; font-size: 12.5px; color: var(--ink-700); }
+  .select-btn svg { width: 12px; height: 12px; color: var(--ink-500); }
+
+  /* Holdings table */
+  .table-card { padding: 0; overflow: hidden; }
+  table.holdings { width: 100%; border-collapse: collapse; }
+  table.holdings th, table.holdings td { padding: 12px 16px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.holdings th:first-child, table.holdings td:first-child { text-align: left; }
+  table.holdings th:nth-child(2), table.holdings td:nth-child(2) { text-align: left; }
+  table.holdings thead th { font-size: 10.5px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-500); background: var(--card-alt); border-bottom: 1px solid var(--hairline); position: sticky; top: 0; z-index: 2; }
+  table.holdings tbody tr + tr td { border-top: 1px solid var(--hairline); }
+  table.holdings tbody tr:hover td { background: var(--card-alt); }
+  table.holdings td .num-pos { color: var(--success); font-weight: 500; }
+  table.holdings td .num-neg { color: var(--danger); font-weight: 500; }
+  table.holdings td.date-cell { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-500); }
+  .num-dim { color: var(--ink-500); }
+
+  /* Ticker chip */
+  .ticker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-900);
+    font-weight: 500;
+  }
+  .ticker__mark {
+    width: 24px; height: 24px; border-radius: 6px;
+    background: var(--card-alt);
+    border: 1px solid var(--hairline);
+    display: grid; place-items: center;
+    font-size: 9.5px; font-weight: 700;
+    color: var(--ink-900);
+    font-family: var(--font-sans);
+    letter-spacing: -0.01em;
+    flex: none;
+  }
+
+  /* Return chip in-row */
+  .ret-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-sans);
+  }
+  .ret-chip--pos { background: var(--success-soft); color: var(--success); }
+  .ret-chip--neg { background: var(--danger-soft);  color: var(--danger); }
+
+  /* Actions column */
+  .actions-cell { display: inline-flex; gap: 4px; }
+  .icon-btn { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; color: var(--ink-500); cursor: default; }
+  .icon-btn:hover { background: var(--card-alt); color: var(--ink-900); }
+  .icon-btn svg { width: 13px; height: 13px; }
+
+  /* Total row */
+  tr.total-row td {
+    background: var(--card-alt) !important;
+    font-weight: 600 !important;
+    border-top: 2px solid var(--hairline) !important;
+    font-size: 13px;
+  }
+  tr.total-row td:first-child { color: var(--ink-500); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  tr.total-row td .num-pos { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+
+  /* Chart row */
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .chart-card { padding: 22px 24px; }
+  .chart-card__head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .chart-card__title-blk .lbl { font-size: 10.5px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-500); }
+  .chart-card__title-blk .val { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .tabs { display: inline-flex; background: var(--card-alt); border-radius: var(--r-pill); padding: 3px; gap: 2px; border: 1px solid var(--hairline); }
+  .tabs__tab { padding: 5px 12px; font-size: 11.5px; border-radius: var(--r-pill); color: var(--ink-500); cursor: default; }
+  .tabs__tab--active { background: var(--card); color: var(--ink-900); font-weight: 500; }
+
+  /* Ticker selector */
+  .ticker-strip {
+    display: flex; gap: 6px; overflow-x: auto;
+    padding-bottom: 12px;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--hairline);
+    margin-bottom: 16px;
+  }
+  .ticker-strip::-webkit-scrollbar { display: none; }
+  .ticker-strip__item {
+    flex: none;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-500);
+    background: transparent;
+    cursor: default;
+  }
+  .ticker-strip__item:hover { background: var(--card-alt); color: var(--ink-900); }
+  .ticker-strip__item--active { background: var(--ink-900); color: #fff; }
+
+  /* Empty chart state */
+  .chart-empty {
+    height: 220px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px;
+    color: var(--ink-400);
+  }
+  .chart-empty svg { width: 32px; height: 32px; }
+  .chart-empty__title { font-size: 13px; color: var(--ink-500); }
+  .chart-empty__body { font-size: 11.5px; color: var(--ink-400); }
+
+  /* Diverging bar chart */
+  .diverging { padding: 4px 0; }
+  .div-row { display: grid; grid-template-columns: 60px 1fr 60px; gap: 12px; align-items: center; padding: 5px 0; }
+  .div-row__label { font-family: var(--font-mono); font-size: 11px; color: var(--ink-700); text-align: right; }
+  .div-row__val { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .div-row__val--pos { color: var(--success); font-weight: 500; }
+  .div-row__val--neg { color: var(--danger); font-weight: 500; }
+  .div-bar {
+    position: relative;
+    height: 16px;
+  }
+  .div-bar::before {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0; left: 50%;
+    width: 1px;
+    background: var(--hairline);
+  }
+  .div-bar__fill {
+    position: absolute;
+    top: 3px; bottom: 3px;
+    border-radius: 3px;
+  }
+  .div-bar__fill--pos { background: var(--success); left: 50%; }
+  .div-bar__fill--neg { background: var(--danger);  right: 50%; }
+
+  /* Performer tiles */
+  .perf-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .perf-card { padding: 16px 18px; }
+  .perf-card__head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .perf-card__ticker { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--ink-900); }
+  .perf-card__mark { width: 22px; height: 22px; border-radius: 6px; background: var(--card-alt); border: 1px solid var(--hairline); display: grid; place-items: center; font-family: var(--font-sans); font-size: 9px; font-weight: 700; }
+  .perf-card__ret { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -0.015em; color: var(--success); font-variant-numeric: tabular-nums; }
+  .perf-card__sub { font-size: 11px; color: var(--ink-500); margin-top: 6px; }
+
+  /* Dividends empty */
+  .empty { padding: 40px 28px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+  .empty__icon { width: 48px; height: 48px; border-radius: 14px; background: var(--card-alt); border: 1px solid var(--hairline); display: grid; place-items: center; color: var(--ink-500); margin-bottom: 14px; }
+  .empty__icon svg { width: 20px; height: 20px; }
+  .empty__title { font-family: var(--font-display); font-size: 15px; font-weight: 600; margin: 0 0 4px; color: var(--ink-900); }
+  .empty__body { font-size: 12.5px; color: var(--ink-500); max-width: 320px; line-height: 1.5; margin: 0 0 18px; }
+
+  /* ================================================================
+     MOBILE
+     ================================================================ */
+  .phone { width: 390px; margin: 0 auto; background: var(--canvas); min-height: 1400px; padding-bottom: 100px; position: relative; }
+  .status-bar { padding: 14px 24px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--ink-900); }
+  .status-bar__right { display:flex; gap: 6px; align-items:center; font-size: 10px; }
+  .m-nav { padding: 4px 20px 8px; display: flex; align-items: center; justify-content: space-between; }
+  .m-nav__back { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-500); }
+  .m-nav__back svg { width: 14px; height: 14px; }
+  .m-nav__actions { display: flex; gap: 12px; color: var(--ink-500); }
+  .m-nav__actions svg { width: 18px; height: 18px; }
+
+  .m-page-head { padding: 12px 20px 12px; }
+  .m-page-head__kicker { font-size: 10.5px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-500); margin-bottom: 6px; }
+  .m-page-head__title { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+  .m-page-head__sub { font-size: 12px; color: var(--ink-500); margin-top: 4px; }
+
+  /* Portfolio hero card */
+  .m-hero { margin: 8px 20px 12px; padding: 22px; border-radius: 20px; background: var(--ink-900); color: #fff; }
+  .m-hero__lbl { font-size: 10.5px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+  .m-hero__num { font-family: var(--font-display); font-size: 40px; font-weight: 600; letter-spacing: -0.025em; margin-top: 10px; font-variant-numeric: tabular-nums; line-height: 1; }
+  .m-hero__num .prefix { font-family: var(--font-sans); font-size: 0.36em; font-weight: 500; color: rgba(255,255,255,0.6); vertical-align: 0.65em; margin-right: 0.4em; }
+  .m-hero__foot { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11.5px; }
+  .m-hero__foot-item { display: flex; flex-direction: column; gap: 2px; }
+  .m-hero__foot-lbl { color: rgba(255,255,255,0.5); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .m-hero__foot-val { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+  .m-hero__chip { background: rgba(255,255,255,0.12); color: #fff; padding: 4px 10px; border-radius: 999px; font-size: 11px; }
+
+  /* Mobile alert (compact) */
+  .m-alert { margin: 4px 20px 12px; background: #FEF7EA; border: 1px solid #F1D9A9; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
+  .m-alert__mark { width: 28px; height: 28px; border-radius: 8px; background: var(--warning); color:#fff; display:grid; place-items:center; flex: none; }
+  .m-alert__mark svg { width: 14px; height: 14px; }
+  .m-alert__title { font-size: 12.5px; font-weight: 600; color: var(--ink-900); }
+  .m-alert__body { font-size: 11px; color: var(--ink-700); margin-top: 2px; }
+  .m-alert__chev { color: var(--ink-500); margin-left: auto; }
+  .m-alert__chev svg { width: 14px; height: 14px; }
+
+  .m-section-head { display:flex; justify-content: space-between; align-items: baseline; padding: 22px 20px 12px; }
+  .m-section-head__title { font-family: var(--font-display); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .m-section-head__link { font-size: 11px; color: var(--accent); font-weight: 500; }
+
+  /* Mobile filter chips */
+  .m-filter { display: flex; gap: 8px; padding: 0 20px 12px; overflow-x: auto; scrollbar-width: none; }
+  .m-filter::-webkit-scrollbar { display: none; }
+  .m-filter__chip { flex: none; background: var(--card); border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 14px; font-size: 12px; color: var(--ink-700); }
+  .m-filter__chip--active { background: var(--ink-900); color: #fff; border-color: var(--ink-900); font-weight: 500; }
+
+  /* Holdings mobile list */
+  .m-holdings { background: var(--card); border: 1px solid var(--hairline); border-radius: 16px; margin: 0 20px 12px; overflow: hidden; }
+  .m-holding-row { padding: 14px 16px; display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; align-items: center; }
+  .m-holding-row + .m-holding-row { border-top: 1px solid var(--hairline); }
+  .m-holding__mark { width: 28px; height: 28px; border-radius: 8px; background: var(--card-alt); border: 1px solid var(--hairline); display: grid; place-items: center; font-family: var(--font-sans); font-size: 9.5px; font-weight: 700; }
+  .m-holding__ticker { font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; color: var(--ink-900); }
+  .m-holding__co { font-size: 10.5px; color: var(--ink-500); margin-top: 2px; font-family: var(--font-mono); }
+  .m-holding__value { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; text-align: right; }
+  .m-holding__ret { text-align: right; margin-top: 2px; }
+
+  /* Mobile diverging */
+  .m-div-card { background: var(--card); border: 1px solid var(--hairline); border-radius: 16px; margin: 0 20px 12px; padding: 18px; }
+  .m-div-row { display: grid; grid-template-columns: 46px 1fr 54px; gap: 8px; align-items: center; padding: 4px 0; }
+  .m-div-row__label { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-700); text-align: right; }
+  .m-div-row__val { font-family: var(--font-mono); font-size: 10.5px; }
+
+  /* Mobile performer tiles */
+  .m-perf-scroll { display: flex; gap: 10px; padding: 0 20px 12px; overflow-x: auto; scrollbar-width: none; }
+  .m-perf-scroll::-webkit-scrollbar { display: none; }
+  .m-perf-card { flex: none; width: 130px; background: var(--card); border: 1px solid var(--hairline); border-radius: 14px; padding: 14px; }
+  .m-perf-card__ticker { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; }
+  .m-perf-card__ret { font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--success); margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .m-perf-card__val { font-size: 10.5px; color: var(--ink-500); margin-top: 2px; }
+
+  /* Mobile empty state */
+  .m-empty { background: var(--card); border: 1px solid var(--hairline); border-radius: 16px; margin: 0 20px; padding: 32px 20px; text-align: center; display:flex; flex-direction: column; align-items: center; }
+  .m-empty__icon { width: 44px; height: 44px; border-radius: 14px; background: var(--card-alt); border: 1px solid var(--hairline); display:grid; place-items:center; color: var(--ink-500); margin-bottom: 12px; }
+  .m-empty__icon svg { width: 18px; height: 18px; }
+  .m-empty__title { font-family: var(--font-display); font-size: 14.5px; font-weight: 600; margin: 0 0 4px; }
+  .m-empty__body { font-size: 11.5px; color: var(--ink-500); line-height: 1.5; margin: 0 0 14px; }
+
+  /* FAB */
+  .fab { position: absolute; right: 20px; bottom: 96px; width: 52px; height: 52px; border-radius: 50%; background: var(--ink-900); color: #fff; display: grid; place-items: center; box-shadow: 0 6px 24px -8px rgba(15,23,32,0.4); z-index: 3; }
+  .fab svg { width: 22px; height: 22px; }
+
+  /* Tab bar */
+  .tabbar { position: sticky; bottom: 0; background: rgba(255,255,255,0.92); backdrop-filter: saturate(180%) blur(12px); border-top: 1px solid var(--hairline); display: grid; grid-template-columns: repeat(5, 1fr); padding: 10px 8px 24px; margin-top: 20px; }
+  .tabbar__item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 0; color: var(--ink-500); }
+  .tabbar__item--active { color: var(--ink-900); }
+  .tabbar__lbl { font-size: 10px; font-weight: 500; }
+
+  /* Reflow */
+  .reflow-panel { margin-top: 40px; }
+  .reflow-panel__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
+  .reflow-card { background: var(--card); border: 1px solid var(--hairline); border-radius: 14px; padding: 20px; }
+  .reflow-card__num { font-family: var(--font-display); font-size: 22px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+  .reflow-card__title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .reflow-card__body { font-size: 12.5px; color: var(--ink-700); line-height: 1.5; }
+  .reflow-card--new { background: var(--accent-soft); border-color: #DAE0F5; }
+  .reflow-card--new .reflow-card__num { color: var(--accent-ink); }
+
+  .icon { width: 16px; height: 16px; display: inline-block; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute;">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8v10a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V11z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></symbol>
+    <symbol id="i-cash" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-bank" viewBox="0 0 24 24"><path d="M3 21h18M4 10v8M8 10v8M12 10v8M16 10v8M20 10v8M2 10h20L12 3 2 10z"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+    <symbol id="i-line" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 4 3 5-6"/></symbol>
+    <symbol id="i-dollar" viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></symbol>
+  </defs>
+</svg>
+
+<div class="stage">
+  <!-- HEADER -->
+  <div class="stage__header">
+    <div>
+      <div class="stage__kicker">Unze OS · Design v1 · Page 04 of ?</div>
+      <h1 class="stage__title">Investments — PSX Portfolio</h1>
+    </div>
+    <div class="stage__sub">
+      Introduces the dense-table pattern, ticker chip, diverging horizontal bar chart, and performer tile. All built from existing tokens.
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- ============ DESKTOP ============ -->
+    <div class="frame">
+      <div class="frame__caption">
+        <span class="frame__label">Desktop · 1440 × auto</span>
+        <span class="frame__dim" id="desktop-scale-caption">Web · Next.js</span>
+      </div>
+
+      <div class="desktop-scaler" id="desktop-scaler">
+      <div class="desktop-inner" id="desktop-inner">
+      <div class="desktop-app">
+
+        <!-- Sidebar -->
+        <aside class="side">
+          <div class="side__brand">
+            <div class="side__brand-mark">U</div>
+            <div>
+              <div class="side__brand-name">Unze Group</div>
+              <div style="font-size:10px; color: var(--ink-500);">Operations</div>
+            </div>
+          </div>
+
+          <div class="side__group">Overview</div>
+          <a class="side__item"><svg class="icon"><use href="#i-home"/></svg>Executive</a>
+          <a class="side__item"><svg class="icon"><use href="#i-chart"/></svg>Reports</a>
+
+          <div class="side__group">Entities</div>
+          <a class="side__item"><svg class="icon"><use href="#i-briefcase"/></svg>Unze Trading</a>
+          <a class="side__item"><svg class="icon"><use href="#i-briefcase"/></svg>Imperial Footwear</a>
+
+          <div class="side__group">Finance</div>
+          <a class="side__item"><svg class="icon"><use href="#i-cash"/></svg>Cash flow</a>
+          <a class="side__item"><svg class="icon"><use href="#i-doc"/></svg>Receivables</a>
+          <a class="side__item"><svg class="icon"><use href="#i-bank"/></svg>Bank facilities</a>
+          <a class="side__item side__item--active"><svg class="icon"><use href="#i-line"/></svg>Investments</a>
+          <a class="side__item"><svg class="icon"><use href="#i-doc"/></svg>Ledgers</a>
+
+          <div class="side__group">Operations</div>
+          <a class="side__item"><svg class="icon"><use href="#i-users"/></svg>Departments</a>
+          <a class="side__item"><svg class="icon"><use href="#i-calendar"/></svg>Calendar</a>
+
+
+          <div class="side__group">Preferences</div>
+          <a class="side__item" data-theme-toggle style="cursor:pointer;"><svg class="icon"><use href="#i-moon"/></svg>Dark mode</a>
+          <div class="side__user">
+            <div class="side__avatar">KS</div>
+            <div>
+              <div class="side__user-name">Khuram Saleem</div>
+              <div class="side__user-role">CEO · Unze Group</div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Main -->
+        <main class="main">
+          <!-- Breadcrumb -->
+          <nav class="crumb">
+            <span>Home</span>
+            <svg><use href="#i-chevron"/></svg>
+            <span>Finance</span>
+            <svg><use href="#i-chevron"/></svg>
+            <span class="crumb__current">Investments</span>
+          </nav>
+
+          <div class="main__top">
+            <div>
+              <h1 class="main__title">Investments</h1>
+              <div class="main__meta">PSX portfolio · 20 holdings · Prices last updated 04 Jul 2026 · 17:03 PKT</div>
+            </div>
+            <div class="main__actions">
+              <div class="main__date-picker">
+                <svg><use href="#i-calendar"/></svg>
+                <span>Portfolio as of 05.07.2026</span>
+                <svg><use href="#i-chevron-down"/></svg>
+              </div>
+              <button class="btn"><svg class="icon"><use href="#i-refresh"/></svg>Refresh prices</button>
+              <button class="btn btn--primary"><svg class="icon"><use href="#i-plus"/></svg>Add Holding</button>
+            </div>
+          </div>
+
+          <!-- KPI Row -->
+          <div class="kpi-row">
+            <div class="card kpi">
+              <div class="kpi__label"><span class="dot dot--neutral"></span>Total Invested</div>
+              <div class="kpi__num"><span class="currency-prefix">Rs</span>11,505,543</div>
+              <div class="kpi__sub">Cost basis · 20 holdings</div>
+            </div>
+            <div class="card kpi">
+              <div class="kpi__label"><span class="dot dot--success"></span>Current Value</div>
+              <div class="kpi__num"><span class="currency-prefix">Rs</span>13,484,473</div>
+              <div class="kpi__sub">Mark-to-market · PSX close</div>
+            </div>
+            <div class="card kpi">
+              <div class="kpi__label"><span class="dot dot--success"></span>Total Gain / Loss</div>
+              <div class="kpi__num" style="color: var(--success);">+<span class="currency-prefix" style="color: var(--ink-500);">Rs</span>1,978,930</div>
+              <div class="kpi__foot"><span class="chip chip--success">▲ 17.20%</span></div>
+            </div>
+            <div class="card kpi">
+              <div class="kpi__label"><span class="dot dot--neutral"></span>Stocks</div>
+              <div class="kpi__num">20</div>
+              <div class="kpi__sub">Prices 04/07/2026</div>
+            </div>
+          </div>
+
+          <!-- Alert -->
+          <div class="alert" style="margin-top: 20px;">
+            <div class="alert__left">
+              <div class="alert__mark"><svg><use href="#i-alert"/></svg></div>
+              <div>
+                <div class="alert__title">5 stocks down more than 3% today</div>
+                <div class="alert__body">
+                  <span class="alert__ticker-chip">PSO <span class="change">−19.90%</span></span>
+                  <span class="alert__ticker-chip">FAEL <span class="change">−13.19%</span></span>
+                  <span class="alert__ticker-chip">AIRLINK <span class="change">−13.76%</span></span>
+                  <span class="alert__ticker-chip">MEBL <span class="change">−7.24%</span></span>
+                  <span class="alert__ticker-chip">POL <span class="change">−3.14%</span></span>
+                </div>
+              </div>
+            </div>
+            <div class="alert__actions">
+              <button class="btn btn--sm">Dismiss</button>
+              <button class="btn btn--sm">Review all</button>
+            </div>
+          </div>
+
+          <!-- Holdings -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Holdings</h2>
+            <div class="sec-head__actions">
+              <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-download"/></svg>Export CSV</button>
+            </div>
+          </div>
+
+          <div class="table-toolbar">
+            <span class="search-inline">
+              <svg><use href="#i-search"/></svg>
+              <span>Search ticker or company…</span>
+            </span>
+            <div style="display:flex; gap: 8px;">
+              <span class="select-btn">All sectors <svg><use href="#i-chevron-down"/></svg></span>
+              <span class="select-btn">Sort: Value <svg><use href="#i-chevron-down"/></svg></span>
+              <span class="select-btn"><svg style="width:12px;height:12px;"><use href="#i-filter"/></svg>Filter</span>
+            </div>
+          </div>
+
+          <div class="card table-card">
+            <table class="holdings">
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Company</th>
+                  <th>Qty</th>
+                  <th>Avg Cost</th>
+                  <th>Current</th>
+                  <th>Value</th>
+                  <th>Gain / Loss</th>
+                  <th>%</th>
+                  <th>Target</th>
+                  <th>Updated</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">A</span>AGP</span></td>
+                  <td class="num-dim">AGP Ltd</td>
+                  <td>1,125</td>
+                  <td>216.97</td>
+                  <td>222.03</td>
+                  <td>227,300</td>
+                  <td><span class="num-pos">+10,411</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+4.68%</span></td>
+                  <td class="num-dim">230.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">A</span>AIRLINK</span></td>
+                  <td class="num-dim">Air Link Comm.</td>
+                  <td>1,558</td>
+                  <td>155.00</td>
+                  <td>133.70</td>
+                  <td>215,325</td>
+                  <td><span class="num-neg">−34,425</span></td>
+                  <td><span class="ret-chip ret-chip--neg">−13.75%</span></td>
+                  <td class="num-dim">—</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">A</span>AKBL</span></td>
+                  <td class="num-dim">Askari Bank</td>
+                  <td>4,545</td>
+                  <td>82.87</td>
+                  <td>124.99</td>
+                  <td>522,010</td>
+                  <td><span class="num-pos">+145,983</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+38.76%</span></td>
+                  <td class="num-dim">140.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">A</span>APL</span></td>
+                  <td class="num-dim">Attock Petroleum</td>
+                  <td>857</td>
+                  <td>553.60</td>
+                  <td>542.35</td>
+                  <td>487,482</td>
+                  <td><span class="num-neg">−16,893</span></td>
+                  <td><span class="ret-chip ret-chip--neg">−2.03%</span></td>
+                  <td class="num-dim">700.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">B</span>BAFL</span></td>
+                  <td class="num-dim">Bank Alfalah</td>
+                  <td>5,608</td>
+                  <td>84.54</td>
+                  <td>91.87</td>
+                  <td>91,842,439</td>
+                  <td><span class="num-pos">+7,265</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+7.30%</span></td>
+                  <td class="num-dim">120.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">D</span>DCR</span></td>
+                  <td class="num-dim">Dolmen City</td>
+                  <td>9,105</td>
+                  <td>81.27</td>
+                  <td>91.87</td>
+                  <td>848,332</td>
+                  <td><span class="num-pos">+96,145</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+14.29%</span></td>
+                  <td class="num-dim">96.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">E</span>ENGROH</span></td>
+                  <td class="num-dim">Engro Holdings</td>
+                  <td>1,958</td>
+                  <td>295.27</td>
+                  <td>420.00</td>
+                  <td>822,616</td>
+                  <td><span class="num-pos">+243,208</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+42.24%</span></td>
+                  <td class="num-dim">515.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">F</span>FCCL</span></td>
+                  <td class="num-dim">Fauji Cement</td>
+                  <td>6,411</td>
+                  <td>59.66</td>
+                  <td>60.94</td>
+                  <td>377,846</td>
+                  <td><span class="num-pos">+8,196</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+2.17%</span></td>
+                  <td class="num-dim">72.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">F</span>FFC</span></td>
+                  <td class="num-dim">Fauji Fert. Co.</td>
+                  <td>2,398</td>
+                  <td>350.00</td>
+                  <td>573.10</td>
+                  <td>1,374,054</td>
+                  <td><span class="num-pos">+441,332</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+47.30%</span></td>
+                  <td class="num-dim">610.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">G</span>GAL</span></td>
+                  <td class="num-dim">Ghandhara Auto</td>
+                  <td>1,724</td>
+                  <td>545.98</td>
+                  <td>580.13</td>
+                  <td>1,000,032</td>
+                  <td><span class="num-pos">+55,090</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+6.26%</span></td>
+                  <td class="num-dim">635.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">G</span>GHNI</span></td>
+                  <td class="num-dim">Ghani Global</td>
+                  <td>268</td>
+                  <td>746.91</td>
+                  <td>985.02</td>
+                  <td>263,985</td>
+                  <td><span class="num-pos">+63,912</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+31.88%</span></td>
+                  <td class="num-dim">1,200.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">H</span>HBL</span></td>
+                  <td class="num-dim">Habib Bank</td>
+                  <td>1,544</td>
+                  <td>200.00</td>
+                  <td>200.15</td>
+                  <td>308,939</td>
+                  <td><span class="num-pos">+4,349</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+0.08%</span></td>
+                  <td class="num-dim">245.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">M</span>MEBL</span></td>
+                  <td class="num-dim">Meezan Bank</td>
+                  <td>2,908</td>
+                  <td>402.80</td>
+                  <td>594.20</td>
+                  <td>1,338,072</td>
+                  <td><span class="num-pos">+364,099</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+37.54%</span></td>
+                  <td class="num-dim">610.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">N</span>NBP</span></td>
+                  <td class="num-dim">Nat. Bank of Pak</td>
+                  <td>2,798</td>
+                  <td>151.17</td>
+                  <td>167,032</td>
+                  <td>491,608</td>
+                  <td><span class="num-pos">+117,689</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+31.31%</span></td>
+                  <td class="num-dim">185.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">O</span>OGDC</span></td>
+                  <td class="num-dim">Oil &amp; Gas Dev.</td>
+                  <td>4,158</td>
+                  <td>247.63</td>
+                  <td>335.53</td>
+                  <td>1,395,020</td>
+                  <td><span class="num-pos">+365,319</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+35.60%</span></td>
+                  <td class="num-dim">395.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">P</span>PAEL</span></td>
+                  <td class="num-dim">Pak Elektron</td>
+                  <td>15,987</td>
+                  <td>55.98</td>
+                  <td>36.86</td>
+                  <td>588,449</td>
+                  <td><span class="num-neg">−106,088</span></td>
+                  <td><span class="ret-chip ret-chip--neg">−15.19%</span></td>
+                  <td class="num-dim">70.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">P</span>POL</span></td>
+                  <td class="num-dim">Pakistan Oilfields</td>
+                  <td>473</td>
+                  <td>511.15</td>
+                  <td>682.70</td>
+                  <td>327,121</td>
+                  <td><span class="num-pos">+76,162</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+30.29%</span></td>
+                  <td class="num-dim">720.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">P</span>PSO</span></td>
+                  <td class="num-dim">PSO Company</td>
+                  <td>2,387</td>
+                  <td>342.51</td>
+                  <td>328.75</td>
+                  <td>784,715</td>
+                  <td><span class="num-neg">−197,929</span></td>
+                  <td><span class="ret-chip ret-chip--neg">−19.90%</span></td>
+                  <td class="num-dim">475.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">P</span>PTC</span></td>
+                  <td class="num-dim">Pak Telecom</td>
+                  <td>13,258</td>
+                  <td>54.14</td>
+                  <td>73.40</td>
+                  <td>972,559</td>
+                  <td><span class="num-pos">+253,105</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+35.57%</span></td>
+                  <td class="num-dim">92.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr>
+                  <td><span class="ticker"><span class="ticker__mark">U</span>UBL</span></td>
+                  <td class="num-dim">United Bank Ltd</td>
+                  <td>2,778</td>
+                  <td>355.28</td>
+                  <td>484.93</td>
+                  <td>1,342,105</td>
+                  <td><span class="num-pos">+340,059</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+34.85%</span></td>
+                  <td class="num-dim">550.00</td>
+                  <td class="date-cell">04/07/2026</td>
+                  <td><div class="actions-cell"><span class="icon-btn"><svg><use href="#i-eye"/></svg></span><span class="icon-btn"><svg><use href="#i-pencil"/></svg></span><span class="icon-btn"><svg><use href="#i-trash"/></svg></span></div></td>
+                </tr>
+                <tr class="total-row">
+                  <td>Total</td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                  <td>13,484,473</td>
+                  <td><span class="num-pos">+1,978,930</span></td>
+                  <td><span class="ret-chip ret-chip--pos">+17.20%</span></td>
+                  <td></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Charts -->
+          <div class="chart-row">
+            <!-- Price history -->
+            <div class="card chart-card">
+              <div class="chart-card__head">
+                <div class="chart-card__title-blk">
+                  <div class="lbl">Price history</div>
+                  <div class="val" style="font-family: var(--font-mono); font-size: 15px; color: var(--ink-500); font-weight: 500;">Select a ticker</div>
+                </div>
+                <div class="tabs">
+                  <span class="tabs__tab">1W</span>
+                  <span class="tabs__tab tabs__tab--active">1M</span>
+                  <span class="tabs__tab">3M</span>
+                  <span class="tabs__tab">1Y</span>
+                  <span class="tabs__tab">All</span>
+                </div>
+              </div>
+
+              <div class="ticker-strip">
+                <span class="ticker-strip__item ticker-strip__item--active">AGP</span>
+                <span class="ticker-strip__item">AIRLINK</span>
+                <span class="ticker-strip__item">AKBL</span>
+                <span class="ticker-strip__item">APL</span>
+                <span class="ticker-strip__item">BAFL</span>
+                <span class="ticker-strip__item">DCR</span>
+                <span class="ticker-strip__item">ENGROH</span>
+                <span class="ticker-strip__item">FCCL</span>
+                <span class="ticker-strip__item">FFC</span>
+                <span class="ticker-strip__item">GAL</span>
+                <span class="ticker-strip__item">GHNI</span>
+                <span class="ticker-strip__item">HBL</span>
+                <span class="ticker-strip__item">MEBL</span>
+                <span class="ticker-strip__item">NBP</span>
+                <span class="ticker-strip__item">OGDC</span>
+                <span class="ticker-strip__item">PAEL</span>
+                <span class="ticker-strip__item">POL</span>
+                <span class="ticker-strip__item">PSO</span>
+                <span class="ticker-strip__item">PTC</span>
+                <span class="ticker-strip__item">UBL</span>
+              </div>
+
+              <div class="chart-empty">
+                <svg><use href="#i-chart"/></svg>
+                <div class="chart-empty__title">No price history yet for AGP</div>
+                <div class="chart-empty__body">History is captured from the daily refresh — check back after a few sync cycles.</div>
+              </div>
+            </div>
+
+            <!-- Diverging bar chart -->
+            <div class="card chart-card">
+              <div class="chart-card__head">
+                <div class="chart-card__title-blk">
+                  <div class="lbl">Gain / Loss by stock</div>
+                  <div class="val" style="font-size: 15px; font-weight: 500;"><span style="color: var(--success);">15 winners</span> <span style="color: var(--ink-400); margin: 0 6px;">·</span> <span style="color: var(--danger);">5 losers</span></div>
+                </div>
+                <div class="tabs">
+                  <span class="tabs__tab tabs__tab--active">%</span>
+                  <span class="tabs__tab">Rs</span>
+                </div>
+              </div>
+
+              <div class="diverging">
+                <div class="div-row"><span class="div-row__label">FFC</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 47%;"></div></div><span class="div-row__val div-row__val--pos">+47.3%</span></div>
+                <div class="div-row"><span class="div-row__label">ENGROH</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 42%;"></div></div><span class="div-row__val div-row__val--pos">+42.2%</span></div>
+                <div class="div-row"><span class="div-row__label">AKBL</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 39%;"></div></div><span class="div-row__val div-row__val--pos">+38.8%</span></div>
+                <div class="div-row"><span class="div-row__label">MEBL</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 37%;"></div></div><span class="div-row__val div-row__val--pos">+37.5%</span></div>
+                <div class="div-row"><span class="div-row__label">OGDC</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 36%;"></div></div><span class="div-row__val div-row__val--pos">+35.6%</span></div>
+                <div class="div-row"><span class="div-row__label">PTC</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 36%;"></div></div><span class="div-row__val div-row__val--pos">+35.6%</span></div>
+                <div class="div-row"><span class="div-row__label">UBL</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 35%;"></div></div><span class="div-row__val div-row__val--pos">+34.9%</span></div>
+                <div class="div-row"><span class="div-row__label">GHNI</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 32%;"></div></div><span class="div-row__val div-row__val--pos">+31.9%</span></div>
+                <div class="div-row"><span class="div-row__label">NBP</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 31%;"></div></div><span class="div-row__val div-row__val--pos">+31.3%</span></div>
+                <div class="div-row"><span class="div-row__label">POL</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 30%;"></div></div><span class="div-row__val div-row__val--pos">+30.3%</span></div>
+                <div class="div-row"><span class="div-row__label">DCR</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 14%;"></div></div><span class="div-row__val div-row__val--pos">+14.3%</span></div>
+                <div class="div-row"><span class="div-row__label">BAFL</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 7%;"></div></div><span class="div-row__val div-row__val--pos">+7.3%</span></div>
+                <div class="div-row"><span class="div-row__label">GAL</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 6%;"></div></div><span class="div-row__val div-row__val--pos">+6.3%</span></div>
+                <div class="div-row"><span class="div-row__label">AGP</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 5%;"></div></div><span class="div-row__val div-row__val--pos">+4.7%</span></div>
+                <div class="div-row"><span class="div-row__label">FCCL</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--pos" style="width: 2%;"></div></div><span class="div-row__val div-row__val--pos">+2.2%</span></div>
+                <div class="div-row"><span class="div-row__label">APL</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--neg" style="width: 2%;"></div></div><span class="div-row__val div-row__val--neg">−2.0%</span></div>
+                <div class="div-row"><span class="div-row__label">MEBL2</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--neg" style="width: 7%;"></div></div><span class="div-row__val div-row__val--neg">−7.2%</span></div>
+                <div class="div-row"><span class="div-row__label">AIRLINK</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--neg" style="width: 14%;"></div></div><span class="div-row__val div-row__val--neg">−13.8%</span></div>
+                <div class="div-row"><span class="div-row__label">PAEL</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--neg" style="width: 15%;"></div></div><span class="div-row__val div-row__val--neg">−15.2%</span></div>
+                <div class="div-row"><span class="div-row__label">PSO</span><div class="div-bar"><div class="div-bar__fill div-bar__fill--neg" style="width: 20%;"></div></div><span class="div-row__val div-row__val--neg">−19.9%</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top performers -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Top performers <span style="color: var(--ink-400); font-weight: 500; font-size: 15px; margin-left: 8px;">10% and above</span></h2>
+            <div class="sec-head__meta">Sorted by % return</div>
+          </div>
+
+          <div class="perf-grid">
+            <div class="card perf-card">
+              <div class="perf-card__head"><span class="perf-card__mark">F</span><span class="perf-card__ticker">FFC</span></div>
+              <div class="perf-card__ret">+47.30%</div>
+              <div class="perf-card__sub">Rs 441,332</div>
+            </div>
+            <div class="card perf-card">
+              <div class="perf-card__head"><span class="perf-card__mark">E</span><span class="perf-card__ticker">ENGROH</span></div>
+              <div class="perf-card__ret">+42.24%</div>
+              <div class="perf-card__sub">Rs 243,208</div>
+            </div>
+            <div class="card perf-card">
+              <div class="perf-card__head"><span class="perf-card__mark">A</span><span class="perf-card__ticker">AKBL</span></div>
+              <div class="perf-card__ret">+38.76%</div>
+              <div class="perf-card__sub">Rs 145,983</div>
+            </div>
+            <div class="card perf-card">
+              <div class="perf-card__head"><span class="perf-card__mark">M</span><span class="perf-card__ticker">MEBL</span></div>
+              <div class="perf-card__ret">+37.54%</div>
+              <div class="perf-card__sub">Rs 364,099</div>
+            </div>
+            <div class="card perf-card">
+              <div class="perf-card__head"><span class="perf-card__mark">O</span><span class="perf-card__ticker">OGDC</span></div>
+              <div class="perf-card__ret">+35.60%</div>
+              <div class="perf-card__sub">Rs 365,319</div>
+            </div>
+          </div>
+
+          <!-- Dividends -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Dividends — next 14 days</h2>
+            <div class="sec-head__actions">
+              <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-plus"/></svg>Add dividend</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="empty">
+              <div class="empty__icon"><svg><use href="#i-dollar"/></svg></div>
+              <h3 class="empty__title">No dividends scheduled</h3>
+              <p class="empty__body">No upcoming dividend distributions in the next 14 days across your holdings. Recorded dividends will appear here.</p>
+              <button class="btn btn--primary btn--sm"><svg class="icon" style="width:12px; height:12px;"><use href="#i-plus"/></svg>Add dividend</button>
+            </div>
+          </div>
+
+        </main>
+      </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- ============ MOBILE ============ -->
+    <div class="frame">
+      <div class="frame__caption">
+        <span class="frame__label">Mobile · 390 × auto</span>
+        <span class="frame__dim">iOS / Android / PWA</span>
+      </div>
+
+      <div class="phone">
+        <div class="status-bar">
+          <span>9:42</span>
+          <div class="status-bar__right">
+            <span>●●●●</span>
+            <span style="margin-left:6px;">100%</span>
+          </div>
+        </div>
+
+        <div class="m-nav">
+          <span class="m-nav__back"><svg><use href="#i-chevron-left"/></svg>Home</span>
+          <div class="m-nav__actions">
+            <svg><use href="#i-search"/></svg>
+            <svg><use href="#i-bell"/></svg>
+          </div>
+        </div>
+
+        <div class="m-page-head">
+          <div class="m-page-head__kicker">Finance · PSX</div>
+          <h1 class="m-page-head__title">Investments</h1>
+          <div class="m-page-head__sub">20 holdings · updated 04 Jul, 17:03</div>
+        </div>
+
+        <!-- Portfolio hero -->
+        <div class="m-hero">
+          <div class="m-hero__lbl">Current value</div>
+          <div class="m-hero__num"><span class="prefix">Rs</span>13.48M</div>
+          <div class="m-hero__foot">
+            <div class="m-hero__foot-item">
+              <span class="m-hero__foot-lbl">Invested</span>
+              <span class="m-hero__foot-val">11.51M</span>
+            </div>
+            <div class="m-hero__foot-item">
+              <span class="m-hero__foot-lbl">Gain</span>
+              <span class="m-hero__foot-val" style="color: #6ADE9B;">+1.98M</span>
+            </div>
+            <span class="m-hero__chip">▲ 17.20%</span>
+          </div>
+        </div>
+
+        <!-- Alert -->
+        <div class="m-alert">
+          <div class="m-alert__mark"><svg><use href="#i-alert"/></svg></div>
+          <div>
+            <div class="m-alert__title">5 stocks down &gt;3% today</div>
+            <div class="m-alert__body">PSO · FAEL · AIRLINK · MEBL · POL</div>
+          </div>
+          <div class="m-alert__chev"><svg><use href="#i-chevron"/></svg></div>
+        </div>
+
+        <!-- Filter -->
+        <div class="m-section-head">
+          <div class="m-section-head__title">Holdings</div>
+          <a class="m-section-head__link">Sort ↓</a>
+        </div>
+
+        <div class="m-filter">
+          <span class="m-filter__chip m-filter__chip--active">All</span>
+          <span class="m-filter__chip">Winners</span>
+          <span class="m-filter__chip">Losers</span>
+          <span class="m-filter__chip">Watch</span>
+          <span class="m-filter__chip">By value</span>
+        </div>
+
+        <!-- Mobile holdings -->
+        <div class="m-holdings">
+          <div class="m-holding-row">
+            <div class="m-holding__mark">F</div>
+            <div>
+              <div class="m-holding__ticker">FFC</div>
+              <div class="m-holding__co">Fauji Fert. · 2,398 sh</div>
+            </div>
+            <div>
+              <div class="m-holding__value">1.37M</div>
+              <div class="m-holding__ret"><span class="ret-chip ret-chip--pos">+47.30%</span></div>
+            </div>
+          </div>
+          <div class="m-holding-row">
+            <div class="m-holding__mark">O</div>
+            <div>
+              <div class="m-holding__ticker">OGDC</div>
+              <div class="m-holding__co">Oil &amp; Gas Dev · 4,158 sh</div>
+            </div>
+            <div>
+              <div class="m-holding__value">1.40M</div>
+              <div class="m-holding__ret"><span class="ret-chip ret-chip--pos">+35.60%</span></div>
+            </div>
+          </div>
+          <div class="m-holding-row">
+            <div class="m-holding__mark">U</div>
+            <div>
+              <div class="m-holding__ticker">UBL</div>
+              <div class="m-holding__co">United Bank · 2,778 sh</div>
+            </div>
+            <div>
+              <div class="m-holding__value">1.34M</div>
+              <div class="m-holding__ret"><span class="ret-chip ret-chip--pos">+34.85%</span></div>
+            </div>
+          </div>
+          <div class="m-holding-row">
+            <div class="m-holding__mark">M</div>
+            <div>
+              <div class="m-holding__ticker">MEBL</div>
+              <div class="m-holding__co">Meezan Bank · 2,908 sh</div>
+            </div>
+            <div>
+              <div class="m-holding__value">1.34M</div>
+              <div class="m-holding__ret"><span class="ret-chip ret-chip--pos">+37.54%</span></div>
+            </div>
+          </div>
+          <div class="m-holding-row">
+            <div class="m-holding__mark">P</div>
+            <div>
+              <div class="m-holding__ticker">PSO</div>
+              <div class="m-holding__co">PSO Company · 2,387 sh</div>
+            </div>
+            <div>
+              <div class="m-holding__value">785K</div>
+              <div class="m-holding__ret"><span class="ret-chip ret-chip--neg">−19.90%</span></div>
+            </div>
+          </div>
+          <div class="m-holding-row">
+            <div class="m-holding__mark">P</div>
+            <div>
+              <div class="m-holding__ticker">PAEL</div>
+              <div class="m-holding__co">Pak Elektron · 15,987 sh</div>
+            </div>
+            <div>
+              <div class="m-holding__value">588K</div>
+              <div class="m-holding__ret"><span class="ret-chip ret-chip--neg">−15.19%</span></div>
+            </div>
+          </div>
+          <div class="m-holding-row">
+            <div class="m-holding__mark">A</div>
+            <div>
+              <div class="m-holding__ticker">AIRLINK</div>
+              <div class="m-holding__co">Air Link · 1,558 sh</div>
+            </div>
+            <div>
+              <div class="m-holding__value">215K</div>
+              <div class="m-holding__ret"><span class="ret-chip ret-chip--neg">−13.75%</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top performers strip -->
+        <div class="m-section-head">
+          <div class="m-section-head__title">Top performers</div>
+          <a class="m-section-head__link">All →</a>
+        </div>
+        <div class="m-perf-scroll">
+          <div class="m-perf-card">
+            <div class="m-perf-card__ticker">FFC</div>
+            <div class="m-perf-card__ret">+47.3%</div>
+            <div class="m-perf-card__val">Rs 441,332</div>
+          </div>
+          <div class="m-perf-card">
+            <div class="m-perf-card__ticker">ENGROH</div>
+            <div class="m-perf-card__ret">+42.2%</div>
+            <div class="m-perf-card__val">Rs 243,208</div>
+          </div>
+          <div class="m-perf-card">
+            <div class="m-perf-card__ticker">AKBL</div>
+            <div class="m-perf-card__ret">+38.8%</div>
+            <div class="m-perf-card__val">Rs 145,983</div>
+          </div>
+          <div class="m-perf-card">
+            <div class="m-perf-card__ticker">MEBL</div>
+            <div class="m-perf-card__ret">+37.5%</div>
+            <div class="m-perf-card__val">Rs 364,099</div>
+          </div>
+        </div>
+
+        <!-- Gain/Loss diverging (compact) -->
+        <div class="m-section-head">
+          <div class="m-section-head__title">Gain / Loss</div>
+          <a class="m-section-head__link">All →</a>
+        </div>
+        <div class="m-div-card">
+          <div class="m-div-row"><span class="m-div-row__label">FFC</span><div class="div-bar" style="height:14px;"><div class="div-bar__fill div-bar__fill--pos" style="width: 47%;"></div></div><span class="m-div-row__val div-row__val--pos" style="text-align:right;">+47.3%</span></div>
+          <div class="m-div-row"><span class="m-div-row__label">ENGROH</span><div class="div-bar" style="height:14px;"><div class="div-bar__fill div-bar__fill--pos" style="width: 42%;"></div></div><span class="m-div-row__val div-row__val--pos" style="text-align:right;">+42.2%</span></div>
+          <div class="m-div-row"><span class="m-div-row__label">AKBL</span><div class="div-bar" style="height:14px;"><div class="div-bar__fill div-bar__fill--pos" style="width: 39%;"></div></div><span class="m-div-row__val div-row__val--pos" style="text-align:right;">+38.8%</span></div>
+          <div class="m-div-row"><span class="m-div-row__label">MEBL</span><div class="div-bar" style="height:14px;"><div class="div-bar__fill div-bar__fill--pos" style="width: 37%;"></div></div><span class="m-div-row__val div-row__val--pos" style="text-align:right;">+37.5%</span></div>
+          <div class="m-div-row"><span class="m-div-row__label">AIRLINK</span><div class="div-bar" style="height:14px;"><div class="div-bar__fill div-bar__fill--neg" style="width: 14%;"></div></div><span class="m-div-row__val div-row__val--neg" style="text-align:right;">−13.8%</span></div>
+          <div class="m-div-row"><span class="m-div-row__label">PAEL</span><div class="div-bar" style="height:14px;"><div class="div-bar__fill div-bar__fill--neg" style="width: 15%;"></div></div><span class="m-div-row__val div-row__val--neg" style="text-align:right;">−15.2%</span></div>
+          <div class="m-div-row"><span class="m-div-row__label">PSO</span><div class="div-bar" style="height:14px;"><div class="div-bar__fill div-bar__fill--neg" style="width: 20%;"></div></div><span class="m-div-row__val div-row__val--neg" style="text-align:right;">−19.9%</span></div>
+        </div>
+
+        <!-- Dividends empty -->
+        <div class="m-section-head">
+          <div class="m-section-head__title">Dividends — 14 d</div>
+        </div>
+        <div class="m-empty">
+          <div class="m-empty__icon"><svg><use href="#i-dollar"/></svg></div>
+          <h3 class="m-empty__title">No dividends scheduled</h3>
+          <p class="m-empty__body">Recorded dividends will appear here.</p>
+          <button class="btn btn--primary btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-plus"/></svg>Add dividend</button>
+        </div>
+
+        <div class="fab"><svg><use href="#i-plus"/></svg></div>
+
+        <div class="tabbar">
+          <div class="tabbar__item">
+            <svg class="icon" style="width:20px; height:20px;"><use href="#i-home"/></svg>
+            <span class="tabbar__lbl">Home</span>
+          </div>
+          <div class="tabbar__item">
+            <svg class="icon" style="width:20px; height:20px;"><use href="#i-cash"/></svg>
+            <span class="tabbar__lbl">Cash</span>
+          </div>
+          <div class="tabbar__item tabbar__item--active">
+            <svg class="icon" style="width:20px; height:20px;"><use href="#i-line"/></svg>
+            <span class="tabbar__lbl">Invest</span>
+          </div>
+          <div class="tabbar__item">
+            <svg class="icon" style="width:20px; height:20px;"><use href="#i-users"/></svg>
+            <span class="tabbar__lbl">Teams</span>
+          </div>
+          <div class="tabbar__item">
+            <svg class="icon" style="width:20px; height:20px;"><use href="#i-bell"/></svg>
+            <span class="tabbar__lbl">Alerts</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Reflow notes -->
+  <div class="reflow-panel">
+    <div class="sec-head" style="margin-bottom: 4px;">
+      <h2 class="sec-head__title" style="font-size: 22px;">How the layout reflows</h2>
+      <div class="sec-head__meta">Desktop → Mobile</div>
+    </div>
+    <div style="font-size: 13px; color: var(--ink-500); max-width: 760px; line-height: 1.55;">
+      The densest table so far. Instead of horizontal-scrolling the 11-column table on mobile, it becomes a card list with the essential columns only. Cards marked <b style="color: var(--accent-ink);">NEW</b> are additions to the design system.
+    </div>
+
+    <div class="reflow-panel__grid">
+      <div class="reflow-card reflow-card--new">
+        <div class="reflow-card__num">01 · NEW</div>
+        <div class="reflow-card__title">Ticker chip</div>
+        <div class="reflow-card__body">Small letter mark (24×24 on desktop, 28×28 on mobile) + mono ticker string. Used everywhere a stock appears — table cells, performer tiles, mobile list, alert chips. Consistent visual anchor.</div>
+      </div>
+      <div class="reflow-card reflow-card--new">
+        <div class="reflow-card__num">02 · NEW</div>
+        <div class="reflow-card__title">Return chip (small)</div>
+        <div class="reflow-card__body">A tighter variant of the delta chip — 2×8 padding, 6px radius, tabular-nums. Used inline in tables where the standard pill-shaped chip would break the row rhythm. Same success/danger tint tokens.</div>
+      </div>
+      <div class="reflow-card reflow-card--new">
+        <div class="reflow-card__num">03 · NEW</div>
+        <div class="reflow-card__title">Diverging horizontal bars</div>
+        <div class="reflow-card__body">A zero-axis in the middle; positive bars grow right in success, negative bars grow left in danger. Label on left, value on right — the bar is the middle 60% of the row. Row height 26px on desktop, 22px on mobile.</div>
+      </div>
+      <div class="reflow-card reflow-card--new">
+        <div class="reflow-card__num">04 · NEW</div>
+        <div class="reflow-card__title">Performer tile</div>
+        <div class="reflow-card__body">Compact card: ticker chip + big return number + underlying value in a muted line. 5-across on desktop, becomes a horizontal-scroll strip of 4 wide cards on mobile — much better than trying to fit them 2-across.</div>
+      </div>
+      <div class="reflow-card reflow-card--new">
+        <div class="reflow-card__num">05 · NEW</div>
+        <div class="reflow-card__title">Ticker selector strip</div>
+        <div class="reflow-card__body">Horizontal-scroll row of mono ticker chips above a chart. Active chip is dark (ink-900). Reused wherever the user needs to pick "which one am I viewing?" — could apply to bank facilities, entities, cost centers.</div>
+      </div>
+      <div class="reflow-card reflow-card--new">
+        <div class="reflow-card__num">06 · NEW</div>
+        <div class="reflow-card__title">Sticky total row</div>
+        <div class="reflow-card__body">Tinted (card-alt) background, 2px top border, bold weight, display-font total number, matching return chip. Sits at the bottom of any long table. On mobile the table becomes a card list, and the totals live in the hero card at the top instead.</div>
+      </div>
+      <div class="reflow-card">
+        <div class="reflow-card__num">07</div>
+        <div class="reflow-card__title">11-col table → 3-col card list</div>
+        <div class="reflow-card__body">On desktop, holdings are shown across all 11 columns — power users like the density. On mobile, each holding becomes a 3-column row: ticker mark / ticker+company+qty / value+return. That's the essential story of one holding.</div>
+      </div>
+      <div class="reflow-card">
+        <div class="reflow-card__num">08</div>
+        <div class="reflow-card__title">Actions column → row tap</div>
+        <div class="reflow-card__body">Desktop has an inline actions cell (view / edit / delete icon buttons). Mobile drops the column entirely — tapping a row opens a detail sheet with the same actions as buttons. FAB handles "Add Holding" instead of a top-right button.</div>
+      </div>
+      <div class="reflow-card">
+        <div class="reflow-card__num">09</div>
+        <div class="reflow-card__title">Two-chart row → stacked</div>
+        <div class="reflow-card__body">Price history + diverging chart sit side-by-side on desktop. On mobile they stack, with the ticker selector strip becoming a filter above the (currently smaller) price chart. The diverging chart trims to top 7 rows on mobile.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 56px;">
+    <div class="sec-head" style="margin-bottom: 4px;">
+      <h2 class="sec-head__title" style="font-size: 22px;">Added to the system</h2>
+      <a class="sec-head__link" href="Design System.html">Open Design System →</a>
+    </div>
+    <div style="font-size: 13px; color: var(--ink-500); max-width: 760px; line-height: 1.55;">
+      Ticker chip · Small return chip (inline) · Diverging horizontal bar · Performer tile · Ticker selector strip · Sticky total row · Icon-button (row actions). All reuse existing color, spacing and type tokens.
+    </div>
+  </div>
+
+</div>
+
+<script>
+  (function() {
+    const scaler = document.getElementById('desktop-scaler');
+    const inner  = document.getElementById('desktop-inner');
+    const cap    = document.getElementById('desktop-scale-caption');
+    if (!scaler || !inner) return;
+    function apply() {
+      const w = scaler.clientWidth;
+      const scale = Math.min(1, w / 1440);
+      inner.style.transform = 'scale(' + scale + ')';
+      scaler.style.height = (inner.offsetHeight * scale) + 'px';
+      if (cap) cap.textContent = 'Web · Next.js · shown at ' + Math.round(scale * 100) + '%';
+    }
+    apply();
+    window.addEventListener('load', apply);
+    window.addEventListener('resize', apply);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(apply);
+    if (window.ResizeObserver) new ResizeObserver(apply).observe(inner);
+  })();
+</script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

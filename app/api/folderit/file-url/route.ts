@@ -1,0 +1,304 @@
+import { NextRequest } from "next/server";
+import * as XLSX from "xlsx";
+import { createServiceClient } from "../../../lib/supabase-server";
+import { requireAuth } from "../../../lib/api-auth";
+import { folderitFetch } from "../../../lib/folderit-auth";
+import { canViewFolderitHr, type UserCtx, type PermOverrides } from "../../../lib/permissions";
+
+export const maxDuration = 60; // conversion-heavy files (xlsx, docx) can take a while to render to PDF
+
+// How many times to poll Folderit while it's still generating the PDF
+// rendition, and how long to wait between polls (clamped — Folderit's own
+// retryAfter is honoured within these bounds).
+const MAX_PREVIEW_POLLS = 8;
+const MIN_POLL_DELAY_MS = 1000;
+const MAX_POLL_DELAY_MS = 3000;
+
+type PreviewLinkResult =
+  | { kind: "url"; url: string }
+  | { kind: "retry"; delayMs: number }
+  | { kind: "error"; message: string; status: number };
+
+async function requestFolderitPreviewLink(accountUid: string, fileUid: string): Promise<PreviewLinkResult> {
+  const res = await folderitFetch(`/v2/accounts/${accountUid}/files/${fileUid}/preview`, {
+    redirect: "manual",
+  });
+
+  const location = res.headers.get("location");
+  if (location) return { kind: "url", url: location };
+
+  // Read as text first (a body can only be consumed once) so a non-JSON
+  // error body from Folderit is still visible in the error case below,
+  // instead of being silently swallowed by a failed .json() parse.
+  const rawBody = await res.text().catch(() => null);
+  let json: Record<string, unknown> | null = null;
+  if (rawBody) {
+    try {
+      json = JSON.parse(rawBody);
+    } catch {
+      // not JSON — rawBody stays as-is for the error message below
+    }
+  }
+
+  if (typeof json?.url === "string") return { kind: "url", url: json.url };
+
+  // 202 = still generating the PDF rendition. Word/PowerPoint need an
+  // actual conversion pass and can take several seconds; native PDFs
+  // resolve instantly and never hit this branch. Folderit tells us how
+  // long to wait via Retry-After / retryAfter.
+  if (res.status === 202 || res.status === 303) {
+    const headerDelay = Number(res.headers.get("retry-after"));
+    const bodyDelay = typeof json?.retryAfter === "number" ? json.retryAfter : NaN;
+    const delaySec = !isNaN(bodyDelay) ? bodyDelay : !isNaN(headerDelay) ? headerDelay : 2;
+    const delayMs = Math.min(Math.max(delaySec * 1000, MIN_POLL_DELAY_MS), MAX_POLL_DELAY_MS);
+    return { kind: "retry", delayMs };
+  }
+
+  // Surface exactly what Folderit said instead of a generic message — the
+  // status/body tells us whether this is permissions (403), a
+  // deleted/moved file (404), an unsupported type for PDF conversion
+  // (400), or something else entirely. Note: a clean 404 "No preview
+  // found" is EXPECTED for Excel files — Folderit's own docs list
+  // supported preview formats as PDF/JPG/PNG/GIF/DOCX/PPTX/PSD/AI, and
+  // .xlsx/.xls simply isn't one of them. That's not a bug on either
+  // side; see requestFolderitDownloadLink below for how we handle it.
+  return {
+    kind: "error",
+    message: `Folderit didn't return a preview link (${res.status}${res.statusText ? " " + res.statusText : ""})${rawBody ? `: ${rawBody.slice(0, 300)}` : ""}`,
+    status: 502,
+  };
+}
+
+// Folderit never generates a preview rendition for spreadsheets (confirmed
+// against their own docs — supported preview formats are PDF, JPG, PNG,
+// GIF, DOCX, PPTX, PSD, AI; Excel isn't on that list), so the /preview
+// call above always 404s for .xlsx/.xls. Khuram: "build a feature that
+// opens the Excel file and converts it into a preview." Since Folderit
+// won't do this for us, we do it ourselves: fetch the ORIGINAL file
+// bytes via Folderit's /download endpoint (never exposed to the browser
+// — same "no downloads" posture as the PDF path, just a different
+// conversion target) and render every sheet as an HTML table with
+// SheetJS (already a dependency, used elsewhere for the finance import
+// flows). The browser only ever receives the rendered HTML, never the
+// original .xlsx bytes.
+async function requestFolderitDownloadLink(accountUid: string, fileUid: string): Promise<string | null> {
+  const res = await folderitFetch(`/v2/accounts/${accountUid}/files/${fileUid}/download`, {
+    redirect: "manual",
+  });
+  const location = res.headers.get("location");
+  if (location) return location;
+  const rawBody = await res.text().catch(() => null);
+  if (rawBody) {
+    try {
+      const json = JSON.parse(rawBody);
+      if (typeof json?.url === "string") return json.url;
+    } catch {
+      // not JSON — fall through to null
+    }
+  }
+  return null;
+}
+
+const SPREADSHEET_TABLE_CSS = `
+  body { font-family: system-ui, -apple-system, sans-serif; padding: 16px; color: #1e293b; }
+  h3 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; margin: 24px 0 8px; }
+  h3:first-child { margin-top: 0; }
+  table { border-collapse: collapse; margin-bottom: 8px; }
+  td, th { border: 1px solid #e2e8f0; padding: 4px 8px; font-size: 12.5px; white-space: nowrap; }
+  th { background: #f8fafc; font-weight: 600; }
+`;
+
+// Returns rendered HTML on success, or null if the bytes aren't a
+// spreadsheet SheetJS can parse (e.g. a genuinely unsupported/corrupt
+// file) — the caller falls back to the original Folderit error in that
+// case rather than pretending this succeeded.
+async function tryRenderSpreadsheetPreview(accountUid: string, fileUid: string): Promise<string | null> {
+  try {
+    const downloadUrl = await requestFolderitDownloadLink(accountUid, fileUid);
+    if (!downloadUrl) return null;
+
+    const fileRes = await fetch(downloadUrl);
+    if (!fileRes.ok) return null;
+
+    const buffer = await fileRes.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array" });
+    if (!workbook.SheetNames.length) return null;
+
+    const showSheetNames = workbook.SheetNames.length > 1;
+    const tables = workbook.SheetNames.map((sheetName) => {
+      const html = XLSX.utils.sheet_to_html(workbook.Sheets[sheetName], { header: "", footer: "" });
+      return showSheetNames ? `<h3>${sheetName}</h3>${html}` : html;
+    }).join("\n");
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${SPREADSHEET_TABLE_CSS}</style></head><body>${tables}</body></html>`;
+  } catch {
+    return null;
+  }
+}
+
+// Stream a PDF PREVIEW of a Folderit file back to the browser — never the
+// original, and never a link the browser downloads. Khuram: "every time I
+// click on the documents to view, it downloads the document... I don't
+// want people downloading it from the app. I want people to just preview
+// it." First attempt just handed back Folderit's own signed preview link
+// for the frontend <iframe> to load directly — that still downloaded,
+// because Folderit's signed link carries its own Content-Disposition
+// baked into the URL's signature (can't be edited without invalidating
+// it), and it's set to "attachment", not "inline".
+//
+// Fix: this route fetches the PDF bytes itself server-side and re-serves
+// them with a disposition WE control (always "inline"), so the browser
+// has no choice but to render it instead of downloading it. The frontend
+// never sees Folderit's real link at all — it gets our proxied response
+// as a blob and points an <iframe> at a local blob: URL.
+//
+// GET /v2/accounts/{accountUid}/files/{fileUid}/preview returns a link to
+// a PDF *rendition* of the file (Folderit converts it server-side,
+// regardless of original format) — deliberately not the /download
+// endpoint, which serves the original file. Response is a 302/303 whose
+// Location header (and JSON body) carries that link, never meant to be
+// followed as a normal 2xx fetch — hence redirect: "manual" for that
+// first call only; the second fetch (of the link itself) follows
+// normally to get the actual bytes.
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+  const email = (auth as { email: string }).email.toLowerCase();
+
+  const fileUid = request.nextUrl.searchParams.get("file");
+  if (!fileUid) return Response.json({ error: "Missing file" }, { status: 400 });
+
+  const db = createServiceClient();
+
+  const { data: accountUid, error: lookupErr } = await db.rpc("get_folderit_file_account", {
+    p_file_uid: fileUid,
+  });
+  if (lookupErr) return Response.json({ error: lookupErr.message }, { status: 500 });
+  if (!accountUid) return Response.json({ error: "File not found" }, { status: 404 });
+
+  // Select everything permission-checking might need up front (id +
+  // department, on top of role/company_id) so the HR-gated branch below
+  // never has to re-query members a second time — that duplicate lookup
+  // was adding a full extra DB round trip to every single HR "policy"
+  // preview. Khuram: "when we're trying to look up the policies, it
+  // takes a bit of a while to pull up the policy."
+  const { data: member } = await db
+    .from("members")
+    .select("id, role, department, company_id")
+    .eq("email", email)
+    .maybeSingle();
+
+  const isAdmin =
+    email === "khuram1901@gmail.com" ||
+    member?.role === "Admin" ||
+    member?.role === "CEO";
+
+  if (!isAdmin) {
+    // HR documents are locked behind can_view_folderit_hr (off by default,
+    // granted per-member via Members > Access Matrix > Folderit > HR).
+    // Everything else is scoped to the caller's own company, as before.
+    const { data: hrMatch } = await db
+      .from("folderit_hr_categories")
+      .select("category_name")
+      .eq("account_uid", accountUid)
+      .limit(1)
+      .maybeSingle();
+
+    if (hrMatch) {
+      let overrides: PermOverrides | null = null;
+      if (member?.id) {
+        const { data: perms } = await db
+          .from("member_permissions")
+          .select("*")
+          .eq("member_id", member.id)
+          .maybeSingle();
+        overrides = (perms as PermOverrides) || null;
+      }
+      const ctx: UserCtx = { email, role: member?.role ?? null, department: member?.department ?? null, overrides };
+      if (!canViewFolderitHr(ctx)) return Response.json({ error: "Forbidden" }, { status: 403 });
+    } else {
+      const { data: companyMatch } = await db
+        .from("folderit_account_companies")
+        .select("company_uuid")
+        .eq("account_uid", accountUid)
+        .eq("company_uuid", member?.company_id ?? "")
+        .maybeSingle();
+      if (!companyMatch) return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
+
+  try {
+    // Poll until Folderit finishes converting the file to a PDF rendition.
+    // Khuram: "i noticed it was applying to files which are .xlxs excel
+    // files not pdf as they work fine" — confirms this: native PDFs need
+    // no conversion and resolve on the first request, but Excel/Word
+    // files go through an actual conversion pass and were hitting 202
+    // ("still generating") on that first request, which the old code
+    // treated as a dead end instead of waiting and asking again.
+    let signedUrl: string | null = null;
+    for (let attempt = 0; attempt < MAX_PREVIEW_POLLS; attempt++) {
+      const result = await requestFolderitPreviewLink(accountUid, fileUid);
+      if (result.kind === "url") {
+        signedUrl = result.url;
+        break;
+      }
+      if (result.kind === "error") {
+        // Folderit has no preview rendition for this file — most commonly
+        // because it's a spreadsheet, which Folderit never generates a
+        // preview for at all (see requestFolderitPreviewLink above). Try
+        // rendering it ourselves before giving up; if the bytes aren't a
+        // spreadsheet SheetJS can parse, this returns null and we fall
+        // through to the original, honest error message.
+        const spreadsheetHtml = await tryRenderSpreadsheetPreview(accountUid, fileUid);
+        if (spreadsheetHtml) {
+          return new Response(spreadsheetHtml, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/html; charset=utf-8",
+              "Content-Disposition": "inline",
+              "Cache-Control": "private, max-age=60",
+            },
+          });
+        }
+        return Response.json({ error: result.message }, { status: result.status });
+      }
+      // result.kind === "retry"
+      if (attempt === MAX_PREVIEW_POLLS - 1) {
+        return Response.json(
+          { error: "Preview is taking longer than usual to generate (large file?) — try again in a moment." },
+          { status: 202 }
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, result.delayMs));
+    }
+
+    if (!signedUrl) {
+      return Response.json({ error: "Folderit didn't return a preview link in time." }, { status: 502 });
+    }
+
+    // Fetch the actual PDF bytes ourselves and re-serve them with an
+    // explicit inline disposition — see comment above for why we can't
+    // just hand the signed link to the browser directly.
+    const pdfRes = await fetch(signedUrl);
+    if (!pdfRes.ok) {
+      return Response.json({ error: `Couldn't fetch preview content (${pdfRes.status})` }, { status: 502 });
+    }
+
+    const contentType = pdfRes.headers.get("content-type") || "application/pdf";
+    const buffer = await pdfRes.arrayBuffer();
+
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": contentType,
+        "Content-Disposition": "inline",
+        "Cache-Control": "private, max-age=60",
+      },
+    });
+  } catch (e) {
+    return Response.json(
+      { error: `Preview fetch failed — ${e instanceof Error ? e.message : String(e)}` },
+      { status: 500 }
+    );
+  }
+}

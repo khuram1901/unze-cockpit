@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+:root {
+  --bg-page: #f4f6f9;
+  --bg-sidebar: #edeae4;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --bg-input: #ffffff;
+  --bg-header: #ffffff;
+  --border-color: #e2e8f0;
+  --border-light: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --text-sidebar: #64748b;
+  --text-sidebar-active: #0f172a;
+  --shadow-sm: 0 1px 3px rgba(15,23,42,0.06);
+  --shadow-md: 0 4px 14px rgba(15,23,42,0.08);
+  --sidebar-active-bg: #f1f5f9;
+  --sidebar-hover-bg: #d8d4cc;
+  --sidebar-border: #ccc8c0;
+}
+
+@theme inline {
+  --color-background: var(--bg-page);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-source-sans), system-ui, sans-serif;
+  font-size: 16px;
+  overflow-x: hidden;
+}
+
+main {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+table {
+  max-width: 100%;
+}
+
+/* Allow wide tables to scroll horizontally inside content area */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Sidebar scrollbar */
+nav::-webkit-scrollbar {
+  width: 4px;
+}
+nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+nav::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.12);
+  border-radius: 4px;
+}
+
+/* Shimmer animation for loading skeletons */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Login page animations */
+@keyframes loginFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loginSlideFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Tooltip on hover for icon buttons */
+button[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-primary);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 50;
+  pointer-events: none;
+}
+
+button[title] {
+  position: relative;
+}

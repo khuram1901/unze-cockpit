@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Operations Dashboard — Unze OS</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/page-shell.css"/>
+<style>
+  .kpi-row-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .kpi-tight { padding: 16px 18px; }
+  .kpi-tight .kpi__label { font-size: 10px; letter-spacing: 0.08em; margin-bottom: 10px; }
+  .kpi-tight .kpi__num { font-size: 26px; }
+
+  /* Alert (reused) */
+  .alert { background: #FEF7EA; border: 1px solid #F1D9A9; border-radius: var(--r-md); padding: 14px 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+  .alert__left { display: flex; align-items: flex-start; gap: 14px; }
+  .alert__mark { width: 30px; height: 30px; border-radius: 8px; background: var(--warning); color: #fff; display: grid; place-items: center; flex: none; }
+  .alert__mark svg { width: 15px; height: 15px; }
+  .alert__title { font-size: 13px; font-weight: 600; color: var(--ink-900); }
+  .alert__body { font-size: 12.5px; color: var(--ink-700); margin-top: 4px; }
+
+  /* Split 2 col */
+  .split-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+
+  .chart-card { padding: 22px 24px; }
+  .chart-card__title { font-family: var(--font-display); font-size: 15px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .chart-card__meta { font-size: 11px; color: var(--ink-500); margin-left: auto; font-weight: 400; }
+
+  /* Plant comparison horizontal bars */
+  .plant-row { display: grid; grid-template-columns: 90px 1fr; gap: 12px; align-items: center; padding: 6px 0; }
+  .plant-row__label { font-size: 12px; color: var(--ink-700); text-align: right; font-weight: 500; }
+  .plant-row__track { position: relative; height: 22px; background: var(--track); border-radius: 4px; overflow: hidden; }
+  .plant-row__target {
+    position: absolute; top: 0; bottom: 0; left: 0;
+    background: var(--ink-100);
+    border-radius: 4px;
+  }
+  .plant-row__actual {
+    position: absolute; top: 4px; bottom: 4px; left: 0;
+    background: var(--success);
+    border-radius: 3px;
+    display: flex; align-items: center; padding-left: 6px;
+    color: #fff; font-family: var(--font-mono); font-size: 10px; font-variant-numeric: tabular-nums;
+  }
+  .plant-row__actual--dispatch { background: var(--accent); }
+  .plant-row__actual--empty { background: transparent; }
+  .plant-row__empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-400); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  /* Breakage rate list */
+  .breakage-row { display: grid; grid-template-columns: 100px 1fr 80px; gap: 12px; align-items: center; padding: 12px 0; }
+  .breakage-row + .breakage-row { border-top: 1px solid var(--hairline); }
+  .breakage-row__label { font-size: 12.5px; color: var(--ink-900); font-weight: 500; }
+  .breakage-row__track { position: relative; height: 4px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .breakage-row__track::before {
+    content: '';
+    position: absolute; top: -4px; bottom: -4px;
+    left: 30%;
+    width: 1px;
+    background: var(--danger);
+    opacity: 0.4;
+  }
+  .breakage-row__fill { position: absolute; inset: 0; background: var(--success); border-radius: 999px; }
+  .breakage-row__val { font-family: var(--font-mono); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+  .breakage-row__val--nodata { color: var(--ink-400); font-family: var(--font-sans); }
+  .breakage-row__val--ok { color: var(--success); }
+
+  /* Section: Stock by customer PO */
+  .stock-empty { padding: 40px 24px; text-align: center; }
+  .stock-empty__icon { width: 44px; height: 44px; border-radius: 12px; background: var(--card-alt); border: 1px solid var(--hairline); display: grid; place-items: center; margin: 0 auto 12px; color: var(--ink-500); }
+  .stock-empty__title { font-size: 13px; color: var(--ink-700); margin-bottom: 4px; }
+  .stock-empty__link { font-size: 12px; color: var(--accent); font-weight: 500; }
+
+  /* Tab strip (for KPI section) */
+  .tabstrip { display: inline-flex; background: var(--card-alt); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 3px; gap: 2px; margin-bottom: 20px; }
+  .tabstrip__tab { padding: 6px 14px; font-size: 12.5px; border-radius: var(--r-pill); color: var(--ink-500); cursor: default; }
+  .tabstrip__tab--active { background: var(--card); color: var(--ink-900); font-weight: 500; box-shadow: 0 1px 2px rgba(15,23,32,0.06); }
+  .tabstrip__badge { display: inline-flex; align-items: center; margin-left: 6px; background: var(--ink-100); color: var(--ink-500); padding: 1px 6px; border-radius: 4px; font-size: 10px; font-family: var(--font-mono); }
+  .tabstrip__tab--active .tabstrip__badge { background: var(--card-alt); }
+
+  /* Production KPI chart */
+  .prod-chart {
+    width: 100%; height: 160px;
+  }
+
+  /* Weekly KPI table */
+  .kpi-table { padding: 0; overflow: hidden; }
+  table.kpi-tbl { width: 100%; border-collapse: collapse; }
+  table.kpi-tbl th, table.kpi-tbl td { padding: 12px 20px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+  table.kpi-tbl th:first-child, table.kpi-tbl td:first-child { text-align: left; }
+  table.kpi-tbl thead th { font-size: 10.5px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-500); background: var(--card-alt); border-bottom: 1px solid var(--hairline); }
+  table.kpi-tbl tbody tr + tr td { border-top: 1px solid var(--hairline); }
+  table.kpi-tbl td.plant { font-weight: 500; color: var(--ink-900); }
+  table.kpi-tbl td.dim { color: var(--ink-500); }
+  table.kpi-tbl td.na { color: var(--ink-400); font-family: var(--font-sans); }
+  .status-bad { color: var(--danger); font-weight: 500; }
+  .status-notarget { color: var(--ink-400); }
+  .status-ontrack { color: var(--success); font-weight: 500; }
+
+  /* Monthly targets */
+  .target-row { display: grid; grid-template-columns: 120px 1fr 130px; gap: 16px; align-items: center; padding: 14px 0; }
+  .target-row + .target-row { border-top: 1px solid var(--hairline); }
+  .target-row__plant { font-size: 13px; font-weight: 500; }
+  .target-row__type { font-size: 11px; color: var(--ink-500); margin-top: 2px; }
+  .target-row__bar-wrap { position: relative; height: 16px; background: var(--track); border-radius: 4px; overflow: hidden; }
+  .target-row__bar {
+    position: absolute; top: 3px; bottom: 3px; left: 0;
+    border-radius: 3px;
+    background: var(--success);
+  }
+  .target-row__bar--danger { background: var(--danger); }
+  .target-row__meta { text-align: right; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-500); font-variant-numeric: tabular-nums; }
+  .target-row__meta strong { color: var(--ink-900); font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+  .target-row__meta .pct-danger { color: var(--danger); font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+
+  /* Section header + set target */
+  .target-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .target-head__title { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+  .target-head__meta { font-size: 12px; color: var(--ink-500); margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage__header">
+    <div>
+      <div class="stage__kicker">Unze OS · Design v1 · Page 13 of ?</div>
+      <h1 class="stage__title">Operations Dashboard</h1>
+    </div>
+    <div class="stage__sub">
+      Production, dispatch, stock, and machine health across all plants. Introduces the target-vs-actual bar, KPI comparison table, and breakage-rate row with a fixed danger threshold marker.
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- DESKTOP -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Desktop · 1440 × auto</span><span class="frame__dim" id="desktop-scale-caption">Web · Next.js</span></div>
+      <div class="desktop-scaler" id="desktop-scaler"><div class="desktop-inner" id="desktop-inner"><div class="desktop-app">
+
+        <aside class="side">
+          <div class="side__brand"><div class="side__brand-mark">U</div><div><div class="side__brand-name">Unze Group</div><div style="font-size:10px; color: var(--ink-500);">Operations</div></div></div>
+          <div class="side__group">Overview</div>
+          <a class="side__item"><svg class="icon"><use href="#i-home"/></svg>Executive</a>
+          <div class="side__group">Operations</div>
+          <a class="side__item"><svg class="icon"><use href="#i-factory"/></svg>Daily entry</a>
+          <a class="side__item"><svg class="icon"><use href="#i-doc"/></svg>Manage POs</a>
+          <a class="side__item side__item--active"><svg class="icon"><use href="#i-chart"/></svg>Ops dashboard</a>
+          <a class="side__item"><svg class="icon"><use href="#i-package"/></svg>Stock</a>
+          <a class="side__item"><svg class="icon"><use href="#i-clipboard"/></svg>Opening balances</a>
+          <div class="side__group">Departments</div>
+          <a class="side__item"><svg class="icon"><use href="#i-users"/></svg>Admin</a>
+          <a class="side__item"><svg class="icon"><use href="#i-shield"/></svg>Audit</a>
+
+          <div class="side__group">Preferences</div>
+          <a class="side__item" data-theme-toggle style="cursor:pointer;"><svg class="icon"><use href="#i-moon"/></svg>Dark mode</a>
+          <div class="side__user"><div class="side__avatar">KS</div><div><div class="side__user-name">Khuram Saleem</div><div class="side__user-role">CEO · Unze Group</div></div></div>
+        </aside>
+
+        <main class="main">
+          <nav class="crumb"><span>Home</span><svg><use href="#i-chevron"/></svg><span>Operations</span><svg><use href="#i-chevron"/></svg><span class="crumb__current">Ops Dashboard</span></nav>
+
+          <div class="main__top">
+            <div>
+              <h1 class="main__title">Operations Dashboard</h1>
+              <div class="main__meta">Production, dispatch, stock, machines — 4 plants · updated 09:42 PKT</div>
+            </div>
+            <div class="main__actions">
+              <button class="btn"><svg class="icon"><use href="#i-calendar"/></svg>July 2026</button>
+              <button class="btn"><svg class="icon"><use href="#i-download"/></svg>Export</button>
+            </div>
+          </div>
+
+          <!-- Alert -->
+          <div class="alert">
+            <div class="alert__left">
+              <div class="alert__mark"><svg><use href="#i-alert"/></svg></div>
+              <div>
+                <div class="alert__title">Attention needed — 1 issue</div>
+                <div class="alert__body">4 plants have not reported today. Ping plant heads or mark them "no operations".</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn--sm">Dismiss</button>
+              <button class="btn btn--sm btn--primary">Notify plant heads</button>
+            </div>
+          </div>
+
+          <!-- 6-KPI row -->
+          <div class="kpi-row-6">
+            <div class="card kpi kpi-tight"><div class="kpi__label"><span class="dot dot--neutral"></span>Produced today</div><div class="kpi__num">0</div></div>
+            <div class="card kpi kpi-tight"><div class="kpi__label"><span class="dot dot--neutral"></span>Dispatched today</div><div class="kpi__num">0</div></div>
+            <div class="card kpi kpi-tight"><div class="kpi__label"><span class="dot dot--warning"></span>Broken today</div><div class="kpi__num" style="color: var(--warning);">0</div></div>
+            <div class="card kpi kpi-tight"><div class="kpi__label"><span class="dot dot--success"></span>Good stock</div><div class="kpi__num" style="color: var(--success);">55,269</div></div>
+            <div class="card kpi kpi-tight"><div class="kpi__label"><span class="dot dot--danger"></span>Broken stock</div><div class="kpi__num" style="color: var(--danger);">0</div></div>
+            <div class="card kpi kpi-tight"><div class="kpi__label"><span class="dot dot--success"></span>Machine issues</div><div class="kpi__num" style="color: var(--success);">0</div></div>
+          </div>
+
+          <!-- Plant comparison + Breakage rate -->
+          <div class="sec-head" style="margin-top: 32px;">
+            <h2 class="sec-head__title">This month</h2>
+            <div class="sec-head__meta">By plant · production vs dispatch vs target</div>
+          </div>
+
+          <div class="split-2">
+            <div class="card chart-card">
+              <div class="chart-card__title">Plant comparison
+                <span class="chart-card__meta">Dispatched (blue) · Produced (green) · Target (grey)</span>
+              </div>
+              <div>
+                <div class="plant-row">
+                  <span class="plant-row__label">FIEDMC</span>
+                  <div class="plant-row__track">
+                    <div class="plant-row__target" style="width: 40%;"></div>
+                    <div class="plant-row__actual plant-row__actual--empty">
+                      <span class="plant-row__empty">No data</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="plant-row">
+                  <span class="plant-row__label">MEPCO</span>
+                  <div class="plant-row__track">
+                    <div class="plant-row__target" style="width: 92%;"></div>
+                    <div class="plant-row__actual plant-row__actual--dispatch" style="width: 6%;">·</div>
+                    <div class="plant-row__actual" style="width: 12%; top: 10px; bottom: -6px; height: 8px;"></div>
+                  </div>
+                </div>
+                <div class="plant-row">
+                  <span class="plant-row__label">PESCO</span>
+                  <div class="plant-row__track">
+                    <div class="plant-row__target" style="width: 40%;"></div>
+                    <div class="plant-row__actual plant-row__actual--empty">
+                      <span class="plant-row__empty">No data</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="plant-row">
+                  <span class="plant-row__label">Smart Meter</span>
+                  <div class="plant-row__track">
+                    <div class="plant-row__target" style="width: 40%;"></div>
+                    <div class="plant-row__actual plant-row__actual--empty">
+                      <span class="plant-row__empty">No data</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 14px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); font-size: 11px; color: var(--ink-500);">
+                  <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 8px; background: var(--accent); border-radius: 2px;"></span>Dispatched</span>
+                  <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 8px; background: var(--success); border-radius: 2px;"></span>Produced</span>
+                  <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 8px; background: var(--ink-100); border-radius: 2px;"></span>Target</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card chart-card">
+              <div class="chart-card__title">Breakage rate by plant
+                <span class="chart-card__meta">Limit 1.5%</span>
+              </div>
+              <div>
+                <div class="breakage-row">
+                  <span class="breakage-row__label">FIEDMC</span>
+                  <div class="breakage-row__track"><div class="breakage-row__fill" style="width: 0%;"></div></div>
+                  <span class="breakage-row__val breakage-row__val--nodata">No data</span>
+                </div>
+                <div class="breakage-row">
+                  <span class="breakage-row__label">MEPCO</span>
+                  <div class="breakage-row__track"><div class="breakage-row__fill" style="width: 0%;"></div></div>
+                  <span class="breakage-row__val breakage-row__val--ok">0.00%</span>
+                </div>
+                <div class="breakage-row">
+                  <span class="breakage-row__label">PESCO</span>
+                  <div class="breakage-row__track"><div class="breakage-row__fill" style="width: 0%;"></div></div>
+                  <span class="breakage-row__val breakage-row__val--nodata">No data</span>
+                </div>
+                <div class="breakage-row">
+                  <span class="breakage-row__label">Smart Meter</span>
+                  <div class="breakage-row__track"><div class="breakage-row__fill" style="width: 0%;"></div></div>
+                  <span class="breakage-row__val breakage-row__val--nodata">No data</span>
+                </div>
+              </div>
+              <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); font-size: 11px; color: var(--ink-500); display: flex; justify-content: space-between;">
+                <span>Vertical mark = 1.5% limit</span>
+                <span>Below limit is <span style="color: var(--success); font-weight: 500;">healthy</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stock by customer PO -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Stock by Customer PO</h2>
+            <div class="sec-head__meta">Produced · Dispatched · In stock · Fulfillment</div>
+          </div>
+
+          <div class="card">
+            <div class="stock-empty">
+              <div class="stock-empty__icon"><svg class="icon"><use href="#i-package"/></svg></div>
+              <div class="stock-empty__title">No stock data yet</div>
+              <a class="stock-empty__link">Add the first PO →</a>
+            </div>
+          </div>
+
+          <!-- KPIs section -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">KPIs</h2>
+            <div class="sec-head__actions">
+              <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-download"/></svg>Export CSV</button>
+            </div>
+          </div>
+
+          <div class="tabstrip">
+            <span class="tabstrip__tab tabstrip__tab--active">Production KPI</span>
+            <span class="tabstrip__tab">Dispatch KPI</span>
+            <span class="tabstrip__tab">Breakage</span>
+            <span class="tabstrip__tab">My tasks <span class="tabstrip__badge">0</span></span>
+          </div>
+
+          <div class="card chart-card" style="margin-bottom: 16px;">
+            <div class="chart-card__title">30-day production trend
+              <span class="chart-card__meta">MEPCO only reporting</span>
+            </div>
+            <svg class="prod-chart" viewBox="0 0 600 160" preserveAspectRatio="none">
+              <g stroke="#EEF0F3" stroke-width="1">
+                <line x1="0" y1="30" x2="600" y2="30"/>
+                <line x1="0" y1="70" x2="600" y2="70"/>
+                <line x1="0" y1="110" x2="600" y2="110"/>
+                <line x1="0" y1="150" x2="600" y2="150"/>
+              </g>
+              <!-- Target bars in ink-100 -->
+              <g fill="#EEF0F3">
+                <rect x="20" y="60" width="16" height="90" rx="2"/>
+                <rect x="42" y="60" width="16" height="90" rx="2"/>
+                <rect x="64" y="60" width="16" height="90" rx="2"/>
+                <rect x="86" y="60" width="16" height="90" rx="2"/>
+                <rect x="108" y="60" width="16" height="90" rx="2"/>
+                <rect x="130" y="60" width="16" height="90" rx="2"/>
+                <rect x="152" y="60" width="16" height="90" rx="2"/>
+                <rect x="174" y="60" width="16" height="90" rx="2"/>
+                <rect x="196" y="60" width="16" height="90" rx="2"/>
+                <rect x="218" y="60" width="16" height="90" rx="2"/>
+              </g>
+              <!-- One green production bar -->
+              <rect x="20" y="30" width="16" height="120" fill="#0F7B5F" rx="2"/>
+              <g fill="#94A3B8" font-family="Inter" font-size="10">
+                <text x="14" y="150" dy="12">07/01</text>
+                <text x="0" y="26">80</text>
+                <text x="0" y="66">60</text>
+                <text x="0" y="106">40</text>
+                <text x="0" y="146">20</text>
+              </g>
+            </svg>
+            <div style="display: flex; gap: 14px; margin-top: 8px;">
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-500);"><span style="width: 12px; height: 8px; background: var(--success); border-radius: 2px;"></span>Produced</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-500);"><span style="width: 12px; height: 8px; background: var(--ink-100); border-radius: 2px;"></span>Daily target</span>
+            </div>
+          </div>
+
+          <!-- KPI table -->
+          <div class="card kpi-table">
+            <table class="kpi-tbl">
+              <thead>
+                <tr>
+                  <th>Plant</th>
+                  <th>Monthly target</th>
+                  <th>Month actual</th>
+                  <th>Month %</th>
+                  <th>Cum. Wk target</th>
+                  <th>Cum. Actual</th>
+                  <th>Wk %</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="plant">FIEDMC</td>
+                  <td class="dim">0</td>
+                  <td class="dim">0</td>
+                  <td class="na">—</td>
+                  <td class="dim">0</td>
+                  <td class="dim">0</td>
+                  <td class="na">—</td>
+                  <td><span class="status-notarget">No target</span></td>
+                </tr>
+                <tr>
+                  <td class="plant">MEPCO</td>
+                  <td>551</td>
+                  <td>72</td>
+                  <td class="status-bad">13%</td>
+                  <td>138</td>
+                  <td>72</td>
+                  <td class="status-bad">52%</td>
+                  <td><span class="status-bad">RED</span></td>
+                </tr>
+                <tr>
+                  <td class="plant">PESCO</td>
+                  <td class="dim">0</td>
+                  <td class="dim">0</td>
+                  <td class="na">—</td>
+                  <td class="dim">0</td>
+                  <td class="dim">0</td>
+                  <td class="na">—</td>
+                  <td><span class="status-notarget">No target</span></td>
+                </tr>
+                <tr>
+                  <td class="plant">Smart Meter Plant</td>
+                  <td class="dim">0</td>
+                  <td class="dim">0</td>
+                  <td class="na">—</td>
+                  <td class="dim">0</td>
+                  <td class="dim">0</td>
+                  <td class="na">—</td>
+                  <td><span class="status-notarget">No target</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Monthly Targets -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Monthly targets</h2>
+            <div class="sec-head__actions">
+              <span class="chip">07 / 2026</span>
+              <button class="btn btn--sm btn--primary"><svg class="icon" style="width:12px;height:12px;"><use href="#i-plus"/></svg>Set target</button>
+            </div>
+          </div>
+
+          <div class="card" style="padding: 22px 24px;">
+            <div class="target-head">
+              <div>
+                <div class="target-head__title">Target vs Actual — 07 / 2026</div>
+                <div class="target-head__meta">Only MEPCO has a target set this month</div>
+              </div>
+              <div style="display: flex; gap: 14px; font-size: 11px; color: var(--ink-500);">
+                <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; background: var(--success); border-radius: 2px;"></span>Prod actual</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; background: var(--danger); border-radius: 2px;"></span>Disp actual</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; background: var(--track); border-radius: 2px;"></span>Target</span>
+              </div>
+            </div>
+
+            <div class="target-row">
+              <div>
+                <div class="target-row__plant">MEPCO</div>
+                <div class="target-row__type">Production</div>
+              </div>
+              <div class="target-row__bar-wrap">
+                <div class="target-row__bar" style="width: 13%; background: var(--success);"></div>
+              </div>
+              <div class="target-row__meta">
+                <strong>72</strong> <span style="color: var(--ink-400);">/ 551</span>
+                <span style="display: block; margin-top: 2px;"><span class="pct-danger">13%</span></span>
+              </div>
+            </div>
+
+            <div class="target-row">
+              <div>
+                <div class="target-row__plant">MEPCO</div>
+                <div class="target-row__type">Dispatch</div>
+              </div>
+              <div class="target-row__bar-wrap">
+                <div class="target-row__bar target-row__bar--danger" style="width: 0.5%;"></div>
+              </div>
+              <div class="target-row__meta">
+                <strong>0</strong> <span style="color: var(--ink-400);">/ 1,700</span>
+                <span style="display: block; margin-top: 2px;"><span class="pct-danger">0%</span></span>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div></div></div>
+    </div>
+
+    <!-- MOBILE -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Mobile · 390 × auto</span><span class="frame__dim">iOS / Android / PWA</span></div>
+      <div class="phone">
+        <div class="status-bar"><span>9:42</span><div class="status-bar__right"><span>●●●●</span><span style="margin-left:6px;">100%</span></div></div>
+        <div class="m-nav"><span class="m-nav__back"><svg><use href="#i-chevron-left"/></svg>Home</span><div class="m-nav__actions"><svg><use href="#i-calendar"/></svg><svg><use href="#i-bell"/></svg></div></div>
+        <div class="m-page-head">
+          <div class="m-page-head__kicker">Operations</div>
+          <h1 class="m-page-head__title">Ops Dashboard</h1>
+          <div class="m-page-head__sub">4 plants · updated 09:42 PKT</div>
+        </div>
+
+        <!-- Alert -->
+        <div style="margin: 4px 20px 12px; background: #FEF7EA; border: 1px solid #F1D9A9; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+          <div style="width:28px;height:28px;border-radius:8px;background:var(--warning);color:#fff;display:grid;place-items:center;flex:none;"><svg class="icon" style="width:14px;height:14px;"><use href="#i-alert"/></svg></div>
+          <div><div style="font-size:12.5px;font-weight:600;">Attention needed</div><div style="font-size:11px;color:var(--ink-500);margin-top:2px;">4 plants haven't reported today</div></div>
+          <svg class="icon" style="margin-left:auto;color:var(--ink-500);"><use href="#i-chevron"/></svg>
+        </div>
+
+        <!-- Hero: good stock -->
+        <div style="margin: 4px 20px 12px; padding: 22px; border-radius: 20px; background: var(--ink-900); color: #fff;">
+          <div style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.55); font-weight: 500;">Good stock</div>
+          <div style="font-family: var(--font-display); font-size: 40px; font-weight: 600; letter-spacing: -0.025em; margin-top: 10px; line-height: 1; font-variant-numeric: tabular-nums;">55,269</div>
+          <div style="display: flex; justify-content: space-between; margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11.5px; color: rgba(255,255,255,0.6);">
+            <span>Across 4 plants</span>
+            <span>Broken 0 · Machines OK</span>
+          </div>
+        </div>
+
+        <!-- Today KPIs 2x2 -->
+        <div class="m-kpi-grid">
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--neutral"></span>Produced</div><div class="m-kpi__num">0</div><div class="m-kpi__sub">Today</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--neutral"></span>Dispatched</div><div class="m-kpi__num">0</div><div class="m-kpi__sub">Today</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--warning"></span>Broken</div><div class="m-kpi__num" style="color:var(--warning);">0</div><div class="m-kpi__sub">Today</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--danger"></span>Broken stock</div><div class="m-kpi__num" style="color:var(--danger);">0</div><div class="m-kpi__sub">All plants</div></div>
+        </div>
+
+        <!-- Plant comparison -->
+        <div class="m-section-head"><div class="m-section-head__title">Plant comparison</div><a class="m-section-head__link">This month →</a></div>
+        <div class="m-card" style="padding: 18px;">
+          <div class="plant-row">
+            <span class="plant-row__label" style="font-size: 11.5px;">FIEDMC</span>
+            <div class="plant-row__track"><div class="plant-row__target" style="width: 40%;"></div><div class="plant-row__empty">No data</div></div>
+          </div>
+          <div class="plant-row">
+            <span class="plant-row__label" style="font-size: 11.5px;">MEPCO</span>
+            <div class="plant-row__track"><div class="plant-row__target" style="width: 92%;"></div><div class="plant-row__actual" style="width: 12%;"></div></div>
+          </div>
+          <div class="plant-row">
+            <span class="plant-row__label" style="font-size: 11.5px;">PESCO</span>
+            <div class="plant-row__track"><div class="plant-row__target" style="width: 40%;"></div><div class="plant-row__empty">No data</div></div>
+          </div>
+          <div class="plant-row">
+            <span class="plant-row__label" style="font-size: 11.5px;">Smart Meter</span>
+            <div class="plant-row__track"><div class="plant-row__target" style="width: 40%;"></div><div class="plant-row__empty">No data</div></div>
+          </div>
+        </div>
+
+        <!-- Monthly target -->
+        <div class="m-section-head"><div class="m-section-head__title">Monthly targets</div><a class="m-section-head__link">07/2026</a></div>
+        <div class="m-card">
+          <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-bottom: 10px;">
+            <div>
+              <div style="font-size: 13.5px; font-weight: 500;">MEPCO — Production</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px; font-family: var(--font-mono);">72 / 551</div>
+            </div>
+            <div style="font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--danger);">13%</div>
+          </div>
+          <div class="target-row__bar-wrap"><div class="target-row__bar" style="width: 13%;"></div></div>
+
+          <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin: 16px 0 10px; padding-top: 16px; border-top: 1px solid var(--hairline);">
+            <div>
+              <div style="font-size: 13.5px; font-weight: 500;">MEPCO — Dispatch</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px; font-family: var(--font-mono);">0 / 1,700</div>
+            </div>
+            <div style="font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--danger);">0%</div>
+          </div>
+          <div class="target-row__bar-wrap"><div class="target-row__bar target-row__bar--danger" style="width: 0.5%;"></div></div>
+        </div>
+
+        <!-- KPI table compressed -->
+        <div class="m-section-head"><div class="m-section-head__title">KPIs by plant</div><a class="m-section-head__link">Table →</a></div>
+        <div class="m-card" style="padding: 0;">
+          <div style="padding: 14px 18px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;">
+            <div>
+              <div style="font-size: 13.5px; font-weight: 500;">MEPCO</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">72 / 551 monthly · Wk 72 / 138</div>
+            </div>
+            <span class="st-pill" style="background: var(--danger-soft); color: var(--danger);">RED</span>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;">
+            <div>
+              <div style="font-size: 13.5px; font-weight: 500;">FIEDMC</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">No target set</div>
+            </div>
+            <span class="st-pill st-pill--notstarted">No target</span>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;">
+            <div>
+              <div style="font-size: 13.5px; font-weight: 500;">PESCO</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">No target set</div>
+            </div>
+            <span class="st-pill st-pill--notstarted">No target</span>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline); display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px;">
+            <div>
+              <div style="font-size: 13.5px; font-weight: 500;">Smart Meter Plant</div>
+              <div style="font-size: 11px; color: var(--ink-500); margin-top: 2px;">No target set</div>
+            </div>
+            <span class="st-pill st-pill--notstarted">No target</span>
+          </div>
+        </div>
+
+        <div class="tabbar">
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-home"/></svg><span class="tabbar__lbl">Home</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-factory"/></svg><span class="tabbar__lbl">Entry</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-package"/></svg><span class="tabbar__lbl">Stock</span></div>
+          <div class="tabbar__item tabbar__item--active"><svg class="icon" style="width:20px;height:20px;"><use href="#i-chart"/></svg><span class="tabbar__lbl">Ops</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-bell"/></svg><span class="tabbar__lbl">Alerts</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="reflow-panel">
+    <div class="sec-head" style="margin-bottom: 4px;"><h2 class="sec-head__title" style="font-size: 22px;">Reflow &amp; new components</h2><div class="sec-head__meta">Desktop → Mobile</div></div>
+    <div class="reflow-panel__grid">
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">01 · NEW</div><div class="reflow-card__title">6-KPI compact row</div><div class="reflow-card__body">A tighter KPI variant (16×18 padding, 26px number) so 6 metrics fit on one desktop row. Reusable for ops-heavy pages where 4 KPIs isn't enough.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">02 · NEW</div><div class="reflow-card__title">Plant comparison bar</div><div class="reflow-card__body">Horizontal bar with layered elements: light target bar (background), colored actual bar (foreground), and empty-state "No data" overlay when no reading exists. Great for multi-plant/multi-entity comparisons against a benchmark.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">03 · NEW</div><div class="reflow-card__title">Breakage-rate row</div><div class="reflow-card__body">Ultra-thin bar with a vertical limit marker at 1.5% (danger red line). Below limit = healthy. Reusable for any rate that must stay under a threshold — defect rate, downtime %, churn %, etc.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">04 · NEW</div><div class="reflow-card__title">KPI comparison table</div><div class="reflow-card__body">7-col table with muted zeros, "—" for no-target rows, and clean RED / No target status pills. Sortable by any KPI column.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">05 · NEW</div><div class="reflow-card__title">Target-vs-actual row</div><div class="reflow-card__body">3-col: plant + subtype (Production / Dispatch), horizontal bar showing actual as % of target, right-aligned "N / target" with a big percentage number below (red if under 60%).</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">06</div><div class="reflow-card__title">6-KPI row → hero + 2x2</div><div class="reflow-card__body">Mobile promotes "Good stock" to a full-width dark hero. The remaining 4 today-KPIs become a 2×2 grid; broken stock and machine issues collapse into the hero foot line.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">07</div><div class="reflow-card__title">Wide table → compact list</div><div class="reflow-card__body">The 7-column KPI table becomes a 2-line-per-plant list: name + inline "N / target · Wk N / N" summary + status pill. Full table lives behind "Table →" link.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">08</div><div class="reflow-card__title">Tabstrip stays</div><div class="reflow-card__body">Production / Dispatch / Breakage / My tasks tabs render on both breakpoints — same styling. Chart/data below swaps per tab.</div></div>
+    </div>
+  </div>
+</div>
+<script src="assets/page-shell.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>

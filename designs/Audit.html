@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Audit — Unze OS</title>
+<link rel="stylesheet" href="assets/tokens.css"/>
+<link rel="stylesheet" href="assets/page-shell.css"/>
+<style>
+  /* KPI variant — 5 cards */
+  .kpi-row-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+
+  /* Chart trio */
+  .chart-trio { display: grid; grid-template-columns: 1.3fr 1fr 1.3fr; gap: 16px; }
+  .chart-card { padding: 22px 24px; }
+  .chart-card__title { font-family: var(--font-display); font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+
+  /* Horizontal bar chart */
+  .hbar-row { display: grid; grid-template-columns: 96px 1fr 40px; gap: 12px; align-items: center; padding: 5px 0; }
+  .hbar-row__label { font-size: 11.5px; color: var(--ink-700); text-align: right; }
+  .hbar-row__track { position: relative; height: 14px; background: var(--track); border-radius: 4px; overflow: hidden; }
+  .hbar-row__fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+  .hbar-row__val { font-family: var(--font-mono); font-size: 11px; color: var(--ink-500); font-variant-numeric: tabular-nums; text-align: right; }
+
+  /* Donut used inside chart-trio (reuse from Admin) */
+  .donut-wrap { display: grid; grid-template-columns: 1fr; gap: 14px; justify-items: center; }
+  .donut-svg { width: 140px; height: 140px; }
+  .donut-svg .track { fill: none; stroke: var(--track); stroke-width: 14; }
+  .donut-svg .seg { fill: none; stroke-width: 14; stroke-linecap: butt; transform: rotate(-90deg); transform-origin: 50% 50%; }
+  .donut-center-wrap { position: relative; width: 140px; height: 140px; }
+  .donut-center__value { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .donut-center__num { font-family: var(--font-display); font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .donut-center__lbl { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-500); margin-top: 4px; }
+  .donut-legend-row { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--ink-500); justify-content: center; }
+  .donut-legend-row span.sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+
+  /* Stacked bar (auditor workload) */
+  .stack-row { display: grid; grid-template-columns: 60px 1fr 40px; gap: 12px; align-items: center; padding: 10px 0; }
+  .stack-row__label { font-size: 12px; font-weight: 500; }
+  .stack-row__bar { display: flex; height: 20px; border-radius: 5px; overflow: hidden; }
+  .stack-row__bar > span { display: block; height: 100%; }
+  .stack-row__count { font-family: var(--font-display); font-size: 15px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* Audit records */
+  .records { padding: 0; overflow: hidden; }
+  .records__group-head { padding: 12px 22px; background: var(--card-alt); border-bottom: 1px solid var(--hairline); display: flex; justify-content: space-between; align-items: center; }
+  .records__group-title { font-size: 11px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-700); display: flex; align-items: center; gap: 8px; }
+  .records__group-count { font-size: 11px; color: var(--ink-500); }
+
+  .audit-row { display: grid; grid-template-columns: 1fr 200px 60px 26px; gap: 16px; align-items: center; padding: 16px 22px; }
+  .audit-row + .audit-row { border-top: 1px solid var(--hairline); }
+  .audit-row__title { font-size: 14px; font-weight: 500; color: var(--ink-900); }
+  .audit-row__meta { font-size: 11.5px; color: var(--ink-500); margin-top: 4px; display: flex; align-items: center; gap: 8px; }
+  .audit-row__badges { display: inline-flex; gap: 4px; }
+  .type-badge { padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 500; }
+  .type-badge--financial { background: var(--accent-soft); color: var(--accent-ink); }
+  .type-badge--operational { background: #EEF6EF; color: var(--success); }
+  .type-badge--compliance { background: #F1EBFB; color: #6E45B8; }
+  .audit-row__progress { display: flex; align-items: center; gap: 10px; }
+  .audit-row__progress-track { flex: 1; height: 4px; background: var(--track); border-radius: 999px; overflow: hidden; }
+  .audit-row__progress-fill { height: 100%; border-radius: 999px; }
+  .audit-row__progress-val { font-family: var(--font-mono); font-size: 11px; color: var(--ink-500); font-variant-numeric: tabular-nums; width: 32px; text-align: right; }
+  .audit-row__cta { color: var(--ink-500); }
+  .audit-row__cta svg { width: 14px; height: 14px; }
+  .late { color: var(--danger); font-weight: 500; }
+
+  /* Alert */
+  .alert { background: #FEF7EA; border: 1px solid #F1D9A9; border-radius: var(--r-md); padding: 14px 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
+  .alert__left { display: flex; align-items: flex-start; gap: 14px; }
+  .alert__mark { width: 30px; height: 30px; border-radius: 8px; background: var(--warning); color: #fff; display: grid; place-items: center; flex: none; }
+  .alert__mark svg { width: 15px; height: 15px; }
+  .alert__title { font-size: 13px; font-weight: 600; color: var(--ink-900); }
+  .alert__body { font-size: 12.5px; color: var(--ink-700); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="stage__header">
+    <div>
+      <div class="stage__kicker">Unze OS · Design v1 · Page 08 of ?</div>
+      <h1 class="stage__title">Audit — Internal audit tracking</h1>
+    </div>
+    <div class="stage__sub">
+      Adds horizontal bar chart, stacked workload bar, audit record row with progress. Type badges (Financial/Operational/Compliance) join the shared system.
+    </div>
+  </div>
+
+  <div class="split">
+
+    <!-- DESKTOP -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Desktop · 1440 × auto</span><span class="frame__dim" id="desktop-scale-caption">Web · Next.js</span></div>
+      <div class="desktop-scaler" id="desktop-scaler"><div class="desktop-inner" id="desktop-inner"><div class="desktop-app">
+
+        <aside class="side">
+          <div class="side__brand"><div class="side__brand-mark">U</div><div><div class="side__brand-name">Unze Group</div><div style="font-size:10px; color: var(--ink-500);">Operations</div></div></div>
+          <div class="side__group">Overview</div>
+          <a class="side__item"><svg class="icon"><use href="#i-home"/></svg>Executive</a>
+          <div class="side__group">Finance</div>
+          <a class="side__item"><svg class="icon"><use href="#i-cash"/></svg>Cash flow</a>
+          <a class="side__item"><svg class="icon"><use href="#i-doc"/></svg>Receivables</a>
+          <a class="side__item"><svg class="icon"><use href="#i-bank"/></svg>Bank facilities</a>
+          <div class="side__group">Departments</div>
+          <a class="side__item"><svg class="icon"><use href="#i-users"/></svg>Admin</a>
+          <a class="side__item side__item--active"><svg class="icon"><use href="#i-shield"/></svg>Audit</a>
+          <a class="side__item"><svg class="icon"><use href="#i-scale"/></svg>Taxation</a>
+          <a class="side__item"><svg class="icon"><use href="#i-user"/></svg>HR</a>
+
+          <div class="side__group">Preferences</div>
+          <a class="side__item" data-theme-toggle style="cursor:pointer;"><svg class="icon"><use href="#i-moon"/></svg>Dark mode</a>
+          <div class="side__user"><div class="side__avatar">KS</div><div><div class="side__user-name">Khuram Saleem</div><div class="side__user-role">CEO · Unze Group</div></div></div>
+        </aside>
+
+        <main class="main">
+          <nav class="crumb"><span>Home</span><svg><use href="#i-chevron"/></svg><span>Departments</span><svg><use href="#i-chevron"/></svg><span class="crumb__current">Audit</span></nav>
+          <div class="main__top">
+            <div>
+              <h1 class="main__title">Audit</h1>
+              <div class="main__meta">Internal audit tracking · 12 audits across financial, operational, and compliance</div>
+            </div>
+            <div class="main__actions">
+              <button class="btn"><svg class="icon"><use href="#i-download"/></svg>Export</button>
+              <button class="btn btn--primary"><svg class="icon"><use href="#i-plus"/></svg>New audit</button>
+            </div>
+          </div>
+
+          <!-- Alert -->
+          <div class="alert">
+            <div class="alert__left">
+              <div class="alert__mark"><svg><use href="#i-alert"/></svg></div>
+              <div>
+                <div class="alert__title">2 audits past target date</div>
+                <div class="alert__body">Physical cash count · Head Office &middot; P&amp;L Audit 1st Quarter · Imperial (USD)</div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn--sm">Dismiss</button>
+              <button class="btn btn--sm btn--primary">Issue task</button>
+            </div>
+          </div>
+
+          <!-- 5 KPIs -->
+          <div class="kpi-row-5">
+            <div class="card kpi"><div class="kpi__label"><span class="dot dot--neutral"></span>Planned</div><div class="kpi__num">1</div></div>
+            <div class="card kpi"><div class="kpi__label"><span class="dot dot--warning"></span>In progress</div><div class="kpi__num" style="color: var(--warning);">7</div></div>
+            <div class="card kpi"><div class="kpi__label"><span class="dot dot--success"></span>Complete</div><div class="kpi__num" style="color: var(--success);">2</div></div>
+            <div class="card kpi"><div class="kpi__label"><span class="dot dot--danger"></span>Overdue</div><div class="kpi__num" style="color: var(--danger);">2</div></div>
+            <div class="card kpi"><div class="kpi__label"><span class="dot dot--info"></span>Avg completion</div><div class="kpi__num">61<span style="font-size:0.5em; color:var(--ink-500); font-weight:500; margin-left:4px;">%</span></div></div>
+          </div>
+
+          <!-- Charts trio -->
+          <div class="sec-head"><h2 class="sec-head__title">Overview</h2></div>
+          <div class="chart-trio">
+            <!-- Stage pipeline (horizontal bar) -->
+            <div class="card chart-card">
+              <div class="chart-card__title">Stage pipeline</div>
+              <div>
+                <div class="hbar-row"><span class="hbar-row__label">Audit planning</span><div class="hbar-row__track"><div class="hbar-row__fill" style="width: 12%; background: var(--accent);"></div></div><span class="hbar-row__val">1</span></div>
+                <div class="hbar-row"><span class="hbar-row__label">Data collection</span><div class="hbar-row__track"><div class="hbar-row__fill" style="width: 32%; background: var(--accent);"></div></div><span class="hbar-row__val">3</span></div>
+                <div class="hbar-row"><span class="hbar-row__label">Data verification</span><div class="hbar-row__track"><div class="hbar-row__fill" style="width: 22%; background: var(--warning);"></div></div><span class="hbar-row__val">2</span></div>
+                <div class="hbar-row"><span class="hbar-row__label">Draft findings</span><div class="hbar-row__track"><div class="hbar-row__fill" style="width: 52%; background: var(--warning);"></div></div><span class="hbar-row__val">4</span></div>
+                <div class="hbar-row"><span class="hbar-row__label">Review report</span><div class="hbar-row__track"><div class="hbar-row__fill" style="width: 22%; background: #6E45B8;"></div></div><span class="hbar-row__val">2</span></div>
+                <div class="hbar-row"><span class="hbar-row__label">Comms to owner</span><div class="hbar-row__track"><div class="hbar-row__fill" style="width: 32%; background: var(--success);"></div></div><span class="hbar-row__val">3</span></div>
+                <div class="hbar-row"><span class="hbar-row__label">Submit to mgmt</span><div class="hbar-row__track"><div class="hbar-row__fill" style="width: 12%; background: var(--success);"></div></div><span class="hbar-row__val">1</span></div>
+              </div>
+            </div>
+
+            <!-- Type distribution donut -->
+            <div class="card chart-card">
+              <div class="chart-card__title">By type</div>
+              <div class="donut-wrap">
+                <div class="donut-center-wrap">
+                  <svg class="donut-svg" viewBox="0 0 100 100">
+                    <circle class="track" cx="50" cy="50" r="42"/>
+                    <!-- Financial 7/12 = 58.3% = 154 -->
+                    <circle class="seg" cx="50" cy="50" r="42" stroke="#3B4CCA" stroke-dasharray="154 110"/>
+                    <!-- Operational 3/12 = 25% = 66 offset 154 -->
+                    <circle class="seg" cx="50" cy="50" r="42" stroke="#0F7B5F" stroke-dasharray="66 198" stroke-dashoffset="-154"/>
+                    <!-- Compliance 2/12 = 16.7% = 44 offset 220 -->
+                    <circle class="seg" cx="50" cy="50" r="42" stroke="#6E45B8" stroke-dasharray="44 220" stroke-dashoffset="-220"/>
+                  </svg>
+                  <div class="donut-center__value"><div><div class="donut-center__num">12</div><div class="donut-center__lbl">Audits</div></div></div>
+                </div>
+                <div class="donut-legend-row">
+                  <span><span class="sw" style="background: var(--accent);"></span>Financial 7</span>
+                  <span><span class="sw" style="background: var(--success);"></span>Operational 3</span>
+                  <span><span class="sw" style="background: #6E45B8;"></span>Compliance 2</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Auditor workload -->
+            <div class="card chart-card">
+              <div class="chart-card__title">Auditor workload</div>
+              <div class="stack-row">
+                <span class="stack-row__label">Shahid</span>
+                <div class="stack-row__bar">
+                  <span style="width: 12%; background: var(--danger);"></span>
+                  <span style="width: 70%; background: var(--accent);"></span>
+                  <span style="width: 18%; background: var(--success);"></span>
+                </div>
+                <span class="stack-row__count">7</span>
+              </div>
+              <div class="stack-row">
+                <span class="stack-row__label">Junaid</span>
+                <div class="stack-row__bar">
+                  <span style="width: 24%; background: var(--danger);"></span>
+                  <span style="width: 0%; background: var(--accent);"></span>
+                  <span style="width: 0%; background: var(--success);"></span>
+                </div>
+                <span class="stack-row__count">1</span>
+              </div>
+              <div class="stack-row">
+                <span class="stack-row__label">Zubair</span>
+                <div class="stack-row__bar">
+                  <span style="width: 0%; background: var(--danger);"></span>
+                  <span style="width: 42%; background: var(--accent);"></span>
+                  <span style="width: 20%; background: var(--success);"></span>
+                </div>
+                <span class="stack-row__count">4</span>
+              </div>
+              <div style="display: flex; gap: 14px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--hairline); font-size: 11px; color: var(--ink-500);">
+                <span><span class="sw" style="width:8px;height:8px;border-radius:2px;background:var(--danger);display:inline-block;margin-right:4px;"></span>Overdue</span>
+                <span><span class="sw" style="width:8px;height:8px;border-radius:2px;background:var(--accent);display:inline-block;margin-right:4px;"></span>In progress</span>
+                <span><span class="sw" style="width:8px;height:8px;border-radius:2px;background:var(--success);display:inline-block;margin-right:4px;"></span>Complete</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Records -->
+          <div class="sec-head">
+            <h2 class="sec-head__title">Audit records</h2>
+            <div class="sec-head__actions">
+              <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-download"/></svg>Export</button>
+              <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-upload"/></svg>Import</button>
+              <button class="btn btn--sm"><svg class="icon" style="width:12px;height:12px;"><use href="#i-grid"/></svg></button>
+            </div>
+          </div>
+
+          <div class="card records">
+            <div class="records__group-head">
+              <div class="records__group-title"><span class="dot dot--warning"></span>In progress</div>
+              <div class="records__group-count">7 audits</div>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">P&amp;L Audit (Jan–Apr 2026) — HD</div>
+                <div class="audit-row__meta">
+                  <span class="audit-row__badges"><span class="type-badge type-badge--financial">Financial</span></span>
+                  Shahid · Target 15/06/2026
+                </div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 30%; background: var(--warning);"></div></div>
+                <span class="audit-row__progress-val">30%</span>
+              </div>
+              <span class="st-pill st-pill--inprogress" style="justify-self: start;">Active</span>
+              <span class="audit-row__cta"><svg><use href="#i-play"/></svg></span>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">P&amp;L Audit (Jan–Apr 2026) — Baraah Pvt. Ltd.</div>
+                <div class="audit-row__meta"><span class="audit-row__badges"><span class="type-badge type-badge--financial">Financial</span></span>Shahid · Target 15/06/2026</div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 30%; background: var(--warning);"></div></div>
+                <span class="audit-row__progress-val">30%</span>
+              </div>
+              <span class="st-pill st-pill--inprogress" style="justify-self: start;">Active</span>
+              <span class="audit-row__cta"><svg><use href="#i-play"/></svg></span>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">Sales Audit (2025–26) — Unze Trading</div>
+                <div class="audit-row__meta"><span class="audit-row__badges"><span class="type-badge type-badge--compliance">Compliance</span></span>Shahid · Target 31/07/2026</div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 30%; background: var(--warning);"></div></div>
+                <span class="audit-row__progress-val">30%</span>
+              </div>
+              <span class="st-pill st-pill--inprogress" style="justify-self: start;">Active</span>
+              <span class="audit-row__cta"><svg><use href="#i-play"/></svg></span>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">Office supplies recording in SAP and inventory count — Imperial</div>
+                <div class="audit-row__meta"><span class="audit-row__badges"><span class="type-badge type-badge--operational">Operational</span></span>Shahid · Target 05/07/2026</div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 40%; background: var(--warning);"></div></div>
+                <span class="audit-row__progress-val">40%</span>
+              </div>
+              <span class="st-pill st-pill--inprogress" style="justify-self: start;">Active</span>
+              <span class="audit-row__cta"><svg><use href="#i-play"/></svg></span>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">Fixed asset Audit — Unze Trading</div>
+                <div class="audit-row__meta"><span class="audit-row__badges"><span class="type-badge type-badge--operational">Operational</span></span>Shahid · Target 20/07/2026</div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 60%; background: var(--warning);"></div></div>
+                <span class="audit-row__progress-val">60%</span>
+              </div>
+              <span class="st-pill st-pill--inprogress" style="justify-self: start;">Active</span>
+              <span class="audit-row__cta"><svg><use href="#i-play"/></svg></span>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">P&amp;L Audit 1st Quarter — Imperial</div>
+                <div class="audit-row__meta">
+                  <span class="audit-row__badges"><span class="type-badge type-badge--financial">Financial</span></span>
+                  Shahid · Target <span class="late">31/05/2026 (35d late)</span>
+                </div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 70%; background: var(--danger);"></div></div>
+                <span class="audit-row__progress-val">70%</span>
+              </div>
+              <span class="st-pill st-pill--overdue" style="justify-self: start;">Overdue</span>
+              <span class="audit-row__cta"><svg><use href="#i-play"/></svg></span>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">P&amp;L Audit 3rd Quarter — Unze Trading</div>
+                <div class="audit-row__meta"><span class="audit-row__badges"><span class="type-badge type-badge--financial">Financial</span></span>Shahid · Target 15/07/2026</div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 60%; background: var(--warning);"></div></div>
+                <span class="audit-row__progress-val">60%</span>
+              </div>
+              <span class="st-pill st-pill--inprogress" style="justify-self: start;">Active</span>
+              <span class="audit-row__cta"><svg><use href="#i-play"/></svg></span>
+            </div>
+
+            <div class="records__group-head">
+              <div class="records__group-title"><span class="dot dot--neutral"></span>Planned</div>
+              <div class="records__group-count">1 audit</div>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">Physical cash count — Head Office</div>
+                <div class="audit-row__meta">
+                  <span class="audit-row__badges"><span class="type-badge type-badge--operational">Operational</span></span>
+                  Junaid · Target <span class="late">01/07/2026 (4d late)</span>
+                </div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 40%; background: var(--danger);"></div></div>
+                <span class="audit-row__progress-val">40%</span>
+              </div>
+              <span class="st-pill st-pill--overdue" style="justify-self: start;">Overdue</span>
+              <span class="audit-row__cta"><svg><use href="#i-play"/></svg></span>
+            </div>
+
+            <div class="records__group-head">
+              <div class="records__group-title"><span class="dot dot--success"></span>Completed</div>
+              <div class="records__group-count">2 audits</div>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">PF withdrawal SOP</div>
+                <div class="audit-row__meta"><span class="audit-row__badges"><span class="type-badge type-badge--compliance">Compliance</span></span>Shahid · Target 30/06/2026</div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 100%; background: var(--success);"></div></div>
+                <span class="audit-row__progress-val">100%</span>
+              </div>
+              <span class="st-pill st-pill--completed" style="justify-self: start;">Done</span>
+              <span class="audit-row__cta"><svg><use href="#i-eye"/></svg></span>
+            </div>
+            <div class="audit-row">
+              <div>
+                <div class="audit-row__title">P&amp;L Audit 1st Quarter — HD</div>
+                <div class="audit-row__meta"><span class="audit-row__badges"><span class="type-badge type-badge--financial">Financial</span></span>Shahid · Target 31/05/2026</div>
+              </div>
+              <div class="audit-row__progress">
+                <div class="audit-row__progress-track"><div class="audit-row__progress-fill" style="width: 100%; background: var(--success);"></div></div>
+                <span class="audit-row__progress-val">100%</span>
+              </div>
+              <span class="st-pill st-pill--completed" style="justify-self: start;">Done</span>
+              <span class="audit-row__cta"><svg><use href="#i-eye"/></svg></span>
+            </div>
+          </div>
+        </main>
+      </div></div></div>
+    </div>
+
+    <!-- MOBILE -->
+    <div class="frame">
+      <div class="frame__caption"><span class="frame__label">Mobile · 390 × auto</span><span class="frame__dim">iOS / Android / PWA</span></div>
+      <div class="phone">
+        <div class="status-bar"><span>9:42</span><div class="status-bar__right"><span>●●●●</span><span style="margin-left:6px;">100%</span></div></div>
+        <div class="m-nav"><span class="m-nav__back"><svg><use href="#i-chevron-left"/></svg>Home</span><div class="m-nav__actions"><svg><use href="#i-search"/></svg><svg><use href="#i-filter"/></svg></div></div>
+        <div class="m-page-head"><div class="m-page-head__kicker">Departments</div><h1 class="m-page-head__title">Audit</h1><div class="m-page-head__sub">12 audits · 2 overdue</div></div>
+
+        <!-- Alert -->
+        <div style="margin: 4px 20px 12px; background: #FEF7EA; border: 1px solid #F1D9A9; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 12px;">
+          <div style="width:28px;height:28px;border-radius:8px;background:var(--warning);color:#fff;display:grid;place-items:center;flex:none;"><svg class="icon" style="width:14px;height:14px;"><use href="#i-alert"/></svg></div>
+          <div><div style="font-size:12.5px;font-weight:600;">2 audits past target</div><div style="font-size:11px;color:var(--ink-500);margin-top:2px;">Physical cash count · P&amp;L Q1 Imperial</div></div>
+          <svg class="icon" style="margin-left:auto;color:var(--ink-500);"><use href="#i-chevron"/></svg>
+        </div>
+
+        <!-- KPI 2x2 -->
+        <div class="m-kpi-grid">
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--warning"></span>In progress</div><div class="m-kpi__num" style="color:var(--warning);">7</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--danger"></span>Overdue</div><div class="m-kpi__num" style="color:var(--danger);">2</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--success"></span>Complete</div><div class="m-kpi__num" style="color:var(--success);">2</div></div>
+          <div class="m-kpi"><div class="m-kpi__lbl"><span class="dot dot--info"></span>Avg %</div><div class="m-kpi__num">61</div></div>
+        </div>
+
+        <!-- Donut card -->
+        <div class="m-section-head"><div class="m-section-head__title">By type</div><a class="m-section-head__link">Detail →</a></div>
+        <div class="m-card" style="padding: 18px;">
+          <div style="display: grid; grid-template-columns: 90px 1fr; gap: 16px; align-items: center;">
+            <div class="donut-center-wrap" style="width: 90px; height: 90px;">
+              <svg class="donut-svg" viewBox="0 0 100 100" style="width: 90px; height: 90px;">
+                <circle class="track" cx="50" cy="50" r="42"/>
+                <circle class="seg" cx="50" cy="50" r="42" stroke="#3B4CCA" stroke-dasharray="154 110"/>
+                <circle class="seg" cx="50" cy="50" r="42" stroke="#0F7B5F" stroke-dasharray="66 198" stroke-dashoffset="-154"/>
+                <circle class="seg" cx="50" cy="50" r="42" stroke="#6E45B8" stroke-dasharray="44 220" stroke-dashoffset="-220"/>
+              </svg>
+              <div class="donut-center__value"><div><div class="donut-center__num" style="font-size:18px;">12</div><div class="donut-center__lbl" style="font-size:9px;">Audits</div></div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:11.5px;">
+              <div style="display:grid;grid-template-columns:8px 1fr auto;gap:8px;align-items:center;"><span style="width:8px;height:8px;border-radius:2px;background:var(--accent);"></span>Financial<b style="font-family: var(--font-display);">7</b></div>
+              <div style="display:grid;grid-template-columns:8px 1fr auto;gap:8px;align-items:center;"><span style="width:8px;height:8px;border-radius:2px;background:var(--success);"></span>Operational<b style="font-family: var(--font-display);">3</b></div>
+              <div style="display:grid;grid-template-columns:8px 1fr auto;gap:8px;align-items:center;"><span style="width:8px;height:8px;border-radius:2px;background:#6E45B8;"></span>Compliance<b style="font-family: var(--font-display);">2</b></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter chips -->
+        <div class="m-filter">
+          <span class="m-filter__chip m-filter__chip--active">In progress 7</span>
+          <span class="m-filter__chip">Overdue 2</span>
+          <span class="m-filter__chip">Complete 2</span>
+          <span class="m-filter__chip">Planned 1</span>
+        </div>
+
+        <!-- Records -->
+        <div class="m-section-head"><div class="m-section-head__title">In progress</div><a class="m-section-head__link">7 audits</a></div>
+        <div class="m-card" style="padding: 0;">
+          <div style="padding: 14px 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <div style="font-size: 13.5px; font-weight: 500; line-height: 1.4;">P&amp;L Audit (Jan–Apr 2026) — HD</div>
+              <span class="type-badge type-badge--financial" style="flex: none;">Financial</span>
+            </div>
+            <div style="font-size: 11px; color: var(--ink-500); margin-bottom: 10px;">Shahid · Target 15/06/2026</div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="flex: 1; height: 4px; background: var(--track); border-radius: 999px; overflow: hidden;"><div style="height: 100%; background: var(--warning); width: 30%; border-radius: 999px;"></div></div>
+              <span style="font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);">30%</span>
+            </div>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <div style="font-size: 13.5px; font-weight: 500; line-height: 1.4;">P&amp;L Audit 1st Quarter — Imperial</div>
+              <span class="type-badge type-badge--financial" style="flex: none;">Financial</span>
+            </div>
+            <div style="font-size: 11px; margin-bottom: 10px;"><span style="color:var(--ink-500);">Shahid · Target </span><span class="late">31/05/2026 (35d late)</span></div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="flex: 1; height: 4px; background: var(--track); border-radius: 999px; overflow: hidden;"><div style="height: 100%; background: var(--danger); width: 70%; border-radius: 999px;"></div></div>
+              <span style="font-family: var(--font-mono); font-size: 11px; color: var(--danger);">70%</span>
+            </div>
+          </div>
+          <div style="padding: 14px 18px; border-top: 1px solid var(--hairline);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <div style="font-size: 13.5px; font-weight: 500; line-height: 1.4;">Fixed asset Audit — Unze Trading</div>
+              <span class="type-badge type-badge--operational" style="flex: none;">Operational</span>
+            </div>
+            <div style="font-size: 11px; color: var(--ink-500); margin-bottom: 10px;">Shahid · Target 20/07/2026</div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="flex: 1; height: 4px; background: var(--track); border-radius: 999px; overflow: hidden;"><div style="height: 100%; background: var(--warning); width: 60%; border-radius: 999px;"></div></div>
+              <span style="font-family: var(--font-mono); font-size: 11px; color: var(--ink-500);">60%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="fab"><svg><use href="#i-plus"/></svg></div>
+        <div class="tabbar">
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-home"/></svg><span class="tabbar__lbl">Home</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-cash"/></svg><span class="tabbar__lbl">Cash</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-doc"/></svg><span class="tabbar__lbl">Tasks</span></div>
+          <div class="tabbar__item tabbar__item--active"><svg class="icon" style="width:20px;height:20px;"><use href="#i-shield"/></svg><span class="tabbar__lbl">Audit</span></div>
+          <div class="tabbar__item"><svg class="icon" style="width:20px;height:20px;"><use href="#i-bell"/></svg><span class="tabbar__lbl">Alerts</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="reflow-panel">
+    <div class="sec-head" style="margin-bottom: 4px;"><h2 class="sec-head__title" style="font-size: 22px;">Reflow &amp; new components</h2><div class="sec-head__meta">Desktop → Mobile</div></div>
+    <div class="reflow-panel__grid">
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">01 · NEW</div><div class="reflow-card__title">Horizontal bar chart</div><div class="reflow-card__body">Right-aligned label · thin 14px track · colored fill · value. Rows use color to signal stage grouping: accent (planning), warning (in progress), purple (review), success (final).</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">02 · NEW</div><div class="reflow-card__title">Stacked workload bar</div><div class="reflow-card__body">Per-auditor stacked bar with segments for overdue / in progress / complete. Total count on the right. Legend row at the bottom.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">03 · NEW</div><div class="reflow-card__title">Audit record row</div><div class="reflow-card__body">4-column: title + meta (with type badge + auditor + target), progress bar with %, status pill, action icon. Uses the same grouped-list header pattern from Admin.</div></div>
+      <div class="reflow-card reflow-card--new"><div class="reflow-card__num">04 · NEW</div><div class="reflow-card__title">Type badge (audit)</div><div class="reflow-card__body">Compact 10px pill for audit type. Financial=accent, Operational=success-tinted, Compliance=purple. Purple is the only new hue introduced beyond the base palette — reused wherever "governance / legal / compliance" is signaled.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">05</div><div class="reflow-card__title">3-chart row → stacked</div><div class="reflow-card__body">Stage pipeline + Type donut + Workload becomes a single donut card on mobile (the most compact summary), with the horizontal bar and workload available on a "Detail →" screen.</div></div>
+      <div class="reflow-card"><div class="reflow-card__num">06</div><div class="reflow-card__title">Record row → vertical card</div><div class="reflow-card__body">Desktop 4-col grid becomes a stack: title + type badge, meta line, progress bar. Status shows via progress bar color and text color of "N d late" only.</div></div>
+    </div>
+  </div>
+</div>
+<script src="assets/page-shell.js"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
