@@ -55,27 +55,51 @@ export async function POST(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   try {
-    const { companyId, from, to, plant } = await request.json();
-    if (!companyId || !from || !to) {
-      return Response.json({ error: "companyId, from and to are required" }, { status: 400 });
+    const { companyId, from, to, plant, company, channel, branch } = await request.json();
+    if (!from || !to) {
+      return Response.json({ error: "from and to are required" }, { status: 400 });
     }
-    const plantFilter = typeof plant === "string" && plant ? plant : "All";
 
     const db = createServiceClient();
-    const [kpiRes, plantRes, costRes] = await Promise.all([
-      db.rpc("pnl_kpi_summary_plant", { p_company_id: companyId, p_from: from, p_to: to, p_plant: plantFilter }),
-      db.rpc("pnl_plant_margin_trend", { p_company_id: companyId, p_from: from, p_to: to }),
-      db.rpc("pnl_cost_structure", { p_company_id: companyId, p_from: from, p_to: to, p_plant: plantFilter }),
-    ]);
-    if (kpiRes.error) return Response.json({ error: kpiRes.error.message }, { status: 500 });
+    let summary: Record<string, unknown>;
+    let businessContext: string;
 
-    const summary = {
-      scope: plantFilter === "All" ? "Whole company (all plants + HO)" : `${plantFilter} only`,
-      monthly_kpis: kpiRes.data,
-      plant_margins: plantRes.data || [],
-      cost_buckets: costRes.data || [],
-      note: "Amounts are PKR. Costs are negative in monthly_kpis; in cost_buckets expenses are positive and income negative.",
-    };
+    if (company === "IFPL") {
+      // Imperial Footwear — Unze London retail (plan vs actual).
+      const channelFilter = typeof channel === "string" && channel ? channel : "All";
+      const branchFilter = typeof branch === "string" && branch ? branch : "All";
+      const [kpiRes, leagueRes, lineRes] = await Promise.all([
+        db.rpc("ifpl_kpi_by_month", { p_from: from, p_to: to, p_channel: channelFilter, p_branch: branchFilter }),
+        db.rpc("ifpl_branch_league", { p_from: from, p_to: to }),
+        db.rpc("ifpl_line_totals", { p_from: from, p_to: to, p_channel: channelFilter, p_branch: branchFilter }),
+      ]);
+      if (kpiRes.error) return Response.json({ error: kpiRes.error.message }, { status: 500 });
+      summary = {
+        scope: branchFilter !== "All" ? `${branchFilter} branch only` : channelFilter !== "All" ? `${channelFilter} channel only` : "Whole company (all branches)",
+        monthly_plan_vs_actual: kpiRes.data,
+        branch_league: leagueRes.data || [],
+        expense_lines: lineRes.data || [],
+        note: "Amounts are PKR. Every figure has projection (plan) and actual — variance vs plan is central. Highly seasonal retail: Nov-Mar are the peak months.",
+      };
+      businessContext = `The company: Imperial Footwear (brand "Unze London") — Pakistani footwear retailer with ~32 branches across malls and cities plus a large Online PK channel (~24% of sales). Highly seasonal (wedding season Nov-Dec, Eid ~Mar). Head Office and warehouses are cost centres. You are briefing the CEO on plan-vs-actual discipline, branch performance, channel mix and seasonality risk.`;
+    } else {
+      if (!companyId) return Response.json({ error: "companyId is required" }, { status: 400 });
+      const plantFilter = typeof plant === "string" && plant ? plant : "All";
+      const [kpiRes, plantRes, costRes] = await Promise.all([
+        db.rpc("pnl_kpi_summary_plant", { p_company_id: companyId, p_from: from, p_to: to, p_plant: plantFilter }),
+        db.rpc("pnl_plant_margin_trend", { p_company_id: companyId, p_from: from, p_to: to }),
+        db.rpc("pnl_cost_structure", { p_company_id: companyId, p_from: from, p_to: to, p_plant: plantFilter }),
+      ]);
+      if (kpiRes.error) return Response.json({ error: kpiRes.error.message }, { status: 500 });
+      summary = {
+        scope: plantFilter === "All" ? "Whole company (all plants + HO)" : `${plantFilter} only`,
+        monthly_kpis: kpiRes.data,
+        plant_margins: plantRes.data || [],
+        cost_buckets: costRes.data || [],
+        note: "Amounts are PKR. Costs are negative in monthly_kpis; in cost_buckets expenses are positive and income negative.",
+      };
+      businessContext = "";
+    }
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -84,7 +108,9 @@ export async function POST(request: NextRequest) {
       tool_choice: { type: "tool", name: "record_insights" },
       messages: [{
         role: "user",
-        content: `You are a sharp CFO briefing the CEO of a Pakistani pole and smart-meter manufacturer. Analyse the monthly P&L data below and produce 4-6 insights (each tagged good / watch / urgent) and 3-5 concrete actions. Be direct and specific — quote figures in PKR millions (divide raw amounts by 1,000,000, one decimal). Focus on: margin trajectory, loss-making months, plant-level performance differences, cost structure shifts, and how the market context creates risk or opportunity. No fluff.\n\n${MARKET_CONTEXT}\n\nInternal data (JSON):\n${JSON.stringify(summary)}`,
+        content: company === "IFPL"
+          ? `You are a sharp CFO briefing the CEO of a fast-growing Pakistani footwear retailer. Analyse the plan-vs-actual P&L data below and produce 4-6 insights (each tagged good / watch / urgent) and 3-5 concrete actions. Be direct and specific — quote figures in PKR millions (divide raw amounts by 1,000,000, one decimal). Focus on: variance vs plan, branch winners and losers, online vs retail margin mix, seasonality dependence, overhead discipline. No fluff.\n\n${businessContext}\n\nInternal data (JSON):\n${JSON.stringify(summary)}`
+          : `You are a sharp CFO briefing the CEO of a Pakistani pole and smart-meter manufacturer. Analyse the monthly P&L data below and produce 4-6 insights (each tagged good / watch / urgent) and 3-5 concrete actions. Be direct and specific — quote figures in PKR millions (divide raw amounts by 1,000,000, one decimal). Focus on: margin trajectory, loss-making months, plant-level performance differences, cost structure shifts, and how the market context creates risk or opportunity. No fluff.\n\n${MARKET_CONTEXT}\n\nInternal data (JSON):\n${JSON.stringify(summary)}`,
       }],
     });
 

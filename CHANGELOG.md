@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-17 (evening) — Imperial Footwear P&L page: plan vs actual, branch league, named access
+
+Khuram uploaded Imperial's cumulative "PL-CURRENT.xlsx" (Unze London retail: ~32 branches + Online PK, one sheet per month Jul-25→Jun-26, every line carrying Projection | Actual | Variance). A design mockup with the real numbers was approved, then built:
+
+- **New page `/finance/imperial-pnl`** — plan-vs-actual is the spine (Imperial has budgets; Unze doesn't): filter bar (channel chips derived from data, branch dropdown, Month/Quarter/YTD/Custom presets) drives every card; attention banner (branches >20% under plan, loss-makers, latest-month miss); KPI cards with variance; plan-vs-actual combo chart (green/red bars vs projection line); final-profit-by-month chart (the seasonality picture — Nov-Mar carry the year); growth story chart (FY21-22 927m → FY24-25 2,577m from the workbook's Sales Growth sheet, hardcoded, + live current-year total); **branch league** (sortable headers, search, margin RAG chips ≥40/≥34 for retail, click-to-filter, cost centres pinned at bottom); expense watch vs plan + below-the-line strip; CEO commentary; data-quality strip.
+- **Access is named**: Khuram, Kamran, Shakeel, Shahida only. New `canViewIfplPnl()` (PA blocked unconditionally per rule 6; Admin/CEO roles default true; Managers need the new `member_permissions.can_view_ifpl_pnl` override — granted to Shakeel and Shahida in the migration). Wired through PERM_FUNC, pageRegistry ("Imperial P&L" card), and a new `ifpl_pnl` route-guard capability. Verified in the live DB: exactly the 4 people pass.
+- **Pipeline**: `pnl-ifpl-parser.ts` parses the whole cumulative workbook per upload (each month validated independently, accepted months replace what was stored). 12 checks per month in two tiers — structural checks BLOCK (branch sum = the file's own Total (Pk) column; matches the month-wise summary sheet; net sales/operating/final identities on actuals), while file-quality quirks WARN without rejecting (the file genuinely contains: an Aug-25 "Cross Sales" typo, Oct-25's online summary column carrying the brand prefix, "Add:"/"Less:" prefixes that contradict the maths on depreciation, and blank Final Profit cells for 3 branches in Apr-26 — the parser maps/computes around all of them and records 3 warnings). Tested against the real file: **11/11 months accepted, totals reconcile (YTD net sales 4,282.5m, final profit 371.6m)**.
+- `/api/pnl/upload-ifpl` (20 MB limit, maxDuration 60s, replaces months on re-upload) and `/api/pnl/ceo-insights` extended with a `company: "IFPL"` branch using a retail-specific prompt. Migration `144_ifpl_pnl.sql` (3 tables, RLS enabled no policies, 4 read RPCs, permission column + grants) applied with Khuram's standing approval.
+- First data load: Khuram uploads PL-CURRENT.xlsx through the page after deploy — deliberately exercises the real pipeline end to end. Monthly routine thereafter: upload the same workbook; every month in it refreshes.
+
+`tsc --noEmit` clean; eslint clean (8 pre-existing warnings in untouched code paths).
+
+---
+
 ## 2026-07-17 (later) — CEO view v2: mockup-approved redesign, plant filter now drives everything, page is Unze-only
 
 Khuram's feedback on v1: the plant/month filters didn't change most numbers (true — only the expense breakdown was plant-aware), the visuals weren't what he needed, and Imperial must be a separate page for a different audience. A design mockup was built with real numbers, he approved it, and the page was rebuilt to match:

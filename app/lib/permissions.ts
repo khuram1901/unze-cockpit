@@ -130,6 +130,18 @@ export function financeCompanies(u: UserCtx): "both" | "UTPL" | "IFPL" | "none" 
   return "both";
 }
 
+// ── Imperial Footwear P&L (named access) ──────────────────────────
+// The Imperial P&L page is restricted to Khuram, Kamran, Shakeel and
+// Shahida. Admin + CEO roles pass by default (Khuram's accounts, Kamran);
+// Shakeel and Shahida hold per-member overrides (migration 144). PA is
+// blocked unconditionally, before any override — house rule 6.
+export function canViewIfplPnl(u: UserCtx) {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_ifpl_pnl");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+
 // ── Receivables ───────────────────────────────────────────────────
 export function canViewReceivables(u: UserCtx) {
   // Same override-before-PA ordering bug as canViewFinance, fixed the
