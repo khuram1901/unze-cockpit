@@ -67,7 +67,11 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "dept_admin.kpi_charts", label: "KPI cards + charts", page: "Admin" },
   { key: "dept_admin.records_table", label: "Tasks by Company (table)", page: "Admin" },
 
-  { key: "dept_audit.attention_banner", label: "Alert banner", page: "Audit", tip: "Overdue/urgent items dropdown at the top" },
+  { key: "dept_audit.stuck_strip", label: "Where teams are stuck (strip)", page: "Audit", tip: "Manager-only strip flagging sub-tasks over day budget or idle 5+ days" },
+  { key: "dept_audit.team_cards", label: "Team cards", page: "Audit", tip: "The three audit team cards (Unze / Imperial / Restaurants)" },
+  { key: "dept_audit.plan_checklist", label: "Annual plan checklist", page: "Audit", tip: "The team's audit checklist with stage tracker" },
+  { key: "dept_audit.daily_activities", label: "Pre-audit daily activities", page: "Audit", tip: "Reference panel of daily approvals" },
+  { key: "dept_audit.attention_banner", label: "Alert banner (legacy)", page: "Audit", tip: "Overdue/urgent items dropdown in the legacy records section" },
   { key: "dept_audit.kpi_charts", label: "KPI cards + charts", page: "Audit" },
   { key: "dept_audit.records_table", label: "Audit Records (table)", page: "Audit" },
 

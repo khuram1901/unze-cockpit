@@ -6,13 +6,12 @@ import { COMPANIES } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
+import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
-import { canCreateAssignments, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
+import { widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { downloadCSV } from "../../lib/exportUtils";
 import ImportExportButtons from "../../lib/ImportExportButtons";
-import NewTaskForm from "../../tasks/NewTaskForm";
 import { useUserCtx } from "../../lib/useUserCtx";
 import AnnualAuditPlan from "./AnnualAuditPlan";
 
@@ -114,7 +113,6 @@ export default function AuditDashboard() {
   const [items, setItems] = useState<AuditItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [showTaskForm, setShowTaskForm] = useState(false);
   const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -321,17 +319,38 @@ export default function AuditDashboard() {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
         <PageHeader />
-        <button onClick={() => setShowForm(!showForm)} style={{
-          backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: "50%",
-          width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          boxShadow: SHADOWS.MODAL,
-        }} title="Add audit">{showForm ? "×" : "+"}</button>
       </div>
 
       {message && (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px", backgroundColor: COLOURS.CARD, fontSize: "14px", color: COLOURS.NAVY }}>{message}</div>
       )}
+
+      {/* ═══ ANNUAL INTERNAL AUDIT PLAN (primary view) ═══ */}
+      <AnnualAuditPlan userCtx={userCtx} showMsg={showMsg} />
+
+      {/* ═══ AD-HOC / HISTORICAL AUDIT RECORDS (legacy, collapsed by default) ═══ */}
+      <div
+        onClick={() => setShowLegacy(!showLegacy)}
+        style={{
+          border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD,
+          padding: "10px 18px", cursor: "pointer", display: "flex", justifyContent: "space-between",
+          alignItems: "center", marginBottom: "14px", marginTop: "8px",
+        }}
+      >
+        <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.INK_700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Ad-hoc &amp; Historical Audit Records
+        </span>
+        <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>{items.length} record{items.length !== 1 ? "s" : ""} {showLegacy ? "▲" : "▼"}</span>
+      </div>
+
+      {showLegacy && (
+      <>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px" }}>
+        <button onClick={() => setShowForm(!showForm)} style={{
+          backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL,
+          padding: "7px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+        }}>{showForm ? "Cancel" : "+ Add ad-hoc audit"}</button>
+      </div>
 
       {/* Add Audit form */}
       {showForm && (
@@ -357,44 +376,6 @@ export default function AuditDashboard() {
         </div>
       )}
 
-      {/* Issue Task */}
-      {userCtx && canCreateAssignments(userCtx) && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
-          <button
-            onClick={() => setShowTaskForm(!showTaskForm)}
-            style={{ backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL, padding: "8px 16px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-          >
-            {showTaskForm ? "Cancel" : "+ Issue Task"}
-          </button>
-        </div>
-      )}
-
-      {showTaskForm && (
-        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`, borderRadius: RADII.CARD, marginBottom: "14px", overflow: "hidden" }}>
-          <NewTaskForm onCreated={() => { setShowTaskForm(false); loadData(); }} />
-        </div>
-      )}
-
-      {/* ═══ ANNUAL INTERNAL AUDIT PLAN (primary view) ═══ */}
-      <AnnualAuditPlan userCtx={userCtx} showMsg={showMsg} />
-
-      {/* ═══ AD-HOC / HISTORICAL AUDIT RECORDS (legacy, collapsed by default) ═══ */}
-      <div
-        onClick={() => setShowLegacy(!showLegacy)}
-        style={{
-          border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD,
-          padding: "10px 18px", cursor: "pointer", display: "flex", justifyContent: "space-between",
-          alignItems: "center", marginBottom: "14px", marginTop: "8px",
-        }}
-      >
-        <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.INK_700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Ad-hoc &amp; Historical Audit Records
-        </span>
-        <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>{items.length} record{items.length !== 1 ? "s" : ""} {showLegacy ? "▲" : "▼"}</span>
-      </div>
-
-      {showLegacy && (
-      <>
       {/* ═══ ZONE 1: ALERT BANNER ═══ */}
       {wv("dept_audit.attention_banner", true) && !loading && overdue > 0 && (
         <div style={WARNING_BANNER_STYLE}>

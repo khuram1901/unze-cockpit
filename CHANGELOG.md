@@ -4,6 +4,19 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-18 (later) — Audit page redesigned around the three audit teams
+
+Khuram found the first plan layout confusing; a mockup-first redesign was approved in chat. The page is now team-based:
+
+- **Three teams (pairs)**: Unze Trading (UTPL), Imperial (IFPL), Restaurants (HD + Baranh). Migration `148_audit_teams.sql`: `audit_teams` / `audit_team_companies` / `audit_team_members` (seeded with the best-guess pairs — Abdul Rehman + Amina, Junaid + Attia, Khizar + Fraz — Khuram to confirm; editable in-app), `started_at` on stage tasks, `is_audit_manager()` helper, `audit_team_overview()` RPC (visibility enforced in the DB: managers see all, members only their team, others empty), `audit_assign_team()` RPC.
+- **Manager view** (Khuram/Kamran/Shahid): "Where teams are stuck" strip (sub-tasks over their day budget or idle 5+ days), three team cards with done/running/stuck/overdue counts, click a card to open that team's checklist, "Edit team members" panel.
+- **Member view**: banner naming their team, then only their checklist — nothing else to navigate.
+- **Stage tracker**: completed stages collapse to one line with completion date; the current stage opens as a box listing its bits, each with responsible, day budget, and Start / ✓ Mark done buttons (dates record automatically; reopen link to undo). Over-budget bits show "N days in, budget M — X over" in red.
+- **Removed** the "+ Issue Task" button; the ad-hoc "+" add form moved inside the collapsed legacy records section. New widget keys: `dept_audit.stuck_strip` / `team_cards` / `plan_checklist` / `daily_activities`.
+- Migration applied; teams verified in the live DB. tsc clean for audit files; eslint shows only the codebase's pre-existing patterns.
+
+---
+
 ## 2026-07-18 — Annual Internal Audit Plan built from the audit manager's workbook
 
 The audit page is now organised around the audit manager's "Audit activities" Excel plan (FY 2025-26, year end 30/06/2026) instead of a flat ad-hoc list:
