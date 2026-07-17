@@ -11,7 +11,7 @@ import {
   primaryButtonStyle, inputStyle, labelStyle, cardStyle,
 } from "../../lib/SharedUI";
 import { formatDateUK } from "../../lib/dateUtils";
-import DateInput from "../../lib/DateInput";
+import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -946,7 +946,7 @@ export default function StockManagePage() {
                   <Field label="Customer name *"><input value={poForm.customer_name} onChange={(e) => setPOForm({ ...poForm, customer_name: e.target.value })} placeholder="e.g. FESCO, MEPCO, Packages Ltd" style={{ ...inputStyle, width: "100%" }} /></Field>
                   <Field label="PO number *"><input value={poForm.po_number} onChange={(e) => setPOForm({ ...poForm, po_number: e.target.value })} placeholder="e.g. FESCO-2024-001" style={{ ...inputStyle, width: "100%" }} /></Field>
                   <Field label="PO label / description"><input value={poForm.po_label} onChange={(e) => setPOForm({ ...poForm, po_label: e.target.value })} placeholder="e.g. 1st Year with 15% Repeat" style={{ ...inputStyle, width: "100%" }} /></Field>
-                  <Field label="Start date"><DateInput value={poForm.start_date} onChange={(e) => setPOForm({ ...poForm, start_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                  <Field label="Start date"><DateInputWithCalendar value={poForm.start_date} onChange={(e) => setPOForm({ ...poForm, start_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                 </div>
                 <div style={{ ...kicker, margin: "12px 0 8px" }}>Ordered quantities (by size)</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px,1fr))", gap: "10px" }}>
@@ -986,9 +986,9 @@ export default function StockManagePage() {
                     </select>
                   </Field>
                   <Field label="Letter / reference number *"><input value={letterForm.letter_number} onChange={(e) => setLetterForm({ ...letterForm, letter_number: e.target.value })} placeholder="e.g. FESCO-LT-2291" style={{ ...inputStyle, width: "100%" }} /></Field>
-                  <Field label="Issue date *"><DateInput value={letterForm.issue_date} onChange={(e) => setLetterForm({ ...letterForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                  <Field label="Issue date *"><DateInputWithCalendar value={letterForm.issue_date} onChange={(e) => setLetterForm({ ...letterForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                   <Field label="Authorised by *"><input value={letterForm.issued_by} onChange={(e) => setLetterForm({ ...letterForm, issued_by: e.target.value })} placeholder="Name of contact who authorised collection" style={{ ...inputStyle, width: "100%" }} /></Field>
-                  <Field label="Expiry date (optional)"><DateInput value={letterForm.expiry_date} onChange={(e) => setLetterForm({ ...letterForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                  <Field label="Expiry date (optional)"><DateInputWithCalendar value={letterForm.expiry_date} onChange={(e) => setLetterForm({ ...letterForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                 </div>
                 <div style={{ ...kicker, margin: "10px 0 8px" }}>Letter quantity (authorised to collect)</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px,1fr))", gap: "10px" }}>
@@ -1131,7 +1131,7 @@ export default function StockManagePage() {
                             <Field label="Customer name *"><input value={editPOForm.customer_name} onChange={(e) => setEditPOForm({ ...editPOForm, customer_name: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                             <Field label="PO number *"><input value={editPOForm.po_number} onChange={(e) => setEditPOForm({ ...editPOForm, po_number: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                             <Field label="PO label / description"><input value={editPOForm.po_label} onChange={(e) => setEditPOForm({ ...editPOForm, po_label: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                            <Field label="Start date"><DateInput value={editPOForm.start_date} onChange={(e) => setEditPOForm({ ...editPOForm, start_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                            <Field label="Start date"><DateInputWithCalendar value={editPOForm.start_date} onChange={(e) => setEditPOForm({ ...editPOForm, start_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                           </div>
                           <div style={{ ...kicker, margin: "10px 0 8px" }}>Ordered quantities (by size)</div>
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px,1fr))", gap: "8px" }}>
@@ -1210,9 +1210,9 @@ export default function StockManagePage() {
                                             </select>
                                           </Field>
                                           <Field label="Letter number"><input value={editLetterForm.letter_number} onChange={(e) => setEditLetterForm({ ...editLetterForm, letter_number: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                                          <Field label="Issue date"><DateInput value={editLetterForm.issue_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                                          <Field label="Issue date"><DateInputWithCalendar value={editLetterForm.issue_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                                           <Field label="Issued by"><input value={editLetterForm.issued_by} onChange={(e) => setEditLetterForm({ ...editLetterForm, issued_by: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                                          <Field label="Expiry date"><DateInput value={editLetterForm.expiry_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                                          <Field label="Expiry date"><DateInputWithCalendar value={editLetterForm.expiry_date} onChange={(e) => setEditLetterForm({ ...editLetterForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                                         </div>
                                         <div style={{ ...kicker, margin: "8px 0 6px" }}>Authorised quantities</div>
                                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: "8px" }}>
@@ -1304,7 +1304,7 @@ export default function StockManagePage() {
                                               <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", backgroundColor: COLOURS.CARD, marginBottom: "10px" }}>
                                                 <div style={{ ...kicker, marginBottom: "8px" }}>Record new dispatch</div>
                                                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
-                                                  <Field label="Date *"><DateInput value={newDispatchForm.dispatch_date} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                                                  <Field label="Date *"><DateInputWithCalendar value={newDispatchForm.dispatch_date} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                                                   <Field label="Released by *"><input value={newDispatchForm.released_by} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, released_by: e.target.value })} placeholder="Name of person releasing poles" style={{ ...inputStyle, width: "100%" }} /></Field>
                                                   <Field label="Vehicle number"><input value={newDispatchForm.vehicle_number} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, vehicle_number: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
                                                 </div>
@@ -1332,7 +1332,7 @@ export default function StockManagePage() {
                                                 {editDispatchId === d.id ? (
                                                   <div>
                                                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
-                                                      <Field label="Date"><DateInput value={editDispatchForm.dispatch_date} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                                                      <Field label="Date"><DateInputWithCalendar value={editDispatchForm.dispatch_date} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                                                       <Field label="Released by"><input value={editDispatchForm.released_by} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, released_by: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                                                       <Field label="Vehicle"><input value={editDispatchForm.vehicle_number} onChange={(e) => setEditDispatchForm({ ...editDispatchForm, vehicle_number: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
                                                     </div>

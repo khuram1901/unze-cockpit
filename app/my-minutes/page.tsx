@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, CountCard, StatusBadge, inputStyle, primaryButtonStyle, labelStyle, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import { canSeeAllMinutes, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -442,7 +442,7 @@ function MyMinutesPage() {
                               </div>
                               <div>
                                 <label style={labelStyle}>Due date</label>
-                                <DateInput value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} required
+                                <DateInputWithCalendar value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} required
                                   style={{ ...inputStyle, borderColor: !newTaskDue ? COLOURS.RED : undefined }} />
                               </div>
                               <div>

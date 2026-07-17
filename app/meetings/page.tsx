@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import { useRequireCapability } from "../lib/useRouteGuard";
@@ -938,7 +938,7 @@ export default function MeetingsPage() {
                   </div>
                   <div>
                     <label style={{ ...labelStyle, fontSize: "12px", color: !item.due_date ? COLOURS.RED : undefined }}>Due Date *</label>
-                    <DateInput value={item.due_date || ""} onChange={(e) => updateActionItem(i, { due_date: e.target.value })} required
+                    <DateInputWithCalendar value={item.due_date || ""} onChange={(e) => updateActionItem(i, { due_date: e.target.value })} required
                       style={{ ...smallField, borderColor: !item.due_date ? COLOURS.RED : undefined }} />
                   </div>
                   <div>

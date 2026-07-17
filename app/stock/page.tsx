@@ -6,7 +6,7 @@ import { useRequireCapability } from "../lib/useRouteGuard";
 import { supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, PageHeader, SectionTitle, SkeletonRows, ErrorBanner, useToast } from "../lib/SharedUI";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { formatDateUK, todayPakistanISO } from "../lib/dateUtils";
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ function DispatchModal({ target, onClose, onSaved }: {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
           <div>
             <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Date *</label>
-            <DateInput value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} style={inputSt} />
+            <DateInputWithCalendar value={form.dispatch_date} onChange={(e) => setForm({ ...form, dispatch_date: e.target.value })} style={inputSt} />
           </div>
           <div>
             <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Released by *</label>

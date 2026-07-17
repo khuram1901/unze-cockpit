@@ -4,7 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { COLOURS, RADII, SectionTitle, PageHeader, useConfirm } from "../lib/SharedUI";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { canEditInvestments, canRefreshInvestmentPrices, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -597,7 +597,7 @@ export default function InvestmentsPage() {
         {/* Date selector */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "14px", flexWrap: "wrap" }}>
           <span style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>View portfolio as of:</span>
-          <DateInput
+          <DateInputWithCalendar
             value={selectedDate}
             onChange={(e) => { setSelectedDate(e.target.value); setLoading(true); }}
             style={{ padding: "6px 10px", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "6px", fontSize: "15px" }}
@@ -728,7 +728,7 @@ export default function InvestmentsPage() {
                   <input placeholder="Company Name" value={formCompany} onChange={(e) => setFormCompany(e.target.value)} style={inputStyle} />
                   <input placeholder="Quantity" type="number" step="1" value={formQty} onChange={(e) => setFormQty(e.target.value)} required style={inputStyle} />
                   <input placeholder="Buy Price (Rs)" type="number" step="0.01" value={formBuyPrice} onChange={(e) => setFormBuyPrice(e.target.value)} required style={inputStyle} />
-                  <DateInput placeholder="Buy Date" value={formBuyDate} onChange={(e) => setFormBuyDate(e.target.value)} style={inputStyle} />
+                  <DateInputWithCalendar placeholder="Buy Date" value={formBuyDate} onChange={(e) => setFormBuyDate(e.target.value)} style={inputStyle} />
                   <input placeholder="Target Price (Rs)" type="number" step="0.01" value={formTarget} onChange={(e) => setFormTarget(e.target.value)} style={inputStyle} />
                   <input placeholder="Notes" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} style={inputStyle} />
                   <div style={{ display: "flex", gap: "8px" }}>
@@ -1161,15 +1161,15 @@ export default function InvestmentsPage() {
                             </div>
                             <div>
                               <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Ex-Dividend Date *</label>
-                              <DateInput value={divExDate} onChange={(e) => setDivExDate(e.target.value)} required style={inputStyle} />
+                              <DateInputWithCalendar value={divExDate} onChange={(e) => setDivExDate(e.target.value)} required style={inputStyle} />
                             </div>
                             <div>
                               <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Payment Date</label>
-                              <DateInput value={divPayDate} onChange={(e) => setDivPayDate(e.target.value)} style={inputStyle} />
+                              <DateInputWithCalendar value={divPayDate} onChange={(e) => setDivPayDate(e.target.value)} style={inputStyle} />
                             </div>
                             <div>
                               <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Announced Date</label>
-                              <DateInput value={divAnnounced} onChange={(e) => setDivAnnounced(e.target.value)} style={inputStyle} />
+                              <DateInputWithCalendar value={divAnnounced} onChange={(e) => setDivAnnounced(e.target.value)} style={inputStyle} />
                             </div>
                             <div>
                               <label style={{ fontSize: "12px", color: SLATE, display: "block", marginBottom: "3px" }}>Notes</label>

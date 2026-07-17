@@ -5,7 +5,7 @@ import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK, todayPakistanISO } from "../lib/dateUtils";
 import { canAccessDailyEntry, type UserCtx, type PermOverrides } from "../lib/permissions";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { COLOURS, RADII, cardStyle, tableHeaderStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle } from "../lib/SharedUI";
 
 type Plant = {
@@ -679,7 +679,7 @@ export default function ProductionForm() {
         )}
         <div>
           <label style={labelStyle}>Date
-            <DateInput
+            <DateInputWithCalendar
               style={{ ...inputStyle, marginBottom: 0, width: "auto" }}
               value={entryDate}
               onChange={(e) => setEntryDate(e.target.value)}

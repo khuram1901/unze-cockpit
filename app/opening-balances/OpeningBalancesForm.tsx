@@ -5,7 +5,7 @@ import { supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { COLOURS, RADII, cardStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle, SectionTitle } from "../lib/SharedUI";
 import { canEditFinance, type UserCtx, type PermOverrides } from "../lib/permissions";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 
 type Plant = { id: string; name: string; type: string };
 type PO = { id: string; customer_name: string; po_number: string; po_label: string; is_system_unallocated: boolean };
@@ -234,7 +234,7 @@ export default function OpeningBalancesForm() {
 
           <label style={labelStyle}>
             As of date
-            <DateInput style={inputStyle} value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} required />
+            <DateInputWithCalendar style={inputStyle} value={asOfDate} onChange={(e) => setAsOfDate(e.target.value)} required />
             {asOfDate && <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px", display: "block" }}>{asOfDateUK}</span>}
           </label>
         </div>

@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
 import {
@@ -396,7 +396,7 @@ export default function PADashboardPage() {
               <select value={task.priority || "Normal"} onChange={(e) => updateTask(task.id, { priority: e.target.value })} style={controlStyle}>
                 {PRIORITIES.map((p) => <option key={p}>{p}</option>)}
               </select>
-              <DateInput value={task.due_date || ""} onChange={(e) => updateTask(task.id, { due_date: e.target.value || null })} style={controlStyle} />
+              <DateInputWithCalendar value={task.due_date || ""} onChange={(e) => updateTask(task.id, { due_date: e.target.value || null })} style={controlStyle} />
               <select value={task.assigned_to || ""} onChange={async (e) => {
                 const m = members.find((mem) => memberName(mem) === e.target.value);
                 const prevOwner = task.assigned_to || "unassigned";
@@ -535,7 +535,7 @@ export default function PADashboardPage() {
                       {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </label>
-                  <label style={labelStyle}>Due Date <DateInput value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} required style={inputStyle} /></label>
+                  <label style={labelStyle}>Due Date <DateInputWithCalendar value={newDueDate} onChange={(e) => setNewDueDate(e.target.value)} required style={inputStyle} /></label>
                   <label style={labelStyle}>Priority
                     <select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} style={inputStyle}>
                       {PRIORITIES.map((p) => <option key={p}>{p}</option>)}

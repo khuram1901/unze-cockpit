@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { COMPANIES } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
-import DateInput from "../../lib/DateInput";
+import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useToast } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
@@ -346,8 +346,8 @@ export default function AuditDashboard() {
               <label style={lbl}>Audit Area <input style={inp} value={auditArea} onChange={(e) => setAuditArea(e.target.value)} required placeholder="e.g. Procurement Process" /></label>
               <label style={lbl}>Audit Type <select style={inp} value={auditType} onChange={(e) => setAuditType(e.target.value)} required><option value="">Select</option>{AUDIT_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
               <label style={lbl}>Assigned To <input style={inp} value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder="Auditor name" required /></label>
-              <label style={lbl}>Planned Date <DateInput style={inp} value={plannedDate} onChange={(e) => setPlannedDate(e.target.value)} /></label>
-              <label style={lbl}>Target Date <DateInput style={inp} value={targetDate} onChange={(e) => setTargetDate(e.target.value)} required /></label>
+              <label style={lbl}>Planned Date <DateInputWithCalendar style={inp} value={plannedDate} onChange={(e) => setPlannedDate(e.target.value)} /></label>
+              <label style={lbl}>Target Date <DateInputWithCalendar style={inp} value={targetDate} onChange={(e) => setTargetDate(e.target.value)} required /></label>
               <label style={lbl}>Scope <textarea style={{ ...inp, height: "50px" }} value={scope} onChange={(e) => setScope(e.target.value)} placeholder="What will be audited" /></label>
             </div>
             <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL, padding: "8px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", marginTop: "10px" }}>{saving ? "Saving…" : "Add Audit"}</button>
@@ -624,7 +624,7 @@ export default function AuditDashboard() {
                           </div>
                           <div>
                             <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "3px" }}>Target Date</div>
-                            <DateInput style={inp} value={item.target_date || ""} onChange={(e) => updateField(item.id, "target_date", e.target.value || null)} />
+                            <DateInputWithCalendar style={inp} value={item.target_date || ""} onChange={(e) => updateField(item.id, "target_date", e.target.value || null)} />
                           </div>
                         </div>
                       </div>

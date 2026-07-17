@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, HD_COMPANY_ID, BRNH_COMPANY_ID, DIR_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
-import DateInput from "../../lib/DateInput";
+import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
 import { useMobile } from "../../lib/useMobile";
 import {
   COLOURS, RADII, SHADOWS, PageHeader, SectionTitle, CountCard, StatusBadge,
@@ -552,8 +552,8 @@ export default function TaxationDashboard() {
               <label style={labelStyle}>Type <select style={inputStyle} value={formData.notice_type || ""} onChange={(e) => setField("notice_type", e.target.value)} required><option value="">Select</option>{NOTICE_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
               <label style={labelStyle}>Company <select style={inputStyle} value={formData.company_name || ""} onChange={(e) => setField("company_name", e.target.value)} required><option value="">Select</option>{COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></label>
               <label style={labelStyle}>Consultant <select style={inputStyle} value={formData.consultant_name || ""} onChange={(e) => setField("consultant_name", e.target.value)}><option value="">Select</option>{CONSULTANTS.map((c) => <option key={c}>{c}</option>)}</select></label>
-              <label style={labelStyle}>Received Date <DateInput style={inputStyle} value={formData.received_date || ""} onChange={(e) => setField("received_date", e.target.value)} /></label>
-              <label style={labelStyle}>Hearing Deadline <DateInput style={inputStyle} value={formData.hearing_deadline || ""} onChange={(e) => setField("hearing_deadline", e.target.value)} /></label>
+              <label style={labelStyle}>Received Date <DateInputWithCalendar style={inputStyle} value={formData.received_date || ""} onChange={(e) => setField("received_date", e.target.value)} /></label>
+              <label style={labelStyle}>Hearing Deadline <DateInputWithCalendar style={inputStyle} value={formData.hearing_deadline || ""} onChange={(e) => setField("hearing_deadline", e.target.value)} /></label>
               <label style={labelStyle}>Financial Exposure (PKR) <input type="number" style={inputStyle} value={formData.financial_exposure || ""} onChange={(e) => setField("financial_exposure", e.target.value)} placeholder="0" /></label>
               <label style={labelStyle}>Notice Status <select style={inputStyle} value={formData.notice_status || ""} onChange={(e) => setField("notice_status", e.target.value)}><option value="">— None —</option>{NOTICE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></label>
               <label style={labelStyle}>Legal Stage <select style={inputStyle} value={formData.legal_stage || ""} onChange={(e) => setField("legal_stage", e.target.value)}><option value="">— None —</option>{LEGAL_STAGES.map((s) => <option key={s}>{s}</option>)}</select></label>
@@ -730,8 +730,8 @@ export default function TaxationDashboard() {
                                   <label style={labelStyle}>Type<select style={inputStyle} value={editForm.notice_type} onChange={(e) => setEditForm({ ...editForm, notice_type: e.target.value })}><option value="">Select</option>{NOTICE_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
                                   <label style={labelStyle}>Company<select style={inputStyle} value={editForm.company_name} onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })}><option value="">Select</option>{COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></label>
                                   <label style={labelStyle}>Consultant<select style={inputStyle} value={editForm.consultant_name} onChange={(e) => setEditForm({ ...editForm, consultant_name: e.target.value })}><option value="">Select</option>{CONSULTANTS.map((c) => <option key={c}>{c}</option>)}</select></label>
-                                  <label style={labelStyle}>Received Date<DateInput style={inputStyle} value={editForm.received_date} onChange={(e) => setEditForm({ ...editForm, received_date: e.target.value })} /></label>
-                                  <label style={labelStyle}>Hearing Deadline<DateInput style={inputStyle} value={editForm.hearing_deadline} onChange={(e) => setEditForm({ ...editForm, hearing_deadline: e.target.value })} /></label>
+                                  <label style={labelStyle}>Received Date<DateInputWithCalendar style={inputStyle} value={editForm.received_date} onChange={(e) => setEditForm({ ...editForm, received_date: e.target.value })} /></label>
+                                  <label style={labelStyle}>Hearing Deadline<DateInputWithCalendar style={inputStyle} value={editForm.hearing_deadline} onChange={(e) => setEditForm({ ...editForm, hearing_deadline: e.target.value })} /></label>
                                   <label style={labelStyle}>Financial Exposure (PKR)<input type="number" style={inputStyle} value={editForm.financial_exposure} onChange={(e) => setEditForm({ ...editForm, financial_exposure: e.target.value })} /></label>
                                   <label style={labelStyle}>Resolution Status<select style={inputStyle} value={editForm.resolution_status} onChange={(e) => setEditForm({ ...editForm, resolution_status: e.target.value })}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select></label>
                                   <label style={labelStyle}>Our Action Required<textarea style={{ ...inputStyle, height: "52px" }} value={editForm.our_action_required} onChange={(e) => setEditForm({ ...editForm, our_action_required: e.target.value })} /></label>

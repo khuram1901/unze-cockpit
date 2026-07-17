@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { COLOURS, RADII, cardStyle, tableHeaderStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle } from "../lib/SharedUI";
 
 type Stage = {
@@ -336,7 +336,7 @@ export default function ReceivablesSection({
           </label>
           <label style={labelStyle}>
             Date submitted
-            <DateInput
+            <DateInputWithCalendar
               style={inputStyle}
               value={dateSubmitted}
               onChange={(e) => setDateSubmitted(e.target.value)}

@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, SectionTitle, CountCard, SkeletonRows, inputStyle, labelStyle } from "../lib/SharedUI";
 import { logAction } from "../lib/audit-log";
@@ -471,7 +471,7 @@ export default function ReceivablesPage() {
                 </div>
                 <div>
                   <label style={lbl}>Date Submitted</label>
-                  <DateInput style={inp} value={dateSubmitted} onChange={(e) => setDateSubmitted(e.target.value)} required />
+                  <DateInputWithCalendar style={inp} value={dateSubmitted} onChange={(e) => setDateSubmitted(e.target.value)} required />
                 </div>
                 <div>
                   <label style={lbl}>Invoice Ref</label>
@@ -604,7 +604,7 @@ export default function ReceivablesPage() {
                                     </div>
                                     <div>
                                       <label style={{ fontSize: "10.5px", color: COLOURS.SLATE, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: "3px" }}>Date Submitted</label>
-                                      <DateInput value={editForm.date_submitted} onChange={(e) => setEditForm({ ...editForm, date_submitted: e.target.value })} style={{ ...inp, display: "block", width: "100%", boxSizing: "border-box" as const }} />
+                                      <DateInputWithCalendar value={editForm.date_submitted} onChange={(e) => setEditForm({ ...editForm, date_submitted: e.target.value })} style={{ ...inp, display: "block", width: "100%", boxSizing: "border-box" as const }} />
                                     </div>
                                     <div>
                                       <label style={{ fontSize: "10.5px", color: COLOURS.SLATE, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: "3px" }}>Bill Type</label>

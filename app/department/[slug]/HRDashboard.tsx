@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { COMPANIES, getCompanyById } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
-import DateInput from "../../lib/DateInput";
+import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, StatusBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR } from "../../lib/SharedUI";
 import { logAction } from "../../lib/audit-log";
@@ -225,7 +225,7 @@ export default function HRDashboard() {
               <label style={lbl}>Company <select style={inp} value={companyId} onChange={(e) => setCompanyId(e.target.value)} required><option value="">Select</option>{COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
               <label style={lbl}>Position Title <input style={inp} value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Finance Manager" /></label>
               <label style={lbl}>Department <select style={inp} value={dept} onChange={(e) => setDept(e.target.value)} required><option value="">Select</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></label>
-              <label style={lbl}>Date Opened <DateInput style={inp} value={dateOpened} onChange={(e) => setDateOpened(e.target.value)} required /></label>
+              <label style={lbl}>Date Opened <DateInputWithCalendar style={inp} value={dateOpened} onChange={(e) => setDateOpened(e.target.value)} required /></label>
               <label style={{ ...lbl, gridColumn: isMobile ? undefined : "1 / -1" }}>Notes <textarea style={{ ...inp, height: "50px" }} value={notes} onChange={(e) => setNotes(e.target.value)} /></label>
             </div>
             <button type="submit" disabled={saving} style={{ backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: RADII.PILL, padding: "8px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", marginTop: "8px" }}>{saving ? "Saving…" : "Save"}</button>

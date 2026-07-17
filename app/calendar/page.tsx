@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import {
   COLOURS,
   RADII,
@@ -335,7 +335,7 @@ export default function CalendarPage() {
                   </div>
                   <div>
                     <label style={labelStyle}>Date</label>
-                    <DateInput style={inputStyle} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} />
+                    <DateInputWithCalendar style={inputStyle} value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} />
                   </div>
                 </div>
 

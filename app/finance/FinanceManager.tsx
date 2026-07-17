@@ -10,7 +10,7 @@ import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import * as XLSX from "xlsx";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ReferenceLine, LabelList } from "recharts";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { canEditFinance, isAdminTier, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { UTPL_COMPANY_ID } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
@@ -784,7 +784,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               <p style={{ fontSize: "13px", color: SLATE, marginBottom: "12px" }}>Enter today's figures from the accountant's statement.</p>
               <form onSubmit={saveDailyPosition}>
                 <label style={labelStyle}>Date
-                  <DateInput value={dpDate} onChange={(e) => setDpDate(e.target.value)} style={inputStyle} required />
+                  <DateInputWithCalendar value={dpDate} onChange={(e) => setDpDate(e.target.value)} style={inputStyle} required />
                 </label>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
                   <label style={labelStyle}>Opening (PKR)
@@ -1148,7 +1148,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           <form onSubmit={saveOpeningBalance}>
             <label style={labelStyle}>
               <span style={kickerLabel}>As of date</span>
-              <DateInput
+              <DateInputWithCalendar
                 value={obDate}
                 onChange={(e) => setObDate(e.target.value)}
                 style={inputStyle}

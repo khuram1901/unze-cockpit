@@ -8,7 +8,7 @@ import { canViewGuaranteeFinancials, canManageGuarantees, widgetVisible } from "
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, cardStyle, useToast, useConfirm, primaryButtonStyle, inputStyle, labelStyle } from "../../lib/SharedUI";
 import { formatDateUK } from "../../lib/dateUtils";
-import DateInput from "../../lib/DateInput";
+import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -352,7 +352,7 @@ function BillPicker({ linkedId, linkedDate, linkedRef, onLink, onManualDate, man
         </button>
         {showManual && (
           <div style={{ marginTop: "6px" }}>
-            <DateInput value={manualDate} onChange={(e) => onManualDate(e.target.value)} style={{ ...inputStyle, width: "220px" }} />
+            <DateInputWithCalendar value={manualDate} onChange={(e) => onManualDate(e.target.value)} style={{ ...inputStyle, width: "220px" }} />
             <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px" }}>Used as fallback if no bill is linked above</div>
           </div>
         )}
@@ -808,8 +808,8 @@ export default function GuaranteesPage() {
               <Field label="Guarantee / PO number *">
                 <input value={addForm.guarantee_number} onChange={(e) => setAddForm({ ...addForm, guarantee_number: e.target.value })} placeholder="Bank-issued reference" style={{ ...inputStyle, width: "100%" }} />
               </Field>
-              <Field label="Issue date *"><DateInput value={addForm.issue_date} onChange={(e) => setAddForm({ ...addForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-              <Field label="Expiry date"><DateInput value={addForm.expiry_date} onChange={(e) => setAddForm({ ...addForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Issue date *"><DateInputWithCalendar value={addForm.issue_date} onChange={(e) => setAddForm({ ...addForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+              <Field label="Expiry date"><DateInputWithCalendar value={addForm.expiry_date} onChange={(e) => setAddForm({ ...addForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="Amount (PKR) *"><input type="number" min="0" value={addForm.amount} onChange={(e) => setAddForm({ ...addForm, amount: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
               <Field label="Cash margin %">
                 <input type="number" min="0" max="100" value={addForm.cash_margin_pct} onChange={(e) => setAddForm({ ...addForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} />
@@ -1071,8 +1071,8 @@ export default function GuaranteesPage() {
                             );
                           })()}
                         </Field>
-                        <Field label="Issue date"><DateInput value={editForm.issue_date} onChange={(e) => setEditForm({ ...editForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Expiry date"><DateInput value={editForm.expiry_date} onChange={(e) => setEditForm({ ...editForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Issue date"><DateInputWithCalendar value={editForm.issue_date} onChange={(e) => setEditForm({ ...editForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Expiry date"><DateInputWithCalendar value={editForm.expiry_date} onChange={(e) => setEditForm({ ...editForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Amount (PKR)"><input type="number" min="0" value={editForm.amount} onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Cash margin %"><input type="number" min="0" max="100" value={editForm.cash_margin_pct} onChange={(e) => setEditForm({ ...editForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Bank charges (PKR)"><input type="number" min="0" value={editForm.bank_charges} onChange={(e) => setEditForm({ ...editForm, bank_charges: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
@@ -1123,8 +1123,8 @@ export default function GuaranteesPage() {
                             return sel ? <div style={{ marginTop: "4px", fontSize: "11px", color: COLOURS.GREEN, fontWeight: 600 }}>Bank: {sel.bank_name} · Available: {pkr(sel.available)}</div> : null;
                           })()}
                         </Field>
-                        <Field label="Issue date *"><DateInput value={convertForm.issue_date} onChange={(e) => setConvertForm({ ...convertForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                        <Field label="Expiry date"><DateInput value={convertForm.expiry_date} onChange={(e) => setConvertForm({ ...convertForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Issue date *"><DateInputWithCalendar value={convertForm.issue_date} onChange={(e) => setConvertForm({ ...convertForm, issue_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
+                        <Field label="Expiry date"><DateInputWithCalendar value={convertForm.expiry_date} onChange={(e) => setConvertForm({ ...convertForm, expiry_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Amount (PKR) *"><input type="number" min="0" value={convertForm.amount} onChange={(e) => setConvertForm({ ...convertForm, amount: e.target.value })} placeholder="Performance guarantee amount" style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Cash margin %"><input type="number" min="0" max="100" value={convertForm.cash_margin_pct} onChange={(e) => setConvertForm({ ...convertForm, cash_margin_pct: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
                         <Field label="Bank charges (PKR)"><input type="number" min="0" value={convertForm.bank_charges} onChange={(e) => setConvertForm({ ...convertForm, bank_charges: e.target.value })} placeholder="0" style={{ ...inputStyle, width: "100%" }} /></Field>
@@ -1156,7 +1156,7 @@ export default function GuaranteesPage() {
                         {canRelease ? "Mark as Released" : "Mark as Returned to Bank"}
                       </div>
                       <Field label={canRelease ? "Release date" : "Return date"}>
-                        <DateInput value={returnedDate} onChange={(e) => setReturnedDate(e.target.value)} style={{ ...inputStyle, width: "260px" }} />
+                        <DateInputWithCalendar value={returnedDate} onChange={(e) => setReturnedDate(e.target.value)} style={{ ...inputStyle, width: "260px" }} />
                       </Field>
                       <div style={{ display: "flex", gap: "8px" }}>
                         <button

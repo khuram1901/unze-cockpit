@@ -15,7 +15,7 @@ import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpi
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
-import DateInput from "../lib/DateInput";
+import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import TaxComplianceSummary from "../accounts-tax/TaxComplianceSummary";
 
 const { NAVY, SLATE, BORDER, CANVAS, HAIRLINE, CARD_ALT, INK_700, INK_400, GREEN, AMBER, RED, BLUE, SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT } = COLOURS;
@@ -2596,7 +2596,7 @@ function ExecutiveDashboardBody({
         )}
         <div style={{ backgroundColor: COLOURS.CARD, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 12px", flexShrink: 0 }}>
           <label style={{ fontWeight: 700, display: "block", marginBottom: "3px", fontSize: "15px", color: SLATE }}>View date</label>
-          <DateInput
+          <DateInputWithCalendar
             value={selectedDate}
             min={minDate}
             max={today}
