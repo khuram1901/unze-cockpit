@@ -78,15 +78,16 @@ if not exists (select 1 from audit_teams) then
   select t_rest, id from companies where short_code in ('HD', 'BRNH');
 
   -- name matching tolerant of double spaces in members.name
+  -- Pairs confirmed by Khuram 18/07/2026
   insert into audit_team_members (team_id, member_id)
   select t_unze, id from members
-   where department = 'Audit' and regexp_replace(name, '\s+', ' ', 'g') in ('Abdul Rehman', 'Amina Sikandar');
+   where department = 'Audit' and regexp_replace(name, '\s+', ' ', 'g') in ('Muhammad Fraz', 'Amina Sikandar');
   insert into audit_team_members (team_id, member_id)
   select t_imp, id from members
    where department = 'Audit' and regexp_replace(name, '\s+', ' ', 'g') in ('Junaid Sheikh', 'Attia Iftikhar');
   insert into audit_team_members (team_id, member_id)
   select t_rest, id from members
-   where department = 'Audit' and regexp_replace(name, '\s+', ' ', 'g') in ('Khizar Javiad', 'Muhammad Fraz');
+   where department = 'Audit' and regexp_replace(name, '\s+', ' ', 'g') in ('Khizar Javiad', 'Abdul Rehman');
 end if;
 end $seed$;
 
