@@ -202,6 +202,21 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     }
     setMyCoAssignedTaskIds(new Set(myCoAssignedIds));
 
+    // Manager visibility (Khuram, 17/07/2026): a non-privileged user should
+    // also see tasks assigned to their direct reports (via members.manager_id
+    // — see migration 142), not just tasks they created/are assigned/are a
+    // co-assignee on. RLS enforces this server-side regardless; fetching the
+    // report list here just means the client actually asks for those rows
+    // instead of silently under-requesting them.
+    let myReportEmails: string[] = [];
+    if (!isPrivileged && email) {
+      const { data: myMember } = await supabase.from("members").select("id").eq("email", email).maybeSingle();
+      if (myMember?.id) {
+        const { data: reports } = await supabase.from("members").select("email").eq("manager_id", myMember.id);
+        myReportEmails = (reports || []).map((r) => r.email).filter((e): e is string => !!e);
+      }
+    }
+
     let query = supabase
       .from("tasks")
       .select("*, task_subtasks(id, is_complete), task_comments(id)")
@@ -209,7 +224,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
     if (!isPrivileged && email) {
       const idClause = myCoAssignedIds.length > 0 ? `,id.in.(${myCoAssignedIds.join(",")})` : "";
-      query = query.or(`assigned_to_email.eq.${email},assigned_by_email.eq.${email}${idClause}`);
+      const reportsClause = myReportEmails.length > 0 ? `,assigned_to_email.in.(${myReportEmails.join(",")})` : "";
+      query = query.or(`assigned_to_email.eq.${email},assigned_by_email.eq.${email}${idClause}${reportsClause}`);
     }
 
     const { data, error } = await query;
