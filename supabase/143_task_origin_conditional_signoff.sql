@@ -36,16 +36,28 @@ alter table public.tasks
 alter table public.recurring_tasks
   add column if not exists created_by_email text;
 
--- The backfill below touches every task row, including ones already
--- Completed. enforce_completed_task_lock (migration 117) unconditionally
--- blocks ANY update to a completed task unless the actor is admin-tier --
--- and the SQL Editor has no logged-in app user at all (auth.email() is
--- null here), so it rejects the whole statement with "This task is
--- completed and locked." Disabling just this one trigger for the
--- duration of this single backfill, then immediately re-enabling it
--- before this script ends, is safe -- it's a one-shot migration script,
--- not a standing change to how the app enforces the lock.
+-- The backfill below touches every task row. Two things stand in the way
+-- of a blanket UPDATE like that:
+--   1. enforce_completed_task_lock (migration 117) unconditionally blocks
+--      ANY update to an already-Completed task unless the actor is
+--      admin-tier -- and the SQL Editor has no logged-in app user at all
+--      (auth.email() is null here), so it rejects the whole statement
+--      with "This task is completed and locked."
+--   2. tasks_description_length_chk and tasks_assigned_by_email_chk are
+--      both "NOT VALID" check constraints -- meaning some rows already in
+--      the table predate them and don't actually satisfy them, but
+--      Postgres re-checks every constraint on every row an UPDATE
+--      touches regardless of which columns changed, so those legacy rows
+--      block this statement too even though it never reads or writes
+--      description/assigned_by_email's validity.
+-- Disabling the trigger and dropping+re-adding the two constraints
+-- (staying NOT VALID, so nothing about their normal enforcement changes)
+-- for the duration of this one backfill statement, then restoring all
+-- three immediately after, is safe -- it's a one-shot migration script,
+-- not a standing change to any of these rules.
 alter table public.tasks disable trigger tasks_enforce_completed_lock;
+alter table public.tasks drop constraint if exists tasks_description_length_chk;
+alter table public.tasks drop constraint if exists tasks_assigned_by_email_chk;
 
 update public.tasks
 set requires_manager_signoff = (
@@ -54,6 +66,8 @@ set requires_manager_signoff = (
 );
 
 alter table public.tasks enable trigger tasks_enforce_completed_lock;
+alter table public.tasks add constraint tasks_description_length_chk check (char_length(description) <= 150) not valid;
+alter table public.tasks add constraint tasks_assigned_by_email_chk check (assigned_by_email is not null) not valid;
 
 -- ── enforce_task_completion_hod(): branch on requires_manager_signoff ──
 create or replace function public.enforce_task_completion_hod()
