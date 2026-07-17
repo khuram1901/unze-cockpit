@@ -30,6 +30,12 @@ The audit page is now organised around the audit manager's "Audit activities" Ex
 
 ---
 
+## 2026-07-18 (verification pass) — Full P&L stack check + anon RPC lockdown
+
+Khuram asked for a check that all SQL is applied, code pushed, and everything enabled. Verified: git main = origin (5ba5025), all 15 database objects from migrations 142–145 present (10 RPCs, 4 tables, permission column), RLS enabled on all 4 new tables, live data intact (11 Imperial months / 10,785 rows, Unze 440 rows). The security advisor scan then surfaced a real issue: security-definer functions default to EXECUTE for PUBLIC, so the `anon` role could call every P&L RPC through the REST API without logging in. Migration 149 revokes anon/public execute on all 16 P&L read RPCs (139-145 vintage) and grants authenticated + service_role — applied and verified (`anon_can_run=false` across the board). Honest caveat recorded in the migration: `authenticated` still means any logged-in member could call these RPCs directly outside the page permission gates; fixing that properly means permission checks inside each function, across the app's whole RPC surface — flagged for a future pass.
+
+---
+
 ## 2026-07-18 (later) — Saved AI commentary, exact upload errors, retail market context
 
 Three more of Khuram's requests on the P&L pages:
