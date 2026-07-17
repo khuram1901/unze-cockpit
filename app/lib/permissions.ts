@@ -523,6 +523,22 @@ export function canReopenCompletedTask(u: UserCtx): boolean {
   return isAdminTier(u);
 }
 
+// ── Admin Operations (registrations, compliance, documents, ops) ─
+// CEO / Admin role, or any Manager in the Admin department.
+export function canAccessAdminOps(u: UserCtx): boolean {
+  const o = ov(u, "can_access_admin_ops");
+  if (o !== null) return o;
+  return isAdminTier(u) || (u.role === "Manager" && u.department === "Admin");
+}
+
+// ── Admin Entry (fuel, solar, utility, maintenance — mobile form) ─
+// Off by default — granted explicitly per member via the Access Matrix.
+export function canAccessAdminEntry(u: UserCtx): boolean {
+  const o = ov(u, "can_access_admin_entry");
+  if (o !== null) return o;
+  return false;
+}
+
 // ── Widget-level visibility ───────────────────────────────────────
 // One level below page-level access: canViewExecutiveDashboard() etc.
 // decide whether someone can reach a page at all; this decides which

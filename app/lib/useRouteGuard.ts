@@ -7,7 +7,8 @@ import {
   canViewFinance, canViewReceivables, canViewExecutiveDashboard, canViewDepartment,
   canViewOperations, canSeeAllMinutes, canSeeAllTasks, canManageRecurringTasks,
   canManageMembers, canViewAuditLog, canViewExceptions, canImportExport,
-  canAccessDailyEntry, canViewPADashboard, canViewInvestments,
+  canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry,
+  canViewPADashboard, canViewInvestments,
   canViewStock, canViewGuarantees, canViewIfplPnl,
   isPrivileged, isAdminTier, isMainAdmin,
   type UserCtx, type PermOverrides,
@@ -17,7 +18,7 @@ type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
   | "audit_log" | "exceptions" | "import_export" | "daily_entry"
   | "pa_dashboard" | "investments" | "system_backups" | "stock" | "guarantees"
-  | "ifpl_pnl";
+  | "ifpl_pnl" | "admin_ops" | "admin_entry";
 
 const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   finance: canViewFinance,
@@ -36,6 +37,8 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   pa_dashboard: canViewPADashboard,
   investments: canViewInvestments,
   system_backups: isMainAdmin,
+  admin_ops: canAccessAdminOps,
+  admin_entry: canAccessAdminEntry,
   stock: canViewStock,
   ifpl_pnl: canViewIfplPnl,
 };
