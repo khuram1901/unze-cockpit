@@ -128,6 +128,11 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
     e.preventDefault();
     setSaving(true);
     const member = members.find((m) => memberName(m) === assignTo);
+    // created_by_email (migration 143) — lets the cron that spins out each
+    // cycle's task tell a self-built recurring template (no manager sign-
+    // off needed on what it creates) apart from one built for someone
+    // else (sign-off needed), per Khuram's 17/07/2026 request.
+    const { data: userData } = await supabase.auth.getUser();
     const { error } = await supabase.from("recurring_tasks").insert({
       description: desc, assigned_to: assignTo || null,
       assigned_to_email: member?.email || null, assigned_to_department: member?.department || null,
@@ -136,6 +141,7 @@ export default function RecurringTasksPanel({ isPrivileged }: { isPrivileged: bo
       frequency, day_of_week: frequency === "weekly" ? dayOfWeek : null,
       day_of_month: frequency === "monthly" ? dayOfMonth : null,
       due_days_after: Number(dueDays) || 3, active: true,
+      created_by_email: userData.user?.email || null,
     });
     setSaving(false);
     if (error) {

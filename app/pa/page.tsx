@@ -296,6 +296,12 @@ export default function PADashboardPage() {
         project: newProject || null,
         status: "Not Started",
         taskType: "Task",
+        // Khuram (17/07/2026): tasks created via the PA flow always need
+        // the assignee's manager to sign off before they can be closed —
+        // even if the PA happens to assign one to themselves — so this is
+        // forced true rather than left to the create-route's default
+        // (self-assigned => no sign-off) rule.
+        requiresManagerSignoff: true,
       }),
     });
     const result = await res.json().catch(() => ({}));

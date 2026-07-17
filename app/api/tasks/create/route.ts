@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       assignedToDepartment, assignedToBusinessUnit, dueDate, priority, status, project, stage, notes,
       taskType, replyRequired, explanationRequired, exceptionType, meetingId,
       sourceType, sourceRecordId, sourceLabel, notificationStyle,
-      systemActor,
+      systemActor, requiresManagerSignoff,
     } = body || {};
 
     const supabase = createServiceClient();
@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
       assignedToDepartment, assignedToBusinessUnit, dueDate, priority, status, project, stage, notes,
       taskType, replyRequired, explanationRequired, exceptionType, meetingId,
       sourceType, sourceRecordId, sourceLabel, notificationStyle, actor,
+      requiresManagerSignoff: typeof requiresManagerSignoff === "boolean" ? requiresManagerSignoff : undefined,
     });
 
     if (!result.ok) return Response.json({ error: result.error }, { status: 400 });

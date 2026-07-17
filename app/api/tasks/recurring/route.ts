@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     const { data: templates } = await supabase
       .from("recurring_tasks")
-      .select("id, description, frequency, day_of_week, day_of_month, last_created_at, company_id, assigned_to, assigned_to_email, assigned_to_department, due_days_after, priority, project, assigned_by")
+      .select("id, description, frequency, day_of_week, day_of_month, last_created_at, company_id, assigned_to, assigned_to_email, assigned_to_department, due_days_after, priority, project, assigned_by, created_by_email")
       .eq("active", true);
 
     if (!templates || templates.length === 0) {
@@ -70,6 +70,15 @@ export async function GET(request: NextRequest) {
       dueDate.setDate(dueDate.getDate() + (tmpl.due_days_after || 3));
       const dueDateStr = dueDate.toISOString().slice(0, 10);
 
+      // requiresManagerSignoff: a self-built template (creator === assignee,
+      // via created_by_email — migration 143) produces tasks the member can
+      // complete directly; anything else (built by someone else for this
+      // assignee, or a template that predates created_by_email and so has
+      // no way to tell) keeps requiring sign-off, same as a one-off task
+      // someone else assigned.
+      const requiresManagerSignoff = !tmpl.created_by_email
+        || tmpl.created_by_email.trim().toLowerCase() !== (tmpl.assigned_to_email || "").trim().toLowerCase();
+
       const result = await createTaskCore({
         description: tmpl.description,
         companyId: tmpl.company_id,
@@ -82,6 +91,7 @@ export async function GET(request: NextRequest) {
         status: "Not Started",
         taskType: "Recurring",
         actor: { kind: "system", label: tmpl.assigned_by || "Recurring Task" },
+        requiresManagerSignoff,
       });
 
       if (!result.ok) {

@@ -33,6 +33,10 @@ type Task = {
   // below (migration 113).
   submitted_by_name?: string | null;
   submitted_by_email?: string | null;
+  // Khuram (17/07/2026): false = this task was created by its own
+  // assignee, for themselves — see migration 143. They can close it
+  // directly, no Submitted step or manager sign-off required.
+  requires_manager_signoff?: boolean | null;
 };
 
 type Subtask = {
@@ -107,6 +111,11 @@ export default function TaskStatus({
   // routed to them; Khuram, Kamran, and the Executive are a blanket
   // override on top of that, not limited to tasks routed to them).
   const canComplete = status === "Submitted" && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email);
+  // Self-created task (Khuram, 17/07/2026): the assignee (or an admin/
+  // Kamran/Executive) can close it directly from any open status — no
+  // Submitted step, no manager sign-off. See migration 143.
+  const isSelfCreated = task.requires_manager_signoff === false;
+  const canCompleteDirect = isSelfCreated && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email);
   const canEditDate = canEditDateProp ?? (currentRole === "Admin" || currentRole === "CEO" || currentRole === "Executive");
 
   // Khuram: "once the task is completed then it should be greyed out...
@@ -181,7 +190,7 @@ export default function TaskStatus({
     setSavedMessage("");
 
     const extra = newStatus === "Submitted" && task.status !== "Submitted"
-      ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email)
+      ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email, task.requires_manager_signoff !== false)
       : await handBackIfLeaving(newStatus);
 
     const { error } = await supabase
@@ -306,7 +315,7 @@ export default function TaskStatus({
     setSavedMessage("");
 
     const { data: userData } = await supabase.auth.getUser();
-    const extra = task.status !== "Submitted" ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email) : {};
+    const extra = task.status !== "Submitted" ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email, task.requires_manager_signoff !== false) : {};
 
     const { error } = await supabase
       .from("tasks")
@@ -451,7 +460,40 @@ export default function TaskStatus({
             file) closes or reopens it. This is the ONLY path to Completed
             in the whole app now — see the removed free-dropdown option and
             self-serve button above. */}
-        {status === "Submitted" && canComplete && (
+        {/* Self-created task — Mark Complete is available straight away,
+            from any open status, no Submitted step and no manager sign-
+            off (Khuram, 17/07/2026 — see migration 143). */}
+        {isSelfCreated && status !== "Completed" && status !== "Cancelled" && canCompleteDirect && (
+          <div style={{ marginTop: "10px" }}>
+            <button
+              onClick={() => saveStatus("Completed")}
+              disabled={saving || openSubtasks > 0}
+              title={openSubtasks > 0 ? "Complete all subtasks first" : undefined}
+              style={{
+                backgroundColor: openSubtasks > 0 ? COLOURS.TRACK : COLOURS.GREEN,
+                color: openSubtasks > 0 ? COLOURS.INK_400 : "white",
+                border: "none",
+                borderRadius: RADII.SM,
+                padding: "7px 16px",
+                fontSize: "13px",
+                cursor: openSubtasks > 0 ? "not-allowed" : "pointer",
+                fontWeight: 700,
+                opacity: saving ? 0.7 : 1,
+              }}
+            >
+              Mark Complete
+            </button>
+            <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "6px", marginBottom: 0 }}>
+              This task was self-assigned, so you can close it directly — no manager sign-off needed.
+            </p>
+            {openSubtasks > 0 && (
+              <p style={{ fontSize: "12px", color: COLOURS.AMBER, marginTop: "6px", marginBottom: 0 }}>
+                Complete all subtasks before this can be closed.
+              </p>
+            )}
+          </div>
+        )}
+        {!isSelfCreated && status === "Submitted" && canComplete && (
           <div style={{ marginTop: "10px" }}>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <button
@@ -501,15 +543,17 @@ export default function TaskStatus({
         {/* Submitted, but the viewer isn't the one it's waiting on — tell
             them plainly rather than leave them wondering why there's no
             button here for them to click. */}
-        {status === "Submitted" && !canComplete && (
+        {!isSelfCreated && status === "Submitted" && !canComplete && (
           <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "10px", marginBottom: 0 }}>
             Waiting for {task.assigned_to || "the assigned manager"} to review and close.
           </p>
         )}
         {/* No self-serve "mark complete" here any more — per Khuram, a task
+            created by someone else (a manager, meeting minutes, or the PA)
             can only become Completed via the HOD's "Mark Complete" button
-            above, once it's been Submitted. */}
-        {status !== "Completed" && status !== "Cancelled" && status !== "Submitted" && (
+            above, once it's been Submitted. Self-created tasks skip this
+            entirely — see the direct Mark Complete button above instead. */}
+        {!isSelfCreated && status !== "Completed" && status !== "Cancelled" && status !== "Submitted" && (
           <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "10px", marginBottom: 0 }}>
             Move this to <strong>Submitted</strong> above when the work is done — it will be routed to the manager for sign-off.
           </p>

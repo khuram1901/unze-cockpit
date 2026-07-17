@@ -46,6 +46,10 @@ type Task = {
   completed_at: string | null;
   assigned_to_department: string | null;
   company_id: string | null;
+  // Khuram (17/07/2026): false = self-created task, can be closed
+  // directly by the assignee — no Submitted step, no manager sign-off.
+  // See migration 143.
+  requires_manager_signoff?: boolean | null;
   task_subtasks?: { id: string; is_complete: boolean }[];
   task_comments?: { id: string }[];
 };
@@ -473,7 +477,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       for (const id of eligible) {
         const t = tasks.find((x) => x.id === id);
         if (!t || t.status === "Submitted") continue;
-        const extra = await routeSubmittedTask(id, t.assigned_to, t.assigned_to_email);
+        const extra = await routeSubmittedTask(id, t.assigned_to, t.assigned_to_email, t.requires_manager_signoff !== false);
         const { error } = await supabase.from("tasks").update({ status: "Submitted", updated_at: new Date().toISOString(), ...extra }).eq("id", id);
         if (error) failed++; else routed++;
       }
@@ -558,7 +562,11 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     for (const id of ids) {
       const t = tasks.find((x) => x.id === id);
       if (!t) continue;
-      if (t.status !== "Submitted") { notSubmitted++; continue; }
+      // Self-created tasks (Khuram, 17/07/2026) don't need to be Submitted
+      // first — the assignee can close them from any open status.
+      const selfCreated = t.requires_manager_signoff === false;
+      if (!selfCreated && t.status !== "Submitted") { notSubmitted++; continue; }
+      if (selfCreated && (t.status === "Completed" || t.status === "Cancelled")) { notSubmitted++; continue; }
       if ((t.task_subtasks || []).some((s) => !s.is_complete)) { openSubtasks++; continue; }
       if (!canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email)) { notAllowed++; continue; }
       eligible.push(id);

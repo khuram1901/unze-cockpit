@@ -36,6 +36,9 @@ type Task = {
   time_spent_minutes: number | null;
   whatsapp_auto_remind: boolean;
   company_id: string | null;
+  // Khuram (17/07/2026): false = self-created task, closable directly by
+  // the assignee — no Submitted step, no manager sign-off. Migration 143.
+  requires_manager_signoff?: boolean | null;
   task_subtasks?: { id: string; is_complete: boolean }[];
   task_comments?: { id: string }[];
 };
@@ -94,8 +97,18 @@ export default function TasksBoard({
     // single-task view now: only Submitted can become Completed, and only
     // by the person that rule says may close it.
     if (newStatus === "Completed") {
-      if (!t || t.status !== "Submitted" || !canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email)) {
-        toast.show("This has to be Submitted first, and only the assigned HOD (or Khuram, Kamran, or the Executive) can close it.", "error");
+      const selfCreated = t?.requires_manager_signoff === false;
+      const canClose = !!t && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email);
+      // Self-created tasks (Khuram, 17/07/2026) can go straight to
+      // Completed from any open status; everything else still needs
+      // Submitted first.
+      if (!canClose || (!selfCreated && t?.status !== "Submitted")) {
+        toast.show(
+          selfCreated
+            ? "Only the assignee (or Khuram, Kamran, or the Executive) can close this."
+            : "This has to be Submitted first, and only the assigned HOD (or Khuram, Kamran, or the Executive) can close it.",
+          "error"
+        );
         return;
       }
     }
@@ -112,7 +125,7 @@ export default function TasksBoard({
     // "Submitted" routes to the assignee's HOD — same rule as the
     // single-task dropdown and the bulk status change in TasksList.tsx.
     const extra = newStatus === "Submitted" && t && t.status !== "Submitted"
-      ? await routeSubmittedTask(taskId, t.assigned_to, t.assigned_to_email)
+      ? await routeSubmittedTask(taskId, t.assigned_to, t.assigned_to_email, t.requires_manager_signoff !== false)
       : {};
 
     const { error } = await supabase.from("tasks").update({ status: newStatus, updated_at: new Date().toISOString(), ...extra }).eq("id", taskId);

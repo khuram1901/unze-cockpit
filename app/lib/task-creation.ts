@@ -47,6 +47,16 @@ export type CreateTaskInput = {
   sourceLabel?: string | null;
   actor: TaskActor;
   notificationStyle?: "task_assigned" | "escalation" | "none";
+  // Khuram (17/07/2026): "this only applies if the tasks was created by
+  // their HOD/manager, via minutes of meeting or via Personal assistant.
+  // otherwise all tasks created by themselves they can complete." When
+  // left unset, defaults to true unless the assignee and the creator are
+  // the same person (a genuine self-created task) -- see the fallback
+  // below. Callers that know better set this explicitly: the PA quick-add
+  // form always passes true (a task "via Personal Assistant" needs sign-
+  // off even if the PA assigned it to themselves), and meeting-minutes
+  // tasks are already covered by meetingId being set.
+  requiresManagerSignoff?: boolean;
 };
 
 export type CreateTaskResult =
@@ -102,6 +112,14 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
   const assignedBy = input.actor.kind === "user" ? input.actor.name : input.actor.label;
   const assignedByEmail = input.actor.kind === "user" ? input.actor.email : "khuram1901@gmail.com";
 
+  // See requiresManagerSignoff's doc comment above. Default rule when a
+  // caller doesn't specify: a meeting-linked task, or one where the
+  // creator and the assignee are different people, needs sign-off; a
+  // task someone created and assigned to themselves doesn't.
+  const requiresManagerSignoff = input.requiresManagerSignoff !== undefined
+    ? input.requiresManagerSignoff
+    : !!input.meetingId || (input.assignedToEmail || "").trim().toLowerCase() !== assignedByEmail.trim().toLowerCase();
+
   const { data: newTask, error } = await supabase
     .from("tasks")
     .insert({
@@ -128,6 +146,7 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
       source_type: input.sourceType ?? null,
       source_record_id: input.sourceRecordId ?? null,
       source_label: input.sourceLabel ?? null,
+      requires_manager_signoff: requiresManagerSignoff,
     })
     .select("id")
     .single();

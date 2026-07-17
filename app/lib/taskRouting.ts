@@ -30,8 +30,15 @@ import { supabase } from "./supabase";
 export async function routeSubmittedTask(
   taskId: string,
   assignedTo: string | null | undefined,
-  assignedToEmail: string | null | undefined
+  assignedToEmail: string | null | undefined,
+  // Khuram (17/07/2026): a self-created task doesn't need a manager in
+  // the loop at all — Submitted is just a label for it, not a handoff.
+  // Defaults to true so every existing call site keeps its old behaviour
+  // unless it explicitly knows the task is self-created (see migration
+  // 143 for the matching DB-side guard on route_submitted_task()).
+  requiresManagerSignoff: boolean = true
 ): Promise<Record<string, unknown>> {
+  if (!requiresManagerSignoff) return {};
   if (!assignedToEmail) return {};
   const { data: me } = await supabase.from("members").select("manager_id, role").eq("email", assignedToEmail).maybeSingle();
   if (!me?.manager_id || me.role === "Executive") return {};
