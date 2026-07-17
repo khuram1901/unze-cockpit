@@ -4,6 +4,12 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-17 (night) — Imperial upload fix: parse in the browser (Vercel 4.5 MB body cap)
+
+First live upload attempt of PL-CURRENT.xlsx (9.4 MB) hung: Vercel rejects request bodies over 4.5 MB before they ever reach the route, and the page's error handling left the button stuck on "Checking every month…". Two fixes: (1) the parser now runs in the BROWSER — loaded on demand via dynamic import, it reads the file locally and posts only the extracted rows (~1.5 MB JSON) to `/api/pnl/upload-ifpl`, which now takes JSON, re-derives acceptance from the blocking checks server-side, and sanitises every field; (2) `handleUpload` wraps everything in try/finally so any failure shows a message and resets the button. Verified with tsc + eslint.
+
+---
+
 ## 2026-07-17 (evening) — Imperial Footwear P&L page: plan vs actual, branch league, named access
 
 Khuram uploaded Imperial's cumulative "PL-CURRENT.xlsx" (Unze London retail: ~32 branches + Online PK, one sheet per month Jul-25→Jun-26, every line carrying Projection | Actual | Variance). A design mockup with the real numbers was approved, then built:

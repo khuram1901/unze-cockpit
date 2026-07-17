@@ -116,8 +116,13 @@ function tol(expected: number): number {
   return Math.max(2000, Math.abs(expected) * 0.001);
 }
 
-export function parseIfplPnl(buffer: Buffer): ParsedIfplMonth[] {
-  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+// Runs in the BROWSER (dynamic import on the Imperial page): the workbook
+// is ~9.4 MB and Vercel caps request bodies at 4.5 MB, so the file itself
+// can never be posted — the client parses it and sends only the extracted
+// rows (~1.5 MB of JSON) to /api/pnl/upload-ifpl.
+export function parseIfplPnl(data: ArrayBuffer | Uint8Array): ParsedIfplMonth[] {
+  const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+  const wb = XLSX.read(bytes, { type: "array", cellDates: true });
 
   // Company-level actual Net Sales per month from the month-wise summary
   // sheet, used as an independent cross-check on each month sheet.

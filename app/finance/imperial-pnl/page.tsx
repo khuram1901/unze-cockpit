@@ -146,23 +146,41 @@ export default function ImperialPnlPage() {
     return () => { active = false; };
   }, [monthFrom, monthTo, channelFilter, branchFilter]);
 
+  // The workbook (~9.4 MB) is over Vercel's 4.5 MB request-body cap, so the
+  // file itself is parsed HERE in the browser (parser loaded on demand) and
+  // only the extracted rows go to the server as JSON.
   async function handleUpload() {
     if (!uploadFile) return;
     setUploading(true);
     setUploadResults([]);
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    const res = await authedFetch("/api/pnl/upload-ifpl", { method: "POST", body: formData });
-    const body = await res.json();
-    setUploading(false);
-    setUploadFile(null);
-    if (!res.ok) {
-      setUploadResults([{ month: "", accepted: false, summary: body.error || "Upload failed" }]);
-      return;
+    try {
+      const bytes = await uploadFile.arrayBuffer();
+      const { parseIfplPnl } = await import("../../lib/excel-parsers/pnl-ifpl-parser");
+      const months = parseIfplPnl(bytes);
+      if (months.length === 0) {
+        setUploadResults([{ month: "", accepted: false, summary: "No month sheets with activity found — is this the right workbook?" }]);
+        return;
+      }
+      const res = await authedFetch("/api/pnl/upload-ifpl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: uploadFile.name, months }),
+      });
+      let body: { results?: UploadResult[]; error?: string } = {};
+      try { body = await res.json(); } catch { /* non-JSON error page */ }
+      if (!res.ok) {
+        setUploadResults([{ month: "", accepted: false, summary: body.error || `Upload failed (${res.status})` }]);
+        return;
+      }
+      setUploadResults((body.results || []) as UploadResult[]);
+      const { data } = await supabase.rpc("ifpl_kpi_by_month", { p_from: "2000-01-01", p_to: "2100-01-01", p_channel: "All", p_branch: "All" });
+      setAllMonths(((data || []) as KpiRow[]).map((r) => r.month));
+    } catch (err) {
+      setUploadResults([{ month: "", accepted: false, summary: err instanceof Error ? err.message : "Could not read this file" }]);
+    } finally {
+      setUploading(false);
+      setUploadFile(null);
     }
-    setUploadResults((body.results || []) as UploadResult[]);
-    const { data } = await supabase.rpc("ifpl_kpi_by_month", { p_from: "2000-01-01", p_to: "2100-01-01", p_channel: "All", p_branch: "All" });
-    setAllMonths(((data || []) as KpiRow[]).map((r) => r.month));
   }
 
   async function generateInsights() {
