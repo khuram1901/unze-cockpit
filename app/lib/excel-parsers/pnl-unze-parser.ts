@@ -27,16 +27,21 @@ export type ParsedUnzePnl = {
   accepted: boolean;
 };
 
-const SUMMARY_LINES = [
-  " Gross Sale",
-  " Total Cost of Sale",
-  " GP",
-  " Operating Expenses-Admin& Selling",
-  "Taxation",
-  "Net Profit After Tax",
-  "Non Operationg Income and exp.",
-  "Net Profit After  Non Opr.Income & Exp",
-] as const;
+// Maps the source file's exact (slightly inconsistent — a typo, uneven
+// spacing around some ampersands) row labels to a clean canonical name.
+// Everything downstream (the database, the RPCs, the page) only ever sees
+// the canonical name on the right — the file's quirks stop here.
+const SUMMARY_LINE_MAP: Record<string, string> = {
+  " Gross Sale": "Gross Sale",
+  " Total Cost of Sale": "Total Cost of Sale",
+  " GP": "GP",
+  " Operating Expenses-Admin& Selling": "Operating Expenses",
+  "Taxation": "Taxation",
+  "Net Profit After Tax": "Net Profit After Tax",
+  "Non Operationg Income and exp.": "Non Operating Income and Exp",
+  "Net Profit After  Non Opr.Income & Exp": "Net Profit Final",
+};
+const SUMMARY_LINES = Object.keys(SUMMARY_LINE_MAP) as (keyof typeof SUMMARY_LINE_MAP)[];
 
 const SECTION_HEADERS = new Set([
   "Cost of sales",
@@ -159,10 +164,11 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
     const label = str(row[0]).trim();
     const match = SUMMARY_LINES.find((l) => l.trim() === label);
     if (!match) continue;
+    const canonical = SUMMARY_LINE_MAP[match];
     const vals = valuesByHeader(row, headers);
-    summaryByLine[match] = vals;
+    summaryByLine[canonical] = vals;
     lastSummaryRowIdx = r;
-    for (const [plant, amount] of Object.entries(vals)) lineItems.push({ plant, line: match.trim(), amount });
+    for (const [plant, amount] of Object.entries(vals)) lineItems.push({ plant, line: canonical, amount });
   }
 
   // Ledger detail: walk rows after the summary block, tracking section/group.
@@ -212,13 +218,13 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
   // relying on it for real uploads.
   const plants = ["FEDMIC", "MEPCO", "PESCO"];
 
-  for (const line of SUMMARY_LINES) {
-    const vals = summaryByLine[line];
+  for (const canonical of Object.values(SUMMARY_LINE_MAP)) {
+    const vals = summaryByLine[canonical];
     if (!vals) continue;
     const sum = plants.reduce((s, p) => s + (vals[p] || 0), 0);
     const total = vals["Total"] || 0;
     checks.push({
-      name: `Operating plants sum vs file total — ${line.trim()}`,
+      name: `Operating plants sum vs file total — ${canonical}`,
       expected: total,
       reported: sum,
       diff: sum - total,
@@ -227,14 +233,14 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
   }
 
   const t = (line: string, plant = "Total") => summaryByLine[line]?.[plant] ?? NaN;
-  const gpCheck = t(" Gross Sale") + t(" Total Cost of Sale");
-  checks.push({ name: "GP = Gross Sale + Total Cost of Sale", expected: t(" GP"), reported: gpCheck, diff: gpCheck - t(" GP"), passed: Math.abs(gpCheck - t(" GP")) <= TOL });
+  const gpCheck = t("Gross Sale") + t("Total Cost of Sale");
+  checks.push({ name: "GP = Gross Sale + Total Cost of Sale", expected: t("GP"), reported: gpCheck, diff: gpCheck - t("GP"), passed: Math.abs(gpCheck - t("GP")) <= TOL });
 
-  const npatCheck = t(" GP") + t(" Operating Expenses-Admin& Selling") + t("Taxation");
+  const npatCheck = t("GP") + t("Operating Expenses") + t("Taxation");
   checks.push({ name: "NPAT = GP + Operating Expenses + Taxation", expected: t("Net Profit After Tax"), reported: npatCheck, diff: npatCheck - t("Net Profit After Tax"), passed: Math.abs(npatCheck - t("Net Profit After Tax")) <= TOL });
 
-  const finalCheck = t("Net Profit After Tax") + t("Non Operationg Income and exp.");
-  checks.push({ name: "Final = NPAT + Non-operating", expected: t("Net Profit After  Non Opr.Income & Exp"), reported: finalCheck, diff: finalCheck - t("Net Profit After  Non Opr.Income & Exp"), passed: Math.abs(finalCheck - t("Net Profit After  Non Opr.Income & Exp")) <= TOL });
+  const finalCheck = t("Net Profit After Tax") + t("Non Operating Income and Exp");
+  checks.push({ name: "Final = NPAT + Non-operating", expected: t("Net Profit Final"), reported: finalCheck, diff: finalCheck - t("Net Profit Final"), passed: Math.abs(finalCheck - t("Net Profit Final")) <= TOL });
 
   const allocSum = allocationPct.reduce((s, a) => s + a.pct, 0);
   checks.push({ name: "Allocation percentages sum to 100%", expected: 100, reported: allocSum, diff: allocSum - 100, passed: Math.abs(allocSum - 100) <= 0.1 });
@@ -247,7 +253,7 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
   // catches it even though the summary lines above would still balance.
   for (const plant of ["FEDMIC", "MEPCO", "PESCO", "HO"]) {
     const ledgerSum = ledgerLines.filter((l) => l.plant === plant).reduce((s, l) => s + l.amount, 0);
-    const expected = -(t("Net Profit After  Non Opr.Income & Exp", plant) || 0);
+    const expected = -(t("Net Profit Final", plant) || 0);
     checks.push({
       name: `Ledger detail total vs final profit line — ${plant}`,
       expected,
