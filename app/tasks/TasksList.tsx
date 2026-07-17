@@ -142,8 +142,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Monthly/Quarterly were removed as separate tabs — folded into the
   // periodFilter dropdown below instead, per Khuram.
   const [timeView, setTimeView] = useState<"list" | "board" | "tree" | "timeline" | "team" | "recurring">("list");
-  const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "exception">(
-    filterFromUrl === "overdue" || filterFromUrl === "waiting" || filterFromUrl === "exception" ? filterFromUrl : "all"
+  const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "exception" | "submitted">(
+    filterFromUrl === "overdue" || filterFromUrl === "waiting" || filterFromUrl === "exception" || filterFromUrl === "submitted" ? filterFromUrl : "all"
   );
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [companies, setCompanies] = useState<CompanyLite[]>([]);
@@ -176,7 +176,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Completed/Cancelled) — separate from the all/overdue/waiting quick
   // pills below, and the one way to see Completed/Cancelled tasks in the
   // main list/board/timeline views, which otherwise always hide them.
-  const [statusFilter, setStatusFilter] = useState<string>(filterFromUrl === "submitted" ? "Submitted" : "all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
   // Tracks which department/person groups are EXPANDED — starting empty
@@ -675,7 +675,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // same per-department filter (all/overdue/waiting pill) the JSX below
   // applies per node — so "Select all" ticks exactly what's on screen.
   const treeVisibleIds = deptNodes.flatMap((d) => {
-    const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+    const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
     return deptFiltered.map((t) => t.id);
   });
 
@@ -699,18 +699,30 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   if (filter === "overdue") filteredTasks = overdueTasks;
   else if (filter === "waiting") filteredTasks = waitingReply;
   else if (filter === "exception") filteredTasks = exceptionTasks;
+  else if (filter === "submitted") filteredTasks = allOpen.filter((t) => t.status === "Submitted");
 
   // ── List view (default landing view) flat filter ──
   // List view normally groups myTasksSource into due-date buckets
   // (Overdue/Due Today/This Week/Next Week & Later) and ignores the quick
   // filter pills entirely — which is exactly why clicking "Overdue" or
   // "Waiting" used to do nothing there. When a specific filter is active
-  // (either via the pills or a bell deep-link), show a single flat list
-  // of just that category instead of the grouped breakdown.
+  // (either via the pills or a bell deep-link — "submitted" only arrives
+  // via the bell, there's no pill for it), show a single flat list of
+  // just that category instead of the grouped breakdown.
   const listFilteredTasks = filter === "all" ? null
     : filter === "overdue" ? myTasksSource.filter(isOverdue)
     : filter === "waiting" ? myTasksSource.filter((t) => t.status === "Waiting Reply")
-    : myTasksSource.filter((t) => !!t.explanation_required);
+    : filter === "exception" ? myTasksSource.filter((t) => !!t.explanation_required)
+    : myTasksSource.filter((t) => t.status === "Submitted");
+
+  // Pill counts shown next to "Overdue"/"Waiting"/"Needs explanation" must
+  // match what's actually on screen below them — which is scoped by the
+  // My tasks/Everyone toggle. overdueTasks/waitingReply/exceptionTasks
+  // above stay org-wide on purpose (the KPI tiles at the top of the page
+  // use them), so compute separate scoped counts just for the pills.
+  const overdueMineCount = myTasksSource.filter(isOverdue).length;
+  const waitingMineCount = myTasksSource.filter((t) => t.status === "Waiting Reply").length;
+  const exceptionMineCount = myTasksSource.filter((t) => !!t.explanation_required).length;
 
   const filterSelectStyle: React.CSSProperties = {
     border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 10px",
@@ -1207,7 +1219,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 border: `1px solid ${filter === f ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
                 borderRadius: RADII.PILL, padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
               }}>
-                {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueTasks.length})` : f === "waiting" ? `Waiting (${waitingReply.length})` : `Needs explanation (${exceptionTasks.length})`}
+                {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueMineCount})` : f === "waiting" ? `Waiting (${waitingMineCount})` : `Needs explanation (${exceptionMineCount})`}
               </button>
             ))}
           </div>
@@ -1369,7 +1381,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks to show.</div>
           ) : deptNodes.map((d) => {
             const isDeptCollapsed = !expandedDepts.has(d.dept);
-            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : filter === "submitted" ? d.tasks.filter((t) => t.status === "Submitted") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
             if (deptFiltered.length === 0 && filter !== "all") return null;
 
             const personGroups = new Map<string, Task[]>();
