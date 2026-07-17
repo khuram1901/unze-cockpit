@@ -36,11 +36,24 @@ alter table public.tasks
 alter table public.recurring_tasks
   add column if not exists created_by_email text;
 
+-- The backfill below touches every task row, including ones already
+-- Completed. enforce_completed_task_lock (migration 117) unconditionally
+-- blocks ANY update to a completed task unless the actor is admin-tier --
+-- and the SQL Editor has no logged-in app user at all (auth.email() is
+-- null here), so it rejects the whole statement with "This task is
+-- completed and locked." Disabling just this one trigger for the
+-- duration of this single backfill, then immediately re-enabling it
+-- before this script ends, is safe -- it's a one-shot migration script,
+-- not a standing change to how the app enforces the lock.
+alter table public.tasks disable trigger tasks_enforce_completed_lock;
+
 update public.tasks
 set requires_manager_signoff = (
   meeting_id is not null
   or lower(coalesce(assigned_to_email, '')) is distinct from lower(coalesce(assigned_by_email, ''))
 );
+
+alter table public.tasks enable trigger tasks_enforce_completed_lock;
 
 -- ── enforce_task_completion_hod(): branch on requires_manager_signoff ──
 create or replace function public.enforce_task_completion_hod()

@@ -188,6 +188,15 @@ export default function MembersManager() {
   const [department, setDepartment] = useState("");
   const [businessUnit, setBusinessUnit] = useState("");
   const [company, setCompany] = useState("");
+  // Khuram (17/07/2026): "any new users added needed to allocated with a
+  // manager, this needs to be a mandatory... finally allow me to add new
+  // members into their manager roles." managerId is who THIS new person
+  // reports to (required — see the validation in addMember); newMemberManages
+  // is the reverse: existing people Khuram wants reporting to this new
+  // person the moment they're created, instead of having to go tick them
+  // one at a time afterwards from the new manager's own row.
+  const [managerId, setManagerId] = useState("");
+  const [newMemberManages, setNewMemberManages] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -265,22 +274,39 @@ export default function MembersManager() {
   async function addMember(e: React.FormEvent) {
     e.preventDefault();
     if (!isValidEmail(email)) { toast.show("A valid email address is required.", "error"); return; }
+    // Khuram (17/07/2026): a manager is mandatory for everyone except the
+    // top of the chain — without one, the new person's tasks would have
+    // nowhere to route on Submit and nobody could see them via the
+    // manager-hierarchy visibility rule (migration 142).
+    if (role !== "Admin" && role !== "CEO" && !managerId) {
+      toast.show("Please choose who this person reports to.", "error");
+      return;
+    }
     setSaving(true);
-    const { error } = await supabase.from("members").insert({
+    const { data: inserted, error } = await supabase.from("members").insert({
       first_name: firstName, last_name: lastName, name: `${firstName} ${lastName}`.trim(),
       email: email.trim(), role,
       department: department || null,
       business_unit: businessUnit || null,
       company: company || null,
-    });
+      manager_id: managerId || null,
+    }).select("id").single();
     setSaving(false);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
     logAction("Created", "members", `Added ${firstName} ${lastName} (${email}) as ${role}`);
+    // Point any existing members Khuram ticked at this new person's id,
+    // now that we actually have it — the same reports-to relationship as
+    // toggleTeamMember, just wired up at creation time instead of
+    // requiring a second trip to this new person's row afterwards.
+    if (inserted?.id && newMemberManages.size > 0) {
+      await supabase.from("members").update({ manager_id: inserted.id }).in("id", Array.from(newMemberManages));
+    }
     authFetch("/api/members/invite", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: email.trim(), firstName, lastName, role }) }).catch(() => {});
     toast.show(`${firstName} ${lastName} added as ${role}.`, "success");
     setFirstName(""); setLastName(""); setEmail(""); setRole("Member");
-    setDepartment(""); setBusinessUnit(""); setCompany(""); setShowAddForm(false);
+    setDepartment(""); setBusinessUnit(""); setCompany(""); setManagerId(""); setNewMemberManages(new Set());
+    setShowAddForm(false);
     loadData();
   }
 
@@ -713,6 +739,46 @@ export default function MembersManager() {
                   </select>
                 </div>
               </div>
+
+              {/* Manager — mandatory for everyone except Admin/CEO at the
+                  top of the chain (Khuram, 17/07/2026). Drives task
+                  visibility and the Submit/sign-off routing. */}
+              {role !== "Admin" && role !== "CEO" && (
+                <div style={{ marginTop: "8px" }}>
+                  <label style={lbl}>Manager (required)</label>
+                  <select style={inp} value={managerId} onChange={(e) => setManagerId(e.target.value)} required>
+                    <option value="">Select who this person reports to</option>
+                    {members.filter((m) => m.is_active).sort((a, b) => fullName(a.first_name, a.last_name, a.name).localeCompare(fullName(b.first_name, b.last_name, b.name))).map((m) => (
+                      <option key={m.id} value={m.id}>{fullName(m.first_name, m.last_name, m.name)} ({m.role})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* This person will manage — the reverse relationship, wired
+                  up at creation time so Khuram doesn't have to add the
+                  member first and then come back to tick people under
+                  them from a second screen. */}
+              <div style={{ marginTop: "10px" }}>
+                <label style={lbl}>This person will manage (optional)</label>
+                <div style={{ maxHeight: "140px", overflowY: "auto", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 8px" }}>
+                  {members.filter((m) => m.is_active).sort((a, b) => fullName(a.first_name, a.last_name, a.name).localeCompare(fullName(b.first_name, b.last_name, b.name))).map((m) => (
+                    <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "3px 0", fontSize: "13px", color: COLOURS.NAVY, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={newMemberManages.has(m.id)}
+                        onChange={(e) => setNewMemberManages((prev) => {
+                          const next = new Set(prev);
+                          e.target.checked ? next.add(m.id) : next.delete(m.id);
+                          return next;
+                        })}
+                      />
+                      {fullName(m.first_name, m.last_name, m.name)} <span style={{ color: COLOURS.SLATE }}>({m.role})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               {/* Permissions preview */}
               {(role || department) && (
                 <div style={{ marginTop: "12px", padding: "10px 12px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}>
