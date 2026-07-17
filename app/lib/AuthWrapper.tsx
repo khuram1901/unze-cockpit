@@ -114,11 +114,15 @@ export default function AuthWrapper({
     const counts = data?.[0];
     if (!counts) return;
 
+    // Khuram (18/07/2026): each item deep-links straight into the matching
+    // Tasks-page filter (?filter=...&scope=mine) instead of the bare /tasks
+    // URL — clicking "Overdue" now actually shows only overdue tasks, not
+    // the whole list. See TasksList.tsx's filterFromUrl/scopeFromUrl read.
     const items: { label: string; count: number; href: string }[] = [];
-    if (counts.overdue_count > 0) items.push({ label: "Overdue tasks", count: counts.overdue_count, href: "/tasks" });
-    if (counts.waiting_count > 0) items.push({ label: "Waiting reply", count: counts.waiting_count, href: "/tasks" });
-    if (counts.submitted_count > 0) items.push({ label: "Submitted — awaiting your sign-off", count: counts.submitted_count, href: "/tasks" });
-    if (counts.exception_count > 0) items.push({ label: "Needs explanation", count: counts.exception_count, href: "/tasks" });
+    if (counts.overdue_count > 0) items.push({ label: "Overdue tasks", count: counts.overdue_count, href: "/tasks?filter=overdue&scope=mine" });
+    if (counts.waiting_count > 0) items.push({ label: "Waiting reply", count: counts.waiting_count, href: "/tasks?filter=waiting&scope=mine" });
+    if (counts.submitted_count > 0) items.push({ label: "Submitted — awaiting your sign-off", count: counts.submitted_count, href: "/tasks?filter=submitted&scope=mine" });
+    if (counts.exception_count > 0) items.push({ label: "Needs explanation", count: counts.exception_count, href: "/tasks?filter=exception&scope=mine" });
     if (isAdmin && counts.machines_down_count > 0) items.push({ label: "Machines down", count: counts.machines_down_count, href: "/dashboard" });
     if (isAdmin && counts.pending_minutes_count > 0) items.push({ label: "Minutes pending", count: counts.pending_minutes_count, href: "/meetings" });
 

@@ -50,6 +50,7 @@ type Task = {
   // directly by the assignee — no Submitted step, no manager sign-off.
   // See migration 143.
   requires_manager_signoff?: boolean | null;
+  explanation_required?: boolean | null;
   task_subtasks?: { id: string; is_complete: boolean }[];
   task_comments?: { id: string }[];
 };
@@ -122,6 +123,13 @@ function getWeekStart(d: Date): string {
 export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean }) {
   const searchParams = useSearchParams();
   const taskIdFromUrl = searchParams.get("task");
+  // Khuram (18/07/2026): the notification bell deep-links here with
+  // ?filter=overdue|waiting|exception|submitted&scope=mine so clicking a
+  // bell item actually narrows the page down to that item, instead of
+  // dumping the whole Tasks list on you. Read once on mount to seed the
+  // matching filter state below.
+  const filterFromUrl = searchParams.get("filter");
+  const scopeFromUrl = searchParams.get("scope");
   const toast = useToast();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -134,7 +142,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Monthly/Quarterly were removed as separate tabs — folded into the
   // periodFilter dropdown below instead, per Khuram.
   const [timeView, setTimeView] = useState<"list" | "board" | "tree" | "timeline" | "team" | "recurring">("list");
-  const [filter, setFilter] = useState<"all" | "overdue" | "waiting">("all");
+  const [filter, setFilter] = useState<"all" | "overdue" | "waiting" | "exception">(
+    filterFromUrl === "overdue" || filterFromUrl === "waiting" || filterFromUrl === "exception" ? filterFromUrl : "all"
+  );
   const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
   const [companies, setCompanies] = useState<CompanyLite[]>([]);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
@@ -148,7 +158,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // general view, so it should show the same task set they do by
   // default. The Mine/Everyone toggle is still there for anyone who
   // wants to narrow it down to just their own.
-  const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">("everyone");
+  const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">(scopeFromUrl === "mine" ? "mine" : "everyone");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
@@ -166,7 +176,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // Completed/Cancelled) — separate from the all/overdue/waiting quick
   // pills below, and the one way to see Completed/Cancelled tasks in the
   // main list/board/timeline views, which otherwise always hide them.
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>(filterFromUrl === "submitted" ? "Submitted" : "all");
   const [searchQuery, setSearchQuery] = useState("");
   const [meetingTitles, setMeetingTitles] = useState<Record<string, string>>({});
   // Tracks which department/person groups are EXPANDED — starting empty
@@ -610,6 +620,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     : scopedTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
   const overdueTasks = allOpen.filter(isOverdue);
   const waitingReply = allOpen.filter((t) => t.status === "Waiting Reply");
+  const exceptionTasks = allOpen.filter((t) => !!t.explanation_required);
   const completedAll = scopedTasks.filter((t) => t.status === "Completed");
 
   // ── Weekly grouping ──
@@ -664,7 +675,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // same per-department filter (all/overdue/waiting pill) the JSX below
   // applies per node — so "Select all" ticks exactly what's on screen.
   const treeVisibleIds = deptNodes.flatMap((d) => {
-    const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+    const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
     return deptFiltered.map((t) => t.id);
   });
 
@@ -683,10 +694,23 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     });
   }
 
-  // ── Filtered task list ──
+  // ── Filtered task list ── (used by Timeline/Board views)
   let filteredTasks = allOpen;
   if (filter === "overdue") filteredTasks = overdueTasks;
   else if (filter === "waiting") filteredTasks = waitingReply;
+  else if (filter === "exception") filteredTasks = exceptionTasks;
+
+  // ── List view (default landing view) flat filter ──
+  // List view normally groups myTasksSource into due-date buckets
+  // (Overdue/Due Today/This Week/Next Week & Later) and ignores the quick
+  // filter pills entirely — which is exactly why clicking "Overdue" or
+  // "Waiting" used to do nothing there. When a specific filter is active
+  // (either via the pills or a bell deep-link), show a single flat list
+  // of just that category instead of the grouped breakdown.
+  const listFilteredTasks = filter === "all" ? null
+    : filter === "overdue" ? myTasksSource.filter(isOverdue)
+    : filter === "waiting" ? myTasksSource.filter((t) => t.status === "Waiting Reply")
+    : myTasksSource.filter((t) => !!t.explanation_required);
 
   const filterSelectStyle: React.CSSProperties = {
     border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "6px 10px",
@@ -1176,14 +1200,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           )}
 
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            {(["all", "overdue", "waiting"] as const).map((f) => (
+            {(["all", "overdue", "waiting", "exception"] as const).map((f) => (
               <button key={f} onClick={() => setFilter(f)} style={{
                 backgroundColor: filter === f ? COLOURS.NAVY : COLOURS.CARD,
                 color: filter === f ? "white" : COLOURS.NAVY,
                 border: `1px solid ${filter === f ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
                 borderRadius: RADII.PILL, padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
               }}>
-                {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueTasks.length})` : `Waiting (${waitingReply.length})`}
+                {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueTasks.length})` : f === "waiting" ? `Waiting (${waitingReply.length})` : `Needs explanation (${exceptionTasks.length})`}
               </button>
             ))}
           </div>
@@ -1202,15 +1226,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   </button>
                 ))}
               </div>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, cursor: myTasksSource.length > 0 ? "pointer" : "default" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, cursor: (listFilteredTasks ?? myTasksSource).length > 0 ? "pointer" : "default" }}>
                 <input
                   type="checkbox"
-                  checked={isAllSelected(myTasksSource.map((t) => t.id))}
-                  onChange={() => toggleSelectAll(myTasksSource.map((t) => t.id))}
-                  disabled={myTasksSource.length === 0}
-                  style={{ width: "15px", height: "15px", cursor: myTasksSource.length > 0 ? "pointer" : "default" }}
+                  checked={isAllSelected((listFilteredTasks ?? myTasksSource).map((t) => t.id))}
+                  onChange={() => toggleSelectAll((listFilteredTasks ?? myTasksSource).map((t) => t.id))}
+                  disabled={(listFilteredTasks ?? myTasksSource).length === 0}
+                  style={{ width: "15px", height: "15px", cursor: (listFilteredTasks ?? myTasksSource).length > 0 ? "pointer" : "default" }}
                 />
-                Select all ({myTasksSource.length})
+                Select all ({(listFilteredTasks ?? myTasksSource).length})
               </label>
             </div>
           )}
@@ -1283,25 +1307,42 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       {/* ═══ LIST VIEW (default landing view) ═══ */}
       {timeView === "list" && (
         <div>
-          {myTasksGroupOrder.filter((g) => myTasksGroups.has(g)).map((group) => {
-            const groupTasks = myTasksGroups.get(group)!;
-            return (
-              <div key={group} style={{ marginBottom: "16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: myTasksGroupColor(group), display: "inline-block" }} />
-                  <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>{group}</span>
-                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600 }}>{groupTasks.length}</span>
+          {listFilteredTasks ? (
+            // A specific quick-filter (or bell deep-link) is active — show
+            // one flat list of just that category instead of the usual
+            // due-date grouping, so "Overdue" etc. actually means "only
+            // these tasks", not "the whole list with a pill highlighted".
+            <div style={{ ...cardStyle, overflow: "hidden" }}>
+              {listFilteredTasks.length === 0 ? (
+                <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
+              ) : (
+                listFilteredTasks
+                  .slice()
+                  .sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9"))
+                  .map((t) => <TaskRow key={t.id} task={t} selectable />)
+              )}
+            </div>
+          ) : (
+            myTasksGroupOrder.filter((g) => myTasksGroups.has(g)).map((group) => {
+              const groupTasks = myTasksGroups.get(group)!;
+              return (
+                <div key={group} style={{ marginBottom: "16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: myTasksGroupColor(group), display: "inline-block" }} />
+                    <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>{group}</span>
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600 }}>{groupTasks.length}</span>
+                  </div>
+                  <div style={{ ...cardStyle, overflow: "hidden" }}>
+                    {groupTasks.length === 0 ? (
+                      <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
+                    ) : (
+                      groupTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} selectable />)
+                    )}
+                  </div>
                 </div>
-                <div style={{ ...cardStyle, overflow: "hidden" }}>
-                  {groupTasks.length === 0 ? (
-                    <div style={{ padding: "14px", textAlign: "center", color: COLOURS.INK_400, fontSize: "12.5px" }}>Nothing here. Nice.</div>
-                  ) : (
-                    groupTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9")).map((t) => <TaskRow key={t.id} task={t} selectable />)
-                  )}
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
           {myTasksSource.length === 0 && (
             <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>
               {myTasksScope === "mine" ? "Nothing assigned to you right now." : "No tasks to show."}
@@ -1328,7 +1369,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>No tasks to show.</div>
           ) : deptNodes.map((d) => {
             const isDeptCollapsed = !expandedDepts.has(d.dept);
-            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+            const deptFiltered = filter === "overdue" ? d.tasks.filter(isOverdue) : filter === "waiting" ? d.tasks.filter((t) => t.status === "Waiting Reply") : filter === "exception" ? d.tasks.filter((t) => !!t.explanation_required) : d.tasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
             if (deptFiltered.length === 0 && filter !== "all") return null;
 
             const personGroups = new Map<string, Task[]>();
