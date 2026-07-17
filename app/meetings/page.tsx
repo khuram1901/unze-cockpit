@@ -1346,20 +1346,19 @@ export default function MeetingsPage() {
                   <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
                     {filteredDecisions.map((d, i) => (
                       <div key={`${d.meetingId}-${i}`} style={{
-                        padding: "10px 14px",
-                        borderBottom: i < filteredDecisions.length - 1 ? `1px solid ${COLOURS.LIGHT}` : "none",
+                        display: "flex", alignItems: "flex-start", gap: "10px",
+                        padding: "8px 14px",
+                        borderBottom: i < filteredDecisions.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none",
                         backgroundColor: COLOURS.CARD,
                       }}>
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "3px" }}>
-                          {d.text}
-                        </div>
-                        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", fontSize: "13px", color: COLOURS.SLATE }}>
-                          <span>{formatDateUK(d.meetingDate)}</span>
-                          <span style={{ fontWeight: 600 }}>{d.meetingTitle}</span>
-                          <span style={{
-                            padding: "1px 8px", borderRadius: RADII.XS,
-                            backgroundColor: COLOURS.HAIRLINE, color: COLOURS.NAVY, fontWeight: 600,
-                          }}>{d.department}</span>
+                        <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: COLOURS.GREEN, flexShrink: 0, marginTop: "5px" }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: "12px", color: COLOURS.NAVY, marginBottom: "2px" }}>{d.text}</div>
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: "11px", color: COLOURS.SLATE, alignItems: "center" }}>
+                            <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{formatDateUK(d.meetingDate)}</span>
+                            <span>{d.meetingTitle}</span>
+                            <span style={{ padding: "1px 6px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.NAVY, fontWeight: 600 }}>{d.department}</span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1383,24 +1382,33 @@ export default function MeetingsPage() {
                 const groupTasks = groupMeetings.flatMap((m) => getTasksForMeeting(m.id));
                 const groupOpen = groupTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
                 return (
-                  <div key={groupKey} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "10px" }}>
-                    <div onClick={() => toggleGroup(groupKey)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: isGroupOpen ? COLOURS.NAVY : COLOURS.CARD, borderBottom: isGroupOpen ? `1px solid ${COLOURS.BORDER}` : "none" }}>
-                      <div>
-                        <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "15px", fontWeight: 600, color: isGroupOpen ? "white" : COLOURS.NAVY }}>{formatMonthLabel(groupKey)}</div>
-                        <div style={{ fontSize: "12px", color: isGroupOpen ? "rgba(255,255,255,0.6)" : COLOURS.SLATE, marginTop: "1px" }}>
-                          {groupMeetings.length} meeting{groupMeetings.length !== 1 ? "s" : ""}
-                          {groupOpen > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {groupOpen} open task{groupOpen !== 1 ? "s" : ""}</span>}
-                        </div>
-                      </div>
-                      <span style={{ color: isGroupOpen ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{isGroupOpen ? "▲" : "▼"}</span>
+                  <div key={groupKey} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "10px" }}>
+                    <div onClick={() => toggleGroup(groupKey)} style={{
+                      padding: "10px 14px", cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: "10px",
+                      backgroundColor: isGroupOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+                      borderLeft: `3px solid ${COLOURS.SLATE}`,
+                      borderBottom: isGroupOpen ? `1px solid ${COLOURS.BORDER}` : "none",
+                    }}>
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>📅</span>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, flex: 1 }}>{formatMonthLabel(groupKey)}</span>
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>
+                        {groupMeetings.length} meeting{groupMeetings.length !== 1 ? "s" : ""}
+                        {groupOpen > 0 && <span style={{ color: COLOURS.AMBER }}> · {groupOpen} open</span>}
+                      </span>
+                      <span style={{ color: COLOURS.SLATE, fontSize: "10px", flexShrink: 0 }}>{isGroupOpen ? "▲" : "▼"}</span>
                     </div>
-                    {isGroupOpen && groupMeetings.map((m) => {
-                      const isOpen = expandedId === m.id;
-                      const mTasks = getTasksForMeeting(m.id);
-                      const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
-                      const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
-                      return <MeetingCard key={m.id} m={m} mTasks={mTasks} completedTasks={completedTasks} openTaskCount={openTaskCount} isOpen={isOpen} setExpandedId={setExpandedId} downloadMinutesPDF={downloadMinutesPDF} isMobile={isMobile} showDept />;
-                    })}
+                    {isGroupOpen && (
+                      <div>
+                        {groupMeetings.map((m) => {
+                          const isOpen = expandedId === m.id;
+                          const mTasks = getTasksForMeeting(m.id);
+                          const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
+                          const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
+                          return <MeetingCard key={m.id} m={m} mTasks={mTasks} completedTasks={completedTasks} openTaskCount={openTaskCount} isOpen={isOpen} setExpandedId={setExpandedId} downloadMinutesPDF={downloadMinutesPDF} isMobile={isMobile} showDept />;
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })
