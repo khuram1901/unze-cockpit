@@ -47,6 +47,7 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_guarantees", title: "Bank Facilities", subtitle: "Guarantees, pay orders & bank facility utilisation", href: "/finance/guarantees", icon: "🔐", group: "Finance" },
   { permKey: "can_view_finance_ifpl", title: "Imperial Footwear", subtitle: "Cash position, forecasts, budgets", href: "/finance/imperial", icon: "👞", group: "Finance", badgeKey: "ifplFinance" },
   { permKey: "can_view_investments", title: "Investments", subtitle: "PSX stock portfolio tracker", href: "/investments", icon: "📈", group: "Finance" },
+  { permKey: "can_view_finance", title: "Profit & Loss", subtitle: "Monthly P&L, uploads, trends and analysis", href: "/finance/profit-and-loss", icon: "📉", group: "Finance" },
   { permKey: "can_edit_finance", title: "Opening Balances", subtitle: "Set starting balances for companies", href: "/opening-balances", icon: "🏧", group: "Finance" },
   { permKey: "can_view_receivables", title: "Receivables", subtitle: "Track bills through collection stages", href: "/receivables", icon: "💳", group: "Finance", badgeKey: "receivables" },
   { permKey: "can_view_finance_utpl", title: "Unze Trading", subtitle: "Cash position, forecasts, budgets", href: "/finance/unze-trading", icon: "🏦", group: "Finance", badgeKey: "utplFinance" },
