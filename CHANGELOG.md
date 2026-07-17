@@ -30,6 +30,12 @@ The audit page is now organised around the audit manager's "Audit activities" Ex
 
 ---
 
+## 2026-07-18 (night) — Data-quality warnings are now clickable on the Imperial page
+
+Khuram flagged that the amber "3 data-quality warnings" chip never said WHAT the warnings were. Now it (and any red "rejected" chip) is a button: clicking expands a panel listing every failed check from each month's latest upload — "should be X, file shows Y (out by Z)", amber for accepted-with-warning, red for rejected months — plus a plain-language note of the known causes (Aug-25: Hakim Mall has 2.0m sales with no COGS/GP entered; Oct-25: a projection GP cell and a hardcoded plan Total Overheads that don't match their own parts). Fix the cells, re-upload, and each item clears automatically. New RPC `ifpl_check_details()` (migration 150, anon-revoked per the 149 pattern), lazy-loaded on first click. tsc + eslint clean.
+
+---
+
 ## 2026-07-18 (evening) — Imperial branch league decluttered: summary cards + Top 10 / Watch / All tabs
 
 Khuram found the 33-row branch league messy. Rebuilt to the approved mockup, per the house "management by exception" rule: three summary cards on top (channel totals Online vs retail vs cost centres; stars — top store, best margin over 20m sales, best plan-beat; watch list naming the loss-makers and worst off-plan stores), then the table defaults to **Top 10** with **Watch list (n)** and **All 33** tabs. A "N other stores" roll-up row (tap to expand), the cost-centres row, and a bold whole-company total row keep every rupee accounted for whatever tab is open. Rank numbers added, contribution gets a mini bar like sales, searching switches to the full list automatically, and all previous behaviour (sortable headers, click-a-row-to-filter, RAG margin chips) is retained. Summary cards are filter-independent — always the whole company for the selected period. tsc + eslint clean.

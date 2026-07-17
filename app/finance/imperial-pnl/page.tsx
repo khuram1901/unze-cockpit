@@ -33,6 +33,7 @@ type LeagueRow = { branch: string; channel: string; proj_sales: number; act_sale
 type LineTotal = { line: string; category: string; projection: number; actual: number };
 type ValidationRow = { month: string; file_name: string; status: string; checks_passed: number; checks_failed: number; warnings: number; uploaded_at: string };
 type CheckDetail = { name: string; expected: number; reported: number; diff: number; blocking: boolean };
+type CheckIssue = { month: string; check_name: string; expected: number; reported: number; diff: number; blocking: boolean; status: string };
 type UploadResult = { month: string; accepted: boolean; summary: string; failed?: CheckDetail[]; warnings?: CheckDetail[] };
 type Insight = { title: string; detail: string; severity: "good" | "watch" | "urgent" };
 
@@ -107,6 +108,8 @@ export default function ImperialPnlPage() {
   const [generating, setGenerating] = useState(false);
   const [insightError, setInsightError] = useState("");
   const [showMarket, setShowMarket] = useState(false);
+  const [showIssues, setShowIssues] = useState(false);
+  const [checkIssues, setCheckIssues] = useState<CheckIssue[] | null>(null);
 
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -220,6 +223,16 @@ export default function ImperialPnlPage() {
     } finally {
       setUploading(false);
       setUploadFile(null);
+    }
+  }
+
+  // Lazy-load the failed-check detail the first time the chip is opened.
+  async function toggleIssues() {
+    const next = !showIssues;
+    setShowIssues(next);
+    if (next && checkIssues === null) {
+      const { data } = await supabase.rpc("ifpl_check_details");
+      setCheckIssues((data || []) as CheckIssue[]);
     }
   }
 
@@ -806,15 +819,18 @@ export default function ImperialPnlPage() {
                   </span>
                 ) : (
                   validationRows.filter((v) => v.status !== "accepted").map((v) => (
-                    <span key={v.month} style={{ background: COLOURS.DANGER_SOFT, color: COLOURS.RED, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
-                      {MONTH_LABEL(v.month)} rejected
-                    </span>
+                    <button key={v.month} onClick={toggleIssues} style={{ background: COLOURS.DANGER_SOFT, color: COLOURS.RED, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600, border: `1px solid ${COLOURS.RED}`, cursor: "pointer" }}>
+                      {MONTH_LABEL(v.month)} rejected {showIssues ? "▲" : "▼"}
+                    </button>
                   ))
                 )}
                 {totalWarnings > 0 && (
-                  <span style={{ background: COLOURS.WARNING_SOFT, color: COLOURS.AMBER, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600 }}>
-                    {totalWarnings} data-quality warning{totalWarnings > 1 ? "s" : ""} in the source file
-                  </span>
+                  <button
+                    onClick={toggleIssues}
+                    style={{ background: COLOURS.WARNING_SOFT, color: COLOURS.AMBER, borderRadius: RADII.PILL, padding: "2px 10px", fontSize: "11px", fontWeight: 600, border: `1px solid ${COLOURS.AMBER}`, cursor: "pointer" }}
+                  >
+                    {totalWarnings} data-quality warning{totalWarnings > 1 ? "s" : ""} in the source file {showIssues ? "▲" : "▼"}
+                  </button>
                 )}
                 {validationRows.length > 0 && (
                   <span style={{ fontSize: "11px", color: COLOURS.INK_400 }}>
@@ -826,6 +842,35 @@ export default function ImperialPnlPage() {
                   {showMarket ? "Hide market context" : "Market context"}
                 </button>
               </div>
+              {showIssues && (
+                <div style={{ marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "10px" }}>
+                  {checkIssues === null && <p style={{ fontSize: "12px", color: COLOURS.SLATE }}>Loading…</p>}
+                  {checkIssues !== null && checkIssues.length === 0 && (
+                    <p style={{ fontSize: "12px", color: COLOURS.GREEN }}>All checks pass — nothing to fix.</p>
+                  )}
+                  {checkIssues !== null && checkIssues.length > 0 && (
+                    <>
+                      <div style={{ fontSize: "12px", color: COLOURS.INK_700, marginBottom: "8px" }}>
+                        These are the source file&apos;s own inconsistencies — the exact cells that don&apos;t reconcile. Fix them in the workbook and re-upload; each one clears automatically once its month passes.
+                      </div>
+                      {[...new Set(checkIssues.map((c) => c.month))].map((m) => (
+                        <div key={m} style={{ marginBottom: "8px" }}>
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{MONTH_LABEL(m)}</div>
+                          {checkIssues.filter((c) => c.month === m).map((c, i) => (
+                            <div key={i} style={{ fontSize: "12px", color: c.blocking ? COLOURS.RED : COLOURS.AMBER, lineHeight: 1.6, paddingLeft: "10px" }}>
+                              {c.blocking ? "✗" : "⚠"} {c.check_name}: should be {fmtM(c.expected)}, file shows {fmtM(c.reported)} (out by {fmtM(c.diff)})
+                              {c.blocking ? " — month was rejected" : " — accepted, but worth correcting"}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                      <div style={{ fontSize: "11px", color: COLOURS.INK_400 }}>
+                        Known cause for Aug 25: Hakim Mall has 2.0m net sales recorded with no COGS or gross profit entered. Oct 25&apos;s two are in the projection columns — a GP cell and a hardcoded Total Overheads that don&apos;t match their own parts.
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               {showMarket && (
                 <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7, marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "10px" }}>
                   <div style={{ fontWeight: 700, fontSize: "11px", color: COLOURS.GREEN, marginBottom: "3px" }}>DEMAND — TAILWINDS</div>
