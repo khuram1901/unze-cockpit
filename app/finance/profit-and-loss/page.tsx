@@ -85,9 +85,9 @@ export default function ProfitAndLossPage() {
   const [allocateHo, setAllocateHo] = useState(false);
 
   const [showUpload, setShowUpload] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{ accepted: boolean; summary: string; checks: CheckRow[] } | null>(null);
+  const [uploadResults, setUploadResults] = useState<{ fileName: string; accepted: boolean; summary: string; checks: CheckRow[] }[]>([]);
 
   const isUnze = companyId === UTPL_COMPANY_ID;
 
@@ -137,18 +137,26 @@ export default function ProfitAndLossPage() {
   }, [companyId, isUnze, monthFrom, monthTo, plantFilter, allocateHo]);
 
   async function handleUpload() {
-    if (!uploadFile) return;
+    if (uploadFiles.length === 0) return;
     setUploading(true);
-    setUploadResult(null);
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    const res = await authedFetch("/api/pnl/upload-unze", { method: "POST", body: formData });
-    const body = await res.json();
+    setUploadResults([]);
+    let anyAccepted = false;
+    // Sequential, not Promise.all — each file goes through its own full
+    // check-then-accept-or-reject pass, and running them one at a time
+    // means a later month's checks always see the earlier months already
+    // committed (relevant for the "new account this month" comparison).
+    for (const file of uploadFiles) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await authedFetch("/api/pnl/upload-unze", { method: "POST", body: formData });
+      const body = await res.json();
+      if (body.accepted) anyAccepted = true;
+      setUploadResults((prev) => [...prev, { fileName: file.name, accepted: !!body.accepted, summary: body.summary || body.error || "Unknown error", checks: body.checks || [] }]);
+    }
     setUploading(false);
-    setUploadResult(body);
-    if (body.accepted) {
-      setUploadFile(null);
-      // Reload after a successful upload so the new month shows up.
+    setUploadFiles([]);
+    if (anyAccepted) {
+      // Reload after uploads so any new months show up.
       const { data } = await supabase.rpc("pnl_kpi_summary", { p_company_id: companyId, p_from: "2000-01-01", p_to: "2100-01-01" });
       const rows = (data || []) as KpiRow[];
       if (rows.length > 0) setMonthTo(rows[rows.length - 1].month);
@@ -227,10 +235,10 @@ export default function ProfitAndLossPage() {
                 {canUploadUnze && (
                   <div style={{ marginBottom: "16px" }}>
                     <button
-                      onClick={() => { setShowUpload(!showUpload); setUploadResult(null); }}
+                      onClick={() => { setShowUpload(!showUpload); setUploadResults([]); }}
                       style={{ ...chipBtn(showUpload), display: "inline-flex", alignItems: "center", gap: "6px" }}
                     >
-                      {showUpload ? "Close upload" : "Upload new month"}
+                      {showUpload ? "Close upload" : "Upload months"}
                     </button>
                     {showUpload && (
                       <div style={{ ...cardStyle, marginTop: "10px" }}>
@@ -238,38 +246,42 @@ export default function ProfitAndLossPage() {
                           <input
                             type="file"
                             accept=".xlsx"
-                            onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                            multiple
+                            onChange={(e) => setUploadFiles(Array.from(e.target.files || []))}
                             style={{ fontSize: "13px" }}
                           />
                           <button
                             onClick={handleUpload}
-                            disabled={!uploadFile || uploading}
+                            disabled={uploadFiles.length === 0 || uploading}
                             style={{
                               ...chipBtn(true),
-                              opacity: !uploadFile || uploading ? 0.5 : 1,
-                              cursor: !uploadFile || uploading ? "not-allowed" : "pointer",
+                              opacity: uploadFiles.length === 0 || uploading ? 0.5 : 1,
+                              cursor: uploadFiles.length === 0 || uploading ? "not-allowed" : "pointer",
                             }}
                           >
-                            {uploading ? "Checking…" : "Upload"}
+                            {uploading ? "Checking…" : uploadFiles.length > 1 ? `Upload ${uploadFiles.length} files` : "Upload"}
                           </button>
                         </div>
-                        {uploadResult && (
-                          <div style={{
+                        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "6px" }}>
+                          Select as many months as you like — each one is checked and accepted or rejected on its own.
+                        </div>
+                        {uploadResults.map((r, idx) => (
+                          <div key={idx} style={{
                             marginTop: "12px", padding: "12px 14px", borderRadius: RADII.SM,
-                            background: uploadResult.accepted ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT,
+                            background: r.accepted ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT,
                           }}>
-                            <div style={{ fontSize: "13px", fontWeight: 700, color: uploadResult.accepted ? COLOURS.GREEN : COLOURS.RED, marginBottom: "6px" }}>
-                              {uploadResult.accepted ? "Accepted — " : "Rejected — "}{uploadResult.summary}
+                            <div style={{ fontSize: "13px", fontWeight: 700, color: r.accepted ? COLOURS.GREEN : COLOURS.RED, marginBottom: "6px" }}>
+                              {r.fileName} — {r.accepted ? "Accepted — " : "Rejected — "}{r.summary}
                             </div>
-                            {!uploadResult.accepted && (
+                            {!r.accepted && (
                               <div style={{ fontSize: "12px", color: COLOURS.RED, lineHeight: 1.6 }}>
-                                {uploadResult.checks.filter((c) => !c.passed).map((c, i) => (
+                                {r.checks.filter((c) => !c.passed).map((c, i) => (
                                   <div key={i}>· {c.name}: expected {fmtM(c.expected)}, got {fmtM(c.reported)} (diff {fmtM(c.diff)})</div>
                                 ))}
                               </div>
                             )}
                           </div>
-                        )}
+                        ))}
                       </div>
                     )}
                   </div>
