@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase, loadMyPermissions } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
-import { canSeeAllTasks, isSecondaryCEO, type UserCtx, type PermOverrides } from "./permissions";
+import { canSeeAllTasks, isSecondaryCEO, myIdentityEmails, type UserCtx, type PermOverrides } from "./permissions";
 import { COLOURS } from "./SharedUI";
 
 type Member = {
@@ -107,7 +107,7 @@ export default function AuthWrapper({
     const isAdmin = userCtx ? canSeeAllTasks(userCtx) : (role === "Admin" || role === "CEO" || role === "Executive");
 
     const { data } = await supabase.rpc("get_notification_badge_counts", {
-      p_email: email,
+      p_emails: myIdentityEmails(email),
       p_today: todayStr,
       p_is_admin: isAdmin,
     });
@@ -117,6 +117,8 @@ export default function AuthWrapper({
     const items: { label: string; count: number; href: string }[] = [];
     if (counts.overdue_count > 0) items.push({ label: "Overdue tasks", count: counts.overdue_count, href: "/tasks" });
     if (counts.waiting_count > 0) items.push({ label: "Waiting reply", count: counts.waiting_count, href: "/tasks" });
+    if (counts.submitted_count > 0) items.push({ label: "Submitted — awaiting your sign-off", count: counts.submitted_count, href: "/tasks" });
+    if (counts.exception_count > 0) items.push({ label: "Needs explanation", count: counts.exception_count, href: "/tasks" });
     if (isAdmin && counts.machines_down_count > 0) items.push({ label: "Machines down", count: counts.machines_down_count, href: "/dashboard" });
     if (isAdmin && counts.pending_minutes_count > 0) items.push({ label: "Minutes pending", count: counts.pending_minutes_count, href: "/meetings" });
 
