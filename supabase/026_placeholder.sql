@@ -1,3 +1,0 @@
--- Migration 026: PLACEHOLDER
--- This number was skipped during development (025_push_subscriptions → 027_role_model).
--- File exists to fill the numbering gap. No SQL to execute.
