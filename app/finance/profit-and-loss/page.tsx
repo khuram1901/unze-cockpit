@@ -245,6 +245,9 @@ export default function ProfitAndLossPage() {
   const avgMargin = priorRows.length ? (priorRows.reduce((s, r) => s + (r.gross_sale ? r.gross_profit / r.gross_sale : 0), 0) / priorRows.length) * 100 : 0;
   const latestMargin = latest && latest.gross_sale ? (latest.gross_profit / latest.gross_sale) * 100 : null;
   const prevMargin = prev && prev.gross_sale ? (prev.gross_profit / prev.gross_sale) * 100 : null;
+  const periodSales = kpiRows.reduce((s, r) => s + r.gross_sale, 0);
+  const periodGp = kpiRows.reduce((s, r) => s + r.gross_profit, 0);
+  const periodOpex = kpiRows.reduce((s, r) => s + Math.abs(r.operating_expenses), 0);
   const periodNp = kpiRows.reduce((s, r) => s + r.net_profit_final, 0);
 
   let lossStreak = 0;
@@ -469,33 +472,38 @@ export default function ProfitAndLossPage() {
                 {latest && (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px", marginBottom: "10px" }}>
                     <div style={{ ...cardStyle, padding: "10px 12px" }}>
-                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Sales — {MONTH_LABEL(latest.month)}</div>
+                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Sales — {MONTH_LABEL(latest.month)} (latest month)</div>
                       <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>{fmtM(latest.gross_sale)}</div>
-                      {prev && (
+                      {latest.gross_sale === 0 ? (
+                        <div style={{ fontSize: "11px", color: COLOURS.AMBER, fontWeight: 600 }}>No sales recorded this month{plantFilter !== "All" ? ` for ${plantFilter}` : ""}</div>
+                      ) : prev && (
                         <div style={{ fontSize: "11px", color: latest.gross_sale >= prev.gross_sale ? COLOURS.GREEN : COLOURS.RED }}>
                           {latest.gross_sale >= prev.gross_sale ? "▲" : "▼"} {fmtM(Math.abs(latest.gross_sale - prev.gross_sale))} vs {MONTH_LABEL(prev.month)}
-                          {avgSales > 0 && ` · avg ${fmtM(avgSales)}`}
                         </div>
                       )}
+                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Period: {fmtM(periodSales)}{avgSales > 0 ? ` · avg ${fmtM(avgSales)}/mo` : ""}</div>
                     </div>
                     <div style={{ ...cardStyle, padding: "10px 12px" }}>
-                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Gross margin</div>
+                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Gross margin — {MONTH_LABEL(latest.month)}</div>
                       <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>{latestMargin === null ? "—" : fmtPct(latestMargin)}</div>
                       <div style={{ fontSize: "11px", color: latestMargin !== null && prevMargin !== null && latestMargin < prevMargin ? COLOURS.RED : COLOURS.SLATE }}>
-                        {prevMargin !== null ? `vs ${fmtPct(prevMargin)} ${MONTH_LABEL(prev.month)}` : ""}{priorRows.length >= 2 && latestMargin !== null ? ` · avg ${fmtPct(avgMargin)}` : ""}
+                        {latestMargin === null ? "No sales this month" : prevMargin !== null ? `vs ${fmtPct(prevMargin)} ${MONTH_LABEL(prev.month)}` : ""}
                       </div>
+                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Period: {periodSales > 0 ? fmtPct((periodGp / periodSales) * 100) : "—"}</div>
                     </div>
                     <div style={{ ...cardStyle, padding: "10px 12px" }}>
-                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Operating expenses</div>
+                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Operating expenses — {MONTH_LABEL(latest.month)}</div>
                       <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>{fmtM(Math.abs(latest.operating_expenses))}</div>
                       {prev && (
                         <div style={{ fontSize: "11px", color: Math.abs(latest.operating_expenses) <= Math.abs(prev.operating_expenses) ? COLOURS.GREEN : COLOURS.RED }}>
                           {Math.abs(latest.operating_expenses) <= Math.abs(prev.operating_expenses) ? "▼" : "▲"} {fmtM(Math.abs(Math.abs(latest.operating_expenses) - Math.abs(prev.operating_expenses)))} vs {MONTH_LABEL(prev.month)}
                         </div>
                       )}
+                      <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Period: {fmtM(periodOpex)}</div>
                     </div>
                     <div style={{ ...cardStyle, padding: "10px 12px" }}>
                       <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Net profit — {MONTH_LABEL(latest.month)}</div>
+
                       <div style={{ fontSize: "22px", fontWeight: 700, color: latest.net_profit_final >= 0 ? COLOURS.NAVY : COLOURS.RED }}>{fmtM(latest.net_profit_final)}</div>
                       <div style={{ fontSize: "11px", color: periodNp >= 0 ? COLOURS.SLATE : COLOURS.RED }}>Period total: {fmtM(periodNp)}</div>
                     </div>
