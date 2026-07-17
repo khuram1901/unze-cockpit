@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
         remaining_40: 0,
         remaining_45: Math.max(0, (data.qty_45 || 0) - opening.qty_45 - dispatched.qty_45),
         remaining_meter: Math.max(0, (data.qty_meter || 0) - opening.qty_meter - dispatched.qty_meter),
+        closed_at: data.closed_at || null,
       };
     });
 
@@ -254,9 +255,22 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const { id, contractor_id, letter_number, issue_date, issued_by, expiry_date, qty_31, qty_36, qty_45, qty_meter, notes } = body;
+  const { id, contractor_id, letter_number, issue_date, issued_by, expiry_date, qty_31, qty_36, qty_45, qty_meter, notes, close } = body;
 
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+
+  // Close/reopen — Khuram, 18 Jul 2026: old letters with only a handful of
+  // poles left uncollected (out of hundreds authorised) were warning
+  // forever with no way to say "done with this one". Mirrors PO close:
+  // the letter and its history stay put, it just stops nagging.
+  if (close !== undefined) {
+    const { data, error } = await supabase
+      .from("authority_letters")
+      .update(close ? { closed_at: new Date().toISOString(), closed_by: auth.email } : { closed_at: null, closed_by: null })
+      .eq("id", id).select().single();
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ letter: data });
+  }
 
   // Validate qty cap against PO ordered totals (excluding this letter)
   const { data: existing } = await supabase

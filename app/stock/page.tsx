@@ -23,6 +23,7 @@ type LetterSummary = {
   dispatched_31: number; dispatched_36: number; dispatched_40: number; dispatched_45: number; dispatched_meter: number;
   remaining_31: number; remaining_36: number; remaining_40: number; remaining_45: number; remaining_meter: number;
   notes: string | null;
+  closed_at: string | null;
 };
 
 type ContractorGroup = {
@@ -166,15 +167,17 @@ function LetterRow({ letter, expanded, onToggle, onDispatch }: {
     ? { label: `Exp. ${formatDateUK(letter.expiry_date!)}`, bg: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }
     : null;
 
+  const isClosed = !!letter.closed_at;
+
   return (
-    <div style={{ marginLeft: "24px", marginBottom: "6px" }}>
+    <div style={{ marginLeft: "24px", marginBottom: "6px", opacity: isClosed ? 0.55 : 1 }}>
       <div
         onClick={onToggle}
         style={{
           display: "flex", alignItems: "center", gap: "8px", padding: "7px 10px",
           borderRadius: RADII.SM, cursor: "pointer", flexWrap: "wrap",
-          backgroundColor: expStatus === "expired" ? COLOURS.DANGER_SOFT : fullyCollected ? COLOURS.SUCCESS_SOFT : COLOURS.CARD_ALT,
-          border: `1px solid ${expStatus === "expired" ? COLOURS.RED : expStatus === "expiring-soon" ? COLOURS.AMBER : fullyCollected ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+          backgroundColor: isClosed ? COLOURS.CARD_ALT : expStatus === "expired" ? COLOURS.DANGER_SOFT : fullyCollected ? COLOURS.SUCCESS_SOFT : COLOURS.CARD_ALT,
+          border: `1px solid ${isClosed ? COLOURS.HAIRLINE : expStatus === "expired" ? COLOURS.RED : expStatus === "expiring-soon" ? COLOURS.AMBER : fullyCollected ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
         }}
       >
         <span style={{ fontSize: "13px" }}>{expanded ? "▾" : "▸"}</span>
@@ -182,7 +185,11 @@ function LetterRow({ letter, expanded, onToggle, onDispatch }: {
           Letter #{letter.letter_number}
         </span>
         <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>— {formatDateUK(letter.issue_date)} — Auth&apos;d by {letter.issued_by}</span>
-        {expiryBadge && (
+        {isClosed ? (
+          <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+            Closed
+          </span>
+        ) : expiryBadge && (
           <span style={{ fontSize: "11px", fontWeight: 700, padding: "1px 7px", borderRadius: RADII.PILL, backgroundColor: expiryBadge.bg, color: expiryBadge.color }}>
             {expiryBadge.label}
           </span>
@@ -193,7 +200,7 @@ function LetterRow({ letter, expanded, onToggle, onDispatch }: {
           <span style={{ fontSize: "12px", fontWeight: 700, color: fullyCollected ? COLOURS.GREEN : COLOURS.RED, fontFamily: "var(--font-mono)" }}>
             Balance: {remaining.toLocaleString()}
           </span>
-          {!fullyCollected && (
+          {!fullyCollected && !isClosed && (
             <button
               onClick={(e) => { e.stopPropagation(); onDispatch(); }}
               style={{ padding: "3px 10px", borderRadius: RADII.PILL, fontSize: "11px", fontWeight: 700, border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" }}
@@ -375,6 +382,7 @@ export default function StockPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [showClosed, setShowClosed] = useState(true);
+  const [showAllExpiryWarnings, setShowAllExpiryWarnings] = useState(false);
   const [dispatchTarget, setDispatchTarget] = useState<DispatchTarget | null>(null);
 
   useEffect(() => {
@@ -450,24 +458,46 @@ export default function StockPage() {
   const activePOs = summary.filter((i) => i.po.status === "Active" && !i.po.is_system_unallocated).length;
   const visibleSummary = showClosed ? summary : summary.filter((i) => i.po.status === "Active");
 
-  const expiryWarnings: { po_label: string; contractor: string; letter_number: string; expiry_date: string; status: "expired" | "expiring-soon" }[] = [];
+  // Khuram, 18 Jul 2026: this banner was "really messy" — every expired
+  // letter ever (some from 2022) dumped in one unsorted list, including
+  // ones with only a handful of poles left out of hundreds authorised
+  // (dead paperwork, nobody's collecting those years later). Three fixes:
+  // skip letters that have been explicitly Closed (new action, Manage POs
+  // page), skip ones where the uncollected amount is negligible (<5% of
+  // what was authorised — treat as effectively complete rather than a
+  // real problem), and sort/cap what's left so the list is actually
+  // scannable (Expiring soon first — still time to act — then most
+  // recently expired; capped at 8 with a way to see the rest).
+  const NEGLIGIBLE_REMAINING_PCT = 0.05;
+  const expiryWarningsAll: { po_label: string; contractor: string; letter_number: string; expiry_date: string; status: "expired" | "expiring-soon" }[] = [];
   for (const item of summary) {
     if (item.po.status === "Closed") continue;
     for (const cg of item.contractors) {
       for (const l of cg.letters) {
+        if (l.closed_at) continue;
         const s = expiryStatus(l.expiry_date);
-        if (s === "expired" || s === "expiring-soon") {
-          expiryWarnings.push({
-            po_label: item.po.is_system_unallocated ? "Unallocated" : `${item.po.customer_name} PO#${item.po.po_number}`,
-            contractor: cg.contractor_name,
-            letter_number: l.letter_number,
-            expiry_date: l.expiry_date!,
-            status: s,
-          });
-        }
+        if (s !== "expired" && s !== "expiring-soon") continue;
+        const authorized = totalPoles(l.qty_31, l.qty_36, l.qty_40, l.qty_45, l.qty_meter);
+        const remaining = totalPoles(l.remaining_31, l.remaining_36, l.remaining_40, l.remaining_45, l.remaining_meter);
+        if (authorized > 0 && remaining / authorized < NEGLIGIBLE_REMAINING_PCT) continue;
+        expiryWarningsAll.push({
+          po_label: item.po.is_system_unallocated ? "Unallocated" : `${item.po.customer_name} PO#${item.po.po_number}`,
+          contractor: cg.contractor_name,
+          letter_number: l.letter_number,
+          expiry_date: l.expiry_date!,
+          status: s,
+        });
       }
     }
   }
+  expiryWarningsAll.sort((a, b) => {
+    if (a.status !== b.status) return a.status === "expiring-soon" ? -1 : 1;
+    return a.status === "expiring-soon"
+      ? a.expiry_date.localeCompare(b.expiry_date) // soonest-to-expire first
+      : b.expiry_date.localeCompare(a.expiry_date); // most-recently-expired first
+  });
+  const EXPIRY_WARNINGS_CAP = 8;
+  const expiryWarnings = showAllExpiryWarnings ? expiryWarningsAll : expiryWarningsAll.slice(0, EXPIRY_WARNINGS_CAP);
 
   if (checking) return (
     <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions...</p></main></AuthWrapper>
@@ -543,7 +573,7 @@ export default function StockPage() {
         )}
 
         {/* Expiry warnings banner */}
-        {expiryWarnings.length > 0 && (
+        {expiryWarningsAll.length > 0 && (
           <div style={{ marginBottom: "14px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.WARNING_SOFT, padding: "10px 14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.AMBER, marginBottom: "6px" }}>
               ⚠ Authority Letter Expiry Alerts
@@ -553,6 +583,14 @@ export default function StockPage() {
                 <strong>{w.status === "expired" ? "EXPIRED" : "Expiring soon"}:</strong> Letter #{w.letter_number} ({w.po_label} · {w.contractor}) — {formatDateUK(w.expiry_date)}
               </div>
             ))}
+            {expiryWarningsAll.length > EXPIRY_WARNINGS_CAP && (
+              <button
+                onClick={() => setShowAllExpiryWarnings((v) => !v)}
+                style={{ marginTop: "4px", fontSize: "12px", fontWeight: 600, color: COLOURS.AMBER, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+              >
+                {showAllExpiryWarnings ? "Show fewer" : `+${expiryWarningsAll.length - EXPIRY_WARNINGS_CAP} more — show all`}
+              </button>
+            )}
           </div>
         )}
 

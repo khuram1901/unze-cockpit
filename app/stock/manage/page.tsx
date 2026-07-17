@@ -33,6 +33,7 @@ type AuthorityLetter = {
   qty_31: number; qty_36: number; qty_40: number; qty_45: number; qty_meter: number;
   opening_dispatched_31: number; opening_dispatched_36: number; opening_dispatched_40: number; opening_dispatched_45: number; opening_dispatched_meter: number;
   notes: string | null;
+  closed_at?: string | null;
   contractors?: { name: string } | null;
 };
 type FlatLetter = {
@@ -553,6 +554,22 @@ export default function StockManagePage() {
     if (json.error) { toast(json.error, "error"); return; }
     toast("Letter updated", "success");
     setEditLetterId(null);
+    if (viewLettersPOId) loadLetters(viewLettersPOId);
+  }
+
+  async function toggleCloseLetter(l: AuthorityLetter) {
+    const closing = !l.closed_at;
+    const ok = await confirm(
+      closing
+        ? `Close letter #${l.letter_number}? It'll stop showing up in expiry alerts, but stays here with its history.`
+        : `Reopen letter #${l.letter_number}?`,
+      true
+    );
+    if (!ok) return;
+    const res = await authedFetch("/api/stock/authority-letters", { method: "PATCH", body: JSON.stringify({ id: l.id, close: closing }) });
+    const json = await res.json();
+    if (json.error) { toast(json.error, "error"); return; }
+    toast(closing ? "Letter closed" : "Letter reopened", "success");
     if (viewLettersPOId) loadLetters(viewLettersPOId);
   }
 
@@ -1216,6 +1233,9 @@ export default function StockManagePage() {
                                                 <span style={expiryChipStyle(status)}>{expiryLabel(status, l.expiry_date)}</span>
                                               )}
                                               {status === "Complete" && <span style={expiryChipStyle(status)}>Complete</span>}
+                                              {l.closed_at && (
+                                                <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>Closed</span>
+                                              )}
                                             </div>
                                             {/* Progress bar */}
                                             {totalAuth > 0 && (
@@ -1236,6 +1256,9 @@ export default function StockManagePage() {
                                           </div>
                                           <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
                                             <button onClick={() => { startEditLetter(l); setViewDispatchLetterId(null); }} style={{ ...ghostBtn() }}>Edit</button>
+                                            <button onClick={() => toggleCloseLetter(l)} style={{ ...ghostBtn(!!l.closed_at) }}>
+                                              {l.closed_at ? "Reopen" : "Close"}
+                                            </button>
                                             <button
                                               onClick={() => deleteLetter(l)}
                                               disabled={deletingLetterId === l.id}
