@@ -80,6 +80,8 @@ const WIDGET_GROUP_TO_PAGE: Record<string, string> = {
   "Bank Facilities": "Bank Facilities",
   "Receivables": "Receivables",
   "Accounts & Returns": "Accounts & Returns",
+  "Unze P&L": "Unze P&L",
+  "Imperial P&L": "Imperial P&L",
 };
 
 function lc(s: string | null | undefined) { return (s || "").toLowerCase(); }
