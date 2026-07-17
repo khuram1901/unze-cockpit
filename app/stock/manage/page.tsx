@@ -12,6 +12,7 @@ import {
 } from "../../lib/SharedUI";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
+import DispatchForm from "../../lib/DispatchForm";
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -281,8 +282,6 @@ export default function StockManagePage() {
   const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
   const [dispatchesLoading, setDispatchesLoading] = useState(false);
   const [showNewDispatchForm, setShowNewDispatchForm] = useState(false);
-  const [newDispatchForm, setNewDispatchForm] = useState({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
-  const [savingNewDispatch, setSavingNewDispatch] = useState(false);
   const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
   const [editDispatchForm, setEditDispatchForm] = useState({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
   const [savingEditDispatch, setSavingEditDispatch] = useState(false);
@@ -625,33 +624,6 @@ export default function StockManagePage() {
     const json = await res.json();
     setDispatches(json.dispatches || []);
     setDispatchesLoading(false);
-  }
-
-  async function saveNewDispatch() {
-    if (!viewDispatchLetterId) return;
-    if (!newDispatchForm.dispatch_date || !newDispatchForm.released_by) { toast("Date and released-by are required", "error"); return; }
-    setSavingNewDispatch(true);
-    const res = await authedFetch("/api/stock/dispatch-records", {
-      method: "POST",
-      body: JSON.stringify({
-        authority_letter_id: viewDispatchLetterId,
-        dispatch_date: newDispatchForm.dispatch_date,
-        qty_31: Number(newDispatchForm.qty_31) || 0, qty_36: Number(newDispatchForm.qty_36) || 0,
-        qty_40: Number(newDispatchForm.qty_40) || 0, qty_45: Number(newDispatchForm.qty_45) || 0,
-        qty_meter: Number(newDispatchForm.qty_meter) || 0,
-        released_by: newDispatchForm.released_by,
-        vehicle_number: newDispatchForm.vehicle_number || null,
-        notes: newDispatchForm.notes || null,
-      }),
-    });
-    const json = await res.json();
-    setSavingNewDispatch(false);
-    if (json.error) { toast(json.error, "error"); return; }
-    toast("Dispatch recorded", "success");
-    setShowNewDispatchForm(false);
-    setNewDispatchForm({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
-    loadDispatches(viewDispatchLetterId);
-    loadPOs();
   }
 
   function startEditDispatch(d: DispatchRecord) {
@@ -1277,7 +1249,6 @@ export default function StockManagePage() {
                                                 setViewDispatchLetterId(isOpen ? null : l.id);
                                                 setEditDispatchId(null);
                                                 setShowNewDispatchForm(false);
-                                                setNewDispatchForm({ dispatch_date: "", qty_31: "", qty_36: "", qty_40: "", qty_45: "", qty_meter: "", released_by: "", vehicle_number: "", notes: "" });
                                                 if (!isOpen) loadDispatches(l.id);
                                               }}
                                               style={{ ...ghostBtn(viewDispatchLetterId === l.id) }}
@@ -1303,23 +1274,12 @@ export default function StockManagePage() {
                                             {showNewDispatchForm && (
                                               <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "12px", backgroundColor: COLOURS.CARD, marginBottom: "10px" }}>
                                                 <div style={{ ...kicker, marginBottom: "8px" }}>Record new dispatch</div>
-                                                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
-                                                  <Field label="Date *"><DateInputWithCalendar value={newDispatchForm.dispatch_date} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, dispatch_date: e.target.value })} style={{ ...inputStyle, width: "100%" }} /></Field>
-                                                  <Field label="Released by *"><input value={newDispatchForm.released_by} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, released_by: e.target.value })} placeholder="Name of person releasing poles" style={{ ...inputStyle, width: "100%" }} /></Field>
-                                                  <Field label="Vehicle number"><input value={newDispatchForm.vehicle_number} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, vehicle_number: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
-                                                </div>
-                                                <div style={{ ...kicker, margin: "6px 0 4px" }}>Quantities dispatched</div>
-                                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(100px,1fr))", gap: "8px" }}>
-                                                  {l.qty_31 > 0 && <Field label="31ft"><NumInput value={newDispatchForm.qty_31} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_31: v })} /></Field>}
-                                                  {l.qty_36 > 0 && <Field label="36ft"><NumInput value={newDispatchForm.qty_36} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_36: v })} /></Field>}
-                                                  {l.qty_40 > 0 && <Field label="40ft"><NumInput value={newDispatchForm.qty_40} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_40: v })} /></Field>}
-                                                  {l.qty_45 > 0 && <Field label="45ft"><NumInput value={newDispatchForm.qty_45} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_45: v })} /></Field>}
-                                                  {l.qty_meter > 0 && <Field label="Meter"><NumInput value={newDispatchForm.qty_meter} onChange={(v) => setNewDispatchForm({ ...newDispatchForm, qty_meter: v })} /></Field>}
-                                                </div>
-                                                <Field label="Notes"><input value={newDispatchForm.notes} onChange={(e) => setNewDispatchForm({ ...newDispatchForm, notes: e.target.value })} placeholder="Optional" style={{ ...inputStyle, width: "100%" }} /></Field>
-                                                <button onClick={saveNewDispatch} disabled={savingNewDispatch} style={{ ...primaryButtonStyle, fontSize: "12px", padding: "6px 14px", opacity: savingNewDispatch ? 0.6 : 1 }}>
-                                                  {savingNewDispatch ? "Saving…" : "Save Dispatch"}
-                                                </button>
+                                                <DispatchForm
+                                                  compact
+                                                  target={{ letterId: l.id, qty_31: l.qty_31, qty_36: l.qty_36, qty_40: l.qty_40, qty_45: l.qty_45, qty_meter: l.qty_meter }}
+                                                  onSaved={() => { setShowNewDispatchForm(false); loadDispatches(l.id); loadPOs(); }}
+                                                  onCancel={() => setShowNewDispatchForm(false)}
+                                                />
                                               </div>
                                             )}
 
