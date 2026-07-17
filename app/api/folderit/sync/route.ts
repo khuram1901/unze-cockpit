@@ -411,6 +411,29 @@ export async function GET(request: NextRequest) {
     errors.push(...hr.errors);
   }
 
+  // Persist a record of this run — previously the debug/error info below
+  // only ever lived in this HTTP response, which nothing reads (Vercel
+  // cron discards it). That's why folderit_resolution_invites could sit at
+  // zero rows indefinitely with no trace of why. Best-effort: a logging
+  // failure (e.g. migration not applied yet) must never break the sync
+  // itself.
+  try {
+    await db.from("folderit_sync_log").insert({
+      ok: errors.length === 0,
+      accounts_synced: accounts.length,
+      inbox_files_synced: inboxSynced,
+      invites_synced: invitesSynced,
+      hr_files_synced: hrFilesSynced,
+      audit_entries_scanned: auditEntriesScanned,
+      candidates_found: candidatesFound,
+      distinct_event_types: Array.from(sampleEventsSeen),
+      errors,
+    });
+  } catch {
+    // folderit_sync_log migration not applied yet, or some other
+    // logging-only failure — never let this block the actual sync result.
+  }
+
   return Response.json({
     ok: errors.length === 0,
     accountsSynced: accounts.length,

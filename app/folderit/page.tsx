@@ -440,6 +440,7 @@ function FolderitSearchBox() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FolderitSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -452,13 +453,33 @@ function FolderitSearchBox() {
     // or the component unmounted.
     const handle = setTimeout(async () => {
       if (q.length < 2) {
-        if (!cancelled) { setResults([]); setSearching(false); }
+        if (!cancelled) { setResults([]); setSearching(false); setSearchError(null); }
         return;
       }
-      if (!cancelled) setSearching(true);
-      const res = await authFetch(`/api/folderit/search?q=${encodeURIComponent(q)}`);
-      const json = await res.json();
-      if (!cancelled) { setResults(json.items ?? []); setSearching(false); }
+      if (!cancelled) { setSearching(true); setSearchError(null); }
+      try {
+        const res = await authFetch(`/api/folderit/search?q=${encodeURIComponent(q)}`);
+        const json = await res.json();
+        if (cancelled) return;
+        // Previously any server error (500, auth failure, RPC error) fell
+        // through to "No documents match" — indistinguishable from a
+        // genuine empty result. Surface it instead so a real failure
+        // doesn't look like the document simply isn't there.
+        if (!res.ok || json.error) {
+          setResults([]);
+          setSearchError(typeof json.error === "string" ? json.error : `Search failed (${res.status}).`);
+        } else {
+          setResults(json.items ?? []);
+          setSearchError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setResults([]);
+          setSearchError(e instanceof Error ? e.message : "Search failed — check your connection.");
+        }
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
     }, q.length < 2 ? 0 : 300);
 
     return () => { cancelled = true; clearTimeout(handle); };
@@ -483,6 +504,10 @@ function FolderitSearchBox() {
         <div style={{ ...cardStyle, marginTop: "8px", overflow: "hidden" }}>
           {searching ? (
             <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>Searching…</div>
+          ) : searchError ? (
+            <div style={{ padding: "12px 16px", color: COLOURS.RED, fontSize: "13px" }}>
+              Search failed: {searchError} — try again in a moment.
+            </div>
           ) : results.length === 0 ? (
             <div style={{ padding: "12px 16px", color: SLATE, fontSize: "13px" }}>No documents match &quot;{trimmed}&quot;.</div>
           ) : (
