@@ -501,6 +501,26 @@ export default function AccountsTaxDashboard() {
     }
   }
 
+  // Items needing attention — sign-offs pending even though every step is
+  // marked Completed (Khuram, 17/07/2026: "items need attention" widget).
+  // Reuses allStepsComplete()/signoffs exactly as the per-row sign-off
+  // button does, so this banner never disagrees with what's clickable
+  // further down the page.
+  type PendingSignoff = { entityLabel: string; sectionLabel: string };
+  const pendingSignoffs: PendingSignoff[] = [];
+  const attentionSections = [
+    ...fiscalSections.map((s) => ({ key: s.key as string, label: s.label, entities: QUARTERLY_ENTITIES })),
+    { key: "Annual", label: "Annual", entities: ANNUAL_ENTITIES },
+  ];
+  for (const sec of attentionSections) {
+    for (const e of sec.entities) {
+      const k = `${selectedYear}:${sec.key}:${e.key}`;
+      if (allStepsComplete(sec.key, e.key, scheduleEntries) && !(signoffs.get(k) ?? false)) {
+        pendingSignoffs.push({ entityLabel: e.label, sectionLabel: sec.label });
+      }
+    }
+  }
+
   // Return Filings KPIs — all periods across all return types
   function getAllFilingCounts() {
     let filed = 0, notFiled = 0, overdue = 0;
@@ -657,6 +677,52 @@ export default function AccountsTaxDashboard() {
           </button>
         </div>
       </div>
+
+      {/* ── Items need attention (Khuram, 17/07/2026) — overdue filings +
+          sign-offs pending, toggleable per person via the widget system. ── */}
+      {wv("accounts_tax.attention_banner", true) && !loading && (
+        overdueItems.length > 0 || pendingSignoffs.length > 0 ? (
+          <div style={{ marginBottom: "16px" }}>
+            <SectionTitle title="Items need attention" style={{ margin: "0 0 10px" }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {overdueItems.length > 0 && (
+                <div style={{ backgroundColor: DANGER_SOFT, borderLeft: `4px solid ${RED}`, borderRadius: RADII.CARD, padding: "12px 16px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
+                    {overdueItems.length} return{overdueItems.length !== 1 ? "s" : ""} overdue — past 15th deadline and not yet filed
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {overdueItems.slice(0, 8).map((item, i) => (
+                      <span key={i} style={{ fontSize: "11px", fontWeight: 600, color: RED, backgroundColor: DANGER_SOFT, padding: "2px 8px", borderRadius: RADII.PILL, border: "1px solid #EDB5B2" }}>
+                        {item.entityLabel} · {item.returnLabel} ({item.period})
+                      </span>
+                    ))}
+                    {overdueItems.length > 8 && (
+                      <span style={{ fontSize: "11px", color: RED, alignSelf: "center" }}>+{overdueItems.length - 8} more</span>
+                    )}
+                  </div>
+                </div>
+              )}
+              {pendingSignoffs.length > 0 && (
+                <div style={{ backgroundColor: WARNING_SOFT, borderLeft: `4px solid ${AMBER}`, borderRadius: RADII.CARD, padding: "12px 16px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
+                    {pendingSignoffs.length} account{pendingSignoffs.length !== 1 ? "s" : ""} awaiting sign-off — every step is Completed, waiting on Shakeel
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {pendingSignoffs.slice(0, 8).map((item, i) => (
+                      <span key={i} style={{ fontSize: "11px", fontWeight: 600, color: AMBER, backgroundColor: WARNING_SOFT, padding: "2px 8px", borderRadius: RADII.PILL, border: "1px solid #F6D28A" }}>
+                        {item.entityLabel} · {item.sectionLabel}
+                      </span>
+                    ))}
+                    {pendingSignoffs.length > 8 && (
+                      <span style={{ fontSize: "11px", color: AMBER, alignSelf: "center" }}>+{pendingSignoffs.length - 8} more</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null
+      )}
 
       {/* ── Tax Compliance Summary ── */}
       {wv("accounts_tax.compliance_summary", true) && !loading && (

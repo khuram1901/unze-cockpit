@@ -74,6 +74,7 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "receivables.aging_report", label: "Bill Aging Report", page: "Receivables" },
 
   // ── Accounts & Returns (app/accounts-tax/AccountsTaxDashboard.tsx) ─
+  { key: "accounts_tax.attention_banner", label: "Items Need Attention", page: "Accounts & Returns", tip: "Overdue filings and accounts awaiting sign-off" },
   { key: "accounts_tax.compliance_summary", label: "Tax Compliance Summary", page: "Accounts & Returns" },
   { key: "accounts_tax.schedule", label: "Accounts Schedule", page: "Accounts & Returns", tip: "Quarterly accounts schedule, KPI cards and status table" },
   { key: "accounts_tax.filings", label: "Return Filings", page: "Accounts & Returns", tip: "Monthly/quarterly tax return filing status" },
