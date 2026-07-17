@@ -18,6 +18,8 @@ import AuthWrapper from "../../lib/AuthWrapper";
 import { supabase } from "../../lib/supabase";
 import { COLOURS, RADII, cardStyle, PageHeader, SkeletonRows } from "../../lib/SharedUI";
 import { useRequireCapability } from "../../lib/useRouteGuard";
+import { useUserCtx } from "../../lib/useUserCtx";
+import { widgetVisible } from "../../lib/permissions";
 import { formatDateUK } from "../../lib/dateUtils";
 
 type KpiRow = {
@@ -76,6 +78,9 @@ const sectionCaption: React.CSSProperties = { fontSize: "11px", color: COLOURS.I
 
 export default function ImperialPnlPage() {
   const { checking } = useRequireCapability("ifpl_pnl");
+  const { ctx } = useUserCtx();
+  // Per-section visibility from the Access Matrix page-element picker.
+  const show = (key: string) => !ctx || widgetVisible(ctx, key, true);
 
   const [loading, setLoading] = useState(true);
   const [allMonths, setAllMonths] = useState<string[]>([]);
@@ -393,7 +398,7 @@ export default function ImperialPnlPage() {
             </div>
 
             {/* ── Attention banner ── */}
-            {attention.length > 0 && (
+            {show("imperial_pnl.attention_banner") && attention.length > 0 && (
               <div style={{ ...cardStyle, marginBottom: "10px", background: COLOURS.DANGER_SOFT, border: `1px solid ${COLOURS.RED}` }}>
                 <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.RED, marginBottom: "3px" }}>Needs your attention</div>
                 <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{attention.join(" · ")}</div>
@@ -401,6 +406,7 @@ export default function ImperialPnlPage() {
             )}
 
             {/* ── KPI cards ── */}
+            {show("imperial_pnl.kpi_cards") && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px", marginBottom: "10px" }}>
               <div style={{ ...cardStyle, padding: "10px 12px" }}>
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Net sales — {preset === "Month" ? MONTH_LABEL(monthTo) : "period"}</div>
@@ -431,8 +437,10 @@ export default function ImperialPnlPage() {
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{totSales ? fmtPct((totFinal / totSales) * 100) + " of net sales" : ""}</div>
               </div>
             </div>
+            )}
 
             {/* ── Plan vs actual ── */}
+            {show("imperial_pnl.charts") && (<>
             <div style={{ ...cardStyle, marginBottom: "10px" }}>
               <div style={sectionTitle}>Sales — plan vs actual by month</div>
               <div style={sectionCaption}>Bars = actual (green beat plan, red missed) · dark line = projection</div>
@@ -491,7 +499,10 @@ export default function ImperialPnlPage() {
               </div>
             </div>
 
+            </>)}
+
             {/* ── Branch league ── */}
+            {show("imperial_pnl.branch_league") && (
             <div style={{ ...cardStyle, marginBottom: "10px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                 <div style={sectionTitle}>Branch league — {MONTH_LABEL(monthFrom)} to {MONTH_LABEL(monthTo)}</div>
@@ -552,9 +563,11 @@ export default function ImperialPnlPage() {
                 </table>
               </div>
             </div>
+            )}
 
             {/* ── Expense watch + CEO commentary ── */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+              {show("imperial_pnl.expense_watch") && (
               <div style={cardStyle}>
                 <div style={sectionTitle}>Expense watch — vs plan</div>
                 <div style={sectionCaption}>Largest overheads for the selected scope and period</div>
@@ -587,6 +600,8 @@ export default function ImperialPnlPage() {
                   </div>
                 )}
               </div>
+              )}
+              {show("imperial_pnl.commentary") && (
               <div style={cardStyle}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={sectionTitle}>CEO commentary</div>
@@ -614,9 +629,11 @@ export default function ImperialPnlPage() {
                   </div>
                 )}
               </div>
+              )}
             </div>
 
             {/* ── Data quality strip ── */}
+            {show("imperial_pnl.data_strip") && (
             <div style={{ ...cardStyle, marginBottom: "20px", padding: "10px 14px" }}>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
                 <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>DATA</span>
@@ -643,6 +660,7 @@ export default function ImperialPnlPage() {
                 )}
               </div>
             </div>
+            )}
           </>
         )}
       </main>

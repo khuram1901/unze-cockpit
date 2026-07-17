@@ -31,6 +31,7 @@ export const PERM_COLUMNS = [
   { key: "can_view_finance", label: "Cash", group: "Finance", tip: "View cash positions, budgets, forecasts" },
   { key: "can_edit_finance", label: "Cash Edit", group: "Finance", tip: "Create/edit cash entries, plans, budgets" },
   { key: "finance_company_scope", label: "Scope", group: "Finance", tip: "Which companies: UTPL / IFPL / both", type: "select" as const, options: ["both", "UTPL", "IFPL"] },
+  { key: "can_view_ifpl_pnl", label: "Imperial P&L", group: "Finance", tip: "Access the Imperial Footwear P&L page (Unze London retail). Unze P&L is governed by the Cash toggle + Scope." },
   { key: "can_view_guarantees", label: "BF View", group: "Finance", tip: "View Bank Facilities / guarantee records" },
   { key: "can_manage_guarantees", label: "BF Mgr", group: "Finance", tip: "Add, edit, convert and release bank guarantees" },
   { key: "can_view_investments", label: "Inv", group: "Finance", tip: "View the PSX stock portfolio" },
@@ -124,6 +125,7 @@ export function roleDefault(col: ColDef, m: MatrixMember): boolean | string | nu
     case "can_view_executive_dashboard": return admin;
     case "can_view_operations_dashboard": return admin || dept === "Unze Trading Ops";
     case "can_view_pa_dashboard": return admin || exec;
+    case "can_view_ifpl_pnl": return admin;
     case "can_view_guarantees": return admin || (manager && (dept === "Finance" || dept === "Unze Trading Ops"));
     case "can_manage_guarantees": return admin || (manager && dept === "Finance");
     case "can_view_finance": return admin || (manager && dept === "Finance");

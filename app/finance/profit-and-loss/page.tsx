@@ -20,7 +20,7 @@ import AuthWrapper from "../../lib/AuthWrapper";
 import { supabase } from "../../lib/supabase";
 import { COLOURS, RADII, cardStyle, PageHeader, SkeletonRows } from "../../lib/SharedUI";
 import { useRequireCapability } from "../../lib/useRouteGuard";
-import { canEditFinance, financeCompanies } from "../../lib/permissions";
+import { canEditFinance, financeCompanies, widgetVisible } from "../../lib/permissions";
 import { useUserCtx } from "../../lib/useUserCtx";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
@@ -108,6 +108,8 @@ export default function ProfitAndLossPage() {
   const scope = ctx ? financeCompanies(ctx) : "none";
   const hasUnze = scope === "both" || scope === "UTPL";
   const canUploadUnze = ctx ? canEditFinance(ctx) : false;
+  // Per-section visibility from the Access Matrix page-element picker.
+  const show = (key: string) => !ctx || widgetVisible(ctx, key, true);
   const companyId = UTPL_COMPANY_ID;
 
   const [loading, setLoading] = useState(true);
@@ -461,7 +463,7 @@ export default function ProfitAndLossPage() {
                 )}
 
                 {/* ── Attention banner ── */}
-                {attention.length > 0 && (
+                {show("unze_pnl.attention_banner") && attention.length > 0 && (
                   <div style={{ ...cardStyle, marginBottom: "10px", background: COLOURS.DANGER_SOFT, border: `1px solid ${COLOURS.RED}` }}>
                     <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.RED, marginBottom: "3px" }}>Needs your attention</div>
                     <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{attention.join(" · ")}</div>
@@ -469,7 +471,7 @@ export default function ProfitAndLossPage() {
                 )}
 
                 {/* ── KPI cards ── */}
-                {latest && (
+                {show("unze_pnl.kpi_cards") && latest && (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px", marginBottom: "10px" }}>
                     <div style={{ ...cardStyle, padding: "10px 12px" }}>
                       <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>Sales — {MONTH_LABEL(latest.month)} (latest month)</div>
@@ -511,6 +513,7 @@ export default function ProfitAndLossPage() {
                 )}
 
                 {/* ── Sales & profit + profit bridge ── */}
+                {show("unze_pnl.charts") && (<>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "10px", marginBottom: "10px" }}>
                   <div style={cardStyle}>
                     <div style={sectionTitle}>Sales and net profit by month</div>
@@ -590,8 +593,10 @@ export default function ProfitAndLossPage() {
                     </div>
                   </div>
                 </div>
+                </>)}
 
                 {/* ── Plant scoreboard ── */}
+                {show("unze_pnl.plant_scoreboard") && (
                 <div style={{ ...cardStyle, marginBottom: "10px" }}>
                   <div style={sectionTitle}>Plant scoreboard — {MONTH_LABEL(monthFrom)} to {MONTH_LABEL(monthTo)}</div>
                   <div style={sectionCaption}>Click a row to filter the whole page to that plant · margin sparkline over the period</div>
@@ -644,9 +649,11 @@ export default function ProfitAndLossPage() {
                     </table>
                   </div>
                 </div>
+                )}
 
                 {/* ── Expense watch + CEO commentary ── */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+                  {show("unze_pnl.expense_watch") && (
                   <div style={cardStyle}>
                     <div style={sectionTitle}>Expense watch — {curM ? MONTH_LABEL(curM) : ""}</div>
                     <div style={sectionCaption}>Top groups with movement vs {prevM ? MONTH_LABEL(prevM) : "prior month"}{plantFilter !== "All" ? ` · ${plantFilter} only` : ""}</div>
@@ -678,6 +685,8 @@ export default function ProfitAndLossPage() {
                       </div>
                     )}
                   </div>
+                  )}
+                  {show("unze_pnl.commentary") && (
                   <div style={cardStyle}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={sectionTitle}>CEO commentary</div>
@@ -705,9 +714,11 @@ export default function ProfitAndLossPage() {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
 
                 {/* ── Data quality + market context footer ── */}
+                {show("unze_pnl.footer") && (
                 <div style={{ ...cardStyle, marginBottom: "20px", padding: "10px 14px" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
                     <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600 }}>DATA QUALITY</span>
@@ -741,6 +752,7 @@ export default function ProfitAndLossPage() {
                     </div>
                   )}
                 </div>
+                )}
               </>
             )}
           </>

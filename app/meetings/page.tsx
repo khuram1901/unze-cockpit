@@ -80,6 +80,135 @@ type MeetingTask = {
   meeting_id: string | null;
 };
 
+function MeetingCard({
+  m, mTasks, completedTasks, openTaskCount, isOpen, setExpandedId, downloadMinutesPDF, isMobile, showDept,
+}: {
+  m: Meeting;
+  mTasks: MeetingTask[];
+  completedTasks: number;
+  openTaskCount: number;
+  isOpen: boolean;
+  setExpandedId: (id: string | null) => void;
+  downloadMinutesPDF: (m: Meeting, tasks: MeetingTask[]) => void;
+  isMobile: boolean;
+  showDept: boolean;
+}) {
+  return (
+    <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "6px" }}>
+      <div onClick={() => setExpandedId(isOpen ? null : m.id)} style={{
+        padding: "10px 14px", cursor: "pointer",
+        display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
+        backgroundColor: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+      }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "12px", color: COLOURS.SLATE, minWidth: "80px" }}>{formatDateUK(m.meeting_date)}</span>
+            <span style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{m.title}</span>
+            {showDept && m.department && (
+              <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.NAVY, fontWeight: 600 }}>{m.department}</span>
+            )}
+            {m.company && (
+              <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.BLUE, fontWeight: 600 }}>{m.company}</span>
+            )}
+          </div>
+          {mTasks.length > 0 && (
+            <div style={{ marginTop: "4px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ flex: 1, maxWidth: "120px", height: "6px", backgroundColor: COLOURS.TRACK, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${(completedTasks / mTasks.length) * 100}%`, backgroundColor: completedTasks === mTasks.length ? COLOURS.GREEN : openTaskCount > 0 ? COLOURS.AMBER : COLOURS.BLUE, borderRadius: "3px", transition: "width 0.3s" }} />
+              </div>
+              <span style={{ fontSize: "13px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>
+                {completedTasks}/{mTasks.length}
+                {openTaskCount > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {openTaskCount} open</span>}
+              </span>
+            </div>
+          )}
+        </div>
+        <span style={{ color: COLOURS.SLATE, fontSize: "15px", flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
+      </div>
+
+      {isOpen && (
+        <div style={{ padding: "14px", borderTop: `1px solid ${COLOURS.BORDER}` }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px" }}>
+            <button onClick={() => downloadMinutesPDF(m, mTasks)} style={{ ...primaryButtonStyle, padding: "6px 14px" }}>PDF Download</button>
+          </div>
+          {m.executive_summary && (
+            <div style={{ marginBottom: "12px" }}>
+              <div style={{ fontSize: "10.5px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500, color: COLOURS.SLATE, marginBottom: "6px" }}>Summary</div>
+              <div style={{ fontSize: "13px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{m.executive_summary}</div>
+            </div>
+          )}
+          {m.attendees && m.attendees.length > 0 && (
+            <div style={{ marginBottom: "12px" }}>
+              <div style={{ fontSize: "10.5px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500, color: COLOURS.SLATE, marginBottom: "6px" }}>Attendees</div>
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                {m.attendees.map((a, i) => (
+                  <span key={i} style={{ fontSize: "11.5px", padding: "4px 10px", backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, color: COLOURS.INK_700 }}>{a}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+            {m.decisions && m.decisions.length > 0 && (
+              <div>
+                <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.GREEN, marginBottom: "8px", paddingLeft: "8px" }}>Decisions ({m.decisions.length})</div>
+                {m.decisions.map((d, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <span style={{ color: COLOURS.GREEN, flexShrink: 0, marginTop: "2px" }}>•</span>{d}
+                  </div>
+                ))}
+              </div>
+            )}
+            {m.risks && m.risks.length > 0 && (
+              <div>
+                <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.RED, marginBottom: "8px", paddingLeft: "8px" }}>Risks ({m.risks.length})</div>
+                {m.risks.map((r, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <span style={{ color: COLOURS.RED, flexShrink: 0, marginTop: "2px" }}>•</span>{r}
+                  </div>
+                ))}
+              </div>
+            )}
+            {m.opportunities && m.opportunities.length > 0 && (
+              <div>
+                <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.BLUE, marginBottom: "8px", paddingLeft: "8px" }}>Opportunities ({m.opportunities.length})</div>
+                {m.opportunities.map((o, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <span style={{ color: COLOURS.BLUE, flexShrink: 0, marginTop: "2px" }}>•</span>{o}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.AMBER, marginBottom: "6px" }}>Action Items ({mTasks.length})</div>
+            {mTasks.length > 0 ? (
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+                {mTasks.map((t) => (
+                  <a key={t.id} href={`/tasks?task=${t.id}`} style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "10px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+                    textDecoration: "none", color: "inherit",
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
+                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                        {t.assigned_to || "Unassigned"}{t.due_date ? ` · Due: ${formatDateUK(t.due_date)}` : ""}
+                      </div>
+                    </div>
+                    <StatusBadge status={t.status} />
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>No action items recorded.</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function bestMatch(name: string, members: { name: string; email: string }[]): { name: string; email: string } | undefined {
   const lower = name.toLowerCase().trim();
   const exact = members.find((m) => m.name.toLowerCase() === lower);
@@ -135,8 +264,10 @@ export default function MeetingsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [allTasks, setAllTasks] = useState<MeetingTask[]>([]);
   const [activePendingId, setActivePendingId] = useState<string | null>(null);
-  const [groupBy, setGroupBy] = useState<"date" | "department">("date");
+  const [groupBy, setGroupBy] = useState<"date" | "department">("department");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
   const [view, setView] = useState<"meetings" | "decisions">("meetings");
   const [decisionSearch, setDecisionSearch] = useState("");
@@ -549,9 +680,59 @@ export default function MeetingsPage() {
     });
   };
 
+  const toggleDept = (dept: string) => {
+    setExpandedDepts((prev) => {
+      const next = new Set(prev);
+      if (next.has(dept)) next.delete(dept); else next.add(dept);
+      return next;
+    });
+  };
+
+  const toggleMonth = (key: string) => {
+    setExpandedMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  function getTaskStatsFor(meetingList: Meeting[]) {
+    const ts = meetingList.flatMap((m) => getTasksForMeeting(m.id));
+    return {
+      total: ts.length,
+      open: ts.filter((t) => t.status === "In Progress").length,
+      pending: ts.filter((t) => t.status === "Not Started" || t.status === "Waiting Reply").length,
+      completed: ts.filter((t) => t.status === "Completed").length,
+    };
+  }
+
+  const deptMonthGroups: [string, [string, Meeting[]][]][] = (() => {
+    const deptMap = new Map<string, Map<string, Meeting[]>>();
+    for (const m of meetings) {
+      const dept = m.department || m.company || "Executive Office";
+      const mo = m.meeting_date.slice(0, 7);
+      if (!deptMap.has(dept)) deptMap.set(dept, new Map());
+      const monthMap = deptMap.get(dept)!;
+      if (!monthMap.has(mo)) monthMap.set(mo, []);
+      monthMap.get(mo)!.push(m);
+    }
+    return Array.from(deptMap.entries())
+      .map(([dept, monthMap]) => [
+        dept,
+        Array.from(monthMap.entries()).sort(([a], [b]) => b.localeCompare(a)),
+      ] as [string, [string, Meeting[]][]])
+      .sort(([a], [b]) => a.localeCompare(b));
+  })();
+
   // Auto-expand latest group on first render
-  if (expandedGroups.size === 0 && groupedMeetings.length > 0) {
+  if (groupBy === "date" && expandedGroups.size === 0 && groupedMeetings.length > 0) {
     expandedGroups.add(groupedMeetings[0][0]);
+  }
+  if (groupBy === "department" && expandedDepts.size === 0 && deptMonthGroups.length > 0) {
+    expandedDepts.add(deptMonthGroups[0][0]);
+    if (deptMonthGroups[0][1].length > 0) {
+      expandedMonths.add(`${deptMonthGroups[0][0]}:${deptMonthGroups[0][1][0][0]}`);
+    }
   }
 
   const allDecisions = meetings.flatMap((m) =>
@@ -1108,7 +1289,7 @@ export default function MeetingsPage() {
               {view === "meetings" && (
                 <div style={{ display: "flex", gap: "4px" }}>
                   {(["date", "department"] as const).map((g) => (
-                    <button key={g} onClick={() => { setGroupBy(g); setExpandedGroups(new Set()); }} style={{
+                    <button key={g} onClick={() => { setGroupBy(g); setExpandedGroups(new Set()); setExpandedDepts(new Set()); setExpandedMonths(new Set()); }} style={{
                       padding: "4px 12px", fontSize: "12px", fontWeight: groupBy === g ? 600 : 400, borderRadius: RADII.PILL,
                       border: `1px solid ${groupBy === g ? COLOURS.NAVY : COLOURS.BORDER}`,
                       backgroundColor: groupBy === g ? COLOURS.NAVY : COLOURS.CARD,
@@ -1177,165 +1358,134 @@ export default function MeetingsPage() {
 
             {view === "meetings" && meetings.length === 0 ? (
               <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No meetings recorded yet.</p>
-            ) : view === "meetings" ? (
+
+            ) : view === "meetings" && groupBy === "date" ? (
+              /* ── By Date view (flat month groups) ── */
               groupedMeetings.map(([groupKey, groupMeetings]) => {
                 const isGroupOpen = expandedGroups.has(groupKey);
-                const groupLabel = groupBy === "date" ? formatMonthLabel(groupKey) : groupKey;
                 const groupTasks = groupMeetings.flatMap((m) => getTasksForMeeting(m.id));
                 const groupOpen = groupTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
-
                 return (
-                <div key={groupKey} style={{
-                  border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD,
-                  overflow: "hidden", marginBottom: "10px",
-                }}>
-                  <div onClick={() => toggleGroup(groupKey)} style={{
-                    padding: "12px 16px", cursor: "pointer",
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                    backgroundColor: isGroupOpen ? COLOURS.NAVY : COLOURS.CARD,
-                    borderBottom: isGroupOpen ? `1px solid ${COLOURS.BORDER}` : "none",
-                  }}>
-                    <div>
-                      <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "15px", fontWeight: 600, color: isGroupOpen ? "white" : COLOURS.NAVY }}>
-                        {groupLabel}
-                      </div>
-                      <div style={{ fontSize: "12px", color: isGroupOpen ? "rgba(255,255,255,0.6)" : COLOURS.SLATE, marginTop: "1px" }}>
-                        {groupMeetings.length} meeting{groupMeetings.length !== 1 ? "s" : ""}
-                        {groupOpen > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {groupOpen} open task{groupOpen !== 1 ? "s" : ""}</span>}
-                      </div>
-                    </div>
-                    <span style={{ color: isGroupOpen ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{isGroupOpen ? "▲" : "▼"}</span>
-                  </div>
-
-                  {isGroupOpen && groupMeetings.map((m) => {
-                    const isOpen = expandedId === m.id;
-                    const mTasks = getTasksForMeeting(m.id);
-                    const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
-                    const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
-
-                    return (
-                      <div key={m.id} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "6px" }}>
-                        <div onClick={() => setExpandedId(isOpen ? null : m.id)} style={{
-                          padding: "10px 14px", cursor: "pointer",
-                          display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                          backgroundColor: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
-                        }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                              <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "12px", color: COLOURS.SLATE, minWidth: "80px" }}>{formatDateUK(m.meeting_date)}</span>
-                              <span style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{m.title}</span>
-                              {m.department && (
-                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.NAVY, fontWeight: 600 }}>{m.department}</span>
-                              )}
-                              {m.company && (
-                                <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.BLUE, fontWeight: 600 }}>{m.company}</span>
-                              )}
-                            </div>
-                            {mTasks.length > 0 && (
-                              <div style={{ marginTop: "4px", display: "flex", alignItems: "center", gap: "8px" }}>
-                                <div style={{ flex: 1, maxWidth: "120px", height: "6px", backgroundColor: COLOURS.TRACK, borderRadius: "3px", overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${(completedTasks / mTasks.length) * 100}%`, backgroundColor: completedTasks === mTasks.length ? COLOURS.GREEN : openTaskCount > 0 ? COLOURS.AMBER : COLOURS.BLUE, borderRadius: "3px", transition: "width 0.3s" }} />
-                                </div>
-                                <span style={{ fontSize: "13px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>
-                                  {completedTasks}/{mTasks.length}
-                                  {openTaskCount > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {openTaskCount} open</span>}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <span style={{ color: COLOURS.SLATE, fontSize: "15px", flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
+                  <div key={groupKey} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "10px" }}>
+                    <div onClick={() => toggleGroup(groupKey)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: isGroupOpen ? COLOURS.NAVY : COLOURS.CARD, borderBottom: isGroupOpen ? `1px solid ${COLOURS.BORDER}` : "none" }}>
+                      <div>
+                        <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "15px", fontWeight: 600, color: isGroupOpen ? "white" : COLOURS.NAVY }}>{formatMonthLabel(groupKey)}</div>
+                        <div style={{ fontSize: "12px", color: isGroupOpen ? "rgba(255,255,255,0.6)" : COLOURS.SLATE, marginTop: "1px" }}>
+                          {groupMeetings.length} meeting{groupMeetings.length !== 1 ? "s" : ""}
+                          {groupOpen > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {groupOpen} open task{groupOpen !== 1 ? "s" : ""}</span>}
                         </div>
-
-                        {isOpen && (
-                          <div style={{ padding: "14px", borderTop: `1px solid ${COLOURS.BORDER}` }}>
-                            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "10px" }}>
-                              <button onClick={() => downloadMinutesPDF(m, mTasks)} style={{ ...primaryButtonStyle, padding: "6px 14px" }}>PDF Download</button>
-                            </div>
-                            {m.executive_summary && (
-                              <div style={{ marginBottom: "12px" }}>
-                                <div style={{ fontSize: "10.5px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500, color: COLOURS.SLATE, marginBottom: "6px" }}>Summary</div>
-                                <div style={{ fontSize: "13px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{m.executive_summary}</div>
-                              </div>
-                            )}
-
-                            {m.attendees && m.attendees.length > 0 && (
-                              <div style={{ marginBottom: "12px" }}>
-                                <div style={{ fontSize: "10.5px", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500, color: COLOURS.SLATE, marginBottom: "6px" }}>Attendees</div>
-                                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                                  {m.attendees.map((a, i) => (
-                                    <span key={i} style={{ fontSize: "11.5px", padding: "4px 10px", backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, color: COLOURS.INK_700 }}>{a}</span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
-                              {m.decisions && m.decisions.length > 0 && (
-                                <div>
-                                  <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.GREEN, marginBottom: "8px", paddingLeft: "8px" }}>Decisions ({m.decisions.length})</div>
-                                  {m.decisions.map((d, i) => (
-                                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                                      <span style={{ color: COLOURS.GREEN, flexShrink: 0, marginTop: "2px" }}>•</span>{d}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {m.risks && m.risks.length > 0 && (
-                                <div>
-                                  <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.RED, marginBottom: "8px", paddingLeft: "8px" }}>Risks ({m.risks.length})</div>
-                                  {m.risks.map((r, i) => (
-                                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                                      <span style={{ color: COLOURS.RED, flexShrink: 0, marginTop: "2px" }}>•</span>{r}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {m.opportunities && m.opportunities.length > 0 && (
-                                <div>
-                                  <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "13.5px", fontWeight: 600, color: COLOURS.BLUE, marginBottom: "8px", paddingLeft: "8px" }}>Opportunities ({m.opportunities.length})</div>
-                                  {m.opportunities.map((o, i) => (
-                                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "8px", padding: "6px 8px", fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.5, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                                      <span style={{ color: COLOURS.BLUE, flexShrink: 0, marginTop: "2px" }}>•</span>{o}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            <div>
-                              <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.AMBER, marginBottom: "6px" }}>
-                                Action Items ({mTasks.length})
-                              </div>
-                              {mTasks.length > 0 ? (
-                                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
-                                  {mTasks.map((t) => (
-                                    <a key={t.id} href={`/tasks?task=${t.id}`} style={{
-                                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                                      padding: "10px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
-                                      textDecoration: "none", color: "inherit",
-                                    }}>
-                                      <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
-                                        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                                          {t.assigned_to || "Unassigned"}{t.due_date ? ` · Due: ${formatDateUK(t.due_date)}` : ""}
-                                        </div>
-                                      </div>
-                                      <StatusBadge status={t.status} />
-                                    </a>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>No action items recorded.</div>
-                              )}
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    );
-                  })}
-                </div>
+                      <span style={{ color: isGroupOpen ? "white" : COLOURS.SLATE, fontSize: "16px" }}>{isGroupOpen ? "▲" : "▼"}</span>
+                    </div>
+                    {isGroupOpen && groupMeetings.map((m) => {
+                      const isOpen = expandedId === m.id;
+                      const mTasks = getTasksForMeeting(m.id);
+                      const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
+                      const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
+                      return <MeetingCard key={m.id} m={m} mTasks={mTasks} completedTasks={completedTasks} openTaskCount={openTaskCount} isOpen={isOpen} setExpandedId={setExpandedId} downloadMinutesPDF={downloadMinutesPDF} isMobile={isMobile} showDept />;
+                    })}
+                  </div>
                 );
               })
+
+            ) : view === "meetings" && groupBy === "department" ? (
+              /* ── By Department view (dept → month → meeting) ── */
+              deptMonthGroups.map(([dept, months]) => {
+                const isDeptOpen = expandedDepts.has(dept);
+                const allDeptMeetings = months.flatMap(([, ms]) => ms);
+                const stats = getTaskStatsFor(allDeptMeetings);
+
+                return (
+                  <div key={dept} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "12px" }}>
+
+                    {/* Department header with task stats dashboard */}
+                    <div onClick={() => toggleDept(dept)} style={{
+                      padding: "16px 20px", cursor: "pointer",
+                      backgroundColor: isDeptOpen ? COLOURS.NAVY : COLOURS.CARD,
+                      display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap",
+                      borderBottom: isDeptOpen ? `1px solid ${COLOURS.BORDER}` : "none",
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "16px", fontWeight: 700, color: isDeptOpen ? "white" : COLOURS.NAVY }}>{dept}</div>
+                        <div style={{ fontSize: "12px", color: isDeptOpen ? "rgba(255,255,255,0.55)" : COLOURS.SLATE, marginTop: "2px" }}>
+                          {allDeptMeetings.length} meeting{allDeptMeetings.length !== 1 ? "s" : ""} · {months.length} month{months.length !== 1 ? "s" : ""}
+                          {stats.total > 0 && <span> · {stats.total} task{stats.total !== 1 ? "s" : ""} total</span>}
+                        </div>
+                      </div>
+                      {/* Task stats pills */}
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                        {stats.open > 0 && (
+                          <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: RADII.PILL, backgroundColor: isDeptOpen ? "rgba(239,68,68,0.25)" : COLOURS.DANGER_SOFT, color: isDeptOpen ? "#fca5a5" : COLOURS.RED }}>
+                            {stats.open} in progress
+                          </span>
+                        )}
+                        {stats.pending > 0 && (
+                          <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: RADII.PILL, backgroundColor: isDeptOpen ? "rgba(245,158,11,0.25)" : COLOURS.WARNING_SOFT, color: isDeptOpen ? "#fcd34d" : COLOURS.AMBER }}>
+                            {stats.pending} pending
+                          </span>
+                        )}
+                        {stats.completed > 0 && (
+                          <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: RADII.PILL, backgroundColor: isDeptOpen ? "rgba(34,197,94,0.2)" : COLOURS.SUCCESS_SOFT, color: isDeptOpen ? "#86efac" : COLOURS.GREEN }}>
+                            {stats.completed} completed
+                          </span>
+                        )}
+                        {stats.total === 0 && (
+                          <span style={{ fontSize: "11px", color: isDeptOpen ? "rgba(255,255,255,0.4)" : COLOURS.SLATE }}>no tasks</span>
+                        )}
+                      </div>
+                      <span style={{ color: isDeptOpen ? "white" : COLOURS.SLATE, fontSize: "16px", flexShrink: 0 }}>{isDeptOpen ? "▲" : "▼"}</span>
+                    </div>
+
+                    {/* Month sub-groups */}
+                    {isDeptOpen && (
+                      <div style={{ padding: "10px 12px", backgroundColor: COLOURS.CARD_ALT }}>
+                        {months.map(([month, monthMeetings]) => {
+                          const monthKey = `${dept}:${month}`;
+                          const isMonthOpen = expandedMonths.has(monthKey);
+                          const monthStats = getTaskStatsFor(monthMeetings);
+
+                          return (
+                            <div key={monthKey} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "8px" }}>
+                              {/* Month header */}
+                              <div onClick={() => toggleMonth(monthKey)} style={{
+                                padding: "10px 16px", cursor: "pointer",
+                                display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px",
+                                backgroundColor: isMonthOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+                                borderBottom: isMonthOpen ? `1px solid ${COLOURS.BORDER}` : "none",
+                              }}>
+                                <div>
+                                  <span style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{formatMonthLabel(month)}</span>
+                                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "10px" }}>
+                                    {monthMeetings.length} meeting{monthMeetings.length !== 1 ? "s" : ""}
+                                    {monthStats.open > 0 && <span style={{ color: COLOURS.RED, fontWeight: 700 }}> · {monthStats.open} in progress</span>}
+                                    {monthStats.pending > 0 && <span style={{ color: COLOURS.AMBER, fontWeight: 700 }}> · {monthStats.pending} pending</span>}
+                                    {monthStats.completed > 0 && <span style={{ color: COLOURS.GREEN, fontWeight: 700 }}> · {monthStats.completed} done</span>}
+                                  </span>
+                                </div>
+                                <span style={{ color: COLOURS.SLATE, fontSize: "14px", flexShrink: 0 }}>{isMonthOpen ? "▲" : "▼"}</span>
+                              </div>
+
+                              {/* Individual meetings within month */}
+                              {isMonthOpen && (
+                                <div style={{ padding: "8px" }}>
+                                  {monthMeetings.map((m) => {
+                                    const isOpen = expandedId === m.id;
+                                    const mTasks = getTasksForMeeting(m.id);
+                                    const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
+                                    const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
+                                    return <MeetingCard key={m.id} m={m} mTasks={mTasks} completedTasks={completedTasks} openTaskCount={openTaskCount} isOpen={isOpen} setExpandedId={setExpandedId} downloadMinutesPDF={downloadMinutesPDF} isMobile={isMobile} showDept={false} />;
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+
             ) : null}
           </>
         )}

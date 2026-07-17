@@ -36,6 +36,24 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "home.folderit", label: "Folder-it", page: "Executive Dashboard" },
   { key: "home.department_scorecard", label: "Department Scorecard", page: "Executive Dashboard", tip: "RAG status per department + task load chart" },
 
+  // ── Unze P&L (app/finance/profit-and-loss/page.tsx) ──────────────
+  { key: "unze_pnl.attention_banner", label: "Needs-attention banner", page: "Unze P&L" },
+  { key: "unze_pnl.kpi_cards", label: "KPI cards", page: "Unze P&L" },
+  { key: "unze_pnl.charts", label: "Charts (sales, bridge, margins, cost structure)", page: "Unze P&L" },
+  { key: "unze_pnl.plant_scoreboard", label: "Plant scoreboard", page: "Unze P&L" },
+  { key: "unze_pnl.expense_watch", label: "Expense watch", page: "Unze P&L" },
+  { key: "unze_pnl.commentary", label: "CEO commentary (AI)", page: "Unze P&L" },
+  { key: "unze_pnl.footer", label: "Data quality + market context footer", page: "Unze P&L" },
+
+  // ── Imperial P&L (app/finance/imperial-pnl/page.tsx) ─────────────
+  { key: "imperial_pnl.attention_banner", label: "Needs-attention banner", page: "Imperial P&L" },
+  { key: "imperial_pnl.kpi_cards", label: "KPI cards", page: "Imperial P&L" },
+  { key: "imperial_pnl.charts", label: "Charts (plan vs actual, profit, growth)", page: "Imperial P&L" },
+  { key: "imperial_pnl.branch_league", label: "Branch league", page: "Imperial P&L" },
+  { key: "imperial_pnl.expense_watch", label: "Expense watch", page: "Imperial P&L" },
+  { key: "imperial_pnl.commentary", label: "CEO commentary (AI)", page: "Imperial P&L" },
+  { key: "imperial_pnl.data_strip", label: "Data quality strip", page: "Imperial P&L" },
+
   // ── Operations Dashboard (app/dashboard/DashboardView.tsx) ───────
   { key: "dashboard.attention_banner", label: "Attention Needed banner", page: "Operations Dashboard", tip: "Machines down / plants not reported / overdue tasks alert" },
   { key: "dashboard.hero_kpi_cards", label: "Good Stock hero + KPI cards", page: "Operations Dashboard", tip: "The dark Good Stock card and the 5 compact KPI tiles beside it" },
