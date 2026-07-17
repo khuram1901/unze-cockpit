@@ -167,7 +167,14 @@ app/
 ├── department/[slug]/
 │   ├── page.tsx                      Department page router — dispatches to correct dashboard
 │   ├── DepartmentDashboard.tsx       Default department view — tasks, notices
-│   ├── AuditDashboard.tsx            Audit dept — audit plan items, findings.
+│   ├── AnnualAuditPlan.tsx           Annual Internal Audit Plan (FY 2025-26) — primary audit view.
+│                                     Company tabs (UTPL/IFPL/HD/BRNH) → business processes →
+│                                     7-stage lifecycle → sub-tasks with day budgets. Data via
+│                                     audit_annual_plan_overview() RPC. Audit dept + Admin/CEO edit;
+│                                     everyone with audit access views. Pre-audit daily activities
+│                                     reference panel at bottom. "Start new cycle" resets recurring audits.
+│   ├── AuditDashboard.tsx            Audit dept — renders AnnualAuditPlan first, then legacy
+│                                     ad-hoc audit plan items + findings, collapsed by default.
 │                                     Multi-company: companyFilter state with UTPL/IFPL/BRNH/HD/ALM/DIR
 │                                     tabs via PillTabs. company_id column on audit records.
 │                                     CompanyBadge component: UTPL=blue (#EEF1FC/BLUE), IFPL=green
@@ -1299,7 +1306,10 @@ Returns JSONB: open tasks, overdue task count, escalations, Folderit pending app
 ### Department tables
 
 #### `audit_plan_items` / `audit_findings`
-Audit planning and findings. See migration files.
+Ad-hoc audit records and findings (legacy view, collapsed on the audit page). See migration files.
+
+#### `audit_plan_processes` / `audit_stage_templates` / `audit_stage_tasks` / `audit_daily_activities`
+Annual Internal Audit Plan (migration 147), seeded from the audit manager's "Audit activities" workbook (FY 2025-26, year end 30/06/2026). `audit_plan_processes`: one row per business process per company — UTPL (15), IFPL (12), HD (12), BRNH (12); ALM excluded by design. Frequency (Monthly/Quarterly/Semi-annually/Annually), period label, status, target dates, next-cycle fields. `audit_stage_templates`: the 15 reference sheets — 7-stage lifecycle (Audit Planning → Data Collection → Data Verification → Draft Audit Findings → Review of IA Report → Communication to Process Owner → Submission to Senior Management) with sub-tasks, responsible auditors and day budgets (totals match the workbook: e.g. P&L 70d, SOP review 82d, SAP auth 61d). `audit_stage_tasks`: per-process instances of the template rows; members update `status`, a trigger (`audit_process_rollup`) rolls completion up to the process. RPCs: `audit_annual_plan_overview(p_company_id)` — one round-trip returning KPIs + per-process completion % (day-weighted) and current stage; `audit_start_new_cycle(process_id, …)` — resets a recurring audit for its next period. `audit_daily_activities`: pre-audit daily approvals reference list (some transferred to Accounts). RLS: same pattern as audit_plan_items (Audit dept + admin/exec); templates and daily activities read-only.
 
 #### `recruitment_positions` / `performance_evaluations` / `hr_strategy_goals`
 HR tables. See migration files.

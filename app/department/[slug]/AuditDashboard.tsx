@@ -14,6 +14,7 @@ import { downloadCSV } from "../../lib/exportUtils";
 import ImportExportButtons from "../../lib/ImportExportButtons";
 import NewTaskForm from "../../tasks/NewTaskForm";
 import { useUserCtx } from "../../lib/useUserCtx";
+import AnnualAuditPlan from "./AnnualAuditPlan";
 
 const AUDIT_STAGES: { label: string; pct: number }[] = [
   { label: "Audit Planning", pct: 0 },
@@ -119,6 +120,7 @@ export default function AuditDashboard() {
   const [message, setMessage] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
+  const [showLegacy, setShowLegacy] = useState(false);
   const [companyFilter, setCompanyFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const { ctx: widgetCtx } = useUserCtx();
@@ -373,6 +375,26 @@ export default function AuditDashboard() {
         </div>
       )}
 
+      {/* ═══ ANNUAL INTERNAL AUDIT PLAN (primary view) ═══ */}
+      <AnnualAuditPlan userCtx={userCtx} showMsg={showMsg} />
+
+      {/* ═══ AD-HOC / HISTORICAL AUDIT RECORDS (legacy, collapsed by default) ═══ */}
+      <div
+        onClick={() => setShowLegacy(!showLegacy)}
+        style={{
+          border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD,
+          padding: "10px 18px", cursor: "pointer", display: "flex", justifyContent: "space-between",
+          alignItems: "center", marginBottom: "14px", marginTop: "8px",
+        }}
+      >
+        <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.INK_700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Ad-hoc &amp; Historical Audit Records
+        </span>
+        <span style={{ fontSize: "13px", color: COLOURS.SLATE }}>{items.length} record{items.length !== 1 ? "s" : ""} {showLegacy ? "▲" : "▼"}</span>
+      </div>
+
+      {showLegacy && (
+      <>
       {/* ═══ ZONE 1: ALERT BANNER ═══ */}
       {wv("dept_audit.attention_banner", true) && !loading && overdue > 0 && (
         <div style={WARNING_BANNER_STYLE}>
@@ -635,6 +657,8 @@ export default function AuditDashboard() {
             </div>
           );
         })
+      )}
+      </>
       )}
       </>
       )}

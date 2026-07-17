@@ -4,6 +4,31 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-18 — Annual Internal Audit Plan built from the audit manager's workbook
+
+The audit page is now organised around the audit manager's "Audit activities" Excel plan (FY 2025-26, year end 30/06/2026) instead of a flat ad-hoc list:
+
+- **Migration `147_audit_annual_plan.sql`** — 4 new tables. `audit_plan_processes` (51 rows: UTPL 15, IFPL 12, HD 12, BRNH 12 — every company gets its own plan; Almahar excluded per Khuram), `audit_stage_templates` (121 rows — the workbook's 15 reference sheets: 7-stage lifecycle with sub-tasks, responsible auditors Shahid/Abdul Rehman/Amina, and day budgets; totals verified against the workbook programmatically, e.g. P&L 70d, SOP review 82d), `audit_stage_tasks` (~430 rows — per-process instances; already-completed audits seeded as Completed), `audit_daily_activities` (14 rows — pre-audit daily approvals, some transferred to Accounts). Statuses/target dates seeded from the plan tabs (e.g. UTPL P&L 3rd Quarter target 31/07, 4th Quarter 30/09; bank recs "Updated till May").
+- **DB does the work** (rule 0): `audit_annual_plan_overview(p_company_id)` RPC returns KPIs + per-process day-weighted completion % + current stage in one round-trip; `audit_process_rollup` trigger promotes process status as members complete sub-tasks; `audit_start_new_cycle()` resets a recurring audit for its next period.
+- **New `AnnualAuditPlan.tsx`** — primary view on the audit page: company tabs, KPI cards, overdue banner, processes grouped by status with drill-down into the 7-stage checklist where audit-department members update their sub-task statuses (all Audit dept can edit, per Khuram); pre-audit daily activities as a collapsible reference panel. Old ad-hoc records remain below, collapsed ("Ad-hoc & Historical Audit Records").
+- RLS: same dept_access pattern as audit_plan_items. Workbook quirk honoured: ref sheet 8's second verification row's day isn't counted in the sheet's own total — we follow the workbook's totals.
+
+`tsc` clean for the audit files (one unrelated in-flight error in profit-and-loss from the parallel session); eslint flags only the codebase's pre-existing patterns.
+
+---
+
+## 2026-07-18 — P&L naming + access controls: "Imperial P&L" / "Unze P&L", matrix toggle, per-section widget toggles
+
+Khuram's follow-up requests, all three delivered:
+
+- **Naming**: sidebar/home cards renamed for symmetry — "Imperial P&L" then "Unze P&L" (was "Profit & Loss"), both in the Finance group, registry reordered so Imperial lists first.
+- **Access Matrix**: new "Imperial P&L" toggle in the Finance column group (`can_view_ifpl_pnl`; role default = admin tier only, so Managers show as off unless explicitly granted — Shakeel and Shahida already hold grants from migration 144). Unze P&L remains governed by the existing Cash toggle + company Scope. Tip text on the new column says so.
+- **Widget (page-element) toggles**: both P&L pages are now in `WIDGET_REGISTRY` with 7 sections each (attention banner, KPI cards, charts, plant scoreboard / branch league, expense watch, AI commentary, footer/data strip), and both pages wrap those sections in `widgetVisible()` — so the matrix's per-person page-element picker can hide, say, the AI commentary or the branch league for any individual without touching page access.
+
+tsc clean; eslint reports only a pre-existing `set-state-in-effect` error in AccessMatrix.tsx (line 227, untouched code).
+
+---
+
 ## 2026-07-17 (late night) — Imperial live: first upload verified, branch spelling drift merged
 
 Deployed and verified live in the browser. First workbook upload through the page: **11/11 months accepted** (Jul-25→May-26), page totals match the pre-verified figures exactly (net sales 4,282.5m, GP 40%, final profit +371.6m). One real issue found in the live league table: the accountant renames branches between month sheets ("Mardan"/"MARDAN", "Emporium Mall"→"Emporium" in Mar-26 only, "Sailkot"/"Sialkot", "Usman Mall"/"USMAN MALL", "Koh/Kooh I Noor", "Warehouse"→"Warehouse Gajjumatta"), splitting one store's year across two rows — confirmed the variants never overlap in the same month. Parser now canonicalises branch names case-insensitively with a known-drift map (43 raw names → 37 real branches), and the already-uploaded rows were merged in the database with the same mapping. Attention banner now shows Usman Mall's true variance (−45.9%, was showing −54.1% against a partial year). The parser fix needs a push so future uploads stay clean; the live data is already corrected.
