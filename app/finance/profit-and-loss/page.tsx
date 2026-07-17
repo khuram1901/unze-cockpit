@@ -73,6 +73,11 @@ export default function ProfitAndLossPage() {
   const setCompanyId = setCompanyIdOverride;
 
   const [loading, setLoading] = useState(true);
+  // Every month on file, independent of the current from/to filter — this is
+  // what the two dropdowns are built from. Using the filtered kpiRows for the
+  // dropdown options was the bug: narrowing the range shrank the option list
+  // itself, so you could never widen it back out.
+  const [allMonths, setAllMonths] = useState<string[]>([]);
   const [kpiRows, setKpiRows] = useState<KpiRow[]>([]);
   const [segmentRows, setSegmentRows] = useState<SegmentRow[]>([]);
   const [overheadRows, setOverheadRows] = useState<OverheadRow[]>([]);
@@ -101,6 +106,7 @@ export default function ProfitAndLossPage() {
       const { data } = await supabase.rpc("pnl_kpi_summary", { p_company_id: companyId, p_from: "2000-01-01", p_to: "2100-01-01" });
       if (!active) return;
       const rows = (data || []) as KpiRow[];
+      setAllMonths(rows.map((r) => r.month));
       if (rows.length > 0) {
         const last = rows[rows.length - 1].month;
         const firstIdx = Math.max(0, rows.length - 12);
@@ -156,10 +162,16 @@ export default function ProfitAndLossPage() {
     setUploading(false);
     setUploadFiles([]);
     if (anyAccepted) {
-      // Reload after uploads so any new months show up.
+      // Reload after uploads so any new months show up in the dropdowns too.
       const { data } = await supabase.rpc("pnl_kpi_summary", { p_company_id: companyId, p_from: "2000-01-01", p_to: "2100-01-01" });
       const rows = (data || []) as KpiRow[];
-      if (rows.length > 0) setMonthTo(rows[rows.length - 1].month);
+      setAllMonths(rows.map((r) => r.month));
+      if (rows.length > 0) {
+        const last = rows[rows.length - 1].month;
+        const firstIdx = Math.max(0, rows.length - 12);
+        setMonthFrom(rows[firstIdx].month);
+        setMonthTo(last);
+      }
     }
   }
 
@@ -181,14 +193,17 @@ export default function ProfitAndLossPage() {
     { label: "Net profit (final)", val: latest.net_profit_final, prevVal: prev?.net_profit_final },
   ] : [];
 
-  // Overheads pivoted into a group x month grid for display — a reshape of
-  // already-aggregated rows, not a new sum.
   const ohMonths = [...new Set(overheadRows.map((r) => r.month))].sort();
   const ohGroups = [...new Set(overheadRows.map((r) => r.account_group))];
-  const ohGrid = ohGroups.map((g) => ({
-    group: g,
-    values: ohMonths.map((m) => overheadRows.filter((r) => r.account_group === g && r.month === m).reduce((s, r) => s + r.amount, 0)),
-  }));
+
+  // Top expense groups for the latest month only — a ranked list of at most
+  // 8, matching what was agreed, not a full group x month spreadsheet.
+  const topExpenses = ohGroups
+    .map((g) => ({ group: g, amount: overheadRows.filter((r) => r.account_group === g && r.month === monthTo).reduce((s, r) => s + r.amount, 0) }))
+    .filter((r) => r.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 8);
+  const maxExpense = Math.max(1, ...topExpenses.map((r) => r.amount));
 
   // Biggest movers: this month vs prior month per account group, comparing
   // two already-aggregated totals (not re-summing raw ledger rows).
@@ -295,29 +310,35 @@ export default function ProfitAndLossPage() {
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", marginBottom: "16px" }}>
-                      <select value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} style={{ padding: "6px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px" }}>
-                        {kpiRows.map((r) => <option key={r.month} value={r.month}>{MONTH_LABEL(r.month)}</option>)}
-                      </select>
-                      <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>to</span>
-                      <select value={monthTo} onChange={(e) => setMonthTo(e.target.value)} style={{ padding: "6px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px" }}>
-                        {kpiRows.map((r) => <option key={r.month} value={r.month}>{MONTH_LABEL(r.month)}</option>)}
-                      </select>
-                      <select value={plantFilter} onChange={(e) => setPlantFilter(e.target.value)} style={{ padding: "6px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px" }}>
-                        {["All plants", "FEDMIC", "MEPCO", "PESCO", "HO"].map((p) => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                      <button style={chipBtn(!allocateHo)} onClick={() => setAllocateHo(false)}>As reported</button>
-                      <button style={chipBtn(allocateHo)} onClick={() => setAllocateHo(true)}>Allocated to plants</button>
+                    <div style={{ ...cardStyle, padding: "14px 18px", marginBottom: "20px" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center" }}>
+                        <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600 }}>PERIOD</span>
+                        <select value={monthFrom} onChange={(e) => setMonthFrom(e.target.value)} style={{ padding: "6px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px" }}>
+                          {allMonths.map((m) => <option key={m} value={m}>{MONTH_LABEL(m)}</option>)}
+                        </select>
+                        <span style={{ color: COLOURS.SLATE, fontSize: "13px" }}>to</span>
+                        <select value={monthTo} onChange={(e) => setMonthTo(e.target.value)} style={{ padding: "6px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px" }}>
+                          {allMonths.map((m) => <option key={m} value={m}>{MONTH_LABEL(m)}</option>)}
+                        </select>
+                        <span style={{ width: "1px", height: "20px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
+                        <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600 }}>PLANT</span>
+                        <select value={plantFilter} onChange={(e) => setPlantFilter(e.target.value)} style={{ padding: "6px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px" }}>
+                          {["All plants", "FEDMIC", "MEPCO", "PESCO", "HO"].map((p) => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <span style={{ width: "1px", height: "20px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
+                        <button style={chipBtn(!allocateHo)} onClick={() => setAllocateHo(false)}>As reported</button>
+                        <button style={chipBtn(allocateHo)} onClick={() => setAllocateHo(true)}>Allocated to plants</button>
+                      </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px", marginBottom: "16px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "12px", marginBottom: "20px" }}>
                       {kpiCards.map((k) => {
                         const delta = k.prevVal !== undefined ? k.val - k.prevVal : 0;
                         const up = delta >= 0;
                         return (
-                          <div key={k.label} style={cardStyle}>
+                          <div key={k.label} style={{ ...cardStyle, borderLeft: `3px solid ${COLOURS.NAVY}` }}>
                             <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "6px" }}>{k.label}</div>
-                            <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY }}>{fmtM(k.val)}</div>
+                            <div style={{ fontSize: "24px", fontWeight: 700, color: COLOURS.NAVY }}>{fmtM(k.val)}</div>
                             {k.prevVal !== undefined && (
                               <div style={{ fontSize: "12px", color: up ? COLOURS.GREEN : COLOURS.RED, marginTop: "4px" }}>
                                 {up ? "▲" : "▼"} {fmtM(Math.abs(delta))} vs prior month
@@ -329,7 +350,7 @@ export default function ProfitAndLossPage() {
                     </div>
 
                     {ytd && (
-                      <div style={{ ...cardStyle, marginBottom: "16px" }}>
+                      <div style={{ ...cardStyle, marginBottom: "20px" }}>
                         <SectionTitle title="Year to date" />
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "16px", marginTop: "10px" }}>
                           <div>
@@ -350,7 +371,7 @@ export default function ProfitAndLossPage() {
                       </div>
                     )}
 
-                    <div style={{ ...cardStyle, marginBottom: "16px" }}>
+                    <div style={{ ...cardStyle, marginBottom: "20px" }}>
                       <SectionTitle title="Sales and profit trend" />
                       <div style={{ height: "220px", marginTop: "10px" }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -367,7 +388,7 @@ export default function ProfitAndLossPage() {
                       </div>
                     </div>
 
-                    <div style={{ ...cardStyle, marginBottom: "16px" }}>
+                    <div style={{ ...cardStyle, marginBottom: "20px" }}>
                       <SectionTitle title="Rolling gross margin" />
                       <div style={{ height: "180px", marginTop: "10px" }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -382,7 +403,7 @@ export default function ProfitAndLossPage() {
                       </div>
                     </div>
 
-                    <div style={{ ...cardStyle, marginBottom: "16px" }}>
+                    <div style={{ ...cardStyle, marginBottom: "20px" }}>
                       <SectionTitle title="Cost of goods sold vs sales" />
                       <div style={{ height: "220px", marginTop: "10px" }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -399,7 +420,7 @@ export default function ProfitAndLossPage() {
                       </div>
                     </div>
 
-                    <div style={{ ...cardStyle, marginBottom: "16px" }}>
+                    <div style={{ ...cardStyle, marginBottom: "20px" }}>
                       <SectionTitle title={`By plant — ${allocateHo ? "allocated" : "as reported"} (${MONTH_LABEL(monthTo)})`} />
                       <div style={{ height: "180px", marginTop: "10px" }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -416,36 +437,26 @@ export default function ProfitAndLossPage() {
                       </div>
                     </div>
 
-                    <div style={{ ...cardStyle, marginBottom: "16px", overflowX: "auto" }}>
-                      <SectionTitle title="Overheads by account group — month by month" />
-                      <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse", marginTop: "10px" }}>
-                        <thead>
-                          <tr>
-                            <th style={{ textAlign: "left", padding: "4px 8px", color: COLOURS.SLATE, fontWeight: 500 }}>Group</th>
-                            {ohMonths.map((m) => <th key={m} style={{ textAlign: "right", padding: "4px 8px", color: COLOURS.SLATE, fontWeight: 500 }}>{MONTH_LABEL(m)}</th>)}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {ohGrid.map((row) => (
-                            <tr key={row.group} style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
-                              <td style={{ padding: "4px 8px" }}>{row.group}</td>
-                              {row.values.map((v, i) => {
-                                const prevV = i > 0 ? row.values[i - 1] : v;
-                                const jump = prevV ? ((v / prevV) - 1) * 100 : 0;
-                                return (
-                                  <td key={i} style={{ padding: "4px 8px", textAlign: "right", background: jump > 15 ? COLOURS.DANGER_SOFT : "transparent" }}>
-                                    {fmtM(v)}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div style={{ ...cardStyle, marginBottom: "20px" }}>
+                      <SectionTitle title={`Top expense groups — ${MONTH_LABEL(monthTo)}`} />
+                      <div style={{ marginTop: "12px" }}>
+                        {topExpenses.length === 0 && <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No overhead activity this month.</p>}
+                        {topExpenses.map((r) => (
+                          <div key={r.group} style={{ marginBottom: "10px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "3px" }}>
+                              <span>{r.group}</span>
+                              <span style={{ color: COLOURS.SLATE }}>{fmtM(r.amount)}</span>
+                            </div>
+                            <div style={{ background: COLOURS.TRACK, borderRadius: "4px", height: "6px" }}>
+                              <div style={{ width: `${(r.amount / maxExpense) * 100}%`, background: COLOURS.BLUE, height: "6px", borderRadius: "4px" }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     {movers.length > 0 && (
-                      <div style={{ ...cardStyle, marginBottom: "16px" }}>
+                      <div style={{ ...cardStyle, marginBottom: "20px" }}>
                         <SectionTitle title="Biggest movers this month" />
                         {movers.map((m) => (
                           <div key={m.group} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px" }}>
@@ -459,7 +470,7 @@ export default function ProfitAndLossPage() {
                     )}
 
                     {newFlags.length > 0 && (
-                      <div style={{ ...cardStyle, marginBottom: "16px" }}>
+                      <div style={{ ...cardStyle, marginBottom: "20px" }}>
                         <SectionTitle title="New account activity this month" />
                         {newFlags.map((f, i) => (
                           <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px" }}>
