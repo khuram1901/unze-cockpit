@@ -4,6 +4,38 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-17 (later) — CEO view v2: mockup-approved redesign, plant filter now drives everything, page is Unze-only
+
+Khuram's feedback on v1: the plant/month filters didn't change most numbers (true — only the expense breakdown was plant-aware), the visuals weren't what he needed, and Imperial must be a separate page for a different audience. A design mockup was built with real numbers, he approved it, and the page was rebuilt to match:
+
+- **Page is now Unze Trading only** — company chips removed. Users without UTPL finance scope see a pointer that Imperial will get its own page (its P&L upload remains Phase 2).
+- **One sticky filter bar drives every card**: plant chips (All/FEDMIC/MEPCO/PESCO/HO) + period presets (1M/3M/6M/12M/All/Custom, custom = the old month-to-month dropdowns, satisfying "monthly as well"). Migration 143 makes this real: `pnl_kpi_summary_plant` (plant-filtered KPI lines), `pnl_cost_structure` regains a `p_plant` arg (old 3-arg version dropped first to avoid RPC overload ambiguity), new `pnl_plant_scoreboard`. Applied with Khuram's approval; verified MEPCO-only = 561.5m sales/102.5m GP and scoreboard total = all-plants total = 1,145.2m/214.1m/−30.7m (HO-inclusive).
+- **Layout per approved mockup**: attention banner (loss streak, sales dip, margin drop — plant-scoped) → 4 KPI cards with MoM and vs-average context → sales bars (loss months red) + net-profit line combo → profit bridge ("where the month's money went", Other = non-op + tax) → margin health (GP% and COGS% on one chart, 100% dashed line) → cost structure stacked % of sales (absolute PKR when viewing HO, which has no sales) → **plant scoreboard table** (sales share bar, margin RAG chip ≥18 green / ≥10 amber / else red, net contribution, margin sparkline; HO shown as a cost centre with its % of sales; clicking a row filters the whole page) → expense watch (top groups + movement merged, new-account flags folded in) → CEO commentary (now plant-aware via the API) → one-line data-quality strip + collapsible market context footer.
+- Dropped from v1 per the approved design: company chips, YTD card (period total lives on the Net profit card), separate top-expenses/movers/new-flags cards (merged), full-width market context block (collapsed).
+
+`/api/pnl/ceo-insights` now accepts `plant` and reports scope to the model. `tsc --noEmit` and eslint both clean.
+
+---
+
+## 2026-07-17 — P&L page upgraded to a CEO view: profit bridge, cost structure, plant margins, data quality, market context, AI commentary
+
+Khuram asked for a single page where he can see all the company's financial data the way a professional CEO should — analysis, insights, validation, market context, cost of goods and expenses. Rather than a new page, the existing `/finance/profit-and-loss` was rebuilt top-to-bottom in decision order (his choice over a separate CEO-only page):
+
+- **Attention banner (management by exception)**: auto-computed from the KPI rows — consecutive loss-making months with the cumulative loss, gross margin more than 5pts below the period average, sales more than 30% below the period average. With current data it flags the 4-month loss streak (Feb–May 26).
+- **Executive KPI cards fixed for costs**: operating expenses now display as a positive magnitude and an *increase* shows red (previously a rising cost showed green because the raw negative number "went up").
+- **Period totals strip**: selected-range sales, GP (with %), net profit (with %).
+- **Profit bridge waterfall** for the selected month — Sales → COGS → GP → Opex → Non-operating → Tax → Net profit, using the already-deployed `pnl_profit_bridge`-style line values from `pnl_kpi_summary` (no new query).
+- **Gross margin % and COGS % of sales** side by side, with a dashed 100% reference line ("selling below cost").
+- **Cost structure chart**: monthly stacked bars, each cost bucket as % of that month's sales. Buckets are pattern-mapped from ledger account groups in a new RPC so new groups land somewhere sensible instead of vanishing.
+- **Per-plant gross-margin trend lines** (FEDMIC/MEPCO/PESCO) next to the existing GP-by-plant bar.
+- **Data quality card**: one chip per month from `pnl_uploads` — 16/16 checks green, anything else red. The audit trail behind the numbers.
+- **Market context card**: researched 17/07/2026 with sources — ADB PDSP-II ($130m, covers PESCO), ADB $200m/332k AMI meters, World Bank $375.9m BEST-PAK, government AMI-by-Dec-2026 target (opportunity for the Smart Meter Plant); steel ~PKR 222–232/kg, CPI 11.0%, SBP rate 11.5% (headwinds). Static text, dated, flagged as directional.
+- **AI CEO commentary**: on-demand button (not per-load, to control API cost) calling new route `/api/pnl/ceo-insights` — requireAuth, service client runs the same RPCs, Claude (claude-sonnet-4-6, tool-forced JSON) returns 4–6 severity-tagged insights + 3–5 suggested actions, tying internal numbers to the market context.
+
+New files: `supabase/142_pnl_ceo_rpcs.sql` (3 read-only RPCs: `pnl_plant_margin_trend`, `pnl_cost_structure`, `pnl_validation_summary` — all security definer + fixed search_path, all aggregation in Postgres per rule 0) and `app/api/pnl/ceo-insights/route.ts`. The page hides the three new cards with a one-line hint if migration 142 isn't applied yet, so nothing breaks before it's run. SQL bucket logic was test-run against live data before writing the migration (May-26: Production/COGS 95.9% of sales, reconciling with the 95% COGS ratio). `tsc --noEmit` clean; eslint clean apart from the pre-existing disabled-HO-toggle unused-var warning.
+
+---
+
 ## 2026-07-15 — Cash-flow feedback round: layout, deletes, recurring-cycle status, PDC Outlook, cron/data fixes
 
 Worked through Khuram's live feedback after the audit fixes shipped, in the order he raised it:
