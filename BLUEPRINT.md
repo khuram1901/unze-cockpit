@@ -1,6 +1,8 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 14/07/2026 (Tasks page rebuild, Phases 3–5: migrations 098–105 — company tag, stage, locked assigned/original-due dates, subtasks with DB-enforced completion gating, due-date history, Stuck status (red), Kanban board, Recurring tab, Team tab, monthly/quarterly RPCs, attention banner, My Tasks tab, real filters, task-detail modal, mini-checklist, comments, WhatsApp auto-remind toggle, calendar picker, meeting chip — see "Tasks page redesign" section for the full history including the mockup-reconciliation pass after Khuram flagged the live page didn't match what was designed).
+> **This is the source of truth.** Read before touching any code. Last updated: 18/07/2026 (manager-hierarchy task visibility + conditional sign-off + Submit routing, migrations 142–144; notification bell overhaul with Submitted/exception categories + dual-identity fix, migration 148; Folderit search word-matching + sync diagnostic log, migrations 145–146; authority letter Close/Reopen action + expiry-alert cleanup, migration 149; missing `can_edit_operations_targets` column fixed, migration 147; Stock/Manage POs dispatch-form deduplication; app-wide "collapsible items always start closed" rule — see "Manager hierarchy and task routing" and "Notification bell" sections below for the full history).
+>
+> Previous update: 14/07/2026 (Tasks page rebuild, Phases 3–5: migrations 098–105 — company tag, stage, locked assigned/original-due dates, subtasks with DB-enforced completion gating, due-date history, Stuck status (red), Kanban board, Recurring tab, Team tab, monthly/quarterly RPCs, attention banner, My Tasks tab, real filters, task-detail modal, mini-checklist, comments, WhatsApp auto-remind toggle, calendar picker, meeting chip — see "Tasks page redesign" section for the full history including the mockup-reconciliation pass after Khuram flagged the live page didn't match what was designed).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -896,6 +898,11 @@ Junction: PO ↔ Contractor. UNIQUE(po_id, contractor_id).
 | qty_31/36/45/meter | numeric | Authorised quantities |
 | opening_dispatched_31/36/45/meter | numeric | Backfill |
 | notes / created_by / created_at | various | |
+| closed_at / closed_by | timestamptz / text | **Added migration 149 (18/07/2026).** Manual "Close letter" action (Manage POs page, mirrors the existing PO-close pattern) — letter and its history stay, it just stops appearing in the Stock page's expiry-alert banner. `null` = active/open, non-null = closed. Threaded through `get_stock_summary`'s JSON output so the client can filter without a second query. |
+
+**Stock page expiry-alert cleanup (18/07/2026):** the banner was showing every expired letter ever (55 across all plants, 24 from before 2026) unsorted with no cap — "really messy" per Khuram. Three fixes in `app/stock/page.tsx`: (1) letters with `closed_at` set are excluded entirely; (2) a letter is skipped if its uncollected balance is under 5% of what was authorised (`NEGLIGIBLE_REMAINING_PCT` — old letters with 1–7 poles left out of hundreds are dead paperwork, not real problems); (3) what's left is sorted (Expiring-soon first, then most-recently-expired) and capped at 8 with a "show all" toggle (`showAllExpiryWarnings`).
+
+**Dispatch-form deduplication (18/07/2026):** Khuram flagged the Stock and Manage POs pages as feeling duplicative. Diagnosis: most of the overlap (PO/contractor/letter CRUD vs. the read-only browse tree) is legitimate — they're gated by different permissions (`can_view_stock` vs `can_manage_stock`) for different audiences (any Ops staff vs. Ops Managers/Admin). The one genuine duplicate was the dispatch-recording form, built twice as nearly-identical components. Extracted to `app/lib/DispatchForm.tsx`, used by both Stock's `DispatchModal` (wraps it in a modal overlay) and Manage POs' inline per-letter panel (renders it directly, `compact` prop for tighter spacing) — one place now knows how to record a dispatch. Full page merge (Option B: single `/stock` route with permission-gated tabs) was scoped but not built; offered as a follow-up if the two-URL navigation still bothers him after this fix.
 
 #### `dispatch_records`
 Individual pickups against an authority letter.
@@ -934,6 +941,8 @@ Individual pickups against an authority letter.
 | meeting_id | uuid FK → meetings | |
 | time_spent_minutes | int | DEFAULT 0 |
 | created_at | timestamptz | |
+| requires_manager_signoff | boolean NOT NULL DEFAULT true | **Added migration 143 (18/07/2026).** Computed once at task-creation time (`createTaskCore()` in `app/lib/task-creation.ts`), not recalculated later. `true` when the task came from a meeting or was assigned by someone other than the assignee (needs a manager to sign it off after Submit); `false` for self-created tasks (assignee submits their own work, so they can mark it straight to Completed — see `TaskStatus.tsx`/`TasksBoard.tsx` `isSelfCreated`/`canCompleteDirect`). `route_submitted_task()` skips reassignment entirely when this is false. |
+| submitted_by_name / submitted_by_email | text | **Added migration 143.** Set by `route_submitted_task()` when a task is Submitted and reassigned up to the assignee's manager — records who actually did the work, since `assigned_to`/`assigned_to_email` now point at the manager. Cleared automatically when the task leaves Submitted status (back to the original assignee, or nulled out on Completed/Cancelled). |
 
 **A task cannot be set to `status = 'Completed'` at the database level while it has any incomplete row in `task_subtasks`** — enforced by a BEFORE UPDATE trigger (migration 100), not just a disabled button in the UI.
 
@@ -945,6 +954,22 @@ Automatic, append-only audit trail of every `due_date` change. Columns: `task_id
 
 #### Task summary RPCs (migration 101)
 `get_tasks_kpi_summary(p_company_id uuid default null, p_group_only boolean default false)`, `get_tasks_department_breakdown()`, `get_tasks_team_stats()` — replace client-side counting for the Tasks page KPI row, department breakdown, and Team tab. Each is `security definer` and re-implements the exact same visibility rule as the `tasks_select` RLS policy by hand (privileged, or assigned-to-me, or assigned-by-me), since a `security definer` function does not automatically re-apply the caller's RLS.
+
+#### Manager hierarchy and task routing (migrations 142–144, 18/07/2026)
+`members.manager_id` (self-referencing FK, already existed) is now load-bearing for three things:
+
+1. **Task visibility** — `is_manager_of_assignee(p_assignee_email text)` (migration 142, `security definer`) lets a manager see tasks assigned to their direct reports. Added to the `tasks_select` RLS policy (`OR is_manager_of_assignee(assigned_to_email)`, alongside the existing privileged/assigned-to-me/assigned-by-me/co-assignee clauses) and to the client-side fetch filter in `TasksList.tsx` (fetches each report's email via `manager_id` and widens the `.or()` clause — RLS enforces it either way, this just stops the client under-requesting rows it's allowed to see).
+2. **Submit routing** — `route_submitted_task()` (BEFORE UPDATE trigger on `tasks`) fires when a task's status changes into `'Submitted'` and `requires_manager_signoff` is true. It walks up the `manager_id` chain (skipping inactive managers, capped at 10 hops to guard against a cycle) to find the first active manager, reassigns `assigned_to`/`assigned_to_email`/`assigned_to_department`/`assigned_to_business_unit` to them, and stamps `submitted_by_name`/`submitted_by_email` with the original assignee. A second branch on the same trigger reverses this when the task leaves Submitted (back to the original assignee if not Completed/Cancelled). Members with `role = 'Executive'` (the PA) are deliberately excluded from routing — their submitted tasks don't get reassigned.
+3. **Mandatory manager on new members** — `MembersManager.tsx`'s add-member form now requires picking a manager (skipped for Admin/CEO), plus an optional "this person will manage" multi-select that backfills `manager_id` on existing members.
+
+**Bug fixed 18/07/2026:** a manager's submitted-task notification could go completely unseen because (a) three RPCs — `get_tasks_kpi_summary`, `get_tasks_department_breakdown`, `get_tasks_team_stats` — had their own hand-written visibility `WHERE` clauses that were never updated to match the new RLS policy (migration 144 added the same `is_manager_of_assignee()` clause to each — `security definer` functions don't automatically re-apply the caller's RLS, so this has to be kept in sync by hand every time the policy changes), and (b) nothing on the Executive Dashboard or the notification bell ever surfaced `status = 'Submitted'` tasks at all (fixed separately — see "Notification bell" below). Confirmed the routing itself generalises to every manager, not just one case, by running a real Submit through the trigger for an Audit-team member reporting to a different manager and checking both the reassignment and the bell count, then deleting the test row.
+
+**Khuram's dual identity:** Khuram has two real login accounts (`khuram1901@gmail.com` = Admin, `k.saleem@unzegroup.com` = CEO) that are the same person for "is this assigned to me" purposes. A task routed to whichever account he wasn't currently logged in as would silently look like someone else's. `myIdentityEmails(email)` in `permissions.ts` returns both of his emails as a group (just `[email]` for everyone else) — used by the Tasks page's "Mine" filter, the Executive Dashboard's Submitted-tasks banner, and the notification bell's badge-count RPC. Anywhere a screen decides "does this belong to me" by exact email match, it should compare against `myIdentityEmails(session.email)`, not the raw session email.
+
+#### Notification bell (migration 148, 18/07/2026)
+`get_notification_badge_counts(p_emails text[], p_today date, p_is_admin boolean)` — called from every logged-in session in `AuthWrapper.tsx`, feeds the 🔔 badge in `SidebarLayout.tsx`. Signature changed from a single `p_email text` to `p_emails text[]` (client passes `myIdentityEmails(email)`) to fix the dual-identity gap above. Two new categories added on top of the pre-existing overdue/waiting-reply/machines-down/pending-minutes: `submitted_count` (tasks routed to this person on Submit — the main gap Khuram flagged) and `exception_count` (tasks with `explanation_required = true` — the schema's existing "red alert" flag, previously never surfaced anywhere on the bell). Realtime updates piggyback on the existing `postgres_changes` subscription on the `tasks` table — no new subscription needed since both new categories live on that same table.
+
+**Deliberately not included:** the Executive Dashboard's separate "escalations" system (production/dispatch/breakage KPI misses, stale cash data, bank guarantee overdue) is calculated live in `home/page.tsx`, not stored as tasks, and touches financial data — wiring it into a bell that's visible to every role needs careful per-role gating (PA must never see financial data) rather than a quick bolt-on. Flagged to Khuram as a good candidate for a deliberate follow-up, not done yet.
 
 #### `recurring_tasks`
 Templates for recurring task generation. Fields: description, assigned_to/email/dept, frequency ('weekly'/'monthly'/'quarterly'), day_of_week, day_of_month, due_days_after, active.
@@ -1150,6 +1175,9 @@ Columns: file_uid PK, category_name FK, name, created_at, synced_at.
 Email aliases for Folderit accounts (maps Folderit email → member email).
 Columns: id, folderit_email, member_email, notes.
 
+#### `folderit_sync_log` — migration 146 (18/07/2026)
+Diagnostic log for the `/api/folderit/sync` cron (runs every 30 min). Columns: `ran_at`, `ok`, `accounts_synced`, `inbox_files_synced`, `invites_synced`, `hr_files_synced`, `audit_entries_scanned`, `candidates_found`, `distinct_event_types` (text[]), `errors` (text[]). RLS: Admin/CEO can select. **Why this exists:** the sync route already computed rich debug info every run (candidates found, distinct audit-event types seen, errors) but only ever returned it in the HTTP response — which nothing reads, since Vercel cron discards the response. `folderit_resolution_invites` sat at zero rows for an unknown stretch of time with no trace anywhere of why. Now every run leaves a permanent, queryable record. Not wired into any UI yet — query it directly in the SQL editor. Insert is best-effort (wrapped in try/catch in `route.ts`) so a logging failure never blocks the actual sync.
+
 ---
 
 ### Tax Accounts tables (migrations 069–071)
@@ -1288,13 +1316,16 @@ Detail drill-down: approval items, company inbox files, HR inbox files. Scoped b
 HR inbox files (HR account's own inbox, separate from HR category files).
 **Used by:** `/api/folderit/hr-inbox`.
 
-#### `search_folderit_hr_files(p_query)` — migration 086
+#### `search_folderit_hr_files(p_query)` — migration 086, word-matching fix migration 145 (18/07/2026)
 Searches HR category files + HR inbox files by filename. Returns `{ file_uid, name, source, created_at }`.
-**Used by:** `/api/folderit/hr-search`.
+**Bug fixed 18/07/2026:** originally matched the whole typed phrase as one literal `ILIKE '%phrase%'` substring — real filenames use underscores/hyphens/extra words ("Employee_Handbook_2026.pdf"), so a normal multi-word search like "Leave Policy Revision" found nothing even though "Proposal for Annual **Leave Policy Revision** – FY 2025–2026.docx" existed. Now splits the query on whitespace and requires every word to appear somewhere in the name, in any order — confirmed live against real data (627 HR files) after the fix.
+**Used by:** `/api/folderit/hr-search`, `/api/folderit/search`.
 
-#### `search_folderit_inbox(p_query, p_company_uuid)` — migration 095
-Searches company inbox files by filename. `p_company_uuid = NULL` = all companies (Admin/CEO only). Scoped via `folderit_account_companies` — HR account and excluded/pending accounts naturally excluded.
+#### `search_folderit_inbox(p_query, p_company_uuid)` — migration 095, word-matching fix migration 145
+Searches company inbox files by filename. `p_company_uuid = NULL` = all companies (Admin/CEO only). Scoped via `folderit_account_companies` — HR account and excluded/pending accounts naturally excluded. Same word-based matching fix as `search_folderit_hr_files` above.
 **Used by:** `/api/folderit/search`.
+
+Also fixed 18/07/2026: `FolderitSearchBox` in `app/folderit/page.tsx` previously swallowed server errors silently and showed "No documents match" on a genuine 500/RPC failure — now surfaces the real error message instead.
 
 #### `get_folderit_overdue_items(p_threshold_days)` — migration 079
 Files/approvals overdue for filing/action beyond threshold days.
@@ -1360,20 +1391,27 @@ Calendar/meeting request tracking.
 | Role | Who | Key constraints |
 |------|-----|-----------------|
 | **Admin** | khuram1901@gmail.com | Locked, undeletable, role unchangeable. Sees and can do everything |
-| **CEO** | k.saleem@unzegroup.com | Same powers as Admin. Different home page (CEO briefing). Locked |
+| **CEO** | k.saleem@unzegroup.com (Khuram's 2nd account) + kamran@unze.co.uk (Kamran, IFPL-scoped via the matrix) | Role-based since 16/07/2026 (was hardcoded to Khuram's email only). Same tier as Admin by default; individual permissions now editable per-person via the Access Matrix rather than baked into code |
 | **Executive** (= PA) | pa.ceo@unze.co.uk (Sundas) | Almost-admin but **never** sees Finance, Receivables, or Executive Dashboard. Role locked |
 | **Manager** | Department-scoped | Finance dept → finance pages. Ops dept → ops/production/stock |
 | **Member** | Any staff | Own tasks + profile only |
 
 ### Identity Helpers (permissions.ts)
-- `isCEO(ctx)` — email === 'k.saleem@unzegroup.com'
+- `isCEO(ctx)` — **role-based since 16/07/2026** (`ctx.role === 'CEO'`), was email-based before that (see note below on why that changed)
+- `isPrimaryCEO(ctx)` — email === 'k.saleem@unzegroup.com'. True only for Khuram's second account — for routing/identity purposes (which dashboard, which Gmail/Drive integration owns), not permissions
+- `isSecondaryCEO(ctx)` — email === 'kamran@unze.co.uk'. Routes Kamran (also role CEO) to his own dashboard
 - `isMainAdmin(ctx)` — email === 'khuram1901@gmail.com'
 - `isPA(ctx)` — email === 'pa.ceo@unze.co.uk' OR role === 'Executive'
-- `isAdminTier(ctx)` — CEO + Admin + role 'Admin'. **NOT Executive**
+- `isAdminTier(ctx)` — isMainAdmin OR role 'Admin' OR isCEO. **NOT Executive**
 - `isPrivileged(ctx)` — isAdminTier OR role 'Executive' (includes PA)
+- `myIdentityEmails(email)` — **Added 18/07/2026.** Returns `[email]` for everyone except Khuram; for either of his two accounts (`khuram1901@gmail.com` or `k.saleem@unzegroup.com`) returns both, since they're the same real person for "is this assigned to/created by me" comparisons. Use this instead of a raw email-equality check anywhere that decides "does this task/record belong to me" — a task routed to whichever of Khuram's accounts he isn't currently logged into would otherwise silently look like it belongs to someone else (this bit the Tasks "Mine" filter and the notification bell before the fix).
+
+**Why CEO became role-based (16/07/2026):** Kamran Saleem needed the same powers as Khuram's CEO account but scoped to IFPL only, and the CEO checks were baked directly into `isCEO()`/`isSecondaryCEO()` with email literals — no override hook, so every permission difference for Kamran needed a direct database edit. CEO is now a proper role (`members.role = 'CEO'`) that both Khuram's `k.saleem@unzegroup.com` and Kamran's `kamran@unze.co.uk` accounts hold, with the Access Matrix controlling what each of them individually sees, same as any other role.
 
 ### Override System
 `member_permissions` table stores per-member boolean overrides (NULL = use role default, true/false = override). Checked via `ov(ctx, key)` in every permission function. The Access Matrix UI at `/members` lets Admin toggle these.
+
+**Bug fixed 18/07/2026 (migration 147):** the "Targets" toggle in the Access Matrix's Production group, and `canEditOperationsTargets()` in code, both referenced `member_permissions.can_edit_operations_targets` — but no migration had ever actually added that column to the database. Every attempt to toggle it failed with "Could not find the 'can_edit_operations_targets' column ... in the schema cache." Column added, nullable boolean, no default — same convention as every other override column.
 
 ### Permission Functions (permissions.ts)
 
@@ -1824,6 +1862,7 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 27. **`portfolio_summary` and `current_prices` views are access-revoked** — migration 094. `security_invoker = true` + REVOKE ALL from anon and authenticated. Nothing in the app uses these views; all investment queries go through `get_portfolio_summary_full()` RPC instead.
 28. **Folderit is read-only from the dashboard** — the `/folderit` page and all folderit API routes only read data from the DB (synced by cron). No write operations to Folderit's API are ever made from the dashboard.
 29. **CEO daily digest replaces individual task emails** — `/api/notifications/ceo-digest` sends one email per weekday (11:30am PKT). Do not re-introduce per-task email notifications to Khuram's addresses.
+30. **Collapsible/expandable UI always starts closed on page load (18/07/2026).** Every accordion-style section, expandable tree row, or open/closed detail panel must default to collapsed when its page first mounts — no `useState(true)` for an expand flag, and no Set-of-"collapsed"-keys pattern that starts empty (since an empty "collapsed" set means everything renders *expanded* by default — invert to tracking "expanded" keys instead, so an empty set correctly means "all closed"). Local component state that resets on navigation already satisfies "closes when you leave a page" for free — the only real risk is persisting expand state in `localStorage`/`sessionStorage`/a URL param/a context that survives across route changes; don't do that for expand/collapse state. **Explicit exception:** deep-links that open one specific item on arrival (`/tasks?task=...` from the notification bell or search, `/my-minutes?meeting=...`) are allowed to auto-expand that one item — that's honouring an explicit link target on a fresh page load, not remembering a previous session's state.
 
 ---
 
