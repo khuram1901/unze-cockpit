@@ -196,6 +196,12 @@ export default function AdminDataPage() {
   const [regStatusFilter, setRegStatusFilter] = useState("");
   const [regTypeFilter, setRegTypeFilter] = useState<"" | "EOBI" | "Social Security">("");
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [canManageLocations, setCanManageLocations] = useState(false);
+
+  // ── Add location modal state ───────────────────────────────────────
+  const [addingLocation, setAddingLocation] = useState(false);
+  const [newLocation, setNewLocation] = useState({ name: "", entity: "IFPL", location_type: "retail", province: "" });
+  const [savingLocation, setSavingLocation] = useState(false);
 
   // ── Operations state ───────────────────────────────────────────────
   const [fuelRows, setFuelRows] = useState<FuelRow[]>([]);
@@ -209,8 +215,17 @@ export default function AdminDataPage() {
   useEffect(() => {
     if (checking) return;
     // Detect if user is main admin (needed for backups tab)
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email?.toLowerCase() === "khuram1901@gmail.com") setUserIsAdmin(true);
+    // Also check can_manage_locations for Akhlaq / Sunaina
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      if (user.email?.toLowerCase() === "khuram1901@gmail.com") setUserIsAdmin(true);
+      const { data: member } = await supabase
+        .from("members").select("id").eq("email", user.email!).single();
+      if (member) {
+        const { data: perm } = await supabase
+          .from("member_permissions").select("can_manage_locations").eq("member_id", member.id).single();
+        if (perm?.can_manage_locations) setCanManageLocations(true);
+      }
     });
     loadRegistrations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -378,6 +393,35 @@ export default function AdminDataPage() {
     if (opsYear === now.getFullYear() && opsMonth === now.getMonth() + 1) return;
     if (opsMonth === 12) { setOpsMonth(1); setOpsYear((y) => y + 1); }
     else setOpsMonth((m) => m + 1);
+  }
+
+  async function addLocation() {
+    if (!newLocation.name.trim()) return;
+    setSavingLocation(true);
+    const res = await authedFetch("/api/admin/locations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newLocation),
+    });
+    const json = await res.json();
+    setSavingLocation(false);
+    if (json.ok) {
+      showToast(`${newLocation.name} added`, "success");
+      setAddingLocation(false);
+      setNewLocation({ name: "", entity: "IFPL", location_type: "retail", province: "" });
+      loadRegistrations();
+    } else {
+      showToast(json.error || "Failed to add location", "error");
+    }
+  }
+
+  async function removeLocation(location_id: string, name: string) {
+    const ok = await confirm(`Remove "${name}" from the active locations list? Its existing data is preserved.`);
+    if (!ok) return;
+    const res = await authedFetch(`/api/admin/locations?id=${location_id}`, { method: "DELETE" });
+    const json = await res.json();
+    if (json.ok) { showToast(`${name} removed`, "success"); loadRegistrations(); }
+    else showToast(json.error || "Failed to remove", "error");
   }
 
   async function savePayment() {
@@ -625,11 +669,17 @@ export default function AdminDataPage() {
                     <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>
                       {getLastUpdated(r) ? formatDateUK(getLastUpdated(r)!) : "—"}
                     </td>
-                    <td style={{ padding: "8px 14px", textAlign: "right" }}>
+                    <td style={{ padding: "8px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
                       <button onClick={() => setEditingReg({ location_id: r.location_id, name: r.name, type: "EOBI", current: r.eobi_status || "Pending", notes: r.eobi_notes || "" })}
                         style={{ fontSize: "12px", color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 500 }}>
                         Edit
                       </button>
+                      {canManageLocations && (
+                        <button onClick={() => removeLocation(r.location_id, r.name)}
+                          style={{ fontSize: "12px", color: COLOURS.RED, background: "none", border: "none", cursor: "pointer", fontWeight: 500, marginLeft: "8px" }}>
+                          Remove
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -702,6 +752,12 @@ export default function AdminDataPage() {
             placeholder="🔍  Search location…"
             style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", flex: 1, minWidth: "180px", color: COLOURS.NAVY, backgroundColor: "white" }}
           />
+          {canManageLocations && (
+            <button onClick={() => setAddingLocation(true)}
+              style={{ padding: "6px 14px", borderRadius: "6px", border: "none", backgroundColor: COLOURS.NAVY, color: "white", fontSize: "12.5px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+              + Add Location
+            </button>
+          )}
         </div>
 
         {renderSection(ifplRows, "IFPL — Imperial Footwear (Retail)", false, "ifpl")}
@@ -710,6 +766,65 @@ export default function AdminDataPage() {
 
         {filtered.length === 0 && !loadingRegs && (
           <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No locations match your filters.</p>
+        )}
+
+        {/* Add Location modal */}
+        {addingLocation && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+            onClick={() => setAddingLocation(false)}>
+            <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: RADII.CARD, padding: "24px", maxWidth: "420px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "16px" }}>Add Location</div>
+              <div style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Location Name</label>
+                  <input value={newLocation.name} onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
+                    placeholder="e.g. Multan City Centre"
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Entity</label>
+                    <select value={newLocation.entity} onChange={(e) => setNewLocation({ ...newLocation, entity: e.target.value })}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                      <option value="IFPL">IFPL</option>
+                      <option value="Baranh">Baranh</option>
+                      <option value="HD">Haute Dolci</option>
+                      <option value="UTPL">UTPL</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Type</label>
+                    <select value={newLocation.location_type} onChange={(e) => setNewLocation({ ...newLocation, location_type: e.target.value })}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                      <option value="retail">Retail</option>
+                      <option value="restaurant">Restaurant</option>
+                      <option value="warehouse">Warehouse</option>
+                      <option value="plant">Plant</option>
+                      <option value="office">Office</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Province (optional)</label>
+                  <select value={newLocation.province} onChange={(e) => setNewLocation({ ...newLocation, province: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                    <option value="">— Select —</option>
+                    <option value="Punjab">Punjab</option>
+                    <option value="Sindh">Sindh</option>
+                    <option value="KPK">KPK</option>
+                    <option value="Balochistan">Balochistan</option>
+                    <option value="AJK">AJK</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                <button onClick={() => setAddingLocation(false)} style={{ padding: "8px 16px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Cancel</button>
+                <button onClick={addLocation} disabled={savingLocation || !newLocation.name.trim()} style={{ ...primaryButtonStyle, opacity: (savingLocation || !newLocation.name.trim()) ? 0.6 : 1 }}>
+                  {savingLocation ? "Adding…" : "Add Location"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Edit modal */}
