@@ -695,7 +695,7 @@ export default function SidebarLayout({
           fontSize: "12px", padding: "12px 16px",
           borderTop: "1px solid var(--border-color)",
         }}>
-          © Unze Group 1989–2026 · v3.0 · All Rights Reserved
+          © Unze Group 1989–2026 · v4.0 · All Rights Reserved
         </div>
       </div>
     </div>
