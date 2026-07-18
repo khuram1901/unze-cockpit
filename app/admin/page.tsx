@@ -205,7 +205,13 @@ export default function AdminDataPage() {
 
   // ── Add location modal state ───────────────────────────────────────
   const [addingLocation, setAddingLocation] = useState(false);
-  const [newLocation, setNewLocation] = useState({ name: "", entity: "IFPL", location_type: "retail", province: "" });
+  const [newLocation, setNewLocation] = useState({
+    name: "", entity: "IFPL", location_type: "retail", province: "",
+    eobi_status: "Pending", ss_status: "Pending",
+    civil_defence_status: "Pending", civil_defence_registered: "", civil_defence_due: "",
+    labour_reg_status: "Pending", labour_insp_status: "Pending",
+    ntn_number: "", meter_label: "",
+  });
   const [savingLocation, setSavingLocation] = useState(false);
 
   // ── Operations state ───────────────────────────────────────────────
@@ -223,7 +229,8 @@ export default function AdminDataPage() {
     // Also check can_manage_locations for Akhlaq / Sunaina
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
-      if (user.email?.toLowerCase() === "khuram1901@gmail.com") setUserIsAdmin(true);
+      const isAdmin = user.email?.toLowerCase() === "khuram1901@gmail.com";
+      if (isAdmin) { setUserIsAdmin(true); setCanManageLocations(true); return; }
       const { data: member } = await supabase
         .from("members").select("id").eq("email", user.email!).single();
       if (member) {
@@ -439,8 +446,15 @@ export default function AdminDataPage() {
     if (json.ok) {
       showToast(`${newLocation.name} added`, "success");
       setAddingLocation(false);
-      setNewLocation({ name: "", entity: "IFPL", location_type: "retail", province: "" });
+      setNewLocation({
+        name: "", entity: "IFPL", location_type: "retail", province: "",
+        eobi_status: "Pending", ss_status: "Pending",
+        civil_defence_status: "Pending", civil_defence_registered: "", civil_defence_due: "",
+        labour_reg_status: "Pending", labour_insp_status: "Pending",
+        ntn_number: "", meter_label: "",
+      });
       loadRegistrations();
+      loadCompliance();
     } else {
       showToast(json.error || "Failed to add location", "error");
     }
@@ -796,13 +810,17 @@ export default function AdminDataPage() {
         {addingLocation && (
           <div style={{ position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
             onClick={() => setAddingLocation(false)}>
-            <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: RADII.CARD, padding: "24px", maxWidth: "420px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
-              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "16px" }}>Add Location</div>
-              <div style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: RADII.CARD, padding: "24px", maxWidth: "560px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)", maxHeight: "90vh", overflowY: "auto" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Add Location</div>
+              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "18px" }}>Creates the location and registers it across EOBI, Social Security, Civil Defence, and Labour in one step.</div>
+
+              {/* Section: Basic Details */}
+              <div style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>Basic Details</div>
+              <div style={{ display: "grid", gap: "12px", marginBottom: "18px" }}>
                 <div>
                   <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Location Name</label>
                   <input value={newLocation.name} onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
-                    placeholder="e.g. Multan City Centre"
+                    placeholder="e.g. Sukkur Branch"
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
@@ -841,6 +859,101 @@ export default function AdminDataPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Section: Registrations */}
+              <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "14px", marginBottom: "14px" }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>Registrations</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>EOBI Status</label>
+                    <select value={newLocation.eobi_status} onChange={(e) => setNewLocation({ ...newLocation, eobi_status: e.target.value })}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                      {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Social Security Status</label>
+                    <select value={newLocation.ss_status} onChange={(e) => setNewLocation({ ...newLocation, ss_status: e.target.value })}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                      {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section: Civil Defence */}
+              <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "14px", marginBottom: "14px" }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>Civil Defence</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Status</label>
+                    <select value={newLocation.civil_defence_status} onChange={(e) => setNewLocation({ ...newLocation, civil_defence_status: e.target.value })}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                      <option value="Pending">Pending</option>
+                      <option value="Registered">Registered</option>
+                      <option value="Overdue">Overdue</option>
+                      <option value="N/A">N/A</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Registered</label>
+                    <DateInput value={newLocation.civil_defence_registered} onChange={(e) => setNewLocation({ ...newLocation, civil_defence_registered: e.target.value })}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Renewal Due</label>
+                    <DateInput value={newLocation.civil_defence_due} onChange={(e) => setNewLocation({ ...newLocation, civil_defence_due: e.target.value })}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section: Labour */}
+              <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "14px", marginBottom: "14px" }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>Labour</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Labour Registration</label>
+                    <select value={newLocation.labour_reg_status} onChange={(e) => setNewLocation({ ...newLocation, labour_reg_status: e.target.value })}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                      <option value="Pending">Pending</option>
+                      <option value="Registered">Registered</option>
+                      <option value="Overdue">Overdue</option>
+                      <option value="N/A">N/A</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Labour Inspection</label>
+                    <select value={newLocation.labour_insp_status} onChange={(e) => setNewLocation({ ...newLocation, labour_insp_status: e.target.value })}
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                      <option value="Pending">Pending</option>
+                      <option value="Done">Done</option>
+                      <option value="Overdue">Overdue</option>
+                      <option value="N/A">N/A</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section: Documents (optional) */}
+              <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "14px", marginBottom: "18px" }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>NTN / Meter (optional)</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>NTN Number</label>
+                    <input value={newLocation.ntn_number} onChange={(e) => setNewLocation({ ...newLocation, ntn_number: e.target.value })}
+                      placeholder="e.g. 1234567-8"
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Meter Label</label>
+                    <input value={newLocation.meter_label} onChange={(e) => setNewLocation({ ...newLocation, meter_label: e.target.value })}
+                      placeholder="e.g. Meter 1"
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                </div>
+              </div>
+
               <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                 <button onClick={() => setAddingLocation(false)} style={{ padding: "8px 16px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Cancel</button>
                 <button onClick={addLocation} disabled={savingLocation || !newLocation.name.trim()} style={{ ...primaryButtonStyle, opacity: (savingLocation || !newLocation.name.trim()) ? 0.6 : 1 }}>
