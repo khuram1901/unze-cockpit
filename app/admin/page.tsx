@@ -1106,35 +1106,6 @@ export default function AdminDataPage() {
       });
     }
 
-    function complianceDateCell(registered: string | null, due: string | null, status: string | null, locName: string, type: "Civil Defence" | "Labour Registration" | "Labour Inspection", row: ComplianceRow) {
-      const isOverdue = due && due < today && status !== "Done";
-      return (
-        <td style={{ padding: "8px 14px", minWidth: "160px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
-            <div>
-              <span style={statusBadge(status)}>{status || "—"}</span>
-              <div style={{ marginTop: "4px", fontSize: "10.5px", color: COLOURS.SLATE, lineHeight: 1.5 }}>
-                {registered
-                  ? <span>Registered: <strong style={{ color: COLOURS.NAVY }}>{formatDateUK(registered)}</strong></span>
-                  : <span style={{ color: COLOURS.SLATE }}>Registered: —</span>}
-              </div>
-              <div style={{ fontSize: "10.5px", lineHeight: 1.5 }}>
-                {due
-                  ? <span style={{ color: isOverdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue ? 600 : 400 }}>
-                      Due: <strong>{formatDateUK(due)}</strong>{isOverdue ? " ⚠️" : ""}
-                    </span>
-                  : <span style={{ color: COLOURS.SLATE }}>Due: —</span>}
-              </div>
-            </div>
-            <button onClick={() => openComplianceEdit(row, type)}
-              style={{ fontSize: "11px", color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 500, flexShrink: 0 }}>
-              Edit
-            </button>
-          </div>
-        </td>
-      );
-    }
-
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
@@ -1148,24 +1119,39 @@ export default function AdminDataPage() {
           <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No compliance data on record yet.</p>
         ) : (
           <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white", overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "780px" }}>
               <thead>
                 <tr>
-                  {["Location", "Entity", "Civil Defence", "Labour Reg.", "Labour Insp."].map((h) => (
+                  {["Location", "Entity", "Civil Defence", "Last Renewed", "Next Due", "Labour Reg.", "Labour Insp.", ""].map((h) => (
                     <th key={h} style={thStyle}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {visibleCompliance.map((r) => (
-                  <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                    <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.name}</td>
-                    <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>{r.entity}</td>
-                    {complianceDateCell(r.civil_defence_registered, r.civil_defence_due, r.civil_defence_status, r.name, "Civil Defence", r)}
-                    {complianceDateCell(r.labour_reg_registered,    r.labour_reg_due,    r.labour_reg_status,    r.name, "Labour Registration", r)}
-                    {complianceDateCell(r.labour_insp_registered,   r.labour_insp_due,   r.labour_insp_status,   r.name, "Labour Inspection",   r)}
-                  </tr>
-                ))}
+                {visibleCompliance.map((r) => {
+                  const isOverdue = r.civil_defence_due && r.civil_defence_due < today && r.civil_defence_status !== "Done";
+                  return (
+                    <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                      <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.name}</td>
+                      <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>{r.entity}</td>
+                      <td style={{ padding: "8px 14px" }}><span style={statusBadge(r.civil_defence_status)}>{r.civil_defence_status || "—"}</span></td>
+                      <td style={{ padding: "10px 14px", fontSize: "11.5px", color: COLOURS.SLATE }}>
+                        {r.civil_defence_registered ? formatDateUK(r.civil_defence_registered) : "—"}
+                      </td>
+                      <td style={{ padding: "10px 14px", fontSize: "11.5px", color: isOverdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue ? 600 : 400 }}>
+                        {r.civil_defence_due ? formatDateUK(r.civil_defence_due) : "—"}{isOverdue ? " ⚠️" : ""}
+                      </td>
+                      <td style={{ padding: "8px 14px" }}><span style={statusBadge(r.labour_reg_status)}>{r.labour_reg_status || "—"}</span></td>
+                      <td style={{ padding: "8px 14px" }}><span style={statusBadge(r.labour_insp_status)}>{r.labour_insp_status || "—"}</span></td>
+                      <td style={{ padding: "8px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button onClick={() => openComplianceEdit(r, "Civil Defence")}
+                          style={{ fontSize: "11.5px", color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 500 }}>
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             {hasMorCivil && (
