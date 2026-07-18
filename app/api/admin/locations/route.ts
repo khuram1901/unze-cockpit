@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("admin_locations")
-    .select("id, name, entity, location_type, province, is_active, created_at")
+    .select("id, name, entity, location_type, province, is_active, default_disco, created_at")
     .order("entity").order("name");
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     eobi_status, ss_status,
     civil_defence_status, civil_defence_registered, civil_defence_due,
     labour_reg_status, labour_insp_status,
-    ntn_number, meter_label,
+    ntn_number, meter_label, default_disco,
   } = body;
 
   if (!name?.trim() || !entity || !location_type) {
@@ -76,6 +76,12 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
+
+  // If DISCO was provided, apply it to the new location (RPC doesn't have this param)
+  if (default_disco && data) {
+    await supabase.from("admin_locations").update({ default_disco }).eq("id", data);
+  }
+
   return Response.json({ ok: true, location_id: data });
 }
 
@@ -114,7 +120,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { id, name, entity, location_type, province, is_active } = body;
+  const { id, name, entity, location_type, province, is_active, default_disco } = body;
   if (!id) return Response.json({ error: "id is required" }, { status: 400 });
 
   const updates: Record<string, unknown> = {};
@@ -123,6 +129,7 @@ export async function PATCH(request: NextRequest) {
   if (location_type !== undefined) updates.location_type = location_type;
   if (province !== undefined) updates.province    = province;
   if (is_active !== undefined) updates.is_active  = is_active;
+  if (default_disco !== undefined) updates.default_disco = default_disco || null;
 
   const { error } = await supabase
     .from("admin_locations")

@@ -309,10 +309,10 @@ export default function AdminDataPage() {
   // ── Manage Utility Sites modal ─────────────────────────────────────
   const [manageUtility, setManageUtility] = useState(false);
   const [allLocations, setAllLocations] = useState<{
-    id: string; name: string; entity: string; location_type: string; province: string | null; is_active: boolean;
+    id: string; name: string; entity: string; location_type: string; province: string | null; is_active: boolean; default_disco: string | null;
   }[]>([]);
   const [locationForm, setLocationForm] = useState<{
-    id?: string; name: string; entity: string; location_type: string; province: string; is_active: boolean;
+    id?: string; name: string; entity: string; location_type: string; province: string; is_active: boolean; default_disco: string;
   } | null>(null);
   const [savingUtilityLoc, setSavingUtilityLoc] = useState(false);
 
@@ -1940,7 +1940,7 @@ export default function AdminDataPage() {
       const res = await authedFetch("/api/admin/locations", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: locationForm.id, name: locationForm.name, entity: locationForm.entity, location_type: locationForm.location_type, province: locationForm.province, is_active: locationForm.is_active }),
+        body: JSON.stringify({ id: locationForm.id, name: locationForm.name, entity: locationForm.entity, location_type: locationForm.location_type, province: locationForm.province, is_active: locationForm.is_active, default_disco: locationForm.default_disco }),
       });
       const json = await res.json();
       setSavingUtilityLoc(false);
@@ -1958,7 +1958,7 @@ export default function AdminDataPage() {
       const res = await authedFetch("/api/admin/locations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: locationForm.name, entity: locationForm.entity, location_type: locationForm.location_type, province: locationForm.province }),
+        body: JSON.stringify({ name: locationForm.name, entity: locationForm.entity, location_type: locationForm.location_type, province: locationForm.province, default_disco: locationForm.default_disco }),
       });
       const json = await res.json();
       setSavingUtilityLoc(false);
@@ -2162,8 +2162,9 @@ export default function AdminDataPage() {
                     <div style={{ fontSize: "13px", fontWeight: 600, color: loc.is_active ? COLOURS.NAVY : COLOURS.SLATE }}>{loc.name}</div>
                     <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{ENTITIES.find((e) => e.value === loc.entity)?.label ?? loc.entity} · {loc.location_type}</div>
                   </div>
+                  {loc.default_disco && <span style={{ fontSize: "10.5px", fontWeight: 600, color: COLOURS.SLATE }}>{loc.default_disco}</span>}
                   <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px", backgroundColor: loc.is_active ? "#DCFCE7" : COLOURS.HAIRLINE, color: loc.is_active ? COLOURS.GREEN : COLOURS.SLATE }}>{loc.is_active ? "Active" : "Inactive"}</span>
-                  <button onClick={() => setLocationForm({ id: loc.id, name: loc.name, entity: loc.entity, location_type: loc.location_type, province: loc.province || "", is_active: loc.is_active })}
+                  <button onClick={() => setLocationForm({ id: loc.id, name: loc.name, entity: loc.entity, location_type: loc.location_type, province: loc.province || "", is_active: loc.is_active, default_disco: loc.default_disco || "" })}
                     style={{ fontSize: "11.5px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Edit</button>
                 </div>
               ))}
@@ -2208,6 +2209,17 @@ export default function AdminDataPage() {
                     {PROVINCES.map((p) => <option key={p}>{p}</option>)}
                   </select>
                 </div>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>DISCO (electricity supplier)</label>
+                  <select value={locationForm.default_disco}
+                    onChange={(e) => setLocationForm((f) => f ? { ...f, default_disco: e.target.value } : f)}
+                    style={mgmtInput}>
+                    <option value="">None / unknown</option>
+                    {["LESCO", "MEPCO", "FESCO", "PESCO", "HESCO", "IESCO", "SSGC", "SNGPL", "Other"].map((d) => (
+                      <option key={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               {locationForm.id && (
                 <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: COLOURS.SLATE, marginBottom: "12px", cursor: "pointer" }}>
@@ -2231,7 +2243,7 @@ export default function AdminDataPage() {
               </div>
             </div>
           ) : (
-            <button onClick={() => setLocationForm({ name: "", entity: "", location_type: "retail", province: "Punjab", is_active: true })}
+            <button onClick={() => setLocationForm({ name: "", entity: "", location_type: "retail", province: "Punjab", is_active: true, default_disco: "" })}
               style={{ ...primaryButtonStyle, width: "100%", padding: "10px", fontSize: "13px" }}>+ Add New Site</button>
           )}
         </div>

@@ -6,6 +6,8 @@ ALTER TABLE admin_vehicles
   ADD COLUMN IF NOT EXISTS odometer_unit text NOT NULL DEFAULT 'km';
 
 -- 2. Update get_active_vehicles() to return the new column
+-- Must DROP first because the return type is changing (adding odometer_unit)
+DROP FUNCTION IF EXISTS get_active_vehicles();
 CREATE OR REPLACE FUNCTION get_active_vehicles()
 RETURNS TABLE (id uuid, name text, plate_number text, odometer_unit text)
 LANGUAGE sql
@@ -19,7 +21,8 @@ AS $$
 $$;
 
 -- 3. Update get_vehicle_detail_monthly() to include odometer_unit in result
---    (existing call in vehicle-detail panel shows unit label)
+-- Must DROP first because the return type is changing (adding odometer_unit)
+DROP FUNCTION IF EXISTS get_vehicle_detail_monthly(uuid, int);
 CREATE OR REPLACE FUNCTION get_vehicle_detail_monthly(
   p_vehicle_id uuid,
   p_year       int     -- FY start year, e.g. 2025 = Jul 2025–Jun 2026

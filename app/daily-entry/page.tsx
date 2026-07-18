@@ -12,7 +12,7 @@ import { useMobile } from "../lib/useMobile";
 
 type Vehicle  = { id: string; name: string; plate_number: string; odometer_unit: string };
 type Branch   = { id: string; name: string; system_kw: number | null };
-type Location = { id: string; name: string; entity: string };
+type Location = { id: string; name: string; entity: string; default_disco: string | null };
 
 type FormType = "fuel" | "solar" | "utility" | "maintenance";
 
@@ -200,8 +200,14 @@ export default function DailyEntryPage() {
   }, [solar.branch_id]);
 
   // Auto-fetch last utility reading + recent when location+meter changes
+  // Also auto-populate DISCO from location's default_disco
   useEffect(() => {
     if (!utility.location_id) return;
+    // Auto-populate DISCO
+    const loc = locations.find((l) => l.id === utility.location_id);
+    if (loc?.default_disco) {
+      setUtility((u) => ({ ...u, utility_company: loc.default_disco! }));
+    }
     setLoadingLastReading(true);
     authedFetch(`/api/admin/utility?location_id=${utility.location_id}&meter_label=${encodeURIComponent(utility.meter_label)}`)
       .then((r) => r.json())
@@ -215,7 +221,7 @@ export default function DailyEntryPage() {
       });
     authedFetch(`/api/admin/recent-entries?form=utility&locationId=${utility.location_id}&meterLabel=${encodeURIComponent(utility.meter_label)}`)
       .then((r) => r.json()).then((j) => setRecentUtility(j.data || []));
-  }, [utility.location_id, utility.meter_label]);
+  }, [utility.location_id, utility.meter_label, locations]);
 
   // ── Submit handlers ────────────────────────────────────────────────
   async function submitFuel(e: React.FormEvent) {
