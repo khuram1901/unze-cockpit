@@ -671,7 +671,6 @@ export default function AdminDataPage() {
                   {showEOBI && <th style={thStyle}>EOBI</th>}
                   {showSS && <th style={thStyle}>Social Security</th>}
                   <th style={thStyle}>Last Updated</th>
-                  <th style={{ ...thStyle, width: "50px" }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -699,15 +698,9 @@ export default function AdminDataPage() {
                     )}
                     <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>
                       {getLastUpdated(r) ? formatDateUK(getLastUpdated(r)!) : "—"}
-                    </td>
-                    <td style={{ padding: "8px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button onClick={() => setEditingReg({ location_id: r.location_id, name: r.name, type: "EOBI", current: r.eobi_status || "Pending", notes: r.eobi_notes || "" })}
-                        style={{ fontSize: "12px", color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 500 }}>
-                        Edit
-                      </button>
                       {canManageLocations && (
                         <button onClick={() => removeLocation(r.location_id, r.name)}
-                          style={{ fontSize: "12px", color: COLOURS.RED, background: "none", border: "none", cursor: "pointer", fontWeight: 500, marginLeft: "8px" }}>
+                          style={{ fontSize: "11px", color: COLOURS.RED, background: "none", border: "none", cursor: "pointer", fontWeight: 500, marginLeft: "10px" }}>
                           Remove
                         </button>
                       )}
