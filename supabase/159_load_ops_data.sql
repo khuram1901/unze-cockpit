@@ -128,7 +128,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Hyundai Santa Fe (VX-58, 27 fills)
     ('2025-02-19'::date, 267.99::numeric, 69.24::numeric, 11834, 12797),
     ('2025-05-01'::date, 279.99::numeric, 40.0::numeric, 12797, 0),
     ('2025-05-01'::date, 279.99::numeric, 5.0::numeric, NULL, NULL),
-    ('2025-05-01'::date, 279.99::numeric, 3.0::numeric, NULL, 12797),
+    ('2025-05-01'::date, 279.99::numeric, 3.0::numeric, NULL::integer, 12797),
     ('2025-05-27'::date, 279.99::numeric, 64.0::numeric, 12797, 14079),
     ('2025-06-05'::date, 274.99::numeric, 51.45::numeric, 14079, 14541),
     ('2025-07-25'::date, 284.99::numeric, 65.0::numeric, 12956, 15781),
@@ -158,7 +158,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Sorento (ADK-824, 31 fills)
   INSERT INTO admin_fuel_log (vehicle_id, date, price_per_litre, quantity_litres, previous_odometer, current_odometer, entered_by)
   SELECT v_id, t.d, t.ppl, t.qty, t.prev, t.curr, 'import'
   FROM (VALUES
-    ('2025-06-13'::date, 274.99::numeric, 43.0::numeric, NULL, 65938),
+    ('2025-06-13'::date, 274.99::numeric, 43.0::numeric, NULL::integer, 65938),
     ('2025-11-07'::date, 279.99::numeric, 50.9::numeric, 65938, 72303),
     ('2025-12-01'::date, 279.99::numeric, 60.8::numeric, 72303, 72657),
     ('2025-12-08'::date, 279.99::numeric, 60.8::numeric, 72657, 72965),
@@ -205,7 +205,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Carnival (AEW-533, 67 fills)
     ('2023-01-09'::date, 251.9::numeric, 80.0::numeric, 23022, 23395),
     ('2023-01-18'::date, 251.9::numeric, 70.0::numeric, 22718, 23022),
     ('2023-12-18'::date, 251.9::numeric, 55.58::numeric, 21600, 21735),
-    ('2025-01-01'::date, 264.99::numeric, 56.86::numeric, NULL, 53926),
+    ('2025-01-01'::date, 264.99::numeric, 56.86::numeric, NULL::integer, 53926),
     ('2025-01-05'::date, 264.99::numeric, 70.56::numeric, 53926, 55020),
     ('2025-01-21'::date, 257.25::numeric, 11.66::numeric, 55020, 54810),
     ('2025-02-17'::date, 267.99::numeric, 61.47::numeric, 54810, 57225),
@@ -284,7 +284,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- MG HS (ADP-579, 99 fills)
     ('2023-01-02'::date, 251.9::numeric, 55.32::numeric, 21377, 21677),
     ('2023-01-17'::date, 251.9::numeric, 54.78::numeric, 21677, 21976),
     ('2023-01-20'::date, 251.9::numeric, 52.0::numeric, 21976, 22304),
-    ('2025-01-07'::date, 264.99::numeric, 35.13::numeric, NULL, 54190),
+    ('2025-01-07'::date, 264.99::numeric, 35.13::numeric, NULL::integer, 54190),
     ('2025-01-14'::date, 264.99::numeric, 39.52::numeric, NULL, NULL),
     ('2025-01-22'::date, 264.99::numeric, 44.88::numeric, NULL, NULL),
     ('2025-02-18'::date, 267.99::numeric, 38.56::numeric, 54190, 54113),
@@ -308,7 +308,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- MG HS (ADP-579, 99 fills)
     ('2025-08-02'::date, 279.99::numeric, 8.93::numeric, 62697, 6299),
     ('2025-08-03'::date, 279.99::numeric, 42.86::numeric, 6299, 63122),
     ('2025-08-04'::date, 279.99::numeric, 64.29::numeric, 63122, NULL),
-    ('2025-08-09'::date, 279.99::numeric, 32.16::numeric, NULL, 63486),
+    ('2025-08-09'::date, 279.99::numeric, 32.16::numeric, NULL::integer, 63486),
     ('2025-08-11'::date, 279.99::numeric, 39.29::numeric, 63486, 63967),
     ('2025-08-12'::date, 279.99::numeric, 21.0::numeric, 63967, 64141),
     ('2025-08-12'::date, 265.57::numeric, 26.36::numeric, 64141, 64574),
@@ -385,7 +385,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Cab (CAB-3903, 129 fills)
   INSERT INTO admin_fuel_log (vehicle_id, date, price_per_litre, quantity_litres, previous_odometer, current_odometer, entered_by)
   SELECT v_id, t.d, t.ppl, t.qty, t.prev, t.curr, 'import'
   FROM (VALUES
-    ('2025-01-01'::date, 259.34::numeric, 49.0::numeric, NULL, 84681),
+    ('2025-01-01'::date, 259.34::numeric, 49.0::numeric, NULL::integer, 84681),
     ('2025-01-06'::date, 259.66::numeric, 7.1::numeric, 84681, 85058),
     ('2025-01-08'::date, 259.34::numeric, 48.8::numeric, 85058, 85451),
     ('2025-01-08'::date, 259.34::numeric, 19.28::numeric, 85451, 85574),
@@ -398,7 +398,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Cab (CAB-3903, 129 fills)
     ('2025-01-21'::date, 257.13::numeric, 7.78::numeric, NULL, NULL),
     ('2025-01-21'::date, 257.13::numeric, 1.94::numeric, NULL, NULL),
     ('2025-01-23'::date, 261.95::numeric, 19.09::numeric, NULL, NULL),
-    ('2025-01-27'::date, 261.95::numeric, 47.64::numeric, NULL, 87303),
+    ('2025-01-27'::date, 261.95::numeric, 47.64::numeric, NULL::integer, 87303),
     ('2025-01-29'::date, 257.13::numeric, 5.83::numeric, 87303, 86594),
     ('2025-02-08'::date, 268.95::numeric, 48.04::numeric, 86594, 89635),
     ('2025-02-18'::date, 264.97::numeric, 47.0::numeric, 89635, 90008),
@@ -427,7 +427,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Cab (CAB-3903, 129 fills)
     ('2025-05-16'::date, 255.64::numeric, 27.38::numeric, 98620, 98762),
     ('2025-05-19'::date, 255.64::numeric, 49.0::numeric, 98762, 99200),
     ('2025-05-20'::date, 253.63::numeric, 19.71::numeric, 99200, NULL),
-    ('2025-05-23'::date, 255.64::numeric, 47.0::numeric, NULL, 99566),
+    ('2025-05-23'::date, 255.64::numeric, 47.0::numeric, NULL::integer, 99566),
     ('2025-05-23'::date, 253.63::numeric, 15.77::numeric, NULL, NULL),
     ('2025-05-24'::date, 253.63::numeric, 8.67::numeric, NULL, NULL),
     ('2025-05-25'::date, 253.63::numeric, 7.89::numeric, NULL, NULL),
@@ -446,7 +446,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Cab (CAB-3903, 129 fills)
     ('2025-07-17'::date, 285.38::numeric, 21.02::numeric, 37799, 102839),
     ('2025-07-23'::date, 285.38::numeric, 50.0::numeric, 102839, 103086),
     ('2025-07-23'::date, 273.09::numeric, 18.31::numeric, 103086, NULL),
-    ('2025-07-28'::date, 285.35::numeric, 10.51::numeric, NULL, 103333),
+    ('2025-07-28'::date, 285.35::numeric, 10.51::numeric, NULL::integer, 103333),
     ('2025-07-30'::date, 285.38::numeric, 45.0::numeric, 103333, 103425),
     ('2025-08-05'::date, 286.88::numeric, 49.0::numeric, 38466, 103817),
     ('2025-08-13'::date, 286.88::numeric, 49.0::numeric, 103817, 104217),
@@ -524,7 +524,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Cab (CAL-8941, 73 fills)
   INSERT INTO admin_fuel_log (vehicle_id, date, price_per_litre, quantity_litres, previous_odometer, current_odometer, entered_by)
   SELECT v_id, t.d, t.ppl, t.qty, t.prev, t.curr, 'import'
   FROM (VALUES
-    ('2025-01-10'::date, 253.66::numeric, 19.71::numeric, NULL, 29444),
+    ('2025-01-10'::date, 253.66::numeric, 19.71::numeric, NULL::integer, 29444),
     ('2025-01-10'::date, 253.66::numeric, 11.83::numeric, 29444, 86006),
     ('2025-02-07'::date, 258.13::numeric, 36.0::numeric, 29444, 30216),
     ('2025-02-14'::date, 258.13::numeric, 37.0::numeric, 30216, 30729),
@@ -533,14 +533,14 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Cab (CAL-8941, 73 fills)
     ('2025-05-08'::date, 253.63::numeric, 23.66::numeric, 33420, 34471),
     ('2025-05-12'::date, 253.63::numeric, 39.0::numeric, 34471, 34738),
     ('2025-05-16'::date, 253.63::numeric, 7.89::numeric, 34738, NULL),
-    ('2025-05-16'::date, 253.63::numeric, 19.71::numeric, NULL, 34738),
-    ('2025-05-16'::date, 255.64::numeric, 7.82::numeric, NULL, 35087),
+    ('2025-05-16'::date, 253.63::numeric, 19.71::numeric, NULL::integer, 34738),
+    ('2025-05-16'::date, 255.64::numeric, 7.82::numeric, NULL::integer, 35087),
     ('2025-06-04'::date, 255.63::numeric, 48.0::numeric, NULL, NULL),
     ('2025-06-05'::date, 254.62::numeric, 39.0::numeric, 35087, 36355),
     ('2025-06-14'::date, 254.62::numeric, 37.0::numeric, 36355, 36646),
     ('2025-06-21'::date, 259.42::numeric, 37.66::numeric, 36646, 36860),
     ('2025-07-02'::date, 267.8::numeric, 18.67::numeric, 101422, NULL),
-    ('2025-07-08'::date, 267.8::numeric, 37.0::numeric, NULL, 37477),
+    ('2025-07-08'::date, 267.8::numeric, 37.0::numeric, NULL::integer, 37477),
     ('2025-07-16'::date, 273.18::numeric, 21.96::numeric, 102405, 37799),
     ('2025-07-18'::date, 273.18::numeric, 37.52::numeric, 102839, 38006),
     ('2025-07-30'::date, 273.18::numeric, 38.0::numeric, 103425, 38466),
@@ -609,25 +609,25 @@ DO $$ DECLARE v_id uuid; BEGIN  -- BMW X5 (AGK-001, 19 records)
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
   SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
-    ('2024-03-04'::date, 'Denting/Penting', 'Denting/Penting', NULL, 188000.0::numeric),
-    ('2024-03-07'::date, 'Denting/Penting', 'Denting/Penting', NULL, 12000.0::numeric),
-    ('2024-03-15'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL, 25850.0::numeric),
-    ('2024-07-30'::date, 'Oil Filter', 'Oil Filter, Air Filter, Fuel Filter', NULL, 48420.0::numeric),
-    ('2024-09-06'::date, 'Inspection', 'Inspection', NULL, 8120.0::numeric),
-    ('2024-10-01'::date, 'Oil Filter', 'Oil Filter', NULL, 19152.0::numeric),
-    ('2024-10-16'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Lab Test', NULL, 24202.0::numeric),
-    ('2024-10-17'::date, 'Brake Pads', 'Brake Pads, Any Other Mechanical Maintenance', NULL, 15000.0::numeric),
-    ('2024-12-11'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 45000.0::numeric),
-    ('2025-02-10'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 3000.0::numeric),
-    ('2025-03-03'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 3000.0::numeric),
-    ('2025-04-16'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL, 27260.0::numeric),
-    ('2025-04-29'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 5800.0::numeric),
-    ('2025-05-14'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 28000.0::numeric),
-    ('2025-07-01'::date, 'Radiator', 'Radiator, Any Other Mechanical Maintenance', NULL, 53500.0::numeric),
-    ('2025-08-29'::date, 'Lab Test', 'Lab Test, Any Other Mechanical Maintenance', NULL, 13108.0::numeric),
-    ('2025-09-18'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 10000.0::numeric),
-    ('2026-02-02'::date, 'Service', 'Service', NULL, 1300.0::numeric),
-    ('2026-03-07'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 20000.0::numeric)
+    ('2024-03-04'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 188000.0::numeric),
+    ('2024-03-07'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 12000.0::numeric),
+    ('2024-03-15'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL::integer, 25850.0::numeric),
+    ('2024-07-30'::date, 'Oil Filter', 'Oil Filter, Air Filter, Fuel Filter', NULL::integer, 48420.0::numeric),
+    ('2024-09-06'::date, 'Inspection', 'Inspection', NULL::integer, 8120.0::numeric),
+    ('2024-10-01'::date, 'Oil Filter', 'Oil Filter', NULL::integer, 19152.0::numeric),
+    ('2024-10-16'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Lab Test', NULL::integer, 24202.0::numeric),
+    ('2024-10-17'::date, 'Brake Pads', 'Brake Pads, Any Other Mechanical Maintenance', NULL::integer, 15000.0::numeric),
+    ('2024-12-11'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 45000.0::numeric),
+    ('2025-02-10'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 3000.0::numeric),
+    ('2025-03-03'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 3000.0::numeric),
+    ('2025-04-16'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL::integer, 27260.0::numeric),
+    ('2025-04-29'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 5800.0::numeric),
+    ('2025-05-14'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 28000.0::numeric),
+    ('2025-07-01'::date, 'Radiator', 'Radiator, Any Other Mechanical Maintenance', NULL::integer, 53500.0::numeric),
+    ('2025-08-29'::date, 'Lab Test', 'Lab Test, Any Other Mechanical Maintenance', NULL::integer, 13108.0::numeric),
+    ('2025-09-18'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 10000.0::numeric),
+    ('2026-02-02'::date, 'Service', 'Service', NULL::integer, 1300.0::numeric),
+    ('2026-03-07'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 20000.0::numeric)
   ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
@@ -638,13 +638,13 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Sportage (ASQ-321, 7 records)
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
   SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
-    ('2025-01-27'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter, AC Filter', NULL, 21400.0::numeric),
-    ('2025-04-08'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 1999.0::numeric),
-    ('2025-05-03'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 2000.0::numeric),
-    ('2025-08-22'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL, 34459.22::numeric),
-    ('2026-01-29'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Wheel Alignment, Any Other Mechanical Maintenance', NULL, 40276.45::numeric),
-    ('2026-06-03'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL, 20368.31::numeric),
-    ('2026-06-05'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL, 15000.0::numeric)
+    ('2025-01-27'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter, AC Filter', NULL::integer, 21400.0::numeric),
+    ('2025-04-08'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 1999.0::numeric),
+    ('2025-05-03'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 2000.0::numeric),
+    ('2025-08-22'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL::integer, 34459.22::numeric),
+    ('2026-01-29'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Wheel Alignment, Any Other Mechanical Maintenance', NULL::integer, 40276.45::numeric),
+    ('2026-06-03'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL::integer, 20368.31::numeric),
+    ('2026-06-05'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL::integer, 15000.0::numeric)
   ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
@@ -655,13 +655,13 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Hyundai Santa Fe (VX-58, 7 records)
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
   SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
-    ('2024-12-11'::date, 'Denting/Penting', 'Denting/Penting', NULL, 1650.0::numeric),
-    ('2025-05-26'::date, 'Denting/Penting', 'Denting/Penting', NULL, 3400.0::numeric),
-    ('2025-06-05'::date, 'Denting/Penting', 'Denting/Penting', NULL, 1500.0::numeric),
-    ('2025-07-21'::date, 'Denting/Penting', 'Denting/Penting', NULL, 3500.0::numeric),
-    ('2026-01-07'::date, 'Denting/Penting', 'Denting/Penting', NULL, 600.0::numeric),
-    ('2026-02-23'::date, 'Service', 'Service', NULL, 1300.0::numeric),
-    ('2026-03-10'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Any Other Mechanical Maintenance', NULL, 16584.0::numeric)
+    ('2024-12-11'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 1650.0::numeric),
+    ('2025-05-26'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 3400.0::numeric),
+    ('2025-06-05'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 1500.0::numeric),
+    ('2025-07-21'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 3500.0::numeric),
+    ('2026-01-07'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 600.0::numeric),
+    ('2026-02-23'::date, 'Service', 'Service', NULL::integer, 1300.0::numeric),
+    ('2026-03-10'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Any Other Mechanical Maintenance', NULL::integer, 16584.0::numeric)
   ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
@@ -672,12 +672,12 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Sorento (ADK-824, 6 records)
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
   SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
-    ('2025-04-22'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter, AC Filter, Any Other Mechanical Maintenance', NULL, 48994.0::numeric),
-    ('2025-10-30'::date, 'Oil Filter', 'Oil Filter, Air Filter, AC Filter, Any Other Mechanical Maintenance', NULL, 20600.0::numeric),
-    ('2025-11-28'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 10440.0::numeric),
-    ('2026-04-23'::date, 'Oil Filter', 'Oil Filter, Air Filter, AC Filter', NULL, 26250.0::numeric),
-    ('2026-05-21'::date, 'Coolant Radiator', 'Coolant Radiator, Inspection', NULL, 13734.02::numeric),
-    ('2026-05-21'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL, 24000.0::numeric)
+    ('2025-04-22'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter, AC Filter, Any Other Mechanical Maintenance', NULL::integer, 48994.0::numeric),
+    ('2025-10-30'::date, 'Oil Filter', 'Oil Filter, Air Filter, AC Filter, Any Other Mechanical Maintenance', NULL::integer, 20600.0::numeric),
+    ('2025-11-28'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 10440.0::numeric),
+    ('2026-04-23'::date, 'Oil Filter', 'Oil Filter, Air Filter, AC Filter', NULL::integer, 26250.0::numeric),
+    ('2026-05-21'::date, 'Coolant Radiator', 'Coolant Radiator, Inspection', NULL::integer, 13734.02::numeric),
+    ('2026-05-21'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL::integer, 24000.0::numeric)
   ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
@@ -688,18 +688,18 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Carnival (AEW-533, 12 records)
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
   SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
-    ('2024-08-16'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 30213.72::numeric),
-    ('2024-11-21'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL, 39255.85::numeric),
-    ('2024-12-11'::date, 'Denting/Penting', 'Denting/Penting', NULL, 45000.0::numeric),
-    ('2025-01-17'::date, 'Denting/Penting', 'Denting/Penting', NULL, 197855.0::numeric),
-    ('2025-01-17'::date, 'Denting/Penting', 'Denting/Penting', NULL, 46400.0::numeric),
-    ('2025-01-30'::date, 'Denting/Penting', 'Denting/Penting', NULL, 65000.0::numeric),
-    ('2025-02-07'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Any Other Mechanical Maintenance', NULL, 19748.3::numeric),
-    ('2025-05-09'::date, 'Oil Filter', 'Oil Filter, Air Filter, Fuel Filter, Wheel Alignment', NULL, 81776.0::numeric),
-    ('2025-08-07'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 19748.3::numeric),
-    ('2026-03-03'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 19898.29::numeric),
-    ('2026-03-17'::date, 'Oil Filter', 'Oil Filter, Coolant Radiator', NULL, 18047.78::numeric),
-    ('2026-07-07'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 31745.69::numeric)
+    ('2024-08-16'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 30213.72::numeric),
+    ('2024-11-21'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL::integer, 39255.85::numeric),
+    ('2024-12-11'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 45000.0::numeric),
+    ('2025-01-17'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 197855.0::numeric),
+    ('2025-01-17'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 46400.0::numeric),
+    ('2025-01-30'::date, 'Denting/Penting', 'Denting/Penting', NULL::integer, 65000.0::numeric),
+    ('2025-02-07'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Any Other Mechanical Maintenance', NULL::integer, 19748.3::numeric),
+    ('2025-05-09'::date, 'Oil Filter', 'Oil Filter, Air Filter, Fuel Filter, Wheel Alignment', NULL::integer, 81776.0::numeric),
+    ('2025-08-07'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 19748.3::numeric),
+    ('2026-03-03'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 19898.29::numeric),
+    ('2026-03-17'::date, 'Oil Filter', 'Oil Filter, Coolant Radiator', NULL::integer, 18047.78::numeric),
+    ('2026-07-07'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 31745.69::numeric)
   ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
@@ -710,26 +710,26 @@ DO $$ DECLARE v_id uuid; BEGIN  -- MG HS (ADP-579, 20 records)
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
   SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
-    ('2022-09-08'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 11400.0::numeric),
-    ('2022-12-09'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 12900.0::numeric),
-    ('2022-12-13'::date, 'Inspection', 'Inspection', NULL, 22100.0::numeric),
-    ('2023-04-17'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 12950.0::numeric),
-    ('2023-09-08'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 22250.0::numeric),
-    ('2023-10-10'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL, 43600.0::numeric),
-    ('2024-02-13'::date, 'Engine Oil', 'Engine Oil, Oil Filter, AC Filter', NULL, 28000.0::numeric),
-    ('2024-05-11'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 16150.0::numeric),
-    ('2024-08-23'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 16150.0::numeric),
-    ('2024-10-01'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL, 19400.0::numeric),
-    ('2025-01-25'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 16470.0::numeric),
-    ('2025-03-01'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance, Denting/Penting / Battery', NULL, 15000.0::numeric),
-    ('2025-04-07'::date, 'AC Filter', 'AC Filter', NULL, 4661.0::numeric),
-    ('2025-05-28'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 16470.0::numeric),
-    ('2025-08-08'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Any Other Mechanical Maintenance, Denting/Penting / Battery', NULL, 24070.0::numeric),
-    ('2025-08-13'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter, AC Filter', NULL, 28320.0::numeric),
-    ('2025-08-26'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL, 45500.0::numeric),
-    ('2026-04-20'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 5800.0::numeric),
-    ('2026-05-15'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Inspection', NULL, 17621.0::numeric),
-    ('2026-06-06'::date, 'Brake Oil', 'Brake Oil, Any Other Mechanical Maintenance', NULL, 91721.0::numeric)
+    ('2022-09-08'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 11400.0::numeric),
+    ('2022-12-09'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 12900.0::numeric),
+    ('2022-12-13'::date, 'Inspection', 'Inspection', NULL::integer, 22100.0::numeric),
+    ('2023-04-17'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 12950.0::numeric),
+    ('2023-09-08'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 22250.0::numeric),
+    ('2023-10-10'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL::integer, 43600.0::numeric),
+    ('2024-02-13'::date, 'Engine Oil', 'Engine Oil, Oil Filter, AC Filter', NULL::integer, 28000.0::numeric),
+    ('2024-05-11'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 16150.0::numeric),
+    ('2024-08-23'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 16150.0::numeric),
+    ('2024-10-01'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL::integer, 19400.0::numeric),
+    ('2025-01-25'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 16470.0::numeric),
+    ('2025-03-01'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance, Denting/Penting / Battery', NULL::integer, 15000.0::numeric),
+    ('2025-04-07'::date, 'AC Filter', 'AC Filter', NULL::integer, 4661.0::numeric),
+    ('2025-05-28'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL::integer, 16470.0::numeric),
+    ('2025-08-08'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Any Other Mechanical Maintenance, Denting/Penting / Battery', NULL::integer, 24070.0::numeric),
+    ('2025-08-13'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter, AC Filter', NULL::integer, 28320.0::numeric),
+    ('2025-08-26'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL::integer, 45500.0::numeric),
+    ('2026-04-20'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL::integer, 5800.0::numeric),
+    ('2026-05-15'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Inspection', NULL::integer, 17621.0::numeric),
+    ('2026-06-06'::date, 'Brake Oil', 'Brake Oil, Any Other Mechanical Maintenance', NULL::integer, 91721.0::numeric)
   ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
