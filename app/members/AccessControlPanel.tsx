@@ -77,6 +77,7 @@ const WIDGET_GROUP_TO_PAGE: Record<string, string> = {
   "HR": "HR",
   "Tax Notices": "Tax Notices",
   "IT": "IT",
+  "Admin Operations": "Admin Operations",
   "Bank Facilities": "Bank Facilities",
   "Receivables": "Receivables",
   "Accounts & Returns": "Accounts & Returns",

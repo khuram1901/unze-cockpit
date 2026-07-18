@@ -99,6 +99,13 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "accounts_tax.schedule", label: "Accounts Schedule", page: "Accounts & Returns", tip: "Quarterly accounts schedule, KPI cards and status table" },
   { key: "accounts_tax.filings", label: "Return Filings", page: "Accounts & Returns", tip: "Monthly/quarterly tax return filing status" },
 
+  // ── Admin Operations (app/admin/page.tsx) ────────────────────────
+  { key: "admin_ops.registrations", label: "Registrations tab", page: "Admin Operations", tip: "EOBI & Social Security registration status for all locations" },
+  { key: "admin_ops.payments",      label: "Payments tab",      page: "Admin Operations", tip: "Monthly EOBI/SS payment tracking — missing and late payment alerts" },
+  { key: "admin_ops.compliance",    label: "Compliance tab",    page: "Admin Operations", tip: "Licence and certificate renewals — civil defence, PFA, medical, fire" },
+  { key: "admin_ops.documents",     label: "Documents tab",     page: "Admin Operations", tip: "NTN certificates and other location documents" },
+  { key: "admin_ops.operations",    label: "Operations tab",    page: "Admin Operations", tip: "Fleet fuel tracking, vehicle maintenance, and solar site production" },
+
   // ── Bank Facilities (app/finance/guarantees/page.tsx) ─────────────
   // Ops chases guarantee releases and needs to see the list, but the PKR
   // figures (amounts, cash margin, bank charges, facility limits) are

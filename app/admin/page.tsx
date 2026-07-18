@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import { widgetVisible } from "../lib/permissions";
+import { useUserCtx } from "../lib/useUserCtx";
 import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
@@ -155,7 +157,10 @@ const CURRENT_FY_START = currentFyStart();
 
 export default function AdminDataPage() {
   const { checking } = useRequireCapability("admin_ops");
+  const { ctx } = useUserCtx();
   const isMobile = useMobile();
+  // Widget visibility — gates individual tabs. Default true = visible unless explicitly hidden.
+  const wv = (key: string) => !ctx || widgetVisible(ctx, key, true);
   const { confirm, element: confirmElement } = useConfirm();
   const { show: showToast, element: toastElement } = useToast();
 
@@ -671,13 +676,17 @@ export default function AdminDataPage() {
     </AuthWrapper>
   );
 
-  const TABS: { id: TabId; label: string }[] = [
-    { id: "registrations", label: "Registrations" },
-    { id: "payments",      label: "Payments" },
-    { id: "compliance",    label: "Compliance" },
-    { id: "documents",     label: "Documents" },
-    { id: "operations",    label: "Operations" },
+  const ALL_TABS: { id: TabId; label: string; widgetKey: string }[] = [
+    { id: "registrations", label: "Registrations", widgetKey: "admin_ops.registrations" },
+    { id: "payments",      label: "Payments",      widgetKey: "admin_ops.payments" },
+    { id: "compliance",    label: "Compliance",    widgetKey: "admin_ops.compliance" },
+    { id: "documents",     label: "Documents",     widgetKey: "admin_ops.documents" },
+    { id: "operations",    label: "Operations",    widgetKey: "admin_ops.operations" },
   ];
+  // Only show tabs that are widget-visible for this user.
+  const TABS = ALL_TABS.filter((t) => wv(t.widgetKey));
+  // If the current activeTab was hidden, jump to the first visible one.
+  const safeActiveTab: TabId = TABS.some((t) => t.id === activeTab) ? activeTab : (TABS[0]?.id ?? "registrations");
 
   const tabStyle = (id: TabId): React.CSSProperties => ({
     padding: "8px 16px",
@@ -686,8 +695,8 @@ export default function AdminDataPage() {
     fontWeight: 600,
     cursor: "pointer",
     border: "none",
-    backgroundColor: activeTab === id ? COLOURS.NAVY : "transparent",
-    color: activeTab === id ? "white" : COLOURS.SLATE,
+    backgroundColor: safeActiveTab === id ? COLOURS.NAVY : "transparent",
+    color: safeActiveTab === id ? "white" : COLOURS.SLATE,
     whiteSpace: "nowrap",
   });
 
@@ -2726,10 +2735,10 @@ export default function AdminDataPage() {
         </div>
 
         {/* ── REGISTRATIONS ── */}
-        {activeTab === "registrations" && renderRegistrations()}
+        {safeActiveTab === "registrations" && renderRegistrations()}
 
         {/* ── PAYMENTS ── */}
-        {activeTab === "payments" && (
+        {safeActiveTab === "payments" && (
           <div>
             {/* Alert banner */}
             {!loadingPayments && (() => {
@@ -2764,7 +2773,7 @@ export default function AdminDataPage() {
         )}
 
         {/* ── COMPLIANCE ── */}
-        {activeTab === "compliance" && (
+        {safeActiveTab === "compliance" && (
           <div>
             <div style={{ marginBottom: "28px" }}>
               {renderComplianceRenewals()}
@@ -2790,7 +2799,7 @@ export default function AdminDataPage() {
         )}
 
         {/* ── DOCUMENTS ── */}
-        {activeTab === "documents" && (
+        {safeActiveTab === "documents" && (
           <div>
             {/* Filter bar */}
             <div style={{ display: "flex", gap: "8px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
@@ -2816,7 +2825,7 @@ export default function AdminDataPage() {
         )}
 
         {/* ── OPERATIONS ── */}
-        {activeTab === "operations" && (
+        {safeActiveTab === "operations" && (
           <div>
             {/* Month nav */}
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px" }}>
