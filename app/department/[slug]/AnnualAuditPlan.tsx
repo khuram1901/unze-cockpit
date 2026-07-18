@@ -290,6 +290,17 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
     loadOverview();
   }
 
+  async function deleteProcess(id: string, name: string) {
+    if (!window.confirm(`Delete "${name}" permanently? This cannot be undone.`)) return;
+    const { error } = await supabase.from("audit_plan_processes").delete().eq("id", id);
+    if (error) { showMsg("Error: " + error.message); return; }
+    logAction("Deleted", "audit_plan_processes", name, id);
+    if (expandedId === id) setExpandedId(null);
+    setTasksByProcess((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    showMsg(`"${name}" deleted.`);
+    loadOverview();
+  }
+
   async function startNewCycle(p: PlanProcess) {
     if (!window.confirm(`Start a new ${p.frequency.toLowerCase()} cycle for "${p.process_name}"? All steps reset to not started.`)) return;
     const { error } = await supabase.rpc("audit_start_new_cycle", { p_process_id: p.id });
@@ -638,9 +649,13 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                       </div>
                     )}
                     {isManager && (
-                      <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center" }}>
                         <button onClick={() => setEditStepsFor(editSteps ? null : p.id)} style={btnGhost}>{editSteps ? "Done editing steps" : "Edit steps"}</button>
                         {p.status === "Completed" && <button onClick={() => startNewCycle(p)} style={btnNavy}>Start new cycle</button>}
+                        <button onClick={() => deleteProcess(p.id, `${p.process_name}${p.period_label ? ` — ${p.period_label}` : ""}`)}
+                          style={{ ...btnGhost, marginLeft: "auto", color: COLOURS.RED, borderColor: `${COLOURS.RED}55` }}>
+                          Delete project
+                        </button>
                       </div>
                     )}
                     {(p.next_period_label || p.next_target_date) && (
