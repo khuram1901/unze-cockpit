@@ -67,6 +67,11 @@ type SolarBranch = {
   months: { month: number; total_kwh: number | null; days_entered: number }[] | null;
 };
 
+type UtilityLocation = {
+  location_id: string; location_name: string; entity: string;
+  months: { month: number; total_bill: number | null; meters_read: number }[] | null;
+};
+
 type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations" | "backups";
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -201,6 +206,12 @@ export default function AdminDataPage() {
   const [docSearch, setDocSearch] = useState("");
   const [docTypeFilterUI, setDocTypeFilterUI] = useState("");
   const [docStatusFilterUI, setDocStatusFilterUI] = useState("");
+  const [ntnPage, setNtnPage] = useState(0);
+  const [editingNtn, setEditingNtn] = useState<{
+    doc_id: string; location_id: string; location_name: string;
+    meter_label: string; ntn_number: string; status: string; folderit_link: string;
+  } | null>(null);
+  const [savingNtn, setSavingNtn] = useState(false);
 
   // ── Registrations filter state ─────────────────────────────────────
   const [regSearch, setRegSearch] = useState("");
@@ -226,6 +237,8 @@ export default function AdminDataPage() {
   const [loadingFuel, setLoadingFuel] = useState(false);
   const [solarBranches, setSolarBranches] = useState<SolarBranch[]>([]);
   const [loadingSolar, setLoadingSolar] = useState(false);
+  const [utilityLocations, setUtilityLocations] = useState<UtilityLocation[]>([]);
+  const [loadingUtility, setLoadingUtility] = useState(false);
   const [opsYear, setOpsYear] = useState(CURRENT_YEAR);
   const [opsMonth, setOpsMonth] = useState(new Date().getMonth() + 1);
 
@@ -266,6 +279,7 @@ export default function AdminDataPage() {
     if (activeTab === "operations" && fuelRows.length === 0 && !loadingFuel) {
       loadFuel();
       loadSolar();
+      loadUtility();
     }
     if (activeTab === "backups" && backups.length === 0 && !loadingBackups) {
       loadBackups();
@@ -280,7 +294,7 @@ export default function AdminDataPage() {
   }, [paymentYear]);
 
   useEffect(() => {
-    if (activeTab === "operations" && !checking) { loadFuel(); loadSolar(); }
+    if (activeTab === "operations" && !checking) { loadFuel(); loadSolar(); loadUtility(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opsYear]);
 
@@ -344,6 +358,14 @@ export default function AdminDataPage() {
     const json = await res.json();
     setSolarBranches(json.data || []);
     setLoadingSolar(false);
+  }
+
+  async function loadUtility() {
+    setLoadingUtility(true);
+    const res = await authedFetch(`/api/admin/operations?type=utility&year=${opsYear}`);
+    const json = await res.json();
+    setUtilityLocations(json.data || []);
+    setLoadingUtility(false);
   }
 
   async function loadBackups() {
@@ -437,6 +459,32 @@ export default function AdminDataPage() {
       showToast("Compliance record updated", "success");
       setEditingCompliance(null);
       loadCompliance();
+    } else {
+      showToast(json.error || "Failed to save", "error");
+    }
+  }
+
+  async function saveNtn() {
+    if (!editingNtn) return;
+    setSavingNtn(true);
+    const res = await authedFetch("/api/admin/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        doc_id:       editingNtn.doc_id,
+        location_id:  editingNtn.location_id,
+        meter_label:  editingNtn.meter_label || "Meter 1",
+        ntn_number:   editingNtn.ntn_number || null,
+        status:       editingNtn.status,
+        folderit_link: editingNtn.folderit_link || null,
+      }),
+    });
+    const json = await res.json();
+    setSavingNtn(false);
+    if (json.ok) {
+      showToast("Document updated", "success");
+      setEditingNtn(null);
+      loadNtnDocs();
     } else {
       showToast(json.error || "Failed to save", "error");
     }
@@ -1408,6 +1456,8 @@ export default function AdminDataPage() {
   function renderNtnDocs() {
     if (loadingNtn) return <SkeletonRows count={5} height="44px" />;
 
+    const PAGE_SIZE = 20;
+
     const filtered = ntnDocs.filter((d) => {
       if (docSearch && !d.location_name.toLowerCase().includes(docSearch.toLowerCase())) return false;
       if (docStatusFilterUI && d.status !== docStatusFilterUI) return false;
@@ -1417,36 +1467,133 @@ export default function AdminDataPage() {
     if (ntnDocs.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No NTN documents on record yet.</p>;
     if (filtered.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No NTN documents match your filters.</p>;
 
+    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    const safePage = Math.min(ntnPage, totalPages - 1);
+    const pageRows = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+
     const thStyle: React.CSSProperties = { padding: "9px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
 
     return (
-      <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {["Location", "Meter", "NTN Number", "Status", "Document"].map((h) => (
-                <th key={h} style={thStyle}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((d) => (
-              <tr key={d.doc_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{d.location_name}</td>
-                <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE }}>{d.meter_label || "—"}</td>
-                <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: "11.5px", color: COLOURS.NAVY }}>{d.ntn_number || "—"}</td>
-                <td style={{ padding: "8px 14px" }}><StatusPill status={d.status} /></td>
-                <td style={{ padding: "8px 14px" }}>
-                  {d.folderit_link
-                    ? <a href={d.folderit_link} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: COLOURS.GREEN, textDecoration: "none", fontWeight: 500 }}>📄 Folderit</a>
-                    : <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>—</span>
-                  }
-                </td>
+      <>
+        <p style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginBottom: "12px" }}>Click any row to update the NTN number, status, or Folderit link.</p>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {["Location", "Meter", "NTN Number", "Status", "Folderit Link"].map((h) => (
+                  <th key={h} style={thStyle}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {pageRows.map((d) => (
+                <tr key={d.doc_id}
+                  onClick={() => setEditingNtn({
+                    doc_id: d.doc_id, location_id: d.location_id,
+                    location_name: d.location_name,
+                    meter_label: d.meter_label || "",
+                    ntn_number: d.ntn_number || "",
+                    status: d.status,
+                    folderit_link: d.folderit_link || "",
+                  })}
+                  style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}`, cursor: "pointer" }}
+                >
+                  <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{d.location_name}</td>
+                  <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE }}>{d.meter_label || "—"}</td>
+                  <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: "11.5px", color: COLOURS.NAVY }}>{d.ntn_number || "—"}</td>
+                  <td style={{ padding: "8px 14px" }}><StatusPill status={d.status} /></td>
+                  <td style={{ padding: "8px 14px" }} onClick={(e) => e.stopPropagation()}>
+                    {d.folderit_link
+                      ? <a href={d.folderit_link} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: COLOURS.GREEN, textDecoration: "none", fontWeight: 500 }}>📄 Open in Folderit</a>
+                      : <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontStyle: "italic" }}>No link — click row to add</span>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Pagination footer */}
+          {totalPages > 1 && (
+            <div style={{ padding: "10px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>
+                Showing {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </span>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  onClick={() => setNtnPage((p) => Math.max(0, p - 1))}
+                  disabled={safePage === 0}
+                  style={{ padding: "5px 12px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: safePage === 0 ? COLOURS.SLATE : COLOURS.NAVY, fontSize: "12px", fontWeight: 600, cursor: safePage === 0 ? "default" : "pointer", opacity: safePage === 0 ? 0.4 : 1 }}>
+                  ← Prev
+                </button>
+                <span style={{ padding: "5px 10px", fontSize: "12px", color: COLOURS.SLATE }}>
+                  Page {safePage + 1} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setNtnPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={safePage === totalPages - 1}
+                  style={{ padding: "5px 12px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: safePage === totalPages - 1 ? COLOURS.SLATE : COLOURS.NAVY, fontSize: "12px", fontWeight: 600, cursor: safePage === totalPages - 1 ? "default" : "pointer", opacity: safePage === totalPages - 1 ? 0.4 : 1 }}>
+                  Next →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* NTN edit modal */}
+        {editingNtn && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+            onClick={() => setEditingNtn(null)}>
+            <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: RADII.CARD, padding: "24px", maxWidth: "440px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "2px" }}>{editingNtn.location_name}</div>
+              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "16px" }}>NTN / WAPDA Document</div>
+              <div style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>NTN Number</label>
+                    <input value={editingNtn.ntn_number} onChange={(e) => setEditingNtn({ ...editingNtn, ntn_number: e.target.value })}
+                      placeholder="e.g. 1234567–8"
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Meter Label</label>
+                    <input value={editingNtn.meter_label} onChange={(e) => setEditingNtn({ ...editingNtn, meter_label: e.target.value })}
+                      placeholder="e.g. Meter 1"
+                      style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Status</label>
+                  <select value={editingNtn.status} onChange={(e) => setEditingNtn({ ...editingNtn, status: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                    <option value="Done">Done</option>
+                    <option value="Pending">Pending</option>
+                    <option value="N/A">N/A</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Folderit Link</label>
+                  <input value={editingNtn.folderit_link} onChange={(e) => setEditingNtn({ ...editingNtn, folderit_link: e.target.value })}
+                    placeholder="https://app.folderit.net/…"
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                  {editingNtn.folderit_link && (
+                    <a href={editingNtn.folderit_link} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: "11px", color: COLOURS.GREEN, display: "block", marginTop: "4px" }}>
+                      📄 Preview link
+                    </a>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                <button onClick={() => setEditingNtn(null)} style={{ padding: "8px 16px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Cancel</button>
+                <button onClick={saveNtn} disabled={savingNtn} style={{ ...primaryButtonStyle, opacity: savingNtn ? 0.6 : 1 }}>
+                  {savingNtn ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -1595,61 +1742,80 @@ export default function AdminDataPage() {
   // ── Tab: Operations ────────────────────────────────────────────────
   function renderFuel() {
     if (loadingFuel) return <SkeletonRows count={4} height="44px" />;
+    // After migration 158, fuelRows contains ALL active vehicles for every month.
+    // Before migration (INNER JOIN), vehicles with no entries won't appear at all —
+    // so we fall back to an empty message only when the array itself is empty.
     const monthRows = fuelRows.filter((r) => r.month === opsMonth);
-    if (monthRows.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No fuel entries for {MONTH_NAMES[opsMonth - 1]} {opsYear} yet.</p>;
+    if (fuelRows.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No vehicles configured yet. Add vehicles in the database to see them here.</p>;
 
-    const totalAmt = monthRows.reduce((s, r) => s + r.total_amount, 0);
-    const totalLit = monthRows.reduce((s, r) => s + r.total_litres, 0);
-    const avgKmL   = totalLit > 0 ? monthRows.reduce((s, r) => s + (r.avg_km_per_l || 0) * r.total_litres, 0) / totalLit : null;
+    const withData = monthRows.filter((r) => r.total_amount > 0 || r.fills > 0);
+    const totalAmt  = withData.reduce((s, r) => s + r.total_amount, 0);
+    const totalLit  = withData.reduce((s, r) => s + r.total_litres, 0);
+    // Weighted avg km/L across vehicles with data
+    const avgKmL    = totalLit > 0
+      ? withData.reduce((s, r) => s + (r.avg_km_per_l || 0) * r.total_litres, 0) / totalLit
+      : null;
     const avgPriceL = totalLit > 0 ? totalAmt / totalLit : null;
-    const fmtPKR = (n: number) => n >= 100000 ? `PKR ${(n / 1000).toFixed(0)}K` : `PKR ${n.toLocaleString()}`;
+    const fmtPKR = (n: number) => n >= 100000 ? `PKR ${(n / 1000).toFixed(0)}K` : n > 0 ? `PKR ${n.toLocaleString()}` : "—";
 
     const statCards = [
-      { label: "Total fuel spend", value: fmtPKR(totalAmt), color: COLOURS.NAVY },
-      { label: "Total litres", value: `${totalLit.toFixed(0)} L`, color: COLOURS.NAVY },
+      { label: "Fuel spend", value: fmtPKR(totalAmt), color: COLOURS.NAVY },
+      { label: "Litres fuelled", value: totalLit > 0 ? `${totalLit.toFixed(0)} L` : "—", color: COLOURS.NAVY },
       { label: "Avg km / litre", value: avgKmL ? `${avgKmL.toFixed(1)}` : "—", color: COLOURS.GREEN },
       { label: "Avg price / litre", value: avgPriceL ? `PKR ${avgPriceL.toFixed(0)}` : "—", color: COLOURS.NAVY },
+      { label: "Vehicles", value: String(monthRows.length), color: COLOURS.NAVY },
+      { label: "No data yet", value: String(monthRows.length - withData.length), color: monthRows.length - withData.length > 0 ? COLOURS.AMBER : COLOURS.GREEN },
     ];
 
     return (
       <div>
         {/* Fuel stat row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px", marginBottom: "14px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "10px", marginBottom: "14px" }}>
           {statCards.map((c) => (
             <div key={c.label} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
-              <div style={{ fontSize: "22px", fontWeight: 700, color: c.color, lineHeight: 1.1 }}>{c.value}</div>
+              <div style={{ fontSize: "20px", fontWeight: 700, color: c.color, lineHeight: 1.1 }}>{c.value}</div>
               <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>{c.label}</div>
             </div>
           ))}
         </div>
 
-        {/* Vehicle cards grid */}
+        {/* Vehicle cards grid — ALL vehicles always shown */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "10px" }}>
-          {monthRows.map((r) => (
-            <div key={r.vehicle_id} style={{ backgroundColor: "white", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 16px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                <div>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{r.vehicle_name}</div>
-                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, fontFamily: "monospace", marginTop: "2px" }}>{r.plate_number}</div>
+          {monthRows.map((r) => {
+            const hasData = r.fills > 0 || r.total_amount > 0;
+            return (
+              <div key={r.vehicle_id} style={{ backgroundColor: "white", border: `1px solid ${hasData ? COLOURS.HAIRLINE : "#E5E7EB"}`, borderRadius: "10px", padding: "14px 16px", opacity: hasData ? 1 : 0.75 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                  <div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{r.vehicle_name}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, fontFamily: "monospace", marginTop: "2px" }}>{r.plate_number || "—"}</div>
+                  </div>
+                  {hasData
+                    ? <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "#ECFDF5", color: COLOURS.GREEN, whiteSpace: "nowrap" }}>Active</span>
+                    : <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE, whiteSpace: "nowrap" }}>No entry</span>
+                  }
                 </div>
-                <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "#ECFDF5", color: COLOURS.GREEN, whiteSpace: "nowrap" }}>Active</span>
-              </div>
-              <div style={{ display: "flex" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY }}>PKR {r.total_amount.toLocaleString()}</div>
-                  <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "2px" }}>This month</div>
+                <div style={{ display: "flex" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: hasData ? COLOURS.NAVY : COLOURS.SLATE }}>
+                      {hasData ? `PKR ${r.total_amount.toLocaleString()}` : "—"}
+                    </div>
+                    <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "2px" }}>Fuel spend</div>
+                  </div>
+                  <div style={{ width: "1px", backgroundColor: COLOURS.HAIRLINE, margin: "0 12px" }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "16px", fontWeight: 700, color: hasData ? COLOURS.NAVY : COLOURS.SLATE }}>
+                      {r.avg_km_per_l ? `${r.avg_km_per_l} km/L` : "—"}
+                    </div>
+                    <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "2px" }}>Efficiency</div>
+                  </div>
                 </div>
-                <div style={{ width: "1px", backgroundColor: COLOURS.HAIRLINE, margin: "0 12px" }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY }}>{r.avg_km_per_l ? `${r.avg_km_per_l} km/L` : "—"}</div>
-                  <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "2px" }}>Efficiency</div>
+                <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "8px" }}>
+                  {hasData ? `${r.fills} fill${r.fills !== 1 ? "s" : ""} · ${r.total_litres.toFixed(1)} L` : `No fuel entries for ${MONTH_NAMES[opsMonth - 1]}`}
                 </div>
               </div>
-              <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "8px" }}>
-                {r.fills} fill{r.fills !== 1 ? "s" : ""} · {r.total_litres.toFixed(1)} L total
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -1714,6 +1880,97 @@ export default function AdminDataPage() {
             );
           })}
         </div>
+      </div>
+    );
+  }
+
+  function renderUtility() {
+    if (loadingUtility) return <SkeletonRows count={4} height="40px" />;
+    if (utilityLocations.length === 0) return (
+      <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No sites configured yet.</p>
+    );
+
+    const now = new Date();
+    const isCurrentOrPast = opsYear < now.getFullYear() || (opsYear === now.getFullYear() && opsMonth <= now.getMonth() + 1);
+
+    const rows = utilityLocations.map((loc) => ({
+      ...loc,
+      monthData: (loc.months || []).find((m) => m.month === opsMonth),
+    }));
+
+    const totalBill   = rows.reduce((s, r) => s + (r.monthData?.total_bill || 0), 0);
+    const noDataCount = isCurrentOrPast ? rows.filter((r) => !r.monthData?.total_bill).length : 0;
+
+    // Group by entity for cleaner display
+    const entities = [...new Set(rows.map((r) => r.entity))].sort();
+
+    const fmtPKR = (n: number) => n >= 100000 ? `PKR ${(n / 1000).toFixed(0)}K` : `PKR ${n.toLocaleString()}`;
+
+    return (
+      <div>
+        {/* Summary stat row */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px", marginBottom: "14px" }}>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: COLOURS.NAVY, lineHeight: 1.1 }}>{totalBill > 0 ? fmtPKR(totalBill) : "—"}</div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>Total bills</div>
+          </div>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: COLOURS.NAVY, lineHeight: 1.1 }}>{rows.length}</div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>Sites</div>
+          </div>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: noDataCount > 0 ? COLOURS.AMBER : COLOURS.GREEN, lineHeight: 1.1 }}>{noDataCount}</div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>No bill this month</div>
+          </div>
+        </div>
+
+        {/* Sites table grouped by entity */}
+        {entities.map((entity) => {
+          const entityRows = rows.filter((r) => r.entity === entity);
+          const entityTotal = entityRows.reduce((s, r) => s + (r.monthData?.total_bill || 0), 0);
+          const thStyle: React.CSSProperties = { padding: "8px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
+          return (
+            <div key={entity} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white", marginBottom: "12px" }}>
+              <div style={{ padding: "10px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#F8F9FC" }}>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{entity}</span>
+                <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>{entityTotal > 0 ? fmtPKR(entityTotal) : "No bills yet"} · {entityRows.length} sites</span>
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Site", "Bill amount", "Meters read", "Status"].map((h) => (
+                      <th key={h} style={thStyle}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {entityRows.map((r) => {
+                    const bill = r.monthData?.total_bill;
+                    const noEntry = isCurrentOrPast && !bill;
+                    return (
+                      <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                        <td style={{ padding: "9px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.location_name}</td>
+                        <td style={{ padding: "9px 14px", fontSize: "12.5px", color: bill ? COLOURS.NAVY : COLOURS.SLATE, fontFamily: bill ? "inherit" : undefined }}>
+                          {bill ? fmtPKR(bill) : "—"}
+                        </td>
+                        <td style={{ padding: "9px 14px", fontSize: "12px", color: COLOURS.SLATE }}>
+                          {r.monthData?.meters_read ?? "—"}
+                        </td>
+                        <td style={{ padding: "8px 14px" }}>
+                          <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px",
+                            backgroundColor: noEntry ? "#FEF3C7" : "#ECFDF5",
+                            color: noEntry ? COLOURS.AMBER : COLOURS.GREEN, whiteSpace: "nowrap" }}>
+                            {noEntry ? "No entry" : "Recorded"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -1806,14 +2063,14 @@ export default function AdminDataPage() {
           <div>
             {/* Filter bar */}
             <div style={{ display: "flex", gap: "8px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
-              <select value={docStatusFilterUI} onChange={(e) => setDocStatusFilterUI(e.target.value)}
+              <select value={docStatusFilterUI} onChange={(e) => { setDocStatusFilterUI(e.target.value); setNtnPage(0); }}
                 style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "140px" }}>
                 <option value="">All Statuses</option>
                 <option value="Done">Done</option>
                 <option value="Pending">Pending</option>
                 <option value="N/A">N/A</option>
               </select>
-              <input type="text" value={docSearch} onChange={(e) => setDocSearch(e.target.value)}
+              <input type="text" value={docSearch} onChange={(e) => { setDocSearch(e.target.value); setNtnPage(0); }}
                 placeholder="🔍  Search location…"
                 style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", flex: 1, minWidth: "180px", color: COLOURS.NAVY, backgroundColor: "white" }}
               />
@@ -1853,7 +2110,7 @@ export default function AdminDataPage() {
             </div>
 
             {/* Solar section */}
-            <div>
+            <div style={{ marginBottom: "28px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                 <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>☀️ Solar — Monthly Production</span>
                 <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
@@ -1862,6 +2119,18 @@ export default function AdminDataPage() {
                 </span>
               </div>
               {renderSolar()}
+            </div>
+
+            {/* Utility / Sites section */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>⚡ Sites — Utility Bills</span>
+                <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+                <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>
+                  {utilityLocations.length} sites
+                </span>
+              </div>
+              {renderUtility()}
             </div>
           </div>
         )}

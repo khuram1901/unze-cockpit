@@ -19,6 +19,12 @@ export async function GET(request: NextRequest) {
     return Response.json({ data });
   }
 
+  if (type === "utility") {
+    const { data, error } = await supabase.rpc("get_utility_summary", { p_year: year });
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ data });
+  }
+
   // Default: fuel
   const { data, error } = await supabase.rpc("get_fuel_summary", { p_year: year });
   if (error) return Response.json({ error: error.message }, { status: 500 });
