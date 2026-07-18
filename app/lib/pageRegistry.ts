@@ -63,8 +63,11 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_dept_tax_accounts", title: "Accounts & Returns", subtitle: "Quarterly accounts schedule and return filings", href: "/accounts-tax", icon: "📂", group: "Departments" },
 
   // ── Operations (alphabetical) ──
-  { permKey: "can_access_admin_entry", title: "Admin Entry", subtitle: "Log fuel, solar, utilities, vehicle maintenance", href: "/daily-entry", icon: "📝", group: "Operations" },
-  { permKey: "can_access_daily_entry", title: "Daily Entry", subtitle: "Log daily production and dispatch", href: "/production", icon: "📊", group: "Operations" },
+  // Admin Entry (/daily-entry) and Daily Entry (/production) are intentionally
+  // hidden from the sidebar — staff access them via a direct bookmarked link on
+  // mobile. Both pages still enforce useRequireCapability (login required).
+  // { permKey: "can_access_admin_entry", title: "Admin Entry", subtitle: "Log fuel, solar, utilities, vehicle maintenance", href: "/daily-entry", icon: "📝", group: "Operations" },
+  // { permKey: "can_access_daily_entry", title: "Daily Entry", subtitle: "Log daily production and dispatch", href: "/production", icon: "📊", group: "Operations" },
   { permKey: "can_manage_stock", title: "Manage POs", subtitle: "Create POs, contractors, authority letters", href: "/stock/manage", icon: "📋", group: "Operations" },
   { permKey: "can_view_operations_dashboard", title: "Operations Dashboard", subtitle: "Production, dispatch, stock, machines", href: "/dashboard", icon: "🏗️", group: "Operations", badgeKey: "operations" },
   { permKey: "can_view_stock", title: "Stock", subtitle: "Customer POs, authority letters, dispatch balances", href: "/stock", icon: "🏭", group: "Operations" },
