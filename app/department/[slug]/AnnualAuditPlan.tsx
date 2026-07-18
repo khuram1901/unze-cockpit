@@ -166,6 +166,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [newProj, setNewProj] = useState({ company_id: "", name: "", frequency: "Monthly", period: "", target: "" });
+  const [dailyOpen, setDailyOpen] = useState(false);
   const { ctx: widgetCtx } = useUserCtx();
   const wv = (key: string, def: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, def);
 
@@ -758,14 +759,38 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
         </div>
       )}
 
-      {/* ═══ Daily approvals check, collapsed, for managers viewing a post team ═══ */}
+      {/* ═══ Daily approvals check — collapsible card for managers on post-audit view ═══ */}
       {!isPreauditView && isManager && wv("dept_audit.daily_activities", true) && (
-        <details>
-          <summary style={{ fontSize: "12px", color: COLOURS.SLATE, cursor: "pointer", padding: "4px 0", marginBottom: "8px" }}>
-            Show daily approvals check ({dailySummary ? `${dailySummary.today_total} pending today` : "…"})
-          </summary>
-          {dailyGrid}
-        </details>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "14px" }}>
+          <button
+            onClick={() => setDailyOpen((o) => !o)}
+            style={{
+              width: "100%", background: "none", border: "none", cursor: "pointer",
+              padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
+              backgroundColor: dailyOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>Daily Approvals Check</span>
+              {dailySummary && (
+                <span style={{
+                  fontSize: "11px", fontWeight: 700, padding: "2px 9px", borderRadius: RADII.PILL,
+                  backgroundColor: dailySummary.today_total > 0 ? "#FEE2E2" : COLOURS.SUCCESS_SOFT,
+                  color: dailySummary.today_total > 0 ? COLOURS.RED : COLOURS.GREEN,
+                }}>
+                  {dailySummary.today_total === 0 ? "✓ All clear" : `${dailySummary.today_total} pending`}
+                </span>
+              )}
+              {dailySummary && (
+                <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                  {dailySummary.entered_count}/{dailySummary.expected_count} entries today
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: "12px", color: COLOURS.SLATE, flexShrink: 0 }}>{dailyOpen ? "▲ Hide" : "▼ Show"}</span>
+          </button>
+          {dailyOpen && <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>{dailyGrid}</div>}
+        </div>
       )}
     </section>
   );
