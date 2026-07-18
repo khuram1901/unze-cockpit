@@ -25,8 +25,8 @@ type ArchivedDoc = {
 
 type Registration = {
   location_id: string; name: string; entity: string; location_type: string;
-  eobi_status: string | null; eobi_notes: string | null;
-  ss_status: string | null;   ss_notes: string | null;
+  eobi_status: string | null; eobi_notes: string | null; eobi_updated_at: string | null;
+  ss_status: string | null;   ss_notes: string | null;  ss_updated_at: string | null;
 };
 
 type MonthEntry = {
@@ -194,6 +194,8 @@ export default function AdminDataPage() {
   const [regSearch, setRegSearch] = useState("");
   const [regEntityFilter, setRegEntityFilter] = useState("");
   const [regStatusFilter, setRegStatusFilter] = useState("");
+  const [regTypeFilter, setRegTypeFilter] = useState<"" | "EOBI" | "Social Security">("");
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   // ── Operations state ───────────────────────────────────────────────
   const [fuelRows, setFuelRows] = useState<FuelRow[]>([]);
@@ -522,13 +524,27 @@ export default function AdminDataPage() {
   function renderRegistrations() {
     if (loadingRegs) return <SkeletonRows count={6} height="44px" />;
 
+    const showEOBI = regTypeFilter === "" || regTypeFilter === "EOBI";
+    const showSS   = regTypeFilter === "" || regTypeFilter === "Social Security";
+
+    function getLastUpdated(r: Registration): string | null {
+      if (regTypeFilter === "EOBI") return r.eobi_updated_at;
+      if (regTypeFilter === "Social Security") return r.ss_updated_at;
+      if (!r.eobi_updated_at && !r.ss_updated_at) return null;
+      if (!r.eobi_updated_at) return r.ss_updated_at;
+      if (!r.ss_updated_at) return r.eobi_updated_at;
+      return r.eobi_updated_at > r.ss_updated_at ? r.eobi_updated_at : r.ss_updated_at;
+    }
+
     // Filtering
     const filtered = registrations.filter((r) => {
       if (regEntityFilter && r.entity !== regEntityFilter) return false;
-      if (regStatusFilter) {
-        if (r.eobi_status !== regStatusFilter && r.ss_status !== regStatusFilter) return false;
-      }
       if (regSearch && !r.name.toLowerCase().includes(regSearch.toLowerCase())) return false;
+      if (regStatusFilter) {
+        if (regTypeFilter === "EOBI")            return r.eobi_status === regStatusFilter;
+        if (regTypeFilter === "Social Security") return r.ss_status   === regStatusFilter;
+        return r.eobi_status === regStatusFilter || r.ss_status === regStatusFilter;
+      }
       return true;
     });
 
@@ -542,6 +558,8 @@ export default function AdminDataPage() {
     const ifplRows = filtered.filter((r) => r.entity === "IFPL");
     const restRows = filtered.filter((r) => r.entity === "Baranh" || r.entity === "HD");
     const utplRows = filtered.filter((r) => r.entity === "UTPL");
+
+    const SECTION_LIMIT = 10;
 
     const statusSelStyle = (status: string | null): React.CSSProperties => {
       const s = status || "Pending";
@@ -557,8 +575,11 @@ export default function AdminDataPage() {
 
     const thStyle: React.CSSProperties = { padding: "9px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
 
-    function renderSection(rows: Registration[], title: string, showEntity: boolean) {
+    function renderSection(rows: Registration[], title: string, showEntity: boolean, sectionKey: string) {
       if (rows.length === 0) return null;
+      const isExpanded = expandedSections[sectionKey] || false;
+      const visibleRows = isExpanded ? rows : rows.slice(0, SECTION_LIMIT);
+      const hasMore = rows.length > SECTION_LIMIT;
       return (
         <div style={{ marginBottom: "24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
@@ -572,13 +593,14 @@ export default function AdminDataPage() {
                 <tr>
                   <th style={thStyle}>Location</th>
                   {showEntity && <th style={thStyle}>Entity</th>}
-                  <th style={thStyle}>EOBI</th>
-                  <th style={thStyle}>Social Security</th>
+                  {showEOBI && <th style={thStyle}>EOBI</th>}
+                  {showSS && <th style={thStyle}>Social Security</th>}
+                  <th style={thStyle}>Last Updated</th>
                   <th style={{ ...thStyle, width: "50px" }}></th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {visibleRows.map((r) => (
                   <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
                     <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.name}</td>
                     {showEntity && (
@@ -586,17 +608,23 @@ export default function AdminDataPage() {
                         <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "rgba(15,23,32,.08)", color: COLOURS.NAVY }}>{r.entity}</span>
                       </td>
                     )}
-                    {(["eobi_status", "ss_status"] as const).map((field, i) => {
-                      const type = (i === 0 ? "EOBI" : "Social Security") as "EOBI" | "Social Security";
-                      const status = r[field];
-                      return (
-                        <td key={field} style={{ padding: "8px 14px" }}>
-                          <select value={status || "Pending"} onChange={(e) => saveRegInline(r.location_id, r.name, type, e.target.value)} style={statusSelStyle(status)}>
-                            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </td>
-                      );
-                    })}
+                    {showEOBI && (
+                      <td style={{ padding: "8px 14px" }}>
+                        <select value={r.eobi_status || "Pending"} onChange={(e) => saveRegInline(r.location_id, r.name, "EOBI", e.target.value)} style={statusSelStyle(r.eobi_status)}>
+                          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                    )}
+                    {showSS && (
+                      <td style={{ padding: "8px 14px" }}>
+                        <select value={r.ss_status || "Pending"} onChange={(e) => saveRegInline(r.location_id, r.name, "Social Security", e.target.value)} style={statusSelStyle(r.ss_status)}>
+                          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                    )}
+                    <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>
+                      {getLastUpdated(r) ? formatDateUK(getLastUpdated(r)!) : "—"}
+                    </td>
                     <td style={{ padding: "8px 14px", textAlign: "right" }}>
                       <button onClick={() => setEditingReg({ location_id: r.location_id, name: r.name, type: "EOBI", current: r.eobi_status || "Pending", notes: r.eobi_notes || "" })}
                         style={{ fontSize: "12px", color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 500 }}>
@@ -607,6 +635,15 @@ export default function AdminDataPage() {
                 ))}
               </tbody>
             </table>
+            {hasMore && (
+              <div style={{ padding: "9px 14px", fontSize: "11.5px", color: COLOURS.SLATE, borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Showing {visibleRows.length} of {rows.length}</span>
+                <button onClick={() => setExpandedSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }))}
+                  style={{ color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 600, fontSize: "11.5px" }}>
+                  {isExpanded ? "Show less ↑" : `Show ${rows.length - SECTION_LIMIT} more ↓`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -649,6 +686,12 @@ export default function AdminDataPage() {
             <option value="HD">Haute Dolci</option>
             <option value="UTPL">UTPL</option>
           </select>
+          <select value={regTypeFilter} onChange={(e) => setRegTypeFilter(e.target.value as "" | "EOBI" | "Social Security")}
+            style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "160px" }}>
+            <option value="">EOBI &amp; Social Security</option>
+            <option value="EOBI">EOBI only</option>
+            <option value="Social Security">Social Security only</option>
+          </select>
           <select value={regStatusFilter} onChange={(e) => setRegStatusFilter(e.target.value)}
             style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "130px" }}>
             <option value="">All Statuses</option>
@@ -661,9 +704,9 @@ export default function AdminDataPage() {
           />
         </div>
 
-        {renderSection(ifplRows, "IFPL — Imperial Footwear (Retail)", false)}
-        {renderSection(restRows, "Restaurants — Baranh & Haute Dolci", true)}
-        {renderSection(utplRows, "Unze Trading (UTPL)", false)}
+        {renderSection(ifplRows, "IFPL — Imperial Footwear (Retail)", false, "ifpl")}
+        {renderSection(restRows, "Restaurants — Baranh & Haute Dolci", true, "restaurants")}
+        {renderSection(utplRows, "Unze Trading (UTPL)", false, "utpl")}
 
         {filtered.length === 0 && !loadingRegs && (
           <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No locations match your filters.</p>
@@ -894,6 +937,11 @@ export default function AdminDataPage() {
 
     const thStyle: React.CSSProperties = { padding: "9px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
 
+    const CIVIL_LIMIT = 10;
+    const civilExpanded = expandedSections["civil-defence"] || false;
+    const visibleCompliance = civilExpanded ? compliance : compliance.slice(0, CIVIL_LIMIT);
+    const hasMorCivil = compliance.length > CIVIL_LIMIT;
+
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
@@ -916,7 +964,7 @@ export default function AdminDataPage() {
                 </tr>
               </thead>
               <tbody>
-                {compliance.map((r) => {
+                {visibleCompliance.map((r) => {
                   const isOverdue = r.civil_defence_due && r.civil_defence_due < today && r.civil_defence_status !== "Done";
                   return (
                     <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
@@ -933,6 +981,15 @@ export default function AdminDataPage() {
                 })}
               </tbody>
             </table>
+            {hasMorCivil && (
+              <div style={{ padding: "9px 14px", fontSize: "11.5px", color: COLOURS.SLATE, borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Showing {visibleCompliance.length} of {compliance.length}</span>
+                <button onClick={() => setExpandedSections((prev) => ({ ...prev, "civil-defence": !prev["civil-defence"] }))}
+                  style={{ color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 600, fontSize: "11.5px" }}>
+                  {civilExpanded ? "Show less ↑" : `Show ${compliance.length - CIVIL_LIMIT} more ↓`}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1201,13 +1258,18 @@ export default function AdminDataPage() {
               const missingCount = paymentRows.reduce((n, r) => n + (r.months || []).filter((m) => m.status === "missing").length, 0);
               const lateCount    = paymentRows.reduce((n, r) => n + (r.months || []).filter((m) => m.status === "late").length, 0);
               if (missingCount === 0 && lateCount === 0) return null;
+              const isHighAlert = missingCount > 0;
               const msg = [
                 missingCount > 0 ? `${missingCount} missing payment${missingCount > 1 ? "s" : ""}` : "",
                 lateCount > 0    ? `${lateCount} late payment${lateCount > 1 ? "s" : ""}` : "",
               ].filter(Boolean).join(" · ");
               return (
-                <div style={{ padding: "11px 16px", borderRadius: "8px", marginBottom: "18px", fontSize: "12.5px", display: "flex", alignItems: "center", gap: "8px", backgroundColor: "#FFFBEB", color: "#78350F", border: "1px solid #FDE68A" }}>
-                  ⚠️ <strong>{msg}</strong>
+                <div style={{ padding: "11px 16px", borderRadius: "8px", marginBottom: "18px", fontSize: "12.5px", display: "flex", alignItems: "center", gap: "8px",
+                  backgroundColor: isHighAlert ? "#FEF2F2" : "#FFFBEB",
+                  color:           isHighAlert ? "#7F1D1D" : "#78350F",
+                  border:          isHighAlert ? "1px solid #FECACA" : "1px solid #FDE68A",
+                }}>
+                  {isHighAlert ? "🚨" : "⚠️"} <strong>{msg}</strong>{isHighAlert ? " — action required" : ""}
                 </div>
               );
             })()}
