@@ -494,7 +494,16 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         if (!t || t.status === "Submitted") continue;
         const extra = await routeSubmittedTask(id, t.assigned_to, t.assigned_to_email, t.requires_manager_signoff !== false);
         const { error } = await supabase.from("tasks").update({ status: "Submitted", updated_at: new Date().toISOString(), ...extra }).eq("id", id);
-        if (error) failed++; else routed++;
+        if (error) { failed++; continue; }
+        routed++;
+        // Notify the HOD who just received this task — fire-and-forget.
+        if ((extra as Record<string, unknown>).assigned_to_email) {
+          authFetch("/api/tasks/notify-submitted", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ taskId: id, managerEmail: (extra as Record<string, unknown>).assigned_to_email, submittedByName: t.assigned_to || "Unknown" }),
+          }).catch((e) => console.error("Submit notification failed (non-blocking)", e));
+        }
       }
       setBulkApplying(false);
       const parts = [`Submitted ${routed} task(s)`];

@@ -6,6 +6,7 @@ import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII } from "../lib/SharedUI";
 import { canCompleteSubmittedTask, canReopenCompletedTask } from "../lib/permissions";
 import { routeSubmittedTask } from "../lib/taskRouting";
+import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
@@ -209,6 +210,18 @@ export default function TaskStatus({
     setStatus(newStatus);
     setSavedMessage("Saved ✓");
     onChanged();
+
+    // Notify the HOD the moment a task lands in their Submitted queue —
+    // fire-and-forget, task save already succeeded so we don't block on this.
+    if (newStatus === "Submitted" && (extra as Record<string, unknown>).assigned_to_email) {
+      const managerEmail = (extra as Record<string, unknown>).assigned_to_email as string;
+      const submittedByName = task.assigned_to || "Unknown";
+      authFetch("/api/tasks/notify-submitted", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId: task.id, managerEmail, submittedByName }),
+      }).catch((e: unknown) => console.error("Submit notification failed (non-blocking)", e));
+    }
 
     // Khuram: "when i mark the task is completed then the window should
     // close." The cycle's done — nothing left to do in this task's detail

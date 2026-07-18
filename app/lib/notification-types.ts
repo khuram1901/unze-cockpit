@@ -14,3 +14,8 @@
 // that slips past the CEO-digest suppression list in send-email.ts.
 export const TRIGGER_TASK_ASSIGNED = "task_assigned";
 export const TRIGGER_ESCALATION = "escalation";
+// Fired when a task is moved to "Submitted" — sent to the HOD/manager
+// who now owns the task and must sign it off. Not suppressed for the CEO
+// digest recipients because the CEO's tasks are generally not routed to
+// themselves; this fires to the *manager*, not the submitter.
+export const TRIGGER_TASK_SUBMITTED = "task_submitted";
