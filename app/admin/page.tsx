@@ -80,6 +80,12 @@ async function authedFetch(url: string, opts: RequestInit = {}) {
 }
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const ENTITY_DISPLAY: Record<string, string> = {
+  IFPL: "IFPL — Imperial Footwear",
+  Baranh: "Baranh",
+  HD: "Haute Dolci",
+  UTPL: "UTPL — Unze Trading",
+};
 const STATUS_COLOURS: Record<string, { bg: string; color: string }> = {
   Registered: { bg: "#D1FAE5", color: COLOURS.GREEN },
   Done:       { bg: "#D1FAE5", color: COLOURS.GREEN },
@@ -569,47 +575,167 @@ export default function AdminDataPage() {
   function renderPayments() {
     if (loadingPayments) return <SkeletonRows count={8} height="44px" />;
 
-    return (
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: "13px", minWidth: "700px" }}>
-          <thead>
-            <tr style={{ backgroundColor: COLOURS.HAIRLINE }}>
-              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, color: COLOURS.SLATE, whiteSpace: "nowrap" }}>Entity</th>
-              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, color: COLOURS.SLATE, whiteSpace: "nowrap" }}>Type</th>
-              {MONTH_NAMES.map((m) => (
-                <th key={m} style={{ padding: "6px 4px", textAlign: "center", fontWeight: 700, color: COLOURS.SLATE, width: "42px", fontSize: "11px" }}>{m}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {paymentRows.map((row) => (
-              <tr key={`${row.entity}-${row.payment_type}`} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                <td style={{ padding: "8px 12px", fontWeight: 600, color: COLOURS.NAVY, whiteSpace: "nowrap" }}>{row.entity}</td>
-                <td style={{ padding: "8px 12px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>{row.payment_type}</td>
-                {(row.months || []).map((entry) => (
-                  <MonthCell key={entry.month} entry={entry} />
-                ))}
-                {/* Clicking missing months opens add-payment modal */}
-                {(row.months || []).filter(e => e.status === "missing").length > 0 && (
-                  (row.months || []).map((entry) =>
-                    entry.status === "missing" ? (
-                      <td key={`add-${entry.month}`} style={{ display: "none" }} />
-                    ) : null
-                  )
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "8px" }}>
-          ✓ = paid on time (by 15th) · ✓ amber = late · ✗ = not paid · — = future
-        </p>
-        <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>Hover a ✓ to see amount, date, and challan number.</p>
+    const ENTITY_ORDER = ["IFPL", "Baranh", "HD", "UTPL"];
+    const eobiRows = ENTITY_ORDER
+      .map((e) => paymentRows.find((r) => r.entity === e && r.payment_type === "EOBI"))
+      .filter(Boolean) as PaymentRow[];
+    const ssRows = ENTITY_ORDER
+      .map((e) => paymentRows.find((r) => r.entity === e && r.payment_type === "Social Security"))
+      .filter(Boolean) as PaymentRow[];
 
-        <button onClick={() => setAddingPayment({ entity: "IFPL", payment_type: "EOBI", month: new Date().getMonth() + 1 })}
-          style={{ ...primaryButtonStyle }}>
-          + Record a payment
-        </button>
+    function entityBadge(row: PaymentRow) {
+      const past = (row.months || []).filter((m) => m.status !== "future");
+      const missing = past.filter((m) => m.status === "missing").length;
+      const late = past.filter((m) => m.status === "late").length;
+      const onTime = past.filter((m) => m.status === "on_time").length;
+      if (missing > 0) return { text: `${missing} missing`, bg: "#FEE2E2", color: COLOURS.RED };
+      if (late > 0)    return { text: `${late} late · ${onTime}/${past.length} on time`, bg: "#FEF3C7", color: COLOURS.AMBER };
+      if (past.length === 0) return { text: "No data", bg: COLOURS.HAIRLINE, color: COLOURS.SLATE };
+      return { text: `${onTime}/${past.length} on time`, bg: "#D1FAE5", color: COLOURS.GREEN };
+    }
+
+    function sectionBadge(rows: PaymentRow[]) {
+      const missing = rows.reduce((n, r) => n + (r.months || []).filter((m) => m.status === "missing").length, 0);
+      const late    = rows.reduce((n, r) => n + (r.months || []).filter((m) => m.status === "late").length, 0);
+      if (missing > 0) return { text: `${missing} missing`, bg: "#FEE2E2", color: COLOURS.RED };
+      if (late > 0)    return { text: `${late} late`, bg: "#FEF3C7", color: COLOURS.AMBER };
+      return null;
+    }
+
+    function renderEntityBlock(row: PaymentRow, payType: string) {
+      const badge = entityBadge(row);
+      return (
+        <div key={`${row.entity}-${payType}`} style={{
+          border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px",
+          overflow: "hidden", marginBottom: "10px", backgroundColor: "white",
+        }}>
+          {/* Entity header */}
+          <div style={{
+            padding: "12px 16px", display: "flex", justifyContent: "space-between",
+            alignItems: "flex-start", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+            backgroundColor: "#FAFBFD",
+          }}>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>
+                {ENTITY_DISPLAY[row.entity] || row.entity}
+              </div>
+              <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                {payType} · Due by 15th each month
+              </div>
+            </div>
+            <span style={{
+              fontSize: "11px", fontWeight: 700, padding: "3px 10px",
+              borderRadius: "20px", backgroundColor: badge.bg, color: badge.color,
+              whiteSpace: "nowrap", marginLeft: "12px",
+            }}>{badge.text}</span>
+          </div>
+
+          {/* Month grid */}
+          <div style={{ padding: "14px 16px", overflowX: "auto" }}>
+            <div style={{ display: "flex", gap: "6px", minWidth: "max-content" }}>
+              {(row.months || []).map((entry) => {
+                const circleCfg: Record<string, { bg: string; color: string; symbol: string }> = {
+                  on_time: { bg: COLOURS.GREEN, color: "white",        symbol: "✓" },
+                  late:    { bg: COLOURS.AMBER, color: "white",        symbol: "!" },
+                  missing: { bg: COLOURS.RED,   color: "white",        symbol: "✗" },
+                  future:  { bg: "#E2E8F0",     color: COLOURS.SLATE,  symbol: "—" },
+                };
+                const cfg = circleCfg[entry.status] || circleCfg.future;
+                // DD short: "08/05" → show day only, or "Due 15th" / "Overdue"
+                const detail = entry.date_paid
+                  ? entry.date_paid.split("-").reverse().join("/").slice(0, 5)
+                  : entry.status === "missing" ? "Overdue" : "Due 15";
+                const tooltip = entry.date_paid
+                  ? `Paid ${entry.date_paid.split("-").reverse().join("/")}${entry.challan_number ? ` · Challan ${entry.challan_number}` : ""}${entry.amount_pkr ? ` · PKR ${Number(entry.amount_pkr).toLocaleString()}` : ""}`
+                  : entry.status === "missing" ? "Not paid — click to record" : "";
+                return (
+                  <div
+                    key={entry.month}
+                    title={tooltip}
+                    onClick={() => entry.status === "missing" && setAddingPayment({ entity: row.entity, payment_type: payType, month: entry.month })}
+                    style={{
+                      display: "flex", flexDirection: "column", alignItems: "center",
+                      gap: "3px", cursor: entry.status === "missing" ? "pointer" : "default",
+                      minWidth: "38px",
+                    }}
+                  >
+                    <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE }}>
+                      {MONTH_NAMES[entry.month - 1]}
+                    </div>
+                    <div style={{
+                      width: "30px", height: "30px", borderRadius: "50%",
+                      backgroundColor: cfg.bg, color: cfg.color,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "12px", fontWeight: 700,
+                    }}>{cfg.symbol}</div>
+                    <div style={{ fontSize: "9px", color: COLOURS.SLATE, textAlign: "center", lineHeight: 1.2 }}>
+                      {detail}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function renderSection(
+      title: string,
+      rows: PaymentRow[],
+      payType: string,
+    ) {
+      const badge = sectionBadge(rows);
+      return (
+        <div style={{ marginBottom: "28px" }}>
+          {/* Section header */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>
+              {title}
+            </span>
+            <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+            {badge && (
+              <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 9px", borderRadius: "20px", backgroundColor: badge.bg, color: badge.color, whiteSpace: "nowrap" }}>
+                {badge.text}
+              </span>
+            )}
+            <button
+              onClick={() => setAddingPayment({ entity: "IFPL", payment_type: payType, month: new Date().getMonth() + 1 })}
+              style={{ fontSize: "12px", fontWeight: 600, padding: "5px 12px", borderRadius: "20px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              + Record Payment
+            </button>
+          </div>
+          {rows.length === 0
+            ? <p style={{ fontSize: "13px", color: COLOURS.SLATE }}>No data for {paymentYear}.</p>
+            : rows.map((r) => renderEntityBlock(r, payType))
+          }
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        {/* Legend */}
+        <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "20px", padding: "10px 14px", backgroundColor: "#FAFBFD", borderRadius: "8px", border: `1px solid ${COLOURS.HAIRLINE}` }}>
+          {[
+            { color: COLOURS.GREEN, label: "Paid on time (by 15th)" },
+            { color: COLOURS.AMBER, label: "Paid late (after 15th)" },
+            { color: COLOURS.RED,   label: "Missed / not paid" },
+            { color: "#E2E8F0",     label: "Future month" },
+          ].map(({ color, label }) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <div style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
+              <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{label}</span>
+            </div>
+          ))}
+          <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "auto" }}>
+            Click a red ✗ to record a payment.
+          </span>
+        </div>
+
+        {renderSection("EOBI — Monthly Payments", eobiRows, "EOBI")}
+        {renderSection("Social Security — Monthly Payments", ssRows, "Social Security")}
       </div>
     );
   }
@@ -877,6 +1003,31 @@ export default function AdminDataPage() {
         {/* ── REGISTRATIONS ── */}
         {activeTab === "registrations" && (
           <div>
+            {/* Summary stat cards */}
+            {!loadingRegs && registrations.length > 0 && (() => {
+              const eobiReg = registrations.filter((r) => r.eobi_status === "Registered").length;
+              const eobiPend = registrations.filter((r) => r.eobi_status === "Pending" || !r.eobi_status).length;
+              const ssReg = registrations.filter((r) => r.ss_status === "Registered").length;
+              const ssPend = registrations.filter((r) => r.ss_status === "Pending" || !r.ss_status).length;
+              const total = registrations.length;
+              const cards = [
+                { label: "EOBI Registered", value: eobiReg, color: COLOURS.GREEN },
+                { label: "EOBI Pending",    value: eobiPend, color: COLOURS.AMBER },
+                { label: "SS Registered",   value: ssReg,   color: COLOURS.GREEN },
+                { label: "SS Pending",      value: ssPend,  color: COLOURS.AMBER },
+                { label: "Total Locations", value: total,   color: COLOURS.NAVY },
+              ];
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "20px" }}>
+                  {cards.map((c) => (
+                    <div key={c.label} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "12px 14px", backgroundColor: "white" }}>
+                      <div style={{ fontSize: "22px", fontWeight: 800, color: c.color }}>{c.value}</div>
+                      <div style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginTop: "2px" }}>{c.label}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             <SectionTitle title="EOBI & Social Security Registration Status" />
             <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: "-8px 0 16px" }}>
               Click Edit on any cell to update the registration status for that location.
@@ -896,7 +1047,7 @@ export default function AdminDataPage() {
                   backgroundColor: complianceSubTab === sub ? COLOURS.NAVY : "white",
                   color: complianceSubTab === sub ? "white" : COLOURS.SLATE,
                 }}>
-                  {sub === "payments" ? "EOBI & SS Payments" : "Civil Defence & Labour"}
+                  {sub === "payments" ? "Monthly Payments" : "Civil Defence & Labour"}
                 </button>
               ))}
             </div>
@@ -904,7 +1055,7 @@ export default function AdminDataPage() {
             {complianceSubTab === "payments" && (
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
-                  <SectionTitle title={`Monthly Payments — ${paymentYear}`} style={{ margin: 0 }} />
+                  <SectionTitle title={`EOBI & Social Security — ${paymentYear}`} style={{ margin: 0 }} />
                   <div style={{ display: "flex", gap: "4px" }}>
                     <button onClick={() => setPaymentYear((y) => y - 1)} style={{ padding: "4px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: "pointer", fontSize: "14px" }}>‹</button>
                     <span style={{ padding: "4px 10px", fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{paymentYear}</span>
