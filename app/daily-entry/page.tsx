@@ -51,25 +51,15 @@ const UTILITY_COMPANIES = ["LESCO", "MEPCO", "FESCO", "PESCO", "HESCO", "IESCO",
 
 // ── Styles ────────────────────────────────────────────────────────────
 
-const labelSt: React.CSSProperties = {
-  fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE,
-  display: "block", marginBottom: "5px",
-};
 const sectionCard: React.CSSProperties = {
   border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD,
-  padding: "20px", backgroundColor: "white", marginBottom: "16px",
-};
-const row2: React.CSSProperties = {
-  display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px",
-};
-const row3: React.CSSProperties = {
-  display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px",
+  padding: "20px", backgroundColor: COLOURS.CARD, marginBottom: "16px",
 };
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={labelSt}>{label}</label>
+      <label style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "5px" }}>{label}</label>
       {children}
     </div>
   );
@@ -371,6 +361,19 @@ export default function DailyEntryPage() {
 
   const maxW = isMobile ? "100%" : "520px";
 
+  const row2: React.CSSProperties = {
+    display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "12px",
+  };
+  const row3: React.CSSProperties = {
+    display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "12px",
+  };
+  const recentGrid4: React.CSSProperties = {
+    display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: "4px",
+  };
+  const recentGrid3: React.CSSProperties = {
+    display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: "4px",
+  };
+
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: maxW, margin: "0 auto" }}>
@@ -480,7 +483,7 @@ export default function DailyEntryPage() {
               <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>Recent fills</div>
               <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
                 {recentFuel.map((r, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "4px", padding: "10px 14px", borderBottom: i < recentFuel.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
+                  <div key={i} style={{ ...recentGrid4, padding: "10px 14px", borderBottom: i < recentFuel.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
                     <div>
                       <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.date.split("-").reverse().join("/")}</div>
                       <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>{r.current_odometer ? `${r.current_odometer.toLocaleString()} km` : "—"}</div>
@@ -564,7 +567,7 @@ export default function DailyEntryPage() {
               <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>Recent readings</div>
               <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
                 {recentSolar.map((r, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", padding: "10px 14px", borderBottom: i < recentSolar.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
+                  <div key={i} style={{ ...recentGrid3, padding: "10px 14px", borderBottom: i < recentSolar.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
                     <div>
                       <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.date.split("-").reverse().join("/")}</div>
                     </div>
@@ -664,7 +667,7 @@ export default function DailyEntryPage() {
               <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>Recent readings</div>
               <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
                 {recentUtility.map((r, i) => (
-                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", padding: "10px 14px", borderBottom: i < recentUtility.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
+                  <div key={i} style={{ ...recentGrid3, padding: "10px 14px", borderBottom: i < recentUtility.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
                     <div>
                       <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.reading_date.split("-").reverse().join("/")}</div>
                       <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>{r.meter_label}</div>
@@ -728,7 +731,7 @@ export default function DailyEntryPage() {
               })()}
 
               <div style={{ marginTop: "16px" }}>
-                <label style={labelSt}>Work done * <span style={{ fontSize: "11px", fontWeight: 400, color: COLOURS.SLATE }}>(select all that apply)</span></label>
+                <label style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "5px" }}>Work done * <span style={{ fontSize: "11px", fontWeight: 400, color: COLOURS.SLATE }}>(select all that apply)</span></label>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "6px" }}>
                   {MAINTENANCE_TYPES.map((t) => {
                     const checked = maint.work_types.includes(t);

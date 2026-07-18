@@ -7,6 +7,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
+import { useMobile } from "../lib/useMobile";
 import { canCompleteSubmittedTask, canReopenCompletedTask, myIdentityEmails } from "../lib/permissions";
 import { routeSubmittedTask } from "../lib/taskRouting";
 import TeamStats from "./TeamStats";
@@ -121,6 +122,7 @@ function getWeekStart(d: Date): string {
 // get_tasks_monthly_chart()/get_tasks_quarterly_chart() (migration 102).
 
 export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean }) {
+  const isMobile = useMobile();
   const searchParams = useSearchParams();
   const taskIdFromUrl = searchParams.get("task");
   // Khuram (18/07/2026): the notification bell deep-links here with
@@ -1134,56 +1136,58 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             of scrolling out of view, per Khuram. ═══ */}
         {selectedIds.size > 0 && (
           <div style={{
-            display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
-            padding: "8px 12px",
+            display: "flex", flexDirection: "column", gap: "8px",
+            padding: "10px 12px",
             border: `1px solid ${COLOURS.NAVY}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD,
             boxShadow: "0 2px 6px rgba(15,23,32,0.08)",
           }}>
-            <span style={{ fontSize: "12.5px", fontWeight: 700, color: COLOURS.NAVY }}>{selectedIds.size} selected</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "12.5px", fontWeight: 700, color: COLOURS.NAVY }}>{selectedIds.size} task{selectedIds.size !== 1 ? "s" : ""} selected</span>
+              <button onClick={() => setSelectedIds(new Set())} style={{ ...smallActionBtn, backgroundColor: "transparent", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>Clear</button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+              <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 140px" }}>
+                <option value="">Change status…</option>
+                {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <button onClick={applyBulkStatus} disabled={!bulkStatus || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, opacity: !bulkStatus || bulkApplying ? 0.5 : 1, cursor: !bulkStatus || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
 
-            <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={filterSelectStyle}>
-              <option value="">Change status…</option>
-              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <button onClick={applyBulkStatus} disabled={!bulkStatus || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkStatus || bulkApplying ? 0.5 : 1, cursor: !bulkStatus || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+              <select value={bulkCompanyId} onChange={(e) => setBulkCompanyId(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 140px" }}>
+                <option value="">Change company…</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button onClick={applyBulkCompany} disabled={!bulkCompanyId || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, opacity: !bulkCompanyId || bulkApplying ? 0.5 : 1, cursor: !bulkCompanyId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
 
-            <select value={bulkCompanyId} onChange={(e) => setBulkCompanyId(e.target.value)} style={filterSelectStyle}>
-              <option value="">Change company…</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            <button onClick={applyBulkCompany} disabled={!bulkCompanyId || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkCompanyId || bulkApplying ? 0.5 : 1, cursor: !bulkCompanyId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
+              <select value={bulkOwnerId} onChange={(e) => setBulkOwnerId(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 140px" }}>
+                <option value="">Change owner…</option>
+                {bulkMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              <button onClick={applyBulkOwner} disabled={!bulkOwnerId || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, opacity: !bulkOwnerId || bulkApplying ? 0.5 : 1, cursor: !bulkOwnerId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
 
-            <select value={bulkOwnerId} onChange={(e) => setBulkOwnerId(e.target.value)} style={filterSelectStyle}>
-              <option value="">Change owner…</option>
-              {bulkMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-            <button onClick={applyBulkOwner} disabled={!bulkOwnerId || bulkApplying} style={{ ...smallActionBtn, opacity: !bulkOwnerId || bulkApplying ? 0.5 : 1, cursor: !bulkOwnerId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
-
-            {(() => {
-              const eligibleCount = Array.from(selectedIds).filter((id) => {
-                const t = tasks.find((x) => x.id === id);
-                return !!t && t.status === "Submitted"
-                  && !(t.task_subtasks || []).some((s) => !s.is_complete)
-                  && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email);
-              }).length;
-              return (
-                <button
-                  onClick={applyBulkComplete}
-                  disabled={eligibleCount === 0 || bulkApplying}
-                  title={eligibleCount === 0 ? "None of your selected tasks are Submitted and yours to close" : undefined}
-                  style={{
-                    ...smallActionBtn,
-                    backgroundColor: eligibleCount === 0 ? smallActionBtn.backgroundColor : COLOURS.GREEN,
-                    opacity: eligibleCount === 0 || bulkApplying ? 0.5 : 1,
-                    cursor: eligibleCount === 0 || bulkApplying ? "not-allowed" : "pointer",
-                  }}
-                >
-                  Mark Complete{eligibleCount > 0 ? ` (${eligibleCount})` : ""}
-                </button>
-              );
-            })()}
-
-            <button onClick={() => setSelectedIds(new Set())} style={{ ...smallActionBtn, marginLeft: "auto", backgroundColor: "transparent", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}>Clear</button>
+              {(() => {
+                const eligibleCount = Array.from(selectedIds).filter((id) => {
+                  const t = tasks.find((x) => x.id === id);
+                  return !!t && t.status === "Submitted"
+                    && !(t.task_subtasks || []).some((s) => !s.is_complete)
+                    && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email);
+                }).length;
+                return (
+                  <button
+                    onClick={applyBulkComplete}
+                    disabled={eligibleCount === 0 || bulkApplying}
+                    title={eligibleCount === 0 ? "None of your selected tasks are Submitted and yours to close" : undefined}
+                    style={{
+                      ...smallActionBtn, borderRadius: RADII.PILL,
+                      backgroundColor: eligibleCount === 0 ? smallActionBtn.backgroundColor : COLOURS.GREEN,
+                      opacity: eligibleCount === 0 || bulkApplying ? 0.5 : 1,
+                      cursor: eligibleCount === 0 || bulkApplying ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Mark Complete{eligibleCount > 0 ? ` (${eligibleCount})` : ""}
+                  </button>
+                );
+              })()}
+            </div>
           </div>
         )}
       </div>
@@ -1196,60 +1200,66 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           reading as a stack of strips. Hidden on Team/Recurring, which
           aren't task lists. ═══ */}
       {timeView !== "team" && timeView !== "recurring" && (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: filtersOpen ? "8px" : "12px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: "1 1 180px", minWidth: "180px", maxWidth: "260px" }}>
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search tasks…"
-              style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%" }}
-            />
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: filtersOpen ? "8px" : "12px" }}>
+          {/* Row 1: search + reset */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "7px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD, borderRadius: RADII.PILL, padding: "6px 14px", flex: 1 }}>
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search tasks…"
+                style={{ border: "none", outline: "none", background: "transparent", fontSize: "13px", color: COLOURS.NAVY, width: "100%" }}
+              />
+            </div>
+            {filtersActive && (
+              <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}>
+                Reset
+              </button>
+            )}
           </div>
-          {filtersActive && (
-            <button onClick={resetFilters} style={{ background: "none", border: "none", color: COLOURS.RED, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", textDecoration: "underline" }}>
-              Reset
-            </button>
-          )}
 
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+          {/* Row 2: filter pills + scope toggle (wraps on mobile) */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
             {(["all", "overdue", "waiting", "exception"] as const).map((f) => (
               <button key={f} onClick={() => setFilter(f)} style={{
                 backgroundColor: filter === f ? COLOURS.NAVY : COLOURS.CARD,
                 color: filter === f ? "white" : COLOURS.NAVY,
                 border: `1px solid ${filter === f ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-                borderRadius: RADII.PILL, padding: "6px 12px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                borderRadius: RADII.PILL, padding: isMobile ? "7px 10px" : "6px 12px", fontSize: isMobile ? "12px" : "13px", fontWeight: 600, cursor: "pointer",
               }}>
-                {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueMineCount})` : f === "waiting" ? `Waiting (${waitingMineCount})` : `Needs explanation (${exceptionMineCount})`}
+                {f === "all" ? "All" : f === "overdue" ? `Overdue (${overdueMineCount})` : f === "waiting" ? `Waiting (${waitingMineCount})` : `Needs exp. (${exceptionMineCount})`}
               </button>
             ))}
-          </div>
 
-          {timeView === "list" && (
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginLeft: "auto" }}>
-              <div style={{ display: "flex", gap: "4px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, padding: "3px" }}>
-                {(["mine", "everyone"] as const).map((s) => (
-                  <button key={s} onClick={() => setMyTasksScope(s)} style={{
-                    backgroundColor: myTasksScope === s ? COLOURS.CARD : "transparent",
-                    color: myTasksScope === s ? COLOURS.NAVY : COLOURS.SLATE,
-                    border: "none", borderRadius: RADII.PILL, padding: "5px 14px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
-                    boxShadow: myTasksScope === s ? "0 1px 2px rgba(15,23,32,0.08)" : "none",
-                  }}>
-                    {s === "mine" ? "My tasks" : "Everyone"}
-                  </button>
-                ))}
-              </div>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, cursor: (listFilteredTasks ?? myTasksSource).length > 0 ? "pointer" : "default" }}>
-                <input
-                  type="checkbox"
-                  checked={isAllSelected((listFilteredTasks ?? myTasksSource).map((t) => t.id))}
-                  onChange={() => toggleSelectAll((listFilteredTasks ?? myTasksSource).map((t) => t.id))}
-                  disabled={(listFilteredTasks ?? myTasksSource).length === 0}
-                  style={{ width: "15px", height: "15px", cursor: (listFilteredTasks ?? myTasksSource).length > 0 ? "pointer" : "default" }}
-                />
-                Select all ({(listFilteredTasks ?? myTasksSource).length})
-              </label>
-            </div>
-          )}
+            {timeView === "list" && (
+              <>
+                <div style={{ display: "flex", gap: "4px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, padding: "3px", marginLeft: isMobile ? 0 : "auto" }}>
+                  {(["mine", "everyone"] as const).map((s) => (
+                    <button key={s} onClick={() => setMyTasksScope(s)} style={{
+                      backgroundColor: myTasksScope === s ? COLOURS.CARD : "transparent",
+                      color: myTasksScope === s ? COLOURS.NAVY : COLOURS.SLATE,
+                      border: "none", borderRadius: RADII.PILL, padding: "5px 12px", fontSize: "12.5px", fontWeight: 600, cursor: "pointer",
+                      boxShadow: myTasksScope === s ? "0 1px 2px rgba(15,23,32,0.08)" : "none",
+                    }}>
+                      {s === "mine" ? "Mine" : "Everyone"}
+                    </button>
+                  ))}
+                </div>
+                {!isMobile && (
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY, cursor: (listFilteredTasks ?? myTasksSource).length > 0 ? "pointer" : "default" }}>
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected((listFilteredTasks ?? myTasksSource).map((t) => t.id))}
+                      onChange={() => toggleSelectAll((listFilteredTasks ?? myTasksSource).map((t) => t.id))}
+                      disabled={(listFilteredTasks ?? myTasksSource).length === 0}
+                      style={{ width: "15px", height: "15px", cursor: (listFilteredTasks ?? myTasksSource).length > 0 ? "pointer" : "default" }}
+                    />
+                    Select all ({(listFilteredTasks ?? myTasksSource).length})
+                  </label>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 

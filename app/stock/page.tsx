@@ -597,7 +597,7 @@ export default function StockPage() {
         {/* Controls */}
         <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap", alignItems: "center" }}>
           <SectionTitle title="Purchase Orders" />
-          <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
+          <div style={{ marginLeft: "auto", display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button onClick={expandAll} style={{ ...ghostBtn, color: COLOURS.NAVY }}>
               Expand all
             </button>

@@ -193,19 +193,22 @@ const kickerStyle: React.CSSProperties = {
   marginBottom:  "10px",
 };
 
-// ── Tab strip ──────────────────────────────────────────────────────
-const tabstripStyle: React.CSSProperties = {
-  display:         "inline-flex",
-  background:      CARD_ALT,
-  border:          `1px solid ${HAIRLINE}`,
-  borderRadius:    RADII.PILL,
-  padding:         "3px",
-  gap:             "2px",
-  marginBottom:    "20px",
-  flexWrap:        "wrap",
-};
+// ── Tab strip — helper; call inside component where isMobile is available ──
+function tabstripSt(isMobile: boolean): React.CSSProperties {
+  return {
+    display:         isMobile ? "flex" : "inline-flex",
+    width:           isMobile ? "100%" : undefined,
+    background:      CARD_ALT,
+    border:          `1px solid ${HAIRLINE}`,
+    borderRadius:    RADII.PILL,
+    padding:         "3px",
+    gap:             "2px",
+    marginBottom:    "20px",
+    flexWrap:        "wrap",
+  };
+}
 
-function tabStyle(active: boolean): React.CSSProperties {
+function tabStyle(active: boolean, isMob = false): React.CSSProperties {
   return {
     padding:         "6px 16px",
     fontSize:        "13px",
@@ -217,6 +220,8 @@ function tabStyle(active: boolean): React.CSSProperties {
     cursor:          "pointer",
     border:          "none",
     whiteSpace:      "nowrap" as const,
+    flex:            isMob ? 1 : undefined,
+    textAlign:       isMob ? "center" as const : undefined,
   };
 }
 
@@ -1005,14 +1010,14 @@ export default function DashboardView() {
         )}
       </div>
 
-      <div style={tabstripStyle}>
+      <div style={tabstripSt(isMobile)}>
         {([
           { key: "production" as const, label: "Production KPI" },
           { key: "dispatch"   as const, label: "Dispatch KPI" },
           { key: "breakage"   as const, label: "Breakage" },
           { key: "tasks"      as const, label: `My Tasks (${openTasks.length})` },
         ]).map((tab) => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={tabStyle(activeTab === tab.key)}>
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={tabStyle(activeTab === tab.key, isMobile)}>
             {tab.label}
           </button>
         ))}
