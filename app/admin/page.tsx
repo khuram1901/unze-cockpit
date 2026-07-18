@@ -80,6 +80,7 @@ async function authedFetch(url: string, opts: RequestInit = {}) {
 }
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTH_FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const ENTITY_DISPLAY: Record<string, string> = {
   IFPL: "IFPL — Imperial Footwear",
   Baranh: "Baranh",
@@ -179,13 +180,20 @@ export default function AdminDataPage() {
     amount_pkr: "", date_paid: "", challan_number: "", notes: "",
   });
   const [savingPayment, setSavingPayment] = useState(false);
-  const [complianceSubTab, setComplianceSubTab] = useState<"payments" | "renewals">("payments");
 
   // ── Documents state ────────────────────────────────────────────────
   const [ntnDocs, setNtnDocs] = useState<NtnDoc[]>([]);
   const [loadingNtn, setLoadingNtn] = useState(false);
   const [restaurantLicences, setRestaurantLicences] = useState<RestaurantLicence[]>([]);
   const [loadingLicences, setLoadingLicences] = useState(false);
+  const [docSearch, setDocSearch] = useState("");
+  const [docTypeFilterUI, setDocTypeFilterUI] = useState("");
+  const [docStatusFilterUI, setDocStatusFilterUI] = useState("");
+
+  // ── Registrations filter state ─────────────────────────────────────
+  const [regSearch, setRegSearch] = useState("");
+  const [regEntityFilter, setRegEntityFilter] = useState("");
+  const [regStatusFilter, setRegStatusFilter] = useState("");
 
   // ── Operations state ───────────────────────────────────────────────
   const [fuelRows, setFuelRows] = useState<FuelRow[]>([]);
@@ -193,6 +201,7 @@ export default function AdminDataPage() {
   const [solarBranches, setSolarBranches] = useState<SolarBranch[]>([]);
   const [loadingSolar, setLoadingSolar] = useState(false);
   const [opsYear, setOpsYear] = useState(CURRENT_YEAR);
+  const [opsMonth, setOpsMonth] = useState(new Date().getMonth() + 1);
 
   // ── Initial setup ──────────────────────────────────────────────────
   useEffect(() => {
@@ -343,6 +352,32 @@ export default function AdminDataPage() {
     }
   }
 
+  async function saveRegInline(location_id: string, _name: string, type: "EOBI" | "Social Security", status: string) {
+    const res = await authedFetch("/api/admin/registrations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ location_id, registration_type: type, status, notes: "" }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      showToast("Status updated", "success");
+      loadRegistrations();
+    } else {
+      showToast(json.error || "Failed to save", "error");
+    }
+  }
+
+  function prevOpsMonth() {
+    if (opsMonth === 1) { setOpsMonth(12); setOpsYear((y) => y - 1); }
+    else setOpsMonth((m) => m - 1);
+  }
+  function nextOpsMonth() {
+    const now = new Date();
+    if (opsYear === now.getFullYear() && opsMonth === now.getMonth() + 1) return;
+    if (opsMonth === 12) { setOpsMonth(1); setOpsYear((y) => y + 1); }
+    else setOpsMonth((m) => m + 1);
+  }
+
   async function savePayment() {
     if (!addingPayment) return;
     setSavingPayment(true);
@@ -483,58 +518,156 @@ export default function AdminDataPage() {
 
   // ── Tab: Registrations ─────────────────────────────────────────────
   const STATUSES = ["Registered", "Pending", "Inprocess", "N/A"];
-  const grouped = groupedByEntity(registrations);
 
   function renderRegistrations() {
     if (loadingRegs) return <SkeletonRows count={6} height="44px" />;
 
+    // Filtering
+    const filtered = registrations.filter((r) => {
+      if (regEntityFilter && r.entity !== regEntityFilter) return false;
+      if (regStatusFilter) {
+        if (r.eobi_status !== regStatusFilter && r.ss_status !== regStatusFilter) return false;
+      }
+      if (regSearch && !r.name.toLowerCase().includes(regSearch.toLowerCase())) return false;
+      return true;
+    });
+
+    // Stat card values (unfiltered)
+    const totalReg  = registrations.filter((r) => r.eobi_status === "Registered").length;
+    const totalPend = registrations.filter((r) => !r.eobi_status || r.eobi_status === "Pending").length;
+    const total     = registrations.length;
+    const pct       = total > 0 ? Math.round((totalReg / total) * 100) : 0;
+
+    // Section groups from filtered results
+    const ifplRows = filtered.filter((r) => r.entity === "IFPL");
+    const restRows = filtered.filter((r) => r.entity === "Baranh" || r.entity === "HD");
+    const utplRows = filtered.filter((r) => r.entity === "UTPL");
+
+    const statusSelStyle = (status: string | null): React.CSSProperties => {
+      const s = status || "Pending";
+      const map: Record<string, { bg: string; color: string }> = {
+        Registered: { bg: "#ECFDF5", color: COLOURS.GREEN },
+        Pending:    { bg: "#FEF3C7", color: COLOURS.AMBER },
+        Inprocess:  { bg: "#EFF6FF", color: "#1E40AF" },
+        "N/A":      { bg: COLOURS.HAIRLINE, color: COLOURS.SLATE },
+      };
+      const c = map[s] || map["N/A"];
+      return { WebkitAppearance: "none" as const, appearance: "none" as const, borderRadius: "20px", padding: "3px 10px", fontSize: "11px", fontWeight: 600, cursor: "pointer", border: "none", fontFamily: "inherit", backgroundColor: c.bg, color: c.color };
+    };
+
+    const thStyle: React.CSSProperties = { padding: "9px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
+
+    function renderSection(rows: Registration[], title: string, showEntity: boolean) {
+      if (rows.length === 0) return null;
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>{title}</span>
+            <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+            <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE, whiteSpace: "nowrap" }}>{rows.length} locations</span>
+          </div>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Location</th>
+                  {showEntity && <th style={thStyle}>Entity</th>}
+                  <th style={thStyle}>EOBI</th>
+                  <th style={thStyle}>Social Security</th>
+                  <th style={{ ...thStyle, width: "50px" }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.name}</td>
+                    {showEntity && (
+                      <td style={{ padding: "10px 14px" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "rgba(15,23,32,.08)", color: COLOURS.NAVY }}>{r.entity}</span>
+                      </td>
+                    )}
+                    {(["eobi_status", "ss_status"] as const).map((field, i) => {
+                      const type = (i === 0 ? "EOBI" : "Social Security") as "EOBI" | "Social Security";
+                      const status = r[field];
+                      return (
+                        <td key={field} style={{ padding: "8px 14px" }}>
+                          <select value={status || "Pending"} onChange={(e) => saveRegInline(r.location_id, r.name, type, e.target.value)} style={statusSelStyle(status)}>
+                            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </td>
+                      );
+                    })}
+                    <td style={{ padding: "8px 14px", textAlign: "right" }}>
+                      <button onClick={() => setEditingReg({ location_id: r.location_id, name: r.name, type: "EOBI", current: r.eobi_status || "Pending", notes: r.eobi_notes || "" })}
+                        style={{ fontSize: "12px", color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 500 }}>
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div>
-        {Object.entries(grouped).map(([entity, rows]) => {
-          if (rows.length === 0) return null;
-          return (
-            <div key={entity} style={{ marginBottom: "24px" }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>{entity}</div>
-              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden", backgroundColor: "white" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-                  <thead>
-                    <tr style={{ backgroundColor: COLOURS.HAIRLINE }}>
-                      <th style={{ padding: "8px 12px", textAlign: "left", fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, width: "40%" }}>Location</th>
-                      <th style={{ padding: "8px 12px", textAlign: "left", fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, width: "30%" }}>EOBI</th>
-                      <th style={{ padding: "8px 12px", textAlign: "left", fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, width: "30%" }}>Social Security</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                        <td style={{ padding: "10px 12px", fontSize: "13px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.name}</td>
-                        {(["EOBI", "Social Security"] as const).map((type) => {
-                          const status = type === "EOBI" ? r.eobi_status : r.ss_status;
-                          return (
-                            <td key={type} style={{ padding: "8px 12px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                <StatusPill status={status} />
-                                <button onClick={() => setEditingReg({
-                                  location_id: r.location_id,
-                                  name: r.name,
-                                  type,
-                                  current: status || "Pending",
-                                  notes: (type === "EOBI" ? r.eobi_notes : r.ss_notes) || "",
-                                })} style={{ fontSize: "11px", padding: "2px 8px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.SLATE, cursor: "pointer" }}>
-                                  Edit
-                                </button>
-                              </div>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {/* Stat cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "10px", marginBottom: "18px" }}>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "24px", fontWeight: 700, color: COLOURS.GREEN, lineHeight: 1.1 }}>{totalReg}</div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>EOBI Registered</div>
+          </div>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "24px", fontWeight: 700, color: COLOURS.AMBER, lineHeight: 1.1 }}>{totalPend}</div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>EOBI Pending</div>
+          </div>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "24px", fontWeight: 700, color: COLOURS.NAVY, lineHeight: 1.1 }}>{total}</div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>Total Locations</div>
+          </div>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+              <div style={{ flex: 1, height: "5px", backgroundColor: COLOURS.HAIRLINE, borderRadius: "3px", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${pct}%`, backgroundColor: COLOURS.GREEN, borderRadius: "3px" }} />
               </div>
+              <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600, whiteSpace: "nowrap" }}>{pct}%</span>
             </div>
-          );
-        })}
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "6px", fontWeight: 500 }}>EOBI Compliance</div>
+          </div>
+        </div>
+
+        {/* Filter bar */}
+        <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap", alignItems: "center" }}>
+          <select value={regEntityFilter} onChange={(e) => setRegEntityFilter(e.target.value)}
+            style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "130px" }}>
+            <option value="">All Entities</option>
+            <option value="IFPL">IFPL — Retail</option>
+            <option value="Baranh">Baranh</option>
+            <option value="HD">Haute Dolci</option>
+            <option value="UTPL">UTPL</option>
+          </select>
+          <select value={regStatusFilter} onChange={(e) => setRegStatusFilter(e.target.value)}
+            style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "130px" }}>
+            <option value="">All Statuses</option>
+            <option value="Registered">Registered</option>
+            <option value="Pending">Pending</option>
+          </select>
+          <input type="text" value={regSearch} onChange={(e) => setRegSearch(e.target.value)}
+            placeholder="🔍  Search location…"
+            style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", flex: 1, minWidth: "180px", color: COLOURS.NAVY, backgroundColor: "white" }}
+          />
+        </div>
+
+        {renderSection(ifplRows, "IFPL — Imperial Footwear (Retail)", false)}
+        {renderSection(restRows, "Restaurants — Baranh & Haute Dolci", true)}
+        {renderSection(utplRows, "Unze Trading (UTPL)", false)}
+
+        {filtered.length === 0 && !loadingRegs && (
+          <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No locations match your filters.</p>
+        )}
 
         {/* Edit modal */}
         {editingReg && (
@@ -543,7 +676,6 @@ export default function AdminDataPage() {
             <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: RADII.CARD, padding: "24px", maxWidth: "400px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
               <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>{editingReg.name}</div>
               <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "16px" }}>{editingReg.type} registration status</div>
-
               <div style={{ marginBottom: "12px" }}>
                 <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Status</label>
                 <select value={editingReg.current} onChange={(e) => setEditingReg({ ...editingReg, current: e.target.value })}
@@ -551,13 +683,11 @@ export default function AdminDataPage() {
                   {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-
               <div style={{ marginBottom: "16px" }}>
                 <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Notes (optional)</label>
                 <textarea value={editingReg.notes} onChange={(e) => setEditingReg({ ...editingReg, notes: e.target.value })}
                   rows={3} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical" as const }} />
               </div>
-
               <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                 <button onClick={() => setEditingReg(null)} style={{ padding: "8px 16px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Cancel</button>
                 <button onClick={saveRegistration} disabled={regSaving} style={{ ...primaryButtonStyle, opacity: regSaving ? 0.6 : 1 }}>
@@ -742,50 +872,69 @@ export default function AdminDataPage() {
 
   function renderComplianceRenewals() {
     if (loadingCompliance) return <SkeletonRows count={6} height="44px" />;
-    const grouped2 = groupedByEntity(compliance);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const overdueCount = compliance.filter((r) =>
+      (r.civil_defence_status === "Overdue") ||
+      (r.civil_defence_due && r.civil_defence_due < today && r.civil_defence_status !== "Done")
+    ).length;
+
+    const statusBadge = (status: string | null): React.CSSProperties => {
+      const s = status || "—";
+      const map: Record<string, { bg: string; color: string }> = {
+        Done:       { bg: "#ECFDF5", color: COLOURS.GREEN },
+        Registered: { bg: "#ECFDF5", color: COLOURS.GREEN },
+        Pending:    { bg: "#FEF3C7", color: COLOURS.AMBER },
+        Inprocess:  { bg: "#EFF6FF", color: "#1E40AF" },
+        Overdue:    { bg: "#FEF2F2", color: COLOURS.RED },
+      };
+      const c = map[s] || { bg: COLOURS.HAIRLINE, color: COLOURS.SLATE };
+      return { fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: c.bg, color: c.color, display: "inline-block" };
+    };
+
+    const thStyle: React.CSSProperties = { padding: "9px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
+
     return (
       <div>
-        {Object.entries(grouped2).map(([entity, rows]) => {
-          if (rows.length === 0) return null;
-          return (
-            <div key={entity} style={{ marginBottom: "24px" }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>{entity}</div>
-              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden", backgroundColor: "white", overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "560px" }}>
-                  <thead>
-                    <tr style={{ backgroundColor: COLOURS.HAIRLINE }}>
-                      <th style={{ padding: "8px 12px", textAlign: "left", fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE }}>Location</th>
-                      <th style={{ padding: "8px 12px", textAlign: "center", fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE }}>Civil Defence</th>
-                      <th style={{ padding: "8px 12px", textAlign: "center", fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE }}>Labour Registration</th>
-                      <th style={{ padding: "8px 12px", textAlign: "center", fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE }}>Labour Inspection</th>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+          <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>Civil Defence & Labour — Periodic Renewals</span>
+          <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+          {overdueCount > 0 && (
+            <span style={{ fontSize: "11px", fontWeight: 700, padding: "2px 9px", borderRadius: "20px", backgroundColor: "#FEF2F2", color: COLOURS.RED, whiteSpace: "nowrap" }}>{overdueCount} overdue</span>
+          )}
+        </div>
+        {compliance.length === 0 ? (
+          <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No compliance data on record yet.</p>
+        ) : (
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white", overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
+              <thead>
+                <tr>
+                  {["Location", "Entity", "Civil Defence", "Next Due", "Labour Reg.", "Labour Insp."].map((h) => (
+                    <th key={h} style={thStyle}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {compliance.map((r) => {
+                  const isOverdue = r.civil_defence_due && r.civil_defence_due < today && r.civil_defence_status !== "Done";
+                  return (
+                    <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                      <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.name}</td>
+                      <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE }}>{r.entity}</td>
+                      <td style={{ padding: "8px 14px" }}><span style={statusBadge(r.civil_defence_status)}>{r.civil_defence_status || "—"}</span></td>
+                      <td style={{ padding: "10px 14px", fontSize: "11.5px", color: isOverdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue ? 600 : 400 }}>
+                        {r.civil_defence_due ? formatDateUK(r.civil_defence_due) : "—"}{isOverdue ? " ⚠️" : ""}
+                      </td>
+                      <td style={{ padding: "8px 14px" }}><span style={statusBadge(r.labour_reg_status)}>{r.labour_reg_status || "—"}</span></td>
+                      <td style={{ padding: "8px 14px" }}><span style={statusBadge(r.labour_insp_status)}>{r.labour_insp_status || "—"}</span></td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                        <td style={{ padding: "10px 12px", fontSize: "13px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.name}</td>
-                        {[
-                          { status: r.civil_defence_status, due: r.civil_defence_due },
-                          { status: r.labour_reg_status, due: r.labour_reg_due },
-                          { status: r.labour_insp_status, due: r.labour_insp_due },
-                        ].map((col, i) => (
-                          <td key={i} style={{ padding: "8px 12px", textAlign: "center" }}>
-                            <StatusPill status={col.status} />
-                            {col.due && (
-                              <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                                Due {formatDateUK(col.due)}
-                              </div>
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })}
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     );
   }
@@ -793,35 +942,45 @@ export default function AdminDataPage() {
   // ── Tab: Documents ─────────────────────────────────────────────────
   function renderNtnDocs() {
     if (loadingNtn) return <SkeletonRows count={5} height="44px" />;
-    const grouped3 = groupedByEntity(ntnDocs.map(d => ({ ...d, entity: d.entity })));
+
+    const filtered = ntnDocs.filter((d) => {
+      if (docSearch && !d.location_name.toLowerCase().includes(docSearch.toLowerCase())) return false;
+      if (docStatusFilterUI && d.status !== docStatusFilterUI) return false;
+      return true;
+    });
+
+    if (ntnDocs.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No NTN documents on record yet.</p>;
+    if (filtered.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No NTN documents match your filters.</p>;
+
+    const thStyle: React.CSSProperties = { padding: "9px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
+
     return (
-      <div>
-        {Object.entries(grouped3).map(([entity, rows]) => {
-          if (rows.length === 0) return null;
-          return (
-            <div key={entity} style={{ marginBottom: "24px" }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>{entity}</div>
-              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden", backgroundColor: "white" }}>
-                {(rows as NtnDoc[]).map((d) => (
-                  <div key={d.doc_id} style={{ padding: "10px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    <div>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{d.location_name}{d.meter_label && ` — ${d.meter_label}`}</div>
-                      {d.ntn_number && <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>NTN: {d.ntn_number}</div>}
-                    </div>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <StatusPill status={d.status} />
-                      {d.folderit_link && (
-                        <a href={d.folderit_link} target="_blank" rel="noopener noreferrer"
-                          style={{ fontSize: "12px", color: COLOURS.GREEN, textDecoration: "none", fontWeight: 600 }}>View →</a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-        {ntnDocs.length === 0 && <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No NTN documents on record yet.</p>}
+      <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              {["Location", "Meter", "NTN Number", "Status", "Document"].map((h) => (
+                <th key={h} style={thStyle}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((d) => (
+              <tr key={d.doc_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{d.location_name}</td>
+                <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE }}>{d.meter_label || "—"}</td>
+                <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: "11.5px", color: COLOURS.NAVY }}>{d.ntn_number || "—"}</td>
+                <td style={{ padding: "8px 14px" }}><StatusPill status={d.status} /></td>
+                <td style={{ padding: "8px 14px" }}>
+                  {d.folderit_link
+                    ? <a href={d.folderit_link} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: COLOURS.GREEN, textDecoration: "none", fontWeight: 500 }}>📄 Folderit</a>
+                    : <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>—</span>
+                  }
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     );
   }
@@ -834,54 +993,54 @@ export default function AdminDataPage() {
       { key: "training", label: "Training Cert" },
       { key: "tourism", label: "Tourism Cert" },
     ];
-    const grouped4 = restaurantLicences.reduce<Record<string, RestaurantLicence[]>>((acc, r) => {
-      if (!acc[r.entity]) acc[r.entity] = [];
-      acc[r.entity].push(r);
-      return acc;
-    }, {});
+
+    const filtered = restaurantLicences.filter((r) => {
+      if (docSearch && !r.location_name.toLowerCase().includes(docSearch.toLowerCase())) return false;
+      if (docStatusFilterUI) {
+        const matches = LICENCE_COLS.some((col) => r[`${col.key}_status` as keyof RestaurantLicence] === docStatusFilterUI);
+        if (!matches) return false;
+      }
+      return true;
+    });
+
+    if (restaurantLicences.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No restaurant licences on record yet.</p>;
+    if (filtered.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No licences match your filters.</p>;
+
+    const thStyle: React.CSSProperties = { padding: "9px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
+
     return (
-      <div>
-        {["Baranh", "HD"].map((entity) => {
-          const rows = grouped4[entity] || [];
-          if (rows.length === 0) return null;
-          return (
-            <div key={entity} style={{ marginBottom: "24px" }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>{entity}</div>
-              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden", backgroundColor: "white", overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
-                  <thead>
-                    <tr style={{ backgroundColor: COLOURS.HAIRLINE }}>
-                      <th style={{ padding: "8px 12px", textAlign: "left", fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE }}>Location</th>
-                      {LICENCE_COLS.map((col) => (
-                        <th key={col.key} style={{ padding: "8px 12px", textAlign: "center", fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE }}>{col.label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                        <td style={{ padding: "10px 12px", fontSize: "13px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.location_name}</td>
-                        {LICENCE_COLS.map((col) => {
-                          const status = r[`${col.key}_status` as keyof RestaurantLicence] as string | null;
-                          const link = r[`${col.key}_link` as keyof RestaurantLicence] as string | null;
-                          const expiry = r[`${col.key}_expiry` as keyof RestaurantLicence] as string | null;
-                          return (
-                            <td key={col.key} style={{ padding: "8px 12px", textAlign: "center" }}>
-                              <StatusPill status={status} />
-                              {expiry && <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>{formatDateUK(expiry)}</div>}
-                              {link && <a href={link} target="_blank" rel="noopener noreferrer" style={{ display: "block", fontSize: "11px", color: COLOURS.GREEN, marginTop: "2px" }}>View</a>}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })}
-        {restaurantLicences.length === 0 && <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No restaurant licences on record yet.</p>}
+      <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white", overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Restaurant / Location</th>
+              <th style={thStyle}>Entity</th>
+              {LICENCE_COLS.map((col) => <th key={col.key} style={thStyle}>{col.label}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => (
+              <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.location_name}</td>
+                <td style={{ padding: "10px 14px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "rgba(15,23,32,.08)", color: COLOURS.NAVY }}>{r.entity}</span>
+                </td>
+                {LICENCE_COLS.map((col) => {
+                  const status = r[`${col.key}_status` as keyof RestaurantLicence] as string | null;
+                  const link   = r[`${col.key}_link`   as keyof RestaurantLicence] as string | null;
+                  const expiry = r[`${col.key}_expiry`  as keyof RestaurantLicence] as string | null;
+                  return (
+                    <td key={col.key} style={{ padding: "8px 14px" }}>
+                      <StatusPill status={status} />
+                      {expiry && <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>{formatDateUK(expiry)}</div>}
+                      {link && <a href={link} target="_blank" rel="noopener noreferrer" style={{ display: "block", fontSize: "11px", color: COLOURS.GREEN, marginTop: "2px" }}>View</a>}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     );
   }
@@ -889,94 +1048,125 @@ export default function AdminDataPage() {
   // ── Tab: Operations ────────────────────────────────────────────────
   function renderFuel() {
     if (loadingFuel) return <SkeletonRows count={4} height="44px" />;
-    if (fuelRows.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No fuel entries for {opsYear} yet.</p>;
+    const monthRows = fuelRows.filter((r) => r.month === opsMonth);
+    if (monthRows.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No fuel entries for {MONTH_NAMES[opsMonth - 1]} {opsYear} yet.</p>;
 
-    // Group by month
-    const byMonth: Record<number, FuelRow[]> = {};
-    fuelRows.forEach((r) => {
-      if (!byMonth[r.month]) byMonth[r.month] = [];
-      byMonth[r.month].push(r);
-    });
+    const totalAmt = monthRows.reduce((s, r) => s + r.total_amount, 0);
+    const totalLit = monthRows.reduce((s, r) => s + r.total_litres, 0);
+    const avgKmL   = totalLit > 0 ? monthRows.reduce((s, r) => s + (r.avg_km_per_l || 0) * r.total_litres, 0) / totalLit : null;
+    const avgPriceL = totalLit > 0 ? totalAmt / totalLit : null;
+    const fmtPKR = (n: number) => n >= 100000 ? `PKR ${(n / 1000).toFixed(0)}K` : `PKR ${n.toLocaleString()}`;
+
+    const statCards = [
+      { label: "Total fuel spend", value: fmtPKR(totalAmt), color: COLOURS.NAVY },
+      { label: "Total litres", value: `${totalLit.toFixed(0)} L`, color: COLOURS.NAVY },
+      { label: "Avg km / litre", value: avgKmL ? `${avgKmL.toFixed(1)}` : "—", color: COLOURS.GREEN },
+      { label: "Avg price / litre", value: avgPriceL ? `PKR ${avgPriceL.toFixed(0)}` : "—", color: COLOURS.NAVY },
+    ];
 
     return (
       <div>
-        {Object.entries(byMonth).sort((a, b) => Number(b[0]) - Number(a[0])).map(([mo, rows]) => {
-          const totalAmt = rows.reduce((s, r) => s + r.total_amount, 0);
-          const totalLit = rows.reduce((s, r) => s + r.total_litres, 0);
-          return (
-            <div key={mo} style={{ marginBottom: "20px" }}>
-              <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>
-                {MONTH_NAMES[Number(mo) - 1]} {opsYear}
-                <span style={{ fontWeight: 400, color: COLOURS.SLATE, marginLeft: "10px" }}>
-                  PKR {totalAmt.toLocaleString()} · {totalLit.toFixed(1)}L total
-                </span>
+        {/* Fuel stat row */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px", marginBottom: "14px" }}>
+          {statCards.map((c) => (
+            <div key={c.label} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+              <div style={{ fontSize: "22px", fontWeight: 700, color: c.color, lineHeight: 1.1 }}>{c.value}</div>
+              <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Vehicle cards grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "10px" }}>
+          {monthRows.map((r) => (
+            <div key={r.vehicle_id} style={{ backgroundColor: "white", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{r.vehicle_name}</div>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, fontFamily: "monospace", marginTop: "2px" }}>{r.plate_number}</div>
+                </div>
+                <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "#ECFDF5", color: COLOURS.GREEN, whiteSpace: "nowrap" }}>Active</span>
               </div>
-              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden", backgroundColor: "white" }}>
-                {rows.map((r) => (
-                  <div key={r.vehicle_id} style={{ padding: "10px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>
-                      {r.vehicle_name} <span style={{ fontWeight: 400, color: COLOURS.SLATE }}>({r.plate_number})</span>
-                    </div>
-                    <div style={{ fontSize: "13px", color: COLOURS.SLATE, textAlign: "right" }}>
-                      <span style={{ color: COLOURS.NAVY, fontWeight: 600 }}>PKR {r.total_amount.toLocaleString()}</span>
-                      {" · "}{r.total_litres.toFixed(1)}L
-                      {r.avg_km_per_l && ` · ${r.avg_km_per_l} km/L`}
-                    </div>
-                  </div>
-                ))}
+              <div style={{ display: "flex" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY }}>PKR {r.total_amount.toLocaleString()}</div>
+                  <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "2px" }}>This month</div>
+                </div>
+                <div style={{ width: "1px", backgroundColor: COLOURS.HAIRLINE, margin: "0 12px" }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY }}>{r.avg_km_per_l ? `${r.avg_km_per_l} km/L` : "—"}</div>
+                  <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "2px" }}>Efficiency</div>
+                </div>
+              </div>
+              <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "8px" }}>
+                {r.fills} fill{r.fills !== 1 ? "s" : ""} · {r.total_litres.toFixed(1)} L total
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
     );
   }
 
   function renderSolar() {
     if (loadingSolar) return <SkeletonRows count={4} height="44px" />;
-    if (solarBranches.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No solar data for {opsYear} yet.</p>;
+    if (solarBranches.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No solar branches configured yet.</p>;
+
+    const now = new Date();
+    const isCurrentOrPast = opsYear < now.getFullYear() || (opsYear === now.getFullYear() && opsMonth <= now.getMonth() + 1);
+
+    const branchData = solarBranches.map((b) => ({
+      ...b,
+      monthData: (b.months || []).find((m) => m.month === opsMonth),
+    }));
+
+    const totalKwh    = branchData.reduce((s, b) => s + (b.monthData?.total_kwh || 0), 0);
+    const noDataCount = isCurrentOrPast ? branchData.filter((b) => !b.monthData?.total_kwh).length : 0;
+    const estSavings  = totalKwh * 40;
 
     return (
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: "13px", minWidth: "700px" }}>
-          <thead>
-            <tr style={{ backgroundColor: COLOURS.HAIRLINE }}>
-              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, color: COLOURS.SLATE }}>Branch</th>
-              <th style={{ padding: "8px 12px", textAlign: "right", fontWeight: 700, color: COLOURS.SLATE }}>System</th>
-              {MONTH_NAMES.map((m) => (
-                <th key={m} style={{ padding: "6px 4px", textAlign: "center", fontWeight: 700, color: COLOURS.SLATE, width: "52px", fontSize: "11px" }}>{m}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {solarBranches.map((b) => {
-              const monthMap: Record<number, { total_kwh: number | null; days_entered: number }> = {};
-              (b.months || []).forEach((m) => { monthMap[m.month] = m; });
-              return (
-                <tr key={b.branch_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                  <td style={{ padding: "8px 12px", fontWeight: 600, color: COLOURS.NAVY, whiteSpace: "nowrap" }}>{b.branch_name}</td>
-                  <td style={{ padding: "8px 12px", textAlign: "right", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>{b.system_kw ? `${b.system_kw} kW` : "—"}</td>
-                  {MONTH_NAMES.map((_, i) => {
-                    const mo = i + 1;
-                    const data = monthMap[mo];
-                    const isPast = mo <= new Date().getMonth() + 1 && opsYear <= CURRENT_YEAR;
-                    return (
-                      <td key={mo} style={{
-                        padding: "6px 4px", textAlign: "center", fontSize: "12px",
-                        backgroundColor: !data && isPast ? "#FEF3C7" : "transparent",
-                        color: data?.total_kwh ? COLOURS.GREEN : COLOURS.SLATE,
-                        border: `1px solid ${COLOURS.HAIRLINE}`,
-                      }}>
-                        {data?.total_kwh != null ? `${data.total_kwh.toFixed(0)}` : "—"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "8px" }}>Monthly kWh totals. Amber = no data entered for a past month.</p>
+      <div>
+        {/* Solar stat row */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "10px", marginBottom: "14px" }}>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY, lineHeight: 1.1 }}>{totalKwh > 0 ? `${totalKwh.toFixed(0)} kWh` : "—"}</div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>Total production</div>
+          </div>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.GREEN, lineHeight: 1.1 }}>{estSavings > 0 ? `PKR ${(estSavings / 1000).toFixed(0)}K` : "—"}</div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>Est. savings @ PKR 40/kWh</div>
+          </div>
+          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 18px", backgroundColor: "white" }}>
+            <div style={{ fontSize: "22px", fontWeight: 700, color: noDataCount > 0 ? COLOURS.RED : COLOURS.GREEN, lineHeight: 1.1 }}>{noDataCount}</div>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "3px", fontWeight: 500 }}>No data this month</div>
+          </div>
+        </div>
+
+        {/* Solar cards grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: "10px" }}>
+          {branchData.map((b) => {
+            const kwh    = b.monthData?.total_kwh;
+            const noData = isCurrentOrPast && (kwh == null || kwh === 0);
+            return (
+              <div key={b.branch_id} style={{ backgroundColor: "white", border: `1px solid ${noData ? COLOURS.RED : COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 16px" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.NAVY, textTransform: "uppercase", letterSpacing: "0.4px" }}>{b.branch_name}</div>
+                <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginBottom: "8px" }}>{b.system_kw ? `${b.system_kw} kW system` : "—"}</div>
+                <div style={{ fontSize: "22px", fontWeight: 700, color: kwh ? COLOURS.NAVY : COLOURS.SLATE }}>
+                  {kwh != null ? Math.round(kwh) : "—"}
+                  {kwh != null && <span style={{ fontSize: "11.5px", color: COLOURS.SLATE, fontWeight: 400, marginLeft: "2px" }}>kWh</span>}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "7px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: noData ? "#FEF2F2" : "#ECFDF5", color: noData ? COLOURS.RED : COLOURS.GREEN, whiteSpace: "nowrap" }}>
+                    {noData ? "No data" : "Active"}
+                  </span>
+                  <span style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>
+                    {b.monthData?.days_entered ? `${b.monthData.days_entered}d` : "—"}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -1001,119 +1191,133 @@ export default function AdminDataPage() {
         </div>
 
         {/* ── REGISTRATIONS ── */}
-        {activeTab === "registrations" && (
-          <div>
-            {/* Summary stat cards */}
-            {!loadingRegs && registrations.length > 0 && (() => {
-              const eobiReg = registrations.filter((r) => r.eobi_status === "Registered").length;
-              const eobiPend = registrations.filter((r) => r.eobi_status === "Pending" || !r.eobi_status).length;
-              const ssReg = registrations.filter((r) => r.ss_status === "Registered").length;
-              const ssPend = registrations.filter((r) => r.ss_status === "Pending" || !r.ss_status).length;
-              const total = registrations.length;
-              const cards = [
-                { label: "EOBI Registered", value: eobiReg, color: COLOURS.GREEN },
-                { label: "EOBI Pending",    value: eobiPend, color: COLOURS.AMBER },
-                { label: "SS Registered",   value: ssReg,   color: COLOURS.GREEN },
-                { label: "SS Pending",      value: ssPend,  color: COLOURS.AMBER },
-                { label: "Total Locations", value: total,   color: COLOURS.NAVY },
-              ];
-              return (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "20px" }}>
-                  {cards.map((c) => (
-                    <div key={c.label} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "12px 14px", backgroundColor: "white" }}>
-                      <div style={{ fontSize: "22px", fontWeight: 800, color: c.color }}>{c.value}</div>
-                      <div style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, marginTop: "2px" }}>{c.label}</div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-            <SectionTitle title="EOBI & Social Security Registration Status" />
-            <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: "-8px 0 16px" }}>
-              Click Edit on any cell to update the registration status for that location.
-            </p>
-            {renderRegistrations()}
-          </div>
-        )}
+        {activeTab === "registrations" && renderRegistrations()}
 
         {/* ── COMPLIANCE ── */}
         {activeTab === "compliance" && (
           <div>
-            <div style={{ display: "flex", gap: "4px", marginBottom: "16px" }}>
-              {(["payments", "renewals"] as const).map((sub) => (
-                <button key={sub} onClick={() => setComplianceSubTab(sub)} style={{
-                  padding: "6px 14px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${complianceSubTab === sub ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-                  backgroundColor: complianceSubTab === sub ? COLOURS.NAVY : "white",
-                  color: complianceSubTab === sub ? "white" : COLOURS.SLATE,
-                }}>
-                  {sub === "payments" ? "Monthly Payments" : "Civil Defence & Labour"}
-                </button>
-              ))}
+            {/* Alert banner */}
+            {!loadingPayments && (() => {
+              const missingCount = paymentRows.reduce((n, r) => n + (r.months || []).filter((m) => m.status === "missing").length, 0);
+              const lateCount    = paymentRows.reduce((n, r) => n + (r.months || []).filter((m) => m.status === "late").length, 0);
+              if (missingCount === 0 && lateCount === 0) return null;
+              const msg = [
+                missingCount > 0 ? `${missingCount} missing payment${missingCount > 1 ? "s" : ""}` : "",
+                lateCount > 0    ? `${lateCount} late payment${lateCount > 1 ? "s" : ""}` : "",
+              ].filter(Boolean).join(" · ");
+              return (
+                <div style={{ padding: "11px 16px", borderRadius: "8px", marginBottom: "18px", fontSize: "12.5px", display: "flex", alignItems: "center", gap: "8px", backgroundColor: "#FFFBEB", color: "#78350F", border: "1px solid #FDE68A" }}>
+                  ⚠️ <strong>{msg}</strong>
+                </div>
+              );
+            })()}
+
+            {/* Year nav */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "18px" }}>
+              <button onClick={() => setPaymentYear((y) => y - 1)} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.SLATE, fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>‹</button>
+              <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{paymentYear}</span>
+              <button onClick={() => setPaymentYear((y) => y + 1)} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.SLATE, fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>›</button>
             </div>
 
-            {complianceSubTab === "payments" && (
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
-                  <SectionTitle title={`EOBI & Social Security — ${paymentYear}`} style={{ margin: 0 }} />
-                  <div style={{ display: "flex", gap: "4px" }}>
-                    <button onClick={() => setPaymentYear((y) => y - 1)} style={{ padding: "4px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: "pointer", fontSize: "14px" }}>‹</button>
-                    <span style={{ padding: "4px 10px", fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{paymentYear}</span>
-                    <button onClick={() => setPaymentYear((y) => y + 1)} style={{ padding: "4px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: "pointer", fontSize: "14px" }}>›</button>
-                  </div>
-                </div>
-                {renderPayments()}
-              </div>
-            )}
+            {renderPayments()}
 
-            {complianceSubTab === "renewals" && (
-              <div>
-                <SectionTitle title="Civil Defence & Labour Compliance" />
-                <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: "-8px 0 16px" }}>
-                  Annual renewal tracking per location.
-                </p>
-                {renderComplianceRenewals()}
-              </div>
-            )}
+            <div style={{ marginTop: "8px" }}>
+              {renderComplianceRenewals()}
+            </div>
           </div>
         )}
 
         {/* ── DOCUMENTS ── */}
         {activeTab === "documents" && (
           <div>
-            <SectionTitle title="NTN on WAPDA Bills" />
-            <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: "-8px 0 16px" }}>
-              NTN registration status on electricity bills per location.
-            </p>
-            {renderNtnDocs()}
+            {/* Filter bar */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
+              <select value={docTypeFilterUI} onChange={(e) => setDocTypeFilterUI(e.target.value)}
+                style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "140px" }}>
+                <option value="">All Types</option>
+                <option value="ntn">NTN</option>
+                <option value="licences">Restaurant Licences</option>
+              </select>
+              <select value={docStatusFilterUI} onChange={(e) => setDocStatusFilterUI(e.target.value)}
+                style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "140px" }}>
+                <option value="">All Statuses</option>
+                <option value="Done">Done</option>
+                <option value="Pending">Pending</option>
+                <option value="N/A">N/A</option>
+              </select>
+              <input type="text" value={docSearch} onChange={(e) => setDocSearch(e.target.value)}
+                placeholder="🔍  Search location…"
+                style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", flex: 1, minWidth: "180px", color: COLOURS.NAVY, backgroundColor: "white" }}
+              />
+            </div>
 
-            <SectionTitle title="Restaurant Licences" style={{ marginTop: "24px" }} />
-            <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: "-8px 0 16px" }}>
-              PFA, Medical, Training, and Tourism certificates per outlet.
-            </p>
-            {renderLicences()}
+            {(docTypeFilterUI === "" || docTypeFilterUI === "ntn") && (
+              <div style={{ marginBottom: "24px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>NTN on WAPDA Bills</span>
+                  <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+                </div>
+                {renderNtnDocs()}
+              </div>
+            )}
+
+            {(docTypeFilterUI === "" || docTypeFilterUI === "licences") && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>Restaurant Licences</span>
+                  <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+                  {(() => {
+                    const pendCount = restaurantLicences.filter((r) =>
+                      r.pfa_status === "Pending" || r.medical_status === "Pending" ||
+                      r.training_status === "Pending" || r.tourism_status === "Pending"
+                    ).length;
+                    return pendCount > 0 ? (
+                      <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "#FEF3C7", color: COLOURS.AMBER, whiteSpace: "nowrap" }}>{pendCount} pending</span>
+                    ) : null;
+                  })()}
+                </div>
+                {renderLicences()}
+              </div>
+            )}
           </div>
         )}
 
         {/* ── OPERATIONS ── */}
         {activeTab === "operations" && (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
-              <h2 style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY, margin: 0 }}>
-                CEO Operations Summary — {opsYear}
-              </h2>
-              <div style={{ display: "flex", gap: "4px" }}>
-                <button onClick={() => setOpsYear((y) => y - 1)} style={{ padding: "4px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: "pointer", fontSize: "14px" }}>‹</button>
-                <span style={{ padding: "4px 10px", fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>{opsYear}</span>
-                <button onClick={() => setOpsYear((y) => y + 1)} style={{ padding: "4px 10px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: "pointer", fontSize: "14px" }}>›</button>
-              </div>
+            {/* Month nav */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px" }}>
+              <button onClick={prevOpsMonth} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.SLATE, fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>‹</button>
+              <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, minWidth: "140px", textAlign: "center" }}>{MONTH_FULL[opsMonth - 1]} {opsYear}</span>
+              <button onClick={nextOpsMonth} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.SLATE, fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>›</button>
+              {opsYear === CURRENT_YEAR && opsMonth === new Date().getMonth() + 1 && (
+                <span style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "4px" }}>(month to date)</span>
+              )}
             </div>
 
-            <SectionTitle title="Vehicle Fuel" />
-            {renderFuel()}
+            {/* Fuel section */}
+            <div style={{ marginBottom: "28px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>⛽ Fleet — Fuel Summary</span>
+                <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+                <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>
+                  {fuelRows.filter((r) => r.month === opsMonth).length} vehicles
+                </span>
+              </div>
+              {renderFuel()}
+            </div>
 
-            <SectionTitle title="Solar Production (kWh/month)" style={{ marginTop: "24px" }} />
-            {renderSolar()}
+            {/* Solar section */}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>☀️ Solar — Monthly Production</span>
+                <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+                <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>
+                  {solarBranches.length} systems
+                </span>
+              </div>
+              {renderSolar()}
+            </div>
           </div>
         )}
 
