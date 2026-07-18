@@ -67,7 +67,7 @@ type SolarBranch = {
   months: { month: number; total_kwh: number | null; days_entered: number }[] | null;
 };
 
-type TabId = "registrations" | "compliance" | "documents" | "operations" | "backups";
+type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations" | "backups";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -143,6 +143,7 @@ export default function AdminDataPage() {
   const { show: showToast, element: toastElement } = useToast();
 
   const [activeTab, setActiveTab] = useState<TabId>("registrations");
+
   const [userIsAdmin, setUserIsAdmin] = useState(false);
 
   // ── Backups state ──────────────────────────────────────────────────
@@ -175,6 +176,12 @@ export default function AdminDataPage() {
     status: string; last_renewed: string; next_due: string; notes: string;
   } | null>(null);
   const [savingCompliance, setSavingCompliance] = useState(false);
+  const [editingLicence, setEditingLicence] = useState<{
+    location_id: string; location_name: string;
+    licence_type: string; licence_label: string;
+    status: string; expiry_date: string; folderit_link: string;
+  } | null>(null);
+  const [savingLicence, setSavingLicence] = useState(false);
   const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [paymentYear, setPaymentYear] = useState(CURRENT_YEAR);
@@ -246,13 +253,15 @@ export default function AdminDataPage() {
   // Lazy-load tab data on first visit
   useEffect(() => {
     if (checking) return;
-    if (activeTab === "compliance" && paymentRows.length === 0 && !loadingPayments) {
+    if (activeTab === "payments" && paymentRows.length === 0 && !loadingPayments) {
       loadPayments();
+    }
+    if (activeTab === "compliance" && compliance.length === 0 && !loadingCompliance) {
       loadCompliance();
+      loadLicences();
     }
     if (activeTab === "documents" && ntnDocs.length === 0 && !loadingNtn) {
       loadNtnDocs();
-      loadLicences();
     }
     if (activeTab === "operations" && fuelRows.length === 0 && !loadingFuel) {
       loadFuel();
@@ -266,7 +275,7 @@ export default function AdminDataPage() {
   }, [activeTab, checking]);
 
   useEffect(() => {
-    if (activeTab === "compliance" && !checking) loadPayments();
+    if (activeTab === "payments" && !checking) loadPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentYear]);
 
@@ -433,6 +442,32 @@ export default function AdminDataPage() {
     }
   }
 
+  async function saveLicence() {
+    if (!editingLicence) return;
+    setSavingLicence(true);
+    const res = await authedFetch("/api/admin/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        doc_type:     "licence",
+        location_id:  editingLicence.location_id,
+        licence_type: editingLicence.licence_type,
+        status:       editingLicence.status,
+        expiry_date:  editingLicence.expiry_date || null,
+        folderit_link: editingLicence.folderit_link || null,
+      }),
+    });
+    const json = await res.json();
+    setSavingLicence(false);
+    if (json.ok) {
+      showToast("Licence updated", "success");
+      setEditingLicence(null);
+      loadLicences();
+    } else {
+      showToast(json.error || "Failed to save", "error");
+    }
+  }
+
   async function addLocation() {
     if (!newLocation.name.trim()) return;
     setSavingLocation(true);
@@ -589,9 +624,10 @@ export default function AdminDataPage() {
 
   const TABS: { id: TabId; label: string }[] = [
     { id: "registrations", label: "Registrations" },
-    { id: "compliance", label: "Compliance & Payments" },
-    { id: "documents", label: "Documents" },
-    { id: "operations", label: "Operations" },
+    { id: "payments",      label: "Payments" },
+    { id: "compliance",    label: "Compliance" },
+    { id: "documents",     label: "Documents" },
+    { id: "operations",    label: "Operations" },
     ...(userIsAdmin ? [{ id: "backups" as TabId, label: "Data & Backups" }] : []),
   ];
 
@@ -1286,9 +1322,9 @@ export default function AdminDataPage() {
                   <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
                     <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500, verticalAlign: "top" }}>{r.name}</td>
                     <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap", verticalAlign: "top" }}>{r.entity}</td>
-                    <ComplianceCell r={r} type="Civil Defence" />
-                    <ComplianceCell r={r} type="Labour Registration" />
-                    <ComplianceCell r={r} type="Labour Inspection" />
+                    {ComplianceCell({ r, type: "Civil Defence" })}
+                    {ComplianceCell({ r, type: "Labour Registration" })}
+                    {ComplianceCell({ r, type: "Labour Inspection" })}
                   </tr>
                 ))}
               </tbody>
@@ -1315,10 +1351,25 @@ export default function AdminDataPage() {
               <div style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
                 <div>
                   <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Status</label>
-                  <select value={editingCompliance.status} onChange={(e) => setEditingCompliance({ ...editingCompliance, status: e.target.value })}
-                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                  <select value={editingCompliance.status} onChange={(e) => {
+                    const newStatus = e.target.value;
+                    const today = new Date().toISOString().slice(0, 10);
+                    const nextYear = `${new Date().getFullYear() + 1}-${today.slice(5)}`;
+                    const isRegistered = newStatus === "Registered" || newStatus === "Done";
+                    setEditingCompliance({
+                      ...editingCompliance,
+                      status: newStatus,
+                      last_renewed: isRegistered && !editingCompliance.last_renewed ? today : editingCompliance.last_renewed,
+                      next_due:     isRegistered && !editingCompliance.next_due     ? nextYear : editingCompliance.next_due,
+                    });
+                  }} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
                     {COMPLIANCE_STATUSES.map((s) => <option key={s}>{s}</option>)}
                   </select>
+                  {(editingCompliance.status === "Registered" || editingCompliance.status === "Done") && (
+                    <p style={{ fontSize: "11px", color: COLOURS.GREEN, marginTop: "4px" }}>
+                      ✓ Dates auto-filled below — adjust if needed.
+                    </p>
+                  )}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                   <div>
@@ -1422,40 +1473,122 @@ export default function AdminDataPage() {
 
     const thStyle: React.CSSProperties = { padding: "9px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
 
+    const today = new Date().toISOString().slice(0, 10);
+
     return (
-      <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white", overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Restaurant / Location</th>
-              <th style={thStyle}>Entity</th>
-              {LICENCE_COLS.map((col) => <th key={col.key} style={thStyle}>{col.label}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r) => (
-              <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.location_name}</td>
-                <td style={{ padding: "10px 14px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "rgba(15,23,32,.08)", color: COLOURS.NAVY }}>{r.entity}</span>
-                </td>
-                {LICENCE_COLS.map((col) => {
-                  const status = r[`${col.key}_status` as keyof RestaurantLicence] as string | null;
-                  const link   = r[`${col.key}_link`   as keyof RestaurantLicence] as string | null;
-                  const expiry = r[`${col.key}_expiry`  as keyof RestaurantLicence] as string | null;
-                  return (
-                    <td key={col.key} style={{ padding: "8px 14px" }}>
-                      <StatusPill status={status} />
-                      {expiry && <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>{formatDateUK(expiry)}</div>}
-                      {link && <a href={link} target="_blank" rel="noopener noreferrer" style={{ display: "block", fontSize: "11px", color: COLOURS.GREEN, marginTop: "2px" }}>View</a>}
-                    </td>
-                  );
-                })}
+      <>
+        <p style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginBottom: "12px" }}>Click any certificate cell to update its status and expiry date.</p>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Restaurant / Location</th>
+                <th style={thStyle}>Entity</th>
+                {LICENCE_COLS.map((col) => <th key={col.key} style={thStyle}>{col.label}</th>)}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filtered.map((r) => (
+                <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                  <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500, verticalAlign: "top" }}>{r.location_name}</td>
+                  <td style={{ padding: "10px 14px", verticalAlign: "top" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "rgba(15,23,32,.08)", color: COLOURS.NAVY }}>{r.entity}</span>
+                  </td>
+                  {LICENCE_COLS.map((col) => {
+                    const status = r[`${col.key}_status` as keyof RestaurantLicence] as string | null;
+                    const link   = r[`${col.key}_link`   as keyof RestaurantLicence] as string | null;
+                    const expiry = r[`${col.key}_expiry`  as keyof RestaurantLicence] as string | null;
+                    const isExpired = expiry && expiry < today && status !== "Done" && status !== "N/A";
+                    const isSoon = expiry && !isExpired && expiry <= new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+                    return (
+                      <td key={col.key}
+                        onClick={() => setEditingLicence({
+                          location_id: r.location_id, location_name: r.location_name,
+                          licence_type: col.key, licence_label: col.label,
+                          status: status || "Pending",
+                          expiry_date: expiry || "",
+                          folderit_link: link || "",
+                        })}
+                        title={`Click to edit ${col.label}`}
+                        style={{ padding: "10px 14px", cursor: "pointer", verticalAlign: "top" }}
+                      >
+                        <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                          <StatusPill status={status} />
+                          {expiry ? (
+                            <span style={{
+                              fontSize: "10.5px",
+                              fontWeight: isExpired ? 700 : 400,
+                              color: isExpired ? COLOURS.RED : isSoon ? COLOURS.AMBER : COLOURS.SLATE,
+                            }}>
+                              Expires: {formatDateUK(expiry)}{isExpired ? " ⚠" : isSoon ? " ↑" : ""}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: "10.5px", color: COLOURS.SLATE, fontStyle: "italic" }}>No expiry set</span>
+                          )}
+                          {link && <a href={link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ fontSize: "10.5px", color: COLOURS.GREEN }}>📄 View</a>}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Licence edit modal */}
+        {editingLicence && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+            onClick={() => setEditingLicence(null)}>
+            <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: RADII.CARD, padding: "24px", maxWidth: "420px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "2px" }}>{editingLicence.location_name}</div>
+              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "16px" }}>{editingLicence.licence_label}</div>
+              <div style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Status</label>
+                  <select value={editingLicence.status} onChange={(e) => {
+                    const newStatus = e.target.value;
+                    const nextYear = `${new Date().getFullYear() + 1}-${new Date().toISOString().slice(5, 10)}`;
+                    const isDone = newStatus === "Done" || newStatus === "Registered";
+                    setEditingLicence({
+                      ...editingLicence,
+                      status: newStatus,
+                      expiry_date: isDone && !editingLicence.expiry_date ? nextYear : editingLicence.expiry_date,
+                    });
+                  }} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                    <option value="Done">Done</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Inprocess">Inprocess</option>
+                    <option value="Overdue">Overdue</option>
+                    <option value="N/A">N/A</option>
+                  </select>
+                  {(editingLicence.status === "Done" || editingLicence.status === "Registered") && (
+                    <p style={{ fontSize: "11px", color: COLOURS.GREEN, marginTop: "4px" }}>
+                      ✓ Set the expiry date below — auto-suggested to one year from today.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Expiry / Renewal Date</label>
+                  <DateInput value={editingLicence.expiry_date} onChange={(e) => setEditingLicence({ ...editingLicence, expiry_date: e.target.value })} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Folderit Link (optional)</label>
+                  <input value={editingLicence.folderit_link} onChange={(e) => setEditingLicence({ ...editingLicence, folderit_link: e.target.value })}
+                    placeholder="https://…"
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                <button onClick={() => setEditingLicence(null)} style={{ padding: "8px 16px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Cancel</button>
+                <button onClick={saveLicence} disabled={savingLicence} style={{ ...primaryButtonStyle, opacity: savingLicence ? 0.6 : 1 }}>
+                  {savingLicence ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -1607,8 +1740,8 @@ export default function AdminDataPage() {
         {/* ── REGISTRATIONS ── */}
         {activeTab === "registrations" && renderRegistrations()}
 
-        {/* ── COMPLIANCE ── */}
-        {activeTab === "compliance" && (
+        {/* ── PAYMENTS ── */}
+        {activeTab === "payments" && (
           <div>
             {/* Alert banner */}
             {!loadingPayments && (() => {
@@ -1639,9 +1772,31 @@ export default function AdminDataPage() {
             </div>
 
             {renderPayments()}
+          </div>
+        )}
 
-            <div style={{ marginTop: "8px" }}>
+        {/* ── COMPLIANCE ── */}
+        {activeTab === "compliance" && (
+          <div>
+            <div style={{ marginBottom: "28px" }}>
               {renderComplianceRenewals()}
+            </div>
+
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>Restaurant Licences</span>
+                <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+                {(() => {
+                  const pendCount = restaurantLicences.filter((r) =>
+                    r.pfa_status === "Pending" || r.medical_status === "Pending" ||
+                    r.training_status === "Pending" || r.tourism_status === "Pending"
+                  ).length;
+                  return pendCount > 0 ? (
+                    <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "#FEF3C7", color: COLOURS.AMBER, whiteSpace: "nowrap" }}>{pendCount} pending</span>
+                  ) : null;
+                })()}
+              </div>
+              {renderLicences()}
             </div>
           </div>
         )}
@@ -1651,12 +1806,6 @@ export default function AdminDataPage() {
           <div>
             {/* Filter bar */}
             <div style={{ display: "flex", gap: "8px", marginBottom: "18px", flexWrap: "wrap", alignItems: "center" }}>
-              <select value={docTypeFilterUI} onChange={(e) => setDocTypeFilterUI(e.target.value)}
-                style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "140px" }}>
-                <option value="">All Types</option>
-                <option value="ntn">NTN</option>
-                <option value="licences">Restaurant Licences</option>
-              </select>
               <select value={docStatusFilterUI} onChange={(e) => setDocStatusFilterUI(e.target.value)}
                 style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "140px" }}>
                 <option value="">All Statuses</option>
@@ -1670,34 +1819,11 @@ export default function AdminDataPage() {
               />
             </div>
 
-            {(docTypeFilterUI === "" || docTypeFilterUI === "ntn") && (
-              <div style={{ marginBottom: "24px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>NTN on WAPDA Bills</span>
-                  <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
-                </div>
-                {renderNtnDocs()}
-              </div>
-            )}
-
-            {(docTypeFilterUI === "" || docTypeFilterUI === "licences") && (
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>Restaurant Licences</span>
-                  <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
-                  {(() => {
-                    const pendCount = restaurantLicences.filter((r) =>
-                      r.pfa_status === "Pending" || r.medical_status === "Pending" ||
-                      r.training_status === "Pending" || r.tourism_status === "Pending"
-                    ).length;
-                    return pendCount > 0 ? (
-                      <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: "#FEF3C7", color: COLOURS.AMBER, whiteSpace: "nowrap" }}>{pendCount} pending</span>
-                    ) : null;
-                  })()}
-                </div>
-                {renderLicences()}
-              </div>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", whiteSpace: "nowrap" }}>NTN on WAPDA Bills</span>
+              <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+            </div>
+            {renderNtnDocs()}
           </div>
         )}
 
