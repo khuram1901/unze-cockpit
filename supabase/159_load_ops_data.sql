@@ -607,7 +607,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- BMW X5 (AGK-001, 19 records)
   SELECT id INTO v_id FROM admin_vehicles WHERE plate_number = 'AGK-001' LIMIT 1;
   IF v_id IS NULL THEN RAISE EXCEPTION 'Vehicle AGK-001 not found'; END IF;
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
-  SELECT v_id, t.d, t.wt, t.desc, t.odo, t.cost, 'import'
+  SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
     ('2024-03-04'::date, 'Denting/Penting', 'Denting/Penting', NULL, 188000.0::numeric),
     ('2024-03-07'::date, 'Denting/Penting', 'Denting/Penting', NULL, 12000.0::numeric),
@@ -628,7 +628,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- BMW X5 (AGK-001, 19 records)
     ('2025-09-18'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 10000.0::numeric),
     ('2026-02-02'::date, 'Service', 'Service', NULL, 1300.0::numeric),
     ('2026-03-07'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 20000.0::numeric)
-  ) AS t(d, wt, desc, odo, cost)
+  ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
 
@@ -636,7 +636,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Sportage (ASQ-321, 7 records)
   SELECT id INTO v_id FROM admin_vehicles WHERE plate_number = 'ASQ-321' LIMIT 1;
   IF v_id IS NULL THEN RAISE EXCEPTION 'Vehicle ASQ-321 not found'; END IF;
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
-  SELECT v_id, t.d, t.wt, t.desc, t.odo, t.cost, 'import'
+  SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
     ('2025-01-27'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter, AC Filter', NULL, 21400.0::numeric),
     ('2025-04-08'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 1999.0::numeric),
@@ -645,7 +645,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Sportage (ASQ-321, 7 records)
     ('2026-01-29'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Wheel Alignment, Any Other Mechanical Maintenance', NULL, 40276.45::numeric),
     ('2026-06-03'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL, 20368.31::numeric),
     ('2026-06-05'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL, 15000.0::numeric)
-  ) AS t(d, wt, desc, odo, cost)
+  ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
 
@@ -653,7 +653,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Hyundai Santa Fe (VX-58, 7 records)
   SELECT id INTO v_id FROM admin_vehicles WHERE plate_number = 'VX-58' LIMIT 1;
   IF v_id IS NULL THEN RAISE EXCEPTION 'Vehicle VX-58 not found'; END IF;
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
-  SELECT v_id, t.d, t.wt, t.desc, t.odo, t.cost, 'import'
+  SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
     ('2024-12-11'::date, 'Denting/Penting', 'Denting/Penting', NULL, 1650.0::numeric),
     ('2025-05-26'::date, 'Denting/Penting', 'Denting/Penting', NULL, 3400.0::numeric),
@@ -662,7 +662,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- Hyundai Santa Fe (VX-58, 7 records)
     ('2026-01-07'::date, 'Denting/Penting', 'Denting/Penting', NULL, 600.0::numeric),
     ('2026-02-23'::date, 'Service', 'Service', NULL, 1300.0::numeric),
     ('2026-03-10'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Any Other Mechanical Maintenance', NULL, 16584.0::numeric)
-  ) AS t(d, wt, desc, odo, cost)
+  ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
 
@@ -670,7 +670,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Sorento (ADK-824, 6 records)
   SELECT id INTO v_id FROM admin_vehicles WHERE plate_number = 'ADK-824' LIMIT 1;
   IF v_id IS NULL THEN RAISE EXCEPTION 'Vehicle ADK-824 not found'; END IF;
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
-  SELECT v_id, t.d, t.wt, t.desc, t.odo, t.cost, 'import'
+  SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
     ('2025-04-22'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter, AC Filter, Any Other Mechanical Maintenance', NULL, 48994.0::numeric),
     ('2025-10-30'::date, 'Oil Filter', 'Oil Filter, Air Filter, AC Filter, Any Other Mechanical Maintenance', NULL, 20600.0::numeric),
@@ -678,7 +678,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Sorento (ADK-824, 6 records)
     ('2026-04-23'::date, 'Oil Filter', 'Oil Filter, Air Filter, AC Filter', NULL, 26250.0::numeric),
     ('2026-05-21'::date, 'Coolant Radiator', 'Coolant Radiator, Inspection', NULL, 13734.02::numeric),
     ('2026-05-21'::date, 'Denting/Penting / Battery', 'Denting/Penting / Battery', NULL, 24000.0::numeric)
-  ) AS t(d, wt, desc, odo, cost)
+  ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
 
@@ -686,7 +686,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Carnival (AEW-533, 12 records)
   SELECT id INTO v_id FROM admin_vehicles WHERE plate_number = 'AEW-533' LIMIT 1;
   IF v_id IS NULL THEN RAISE EXCEPTION 'Vehicle AEW-533 not found'; END IF;
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
-  SELECT v_id, t.d, t.wt, t.desc, t.odo, t.cost, 'import'
+  SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
     ('2024-08-16'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 30213.72::numeric),
     ('2024-11-21'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Air Filter', NULL, 39255.85::numeric),
@@ -700,7 +700,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- KIA Carnival (AEW-533, 12 records)
     ('2026-03-03'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 19898.29::numeric),
     ('2026-03-17'::date, 'Oil Filter', 'Oil Filter, Coolant Radiator', NULL, 18047.78::numeric),
     ('2026-07-07'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 31745.69::numeric)
-  ) AS t(d, wt, desc, odo, cost)
+  ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
 
@@ -708,7 +708,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- MG HS (ADP-579, 20 records)
   SELECT id INTO v_id FROM admin_vehicles WHERE plate_number = 'ADP-579' LIMIT 1;
   IF v_id IS NULL THEN RAISE EXCEPTION 'Vehicle ADP-579 not found'; END IF;
   INSERT INTO admin_vehicle_maintenance (vehicle_id, date, work_type, description, odometer_km, cost_pkr, entered_by)
-  SELECT v_id, t.d, t.wt, t.desc, t.odo, t.cost, 'import'
+  SELECT v_id, t.d, t.wt, t.descr, t.odo, t.cost, 'import'
   FROM (VALUES
     ('2022-09-08'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 11400.0::numeric),
     ('2022-12-09'::date, 'Engine Oil', 'Engine Oil, Oil Filter', NULL, 12900.0::numeric),
@@ -730,7 +730,7 @@ DO $$ DECLARE v_id uuid; BEGIN  -- MG HS (ADP-579, 20 records)
     ('2026-04-20'::date, 'Any Other Mechanical Maintenance', 'Any Other Mechanical Maintenance', NULL, 5800.0::numeric),
     ('2026-05-15'::date, 'Engine Oil', 'Engine Oil, Oil Filter, Inspection', NULL, 17621.0::numeric),
     ('2026-06-06'::date, 'Brake Oil', 'Brake Oil, Any Other Mechanical Maintenance', NULL, 91721.0::numeric)
-  ) AS t(d, wt, desc, odo, cost)
+  ) AS t(d, wt, descr, odo, cost)
   WHERE NOT EXISTS (SELECT 1 FROM admin_vehicle_maintenance x WHERE x.vehicle_id = v_id AND x.date = t.d AND x.cost_pkr = t.cost);
 END $$;
 
