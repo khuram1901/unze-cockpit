@@ -166,6 +166,15 @@ export default function AdminDataPage() {
 
   const [activeTab, setActiveTab] = useState<TabId>("registrations");
 
+  // Deep-link support: /admin?tab=payments, /admin?tab=compliance etc.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("tab") as TabId | null;
+    if (t && (["registrations","payments","compliance","documents","operations"] as string[]).includes(t)) {
+      setActiveTab(t);
+    }
+  }, []);
+
   // ── Registrations state ────────────────────────────────────────────
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loadingRegs, setLoadingRegs] = useState(false);

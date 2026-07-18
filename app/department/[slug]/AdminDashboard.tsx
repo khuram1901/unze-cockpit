@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { COLOURS, RADII, PageHeader } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
@@ -69,13 +70,23 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, href }: { children: React.ReactNode; href?: string }) {
   return (
-    <p style={{
-      fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em",
-      textTransform: "uppercase", color: COLOURS.SLATE,
+    <div style={{
+      display: "flex", justifyContent: "space-between", alignItems: "center",
       margin: "20px 0 8px",
-    }}>{children}</p>
+    }}>
+      <p style={{
+        fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em",
+        textTransform: "uppercase", color: COLOURS.SLATE, margin: 0,
+      }}>{children}</p>
+      {href && (
+        <a href={href} style={{
+          fontSize: "11px", color: COLOURS.GREEN, fontWeight: 600,
+          textDecoration: "none", whiteSpace: "nowrap",
+        }}>View →</a>
+      )}
+    </div>
   );
 }
 
@@ -88,14 +99,20 @@ function KCard({ label, value, color }: { label: string; value: string | number;
   );
 }
 
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
-  return (
+function Card({ children, style, href }: { children: React.ReactNode; style?: React.CSSProperties; href?: string }) {
+  const inner = (
     <div style={{
       backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
       borderRadius: RADII.CARD, padding: "12px 14px", ...style,
     }}>
       {children}
     </div>
+  );
+  if (!href) return inner;
+  return (
+    <a href={href} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+      {inner}
+    </a>
   );
 }
 
@@ -134,24 +151,27 @@ function Pill({ label, colour }: { label: string; colour: PillColour }) {
   );
 }
 
-function ComplianceBar({ label, stat }: { label: string; stat: ComplianceStat }) {
+function ComplianceBar({ label, stat, href }: { label: string; stat: ComplianceStat; href: string }) {
   const p = pct(stat.registered, stat.total);
   const barColor = p >= 80 ? COLOURS.GREEN : p >= 50 ? COLOURS.AMBER : COLOURS.RED;
   const pillColour: PillColour = p >= 80 ? "green" : p >= 50 ? "amber" : "red";
   const pillLabel = p >= 80 ? "Good" : p >= 50 ? "Partial" : "Attention";
   return (
-    <div style={{
-      display: "grid", gridTemplateColumns: "130px 1fr 38px 76px",
-      alignItems: "center", gap: "8px",
-      padding: "5px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
-    }}>
-      <span style={{ fontSize: "12px", color: COLOURS.NAVY }}>{label}</span>
-      <div style={{ height: "5px", backgroundColor: COLOURS.HAIRLINE, borderRadius: "3px", overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${p}%`, backgroundColor: barColor, borderRadius: "3px" }} />
+    <a href={href} style={{ textDecoration: "none", color: "inherit" }}>
+      <div style={{
+        display: "grid", gridTemplateColumns: "130px 1fr 38px 76px",
+        alignItems: "center", gap: "8px",
+        padding: "5px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+        cursor: "pointer",
+      }}>
+        <span style={{ fontSize: "12px", color: COLOURS.NAVY }}>{label}</span>
+        <div style={{ height: "5px", backgroundColor: COLOURS.HAIRLINE, borderRadius: "3px", overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${p}%`, backgroundColor: barColor, borderRadius: "3px" }} />
+        </div>
+        <span style={{ fontSize: "11px", fontWeight: 600, color: barColor, textAlign: "right" }}>{p}%</span>
+        <Pill label={pillLabel} colour={pillColour} />
       </div>
-      <span style={{ fontSize: "11px", fontWeight: 600, color: barColor, textAlign: "right" }}>{p}%</span>
-      <Pill label={pillLabel} colour={pillColour} />
-    </div>
+    </a>
   );
 }
 
@@ -166,7 +186,10 @@ function SkeletonBlock({ height = "80px" }: { height?: string }) {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
+const ADMIN_OPS = "/admin";
+
 export default function AdminDashboard() {
+  const router = useRouter();
   const isMobile = useMobile();
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -248,7 +271,7 @@ export default function AdminDashboard() {
         return (
           <>
             {/* ── TASKS ── */}
-            <SectionLabel>Tasks</SectionLabel>
+            <SectionLabel href="/tasks">Tasks</SectionLabel>
             <div style={grid4}>
               <KCard label="Open"           value={tasks.open} />
               <KCard label="Overdue"        value={tasks.overdue}    color={tasks.overdue    > 0 ? COLOURS.RED   : COLOURS.NAVY} />
@@ -257,7 +280,7 @@ export default function AdminDashboard() {
             </div>
 
             {tasks.by_person && tasks.by_person.length > 0 && (
-              <Card style={{ marginBottom: "8px" }}>
+              <Card href="/tasks" style={{ marginBottom: "8px" }}>
                 <CardTitle>By person — Admin team</CardTitle>
                 {tasks.by_person.map((p, i) => {
                   const isLast = i === tasks.by_person.length - 1;
@@ -292,36 +315,38 @@ export default function AdminDashboard() {
             )}
 
             {/* ── COMPLIANCE ── */}
-            <SectionLabel>Compliance health</SectionLabel>
+            <SectionLabel href={`${ADMIN_OPS}?tab=registrations`}>Compliance health</SectionLabel>
             <Card style={{ marginBottom: "8px" }}>
-              <ComplianceBar label="EOBI registration" stat={compliance.eobi} />
-              <ComplianceBar label="Social Security"   stat={compliance.ss} />
-              <ComplianceBar label="Civil Defence"     stat={compliance.civil} />
-              <ComplianceBar label="Labour reg."       stat={compliance.labour_reg} />
+              <ComplianceBar label="EOBI registration" stat={compliance.eobi}       href={`${ADMIN_OPS}?tab=registrations`} />
+              <ComplianceBar label="Social Security"   stat={compliance.ss}         href={`${ADMIN_OPS}?tab=registrations`} />
+              <ComplianceBar label="Civil Defence"     stat={compliance.civil}      href={`${ADMIN_OPS}?tab=compliance`} />
+              <ComplianceBar label="Labour reg."       stat={compliance.labour_reg} href={`${ADMIN_OPS}?tab=compliance`} />
               {(() => {
                 const p2 = pct(compliance.labour_insp.registered, compliance.labour_insp.total);
                 const bc = p2 >= 80 ? COLOURS.GREEN : p2 >= 50 ? COLOURS.AMBER : COLOURS.RED;
                 const pc: PillColour = p2 >= 80 ? "green" : p2 >= 50 ? "amber" : "red";
                 return (
-                  <div style={{
-                    display: "grid", gridTemplateColumns: "130px 1fr 38px 76px",
-                    alignItems: "center", gap: "8px", padding: "5px 0",
-                  }}>
-                    <span style={{ fontSize: "12px", color: COLOURS.NAVY }}>Labour inspection</span>
-                    <div style={{ height: "5px", backgroundColor: COLOURS.HAIRLINE, borderRadius: "3px", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${p2}%`, backgroundColor: bc, borderRadius: "3px" }} />
+                  <a href={`${ADMIN_OPS}?tab=compliance`} style={{ textDecoration: "none", color: "inherit" }}>
+                    <div style={{
+                      display: "grid", gridTemplateColumns: "130px 1fr 38px 76px",
+                      alignItems: "center", gap: "8px", padding: "5px 0", cursor: "pointer",
+                    }}>
+                      <span style={{ fontSize: "12px", color: COLOURS.NAVY }}>Labour inspection</span>
+                      <div style={{ height: "5px", backgroundColor: COLOURS.HAIRLINE, borderRadius: "3px", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${p2}%`, backgroundColor: bc, borderRadius: "3px" }} />
+                      </div>
+                      <span style={{ fontSize: "11px", fontWeight: 600, color: bc, textAlign: "right" }}>{p2}%</span>
+                      <Pill label={p2 >= 80 ? "Good" : p2 >= 50 ? "Partial" : "Attention"} colour={pc} />
                     </div>
-                    <span style={{ fontSize: "11px", fontWeight: 600, color: bc, textAlign: "right" }}>{p2}%</span>
-                    <Pill label={p2 >= 80 ? "Good" : p2 >= 50 ? "Partial" : "Attention"} colour={pc} />
-                  </div>
+                  </a>
                 );
               })()}
             </Card>
 
             {/* ── PAYMENTS ── */}
-            <SectionLabel>Statutory payments — {monthLabel}</SectionLabel>
+            <SectionLabel href={`${ADMIN_OPS}?tab=payments`}>Statutory payments — {monthLabel}</SectionLabel>
             <div style={grid2}>
-              <Card>
+              <Card href={`${ADMIN_OPS}?tab=payments`}>
                 <CardTitle>EOBI</CardTitle>
                 <Row label="IFPL"   value={payPill("IFPL",   "EOBI")} />
                 <Row label="UTPL"   value={payPill("UTPL",   "EOBI")} />
@@ -331,7 +356,7 @@ export default function AdminDashboard() {
                   {payPill("HD", "EOBI")}
                 </div>
               </Card>
-              <Card>
+              <Card href={`${ADMIN_OPS}?tab=payments`}>
                 <CardTitle>Social Security</CardTitle>
                 <Row label="IFPL"   value={payPill("IFPL",   "Social Security")} />
                 <Row label="UTPL"   value={payPill("UTPL",   "Social Security")} />
@@ -342,7 +367,7 @@ export default function AdminDashboard() {
                 </div>
               </Card>
             </div>
-            <Card style={{ marginBottom: "8px" }}>
+            <Card href={`${ADMIN_OPS}?tab=payments`} style={{ marginBottom: "8px" }}>
               <CardTitle>Payment history this FY</CardTitle>
               <Row label="Late payments (any entity)" value={payments.late_fy}    color={payments.late_fy    > 0 ? COLOURS.AMBER : COLOURS.GREEN} />
               <div style={lastRow}>
@@ -354,9 +379,9 @@ export default function AdminDashboard() {
             </Card>
 
             {/* ── DOCUMENTS ── */}
-            <SectionLabel>Documents</SectionLabel>
+            <SectionLabel href={`${ADMIN_OPS}?tab=documents`}>Documents</SectionLabel>
             <div style={grid2}>
-              <Card>
+              <Card href={`${ADMIN_OPS}?tab=documents`}>
                 <CardTitle>NTN certificates</CardTitle>
                 <Row label="Registered"    value={documents.ntn_registered} color={COLOURS.GREEN} />
                 <Row label="Pending"       value={documents.ntn_pending}    color={documents.ntn_pending > 0 ? COLOURS.AMBER : COLOURS.GREEN} />
@@ -367,7 +392,7 @@ export default function AdminDashboard() {
                   </span>
                 </div>
               </Card>
-              <Card>
+              <Card href={`${ADMIN_OPS}?tab=documents`}>
                 <CardTitle>Restaurant licences</CardTitle>
                 <Row label="PFA valid"        value={`${documents.pfa_valid} / ${documents.pfa_total}`}     color={documents.pfa_valid     === documents.pfa_total ? COLOURS.GREEN : COLOURS.AMBER} />
                 <Row label="Medical certs"    value={`${documents.medical_valid} / ${documents.pfa_total}`}  color={documents.medical_valid  === documents.pfa_total ? COLOURS.GREEN : COLOURS.AMBER} />
@@ -382,8 +407,8 @@ export default function AdminDashboard() {
             </div>
 
             {/* ── FLEET ── */}
-            <SectionLabel>Fleet — {monthLabel}</SectionLabel>
-            <Card style={{ marginBottom: "8px" }}>
+            <SectionLabel href={`${ADMIN_OPS}?tab=operations`}>Fleet — {monthLabel}</SectionLabel>
+            <Card href={`${ADMIN_OPS}?tab=operations`} style={{ marginBottom: "8px" }}>
               <div style={twoCol}>
                 <div>
                   <Row label="Active vehicles" value={fleet.active_vehicles} />
@@ -407,8 +432,8 @@ export default function AdminDashboard() {
             </Card>
 
             {/* ── SOLAR ── */}
-            <SectionLabel>Solar — {monthLabel}</SectionLabel>
-            <Card style={{ marginBottom: "8px" }}>
+            <SectionLabel href={`${ADMIN_OPS}?tab=operations`}>Solar — {monthLabel}</SectionLabel>
+            <Card href={`${ADMIN_OPS}?tab=operations`} style={{ marginBottom: "8px" }}>
               <div style={twoCol}>
                 <div>
                   <Row label="Active sites"     value={solar.active_sites} />
@@ -430,8 +455,8 @@ export default function AdminDashboard() {
             </Card>
 
             {/* ── UTILITIES ── */}
-            <SectionLabel>Utilities — {monthLabel}</SectionLabel>
-            <Card style={{ marginBottom: "8px" }}>
+            <SectionLabel href={`${ADMIN_OPS}?tab=operations`}>Utilities — {monthLabel}</SectionLabel>
+            <Card href={`${ADMIN_OPS}?tab=operations`} style={{ marginBottom: "8px" }}>
               <div style={twoCol}>
                 <div>
                   <Row label="Locations tracked" value={utilities.locations_tracked} />
