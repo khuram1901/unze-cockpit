@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       {
         branch_id,
         date,
-        production_kwh: production_kwh != null ? parseFloat(production_kwh) : null,
+        production_kwh: production_kwh != null && production_kwh !== "" ? parseFloat(production_kwh) : null,
         status: status || "Active",
         notes: notes || null,
         entered_by: auth.email,

@@ -289,10 +289,10 @@ export default function AdminDataPage() {
   // ── Manage Fleet modal ─────────────────────────────────────────────
   const [manageFleet, setManageFleet] = useState(false);
   const [allVehicles, setAllVehicles] = useState<{
-    id: string; name: string; plate_number: string; is_active: boolean;
+    id: string; name: string; plate_number: string; is_active: boolean; odometer_unit: string;
   }[]>([]);
   const [vehicleForm, setVehicleForm] = useState<{
-    id?: string; name: string; plate_number: string; is_active: boolean;
+    id?: string; name: string; plate_number: string; is_active: boolean; odometer_unit: string;
   } | null>(null);
   const [savingVehicle, setSavingVehicle] = useState(false);
 
@@ -305,6 +305,16 @@ export default function AdminDataPage() {
     id?: string; name: string; system_kw: string; is_active: boolean;
   } | null>(null);
   const [savingSolar, setSavingSolar] = useState(false);
+
+  // ── Manage Utility Sites modal ─────────────────────────────────────
+  const [manageUtility, setManageUtility] = useState(false);
+  const [allLocations, setAllLocations] = useState<{
+    id: string; name: string; entity: string; location_type: string; province: string | null; is_active: boolean;
+  }[]>([]);
+  const [locationForm, setLocationForm] = useState<{
+    id?: string; name: string; entity: string; location_type: string; province: string; is_active: boolean;
+  } | null>(null);
+  const [savingUtilityLoc, setSavingUtilityLoc] = useState(false);
 
   // ── Utility pagination ─────────────────────────────────────────────
   const [utilityPage, setUtilityPage] = useState(0);
@@ -1913,6 +1923,57 @@ export default function AdminDataPage() {
     }
   }
 
+  // ── Manage Utility Sites handlers ──────────────────────────────────
+  async function openManageUtility() {
+    const res = await authedFetch("/api/admin/locations");
+    const json = await res.json();
+    setAllLocations(json.data || []);
+    setLocationForm(null);
+    setManageUtility(true);
+  }
+
+  async function saveLocation() {
+    if (!locationForm || !locationForm.name.trim() || !locationForm.entity || !locationForm.location_type) return;
+    setSavingUtilityLoc(true);
+    if (locationForm.id) {
+      // Edit existing
+      const res = await authedFetch("/api/admin/locations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: locationForm.id, name: locationForm.name, entity: locationForm.entity, location_type: locationForm.location_type, province: locationForm.province, is_active: locationForm.is_active }),
+      });
+      const json = await res.json();
+      setSavingUtilityLoc(false);
+      if (json.ok) {
+        showToast("Site updated ✓", "success");
+        setLocationForm(null);
+        const r = await authedFetch("/api/admin/locations");
+        setAllLocations((await r.json()).data || []);
+        loadUtility();
+      } else {
+        showToast(json.error || "Failed to save", "error");
+      }
+    } else {
+      // Create new (uses the full RPC which creates compliance records too)
+      const res = await authedFetch("/api/admin/locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: locationForm.name, entity: locationForm.entity, location_type: locationForm.location_type, province: locationForm.province }),
+      });
+      const json = await res.json();
+      setSavingUtilityLoc(false);
+      if (json.ok) {
+        showToast("Site added ✓", "success");
+        setLocationForm(null);
+        const r = await authedFetch("/api/admin/locations");
+        setAllLocations((await r.json()).data || []);
+        loadUtility();
+      } else {
+        showToast(json.error || "Failed to save", "error");
+      }
+    }
+  }
+
   // ── Manage modals render ───────────────────────────────────────────
   function renderManageFleet() {
     if (!manageFleet) return null;
@@ -1937,7 +1998,8 @@ export default function AdminDataPage() {
                     <div style={{ fontSize: "11px", color: COLOURS.SLATE, fontFamily: "monospace" }}>{v.plate_number}</div>
                   </div>
                   <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px", backgroundColor: v.is_active ? "#DCFCE7" : COLOURS.HAIRLINE, color: v.is_active ? COLOURS.GREEN : COLOURS.SLATE }}>{v.is_active ? "Active" : "Inactive"}</span>
-                  <button onClick={() => setVehicleForm({ id: v.id, name: v.name, plate_number: v.plate_number, is_active: v.is_active })}
+                  <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, fontFamily: "monospace" }}>{v.odometer_unit ?? "km"}</div>
+                  <button onClick={() => setVehicleForm({ id: v.id, name: v.name, plate_number: v.plate_number, is_active: v.is_active, odometer_unit: v.odometer_unit ?? "km" })}
                     style={{ fontSize: "11.5px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Edit</button>
                 </div>
               ))}
@@ -1948,7 +2010,7 @@ export default function AdminDataPage() {
           {vehicleForm ? (
             <div style={{ border: `1px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "16px", backgroundColor: "#F8F9FC" }}>
               <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>{vehicleForm.id ? "Edit Vehicle" : "Add New Vehicle"}</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                 <div>
                   <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Vehicle Name *</label>
                   <input type="text" placeholder="e.g. Honda City" value={vehicleForm.name}
@@ -1960,6 +2022,15 @@ export default function AdminDataPage() {
                   <input type="text" placeholder="e.g. LHR-1234" value={vehicleForm.plate_number}
                     onChange={(e) => setVehicleForm((f) => f ? { ...f, plate_number: e.target.value } : f)}
                     style={{ ...mgmtInput, fontFamily: "monospace", textTransform: "uppercase" }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>ODO Unit *</label>
+                  <select value={vehicleForm.odometer_unit ?? "km"}
+                    onChange={(e) => setVehicleForm((f) => f ? { ...f, odometer_unit: e.target.value } : f)}
+                    style={mgmtInput}>
+                    <option value="km">km</option>
+                    <option value="miles">miles</option>
+                  </select>
                 </div>
               </div>
               {vehicleForm.id && (
@@ -1979,7 +2050,7 @@ export default function AdminDataPage() {
               </div>
             </div>
           ) : (
-            <button onClick={() => setVehicleForm({ name: "", plate_number: "", is_active: true })}
+            <button onClick={() => setVehicleForm({ name: "", plate_number: "", is_active: true, odometer_unit: "km" })}
               style={{ ...primaryButtonStyle, width: "100%", padding: "10px", fontSize: "13px" }}>+ Add New Vehicle</button>
           )}
         </div>
@@ -2054,6 +2125,114 @@ export default function AdminDataPage() {
           ) : (
             <button onClick={() => setSolarForm({ name: "", system_kw: "", is_active: true })}
               style={{ ...primaryButtonStyle, width: "100%", padding: "10px", fontSize: "13px" }}>+ Add New Solar Site</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Manage Utility Sites modal render ──────────────────────────────
+  function renderManageUtility() {
+    if (!manageUtility) return null;
+    const mgmtInput: React.CSSProperties = { ...inputStyle, width: "100%", boxSizing: "border-box" as const, fontSize: "13px" };
+    const ENTITIES = [
+      { value: "IFPL",   label: "IFPL — Imperial Footwear" },
+      { value: "UTPL",   label: "UTPL — Unze Trading" },
+      { value: "HD",     label: "HD — Haute Dolci" },
+      { value: "Baranh", label: "Baranh — Bahrain" },
+    ];
+    const LOC_TYPES = ["retail", "restaurant", "plant", "warehouse", "office"];
+    const PROVINCES = ["Punjab", "Sindh", "KPK", "Islamabad", "Balochistan"];
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+        onClick={() => { setManageUtility(false); setLocationForm(null); }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: "12px", padding: "24px", maxWidth: "600px", width: "100%", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>⚡ Manage Sites</div>
+            <button onClick={() => { setManageUtility(false); setLocationForm(null); }}
+              style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: COLOURS.SLATE }}>✕</button>
+          </div>
+
+          {/* Location list */}
+          {allLocations.length > 0 && (
+            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", overflow: "hidden", marginBottom: "16px" }}>
+              {allLocations.map((loc, i) => (
+                <div key={loc.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", borderBottom: i < allLocations.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", backgroundColor: locationForm?.id === loc.id ? "#F0F4FF" : "white" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: loc.is_active ? COLOURS.NAVY : COLOURS.SLATE }}>{loc.name}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{ENTITIES.find((e) => e.value === loc.entity)?.label ?? loc.entity} · {loc.location_type}</div>
+                  </div>
+                  <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px", backgroundColor: loc.is_active ? "#DCFCE7" : COLOURS.HAIRLINE, color: loc.is_active ? COLOURS.GREEN : COLOURS.SLATE }}>{loc.is_active ? "Active" : "Inactive"}</span>
+                  <button onClick={() => setLocationForm({ id: loc.id, name: loc.name, entity: loc.entity, location_type: loc.location_type, province: loc.province || "", is_active: loc.is_active })}
+                    style={{ fontSize: "11.5px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Edit</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add / Edit form */}
+          {locationForm ? (
+            <div style={{ border: `1px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "16px", backgroundColor: "#F8F9FC" }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>{locationForm.id ? "Edit Site" : "Add New Site"}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Site Name *</label>
+                  <input type="text" placeholder="e.g. DHA Branch" value={locationForm.name}
+                    onChange={(e) => setLocationForm((f) => f ? { ...f, name: e.target.value } : f)}
+                    style={mgmtInput} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Company *</label>
+                  <select value={locationForm.entity}
+                    onChange={(e) => setLocationForm((f) => f ? { ...f, entity: e.target.value } : f)}
+                    style={mgmtInput}>
+                    <option value="">Select…</option>
+                    {ENTITIES.map((en) => <option key={en.value} value={en.value}>{en.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Type *</label>
+                  <select value={locationForm.location_type}
+                    onChange={(e) => setLocationForm((f) => f ? { ...f, location_type: e.target.value } : f)}
+                    style={mgmtInput}>
+                    <option value="">Select…</option>
+                    {LOC_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Province</label>
+                  <select value={locationForm.province}
+                    onChange={(e) => setLocationForm((f) => f ? { ...f, province: e.target.value } : f)}
+                    style={mgmtInput}>
+                    <option value="">Select…</option>
+                    {PROVINCES.map((p) => <option key={p}>{p}</option>)}
+                  </select>
+                </div>
+              </div>
+              {locationForm.id && (
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: COLOURS.SLATE, marginBottom: "12px", cursor: "pointer" }}>
+                  <input type="checkbox" checked={locationForm.is_active}
+                    onChange={(e) => setLocationForm((f) => f ? { ...f, is_active: e.target.checked } : f)} />
+                  Active (shows in daily entry + ops)
+                </label>
+              )}
+              {!locationForm.id && (
+                <p style={{ fontSize: "11.5px", color: COLOURS.SLATE, margin: "0 0 12px" }}>
+                  Adding a new site also creates its EOBI &amp; compliance records automatically.
+                </p>
+              )}
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={saveLocation} disabled={savingUtilityLoc}
+                  style={{ ...primaryButtonStyle, padding: "8px 18px", fontSize: "13px", opacity: savingUtilityLoc ? 0.6 : 1 }}>
+                  {savingUtilityLoc ? "Saving…" : locationForm.id ? "Save Changes" : "Add Site"}
+                </button>
+                <button onClick={() => setLocationForm(null)}
+                  style={{ padding: "8px 14px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setLocationForm({ name: "", entity: "", location_type: "retail", province: "Punjab", is_active: true })}
+              style={{ ...primaryButtonStyle, width: "100%", padding: "10px", fontSize: "13px" }}>+ Add New Site</button>
           )}
         </div>
       </div>
@@ -2819,6 +2998,12 @@ export default function AdminDataPage() {
                 <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>
                   {utilityLocations.length} sites
                 </span>
+                {canManageLocations && (
+                  <button onClick={openManageUtility}
+                    style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "white", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    ⚙ Manage
+                  </button>
+                )}
               </div>
               {renderUtility()}
             </div>
@@ -3010,6 +3195,8 @@ export default function AdminDataPage() {
       {renderManageFleet()}
       {/* Manage Solar Sites modal */}
       {renderManageSolar()}
+      {/* Manage Utility Sites modal */}
+      {renderManageUtility()}
     </AuthWrapper>
   );
 }

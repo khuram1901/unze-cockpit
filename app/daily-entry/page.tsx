@@ -10,7 +10,7 @@ import { useMobile } from "../lib/useMobile";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
-type Vehicle  = { id: string; name: string; plate_number: string };
+type Vehicle  = { id: string; name: string; plate_number: string; odometer_unit: string };
 type Branch   = { id: string; name: string; system_kw: number | null };
 type Location = { id: string; name: string; entity: string };
 
@@ -98,6 +98,9 @@ export default function DailyEntryPage() {
   const [loadingOdo, setLoadingOdo] = useState(false);
   const [submittingFuel, setSubmittingFuel] = useState(false);
 
+  // ── Maintenance last-ODO (to show reference + validate forward-only) ─
+  const [lastMaintOdo, setLastMaintOdo] = useState<number | null>(null);
+
   // ── Solar form ─────────────────────────────────────────────────────
   const [solar, setSolar] = useState({
     branch_id: "", date: today,
@@ -178,11 +181,15 @@ export default function DailyEntryPage() {
       .then((r) => r.json()).then((j) => setRecentFuel(j.data || []));
   }, [fuel.vehicle_id]);
 
-  // Recent maintenance when maintenance vehicle changes
+  // Recent maintenance + last ODO when maintenance vehicle changes
   useEffect(() => {
     if (!maint.vehicle_id) return;
     authedFetch(`/api/admin/recent-entries?form=maintenance&vehicleId=${maint.vehicle_id}`)
       .then((r) => r.json()).then((j) => setRecentMaint(j.data || []));
+    // Load last recorded odometer for this vehicle (reuse fuel endpoint)
+    authedFetch(`/api/admin/fuel?vehicle_id=${maint.vehicle_id}`)
+      .then((r) => r.json())
+      .then((json) => setLastMaintOdo(json.data?.current_odometer ?? null));
   }, [maint.vehicle_id]);
 
   // Recent solar when branch changes
@@ -215,6 +222,16 @@ export default function DailyEntryPage() {
     e.preventDefault();
     if (!fuel.vehicle_id || !fuel.date || !fuel.price_per_litre || !fuel.quantity_litres) {
       showToast("Please fill all required fields", "error"); return;
+    }
+    // Forward-only odometer check
+    if (fuel.current_odometer && fuel.previous_odometer) {
+      const curr = parseInt(fuel.current_odometer);
+      const prev = parseInt(fuel.previous_odometer);
+      if (curr < prev) {
+        const unit = vehicles.find((v) => v.id === fuel.vehicle_id)?.odometer_unit ?? "km";
+        showToast(`Current odometer (${curr.toLocaleString()} ${unit}) cannot be less than last recorded (${prev.toLocaleString()} ${unit})`, "error");
+        return;
+      }
     }
     setSubmittingFuel(true);
     const res = await authedFetch("/api/admin/fuel", {
@@ -262,6 +279,15 @@ export default function DailyEntryPage() {
     if (!utility.location_id || !utility.reading_date || !utility.current_reading) {
       showToast("Please fill all required fields", "error"); return;
     }
+    // Forward-only meter check
+    if (utility.previous_reading !== "") {
+      const curr = parseInt(utility.current_reading);
+      const prev = parseInt(utility.previous_reading);
+      if (curr <= prev) {
+        showToast(`Current reading (${curr.toLocaleString()}) must be greater than the last recorded reading (${prev.toLocaleString()})`, "error");
+        return;
+      }
+    }
     setSubmittingUtility(true);
     const res = await authedFetch("/api/admin/utility", {
       method: "POST",
@@ -284,6 +310,15 @@ export default function DailyEntryPage() {
     e.preventDefault();
     if (!maint.vehicle_id || !maint.date || maint.work_types.length === 0 || !maint.cost_pkr) {
       showToast("Please select at least one work type and fill all required fields", "error"); return;
+    }
+    // Forward-only odometer check
+    if (maint.odometer_km && lastMaintOdo != null) {
+      const curr = parseInt(maint.odometer_km);
+      if (curr < lastMaintOdo) {
+        const unit = vehicles.find((v) => v.id === maint.vehicle_id)?.odometer_unit ?? "km";
+        showToast(`Odometer (${curr.toLocaleString()} ${unit}) cannot be less than last recorded (${lastMaintOdo.toLocaleString()} ${unit})`, "error");
+        return;
+      }
     }
     setSubmittingMaint(true);
     const res = await authedFetch("/api/admin/maintenance", {
@@ -391,23 +426,29 @@ export default function DailyEntryPage() {
                 </div>
               )}
 
-              <div style={{ ...row3, marginTop: "12px" }}>
-                <Field label={`Previous odometer${loadingOdo ? " (loading…)" : ""}`}>
-                  <input type="number" min="0" placeholder="km"
-                    value={fuel.previous_odometer} onChange={(e) => setFuel({ ...fuel, previous_odometer: e.target.value })}
-                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
-                </Field>
-                <Field label="Current odometer">
-                  <input type="number" min="0" placeholder="km"
-                    value={fuel.current_odometer} onChange={(e) => setFuel({ ...fuel, current_odometer: e.target.value })}
-                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
-                </Field>
-                <Field label="Mileage">
-                  <div style={{ ...inputStyle, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE, display: "flex", alignItems: "center" }}>
-                    {mileage != null ? `${mileage} km` : "—"}
+              {(() => {
+                const oUnit = vehicles.find((v) => v.id === fuel.vehicle_id)?.odometer_unit ?? "km";
+                return (
+                  <div style={{ ...row3, marginTop: "12px" }}>
+                    <Field label={loadingOdo ? "Last recorded (loading…)" : `Last recorded (${oUnit})`}>
+                      <input type="number" min="0" readOnly
+                        value={fuel.previous_odometer}
+                        placeholder="—"
+                        style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, backgroundColor: "#F1F5F9", color: COLOURS.SLATE, cursor: "not-allowed" }} />
+                    </Field>
+                    <Field label={`New odometer (${oUnit}) *`}>
+                      <input type="number" min="0" placeholder={`Enter current ${oUnit}`}
+                        value={fuel.current_odometer} onChange={(e) => setFuel({ ...fuel, current_odometer: e.target.value })}
+                        style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                    </Field>
+                    <Field label="Distance driven">
+                      <div style={{ ...inputStyle, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE, display: "flex", alignItems: "center" }}>
+                        {mileage != null ? `${mileage} ${oUnit}` : "—"}
+                      </div>
+                    </Field>
                   </div>
-                </Field>
-              </div>
+                );
+              })()}
 
               {kmPerL && (
                 <div style={{ margin: "8px 0 0", fontSize: "13px", color: COLOURS.SLATE }}>
@@ -522,7 +563,7 @@ export default function DailyEntryPage() {
                       <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.date.split("-").reverse().join("/")}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.production_kwh.toFixed(1)} kWh</div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.production_kwh != null ? `${r.production_kwh.toFixed(1)} kWh` : "—"}</div>
                       <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>Production</div>
                     </div>
                     <div style={{ textAlign: "right" as const }}>
@@ -577,13 +618,14 @@ export default function DailyEntryPage() {
               </div>
 
               <div style={{ ...row2, marginTop: "12px" }}>
-                <Field label={`Previous reading${loadingLastReading ? " (loading…)" : ""}`}>
-                  <input type="number" min="0" placeholder="units"
-                    value={utility.previous_reading} onChange={(e) => setUtility({ ...utility, previous_reading: e.target.value })}
-                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                <Field label={loadingLastReading ? "Last recorded (loading…)" : "Last recorded (units)"}>
+                  <input type="number" min="0" readOnly
+                    value={utility.previous_reading}
+                    placeholder="—"
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const, backgroundColor: "#F1F5F9", color: COLOURS.SLATE, cursor: "not-allowed" }} />
                 </Field>
-                <Field label="Current reading *">
-                  <input type="number" min="0" placeholder="units"
+                <Field label="New meter reading *">
+                  <input type="number" min="0" placeholder="Enter current reading"
                     value={utility.current_reading} onChange={(e) => setUtility({ ...utility, current_reading: e.target.value })}
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
                 </Field>
@@ -661,13 +703,23 @@ export default function DailyEntryPage() {
                 </Field>
               </div>
 
-              <div style={{ marginTop: "12px" }}>
-                <Field label="Odometer (km)">
-                  <input type="number" min="0" placeholder="current km"
-                    value={maint.odometer_km} onChange={(e) => setMaint({ ...maint, odometer_km: e.target.value })}
-                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
-                </Field>
-              </div>
+              {(() => {
+                const oUnit = vehicles.find((v) => v.id === maint.vehicle_id)?.odometer_unit ?? "km";
+                return (
+                  <div style={{ marginTop: "12px" }}>
+                    <Field label={`Odometer (${oUnit})`}>
+                      <input type="number" min="0" placeholder={`e.g. ${lastMaintOdo ? (lastMaintOdo + 500).toLocaleString() : "75000"}`}
+                        value={maint.odometer_km} onChange={(e) => setMaint({ ...maint, odometer_km: e.target.value })}
+                        style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }} />
+                    </Field>
+                    {lastMaintOdo != null && (
+                      <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                        Last recorded: <strong style={{ color: COLOURS.NAVY }}>{lastMaintOdo.toLocaleString()} {oUnit}</strong> — new reading must be equal or higher
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div style={{ marginTop: "16px" }}>
                 <label style={labelSt}>Work done * <span style={{ fontSize: "11px", fontWeight: 400, color: COLOURS.SLATE }}>(select all that apply)</span></label>

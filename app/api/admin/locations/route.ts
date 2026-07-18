@@ -15,6 +15,25 @@ async function checkCanManage(auth: { email: string }, supabase: ReturnType<type
   return perm?.can_manage_locations === true;
 }
 
+// GET — list all locations (active + inactive) for management
+export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  if (!(await checkCanManage(auth, supabase))) {
+    return Response.json({ error: "Not authorised" }, { status: 403 });
+  }
+
+  const { data, error } = await supabase
+    .from("admin_locations")
+    .select("id, name, entity, location_type, province, is_active, created_at")
+    .order("entity").order("name");
+
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ data });
+}
+
 // POST — create a new location + all linked records via RPC
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);

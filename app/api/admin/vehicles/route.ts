@@ -41,17 +41,19 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { id, name, plate_number, is_active } = body;
+  const { id, name, plate_number, is_active, odometer_unit } = body;
 
   if (!name?.trim() || !plate_number?.trim()) {
     return Response.json({ error: "name and plate_number are required" }, { status: 400 });
   }
 
+  const unit = odometer_unit === "miles" ? "miles" : "km";
+
   if (id) {
     // Update
     const { error } = await supabase
       .from("admin_vehicles")
-      .update({ name: name.trim(), plate_number: plate_number.trim().toUpperCase(), is_active: is_active !== false })
+      .update({ name: name.trim(), plate_number: plate_number.trim().toUpperCase(), is_active: is_active !== false, odometer_unit: unit })
       .eq("id", id);
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ ok: true });
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
     // Create
     const { data, error } = await supabase
       .from("admin_vehicles")
-      .insert({ name: name.trim(), plate_number: plate_number.trim().toUpperCase(), is_active: true })
+      .insert({ name: name.trim(), plate_number: plate_number.trim().toUpperCase(), is_active: true, odometer_unit: unit })
       .select("id")
       .single();
     if (error) return Response.json({ error: error.message }, { status: 500 });
