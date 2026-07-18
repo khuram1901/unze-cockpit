@@ -79,7 +79,7 @@ export const PERM_COLUMNS = [
 
   // ── Admin ────────────────────────────────────────────────────
   { key: "can_view_audit_log", label: "Log", group: "Admin", tip: "View the system audit trail" },
-  { key: "can_view_exceptions", label: "Exc", group: "Admin", tip: "View escalation/exception alerts" },
+
   { key: "can_import_export", label: "I/O", group: "Admin", tip: "Import/export member data via CSV" },
 
   // ── Folderit ─────────────────────────────────────────────────
@@ -157,7 +157,7 @@ export function roleDefault(col: ColDef, m: MatrixMember): boolean | string | nu
     case "can_delete_members": return admin || exec;
     case "can_reset_passwords": return admin || exec;
     case "can_view_audit_log": return admin || exec;
-    case "can_view_exceptions": return admin || exec;
+
     case "can_import_export": return admin || exec;
     case "can_manage_tax_notices": return admin || (manager && (dept === "Tax" || dept === "Finance"));
     case "can_manage_tax_schedule": return admin || (manager && (dept === "Tax" || dept === "Finance"));

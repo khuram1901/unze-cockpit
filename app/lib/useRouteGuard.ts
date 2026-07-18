@@ -6,7 +6,7 @@ import { supabase, loadMyPermissions } from "./supabase";
 import {
   canViewFinance, canViewReceivables, canViewExecutiveDashboard, canViewDepartment,
   canViewOperations, canSeeAllMinutes, canSeeAllTasks, canManageRecurringTasks,
-  canManageMembers, canViewAuditLog, canViewExceptions, canImportExport,
+  canManageMembers, canViewAuditLog, canImportExport,
   canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry,
   canViewPADashboard, canViewInvestments,
   canViewStock, canViewGuarantees, canViewIfplPnl,
@@ -16,7 +16,7 @@ import {
 
 type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
-  | "audit_log" | "exceptions" | "import_export" | "daily_entry"
+  | "audit_log" | "import_export" | "daily_entry"
   | "pa_dashboard" | "investments" | "system_backups" | "stock" | "guarantees"
   | "ifpl_pnl" | "admin_ops" | "admin_entry";
 
@@ -31,7 +31,6 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   recurring_tasks: canManageRecurringTasks,
   members: canManageMembers,
   audit_log: canViewAuditLog,
-  exceptions: canViewExceptions,
   import_export: canImportExport,
   daily_entry: canAccessDailyEntry,
   pa_dashboard: canViewPADashboard,

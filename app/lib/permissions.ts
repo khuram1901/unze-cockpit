@@ -305,14 +305,9 @@ export function canViewAuditLog(u: UserCtx) {
   return isPrivileged(u);
 }
 
-export function canViewExceptions(u: UserCtx) {
-  const o = ov(u, "can_view_exceptions");
-  if (o !== null) return o;
-  return isPrivileged(u);
-}
 
 export function canSeeSettings(u: UserCtx) {
-  return canManageMembers(u) || canViewAuditLog(u) || canViewExceptions(u);
+  return canManageMembers(u) || canViewAuditLog(u);
 }
 
 export function canImportExport(u: UserCtx) {

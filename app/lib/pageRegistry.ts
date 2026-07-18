@@ -83,7 +83,7 @@ export const PAGE_REGISTRY: PageCard[] = [
 
   // ── Settings ──
   { permKey: "can_view_members", title: "Members", subtitle: "Team members, roles, access", href: "/members", icon: "👥", group: "Settings", badgeKey: "members" },
-  { permKey: "can_view_exceptions", title: "Exceptions", subtitle: "Exception management and alerts", href: "/exceptions", icon: "🚨", group: "Settings" },
+
   { permKey: "can_view_audit_log", title: "Audit Log", subtitle: "System activity trail", href: "/audit-log", icon: "📋", group: "Settings" },
   { permKey: "_profile", title: "Profile", subtitle: "Your account and preferences", href: "/profile", icon: "👤", group: "Settings" },
 ];

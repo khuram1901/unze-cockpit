@@ -15,7 +15,7 @@ import {
   canSeeAllTasks, canCreateAssignments, canReviewTasks,
   canManageRecurringTasks, canManageCalendarRequests, canSeeAllMinutes,
   canViewDepartment, canManageMembers, canAddMembers,
-  canViewAuditLog, canViewExceptions, canImportExport,
+  canViewAuditLog, canImportExport,
   canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry,
   canViewPADashboard, canViewInvestments,
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
@@ -47,7 +47,7 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_view_members: canManageMembers,
   can_add_members: canAddMembers,
   can_view_audit_log: canViewAuditLog,
-  can_view_exceptions: canViewExceptions,
+
   can_import_export: canImportExport,
   can_access_daily_entry: canAccessDailyEntry,
   can_access_admin_ops: canAccessAdminOps,
