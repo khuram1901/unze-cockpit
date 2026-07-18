@@ -148,7 +148,17 @@ function MonthCell({ entry }: { entry: MonthEntry }) {
   );
 }
 
-const CURRENT_YEAR = new Date().getFullYear();
+// Fiscal year start year (July year).
+// e.g. in March 2026 → 2025 (FY 2025-26); in September 2026 → 2026 (FY 2026-27).
+function currentFyStart(): number {
+  const now = new Date();
+  return now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+}
+function fyLabel(fyStart: number): string {
+  return `FY ${fyStart}-${String(fyStart + 1).slice(2)}`;
+}
+
+const CURRENT_FY_START = currentFyStart();
 
 // ── Main component ────────────────────────────────────────────────────
 
@@ -200,7 +210,7 @@ export default function AdminDataPage() {
   const [savingLicence, setSavingLicence] = useState(false);
   const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
-  const [paymentYear, setPaymentYear] = useState(CURRENT_YEAR);
+  const [paymentYear, setPaymentYear] = useState(new Date().getFullYear()); // EOBI = calendar year
   const [addingPayment, setAddingPayment] = useState<{
     entity: string; payment_type: string; month: number;
   } | null>(null);
@@ -250,7 +260,8 @@ export default function AdminDataPage() {
   const [loadingSolar, setLoadingSolar] = useState(false);
   const [utilityLocations, setUtilityLocations] = useState<UtilityLocation[]>([]);
   const [loadingUtility, setLoadingUtility] = useState(false);
-  const [opsYear, setOpsYear] = useState(CURRENT_YEAR);
+  // opsYear = fiscal year START year (July year), e.g. 2025 = FY 2025-26
+  const [opsYear, setOpsYear] = useState(CURRENT_FY_START);
   const [opsMonth, setOpsMonth] = useState(new Date().getMonth() + 1);
 
   // ── Vehicle detail side panel ──────────────────────────────────────
@@ -261,7 +272,8 @@ export default function AdminDataPage() {
     fuel: FuelFill[]; maintenance: MaintenanceRecord[];
   } | null>(null);
   const [vehicleDetailTab, setVehicleDetailTab] = useState<"fuel" | "maintenance" | "summary">("fuel");
-  const [vehicleDetailYear, setVehicleDetailYear] = useState(CURRENT_YEAR);
+  // vehicleDetailYear = fiscal year START year
+  const [vehicleDetailYear, setVehicleDetailYear] = useState(CURRENT_FY_START);
   const [loadingVehicleDetail, setLoadingVehicleDetail] = useState(false);
 
   // ── Import modal ───────────────────────────────────────────────────
@@ -497,13 +509,17 @@ export default function AdminDataPage() {
   }
 
   function prevOpsMonth() {
-    if (opsMonth === 1) { setOpsMonth(12); setOpsYear((y) => y - 1); }
+    // Crossing Jul backward enters the previous fiscal year
+    if (opsMonth === 7) { setOpsMonth(6); setOpsYear((y) => y - 1); }
     else setOpsMonth((m) => m - 1);
   }
   function nextOpsMonth() {
     const now = new Date();
-    if (opsYear === now.getFullYear() && opsMonth === now.getMonth() + 1) return;
-    if (opsMonth === 12) { setOpsMonth(1); setOpsYear((y) => y + 1); }
+    // opsCalYear: actual calendar year for the displayed month
+    const calYear = opsMonth >= 7 ? opsYear : opsYear + 1;
+    if (calYear === now.getFullYear() && opsMonth === now.getMonth() + 1) return;
+    // Crossing Jun forward enters the next fiscal year
+    if (opsMonth === 6) { setOpsMonth(7); setOpsYear((y) => y + 1); }
     else setOpsMonth((m) => m + 1);
   }
 
@@ -1912,7 +1928,9 @@ export default function AdminDataPage() {
     if (solarBranches.length === 0) return <p style={{ color: COLOURS.SLATE, fontSize: "14px" }}>No solar branches configured yet.</p>;
 
     const now = new Date();
-    const isCurrentOrPast = opsYear < now.getFullYear() || (opsYear === now.getFullYear() && opsMonth <= now.getMonth() + 1);
+    // opsYear is FY start year; derive actual calendar year for the displayed month
+    const opsCalYear = opsMonth >= 7 ? opsYear : opsYear + 1;
+    const isCurrentOrPast = opsCalYear < now.getFullYear() || (opsCalYear === now.getFullYear() && opsMonth <= now.getMonth() + 1);
 
     const branchData = solarBranches.map((b) => ({
       ...b,
@@ -2033,10 +2051,10 @@ export default function AdminDataPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <button onClick={() => { const y = vehicleDetailYear - 1; setVehicleDetailYear(y); loadVehicleDetail(vehiclePanel.vehicleId, y); }}
                   style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: "pointer", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
-                <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, minWidth: "42px", textAlign: "center" }}>{vehicleDetailYear}</span>
+                <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, minWidth: "80px", textAlign: "center" }}>{fyLabel(vehicleDetailYear)}</span>
                 <button onClick={() => { const y = vehicleDetailYear + 1; setVehicleDetailYear(y); loadVehicleDetail(vehiclePanel.vehicleId, y); }}
-                  disabled={vehicleDetailYear >= CURRENT_YEAR}
-                  style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: vehicleDetailYear >= CURRENT_YEAR ? "default" : "pointer", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", opacity: vehicleDetailYear >= CURRENT_YEAR ? 0.4 : 1 }}>›</button>
+                  disabled={vehicleDetailYear >= CURRENT_FY_START}
+                  style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: vehicleDetailYear >= CURRENT_FY_START ? "default" : "pointer", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", opacity: vehicleDetailYear >= CURRENT_FY_START ? 0.4 : 1 }}>›</button>
                 <button onClick={() => setVehiclePanel(null)}
                   style={{ marginLeft: "4px", width: "30px", height: "30px", borderRadius: "8px", border: "none", backgroundColor: COLOURS.HAIRLINE, cursor: "pointer", fontSize: "16px", color: COLOURS.SLATE, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
               </div>
@@ -2067,7 +2085,7 @@ export default function AdminDataPage() {
               <SkeletonRows count={8} height="38px" />
             ) : vehicleDetailTab === "fuel" ? (
               fuel.length === 0 ? (
-                <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No fuel entries for {vehicleDetailYear}.</p>
+                <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No fuel entries for {fyLabel(vehicleDetailYear)}.</p>
               ) : (
                 <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
@@ -2108,7 +2126,7 @@ export default function AdminDataPage() {
               )
             ) : vehicleDetailTab === "maintenance" ? (
               maintenance.length === 0 ? (
-                <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No maintenance records for {vehicleDetailYear}.</p>
+                <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No maintenance records for {fyLabel(vehicleDetailYear)}.</p>
               ) : (
                 <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
@@ -2161,7 +2179,7 @@ export default function AdminDataPage() {
                     <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>Total running cost</div>
                   </div>
                 </div>
-                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "10px" }}>Month-by-Month — {vehicleDetailYear}</div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "10px" }}>{fyLabel(vehicleDetailYear)} — Month by Month</div>
                 <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                     <thead>
@@ -2175,8 +2193,9 @@ export default function AdminDataPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {MONTH_NAMES.map((mn, idx) => {
-                        const mo = idx + 1;
+                      {/* Fiscal order: Jul(7)…Dec(12) then Jan(1)…Jun(6) */}
+                      {[7,8,9,10,11,12,1,2,3,4,5,6].map((mo) => {
+                        const mn = MONTH_NAMES[mo - 1];
                         const f  = fuelByMonth[mo];
                         const m  = maintByMonth[mo];
                         const rowFuel  = f?.amount || 0;
@@ -2281,7 +2300,9 @@ export default function AdminDataPage() {
     );
 
     const now = new Date();
-    const isCurrentOrPast = opsYear < now.getFullYear() || (opsYear === now.getFullYear() && opsMonth <= now.getMonth() + 1);
+    // opsYear is FY start year; derive actual calendar year for the displayed month
+    const opsCalYear = opsMonth >= 7 ? opsYear : opsYear + 1;
+    const isCurrentOrPast = opsCalYear < now.getFullYear() || (opsCalYear === now.getFullYear() && opsMonth <= now.getMonth() + 1);
 
     const rows = utilityLocations.map((loc) => ({
       ...loc,
@@ -2480,9 +2501,12 @@ export default function AdminDataPage() {
             {/* Month nav */}
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "20px" }}>
               <button onClick={prevOpsMonth} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.SLATE, fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>‹</button>
-              <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, minWidth: "140px", textAlign: "center" }}>{MONTH_FULL[opsMonth - 1]} {opsYear}</span>
+              <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, minWidth: "140px", textAlign: "center" }}>
+                {MONTH_FULL[opsMonth - 1]} {opsMonth >= 7 ? opsYear : opsYear + 1}
+                <span style={{ fontSize: "11px", fontWeight: 400, color: COLOURS.SLATE, marginLeft: "6px" }}>({fyLabel(opsYear)})</span>
+              </span>
               <button onClick={nextOpsMonth} style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.SLATE, fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>›</button>
-              {opsYear === CURRENT_YEAR && opsMonth === new Date().getMonth() + 1 && (
+              {opsYear === CURRENT_FY_START && opsMonth === new Date().getMonth() + 1 && (
                 <span style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "4px" }}>(month to date)</span>
               )}
             </div>
