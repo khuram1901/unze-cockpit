@@ -968,7 +968,7 @@ export default function AdminDataPage() {
               {/* Section: Civil Defence */}
               <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "14px", marginBottom: "14px" }}>
                 <div style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "10px" }}>Civil Defence</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: "10px" }}>
                   <div>
                     <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Status</label>
                     <select value={newLocation.civil_defence_status} onChange={(e) => setNewLocation({ ...newLocation, civil_defence_status: e.target.value })}
@@ -1887,7 +1887,7 @@ export default function AdminDataPage() {
           {vehicleForm ? (
             <div style={{ border: `1px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "16px", backgroundColor: "#F8F9FC" }}>
               <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>{vehicleForm.id ? "Edit Vehicle" : "Add New Vehicle"}</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
                 <div>
                   <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Vehicle Name *</label>
                   <input type="text" placeholder="e.g. Honda City" value={vehicleForm.name}
@@ -2469,7 +2469,7 @@ export default function AdminDataPage() {
             ) : (
               // YTD Summary tab
               <div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "18px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(3, 1fr)", gap: "10px", marginBottom: "18px" }}>
                   <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "white" }}>
                     <div style={{ fontSize: "18px", fontWeight: 700, color: "#1D4ED8" }}>{fmtPKR(totalFuelCost)}</div>
                     <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>Fuel spend</div>

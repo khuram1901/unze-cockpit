@@ -24,6 +24,7 @@ import { canEditFinance, financeCompanies, widgetVisible } from "../../lib/permi
 import { useUserCtx } from "../../lib/useUserCtx";
 import { UTPL_COMPANY_ID } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
+import { useMobile } from "../../lib/useMobile";
 
 type KpiRow = {
   month: string;
@@ -104,6 +105,7 @@ function Sparkline({ values, colour }: { values: number[]; colour: string }) {
 export default function ProfitAndLossPage() {
   const { checking } = useRequireCapability("finance");
   const { ctx } = useUserCtx();
+  const isMobile = useMobile();
 
   const scope = ctx ? financeCompanies(ctx) : "none";
   const hasUnze = scope === "both" || scope === "UTPL";
@@ -534,7 +536,7 @@ export default function ProfitAndLossPage() {
 
                 {/* ── Sales & profit + profit bridge ── */}
                 {show("unze_pnl.charts") && (<>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(320px, 1fr))", gap: "10px", marginBottom: "10px" }}>
                   <div style={cardStyle}>
                     <div style={sectionTitle}>Sales and net profit by month</div>
                     <div style={sectionCaption}>Bars = sales · line = net profit · red bars = loss months</div>
@@ -575,7 +577,7 @@ export default function ProfitAndLossPage() {
                 </div>
 
                 {/* ── Margin health + cost structure ── */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(320px, 1fr))", gap: "10px", marginBottom: "10px" }}>
                   <div style={cardStyle}>
                     <div style={sectionTitle}>Margin health</div>
                     <div style={sectionCaption}>Gross margin % (amber) vs COGS % of sales (red) — above the dashed line you sold below cost</div>
@@ -672,7 +674,7 @@ export default function ProfitAndLossPage() {
                 )}
 
                 {/* ── Expense watch + CEO commentary ── */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(320px, 1fr))", gap: "10px", marginBottom: "10px" }}>
                   {show("unze_pnl.expense_watch") && (
                   <div style={cardStyle}>
                     <div style={sectionTitle}>Expense watch — {curM ? MONTH_LABEL(curM) : ""}</div>
