@@ -1,400 +1,451 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase, loadMyPermissions } from "../../lib/supabase";
-import { formatDateUK } from "../../lib/dateUtils";
+import { supabase } from "../../lib/supabase";
+import { COLOURS, RADII, PageHeader } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
-import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle, StatusBadge, PriorityBadge, WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR, useConfirm } from "../../lib/SharedUI";
-import { logAction } from "../../lib/audit-log";
-import { canReviewTasks, canCreateAssignments, canDeleteTask, isTaskProtected, widgetVisible, type UserCtx, type PermOverrides } from "../../lib/permissions";
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import NewTaskForm from "../../tasks/NewTaskForm";
-import { useUserCtx } from "../../lib/useUserCtx";
 
-type Task = {
-  id: string;
-  description: string;
-  project: string | null;
-  assigned_to: string | null;
-  due_date: string | null;
-  priority: string | null;
-  status: string;
-  notes: string | null;
-  created_at: string;
-  assigned_by_email: string | null;
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type PersonRow = { name: string; overdue: number; pending: number; done: number };
+type ComplianceStat = { registered: number; total: number };
+type PaymentRow = { entity: string; type: string; status: "paid" | "due" };
+
+type AdminSummary = {
+  tasks: {
+    open: number; overdue: number; urgent: number; done_week: number;
+    by_person: PersonRow[];
+  };
+  compliance: {
+    eobi: ComplianceStat; ss: ComplianceStat;
+    civil: ComplianceStat; labour_reg: ComplianceStat; labour_insp: ComplianceStat;
+  };
+  payments: {
+    current_month: PaymentRow[];
+    late_fy: number;
+    missing_fy: number;
+  };
+  documents: {
+    ntn_registered: number; ntn_pending: number; ntn_no_link: number;
+    pfa_valid: number; pfa_total: number;
+    medical_valid: number; training_valid: number; tourism_valid: number;
+    expiring_30d: number;
+  };
+  fleet: {
+    active_vehicles: number; fills: number; fuel_spend: number;
+    avg_kpl: number; maint_jobs: number; maint_spend: number; no_entry: number;
+  };
+  solar: {
+    active_sites: number; total_kwh: number;
+    missing_data: number; best_site: string | null; lowest_site: string | null;
+  };
+  utilities: {
+    locations_tracked: number; total_bill: number;
+    missing_readings: number; highest_bill_site: string | null;
+  };
 };
 
-const today = new Date().toISOString().slice(0, 10);
-const STATUSES = ["Not Started", "In Progress", "Waiting Reply", "Completed", "Cancelled"];
-const PRIORITY_ORDER: Record<string, number> = { Urgent: 0, High: 1, Medium: 2, Normal: 2, Low: 3 };
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-function isOverdue(t: Task) {
-  if (t.status === "Completed" || t.status === "Cancelled") return false;
-  return !!t.due_date && t.due_date < today;
+async function authedFetch(url: string) {
+  const { data: { session } } = await supabase.auth.getSession();
+  return fetch(url, {
+    headers: { Authorization: `Bearer ${session?.access_token}` },
+  });
 }
 
-function daysOverdue(t: Task): number {
-  if (!t.due_date || !isOverdue(t)) return 0;
-  return Math.floor((Date.now() - new Date(t.due_date + "T00:00:00").getTime()) / 86400000);
+function pct(registered: number, total: number): number {
+  if (!total) return 0;
+  return Math.round((registered / total) * 100);
 }
 
-function sortByPriority(a: Task, b: Task): number {
-  const pa = PRIORITY_ORDER[a.priority || "Normal"] ?? 2;
-  const pb = PRIORITY_ORDER[b.priority || "Normal"] ?? 2;
-  if (pa !== pb) return pa - pb;
-  return daysOverdue(b) - daysOverdue(a);
+function fmtPKR(n: number): string {
+  if (n >= 1_000_000) return `PKR ${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `PKR ${Math.round(n / 1_000)}k`;
+  return `PKR ${Math.round(n)}`;
 }
 
-const companyColors: Record<string, string> = {
-  "Unze Trading PVT Limited":     COLOURS.BLUE,
-  "Imperial Footwear PVT Limited": COLOURS.AMBER,
-  "Haute Dolci":                  COLOURS.GREEN,
-  "Barahn PVT Limited":           COLOURS.PURPLE,
-  "K&K Jhang":                    COLOURS.SLATE,
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{
+      fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em",
+      textTransform: "uppercase", color: COLOURS.SLATE,
+      margin: "20px 0 8px",
+    }}>{children}</p>
+  );
+}
+
+function KCard({ label, value, color }: { label: string; value: string | number; color?: string }) {
+  return (
+    <div style={{ backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, padding: "10px 12px" }}>
+      <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "3px" }}>{label}</div>
+      <div style={{ fontSize: "20px", fontWeight: 600, color: color || COLOURS.NAVY }}>{value}</div>
+    </div>
+  );
+}
+
+function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`,
+      borderRadius: RADII.CARD, padding: "12px 14px", ...style,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function CardTitle({ children }: { children: string }) {
+  return <p style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "8px" }}>{children}</p>;
+}
+
+function Row({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) {
+  return (
+    <div style={{
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      padding: "5px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+    }}>
+      <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{label}</span>
+      <span style={{ fontSize: "12px", fontWeight: 600, color: color || COLOURS.NAVY }}>{value}</span>
+    </div>
+  );
+}
+
+type PillColour = "green" | "amber" | "red" | "grey";
+const PILL_STYLES: Record<PillColour, { bg: string; color: string }> = {
+  green: { bg: "#E8F5F1", color: COLOURS.GREEN },
+  amber: { bg: "#FEF3E2", color: COLOURS.AMBER },
+  red:   { bg: "#FDECEA", color: COLOURS.RED   },
+  grey:  { bg: COLOURS.CARD_ALT, color: COLOURS.SLATE },
 };
+
+function Pill({ label, colour }: { label: string; colour: PillColour }) {
+  const s = PILL_STYLES[colour];
+  return (
+    <span style={{
+      fontSize: "10px", fontWeight: 600, padding: "2px 7px",
+      borderRadius: RADII.PILL, backgroundColor: s.bg, color: s.color,
+      whiteSpace: "nowrap",
+    }}>{label}</span>
+  );
+}
+
+function ComplianceBar({ label, stat }: { label: string; stat: ComplianceStat }) {
+  const p = pct(stat.registered, stat.total);
+  const barColor = p >= 80 ? COLOURS.GREEN : p >= 50 ? COLOURS.AMBER : COLOURS.RED;
+  const pillColour: PillColour = p >= 80 ? "green" : p >= 50 ? "amber" : "red";
+  const pillLabel = p >= 80 ? "Good" : p >= 50 ? "Partial" : "Attention";
+  return (
+    <div style={{
+      display: "grid", gridTemplateColumns: "130px 1fr 38px 76px",
+      alignItems: "center", gap: "8px",
+      padding: "5px 0", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+    }}>
+      <span style={{ fontSize: "12px", color: COLOURS.NAVY }}>{label}</span>
+      <div style={{ height: "5px", backgroundColor: COLOURS.HAIRLINE, borderRadius: "3px", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${p}%`, backgroundColor: barColor, borderRadius: "3px" }} />
+      </div>
+      <span style={{ fontSize: "11px", fontWeight: 600, color: barColor, textAlign: "right" }}>{p}%</span>
+      <Pill label={pillLabel} colour={pillColour} />
+    </div>
+  );
+}
+
+function SkeletonBlock({ height = "80px" }: { height?: string }) {
+  return (
+    <div style={{
+      height, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD_ALT,
+      marginBottom: "8px",
+    }} />
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
   const isMobile = useMobile();
-  const dlg = useConfirm();
-  const [items, setItems] = useState<Task[]>([]);
+  const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
-  const [canDelete, setCanDelete] = useState(false);
-  const [bannerOpen, setBannerOpen] = useState(false);
-  const [priorityFilter, setPriorityFilter] = useState<string>("all");
-  const { ctx: widgetCtx } = useUserCtx();
-  const wv = (key: string, defaultVisible: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
+  const [error, setError] = useState<string | null>(null);
 
-  async function loadData() {
-    setLoading(true);
-    const { data: userData } = await supabase.auth.getUser();
-    if (userData.user?.email) {
-      const { data: memberData } = await supabase.from("members").select("id, role, department, company").eq("email", userData.user.email).maybeSingle();
-      if (memberData) {
-        let overrides: PermOverrides | null = null;
-        const p = await loadMyPermissions();
-        if (p) overrides = p as PermOverrides;
-        const ctx: UserCtx = { email: userData.user.email, role: memberData.role, department: memberData.department, company: memberData.company, overrides };
-        setUserCtx(ctx);
-        setCanDelete(canReviewTasks(ctx));
+  const now = new Date();
+  const monthLabel = `${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await authedFetch("/api/admin/summary");
+        const json = await res.json();
+        if (json.error) { setError(json.error); return; }
+        setSummary(json.data as AdminSummary);
+      } catch (e) {
+        setError(String(e));
+      } finally {
+        setLoading(false);
       }
-    }
-    const { data } = await supabase.from("tasks")
-      .select("id, description, project, assigned_to, due_date, priority, status, notes, created_at, assigned_by_email")
-      .eq("assigned_to_department", "Admin").order("created_at", { ascending: false });
-    setItems(data || []);
-    setLoading(false);
-  }
+    })();
+  }, []);
 
-  useEffect(() => { loadData(); }, []);
-
-  async function updateStatus(id: string, newStatus: string) {
-    await supabase.from("tasks").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", id);
-    logAction("Updated", "tasks", `Status → ${newStatus}`, id);
-    loadData();
-  }
-
-  const openTasks = items.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
-  const overdueTasks = openTasks.filter(isOverdue);
-  const completed = items.filter((t) => t.status === "Completed").length;
-  const urgentCount = openTasks.filter((t) => t.priority === "Urgent" || t.priority === "High").length;
-
-  const donutData = [
-    { name: "Overdue", value: overdueTasks.length, color: COLOURS.RED },
-    { name: "In Progress", value: openTasks.filter((t) => t.status === "In Progress").length, color: COLOURS.AMBER },
-    { name: "Not Started", value: openTasks.filter((t) => t.status === "Not Started").length, color: COLOURS.SLATE },
-    { name: "Completed", value: completed, color: COLOURS.GREEN },
-  ].filter((d) => d.value > 0);
-
-  const companyDonutData = Array.from(
-    openTasks.reduce((map, t) => {
-      const c = t.project || "Unassigned";
-      map.set(c, (map.get(c) || 0) + 1);
-      return map;
-    }, new Map<string, number>())
-  ).map(([name, value]) => ({
-    name: name.replace(" PVT Limited", ""),
-    value,
-    color: companyColors[name] || COLOURS.SLATE,
-  })).sort((a, b) => b.value - a.value);
-
-  // Filter by priority
-  const filteredOpen = priorityFilter === "all"
-    ? openTasks
-    : openTasks.filter((t) => (t.priority || "Normal") === priorityFilter);
-
-  // Group filtered tasks by company, sorted by priority within
-  const companyGroups = new Map<string, Task[]>();
-  for (const t of filteredOpen) {
-    const c = t.project || "Unassigned";
-    if (!companyGroups.has(c)) companyGroups.set(c, []);
-    companyGroups.get(c)!.push(t);
-  }
-  for (const tasks of companyGroups.values()) tasks.sort(sortByPriority);
-  const companyNames = Array.from(companyGroups.keys()).sort();
+  const grid4: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)",
+    gap: "8px", marginBottom: "8px",
+  };
+  const grid2: React.CSSProperties = {
+    display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+    gap: "8px", marginBottom: "8px",
+  };
+  const twoCol: React.CSSProperties = {
+    display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px",
+  };
+  const lastRow: React.CSSProperties = {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "5px 0",
+  };
 
   return (
-    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
-      {dlg.element}
-      {/* Header with + button */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px", marginBottom: "16px" }}>
-        <PageHeader />
-        {userCtx && canCreateAssignments(userCtx) && (
-          <button onClick={() => setShowForm(!showForm)} style={{
-            backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none", borderRadius: "50%",
-            width: "38px", height: "38px", fontSize: "20px", fontWeight: 700, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            boxShadow: SHADOWS.MODAL,
-          }} title="Issue task">{showForm ? "×" : "+"}</button>
-        )}
-      </div>
+    <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "760px", overflowX: "hidden" }}>
+      <PageHeader />
 
-      {/* Collapsible add form */}
-      {showForm && (
+      {loading && (
+        <div style={{ marginTop: "12px" }}>
+          <SkeletonBlock height="64px" />
+          <SkeletonBlock height="120px" />
+          <SkeletonBlock height="160px" />
+          <SkeletonBlock height="120px" />
+        </div>
+      )}
+
+      {error && (
         <div style={{
-          border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`,
-          borderRadius: RADII.CARD, marginBottom: "14px", overflow: "hidden",
+          padding: "12px 16px", borderRadius: RADII.CARD, marginTop: "12px",
+          backgroundColor: "#FDECEA", color: COLOURS.RED, fontSize: "13px",
         }}>
-          <NewTaskForm onCreated={() => { setShowForm(false); loadData(); }} />
+          Could not load summary: {error}
         </div>
       )}
 
-      {/* Alert Banner */}
-      {wv("dept_admin.attention_banner", true) && !loading && overdueTasks.length > 0 && (
-        <div style={WARNING_BANNER_STYLE}>
-          <div onClick={() => setBannerOpen(!bannerOpen)} style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "20px" }}>⚠</span>
-              <div>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{overdueTasks.length} overdue task{overdueTasks.length > 1 ? "s" : ""}</div>
-                <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>{overdueTasks.slice(0, 3).map((t) => `${t.description.slice(0, 25)}${t.description.length > 25 ? "…" : ""}`).join(" · ")}</div>
-              </div>
+      {!loading && !error && summary && (() => {
+        const { tasks, compliance, payments, documents, fleet, solar, utilities } = summary;
+
+        const payStatus = (entity: string, type: string): "paid" | "due" => {
+          const row = payments.current_month?.find(
+            (r) => r.entity === entity && r.type === type
+          );
+          return row?.status ?? "due";
+        };
+        const payPill = (entity: string, type: string) => {
+          const s = payStatus(entity, type);
+          return <Pill label={s === "paid" ? "Paid" : "Due"} colour={s === "paid" ? "green" : "amber"} />;
+        };
+
+        return (
+          <>
+            {/* ── TASKS ── */}
+            <SectionLabel>Tasks</SectionLabel>
+            <div style={grid4}>
+              <KCard label="Open"           value={tasks.open} />
+              <KCard label="Overdue"        value={tasks.overdue}    color={tasks.overdue    > 0 ? COLOURS.RED   : COLOURS.NAVY} />
+              <KCard label="Urgent / high"  value={tasks.urgent}     color={tasks.urgent     > 0 ? COLOURS.AMBER : COLOURS.NAVY} />
+              <KCard label="Done this week" value={tasks.done_week}  color={tasks.done_week  > 0 ? COLOURS.GREEN : COLOURS.NAVY} />
             </div>
-            <span style={{ fontSize: "13px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{bannerOpen ? "▲" : "▼"}</span>
-          </div>
-          {bannerOpen && (
-            <div style={WARNING_BANNER_INNER}>
-              {overdueTasks.sort((a, b) => daysOverdue(b) - daysOverdue(a)).map((t) => (
-                <div key={t.id} onClick={() => { setExpandedId(t.id); setBannerOpen(false); }} style={{ padding: "8px 16px 8px 48px", borderBottom: `1px solid ${COLOURS.TRACK}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{t.description}</div>
-                    <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>{t.assigned_to || "Unassigned"} · {t.project || "—"}</div>
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.RED }}>{daysOverdue(t)}d late</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* KPI Cards */}
-      {wv("dept_admin.kpi_charts", true) && !loading && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-          {[
-            { label: "Open",        value: openTasks.length },
-            { label: "Overdue",     value: overdueTasks.length },
-            { label: "Urgent/High", value: urgentCount },
-            { label: "Completed",   value: completed },
-          ].map(({ label, value }) => (
-            <div key={label} style={{ ...cardStyle, padding: "16px 20px" }}>
-              <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "10px" }}>{label}</div>
-              <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY }}>{value.toLocaleString()}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Two donuts side by side */}
-      {wv("dept_admin.kpi_charts", true) && !loading && (donutData.length > 0 || companyDonutData.length > 0) && (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-          {donutData.length > 0 && (
-            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "16px 20px", backgroundColor: COLOURS.CARD }}>
-              <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px" }}>By Status</div>
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
-                    {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                  </Pie>
-                  <Tooltip formatter={(value, name) => [`${value} task${Number(value) > 1 ? "s" : ""}`, name]} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
-                {donutData.map((d) => (
-                  <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: COLOURS.SLATE }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {companyDonutData.length > 0 && (
-            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "16px 20px", backgroundColor: COLOURS.CARD }}>
-              <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px" }}>By Company</div>
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie data={companyDonutData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
-                    {companyDonutData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                  </Pie>
-                  <Tooltip formatter={(value, name) => [`${value} task${Number(value) > 1 ? "s" : ""}`, name]} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
-                {companyDonutData.map((d) => (
-                  <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: COLOURS.SLATE }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: d.color }} /> {d.name} ({d.value})
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Priority filter + section title */}
-      {wv("dept_admin.records_table", true) && (
-      <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", gap: "8px", flexWrap: "wrap" }}>
-        <SectionTitle title="Tasks by Company" />
-        <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
-          {[
-            { key: "all", label: "All" },
-            { key: "Urgent", label: "Urgent", color: COLOURS.RED },
-            { key: "High", label: "High", color: COLOURS.RED },
-            { key: "Normal", label: "Normal", color: COLOURS.BLUE },
-            { key: "Low", label: "Low", color: COLOURS.SLATE },
-          ].map((f) => (
-            <button key={f.key} onClick={() => setPriorityFilter(f.key)} style={{
-              backgroundColor: priorityFilter === f.key ? (f.color || COLOURS.NAVY) : COLOURS.CARD,
-              color: priorityFilter === f.key ? COLOURS.CARD : COLOURS.NAVY,
-              border: priorityFilter === f.key ? "1px solid transparent" : `1px solid ${COLOURS.HAIRLINE}`,
-              borderRadius: RADII.SM, padding: "4px 10px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
-            }}>{f.label}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tasks grouped by company */}
-      {loading ? <p style={{ color: COLOURS.SLATE }}>Loading…</p> : companyNames.length === 0 ? (
-        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, textAlign: "center" }}>
-          {priorityFilter === "all" ? "No open admin tasks." : `No ${priorityFilter} priority tasks.`}
-        </div>
-      ) : (
-        companyNames.map((company) => {
-          const tasks = companyGroups.get(company)!;
-          const compOverdue = tasks.filter(isOverdue).length;
-          const compUrgent = tasks.filter((t) => t.priority === "Urgent" || t.priority === "High").length;
-          const compInProgress = tasks.filter((t) => t.status === "In Progress").length;
-          const compNotStarted = tasks.filter((t) => t.status === "Not Started").length;
-          const companyColor = companyColors[company] || COLOURS.SLATE;
-
-          return (
-            <div key={company} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${companyColor}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "12px" }}>
-              {/* Company header with mini stats */}
-              <div style={{ padding: "10px 16px", backgroundColor: COLOURS.CARD_ALT, borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY }}>{company.replace(" PVT Limited", "")}</span>
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE }}>{tasks.length} task{tasks.length > 1 ? "s" : ""}</span>
-                </div>
-                <div style={{ display: "flex", gap: "12px", fontSize: "13px", flexWrap: "wrap" }}>
-                  {compOverdue > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: COLOURS.RED }} />
-                      <span style={{ fontWeight: 700, color: COLOURS.RED }}>{compOverdue} overdue</span>
-                    </div>
-                  )}
-                  {compUrgent > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: COLOURS.RED }} />
-                      <span style={{ fontWeight: 700, color: COLOURS.RED }}>{compUrgent} urgent/high</span>
-                    </div>
-                  )}
-                  {compInProgress > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: COLOURS.AMBER }} />
-                      <span style={{ fontWeight: 600, color: COLOURS.AMBER }}>{compInProgress} in progress</span>
-                    </div>
-                  )}
-                  {compNotStarted > 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: COLOURS.SLATE }} />
-                      <span style={{ color: COLOURS.SLATE }}>{compNotStarted} not started</span>
-                    </div>
-                  )}
-                  {compOverdue === 0 && compUrgent === 0 && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                      <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: COLOURS.GREEN }} />
-                      <span style={{ fontWeight: 600, color: COLOURS.GREEN }}>On track</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Task rows sorted by priority */}
-              {tasks.map((task) => {
-                const isOpen = expandedId === task.id;
-                const overdue = isOverdue(task);
-                const od = daysOverdue(task);
-                return (
-                  <div key={task.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                    <div onClick={() => setExpandedId(isOpen ? null : task.id)} style={{
-                      padding: "10px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                      backgroundColor: overdue ? COLOURS.DANGER_SOFT : isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+            {tasks.by_person && tasks.by_person.length > 0 && (
+              <Card style={{ marginBottom: "8px" }}>
+                <CardTitle>By person — Admin team</CardTitle>
+                {tasks.by_person.map((p, i) => {
+                  const isLast = i === tasks.by_person.length - 1;
+                  return (
+                    <div key={p.name} style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "6px 0",
+                      borderBottom: isLast ? "none" : `1px solid ${COLOURS.HAIRLINE}`,
                     }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.description}</div>
-                        <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-                          <span>{task.assigned_to || "Unassigned"}</span>
-                          {task.due_date && <span style={{ color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 400 }}>{formatDateUK(task.due_date)}{od > 0 && ` (${od}d late)`}</span>}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: "5px", alignItems: "center", flexShrink: 0 }}>
-                        {task.priority && <PriorityBadge priority={task.priority} />}
-                        <StatusBadge status={task.status} />
-                        <span style={{ color: COLOURS.SLATE, fontSize: "14px" }}>{isOpen ? "▼" : "▶"}</span>
+                      <span style={{ fontSize: "13px", color: COLOURS.NAVY, fontWeight: 500 }}>{p.name}</span>
+                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        {p.overdue > 0 && (
+                          <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 6px", borderRadius: RADII.PILL, backgroundColor: "#FDECEA", color: COLOURS.RED }}>
+                            {p.overdue} overdue
+                          </span>
+                        )}
+                        {p.pending > 0 && (
+                          <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 6px", borderRadius: RADII.PILL, backgroundColor: "#FEF3E2", color: COLOURS.AMBER }}>
+                            {p.pending} pending
+                          </span>
+                        )}
+                        {p.done > 0 && (
+                          <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 6px", borderRadius: RADII.PILL, backgroundColor: "#E8F5F1", color: COLOURS.GREEN }}>
+                            {p.done} done
+                          </span>
+                        )}
                       </div>
                     </div>
-                    {isOpen && (
-                      <div style={{ padding: "12px 16px", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
-                        {task.notes && <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "6px" }}>Notes: {task.notes}</div>}
-                        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Status:</span>
-                          <select value={task.status} onChange={(e) => updateStatus(task.id, e.target.value)} style={{ padding: "5px 8px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, fontSize: "14px" }}>
-                            {STATUSES.map((s) => <option key={s}>{s}</option>)}
-                          </select>
-                          <span style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginLeft: "8px" }}>Priority:</span>
-                          <select value={task.priority || "Normal"} onChange={(e) => {
-                            supabase.from("tasks").update({ priority: e.target.value }).eq("id", task.id).then(() => loadData());
-                          }} style={{ padding: "5px 8px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, fontSize: "14px" }}>
-                            <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
-                          </select>
-                          {canDelete && userCtx && canDeleteTask(userCtx, task.assigned_by_email) && (
-                            <>
-                              <div style={{ flex: 1 }} />
-                              <button onClick={async () => {
-                                if (!await dlg.confirm(`Delete "${task.description}"? This cannot be undone.`, true)) return;
-                                await supabase.from("tasks").delete().eq("id", task.id);
-                                loadData();
-                              }} style={{ backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.SM, padding: "4px 10px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }} title="Delete this task">Delete</button>
-                            </>
-                          )}
-                          {canDelete && userCtx && !canDeleteTask(userCtx, task.assigned_by_email) && isTaskProtected(task.assigned_by_email) && (
-                            <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>Protected task — cannot be deleted</span>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                  );
+                })}
+              </Card>
+            )}
+
+            {/* ── COMPLIANCE ── */}
+            <SectionLabel>Compliance health</SectionLabel>
+            <Card style={{ marginBottom: "8px" }}>
+              <ComplianceBar label="EOBI registration" stat={compliance.eobi} />
+              <ComplianceBar label="Social Security"   stat={compliance.ss} />
+              <ComplianceBar label="Civil Defence"     stat={compliance.civil} />
+              <ComplianceBar label="Labour reg."       stat={compliance.labour_reg} />
+              {(() => {
+                const p2 = pct(compliance.labour_insp.registered, compliance.labour_insp.total);
+                const bc = p2 >= 80 ? COLOURS.GREEN : p2 >= 50 ? COLOURS.AMBER : COLOURS.RED;
+                const pc: PillColour = p2 >= 80 ? "green" : p2 >= 50 ? "amber" : "red";
+                return (
+                  <div style={{
+                    display: "grid", gridTemplateColumns: "130px 1fr 38px 76px",
+                    alignItems: "center", gap: "8px", padding: "5px 0",
+                  }}>
+                    <span style={{ fontSize: "12px", color: COLOURS.NAVY }}>Labour inspection</span>
+                    <div style={{ height: "5px", backgroundColor: COLOURS.HAIRLINE, borderRadius: "3px", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${p2}%`, backgroundColor: bc, borderRadius: "3px" }} />
+                    </div>
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: bc, textAlign: "right" }}>{p2}%</span>
+                    <Pill label={p2 >= 80 ? "Good" : p2 >= 50 ? "Partial" : "Attention"} colour={pc} />
                   </div>
                 );
-              })}
+              })()}
+            </Card>
+
+            {/* ── PAYMENTS ── */}
+            <SectionLabel>Statutory payments — {monthLabel}</SectionLabel>
+            <div style={grid2}>
+              <Card>
+                <CardTitle>EOBI</CardTitle>
+                <Row label="IFPL"   value={payPill("IFPL",   "EOBI")} />
+                <Row label="UTPL"   value={payPill("UTPL",   "EOBI")} />
+                <Row label="Baranh" value={payPill("Baranh", "EOBI")} />
+                <div style={lastRow}>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>HD</span>
+                  {payPill("HD", "EOBI")}
+                </div>
+              </Card>
+              <Card>
+                <CardTitle>Social Security</CardTitle>
+                <Row label="IFPL"   value={payPill("IFPL",   "Social Security")} />
+                <Row label="UTPL"   value={payPill("UTPL",   "Social Security")} />
+                <Row label="Baranh" value={payPill("Baranh", "Social Security")} />
+                <div style={lastRow}>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>HD</span>
+                  {payPill("HD", "Social Security")}
+                </div>
+              </Card>
             </div>
-          );
-        })
-      )}
-      </>
-      )}
+            <Card style={{ marginBottom: "8px" }}>
+              <CardTitle>Payment history this FY</CardTitle>
+              <Row label="Late payments (any entity)" value={payments.late_fy}    color={payments.late_fy    > 0 ? COLOURS.AMBER : COLOURS.GREEN} />
+              <div style={lastRow}>
+                <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Missing months</span>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: payments.missing_fy > 0 ? COLOURS.RED : COLOURS.GREEN }}>
+                  {payments.missing_fy}
+                </span>
+              </div>
+            </Card>
+
+            {/* ── DOCUMENTS ── */}
+            <SectionLabel>Documents</SectionLabel>
+            <div style={grid2}>
+              <Card>
+                <CardTitle>NTN certificates</CardTitle>
+                <Row label="Registered"    value={documents.ntn_registered} color={COLOURS.GREEN} />
+                <Row label="Pending"       value={documents.ntn_pending}    color={documents.ntn_pending > 0 ? COLOURS.AMBER : COLOURS.GREEN} />
+                <div style={lastRow}>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>No Folderit link</span>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: documents.ntn_no_link > 0 ? COLOURS.RED : COLOURS.GREEN }}>
+                    {documents.ntn_no_link}
+                  </span>
+                </div>
+              </Card>
+              <Card>
+                <CardTitle>Restaurant licences</CardTitle>
+                <Row label="PFA valid"        value={`${documents.pfa_valid} / ${documents.pfa_total}`}     color={documents.pfa_valid     === documents.pfa_total ? COLOURS.GREEN : COLOURS.AMBER} />
+                <Row label="Medical certs"    value={`${documents.medical_valid} / ${documents.pfa_total}`}  color={documents.medical_valid  === documents.pfa_total ? COLOURS.GREEN : COLOURS.AMBER} />
+                <Row label="Tourism licences" value={`${documents.tourism_valid} / ${documents.pfa_total}`}  color={documents.tourism_valid  === documents.pfa_total ? COLOURS.GREEN : COLOURS.AMBER} />
+                <div style={lastRow}>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Expiring in 30 days</span>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: documents.expiring_30d > 0 ? COLOURS.RED : COLOURS.GREEN }}>
+                    {documents.expiring_30d}
+                  </span>
+                </div>
+              </Card>
+            </div>
+
+            {/* ── FLEET ── */}
+            <SectionLabel>Fleet — {monthLabel}</SectionLabel>
+            <Card style={{ marginBottom: "8px" }}>
+              <div style={twoCol}>
+                <div>
+                  <Row label="Active vehicles" value={fleet.active_vehicles} />
+                  <Row label="Total fills"     value={fleet.fills} />
+                  <Row label="Fuel spend"      value={fmtPKR(fleet.fuel_spend)} />
+                </div>
+                <div>
+                  <Row label="Avg km / litre"   value={fleet.avg_kpl > 0 ? `${fleet.avg_kpl}` : "—"} />
+                  <Row label="Maintenance jobs" value={fleet.maint_jobs} />
+                  <Row label="Maint. spend"     value={fmtPKR(fleet.maint_spend)} />
+                </div>
+              </div>
+              <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, marginTop: "8px", paddingTop: "8px" }}>
+                <div style={lastRow}>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Vehicles with no entry this month</span>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: fleet.no_entry > 0 ? COLOURS.AMBER : COLOURS.GREEN }}>
+                    {fleet.no_entry}
+                  </span>
+                </div>
+              </div>
+            </Card>
+
+            {/* ── SOLAR ── */}
+            <SectionLabel>Solar — {monthLabel}</SectionLabel>
+            <Card style={{ marginBottom: "8px" }}>
+              <div style={twoCol}>
+                <div>
+                  <Row label="Active sites"     value={solar.active_sites} />
+                  <Row label="Total generation" value={`${Number(solar.total_kwh).toLocaleString()} kWh`} />
+                </div>
+                <div>
+                  <Row label="Sites missing data" value={solar.missing_data} color={solar.missing_data > 0 ? COLOURS.AMBER : COLOURS.GREEN} />
+                  <Row label="Best performer"     value={solar.best_site   || "—"} />
+                </div>
+              </div>
+              {solar.lowest_site && solar.lowest_site !== solar.best_site && (
+                <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, marginTop: "8px", paddingTop: "8px" }}>
+                  <div style={lastRow}>
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Lowest this month</span>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{solar.lowest_site}</span>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* ── UTILITIES ── */}
+            <SectionLabel>Utilities — {monthLabel}</SectionLabel>
+            <Card style={{ marginBottom: "8px" }}>
+              <div style={twoCol}>
+                <div>
+                  <Row label="Locations tracked" value={utilities.locations_tracked} />
+                  <Row label="Total est. bill"   value={fmtPKR(utilities.total_bill)} />
+                </div>
+                <div>
+                  <Row label="Readings missing"  value={utilities.missing_readings}       color={utilities.missing_readings > 0 ? COLOURS.AMBER : COLOURS.GREEN} />
+                  <Row label="Highest bill site" value={utilities.highest_bill_site || "—"} />
+                </div>
+              </div>
+            </Card>
+          </>
+        );
+      })()}
     </main>
   );
 }
