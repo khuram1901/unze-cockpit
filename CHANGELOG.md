@@ -4,6 +4,17 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-18 (night) — Legacy audit records merged into the plan; one structure for everything
+
+Khuram: "remove if duplicate, otherwise merge." Migration `150_audit_merge_legacy.sql` (applied):
+
+- **Duplicates removed after carrying their progress into the plan project**: UTPL P&L 3rd Q → Draft Audit Findings (stages 1–3 completed), HD 3rd Q → Data Verification, BRNH 3rd Q → Data Collection, IFPL 2nd Q → Data Verification; the completed 30/06 cash count matched the plan's Completed state, and the planned 07/07 count became the plan project's new cycle (target 20/07, note "Head Office count — Amina").
+- **Nine non-duplicates merged as projects** with mapped stage progress: HD P&L 1st Q (done), IFPL P&L 1st Q (90%), HD + BRNH P&L 2nd Q (30%), and five ad-hoc audits (new 'Ad-hoc' frequency): Office supplies SAP (done), PF withdrawal SOP (done), Cash payments, Fixed asset, Sales audit 2025-26. All tagged "Merged from pre-plan audit records".
+- **`audit_plan_items` emptied** (table kept for schema compatibility); legacy section, ad-hoc add form, CSV import and charts removed from AuditDashboard.tsx — it's now a slim wrapper around AnnualAuditPlan. Legacy widget keys dropped from the registry.
+- **`get_department_kpi_counts` audit branch** repointed from audit_plan_items to audit_plan_processes (day-weighted avg completion), so the Department Scorecard and audit health card stay live. Verified: UTPL 7 done / 6 running / 6 planned, avg 42%.
+
+---
+
 ## 2026-07-18 (evening) — Shahid's feedback: pre/post-audit split, daily approvals log, project editor
 
 Shahid's Recommendation.docx reviewed with Khuram; all points implemented (migration `149_audit_pre_post_split.sql`, applied):
