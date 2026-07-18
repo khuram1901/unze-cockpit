@@ -960,11 +960,26 @@ export default function MembersManager() {
                         </label>
                       </div>
 
-                      {/* Reports to — read-only here, set from the manager/director's own
-                          "Team members" picker below, not per-person. */}
-                      {m.manager_id && (
-                        <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "6px" }}>
-                          Reports to: <strong style={{ color: COLOURS.NAVY }}>{fullName(members.find((x) => x.id === m.manager_id)?.first_name ?? null, members.find((x) => x.id === m.manager_id)?.last_name ?? null, members.find((x) => x.id === m.manager_id)?.name)}</strong>
+                      {/* Reports to — editable dropdown so a manager can be
+                          assigned or changed directly from the edit panel. */}
+                      {m.role !== "Admin" && m.role !== "CEO" && (
+                        <div style={{ marginBottom: "8px" }}>
+                          <label style={lblC}>Reports to (manager)</label>
+                          <select
+                            style={inpC}
+                            value={m.manager_id || ""}
+                            onChange={(e) => updateMember(m.id, { manager_id: e.target.value || null })}
+                          >
+                            <option value="">— No manager —</option>
+                            {members
+                              .filter((x) => x.id !== m.id && x.is_active !== false)
+                              .sort((a, b) => fullName(a.first_name, a.last_name, a.name).localeCompare(fullName(b.first_name, b.last_name, b.name)))
+                              .map((x) => (
+                                <option key={x.id} value={x.id}>
+                                  {fullName(x.first_name, x.last_name, x.name)} ({x.role})
+                                </option>
+                              ))}
+                          </select>
                         </div>
                       )}
 

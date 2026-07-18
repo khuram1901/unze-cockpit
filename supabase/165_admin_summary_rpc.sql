@@ -176,34 +176,32 @@ BEGIN
     'pfa_valid', (
       SELECT COUNT(*) FROM admin_restaurant_licences rl
       JOIN admin_locations l ON l.id = rl.location_id AND l.is_active = true
-      WHERE rl.pfa_status IN ('Registered','Done','Valid')
+      WHERE rl.licence_type = 'PFA Licence' AND rl.status = 'Done'
     ),
     'pfa_total', (
       SELECT COUNT(*) FROM admin_restaurant_licences rl
       JOIN admin_locations l ON l.id = rl.location_id AND l.is_active = true
+      WHERE rl.licence_type = 'PFA Licence'
     ),
     'medical_valid', (
       SELECT COUNT(*) FROM admin_restaurant_licences rl
       JOIN admin_locations l ON l.id = rl.location_id AND l.is_active = true
-      WHERE rl.medical_status IN ('Registered','Done','Valid')
+      WHERE rl.licence_type = 'Medical Certificate' AND rl.status = 'Done'
     ),
     'training_valid', (
       SELECT COUNT(*) FROM admin_restaurant_licences rl
       JOIN admin_locations l ON l.id = rl.location_id AND l.is_active = true
-      WHERE rl.training_status IN ('Registered','Done','Valid')
+      WHERE rl.licence_type = 'Training Certificate' AND rl.status = 'Done'
     ),
     'tourism_valid', (
       SELECT COUNT(*) FROM admin_restaurant_licences rl
       JOIN admin_locations l ON l.id = rl.location_id AND l.is_active = true
-      WHERE rl.tourism_status IN ('Registered','Done','Valid')
+      WHERE rl.licence_type = 'Tourism Certificate' AND rl.status = 'Done'
     ),
     'expiring_30d', (
       SELECT COUNT(*) FROM admin_restaurant_licences rl
       JOIN admin_locations l ON l.id = rl.location_id AND l.is_active = true
-      WHERE (rl.pfa_expiry      BETWEEN CURRENT_DATE AND CURRENT_DATE + 30)
-         OR (rl.medical_expiry  BETWEEN CURRENT_DATE AND CURRENT_DATE + 30)
-         OR (rl.training_expiry BETWEEN CURRENT_DATE AND CURRENT_DATE + 30)
-         OR (rl.tourism_expiry  BETWEEN CURRENT_DATE AND CURRENT_DATE + 30)
+      WHERE rl.expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30
     )
   )
   INTO v_documents;
