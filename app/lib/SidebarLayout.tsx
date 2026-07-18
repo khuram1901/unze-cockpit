@@ -65,6 +65,7 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
       (ctx.email || "").toLowerCase() === "shakeel@unze.co.uk") return true;
   const perms = ctx.overrides as Record<string, boolean | string | null> | null;
   if (card.permKey === "_admin_settings") return isMainAdmin(ctx);
+  if (card.permKey === "_backups") return ["khuram1901@gmail.com", "k.saleem@unzegroup.com"].includes((ctx.email || "").toLowerCase());
   if (card.permKey.startsWith("_")) return true;
   const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
   if (isPACtx && card.permKey === "can_view_pa_dashboard") return false;
