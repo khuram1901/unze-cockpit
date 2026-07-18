@@ -340,6 +340,28 @@ function MyMinutesPage() {
   const totalPending = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "Not Started" || t.status === "Waiting Reply").length, 0);
   const totalCompleted = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "Completed").length, 0);
 
+  // Task aging by department — always-visible breakdown table
+  const taskAgingByDept = (() => {
+    const today = new Date();
+    const map = new Map<string, { open: number; pending: number; oldestDays: number }>();
+    for (const m of filtered) {
+      const dept = m.department || "Executive Office";
+      const mTasks = getTasksForMeeting(m.id).filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+      if (mTasks.length === 0) continue;
+      const days = Math.floor((today.getTime() - new Date(m.meeting_date).getTime()) / 86400000);
+      const entry = map.get(dept) || { open: 0, pending: 0, oldestDays: 0 };
+      for (const t of mTasks) {
+        if (t.status === "In Progress") entry.open++;
+        else entry.pending++;
+      }
+      entry.oldestDays = Math.max(entry.oldestDays, days);
+      map.set(dept, entry);
+    }
+    return Array.from(map.entries())
+      .map(([dept, v]) => ({ dept, ...v }))
+      .sort((a, b) => b.oldestDays - a.oldestDays);
+  })();
+
   // Task panel: flat list of tasks for the active filter, with meeting context
   const taskPanelItems = taskFilter ? filtered.flatMap((m) =>
     getTasksForMeeting(m.id)
@@ -404,6 +426,32 @@ function MyMinutesPage() {
                 );
               })}
             </div>
+
+            {/* Task Aging by Department — always visible when there are open tasks */}
+            {taskAgingByDept.length > 0 && (
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: taskFilter ? "0" : "14px", marginTop: "8px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 90px", padding: "6px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT }}>
+                  <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.SLATE, letterSpacing: "0.07em" }}>Dept · Open Tasks</span>
+                  <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.RED, letterSpacing: "0.07em", textAlign: "center" }}>In Progress</span>
+                  <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.AMBER, letterSpacing: "0.07em", textAlign: "center" }}>Pending</span>
+                  <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.SLATE, letterSpacing: "0.07em", textAlign: "right" }}>Oldest Task</span>
+                </div>
+                {taskAgingByDept.map((row) => {
+                  const ageColour = row.oldestDays > 30 ? COLOURS.RED : row.oldestDays > 14 ? COLOURS.AMBER : COLOURS.GREEN;
+                  return (
+                    <div key={row.dept} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 90px", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: deptAccent(row.dept), flexShrink: 0 }} />
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{row.dept}</span>
+                      </div>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: row.open > 0 ? COLOURS.RED : COLOURS.SLATE, textAlign: "center" }}>{row.open}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: row.pending > 0 ? COLOURS.AMBER : COLOURS.SLATE, textAlign: "center" }}>{row.pending}</span>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: ageColour, textAlign: "right" }}>{row.oldestDays} day{row.oldestDays !== 1 ? "s" : ""}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Task panel — shown when a card is clicked */}
             {taskFilter && (

@@ -115,7 +115,7 @@ function MeetingCard({
   const barColour = pct === 100 ? COLOURS.GREEN : pct > 0 ? COLOURS.AMBER : COLOURS.BORDER;
 
   return (
-    <div style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
+    <div id={`meeting-row-${m.id}`} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
       {/* Compact meeting row */}
       <div onClick={() => setExpandedId(isOpen ? null : m.id)} style={{
         display: "flex", alignItems: "center", gap: "10px",
@@ -665,6 +665,42 @@ export default function MeetingsPage() {
   const thisMonthMeetings = meetings.filter((m) => m.meeting_date.slice(0, 7) === currentMonth);
   const openTasks = allTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
 
+  // Task aging by department — for the summary table
+  const taskAgingByDept = (() => {
+    const today = new Date();
+    const map = new Map<string, { open: number; pending: number; oldestDays: number }>();
+    for (const task of openTasks) {
+      const meeting = meetings.find((m) => m.id === task.meeting_id);
+      if (!meeting) continue;
+      const dept = meeting.department || meeting.company || "Executive Office";
+      const days = Math.floor((today.getTime() - new Date(meeting.meeting_date).getTime()) / 86400000);
+      const entry = map.get(dept) || { open: 0, pending: 0, oldestDays: 0 };
+      if (task.status === "In Progress") entry.open++;
+      else entry.pending++;
+      entry.oldestDays = Math.max(entry.oldestDays, days);
+      map.set(dept, entry);
+    }
+    return Array.from(map.entries())
+      .map(([dept, v]) => ({ dept, ...v }))
+      .sort((a, b) => b.oldestDays - a.oldestDays);
+  })();
+
+  // Navigate from Decision Log to a specific meeting in the list
+  function openMeeting(meetingId: string, dept: string, meetingDate: string) {
+    const monthKey = meetingDate.slice(0, 7);
+    setView("meetings");
+    setExpandedId(meetingId);
+    if (groupBy === "department") {
+      setExpandedDepts((prev) => new Set([...prev, dept]));
+      setExpandedMonths((prev) => new Set([...prev, `${dept}:${monthKey}`]));
+    } else {
+      setExpandedGroups((prev) => new Set([...prev, monthKey]));
+    }
+    setTimeout(() => {
+      document.getElementById(`meeting-row-${meetingId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 200);
+  }
+
   const formatMonthLabel = (ym: string) => {
     const [y, m] = ym.split("-");
     const months = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -859,6 +895,32 @@ export default function MeetingsPage() {
                 </div>
               );
             })()}
+
+            {/* Task Aging by Department */}
+            {taskAgingByDept.length > 0 && (
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "14px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 90px", padding: "6px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT }}>
+                  <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.SLATE, letterSpacing: "0.07em" }}>Dept · Open Tasks</span>
+                  <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.RED, letterSpacing: "0.07em", textAlign: "center" }}>In Progress</span>
+                  <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.AMBER, letterSpacing: "0.07em", textAlign: "center" }}>Pending</span>
+                  <span style={{ fontSize: "10px", fontWeight: 600, textTransform: "uppercase" as const, color: COLOURS.SLATE, letterSpacing: "0.07em", textAlign: "right" }}>Oldest Task</span>
+                </div>
+                {taskAgingByDept.map((row) => {
+                  const ageColour = row.oldestDays > 30 ? COLOURS.RED : row.oldestDays > 14 ? COLOURS.AMBER : COLOURS.GREEN;
+                  return (
+                    <div key={row.dept} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 90px", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: deptAccent(row.dept), flexShrink: 0 }} />
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{row.dept}</span>
+                      </div>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: row.open > 0 ? COLOURS.RED : COLOURS.SLATE, textAlign: "center" }}>{row.open}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: row.pending > 0 ? COLOURS.AMBER : COLOURS.SLATE, textAlign: "center" }}>{row.pending}</span>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: ageColour, textAlign: "right" }}>{row.oldestDays} day{row.oldestDays !== 1 ? "s" : ""}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </>
         )}
 
@@ -1400,21 +1462,26 @@ export default function MeetingsPage() {
                 ) : (
                   <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
                     {filteredDecisions.map((d, i) => (
-                      <div key={`${d.meetingId}-${i}`} style={{
-                        display: "flex", alignItems: "flex-start", gap: "10px",
-                        padding: "8px 14px",
-                        borderBottom: i < filteredDecisions.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none",
-                        backgroundColor: COLOURS.CARD,
-                      }}>
-                        <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: COLOURS.GREEN, flexShrink: 0, marginTop: "5px" }} />
+                      <div key={`${d.meetingId}-${i}`}
+                        onClick={() => openMeeting(d.meetingId, d.department, d.meetingDate)}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.backgroundColor = COLOURS.CARD_ALT; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.backgroundColor = COLOURS.CARD; }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: "10px",
+                          padding: "8px 14px",
+                          borderBottom: i < filteredDecisions.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none",
+                          backgroundColor: COLOURS.CARD, cursor: "pointer",
+                        }}>
+                        <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: COLOURS.GREEN, flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: "12px", color: COLOURS.NAVY, marginBottom: "2px" }}>{d.text}</div>
                           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", fontSize: "11px", color: COLOURS.SLATE, alignItems: "center" }}>
                             <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>{formatDateUK(d.meetingDate)}</span>
                             <span>{d.meetingTitle}</span>
-                            <span style={{ padding: "1px 6px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.NAVY, fontWeight: 600 }}>{d.department}</span>
+                            <span style={{ padding: "1px 6px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: deptAccent(d.department), fontWeight: 600 }}>{d.department}</span>
                           </div>
                         </div>
+                        <span style={{ fontSize: "11px", color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>View →</span>
                       </div>
                     ))}
                   </div>
