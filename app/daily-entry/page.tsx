@@ -16,6 +16,20 @@ type Location = { id: string; name: string; entity: string };
 
 type FormType = "fuel" | "solar" | "utility" | "maintenance";
 
+type RecentFuel = {
+  date: string; quantity_litres: number; price_per_litre: number;
+  amount_pkr: number | null; current_odometer: number | null; km_per_litre: number | null;
+};
+type RecentMaint = {
+  date: string; work_type: string; description: string | null;
+  odometer_km: number | null; cost_pkr: number; workshop: string | null;
+};
+type RecentSolar = { date: string; units_produced_kwh: number; status: string | null };
+type RecentUtility = {
+  reading_date: string; current_reading: number | null; previous_reading: number | null;
+  units_consumed: number | null; bill_amount_pkr: number | null; meter_label: string;
+};
+
 // ── Helper ────────────────────────────────────────────────────────────
 
 async function authedFetch(url: string, opts: RequestInit = {}) {
@@ -107,6 +121,12 @@ export default function DailyEntryPage() {
   });
   const [submittingMaint, setSubmittingMaint] = useState(false);
 
+  // ── Recent entries (per-form history) ─────────────────────────────
+  const [recentFuel,    setRecentFuel]    = useState<RecentFuel[]>([]);
+  const [recentMaint,   setRecentMaint]   = useState<RecentMaint[]>([]);
+  const [recentSolar,   setRecentSolar]   = useState<RecentSolar[]>([]);
+  const [recentUtility, setRecentUtility] = useState<RecentUtility[]>([]);
+
   // ── Computed fuel values ───────────────────────────────────────────
   const fuelAmount = fuel.price_per_litre && fuel.quantity_litres
     ? (parseFloat(fuel.price_per_litre) * parseFloat(fuel.quantity_litres)).toFixed(2)
@@ -140,7 +160,7 @@ export default function DailyEntryPage() {
       });
   }, [checking]);
 
-  // Auto-fetch last odometer when vehicle changes
+  // Auto-fetch last odometer + recent fuel when vehicle changes
   useEffect(() => {
     if (!fuel.vehicle_id) return;
     setLoadingOdo(true);
@@ -154,9 +174,25 @@ export default function DailyEntryPage() {
         }
         setLoadingOdo(false);
       });
+    authedFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
+      .then((r) => r.json()).then((j) => setRecentFuel(j.data || []));
   }, [fuel.vehicle_id]);
 
-  // Auto-fetch last utility reading when location+meter changes
+  // Recent maintenance when maintenance vehicle changes
+  useEffect(() => {
+    if (!maint.vehicle_id) return;
+    authedFetch(`/api/admin/recent-entries?form=maintenance&vehicleId=${maint.vehicle_id}`)
+      .then((r) => r.json()).then((j) => setRecentMaint(j.data || []));
+  }, [maint.vehicle_id]);
+
+  // Recent solar when branch changes
+  useEffect(() => {
+    if (!solar.branch_id) return;
+    authedFetch(`/api/admin/recent-entries?form=solar&branchId=${solar.branch_id}`)
+      .then((r) => r.json()).then((j) => setRecentSolar(j.data || []));
+  }, [solar.branch_id]);
+
+  // Auto-fetch last utility reading + recent when location+meter changes
   useEffect(() => {
     if (!utility.location_id) return;
     setLoadingLastReading(true);
@@ -170,6 +206,8 @@ export default function DailyEntryPage() {
         }
         setLoadingLastReading(false);
       });
+    authedFetch(`/api/admin/recent-entries?form=utility&locationId=${utility.location_id}&meterLabel=${encodeURIComponent(utility.meter_label)}`)
+      .then((r) => r.json()).then((j) => setRecentUtility(j.data || []));
   }, [utility.location_id, utility.meter_label]);
 
   // ── Submit handlers ────────────────────────────────────────────────
@@ -189,6 +227,8 @@ export default function DailyEntryPage() {
     if (json.ok) {
       showToast("Fuel entry saved ✓", "success");
       setFuel((f) => ({ ...f, price_per_litre: "", quantity_litres: "", current_odometer: "", notes: "" }));
+      authedFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
+        .then((r) => r.json()).then((j) => setRecentFuel(j.data || []));
     } else {
       showToast(json.error || "Failed to save", "error");
     }
@@ -210,6 +250,8 @@ export default function DailyEntryPage() {
     if (json.ok) {
       showToast("Solar reading saved ✓", "success");
       setSolar((s) => ({ ...s, production_kwh: "", notes: "", status: "Active" }));
+      authedFetch(`/api/admin/recent-entries?form=solar&branchId=${solar.branch_id}`)
+        .then((r) => r.json()).then((j) => setRecentSolar(j.data || []));
     } else {
       showToast(json.error || "Failed to save", "error");
     }
@@ -231,6 +273,8 @@ export default function DailyEntryPage() {
     if (json.ok) {
       showToast("Utility reading saved ✓", "success");
       setUtility((u) => ({ ...u, current_reading: "", bill_amount_pkr: "" }));
+      authedFetch(`/api/admin/recent-entries?form=utility&locationId=${utility.location_id}&meterLabel=${encodeURIComponent(utility.meter_label)}`)
+        .then((r) => r.json()).then((j) => setRecentUtility(j.data || []));
     } else {
       showToast(json.error || "Failed to save", "error");
     }
@@ -252,6 +296,8 @@ export default function DailyEntryPage() {
     if (json.ok) {
       showToast("Maintenance entry saved ✓", "success");
       setMaint((m) => ({ ...m, work_types: [], description: "", odometer_km: "", workshop: "", cost_pkr: "", next_service_due: "" }));
+      authedFetch(`/api/admin/recent-entries?form=maintenance&vehicleId=${maint.vehicle_id}`)
+        .then((r) => r.json()).then((j) => setRecentMaint(j.data || []));
     } else {
       showToast(json.error || "Failed to save", "error");
     }
@@ -305,6 +351,7 @@ export default function DailyEntryPage() {
 
         {/* ── FUEL ── */}
         {activeForm === "fuel" && (
+          <>
           <form onSubmit={submitFuel}>
             <div style={sectionCard}>
               <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 16px" }}>⛽ Fuel Fill-up</h2>
@@ -379,10 +426,41 @@ export default function DailyEntryPage() {
               {submittingFuel ? "Saving…" : "Save Fuel Entry"}
             </button>
           </form>
+
+          {/* Recent fuel entries */}
+          {recentFuel.length > 0 && (
+            <div style={{ marginTop: "16px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>Recent fills</div>
+              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
+                {recentFuel.map((r, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "4px", padding: "10px 14px", borderBottom: i < recentFuel.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.date.split("-").reverse().join("/")}</div>
+                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>{r.current_odometer ? `${r.current_odometer.toLocaleString()} km` : "—"}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.quantity_litres.toFixed(1)} L</div>
+                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>PKR {r.price_per_litre.toFixed(0)}/L</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.amount_pkr ? `PKR ${Math.round(r.amount_pkr).toLocaleString()}` : "—"}</div>
+                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>Amount</div>
+                    </div>
+                    <div style={{ textAlign: "right" as const }}>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: r.km_per_litre ? COLOURS.GREEN : COLOURS.SLATE }}>{r.km_per_litre ? `${r.km_per_litre.toFixed(1)} km/L` : "—"}</div>
+                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>Efficiency</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {/* ── SOLAR ── */}
         {activeForm === "solar" && (
+          <>
           <form onSubmit={submitSolar}>
             <div style={sectionCard}>
               <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 16px" }}>☀️ Solar Production</h2>
@@ -432,10 +510,37 @@ export default function DailyEntryPage() {
               {submittingSolar ? "Saving…" : "Save Solar Reading"}
             </button>
           </form>
+
+          {/* Recent solar readings */}
+          {recentSolar.length > 0 && (
+            <div style={{ marginTop: "16px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>Recent readings</div>
+              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
+                {recentSolar.map((r, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", padding: "10px 14px", borderBottom: i < recentSolar.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.date.split("-").reverse().join("/")}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.units_produced_kwh.toFixed(1)} kWh</div>
+                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>Production</div>
+                    </div>
+                    <div style={{ textAlign: "right" as const }}>
+                      <div style={{ fontSize: "11px", fontWeight: 600, color: r.status === "Active" ? COLOURS.GREEN : COLOURS.AMBER }}>
+                        {r.status || "—"}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {/* ── UTILITY ── */}
         {activeForm === "utility" && (
+          <>
           <form onSubmit={submitUtility}>
             <div style={sectionCard}>
               <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 16px" }}>🔌 Utility Reading</h2>
@@ -504,10 +609,39 @@ export default function DailyEntryPage() {
               {submittingUtility ? "Saving…" : "Save Utility Reading"}
             </button>
           </form>
+
+          {/* Recent utility readings */}
+          {recentUtility.length > 0 && (
+            <div style={{ marginTop: "16px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>Recent readings</div>
+              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
+                {recentUtility.map((r, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "4px", padding: "10px 14px", borderBottom: i < recentUtility.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.reading_date.split("-").reverse().join("/")}</div>
+                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>{r.meter_label}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.units_consumed != null ? `${r.units_consumed} units` : "—"}</div>
+                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>Consumed</div>
+                    </div>
+                    <div style={{ textAlign: "right" as const }}>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>
+                        {r.bill_amount_pkr ? `PKR ${Math.round(r.bill_amount_pkr).toLocaleString()}` : "—"}
+                      </div>
+                      <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>Bill</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {/* ── MAINTENANCE ── */}
         {activeForm === "maintenance" && (
+          <>
           <form onSubmit={submitMaint}>
             <div style={sectionCard}>
               <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 16px" }}>🔧 Vehicle Maintenance</h2>
@@ -602,6 +736,36 @@ export default function DailyEntryPage() {
               {submittingMaint ? "Saving…" : "Save Maintenance Entry"}
             </button>
           </form>
+
+          {/* Recent maintenance records */}
+          {recentMaint.length > 0 && (
+            <div style={{ marginTop: "16px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>Recent maintenance</div>
+              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
+                {recentMaint.map((r, i) => (
+                  <div key={i} style={{ padding: "10px 14px", borderBottom: i < recentMaint.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div>
+                        <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.work_type}</div>
+                        {r.description && <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>{r.description}</div>}
+                      </div>
+                      <div style={{ textAlign: "right" as const, flexShrink: 0, marginLeft: "8px" }}>
+                        <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>PKR {Math.round(r.cost_pkr).toLocaleString()}</div>
+                        <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>{r.date.split("-").reverse().join("/")}</div>
+                      </div>
+                    </div>
+                    {(r.odometer_km || r.workshop) && (
+                      <div style={{ display: "flex", gap: "12px", marginTop: "4px" }}>
+                        {r.odometer_km && <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>{r.odometer_km.toLocaleString()} km</div>}
+                        {r.workshop && <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>{r.workshop}</div>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {toastElement}
