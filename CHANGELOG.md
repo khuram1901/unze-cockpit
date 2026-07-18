@@ -4,6 +4,18 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-19 (session 2) — Mobile overhaul; Admin Ops widgets; manager edit dropdown; JS audit; TypeScript clean
+
+- **Full mobile responsiveness overhaul** across all major pages. `useMobile()` hook (768px breakpoint) used app-wide to switch multi-column grids to single-column on mobile. Global CSS additions in `globals.css`: `font-size: 16px !important` on all inputs/selects/textareas (iOS auto-zoom prevention), `min-height: 44px` on touch targets, `.card-mobile-pad` utility class. Pages fixed: Tasks bulk-action toolbar (column layout on mobile, action groups stacked), P&L (3 chart grids now 1-col on mobile), Admin Operations (3-col form grids → 2-col, YTD stats grid → 2-col), PA Dashboard (KPI grid 3-col → 2-col), Operations Dashboard (tab strip full-width on mobile). Earlier session had already fixed Daily Entry, Stock, Members, Meetings, Investments.
+- **Admin Operations tab-level widget gating.** Five new widget keys added to `widgetRegistry.ts`: `admin_ops.registrations`, `admin_ops.payments`, `admin_ops.compliance`, `admin_ops.documents`, `admin_ops.operations`. `admin/page.tsx` updated with `widgetVisible()` calls per tab, and `safeActiveTab` pattern to auto-jump to the first visible tab when the current one is hidden. `AccessControlPanel.tsx` updated with "Admin Operations" in the `WIDGET_GROUP_TO_PAGE` map so these keys appear in the Access Matrix.
+- **Manager dropdown added to Members edit panel.** In `MembersManager.tsx`, the expanded edit row (click any member row) now shows an editable "Reports to (manager)" `<select>` for non-Admin/CEO members. Previously read-only text ("Reports to: name"). Saves immediately on change via `updateMember()`. Consistent with the add-form's manager requirement.
+- **TypeScript check: zero errors.** `npx tsc --noEmit` ran clean across the full codebase.
+- **JS aggregation audit completed.** All API routes grepped for `.reduce()/.map()/.filter()/for` loops. Findings: (1) `api/stock/authority-letters/route.ts` computes letter balances in JS (2-step batch, not N+1 — flagged as tech debt for future RPC migration); (2) `api/notifications/digest/route.ts` filters tasks in JS but is cron-only, not user-facing. All other loops are either external API data transformation (Google, Folderit, PDF parsing) or validation before writes — not display aggregation. No critical violations found.
+- **BLUEPRINT.md updated**: header date, `members` table schema (added `manager_id`, `is_hod`, `first_name`/`last_name`, `position_title`, `is_active`), MembersManager description expanded, AccessControlPanel description expanded, mobile responsiveness section added, Admin Ops page entry rewritten, `/members` page workflow updated, two new tech-debt entries in Known Issues, two new locked decisions (#31 mobile, #32 safeActiveTab pattern).
+- Commits: `6ff57ef` (manager edit dropdown), plus BLUEPRINT/CHANGELOG update in this session.
+
+---
+
 ## 2026-07-19 — Production Entry redesigned; bell deep-links fixed; Exceptions removed; v4.0
 
 - **Production Daily Entry page (`/production`) redesigned** to match the Admin Daily Entry format: 5 emoji tab cards (⚙️ Production / 🚛 Dispatch / ⚠️ Breakage / ♻️ Scrap / 🔧 Machine) replace the old all-at-once grid. One section shown at a time; last 6 recent entries for that type shown inline below each form. Notes field moved into relevant sections. All submit logic and dispatch safety rules unchanged. Max width 540px, centred on desktop, full-width on mobile.

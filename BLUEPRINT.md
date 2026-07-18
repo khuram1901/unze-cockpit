@@ -1,6 +1,8 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 19/07/2026 (Production Daily Entry redesigned to tab-based layout matching Admin Entry; bell notification deep-links fixed to filter Tasks page on arrival; Exceptions standalone page removed; app version bumped to v4.0; Admin Entry + Daily Entry hidden from sidebar — direct-link access only).
+> **This is the source of truth.** Read before touching any code. Last updated: 19/07/2026 (session 2 — mobile responsiveness overhaul across all pages; Admin Operations tab-level widget gating added; manager assignment dropdown added to Members edit panel; JS aggregation audit completed; TypeScript clean).
+>
+> Previous update: 19/07/2026 (Production Daily Entry redesigned to tab-based layout matching Admin Entry; bell notification deep-links fixed to filter Tasks page on arrival; Exceptions standalone page removed; app version bumped to v4.0; Admin Entry + Daily Entry hidden from sidebar — direct-link access only).
 >
 > Previous update: 14/07/2026 (Tasks page rebuild, Phases 3–5: migrations 098–105 — company tag, stage, locked assigned/original-due dates, subtasks with DB-enforced completion gating, due-date history, Stuck status (red), Kanban board, Recurring tab, Team tab, monthly/quarterly RPCs, attention banner, My Tasks tab, real filters, task-detail modal, mini-checklist, comments, WhatsApp auto-remind toggle, calendar picker, meeting chip — see "Tasks page redesign" section for the full history including the mockup-reconciliation pass after Khuram flagged the live page didn't match what was designed).
 >
@@ -166,8 +168,18 @@ app/
 │
 ├── members/
 │   ├── page.tsx                      Members page shell
-│   ├── MembersManager.tsx            Member list, invite, edit role/dept, delete
-│   └── AccessMatrix.tsx              Permission override grid — per-member boolean toggles
+│   ├── MembersManager.tsx            Member list, invite, edit role/dept, delete.
+│   │                                 Add-member form: manager dropdown (required for non-Admin/CEO) +
+│   │                                 optional "this person will manage" multi-select (backfills manager_id
+│   │                                 on existing members). Edit panel (expanded row): editable "Reports to
+│   │                                 (manager)" dropdown for non-Admin/CEO — saves immediately via
+│   │                                 updateMember(). Team-member checkbox list shows who reports TO
+│   │                                 this person (gated to HOD / Admin / CEO / Executive).
+│   └── AccessControlPanel.tsx        Widget-level access matrix — horizontal grid: one row per member,
+│   │                                 one column per widget key grouped by page. WIDGET_GROUP_TO_PAGE
+│   │                                 maps group labels to page names. Includes "Admin Operations" →
+│   │                                 5 tab-level widget keys (registrations, payments, compliance,
+│   │                                 documents, operations).
 │
 ├── department/[slug]/
 │   ├── page.tsx                      Department page router — dispatches to correct dashboard
@@ -200,9 +212,16 @@ app/
 │
 ├── exceptions/page.tsx               Exception management — surfaced alerts and rule violations
 ├── audit-log/page.tsx                System audit log — all user actions (timestamped)
-├── admin/page.tsx                    Data & Backups — source document archive, backup/restore
-│                                     (khuram1901@gmail.com ONLY). All colours via COLOURS tokens;
-│                                     RADII.CARD, RADII.PILL, RADII.SM used throughout; no raw hex.
+├── admin/page.tsx                    Admin Operations — EOBI registrations, payment tracking,
+│                                     compliance (licences/certificates), documents (NTN certs),
+│                                     operations (fleet fuel, vehicle maintenance, solar production).
+│                                     Five tabs, each gated by a widget key (admin_ops.registrations /
+│                                     .payments / .compliance / .documents / .operations) so individual
+│                                     tabs can be hidden per member via the Access Matrix.
+│                                     safeActiveTab pattern used: if the current tab is hidden for this
+│                                     member, auto-jump to the first visible tab.
+│                                     All colours via COLOURS tokens; RADII.CARD, RADII.PILL, RADII.SM
+│                                     used throughout; no raw hex. Mobile responsive (2-col grids on mobile).
 │
 ├── monthly-operations-targets/page.tsx  Monthly production/dispatch targets per plant.
 │                                     Full Genspark restyle: all var(--*) and raw hex replaced
@@ -496,6 +515,18 @@ Cards have **no shadow** by design (Genspark spec). Shadows reserved for overlay
 - Page padding: `40px` desktop / `20px` mobile
 - **NEVER use `overflowX: hidden` on `<main>` tags** — clips nested scroll containers
 
+### Mobile Responsiveness (19/07/2026)
+
+All major pages have been made mobile-safe (iPhone + Android). Approach:
+
+- **`useMobile()` hook** (`app/lib/useMobile.ts`) — returns `true` when `window.innerWidth < 768`. Used in every page component to switch between desktop and mobile layout grids.
+- **Grid pattern**: `gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(320px, 1fr))"` — stacks to a single column on mobile. Specific pages use custom column counts (e.g. 2-col on tablet for admin stats).
+- **iOS auto-zoom prevention** (`app/globals.css`): `@media (max-width: 768px) { input, select, textarea { font-size: 16px !important; } }` — iOS Safari auto-zooms any input with font-size < 16px.
+- **Touch targets** (`globals.css`): `button, a, select { min-height: 44px; }` — Apple HIG minimum tap target.
+- **Mobile-padded cards** (`globals.css`): `.card-mobile-pad { padding: 14px !important; }` — tighter card padding on mobile.
+- **Pages covered**: Tasks (bulk action toolbar, filter pills), P&L (KPI grids, chart grids), Admin Operations (form grids, YTD stats, tab strip), PA Dashboard (KPI grid), Operations Dashboard (tab strip), Daily Entry, Stock, Members, Meetings, Investments.
+- **Never use `<input type="date">`** — use `<DateInput>` from `app/lib/DateInput.tsx`. Safari ignores `lang="en-GB"` for native date inputs and always shows MM/DD/YYYY.
+
 ### Shared Components in lib/SharedUI.tsx
 
 | Component / Export | Props | Purpose |
@@ -575,6 +606,12 @@ Cards have **no shadow** by design (Genspark spec). Shadows reserved for overlay
 | department | text | e.g. 'Finance', 'Unze Trading Ops', 'HR' |
 | company | text | Company name (text, legacy) |
 | company_id | uuid FK → companies | Added in migration 040 |
+| manager_id | uuid FK → members (self-ref) | Who this member reports to. Drives task visibility (`is_manager_of_assignee()` RLS), submit routing (`route_submitted_task()` trigger), and the Manager dropdown in both the add-member form and the edit panel. NULL for Admin/CEO. See "Manager hierarchy and task routing" in Tasks tables. |
+| is_hod | boolean | DEFAULT false — Head of Department flag |
+| first_name / last_name | text | Added for full-name display |
+| position_title | text | e.g. "CEO", "Director" |
+| is_active | boolean | DEFAULT true — inactive members hidden from most views |
+| phone_e164 | text | E.164 phone for WhatsApp |
 | notify_email | boolean | DEFAULT true |
 | notify_whatsapp | boolean | DEFAULT false |
 | phone_e164 | text | E.164 phone for WhatsApp |
@@ -1638,7 +1675,11 @@ Past Meetings tab + Decision Log tab. AI extraction via Claude. Meeting Action T
 Personal meeting minutes. Copy protection for non-privileged users.
 
 #### `/members`
-Members list, invite, edit, delete. Access Matrix tab (per-member boolean overrides). 38 permission columns across 9 groups: Dashboards, Finance, Recv., Tasks, Depts, Tax Mgmt, Prod., Members, Admin. Columns added: can_view_guarantees, can_manage_guarantees, can_view_investments, can_edit_investments, can_view_dept_tax_accounts, can_manage_tax_schedule, can_manage_tax_notices, can_view_stock, can_manage_stock, can_edit_operations_targets, can_manage_meetings. finance_company_scope is a select (UTPL/IFPL/both) that only appears when can_view_finance is on. Protected members (Admin/CEO/PA) show locked (border-only) cells. Each override highlights in blue.
+Members list, invite, edit, delete. Two tabs: Members (list) and Access Control.
+
+**Members tab** (`MembersManager.tsx`): Expandable edit panel per member (click any row). Edit panel has inline fields for first/last name, email, role, department, business unit, company, HOD flag, position title, active flag, and — new 19/07/2026 — an editable **"Reports to (manager)"** dropdown (for non-Admin/CEO members) that saves immediately via `updateMember()`. Below that: team-members checkbox list (who reports TO this person, shown for HODs/Admin/CEO/Executive). Add-member form: manager dropdown is **required** for non-Admin/CEO (skipped for admin-level roles). The form also has an optional "this person will manage" multi-select to backfill `manager_id` on existing members in one go.
+
+**Access Control tab** (`AccessControlPanel.tsx`): Horizontal matrix — one row per member, one column per widget key. WIDGET_GROUP_TO_PAGE maps group labels to page names. Includes "Admin Operations" group with 5 tab-level widget keys. Per-member permission override grid (38 boolean columns): Dashboards, Finance, Recv., Tasks, Depts, Tax Mgmt, Prod., Members, Admin. `finance_company_scope` select (UTPL/IFPL/both) appears only when `can_view_finance` is on. Protected members show locked (border-only) cells. Each override highlights in blue.
 
 #### `/folderit`
 - **File:** `app/folderit/page.tsx`
@@ -1869,7 +1910,9 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 28. **Folderit is read-only from the dashboard** — the `/folderit` page and all folderit API routes only read data from the DB (synced by cron). No write operations to Folderit's API are ever made from the dashboard.
 29. **CEO daily digest replaces individual task emails** — `/api/notifications/ceo-digest` sends one email per weekday (11:30am PKT). Do not re-introduce per-task email notifications to Khuram's addresses.
 30. **Collapsible/expandable UI always starts closed on page load (18/07/2026).** Every accordion-style section, expandable tree row, or open/closed detail panel must default to collapsed when its page first mounts — no `useState(true)` for an expand flag, and no Set-of-"collapsed"-keys pattern that starts empty (since an empty "collapsed" set means everything renders *expanded* by default — invert to tracking "expanded" keys instead, so an empty set correctly means "all closed"). Local component state that resets on navigation already satisfies "closes when you leave a page" for free — the only real risk is persisting expand state in `localStorage`/`sessionStorage`/a URL param/a context that survives across route changes; don't do that for expand/collapse state. **Explicit exception:** deep-links that open one specific item on arrival (`/tasks?task=...` from the notification bell or search, `/my-minutes?meeting=...`) are allowed to auto-expand that one item — that's honouring an explicit link target on a fresh page load, not remembering a previous session's state.
-31. **Admin Entry (`/daily-entry`) and Daily Entry (`/production`) are hidden from the sidebar for all users (19/07/2026).** Both pages remain fully operational — staff access them via a bookmarked direct link on mobile. Both are auth-gated (`useRequireCapability`): visiting without logging in redirects to the login page. Do not re-add these to `PAGE_REGISTRY` without a deliberate decision.
+31. **Mobile responsiveness uses `useMobile()` hook + inline grid switching (19/07/2026).** Every page that has a multi-column grid must import `useMobile` and switch to `"1fr"` on mobile. Global CSS in `globals.css` sets `font-size: 16px !important` on inputs/selects/textareas (iOS auto-zoom prevention) and `min-height: 44px` on touch targets. **Never skip this** on new pages.
+32. **`safeActiveTab` pattern for widget-gated tabs (19/07/2026).** When tab visibility is controlled by widget keys, always compute a `safeActiveTab` fallback so a user whose active tab gets hidden auto-jumps to the first visible one. Use `safeActiveTab` in all render guards; the lazy-load `useEffect` watches still use the raw state variable.
+33. **Admin Entry (`/daily-entry`) and Daily Entry (`/production`) are hidden from the sidebar for all users (19/07/2026).** Both pages remain fully operational — staff access them via a bookmarked direct link on mobile. Both are auth-gated (`useRequireCapability`): visiting without logging in redirects to the login page. Do not re-add these to `PAGE_REGISTRY` without a deliberate decision.
 32. **Bell notifications deep-link into the Tasks page with filter + scope pre-set (19/07/2026).** Each bell item href carries `?filter=overdue|waiting|submitted|exception&scope=mine`. `TasksList.tsx` reads these from `useSearchParams` on mount and seeds `filter` + `myTasksScope` state accordingly. Pill counts are computed from `myTasksSource` (scoped list) so they match what's actually visible on screen.
 33. **Exceptions standalone page (`/exceptions`) removed (19/07/2026).** Fully redundant — the bell's "Needs explanation" filter and the Tasks page `exception` filter cover it. `can_view_exceptions` column dropped from `member_permissions` (migration 150).
 
@@ -1885,6 +1928,8 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 | — | `isAdmin` in `finance/page.tsx` vs `userIsAdmin` in `FinanceManager.tsx` — confusingly different checks | Tech debt — functional but confusing |
 | — | Section spacing not standardised across all pages | 14px dominant; bulk replace deferred pending visual QA |
 | — | Ops dashboard missing stale-data banner | Home and finance have it; ops dashboard deferred |
+| — | `api/stock/authority-letters/route.ts` GET (listAll) computes letter balances in JS (2-step batch: fetch letters, fetch all dispatch_records for those IDs, sum in JS loop). Not N+1 and not user-visibly slow, but should become an RPC (`get_authority_letter_balances(letter_ids)`) when stock throughput grows. | Tech debt — flag for future. |
+| — | `api/notifications/digest/route.ts` fetches all tasks then `.filter()` for overdue/waiting/due today. Cron only, not user-facing. Could be an RPC for consistency. | Low priority |
 
 ---
 
