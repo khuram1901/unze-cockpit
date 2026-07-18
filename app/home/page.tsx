@@ -17,6 +17,7 @@ import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import TaxComplianceSummary from "../accounts-tax/TaxComplianceSummary";
+import PreauditApprovalsCard from "./PreauditApprovalsCard";
 
 const { NAVY, SLATE, BORDER, CANVAS, HAIRLINE, CARD_ALT, INK_700, INK_400, GREEN, AMBER, RED, BLUE, SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT } = COLOURS;
 
@@ -3222,6 +3223,9 @@ function ExecutiveDashboardBody({
           </a>
         </>
       )}
+
+      {/* ── PRE-AUDIT APPROVALS (today's unapproved documents) ── */}
+      {wv("home.preaudit_pending", true) && <PreauditApprovalsCard />}
 
       {/* ── DEPARTMENT SCORECARD ── */}
       {wv("home.department_scorecard", true) && (<>

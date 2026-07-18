@@ -4,6 +4,19 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-18 (evening) — Shahid's feedback: pre/post-audit split, daily approvals log, project editor
+
+Shahid's Recommendation.docx reviewed with Khuram; all points implemented (migration `149_audit_pre_post_split.sql`, applied):
+
+- **Teams restructured**: post-audit is one member per company — Amina (Unze), Junaid (Imperial), Khizar (Hospitality); Fraz, Attia and Abdul Rehman form the new Pre-audit team. All working-level project tasks reassigned to the post member (Shahid keeps planning/review/communication/submission stages). Verified: only Shahid/Amina/Junaid/Khizar remain as responsibles.
+- **Pre-audit is now a daily measurable**: new `audit_daily_approval_log` (company × doc type × date, unique) — the pre-audit team records the number of unapproved PO / AP / outgoing / bank-portal / JE documents at close of business, target zero, with a reason required in the UI when pending > 0. `audit_daily_log_summary()` RPC feeds three surfaces: the pre-audit team's entry grid (their main view on the audit page), a collapsed check for managers, and a new **Executive Dashboard card** ("Pre-Audit Approvals — Today", widget key `home.preaudit_pending`) showing today's pending count per company for senior management.
+- **"Audit checklist" renamed "Audit Projects"**; daily panel renamed "Audit Tasks" (they're internal audit tasks, not Accounts responsibilities) with a per-task assigned member Shahid sets in-app (`assigned_member_id` + `doc_type` on audit_daily_activities).
+- **Merged quarters split**: Imperial P&L "2nd, 3rd & 4th Quarter" → three separate projects; HD and Baranh "3rd & 4th Quarter" → two each. New copies start clean as Planned.
+- **Legacy records retagged** by title: 5 ad-hoc audits wrongly on UTPL moved to IFPL/HD/BRNH.
+- **Manager project editor**: Shahid can now rename project titles/periods, add projects (7 default stages created automatically), and per stage add/rename/delete steps, reassign responsibles and edit day budgets — ready for his corrected Imperial/Hospitality data-verification structures on Monday.
+
+---
+
 ## 2026-07-18 (later) — Audit page redesigned around the three audit teams
 
 Khuram found the first plan layout confusing; a mockup-first redesign was approved in chat. The page is now team-based:
