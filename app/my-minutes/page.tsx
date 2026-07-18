@@ -7,7 +7,7 @@ import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { useMobile } from "../lib/useMobile";
-import { COLOURS, RADII, cardStyle, PageHeader, SectionTitle, CountCard, StatusBadge, inputStyle, primaryButtonStyle, labelStyle, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, PageHeader, CountCard, StatusBadge, inputStyle, primaryButtonStyle, labelStyle, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import { canSeeAllMinutes, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Meeting = {
@@ -38,12 +38,6 @@ type Task = {
   priority: string | null;
   status: string;
   meeting_id: string | null;
-};
-
-const formatMonthLabel = (ym: string) => {
-  const [y, m] = ym.split("-");
-  const months = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  return `${months[parseInt(m)]} ${y}`;
 };
 
 const DEPT_ACCENT: Record<string, string> = {
@@ -77,10 +71,9 @@ function MyMinutesPage() {
   const searchParams = useSearchParams();
   const meetingIdFromUrl = searchParams.get("meeting");
   const [expandedId, setExpandedId] = useState<string | null>(meetingIdFromUrl);
-  const [isHOD, setIsHOD] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [selectedDept, setSelectedDept] = useState<string>("All");
   const [addingTaskFor, setAddingTaskFor] = useState<string | null>(null);
   const [newTaskDesc, setNewTaskDesc] = useState("");
   const [newTaskOwner, setNewTaskOwner] = useState("");
@@ -92,10 +85,6 @@ function MyMinutesPage() {
   const [allMembers, setAllMembers] = useState<{ name: string; email: string | null; department: string | null }[]>([]);
   const [companies, setCompanies] = useState<{ id: string; name: string; short_code: string | null }[]>([]);
 
-  // Expanded state for dept→month hierarchy
-  const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
-  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
-
   // Task filter panel (click a summary card to drill in)
   const [taskFilter, setTaskFilter] = useState<"in_progress" | "pending" | "completed" | null>(null);
 
@@ -105,7 +94,6 @@ function MyMinutesPage() {
     setLoading(true);
     const { data: userData } = await supabase.auth.getUser();
     const email = userData.user?.email || null;
-    setUserEmail(email);
 
     if (!email) { setLoading(false); return; }
 
@@ -116,7 +104,6 @@ function MyMinutesPage() {
       .maybeSingle();
 
     const role = memberData?.role || "Member";
-    const hod = memberData?.is_hod || false;
 
     let overrides: PermOverrides | null = null;
     const p = await loadMyPermissions();
@@ -124,7 +111,6 @@ function MyMinutesPage() {
     const ctx: UserCtx = { email, role, department: memberData?.department, company: memberData?.company, overrides };
     const privUser = canSeeAllMinutes(ctx);
 
-    setIsHOD(hod);
     setIsAdmin(privUser);
 
     let meetingsData: Meeting[] = [];
@@ -242,17 +228,7 @@ function MyMinutesPage() {
     return [...fromLink, ...fromField];
   }
 
-  function getTaskStatsFor(meetingList: Meeting[]) {
-    const ts = meetingList.flatMap((m) => getTasksForMeeting(m.id));
-    return {
-      total: ts.length,
-      open: ts.filter((t) => t.status === "In Progress").length,
-      pending: ts.filter((t) => t.status === "Not Started" || t.status === "Waiting Reply").length,
-      completed: ts.filter((t) => t.status === "Completed").length,
-    };
-  }
-
-  // Build dept → month → meetings structure
+  // Search filter
   const filtered = filter
     ? meetings.filter((m) =>
         m.title.toLowerCase().includes(filter.toLowerCase()) ||
@@ -261,38 +237,64 @@ function MyMinutesPage() {
       )
     : meetings;
 
-  const deptMonthGroups: [string, [string, Meeting[]][]][] = (() => {
-    const deptMap = new Map<string, Map<string, Meeting[]>>();
+  // Unique dept list for tabs
+  const deptList = Array.from(
+    new Set(filtered.map((m) => m.department || m.company || "Executive Office"))
+  ).sort();
+
+  // Meetings shown — filtered by tab + search, newest first
+  const displayedMeetings = (selectedDept === "All"
+    ? filtered
+    : filtered.filter((m) => (m.department || m.company || "Executive Office") === selectedDept)
+  ).slice().sort((a, b) => b.meeting_date.localeCompare(a.meeting_date));
+
+  // Total stats for the header summary strip
+  const totalTasks = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).length, 0);
+  const totalOpen = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "In Progress").length, 0);
+  const totalPending = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "Not Started" || t.status === "Waiting Reply").length, 0);
+  const totalCompleted = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "Completed").length, 0);
+
+  // Suppress unused variable warning — totalTasks is kept for potential future use
+  void totalTasks;
+
+  // Task aging by department — always-visible breakdown table
+  const taskAgingByDept = (() => {
+    const today = new Date();
+    const map = new Map<string, { open: number; pending: number; oldestDays: number }>();
     for (const m of filtered) {
-      const dept = m.department || m.company || "Executive Office";
-      const mo = m.meeting_date.slice(0, 7);
-      if (!deptMap.has(dept)) deptMap.set(dept, new Map());
-      const monthMap = deptMap.get(dept)!;
-      if (!monthMap.has(mo)) monthMap.set(mo, []);
-      monthMap.get(mo)!.push(m);
+      const dept = m.department || "Executive Office";
+      const mTasks = getTasksForMeeting(m.id).filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
+      if (mTasks.length === 0) continue;
+      const days = Math.floor((today.getTime() - new Date(m.meeting_date).getTime()) / 86400000);
+      const entry = map.get(dept) || { open: 0, pending: 0, oldestDays: 0 };
+      for (const t of mTasks) {
+        if (t.status === "In Progress") entry.open++;
+        else entry.pending++;
+      }
+      entry.oldestDays = Math.max(entry.oldestDays, days);
+      map.set(dept, entry);
     }
-    return Array.from(deptMap.entries())
-      .map(([dept, monthMap]) => [
-        dept,
-        Array.from(monthMap.entries()).sort(([a], [b]) => b.localeCompare(a)),
-      ] as [string, [string, Meeting[]][]])
-      .sort(([a], [b]) => a.localeCompare(b));
+    return Array.from(map.entries())
+      .map(([dept, v]) => ({ dept, ...v }))
+      .sort((a, b) => b.oldestDays - a.oldestDays);
   })();
 
-  // Auto-expand first dept and its latest month on first load
-  if (expandedDepts.size === 0 && deptMonthGroups.length > 0) {
-    expandedDepts.add(deptMonthGroups[0][0]);
-    if (deptMonthGroups[0][1].length > 0) {
-      expandedMonths.add(`${deptMonthGroups[0][0]}:${deptMonthGroups[0][1][0][0]}`);
-    }
-  }
-
-  const toggleDept = (dept: string) => {
-    setExpandedDepts((prev) => { const n = new Set(prev); n.has(dept) ? n.delete(dept) : n.add(dept); return n; });
-  };
-  const toggleMonth = (key: string) => {
-    setExpandedMonths((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  };
+  // Task panel: flat list of tasks for the active filter, with meeting context
+  const taskPanelItems = taskFilter ? filtered.flatMap((m) =>
+    getTasksForMeeting(m.id)
+      .filter((t) => {
+        if (taskFilter === "in_progress") return t.status === "In Progress";
+        if (taskFilter === "pending") return t.status === "Not Started" || t.status === "Waiting Reply";
+        if (taskFilter === "completed") return t.status === "Completed";
+        return false;
+      })
+      .map((t) => ({ ...t, meetingTitle: m.title, meetingDate: m.meeting_date }))
+  ).sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return a.due_date.localeCompare(b.due_date);
+  }) : [];
 
   async function addTaskToMeeting(meetingId: string) {
     if (!newTaskDesc.trim() || !newTaskOwner || !newTaskDue || !newTaskCompanyId) return;
@@ -334,51 +336,6 @@ function MyMinutesPage() {
     loadData();
   }
 
-  // Total stats for the header summary strip
-  const totalTasks = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).length, 0);
-  const totalOpen = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "In Progress").length, 0);
-  const totalPending = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "Not Started" || t.status === "Waiting Reply").length, 0);
-  const totalCompleted = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "Completed").length, 0);
-
-  // Task aging by department — always-visible breakdown table
-  const taskAgingByDept = (() => {
-    const today = new Date();
-    const map = new Map<string, { open: number; pending: number; oldestDays: number }>();
-    for (const m of filtered) {
-      const dept = m.department || "Executive Office";
-      const mTasks = getTasksForMeeting(m.id).filter((t) => t.status !== "Completed" && t.status !== "Cancelled");
-      if (mTasks.length === 0) continue;
-      const days = Math.floor((today.getTime() - new Date(m.meeting_date).getTime()) / 86400000);
-      const entry = map.get(dept) || { open: 0, pending: 0, oldestDays: 0 };
-      for (const t of mTasks) {
-        if (t.status === "In Progress") entry.open++;
-        else entry.pending++;
-      }
-      entry.oldestDays = Math.max(entry.oldestDays, days);
-      map.set(dept, entry);
-    }
-    return Array.from(map.entries())
-      .map(([dept, v]) => ({ dept, ...v }))
-      .sort((a, b) => b.oldestDays - a.oldestDays);
-  })();
-
-  // Task panel: flat list of tasks for the active filter, with meeting context
-  const taskPanelItems = taskFilter ? filtered.flatMap((m) =>
-    getTasksForMeeting(m.id)
-      .filter((t) => {
-        if (taskFilter === "in_progress") return t.status === "In Progress";
-        if (taskFilter === "pending") return t.status === "Not Started" || t.status === "Waiting Reply";
-        if (taskFilter === "completed") return t.status === "Completed";
-        return false;
-      })
-      .map((t) => ({ ...t, meetingTitle: m.title, meetingDate: m.meeting_date }))
-  ).sort((a, b) => {
-    if (!a.due_date && !b.due_date) return 0;
-    if (!a.due_date) return 1;
-    if (!b.due_date) return -1;
-    return a.due_date.localeCompare(b.due_date);
-  }) : [];
-
   if (!loading && meetings.length === 0 && !isAdmin) {
     return (
       <AuthWrapper>
@@ -402,7 +359,6 @@ function MyMinutesPage() {
           <>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: "8px", marginBottom: taskFilter ? "0" : "14px" }}>
               <CountCard label="Meetings" value={filtered.length} color={COLOURS.BLUE} />
-              <CountCard label="Depts" value={deptMonthGroups.length} color={COLOURS.NAVY} />
               {/* Clickable task cards */}
               {(["in_progress", "pending", "completed"] as const).map((key) => {
                 const value = key === "in_progress" ? totalOpen : key === "pending" ? totalPending : totalCompleted;
@@ -499,270 +455,215 @@ function MyMinutesPage() {
             {filter ? "No meetings match your search." : "No meeting minutes yet."}
           </div>
         ) : (
-          /* ── Department → Month → Meeting hierarchy ── */
           <div>
-            {deptMonthGroups.map(([dept, months]) => {
-              const isDeptOpen = expandedDepts.has(dept);
-              const allDeptMeetings = months.flatMap(([, ms]) => ms);
-              const stats = getTaskStatsFor(allDeptMeetings);
-
-              return (
-                <div key={dept} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "10px" }}>
-
-                  {/* Department header — compact left-accent row */}
-                  <div
-                    onClick={() => toggleDept(dept)}
-                    style={{
-                      padding: "10px 14px", cursor: "pointer",
-                      backgroundColor: isDeptOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
-                      display: "flex", alignItems: "center", gap: "10px",
-                      borderLeft: `3px solid ${deptAccent(dept)}`,
-                      borderBottom: isDeptOpen ? `1px solid ${COLOURS.BORDER}` : "none",
-                    }}
-                  >
-                    <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: deptAccent(dept), flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{dept}</span>
-                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "8px" }}>
-                        {allDeptMeetings.length} meeting{allDeptMeetings.length !== 1 ? "s" : ""}
+            {/* Dept filter tabs */}
+            <div style={{ display: "flex", overflowX: "auto", marginBottom: "10px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", backgroundColor: COLOURS.CARD_ALT }}>
+              {["All", ...deptList].map((dept, i) => {
+                const deptMeetings = dept === "All" ? filtered : filtered.filter((m) => (m.department || m.company || "Executive Office") === dept);
+                const openCount = deptMeetings.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "In Progress").length, 0);
+                const pendingCount = deptMeetings.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "Not Started" || t.status === "Waiting Reply").length, 0);
+                const active = selectedDept === dept;
+                const pillColour = openCount > 0 ? COLOURS.RED : pendingCount > 0 ? COLOURS.AMBER : null;
+                const pillBg = openCount > 0 ? COLOURS.DANGER_SOFT : pendingCount > 0 ? COLOURS.WARNING_SOFT : null;
+                const isLast = i === deptList.length; // "All" + deptList
+                return (
+                  <button key={dept} onClick={() => setSelectedDept(dept)} style={{
+                    padding: "8px 14px", fontSize: "12px", fontWeight: active ? 600 : 400,
+                    color: active ? COLOURS.NAVY : COLOURS.SLATE,
+                    backgroundColor: active ? COLOURS.CARD : "transparent",
+                    border: "none", borderRight: isLast ? "none" : `1px solid ${COLOURS.BORDER}`,
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}>
+                    {dept}
+                    {pillColour && (
+                      <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: RADII.PILL, backgroundColor: pillBg!, color: pillColour, fontWeight: 600 }}>
+                        {openCount > 0 ? openCount : pendingCount}
                       </span>
-                    </div>
-                    {/* Task stats pills */}
-                    <div style={{ display: "flex", gap: "4px", alignItems: "center", flexWrap: "wrap" }}>
-                      {stats.open > 0 && (
-                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.DANGER_SOFT, color: COLOURS.RED }}>
-                          {stats.open} in progress
-                        </span>
-                      )}
-                      {stats.pending > 0 && (
-                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.WARNING_SOFT, color: COLOURS.AMBER }}>
-                          {stats.pending} pending
-                        </span>
-                      )}
-                      {stats.completed > 0 && (
-                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }}>
-                          {stats.completed} done
-                        </span>
-                      )}
-                      {stats.total === 0 && (
-                        <span style={{ fontSize: "10px", color: COLOURS.SLATE }}>no tasks</span>
-                      )}
-                    </div>
-                    <span style={{ color: COLOURS.SLATE, fontSize: "10px", flexShrink: 0 }}>{isDeptOpen ? "▲" : "▼"}</span>
-                  </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-                  {/* Month sub-groups */}
-                  {isDeptOpen && (
-                    <div>
-                      {months.map(([month, monthMeetings]) => {
-                        const monthKey = `${dept}:${month}`;
-                        const isMonthOpen = expandedMonths.has(monthKey);
-                        const monthStats = getTaskStatsFor(monthMeetings);
+            {/* Flat meeting list */}
+            {displayedMeetings.length === 0 ? (
+              <div style={{ ...cardStyle, padding: "24px", textAlign: "center" as const, color: COLOURS.SLATE, fontSize: "13px" }}>
+                {selectedDept !== "All" ? `No meetings for ${selectedDept}.` : "No meetings match your search."}
+              </div>
+            ) : (
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+                {displayedMeetings.map((meeting) => {
+                  const isOpen = expandedId === meeting.id;
+                  const mTasks = getTasksForMeeting(meeting.id);
+                  const completedCount = mTasks.filter((t) => t.status === "Completed").length;
+                  const pct = mTasks.length ? Math.round((completedCount / mTasks.length) * 100) : 0;
+                  const barColour = pct === 100 ? COLOURS.GREEN : pct > 0 ? COLOURS.AMBER : COLOURS.BORDER;
 
-                        return (
-                          <div key={monthKey} style={{ borderBottom: `1px solid ${COLOURS.BORDER}` }}>
-                            {/* Month header — indented compact row */}
-                            <div
-                              onClick={() => toggleMonth(monthKey)}
-                              style={{
-                                padding: "7px 14px 7px 28px", cursor: "pointer",
-                                display: "flex", alignItems: "center", gap: "8px",
-                                backgroundColor: isMonthOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
-                                borderBottom: isMonthOpen ? `1px solid ${COLOURS.BORDER}` : "none",
-                              }}
-                            >
-                              <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>📅</span>
-                              <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, flex: 1 }}>{formatMonthLabel(month)}</span>
-                              <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>
-                                {monthMeetings.length} mtg{monthMeetings.length !== 1 ? "s" : ""}
-                                {monthStats.open > 0 && <span style={{ color: COLOURS.RED }}> · {monthStats.open} in progress</span>}
-                                {monthStats.pending > 0 && <span style={{ color: COLOURS.AMBER }}> · {monthStats.pending} pending</span>}
-                                {monthStats.completed > 0 && <span style={{ color: COLOURS.GREEN }}> · {monthStats.completed} done</span>}
-                              </span>
-                              <span style={{ color: COLOURS.SLATE, fontSize: "10px", flexShrink: 0 }}>{isMonthOpen ? "▲" : "▼"}</span>
+                  return (
+                    <div key={meeting.id} id={`meeting-row-${meeting.id}`} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
+                      {/* Compact meeting row */}
+                      <div onClick={() => setExpandedId(isOpen ? null : meeting.id)} style={{
+                        display: "flex", alignItems: "center", gap: "10px",
+                        padding: "10px 14px", cursor: "pointer",
+                        backgroundColor: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
+                      }}>
+                        <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px" }}>{formatDateUK(meeting.meeting_date)}</span>
+                        <span style={{ flex: 1, fontSize: "13px", fontWeight: 500, color: COLOURS.NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{meeting.title}</span>
+                        {meeting.company && (
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>{meeting.company}</span>
+                        )}
+                        {selectedDept === "All" && meeting.department && (
+                          <span style={{ fontSize: "10px", padding: "2px 7px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: deptAccent(meeting.department), fontWeight: 600, flexShrink: 0 }}>{meeting.department}</span>
+                        )}
+                        {mTasks.length > 0 ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                            <div style={{ width: "48px", height: "4px", backgroundColor: COLOURS.TRACK, borderRadius: "2px", overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${pct}%`, backgroundColor: barColour, borderRadius: "2px" }} />
                             </div>
+                            <span style={{ fontSize: "11px", color: COLOURS.SLATE, minWidth: "28px", textAlign: "right" }}>{completedCount}/{mTasks.length}</span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>no tasks</span>
+                        )}
+                        <span style={{ fontSize: "10px", color: COLOURS.SLATE, flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
+                      </div>
 
-                            {/* Individual meetings within month */}
-                            {isMonthOpen && (
-                              <div style={{ paddingLeft: "14px" }}>
-                                {monthMeetings.map((meeting) => {
-                                  const isOpen = expandedId === meeting.id;
-                                  const mTasks = getTasksForMeeting(meeting.id);
-                                  const completedCount = mTasks.filter((t) => t.status === "Completed").length;
-                                  const pct = mTasks.length ? Math.round((completedCount / mTasks.length) * 100) : 0;
+                      {/* Expanded content */}
+                      {isOpen && (
+                        <div style={{ borderTop: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT, ...(!isAdmin ? { userSelect: "none", WebkitUserSelect: "none" } as React.CSSProperties : {}) }}
+                          onCopy={!isAdmin ? (e) => e.preventDefault() : undefined}>
 
-                                  return (
-                                    <div key={meeting.id} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
-                                      {/* Compact meeting row */}
-                                      <div onClick={() => setExpandedId(isOpen ? null : meeting.id)} style={{
-                                        display: "flex", alignItems: "center", gap: "10px",
-                                        padding: "8px 14px", cursor: "pointer",
-                                        backgroundColor: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
-                                      }}>
-                                        <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px" }}>{formatDateUK(meeting.meeting_date)}</span>
-                                        <span style={{ flex: 1, fontSize: "12px", fontWeight: 500, color: COLOURS.NAVY, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meeting.title}</span>
-                                        {meeting.company && (
-                                          <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: RADII.XS, backgroundColor: COLOURS.HAIRLINE, color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>{meeting.company}</span>
-                                        )}
-                                        {mTasks.length > 0 ? (
-                                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-                                            <div style={{ width: "48px", height: "4px", backgroundColor: COLOURS.TRACK, borderRadius: "2px", overflow: "hidden" }}>
-                                              <div style={{ height: "100%", width: `${pct}%`, backgroundColor: pct === 100 ? COLOURS.GREEN : pct > 0 ? COLOURS.AMBER : COLOURS.BORDER, borderRadius: "2px", transition: "width 0.3s" }} />
-                                            </div>
-                                            <span style={{ fontSize: "11px", color: COLOURS.SLATE, minWidth: "28px", textAlign: "right" }}>{completedCount}/{mTasks.length}</span>
-                                          </div>
-                                        ) : (
-                                          <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>no tasks</span>
-                                        )}
-                                        <span style={{ fontSize: "10px", color: COLOURS.SLATE, flexShrink: 0 }}>{isOpen ? "▲" : "▼"}</span>
-                                      </div>
-
-                                      {/* Expanded meeting content */}
-                                      {isOpen && (
-                                        <div style={{ borderTop: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT, ...(!isAdmin ? { userSelect: "none", WebkitUserSelect: "none" } as React.CSSProperties : {}) }}
-                                          onCopy={!isAdmin ? (e) => e.preventDefault() : undefined}>
-
-                                          {/* Summary + attendees + PDF */}
-                                          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: meeting.executive_summary ? "8px" : "0" }}>
-                                              {meeting.attendees && meeting.attendees.length > 0 && (
-                                                <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", flex: 1 }}>
-                                                  {meeting.attendees.map((a, i) => (
-                                                    <span key={i} style={{ fontSize: "11px", padding: "2px 8px", backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.PILL, color: COLOURS.SLATE }}>{a}</span>
-                                                  ))}
-                                                </div>
-                                              )}
-                                              {isAdmin && (
-                                                <button onClick={() => downloadMinutesPDF(meeting, mTasks)} style={{ ...primaryButtonStyle, padding: "4px 10px", fontSize: "11px", flexShrink: 0 }}>PDF</button>
-                                              )}
-                                            </div>
-                                            {meeting.executive_summary && (
-                                              <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{meeting.executive_summary}</div>
-                                            )}
-                                          </div>
-
-                                          {/* Decisions / Risks / Opps — compact inline */}
-                                          {((meeting.decisions?.length ?? 0) > 0 || (meeting.risks?.length ?? 0) > 0 || (meeting.opportunities?.length ?? 0) > 0) && (
-                                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "0", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
-                                              {meeting.decisions && meeting.decisions.length > 0 && (
-                                                <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
-                                                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.GREEN, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Decisions ({meeting.decisions.length})</div>
-                                                  {meeting.decisions.map((d, i) => (
-                                                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
-                                                      <span style={{ color: COLOURS.GREEN, flexShrink: 0 }}>•</span>{d}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
-                                              {meeting.risks && meeting.risks.length > 0 && (
-                                                <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
-                                                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.RED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Risks ({meeting.risks.length})</div>
-                                                  {meeting.risks.map((r, i) => (
-                                                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
-                                                      <span style={{ color: COLOURS.RED, flexShrink: 0 }}>•</span>{r}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
-                                              {meeting.opportunities && meeting.opportunities.length > 0 && (
-                                                <div style={{ padding: "10px 14px" }}>
-                                                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.BLUE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Opportunities ({meeting.opportunities.length})</div>
-                                                  {meeting.opportunities.map((o, i) => (
-                                                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
-                                                      <span style={{ color: COLOURS.BLUE, flexShrink: 0 }}>•</span>{o}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
-
-                                          {/* Action Items — compact task rows */}
-                                          <div>
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
-                                              <span style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.AMBER, textTransform: "uppercase", letterSpacing: "0.07em" }}>Action Items ({mTasks.length})</span>
-                                              {isAdmin && (
-                                                <button onClick={() => setAddingTaskFor(addingTaskFor === meeting.id ? null : meeting.id)} style={{ ...primaryButtonStyle, padding: "3px 10px", fontSize: "11px" }}>
-                                                  {addingTaskFor === meeting.id ? "Cancel" : "+ Add Task"}
-                                                </button>
-                                              )}
-                                            </div>
-
-                                            {addingTaskFor === meeting.id && (
-                                              <div style={{ padding: "10px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
-                                                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr 1fr 1fr", gap: "6px", marginBottom: "8px" }}>
-                                                  <div>
-                                                    <label style={labelStyle}>Description ({newTaskDesc.length}/{TASK_DESCRIPTION_LIMIT})</label>
-                                                    <input placeholder="Task description" value={newTaskDesc} onChange={(e) => setNewTaskDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))} maxLength={TASK_DESCRIPTION_LIMIT} required style={inputStyle} />
-                                                  </div>
-                                                  <div>
-                                                    <label style={labelStyle}>Assign to</label>
-                                                    <select value={newTaskOwner} onChange={(e) => setNewTaskOwner(e.target.value)} required style={inputStyle}>
-                                                      <option value="">Assign to...</option>
-                                                      {allMembers.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
-                                                    </select>
-                                                  </div>
-                                                  <div>
-                                                    <label style={labelStyle}>Company</label>
-                                                    <select value={newTaskCompanyId} onChange={(e) => setNewTaskCompanyId(e.target.value)} required style={inputStyle}>
-                                                      <option value="">Select...</option>
-                                                      {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                                    </select>
-                                                  </div>
-                                                  <div>
-                                                    <label style={labelStyle}>Due date</label>
-                                                    <DateInputWithCalendar value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} required
-                                                      style={{ ...inputStyle, borderColor: !newTaskDue ? COLOURS.RED : undefined }} />
-                                                  </div>
-                                                  <div>
-                                                    <label style={labelStyle}>Priority</label>
-                                                    <select value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value)} style={inputStyle}>
-                                                      <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
-                                                    </select>
-                                                  </div>
-                                                </div>
-                                                {newTaskError && <div style={{ color: COLOURS.RED, fontSize: "12.5px", marginBottom: "8px" }}>{newTaskError}</div>}
-                                                <button onClick={() => addTaskToMeeting(meeting.id)} disabled={savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue || !newTaskCompanyId}
-                                                  style={{ ...primaryButtonStyle, backgroundColor: COLOURS.GREEN, opacity: savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue || !newTaskCompanyId ? 0.5 : 1 }}>
-                                                  {savingNewTask ? "Adding..." : "Add Task"}
-                                                </button>
-                                              </div>
-                                            )}
-
-                                            {mTasks.length > 0 ? mTasks.map((t) => (
-                                              <a key={t.id} href={`/tasks?task=${t.id}`} style={{
-                                                display: "flex", alignItems: "center", gap: "10px",
-                                                padding: "7px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`,
-                                                textDecoration: "none", backgroundColor: COLOURS.CARD,
-                                              }}
-                                              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD_ALT; }}
-                                              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD; }}>
-                                                <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: taskDotColour(t.status), flexShrink: 0 }} />
-                                                <span style={{ flex: 1, fontSize: "12px", color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</span>
-                                                <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>{t.assigned_to || "—"}</span>
-                                                <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px", textAlign: "right" }}>{t.due_date ? formatDateUK(t.due_date) : "—"}</span>
-                                                <StatusBadge status={t.status} />
-                                                <span style={{ fontSize: "11px", color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>Open →</span>
-                                              </a>
-                                            )) : (
-                                              <div style={{ padding: "10px 14px", fontSize: "12px", color: COLOURS.SLATE }}>No action items recorded.</div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
+                          {/* Summary + attendees + PDF */}
+                          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: meeting.executive_summary ? "8px" : "0" }}>
+                              {meeting.attendees && meeting.attendees.length > 0 && (
+                                <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", flex: 1 }}>
+                                  {meeting.attendees.map((a, i) => (
+                                    <span key={i} style={{ fontSize: "11px", padding: "2px 8px", backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.PILL, color: COLOURS.SLATE }}>{a}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {isAdmin && (
+                                <button onClick={() => downloadMinutesPDF(meeting, mTasks)} style={{ ...primaryButtonStyle, padding: "4px 10px", fontSize: "11px", flexShrink: 0 }}>PDF</button>
+                              )}
+                            </div>
+                            {meeting.executive_summary && (
+                              <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{meeting.executive_summary}</div>
                             )}
                           </div>
-                        );
-                      })}
+
+                          {/* Decisions / Risks / Opps */}
+                          {((meeting.decisions?.length ?? 0) > 0 || (meeting.risks?.length ?? 0) > 0 || (meeting.opportunities?.length ?? 0) > 0) && (
+                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                              {meeting.decisions && meeting.decisions.length > 0 && (
+                                <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
+                                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.GREEN, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "6px" }}>Decisions ({meeting.decisions.length})</div>
+                                  {meeting.decisions.map((d, i) => (
+                                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
+                                      <span style={{ color: COLOURS.GREEN, flexShrink: 0 }}>•</span>{d}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {meeting.risks && meeting.risks.length > 0 && (
+                                <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
+                                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.RED, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "6px" }}>Risks ({meeting.risks.length})</div>
+                                  {meeting.risks.map((r, i) => (
+                                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
+                                      <span style={{ color: COLOURS.RED, flexShrink: 0 }}>•</span>{r}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {meeting.opportunities && meeting.opportunities.length > 0 && (
+                                <div style={{ padding: "10px 14px" }}>
+                                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.BLUE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "6px" }}>Opportunities ({meeting.opportunities.length})</div>
+                                  {meeting.opportunities.map((o, i) => (
+                                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
+                                      <span style={{ color: COLOURS.BLUE, flexShrink: 0 }}>•</span>{o}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Action Items */}
+                          <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                              <span style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.AMBER, textTransform: "uppercase" as const, letterSpacing: "0.07em" }}>Action Items ({mTasks.length})</span>
+                              {isAdmin && (
+                                <button onClick={() => setAddingTaskFor(addingTaskFor === meeting.id ? null : meeting.id)} style={{ ...primaryButtonStyle, padding: "3px 10px", fontSize: "11px" }}>
+                                  {addingTaskFor === meeting.id ? "Cancel" : "+ Add Task"}
+                                </button>
+                              )}
+                            </div>
+                            {addingTaskFor === meeting.id && (
+                              <div style={{ padding: "10px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
+                                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr 1fr 1fr", gap: "6px", marginBottom: "8px" }}>
+                                  <div>
+                                    <label style={labelStyle}>Description ({newTaskDesc.length}/{TASK_DESCRIPTION_LIMIT})</label>
+                                    <input placeholder="Task description" value={newTaskDesc} onChange={(e) => setNewTaskDesc(e.target.value.slice(0, TASK_DESCRIPTION_LIMIT))} maxLength={TASK_DESCRIPTION_LIMIT} required style={inputStyle} />
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Assign to</label>
+                                    <select value={newTaskOwner} onChange={(e) => setNewTaskOwner(e.target.value)} required style={inputStyle}>
+                                      <option value="">Assign to...</option>
+                                      {allMembers.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Company</label>
+                                    <select value={newTaskCompanyId} onChange={(e) => setNewTaskCompanyId(e.target.value)} required style={inputStyle}>
+                                      <option value="">Select...</option>
+                                      {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Due date</label>
+                                    <DateInputWithCalendar value={newTaskDue} onChange={(e) => setNewTaskDue(e.target.value)} required style={{ ...inputStyle, borderColor: !newTaskDue ? COLOURS.RED : undefined }} />
+                                  </div>
+                                  <div>
+                                    <label style={labelStyle}>Priority</label>
+                                    <select value={newTaskPriority} onChange={(e) => setNewTaskPriority(e.target.value)} style={inputStyle}>
+                                      <option>Low</option><option>Normal</option><option>High</option><option>Urgent</option>
+                                    </select>
+                                  </div>
+                                </div>
+                                {newTaskError && <div style={{ color: COLOURS.RED, fontSize: "12.5px", marginBottom: "8px" }}>{newTaskError}</div>}
+                                <button onClick={() => addTaskToMeeting(meeting.id)} disabled={savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue || !newTaskCompanyId}
+                                  style={{ ...primaryButtonStyle, backgroundColor: COLOURS.GREEN, opacity: savingNewTask || !newTaskDesc.trim() || !newTaskOwner || !newTaskDue || !newTaskCompanyId ? 0.5 : 1 }}>
+                                  {savingNewTask ? "Adding..." : "Add Task"}
+                                </button>
+                              </div>
+                            )}
+                            {mTasks.length > 0 ? mTasks.map((t) => (
+                              <a key={t.id} href={`/tasks?task=${t.id}`} style={{
+                                display: "flex", alignItems: "center", gap: "10px",
+                                padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                                textDecoration: "none", backgroundColor: COLOURS.CARD,
+                              }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD_ALT; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD; }}>
+                                <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: taskDotColour(t.status), flexShrink: 0 }} />
+                                <span style={{ flex: 1, fontSize: "12px", color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</span>
+                                <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>{t.assigned_to || "—"}</span>
+                                <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px", textAlign: "right" }}>{t.due_date ? formatDateUK(t.due_date) : "—"}</span>
+                                <StatusBadge status={t.status} />
+                                <span style={{ fontSize: "11px", color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>Open →</span>
+                              </a>
+                            )) : (
+                              <div style={{ padding: "10px 14px", fontSize: "12px", color: COLOURS.SLATE }}>No action items recorded.</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </main>

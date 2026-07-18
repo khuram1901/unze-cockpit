@@ -281,10 +281,7 @@ export default function MeetingsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [allTasks, setAllTasks] = useState<MeetingTask[]>([]);
   const [activePendingId, setActivePendingId] = useState<string | null>(null);
-  const [groupBy, setGroupBy] = useState<"date" | "department">("department");
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
-  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [selectedDept, setSelectedDept] = useState<string>("All");
 
   const [view, setView] = useState<"meetings" | "decisions">("meetings");
   const [decisionSearch, setDecisionSearch] = useState("");
@@ -686,108 +683,25 @@ export default function MeetingsPage() {
   })();
 
   // Navigate from Decision Log to a specific meeting in the list
-  function openMeeting(meetingId: string, dept: string, meetingDate: string) {
-    const monthKey = meetingDate.slice(0, 7);
+  function openMeeting(meetingId: string, dept: string, _meetingDate: string) {
     setView("meetings");
+    setSelectedDept(dept);
     setExpandedId(meetingId);
-    if (groupBy === "department") {
-      setExpandedDepts((prev) => new Set([...prev, dept]));
-      setExpandedMonths((prev) => new Set([...prev, `${dept}:${monthKey}`]));
-    } else {
-      setExpandedGroups((prev) => new Set([...prev, monthKey]));
-    }
     setTimeout(() => {
       document.getElementById(`meeting-row-${meetingId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 200);
   }
 
-  const formatMonthLabel = (ym: string) => {
-    const [y, m] = ym.split("-");
-    const months = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    return `${months[parseInt(m)]} ${y}`;
-  };
+  // Dept list for tabs
+  const deptList = Array.from(
+    new Set(meetings.map((m) => m.department || m.company || "Executive Office"))
+  ).sort();
 
-  const groupedMeetings: [string, Meeting[]][] = (() => {
-    if (groupBy === "department") {
-      const groups = new Map<string, Meeting[]>();
-      for (const m of meetings) {
-        const dept = m.department || m.company || "Executive Office";
-        if (!groups.has(dept)) groups.set(dept, []);
-        groups.get(dept)!.push(m);
-      }
-      return Array.from(groups.entries()).sort(([a], [b]) => b.localeCompare(a));
-    }
-    const groups = new Map<string, Meeting[]>();
-    for (const m of meetings) {
-      const mo = m.meeting_date.slice(0, 7);
-      if (!groups.has(mo)) groups.set(mo, []);
-      groups.get(mo)!.push(m);
-    }
-    return Array.from(groups.entries()).sort(([a], [b]) => b.localeCompare(a));
-  })();
-
-  const toggleGroup = (key: string) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  };
-
-  const toggleDept = (dept: string) => {
-    setExpandedDepts((prev) => {
-      const next = new Set(prev);
-      if (next.has(dept)) next.delete(dept); else next.add(dept);
-      return next;
-    });
-  };
-
-  const toggleMonth = (key: string) => {
-    setExpandedMonths((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  };
-
-  function getTaskStatsFor(meetingList: Meeting[]) {
-    const ts = meetingList.flatMap((m) => getTasksForMeeting(m.id));
-    return {
-      total: ts.length,
-      open: ts.filter((t) => t.status === "In Progress").length,
-      pending: ts.filter((t) => t.status === "Not Started" || t.status === "Waiting Reply").length,
-      completed: ts.filter((t) => t.status === "Completed").length,
-    };
-  }
-
-  const deptMonthGroups: [string, [string, Meeting[]][]][] = (() => {
-    const deptMap = new Map<string, Map<string, Meeting[]>>();
-    for (const m of meetings) {
-      const dept = m.department || m.company || "Executive Office";
-      const mo = m.meeting_date.slice(0, 7);
-      if (!deptMap.has(dept)) deptMap.set(dept, new Map());
-      const monthMap = deptMap.get(dept)!;
-      if (!monthMap.has(mo)) monthMap.set(mo, []);
-      monthMap.get(mo)!.push(m);
-    }
-    return Array.from(deptMap.entries())
-      .map(([dept, monthMap]) => [
-        dept,
-        Array.from(monthMap.entries()).sort(([a], [b]) => b.localeCompare(a)),
-      ] as [string, [string, Meeting[]][]])
-      .sort(([a], [b]) => a.localeCompare(b));
-  })();
-
-  // Auto-expand latest group on first render
-  if (groupBy === "date" && expandedGroups.size === 0 && groupedMeetings.length > 0) {
-    expandedGroups.add(groupedMeetings[0][0]);
-  }
-  if (groupBy === "department" && expandedDepts.size === 0 && deptMonthGroups.length > 0) {
-    expandedDepts.add(deptMonthGroups[0][0]);
-    if (deptMonthGroups[0][1].length > 0) {
-      expandedMonths.add(`${deptMonthGroups[0][0]}:${deptMonthGroups[0][1][0][0]}`);
-    }
-  }
+  // Meetings to display in Past Meetings view — filtered by tab, newest first
+  const displayedMeetings = (selectedDept === "All"
+    ? meetings
+    : meetings.filter((m) => (m.department || m.company || "Executive Office") === selectedDept)
+  ).slice().sort((a, b) => b.meeting_date.localeCompare(a.meeting_date));
 
   const allDecisions = meetings.flatMap((m) =>
     (m.decisions || []).map((text) => ({
@@ -1420,20 +1334,6 @@ export default function MeetingsPage() {
                   </button>
                 ))}
               </div>
-              {view === "meetings" && (
-                <div style={{ display: "flex", gap: "4px" }}>
-                  {(["date", "department"] as const).map((g) => (
-                    <button key={g} onClick={() => { setGroupBy(g); setExpandedGroups(new Set()); setExpandedDepts(new Set()); setExpandedMonths(new Set()); }} style={{
-                      padding: "4px 12px", fontSize: "12px", fontWeight: groupBy === g ? 600 : 400, borderRadius: RADII.PILL,
-                      border: `1px solid ${groupBy === g ? COLOURS.NAVY : COLOURS.BORDER}`,
-                      backgroundColor: groupBy === g ? COLOURS.NAVY : COLOURS.CARD,
-                      color: groupBy === g ? "white" : COLOURS.SLATE, cursor: "pointer",
-                    }}>
-                      {g === "date" ? "By Date" : "By Department"}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {view === "decisions" && (
@@ -1494,146 +1394,62 @@ export default function MeetingsPage() {
               </div>
             )}
 
-            {view === "meetings" && meetings.length === 0 ? (
-              <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No meetings recorded yet.</p>
+            {view === "meetings" && (
+              <div>
+                {/* Dept filter tabs */}
+                <div style={{ display: "flex", overflowX: "auto", marginBottom: "10px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", backgroundColor: COLOURS.CARD_ALT }}>
+                  {["All", ...deptList].map((dept, i) => {
+                    const deptMeetings = dept === "All" ? meetings : meetings.filter((m) => (m.department || m.company || "Executive Office") === dept);
+                    const openCount = deptMeetings.reduce((s, m) => {
+                      const mt = getTasksForMeeting(m.id).filter((t) => t.status === "In Progress");
+                      return s + mt.length;
+                    }, 0);
+                    const pendingCount = deptMeetings.reduce((s, m) => {
+                      const mt = getTasksForMeeting(m.id).filter((t) => t.status === "Not Started" || t.status === "Waiting Reply");
+                      return s + mt.length;
+                    }, 0);
+                    const active = selectedDept === dept;
+                    const pillColour = openCount > 0 ? COLOURS.RED : pendingCount > 0 ? COLOURS.AMBER : null;
+                    const isLast = i === deptList.length;
+                    return (
+                      <button key={dept} onClick={() => setSelectedDept(dept)} style={{
+                        padding: "8px 14px", fontSize: "12px", fontWeight: active ? 600 : 400,
+                        color: active ? COLOURS.NAVY : COLOURS.SLATE,
+                        backgroundColor: active ? COLOURS.CARD : "transparent",
+                        border: "none", borderRight: isLast ? "none" : `1px solid ${COLOURS.BORDER}`,
+                        cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap", flexShrink: 0,
+                      }}>
+                        {dept}
+                        {pillColour && (
+                          <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: RADII.PILL, backgroundColor: pillColour + "22", color: pillColour, fontWeight: 600 }}>
+                            {openCount > 0 ? openCount : pendingCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
 
-            ) : view === "meetings" && groupBy === "date" ? (
-              /* ── By Date view (flat month groups) ── */
-              groupedMeetings.map(([groupKey, groupMeetings]) => {
-                const isGroupOpen = expandedGroups.has(groupKey);
-                const groupTasks = groupMeetings.flatMap((m) => getTasksForMeeting(m.id));
-                const groupOpen = groupTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
-                return (
-                  <div key={groupKey} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "10px" }}>
-                    <div onClick={() => toggleGroup(groupKey)} style={{
-                      padding: "10px 14px", cursor: "pointer",
-                      display: "flex", alignItems: "center", gap: "10px",
-                      backgroundColor: isGroupOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
-                      borderLeft: `3px solid ${COLOURS.SLATE}`,
-                      borderBottom: isGroupOpen ? `1px solid ${COLOURS.BORDER}` : "none",
-                    }}>
-                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>📅</span>
-                      <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, flex: 1 }}>{formatMonthLabel(groupKey)}</span>
-                      <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>
-                        {groupMeetings.length} meeting{groupMeetings.length !== 1 ? "s" : ""}
-                        {groupOpen > 0 && <span style={{ color: COLOURS.AMBER }}> · {groupOpen} open</span>}
-                      </span>
-                      <span style={{ color: COLOURS.SLATE, fontSize: "10px", flexShrink: 0 }}>{isGroupOpen ? "▲" : "▼"}</span>
-                    </div>
-                    {isGroupOpen && (
-                      <div>
-                        {groupMeetings.map((m) => {
-                          const isOpen = expandedId === m.id;
-                          const mTasks = getTasksForMeeting(m.id);
-                          const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
-                          const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
-                          return <MeetingCard key={m.id} m={m} mTasks={mTasks} completedTasks={completedTasks} openTaskCount={openTaskCount} isOpen={isOpen} setExpandedId={setExpandedId} downloadMinutesPDF={downloadMinutesPDF} isMobile={isMobile} showDept />;
-                        })}
-                      </div>
-                    )}
+                {/* Flat meeting list */}
+                {meetings.length === 0 ? (
+                  <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No meetings recorded yet.</p>
+                ) : displayedMeetings.length === 0 ? (
+                  <div style={{ ...cardStyle, padding: "24px", textAlign: "center" as const, color: COLOURS.SLATE, fontSize: "13px" }}>
+                    {selectedDept !== "All" ? `No meetings for ${selectedDept}.` : "No past meetings found."}
                   </div>
-                );
-              })
-
-            ) : view === "meetings" && groupBy === "department" ? (
-              /* ── By Department view (dept → month → meeting) ── */
-              deptMonthGroups.map(([dept, months]) => {
-                const isDeptOpen = expandedDepts.has(dept);
-                const allDeptMeetings = months.flatMap(([, ms]) => ms);
-                const stats = getTaskStatsFor(allDeptMeetings);
-
-                return (
-                  <div key={dept} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "10px" }}>
-
-                    {/* Department header — compact left-accent row */}
-                    <div onClick={() => toggleDept(dept)} style={{
-                      padding: "10px 14px", cursor: "pointer",
-                      backgroundColor: isDeptOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
-                      display: "flex", alignItems: "center", gap: "10px",
-                      borderLeft: `3px solid ${deptAccent(dept)}`,
-                      borderBottom: isDeptOpen ? `1px solid ${COLOURS.BORDER}` : "none",
-                    }}>
-                      <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: deptAccent(dept), flexShrink: 0 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{dept}</span>
-                        <span style={{ fontSize: "11px", color: COLOURS.SLATE, marginLeft: "8px" }}>
-                          {allDeptMeetings.length} meeting{allDeptMeetings.length !== 1 ? "s" : ""}
-                        </span>
-                      </div>
-                      {/* Task stats pills */}
-                      <div style={{ display: "flex", gap: "4px", alignItems: "center", flexWrap: "wrap" }}>
-                        {stats.open > 0 && (
-                          <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.DANGER_SOFT, color: COLOURS.RED }}>
-                            {stats.open} in progress
-                          </span>
-                        )}
-                        {stats.pending > 0 && (
-                          <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.WARNING_SOFT, color: COLOURS.AMBER }}>
-                            {stats.pending} pending
-                          </span>
-                        )}
-                        {stats.completed > 0 && (
-                          <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL, backgroundColor: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN }}>
-                            {stats.completed} done
-                          </span>
-                        )}
-                        {stats.total === 0 && (
-                          <span style={{ fontSize: "10px", color: COLOURS.SLATE }}>no tasks</span>
-                        )}
-                      </div>
-                      <span style={{ color: COLOURS.SLATE, fontSize: "10px", flexShrink: 0 }}>{isDeptOpen ? "▲" : "▼"}</span>
-                    </div>
-
-                    {/* Month sub-groups */}
-                    {isDeptOpen && (
-                      <div>
-                        {months.map(([month, monthMeetings]) => {
-                          const monthKey = `${dept}:${month}`;
-                          const isMonthOpen = expandedMonths.has(monthKey);
-                          const monthStats = getTaskStatsFor(monthMeetings);
-
-                          return (
-                            <div key={monthKey} style={{ borderBottom: `1px solid ${COLOURS.BORDER}` }}>
-                              {/* Month header — indented compact row */}
-                              <div onClick={() => toggleMonth(monthKey)} style={{
-                                padding: "7px 14px 7px 28px", cursor: "pointer",
-                                display: "flex", alignItems: "center", gap: "8px",
-                                backgroundColor: isMonthOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
-                                borderBottom: isMonthOpen ? `1px solid ${COLOURS.BORDER}` : "none",
-                              }}>
-                                <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>📅</span>
-                                <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, flex: 1 }}>{formatMonthLabel(month)}</span>
-                                <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>
-                                  {monthMeetings.length} mtg{monthMeetings.length !== 1 ? "s" : ""}
-                                  {monthStats.open > 0 && <span style={{ color: COLOURS.RED }}> · {monthStats.open} in progress</span>}
-                                  {monthStats.pending > 0 && <span style={{ color: COLOURS.AMBER }}> · {monthStats.pending} pending</span>}
-                                  {monthStats.completed > 0 && <span style={{ color: COLOURS.GREEN }}> · {monthStats.completed} done</span>}
-                                </span>
-                                <span style={{ color: COLOURS.SLATE, fontSize: "10px", flexShrink: 0 }}>{isMonthOpen ? "▲" : "▼"}</span>
-                              </div>
-
-                              {/* Individual meetings within month */}
-                              {isMonthOpen && (
-                                <div style={{ paddingLeft: "14px" }}>
-                                  {monthMeetings.map((m) => {
-                                    const isOpen = expandedId === m.id;
-                                    const mTasks = getTasksForMeeting(m.id);
-                                    const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
-                                    const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
-                                    return <MeetingCard key={m.id} m={m} mTasks={mTasks} completedTasks={completedTasks} openTaskCount={openTaskCount} isOpen={isOpen} setExpandedId={setExpandedId} downloadMinutesPDF={downloadMinutesPDF} isMobile={isMobile} showDept={false} />;
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                ) : (
+                  <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+                    {displayedMeetings.map((m) => {
+                      const isOpen = expandedId === m.id;
+                      const mTasks = getTasksForMeeting(m.id);
+                      const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
+                      const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
+                      return <MeetingCard key={m.id} m={m} mTasks={mTasks} completedTasks={completedTasks} openTaskCount={openTaskCount} isOpen={isOpen} setExpandedId={setExpandedId} downloadMinutesPDF={downloadMinutesPDF} isMobile={isMobile} showDept={selectedDept === "All"} />;
+                    })}
                   </div>
-                );
-              })
-
-            ) : null}
+                )}
+              </div>
+            )}
           </>
         )}
       </main>
