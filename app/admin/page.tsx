@@ -38,9 +38,9 @@ type PaymentRow = { entity: string; payment_type: string; months: MonthEntry[] }
 
 type ComplianceRow = {
   location_id: string; name: string; entity: string;
-  civil_defence_status: string | null; civil_defence_due: string | null;
-  labour_reg_status: string | null;    labour_reg_due: string | null;
-  labour_insp_status: string | null;   labour_insp_due: string | null;
+  civil_defence_status: string | null; civil_defence_registered: string | null; civil_defence_due: string | null;
+  labour_reg_status: string | null;    labour_reg_registered: string | null;    labour_reg_due: string | null;
+  labour_insp_status: string | null;   labour_insp_registered: string | null;   labour_insp_due: string | null;
 };
 
 type NtnDoc = {
@@ -170,6 +170,11 @@ export default function AdminDataPage() {
   // ── Compliance state ───────────────────────────────────────────────
   const [compliance, setCompliance] = useState<ComplianceRow[]>([]);
   const [loadingCompliance, setLoadingCompliance] = useState(false);
+  const [editingCompliance, setEditingCompliance] = useState<{
+    location_id: string; name: string; compliance_type: string;
+    status: string; last_renewed: string; next_due: string; notes: string;
+  } | null>(null);
+  const [savingCompliance, setSavingCompliance] = useState(false);
   const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [paymentYear, setPaymentYear] = useState(CURRENT_YEAR);
@@ -393,6 +398,32 @@ export default function AdminDataPage() {
     if (opsYear === now.getFullYear() && opsMonth === now.getMonth() + 1) return;
     if (opsMonth === 12) { setOpsMonth(1); setOpsYear((y) => y + 1); }
     else setOpsMonth((m) => m + 1);
+  }
+
+  async function saveCompliance() {
+    if (!editingCompliance) return;
+    setSavingCompliance(true);
+    const res = await authedFetch("/api/admin/compliance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location_id:     editingCompliance.location_id,
+        compliance_type: editingCompliance.compliance_type,
+        status:          editingCompliance.status,
+        last_renewed:    editingCompliance.last_renewed || null,
+        next_due:        editingCompliance.next_due || null,
+        notes:           editingCompliance.notes || null,
+      }),
+    });
+    const json = await res.json();
+    setSavingCompliance(false);
+    if (json.ok) {
+      showToast("Compliance record updated", "success");
+      setEditingCompliance(null);
+      loadCompliance();
+    } else {
+      showToast(json.error || "Failed to save", "error");
+    }
   }
 
   async function addLocation() {
@@ -1057,6 +1088,53 @@ export default function AdminDataPage() {
     const visibleCompliance = civilExpanded ? compliance : compliance.slice(0, CIVIL_LIMIT);
     const hasMorCivil = compliance.length > CIVIL_LIMIT;
 
+    const COMPLIANCE_STATUSES = ["Done", "Inprocess", "Pending", "Overdue", "N/A"];
+
+    function openComplianceEdit(r: ComplianceRow, type: "Civil Defence" | "Labour Registration" | "Labour Inspection") {
+      const statusMap = {
+        "Civil Defence":       { status: r.civil_defence_status, registered: r.civil_defence_registered, due: r.civil_defence_due },
+        "Labour Registration": { status: r.labour_reg_status,    registered: r.labour_reg_registered,    due: r.labour_reg_due },
+        "Labour Inspection":   { status: r.labour_insp_status,   registered: r.labour_insp_registered,   due: r.labour_insp_due },
+      };
+      const vals = statusMap[type];
+      setEditingCompliance({
+        location_id: r.location_id, name: r.name, compliance_type: type,
+        status: vals.status || "Pending",
+        last_renewed: vals.registered || "",
+        next_due: vals.due || "",
+        notes: "",
+      });
+    }
+
+    function complianceDateCell(registered: string | null, due: string | null, status: string | null, locName: string, type: "Civil Defence" | "Labour Registration" | "Labour Inspection", row: ComplianceRow) {
+      const isOverdue = due && due < today && status !== "Done";
+      return (
+        <td style={{ padding: "8px 14px", minWidth: "160px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+            <div>
+              <span style={statusBadge(status)}>{status || "—"}</span>
+              <div style={{ marginTop: "4px", fontSize: "10.5px", color: COLOURS.SLATE, lineHeight: 1.5 }}>
+                {registered
+                  ? <span>Registered: <strong style={{ color: COLOURS.NAVY }}>{formatDateUK(registered)}</strong></span>
+                  : <span style={{ color: COLOURS.SLATE }}>Registered: —</span>}
+              </div>
+              <div style={{ fontSize: "10.5px", lineHeight: 1.5 }}>
+                {due
+                  ? <span style={{ color: isOverdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue ? 600 : 400 }}>
+                      Due: <strong>{formatDateUK(due)}</strong>{isOverdue ? " ⚠️" : ""}
+                    </span>
+                  : <span style={{ color: COLOURS.SLATE }}>Due: —</span>}
+              </div>
+            </div>
+            <button onClick={() => openComplianceEdit(row, type)}
+              style={{ fontSize: "11px", color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 500, flexShrink: 0 }}>
+              Edit
+            </button>
+          </div>
+        </td>
+      );
+    }
+
     return (
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
@@ -1070,30 +1148,24 @@ export default function AdminDataPage() {
           <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No compliance data on record yet.</p>
         ) : (
           <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white", overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "600px" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
               <thead>
                 <tr>
-                  {["Location", "Entity", "Civil Defence", "Next Due", "Labour Reg.", "Labour Insp."].map((h) => (
+                  {["Location", "Entity", "Civil Defence", "Labour Reg.", "Labour Insp."].map((h) => (
                     <th key={h} style={thStyle}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {visibleCompliance.map((r) => {
-                  const isOverdue = r.civil_defence_due && r.civil_defence_due < today && r.civil_defence_status !== "Done";
-                  return (
-                    <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                      <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.name}</td>
-                      <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE }}>{r.entity}</td>
-                      <td style={{ padding: "8px 14px" }}><span style={statusBadge(r.civil_defence_status)}>{r.civil_defence_status || "—"}</span></td>
-                      <td style={{ padding: "10px 14px", fontSize: "11.5px", color: isOverdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue ? 600 : 400 }}>
-                        {r.civil_defence_due ? formatDateUK(r.civil_defence_due) : "—"}{isOverdue ? " ⚠️" : ""}
-                      </td>
-                      <td style={{ padding: "8px 14px" }}><span style={statusBadge(r.labour_reg_status)}>{r.labour_reg_status || "—"}</span></td>
-                      <td style={{ padding: "8px 14px" }}><span style={statusBadge(r.labour_insp_status)}>{r.labour_insp_status || "—"}</span></td>
-                    </tr>
-                  );
-                })}
+                {visibleCompliance.map((r) => (
+                  <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                    <td style={{ padding: "10px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.name}</td>
+                    <td style={{ padding: "10px 14px", fontSize: "11px", color: COLOURS.SLATE, whiteSpace: "nowrap" }}>{r.entity}</td>
+                    {complianceDateCell(r.civil_defence_registered, r.civil_defence_due, r.civil_defence_status, r.name, "Civil Defence", r)}
+                    {complianceDateCell(r.labour_reg_registered,    r.labour_reg_due,    r.labour_reg_status,    r.name, "Labour Registration", r)}
+                    {complianceDateCell(r.labour_insp_registered,   r.labour_insp_due,   r.labour_insp_status,   r.name, "Labour Inspection",   r)}
+                  </tr>
+                ))}
               </tbody>
             </table>
             {hasMorCivil && (
@@ -1105,6 +1177,47 @@ export default function AdminDataPage() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Edit compliance modal */}
+        {editingCompliance && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+            onClick={() => setEditingCompliance(null)}>
+            <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: RADII.CARD, padding: "24px", maxWidth: "420px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
+              <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "2px" }}>{editingCompliance.name}</div>
+              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "16px" }}>{editingCompliance.compliance_type}</div>
+              <div style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Status</label>
+                  <select value={editingCompliance.status} onChange={(e) => setEditingCompliance({ ...editingCompliance, status: e.target.value })}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                    {COMPLIANCE_STATUSES.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Date Registered</label>
+                    <DateInput value={editingCompliance.last_renewed} onChange={(e) => setEditingCompliance({ ...editingCompliance, last_renewed: e.target.value })} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Renewal Due</label>
+                    <DateInput value={editingCompliance.next_due} onChange={(e) => setEditingCompliance({ ...editingCompliance, next_due: e.target.value })} />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Notes (optional)</label>
+                  <textarea value={editingCompliance.notes} onChange={(e) => setEditingCompliance({ ...editingCompliance, notes: e.target.value })}
+                    rows={2} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical" as const }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                <button onClick={() => setEditingCompliance(null)} style={{ padding: "8px 16px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Cancel</button>
+                <button onClick={saveCompliance} disabled={savingCompliance} style={{ ...primaryButtonStyle, opacity: savingCompliance ? 0.6 : 1 }}>
+                  {savingCompliance ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
