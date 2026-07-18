@@ -61,45 +61,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-// Quick-date picker: tap Today / Yesterday / etc., or type DD/MM/YYYY manually
-function QuickDatePicker({ value, onDateChange }: {
-  value: string;
-  onDateChange: (date: string) => void;
-}) {
-  function daysAgo(n: number): string {
-    const d = new Date();
-    d.setDate(d.getDate() - n);
-    return d.toISOString().slice(0, 10);
-  }
-  const QUICK = [
-    { label: "Today",      val: daysAgo(0) },
-    { label: "Yesterday",  val: daysAgo(1) },
-    { label: "2 days ago", val: daysAgo(2) },
-    { label: "3 days ago", val: daysAgo(3) },
-  ];
-  return (
-    <div>
-      <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexWrap: "wrap" }}>
-        {QUICK.map((q) => {
-          const active = value === q.val;
-          return (
-            <button key={q.label} type="button" onClick={() => onDateChange(q.val)}
-              style={{
-                padding: "6px 13px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600,
-                border: `1.5px solid ${active ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-                backgroundColor: active ? COLOURS.NAVY : "white",
-                color: active ? "white" : COLOURS.SLATE,
-                cursor: "pointer",
-              }}>
-              {q.label}
-            </button>
-          );
-        })}
-      </div>
-      <DateInput value={value} onChange={(e) => onDateChange(e.target.value)} />
-    </div>
-  );
-}
 
 // ── Main page ─────────────────────────────────────────────────────────
 
@@ -359,7 +320,7 @@ export default function DailyEntryPage() {
 
               <div style={{ marginTop: "12px" }}>
                 <Field label="Date *">
-                  <QuickDatePicker value={fuel.date} onDateChange={(d) => setFuel((f) => ({ ...f, date: d }))} />
+                  <DateInput value={fuel.date} onChange={(e) => setFuel((f) => ({ ...f, date: e.target.value }))} />
                 </Field>
               </div>
 
@@ -437,7 +398,7 @@ export default function DailyEntryPage() {
 
               <div style={{ marginTop: "12px" }}>
                 <Field label="Date *">
-                  <QuickDatePicker value={solar.date} onDateChange={(d) => setSolar((s) => ({ ...s, date: d }))} />
+                  <DateInput value={solar.date} onChange={(e) => setSolar((s) => ({ ...s, date: e.target.value }))} />
                 </Field>
               </div>
 
@@ -506,7 +467,7 @@ export default function DailyEntryPage() {
 
               <div style={{ marginTop: "12px" }}>
                 <Field label="Reading date *">
-                  <QuickDatePicker value={utility.reading_date} onDateChange={(d) => setUtility((u) => ({ ...u, reading_date: d }))} />
+                  <DateInput value={utility.reading_date} onChange={(e) => setUtility((u) => ({ ...u, reading_date: e.target.value }))} />
                 </Field>
               </div>
 
@@ -562,7 +523,7 @@ export default function DailyEntryPage() {
 
               <div style={{ marginTop: "12px" }}>
                 <Field label="Date *">
-                  <QuickDatePicker value={maint.date} onDateChange={(d) => setMaint((m) => ({ ...m, date: d }))} />
+                  <DateInput value={maint.date} onChange={(e) => setMaint((m) => ({ ...m, date: e.target.value }))} />
                 </Field>
               </div>
 
