@@ -24,7 +24,7 @@ type RecentMaint = {
   date: string; work_type: string; description: string | null;
   odometer_km: number | null; cost_pkr: number; workshop: string | null;
 };
-type RecentSolar = { date: string; units_produced_kwh: number; status: string | null };
+type RecentSolar = { date: string; production_kwh: number; status: string | null };
 type RecentUtility = {
   reading_date: string; current_reading: number | null; previous_reading: number | null;
   units_consumed: number | null; bill_amount_pkr: number | null; meter_label: string;
@@ -522,7 +522,7 @@ export default function DailyEntryPage() {
                       <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.date.split("-").reverse().join("/")}</div>
                     </div>
                     <div>
-                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.units_produced_kwh.toFixed(1)} kWh</div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>{r.production_kwh.toFixed(1)} kWh</div>
                       <div style={{ fontSize: "10.5px", color: COLOURS.SLATE }}>Production</div>
                     </div>
                     <div style={{ textAlign: "right" as const }}>

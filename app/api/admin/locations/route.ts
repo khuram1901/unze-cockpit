@@ -2,9 +2,11 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
-// Check if caller is allowed to manage locations (admin email OR DB permission)
+const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
+
+// Check if caller is allowed to manage locations (admin emails OR DB permission)
 async function checkCanManage(auth: { email: string }, supabase: ReturnType<typeof createServiceClient>) {
-  if (auth.email.toLowerCase() === "khuram1901@gmail.com") return true;
+  if (ADMIN_EMAILS.includes(auth.email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members").select("id").eq("email", auth.email).single();
   if (!member) return false;
@@ -77,6 +79,36 @@ export async function DELETE(request: NextRequest) {
     .from("admin_locations")
     .update({ is_active: false })
     .eq("id", location_id);
+
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ ok: true });
+}
+
+// PATCH — edit name / entity / location_type / province / is_active of an existing location
+export async function PATCH(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const supabase = createServiceClient();
+  if (!(await checkCanManage(auth, supabase))) {
+    return Response.json({ error: "Not authorised" }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { id, name, entity, location_type, province, is_active } = body;
+  if (!id) return Response.json({ error: "id is required" }, { status: 400 });
+
+  const updates: Record<string, unknown> = {};
+  if (name   !== undefined) updates.name          = name.trim();
+  if (entity !== undefined) updates.entity        = entity;
+  if (location_type !== undefined) updates.location_type = location_type;
+  if (province !== undefined) updates.province    = province;
+  if (is_active !== undefined) updates.is_active  = is_active;
+
+  const { error } = await supabase
+    .from("admin_locations")
+    .update(updates)
+    .eq("id", id);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ ok: true });

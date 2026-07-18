@@ -110,7 +110,7 @@ AS $$
     SELECT
       r.branch_id,
       EXTRACT(MONTH FROM r.date)::int AS mo,
-      SUM(r.units_produced_kwh)       AS total_kwh,
+      SUM(r.production_kwh)           AS total_kwh,
       COUNT(*)                        AS days_entered
     FROM admin_solar_readings r, fy
     WHERE r.date >= fy.fy_start

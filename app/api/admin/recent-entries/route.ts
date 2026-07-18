@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     const { data } = await supabase
       .from("admin_solar_readings")
-      .select("date, units_produced_kwh, status")
+      .select("date, production_kwh, status")
       .eq("branch_id", branchId)
       .order("date", { ascending: false })
       .limit(4);

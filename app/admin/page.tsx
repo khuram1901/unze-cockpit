@@ -286,6 +286,30 @@ export default function AdminDataPage() {
     imported: number; skipped: number; errors: string[];
   } | null>(null);
 
+  // ── Manage Fleet modal ─────────────────────────────────────────────
+  const [manageFleet, setManageFleet] = useState(false);
+  const [allVehicles, setAllVehicles] = useState<{
+    id: string; name: string; plate_number: string; is_active: boolean;
+  }[]>([]);
+  const [vehicleForm, setVehicleForm] = useState<{
+    id?: string; name: string; plate_number: string; is_active: boolean;
+  } | null>(null);
+  const [savingVehicle, setSavingVehicle] = useState(false);
+
+  // ── Manage Solar Sites modal ───────────────────────────────────────
+  const [manageSolar, setManageSolar] = useState(false);
+  const [allSolarBranches, setAllSolarBranches] = useState<{
+    id: string; name: string; system_kw: number | null; is_active: boolean;
+  }[]>([]);
+  const [solarForm, setSolarForm] = useState<{
+    id?: string; name: string; system_kw: string; is_active: boolean;
+  } | null>(null);
+  const [savingSolar, setSavingSolar] = useState(false);
+
+  // ── Utility pagination ─────────────────────────────────────────────
+  const [utilityPage, setUtilityPage] = useState(0);
+  const UTIL_PAGE_SIZE = 10;
+
   // ── Initial setup ──────────────────────────────────────────────────
   useEffect(() => {
     if (checking) return;
@@ -293,7 +317,8 @@ export default function AdminDataPage() {
     // Also check can_manage_locations for Akhlaq / Sunaina
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return;
-      const isAdmin = user.email?.toLowerCase() === "khuram1901@gmail.com";
+      const ADMIN_EMAILS_UI = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
+      const isAdmin = ADMIN_EMAILS_UI.includes(user.email?.toLowerCase() || "");
       if (isAdmin) { setUserIsAdmin(true); setCanManageLocations(true); return; }
       const { data: member } = await supabase
         .from("members").select("id").eq("email", user.email!).single();
@@ -341,6 +366,9 @@ export default function AdminDataPage() {
     if (activeTab === "operations" && !checking) { loadFuel(); loadSolar(); loadUtility(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opsYear]);
+
+  // Reset utility page when month changes
+  useEffect(() => { setUtilityPage(0); }, [opsMonth, opsYear]);
 
   useEffect(() => {
     if (activeTab === "backups" && !checking) loadDocs();
@@ -1824,6 +1852,214 @@ export default function AdminDataPage() {
     );
   }
 
+  // ── Manage Fleet handlers ──────────────────────────────────────────
+  async function openManageFleet() {
+    const res = await authedFetch("/api/admin/vehicles");
+    const json = await res.json();
+    setAllVehicles(json.data || []);
+    setVehicleForm(null);
+    setManageFleet(true);
+  }
+
+  async function saveVehicle() {
+    if (!vehicleForm || !vehicleForm.name.trim() || !vehicleForm.plate_number.trim()) return;
+    setSavingVehicle(true);
+    const res = await authedFetch("/api/admin/vehicles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(vehicleForm),
+    });
+    const json = await res.json();
+    setSavingVehicle(false);
+    if (json.ok) {
+      showToast(vehicleForm.id ? "Vehicle updated ✓" : "Vehicle added ✓", "success");
+      setVehicleForm(null);
+      // Refresh list + reload ops data so it appears immediately
+      const r = await authedFetch("/api/admin/vehicles");
+      setAllVehicles((await r.json()).data || []);
+      loadFuel();
+    } else {
+      showToast(json.error || "Failed to save", "error");
+    }
+  }
+
+  // ── Manage Solar Sites handlers ────────────────────────────────────
+  async function openManageSolar() {
+    const res = await authedFetch("/api/admin/solar-branches");
+    const json = await res.json();
+    setAllSolarBranches(json.data || []);
+    setSolarForm(null);
+    setManageSolar(true);
+  }
+
+  async function saveSolarBranch() {
+    if (!solarForm || !solarForm.name.trim()) return;
+    setSavingSolar(true);
+    const res = await authedFetch("/api/admin/solar-branches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(solarForm),
+    });
+    const json = await res.json();
+    setSavingSolar(false);
+    if (json.ok) {
+      showToast(solarForm.id ? "Site updated ✓" : "Site added ✓", "success");
+      setSolarForm(null);
+      const r = await authedFetch("/api/admin/solar-branches");
+      setAllSolarBranches((await r.json()).data || []);
+      loadSolar();
+    } else {
+      showToast(json.error || "Failed to save", "error");
+    }
+  }
+
+  // ── Manage modals render ───────────────────────────────────────────
+  function renderManageFleet() {
+    if (!manageFleet) return null;
+    const mgmtInput: React.CSSProperties = { ...inputStyle, width: "100%", boxSizing: "border-box" as const, fontSize: "13px" };
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+        onClick={() => { setManageFleet(false); setVehicleForm(null); }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: "12px", padding: "24px", maxWidth: "540px", width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>⛽ Manage Fleet</div>
+            <button onClick={() => { setManageFleet(false); setVehicleForm(null); }}
+              style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: COLOURS.SLATE }}>✕</button>
+          </div>
+
+          {/* Vehicle list */}
+          {allVehicles.length > 0 && (
+            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", overflow: "hidden", marginBottom: "16px" }}>
+              {allVehicles.map((v, i) => (
+                <div key={v.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", borderBottom: i < allVehicles.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", backgroundColor: vehicleForm?.id === v.id ? "#F0F4FF" : "white" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: v.is_active ? COLOURS.NAVY : COLOURS.SLATE }}>{v.name}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, fontFamily: "monospace" }}>{v.plate_number}</div>
+                  </div>
+                  <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px", backgroundColor: v.is_active ? "#DCFCE7" : COLOURS.HAIRLINE, color: v.is_active ? COLOURS.GREEN : COLOURS.SLATE }}>{v.is_active ? "Active" : "Inactive"}</span>
+                  <button onClick={() => setVehicleForm({ id: v.id, name: v.name, plate_number: v.plate_number, is_active: v.is_active })}
+                    style={{ fontSize: "11.5px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Edit</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add / Edit form */}
+          {vehicleForm ? (
+            <div style={{ border: `1px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "16px", backgroundColor: "#F8F9FC" }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>{vehicleForm.id ? "Edit Vehicle" : "Add New Vehicle"}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Vehicle Name *</label>
+                  <input type="text" placeholder="e.g. Honda City" value={vehicleForm.name}
+                    onChange={(e) => setVehicleForm((f) => f ? { ...f, name: e.target.value } : f)}
+                    style={mgmtInput} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Plate Number *</label>
+                  <input type="text" placeholder="e.g. LHR-1234" value={vehicleForm.plate_number}
+                    onChange={(e) => setVehicleForm((f) => f ? { ...f, plate_number: e.target.value } : f)}
+                    style={{ ...mgmtInput, fontFamily: "monospace", textTransform: "uppercase" }} />
+                </div>
+              </div>
+              {vehicleForm.id && (
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: COLOURS.SLATE, marginBottom: "12px", cursor: "pointer" }}>
+                  <input type="checkbox" checked={vehicleForm.is_active}
+                    onChange={(e) => setVehicleForm((f) => f ? { ...f, is_active: e.target.checked } : f)} />
+                  Active (shows in daily entry + ops)
+                </label>
+              )}
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={saveVehicle} disabled={savingVehicle}
+                  style={{ ...primaryButtonStyle, padding: "8px 18px", fontSize: "13px", opacity: savingVehicle ? 0.6 : 1 }}>
+                  {savingVehicle ? "Saving…" : vehicleForm.id ? "Save Changes" : "Add Vehicle"}
+                </button>
+                <button onClick={() => setVehicleForm(null)}
+                  style={{ padding: "8px 14px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setVehicleForm({ name: "", plate_number: "", is_active: true })}
+              style={{ ...primaryButtonStyle, width: "100%", padding: "10px", fontSize: "13px" }}>+ Add New Vehicle</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function renderManageSolar() {
+    if (!manageSolar) return null;
+    const mgmtInput: React.CSSProperties = { ...inputStyle, width: "100%", boxSizing: "border-box" as const, fontSize: "13px" };
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+        onClick={() => { setManageSolar(false); setSolarForm(null); }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: "12px", padding: "24px", maxWidth: "500px", width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>☀️ Manage Solar Sites</div>
+            <button onClick={() => { setManageSolar(false); setSolarForm(null); }}
+              style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: COLOURS.SLATE }}>✕</button>
+          </div>
+
+          {/* Site list */}
+          {allSolarBranches.length > 0 && (
+            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", overflow: "hidden", marginBottom: "16px" }}>
+              {allSolarBranches.map((b, i) => (
+                <div key={b.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", borderBottom: i < allSolarBranches.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", backgroundColor: solarForm?.id === b.id ? "#F0F4FF" : "white" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: b.is_active ? COLOURS.NAVY : COLOURS.SLATE }}>{b.name}</div>
+                    {b.system_kw && <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>{b.system_kw} kW system</div>}
+                  </div>
+                  <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 8px", borderRadius: "20px", backgroundColor: b.is_active ? "#DCFCE7" : COLOURS.HAIRLINE, color: b.is_active ? COLOURS.GREEN : COLOURS.SLATE }}>{b.is_active ? "Active" : "Inactive"}</span>
+                  <button onClick={() => setSolarForm({ id: b.id, name: b.name, system_kw: b.system_kw != null ? String(b.system_kw) : "", is_active: b.is_active })}
+                    style={{ fontSize: "11.5px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>Edit</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add / Edit form */}
+          {solarForm ? (
+            <div style={{ border: `1px solid ${COLOURS.NAVY}`, borderRadius: "8px", padding: "16px", backgroundColor: "#F8F9FC" }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>{solarForm.id ? "Edit Site" : "Add New Solar Site"}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Site Name *</label>
+                  <input type="text" placeholder="e.g. Head Office" value={solarForm.name}
+                    onChange={(e) => setSolarForm((f) => f ? { ...f, name: e.target.value } : f)}
+                    style={mgmtInput} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>System kW (optional)</label>
+                  <input type="number" step="0.5" min="0" placeholder="e.g. 40" value={solarForm.system_kw}
+                    onChange={(e) => setSolarForm((f) => f ? { ...f, system_kw: e.target.value } : f)}
+                    style={mgmtInput} />
+                </div>
+              </div>
+              {solarForm.id && (
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: COLOURS.SLATE, marginBottom: "12px", cursor: "pointer" }}>
+                  <input type="checkbox" checked={solarForm.is_active}
+                    onChange={(e) => setSolarForm((f) => f ? { ...f, is_active: e.target.checked } : f)} />
+                  Active (shows in daily entry + ops)
+                </label>
+              )}
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={saveSolarBranch} disabled={savingSolar}
+                  style={{ ...primaryButtonStyle, padding: "8px 18px", fontSize: "13px", opacity: savingSolar ? 0.6 : 1 }}>
+                  {savingSolar ? "Saving…" : solarForm.id ? "Save Changes" : "Add Site"}
+                </button>
+                <button onClick={() => setSolarForm(null)}
+                  style={{ padding: "8px 14px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", fontSize: "13px", cursor: "pointer", color: COLOURS.SLATE }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setSolarForm({ name: "", system_kw: "", is_active: true })}
+              style={{ ...primaryButtonStyle, width: "100%", padding: "10px", fontSize: "13px" }}>+ Add New Solar Site</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ── Tab: Operations ────────────────────────────────────────────────
   function renderFuel() {
     if (loadingFuel) return <SkeletonRows count={4} height="44px" />;
@@ -2335,53 +2571,69 @@ export default function AdminDataPage() {
           </div>
         </div>
 
-        {/* Sites table grouped by entity */}
-        {entities.map((entity) => {
-          const entityRows = rows.filter((r) => r.entity === entity);
-          const entityTotal = entityRows.reduce((s, r) => s + (r.monthData?.total_bill || 0), 0);
-          const thStyle: React.CSSProperties = { padding: "8px 14px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
+        {/* Paginate: 10 sites per page, sorted by entity then name */}
+        {(() => {
+          const sortedRows = [...rows].sort((a, b) => a.entity.localeCompare(b.entity) || a.location_name.localeCompare(b.location_name));
+          const totalPages = Math.ceil(sortedRows.length / UTIL_PAGE_SIZE);
+          const pageRows   = sortedRows.slice(utilityPage * UTIL_PAGE_SIZE, (utilityPage + 1) * UTIL_PAGE_SIZE);
+          const pageEntities = [...new Set(pageRows.map((r) => r.entity))].sort();
+          const thStyle: React.CSSProperties = { padding: "8px 14px", textAlign: "left" as const, fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC" };
+
           return (
-            <div key={entity} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white", marginBottom: "12px" }}>
-              <div style={{ padding: "10px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#F8F9FC" }}>
-                <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{entity}</span>
-                <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>{entityTotal > 0 ? fmtPKR(entityTotal) : "No bills yet"} · {entityRows.length} sites</span>
-              </div>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {["Site", "Bill amount", "Meters read", "Status"].map((h) => (
-                      <th key={h} style={thStyle}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {entityRows.map((r) => {
-                    const bill = r.monthData?.total_bill;
-                    const noEntry = isCurrentOrPast && !bill;
-                    return (
-                      <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                        <td style={{ padding: "9px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.location_name}</td>
-                        <td style={{ padding: "9px 14px", fontSize: "12.5px", color: bill ? COLOURS.NAVY : COLOURS.SLATE, fontFamily: bill ? "inherit" : undefined }}>
-                          {bill ? fmtPKR(bill) : "—"}
-                        </td>
-                        <td style={{ padding: "9px 14px", fontSize: "12px", color: COLOURS.SLATE }}>
-                          {r.monthData?.meters_read ?? "—"}
-                        </td>
-                        <td style={{ padding: "8px 14px" }}>
-                          <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px",
-                            backgroundColor: noEntry ? "#FEF3C7" : "#ECFDF5",
-                            color: noEntry ? COLOURS.AMBER : COLOURS.GREEN, whiteSpace: "nowrap" }}>
-                            {noEntry ? "No entry" : "Recorded"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {pageEntities.map((entity) => {
+                const entityRows  = pageRows.filter((r) => r.entity === entity);
+                const entityTotal = entityRows.reduce((s, r) => s + (r.monthData?.total_bill || 0), 0);
+                return (
+                  <div key={entity} style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white", marginBottom: "12px" }}>
+                    <div style={{ padding: "10px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#F8F9FC" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{entity}</span>
+                      <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>{entityTotal > 0 ? fmtPKR(entityTotal) : "No bills yet"} · {entityRows.length} sites</span>
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>{["Site", "Bill amount", "Meters read", "Status"].map((h) => <th key={h} style={thStyle}>{h}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {entityRows.map((r) => {
+                          const bill    = r.monthData?.total_bill;
+                          const noEntry = isCurrentOrPast && !bill;
+                          return (
+                            <tr key={r.location_id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                              <td style={{ padding: "9px 14px", fontSize: "12.5px", color: COLOURS.NAVY, fontWeight: 500 }}>{r.location_name}</td>
+                              <td style={{ padding: "9px 14px", fontSize: "12.5px", color: bill ? COLOURS.NAVY : COLOURS.SLATE }}>{bill ? fmtPKR(bill) : "—"}</td>
+                              <td style={{ padding: "9px 14px", fontSize: "12px", color: COLOURS.SLATE }}>{r.monthData?.meters_read ?? "—"}</td>
+                              <td style={{ padding: "8px 14px" }}>
+                                <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: noEntry ? "#FEF3C7" : "#ECFDF5", color: noEntry ? COLOURS.AMBER : COLOURS.GREEN, whiteSpace: "nowrap" as const }}>
+                                  {noEntry ? "No entry" : "Recorded"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+
+              {/* Pagination controls */}
+              {totalPages > 1 && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px" }}>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                    Showing {utilityPage * UTIL_PAGE_SIZE + 1}–{Math.min((utilityPage + 1) * UTIL_PAGE_SIZE, sortedRows.length)} of {sortedRows.length} sites
+                  </span>
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <button onClick={() => setUtilityPage((p) => Math.max(0, p - 1))} disabled={utilityPage === 0}
+                      style={{ padding: "5px 14px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", fontSize: "12px", fontWeight: 600, cursor: utilityPage === 0 ? "default" : "pointer", color: COLOURS.NAVY, opacity: utilityPage === 0 ? 0.4 : 1 }}>← Prev</button>
+                    <button onClick={() => setUtilityPage((p) => Math.min(totalPages - 1, p + 1))} disabled={utilityPage >= totalPages - 1}
+                      style={{ padding: "5px 14px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", fontSize: "12px", fontWeight: 600, cursor: utilityPage >= totalPages - 1 ? "default" : "pointer", color: COLOURS.NAVY, opacity: utilityPage >= totalPages - 1 ? 0.4 : 1 }}>Next →</button>
+                  </div>
+                </div>
+              )}
+            </>
           );
-        })}
+        })()}
       </div>
     );
   }
@@ -2527,6 +2779,12 @@ export default function AdminDataPage() {
                   style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>
                   🔧 Import Maint.
                 </button>
+                {canManageLocations && (
+                  <button onClick={openManageFleet}
+                    style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "white", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    ⚙ Manage
+                  </button>
+                )}
               </div>
               {renderFuel()}
             </div>
@@ -2543,6 +2801,12 @@ export default function AdminDataPage() {
                   style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>
                   📥 Import
                 </button>
+                {canManageLocations && (
+                  <button onClick={openManageSolar}
+                    style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.NAVY}`, backgroundColor: COLOURS.NAVY, color: "white", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    ⚙ Manage
+                  </button>
+                )}
               </div>
               {renderSolar()}
             </div>
@@ -2742,6 +3006,10 @@ export default function AdminDataPage() {
       {renderVehiclePanel()}
       {/* Import modal */}
       {renderImportModal()}
+      {/* Manage Fleet modal */}
+      {renderManageFleet()}
+      {/* Manage Solar Sites modal */}
+      {renderManageSolar()}
     </AuthWrapper>
   );
 }
