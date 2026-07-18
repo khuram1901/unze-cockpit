@@ -566,7 +566,7 @@ export default function PADashboardPage() {
                 {/* Left: KPI grid */}
                 <div style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
                   gap: "10px",
                 }}>
                   <KPICard value={overdueTasks.length} label="Overdue" color={overdueTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
@@ -883,7 +883,7 @@ function PASkeleton({ isMobile }: { isMobile: boolean }) {
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr minmax(200px, 280px)", gap: "16px", marginBottom: "20px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: "10px" }}>
           {[1, 2, 3, 4, 5, 6].map((i) => (
             <div key={i} style={{ backgroundColor: "var(--bg-card, white)", border: `1px solid var(--border-color, ${COLOURS.HAIRLINE})`, borderRadius: "12px", padding: "14px 16px" }}>
               <div style={{ ...pulse, width: "40px", height: "26px" }} />
