@@ -62,6 +62,17 @@ type FuelRow = {
   fills: number; total_litres: number; total_amount: number; avg_km_per_l: number | null;
 };
 
+type FuelFill = {
+  date: string; price_per_litre: number; quantity_litres: number;
+  amount_pkr: number; previous_odometer: number | null;
+  current_odometer: number | null; km_per_litre: number | null; mileage_km: number | null;
+};
+
+type MaintenanceRecord = {
+  date: string; work_type: string; description: string | null;
+  odometer_km: number | null; cost_pkr: number; workshop: string | null;
+};
+
 type SolarBranch = {
   branch_id: string; branch_name: string; system_kw: number | null;
   months: { month: number; total_kwh: number | null; days_entered: number }[] | null;
@@ -242,6 +253,27 @@ export default function AdminDataPage() {
   const [opsYear, setOpsYear] = useState(CURRENT_YEAR);
   const [opsMonth, setOpsMonth] = useState(new Date().getMonth() + 1);
 
+  // ── Vehicle detail side panel ──────────────────────────────────────
+  const [vehiclePanel, setVehiclePanel] = useState<{
+    vehicleId: string; vehicleName: string; plateNumber: string;
+  } | null>(null);
+  const [vehicleDetail, setVehicleDetail] = useState<{
+    fuel: FuelFill[]; maintenance: MaintenanceRecord[];
+  } | null>(null);
+  const [vehicleDetailTab, setVehicleDetailTab] = useState<"fuel" | "maintenance" | "summary">("fuel");
+  const [vehicleDetailYear, setVehicleDetailYear] = useState(CURRENT_YEAR);
+  const [loadingVehicleDetail, setLoadingVehicleDetail] = useState(false);
+
+  // ── Import modal ───────────────────────────────────────────────────
+  const [importModal, setImportModal] = useState<{
+    type: "fuel" | "maintenance" | "solar"; label: string;
+  } | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    imported: number; skipped: number; errors: string[];
+  } | null>(null);
+
   // ── Initial setup ──────────────────────────────────────────────────
   useEffect(() => {
     if (checking) return;
@@ -366,6 +398,43 @@ export default function AdminDataPage() {
     const json = await res.json();
     setUtilityLocations(json.data || []);
     setLoadingUtility(false);
+  }
+
+  async function loadVehicleDetail(vehicleId: string, year: number) {
+    setLoadingVehicleDetail(true);
+    setVehicleDetail(null);
+    const res = await authedFetch(`/api/admin/vehicle-detail?vehicleId=${vehicleId}&year=${year}`);
+    const json = await res.json();
+    setVehicleDetail(json.data || { fuel: [], maintenance: [] });
+    setLoadingVehicleDetail(false);
+  }
+
+  async function handleImport() {
+    if (!importFile || !importModal) return;
+    setImporting(true);
+    setImportResult(null);
+    const form = new FormData();
+    form.append("type", importModal.type);
+    form.append("file", importFile);
+    const res = await authedFetch("/api/admin/import", { method: "POST", body: form });
+    const json = await res.json();
+    setImportResult(json);
+    setImporting(false);
+    if (json.imported > 0) {
+      if (importModal.type === "fuel") loadFuel();
+      else if (importModal.type === "solar") loadSolar();
+    }
+  }
+
+  async function handleDownloadTemplate(type: string, filename: string) {
+    const res = await authedFetch(`/api/admin/import?type=${type}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function loadBackups() {
@@ -1779,12 +1848,28 @@ export default function AdminDataPage() {
           ))}
         </div>
 
-        {/* Vehicle cards grid — ALL vehicles always shown */}
+        {/* Vehicle cards grid — ALL vehicles always shown; click to open detail panel */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "10px" }}>
           {monthRows.map((r) => {
             const hasData = r.fills > 0 || r.total_amount > 0;
+            const isSelected = vehiclePanel?.vehicleId === r.vehicle_id;
             return (
-              <div key={r.vehicle_id} style={{ backgroundColor: "white", border: `1px solid ${hasData ? COLOURS.HAIRLINE : "#E5E7EB"}`, borderRadius: "10px", padding: "14px 16px", opacity: hasData ? 1 : 0.75 }}>
+              <div key={r.vehicle_id}
+                onClick={() => {
+                  setVehiclePanel({ vehicleId: r.vehicle_id, vehicleName: r.vehicle_name, plateNumber: r.plate_number });
+                  setVehicleDetailYear(opsYear);
+                  setVehicleDetailTab("fuel");
+                  loadVehicleDetail(r.vehicle_id, opsYear);
+                }}
+                style={{
+                  backgroundColor: "white",
+                  border: `1.5px solid ${isSelected ? COLOURS.NAVY : hasData ? COLOURS.HAIRLINE : "#E5E7EB"}`,
+                  borderRadius: "10px", padding: "14px 16px",
+                  opacity: hasData ? 1 : 0.75,
+                  cursor: "pointer",
+                  transition: "box-shadow 0.15s, border-color 0.15s",
+                  boxShadow: isSelected ? `0 0 0 3px rgba(15,23,32,0.08)` : undefined,
+                }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                   <div>
                     <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY }}>{r.vehicle_name}</div>
@@ -1810,8 +1895,9 @@ export default function AdminDataPage() {
                     <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "2px" }}>Efficiency</div>
                   </div>
                 </div>
-                <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "8px" }}>
-                  {hasData ? `${r.fills} fill${r.fills !== 1 ? "s" : ""} · ${r.total_litres.toFixed(1)} L` : `No fuel entries for ${MONTH_NAMES[opsMonth - 1]}`}
+                <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>{hasData ? `${r.fills} fill${r.fills !== 1 ? "s" : ""} · ${r.total_litres.toFixed(1)} L` : `No fuel entries for ${MONTH_NAMES[opsMonth - 1]}`}</span>
+                  <span style={{ fontSize: "10px", color: COLOURS.SLATE, opacity: 0.6 }}>View →</span>
                 </div>
               </div>
             );
@@ -1855,19 +1941,30 @@ export default function AdminDataPage() {
           </div>
         </div>
 
-        {/* Solar cards grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: "10px" }}>
+        {/* Solar cards grid — per-site production + estimated savings */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "10px" }}>
           {branchData.map((b) => {
-            const kwh    = b.monthData?.total_kwh;
-            const noData = isCurrentOrPast && (kwh == null || kwh === 0);
+            const kwh     = b.monthData?.total_kwh;
+            const noData  = isCurrentOrPast && (kwh == null || kwh === 0);
+            const savings = kwh ? kwh * 40 : 0;
             return (
               <div key={b.branch_id} style={{ backgroundColor: "white", border: `1px solid ${noData ? COLOURS.RED : COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 16px" }}>
-                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.NAVY, textTransform: "uppercase", letterSpacing: "0.4px" }}>{b.branch_name}</div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.NAVY, textTransform: "uppercase" as const, letterSpacing: "0.4px" }}>{b.branch_name}</div>
                 <div style={{ fontSize: "10.5px", color: COLOURS.SLATE, marginBottom: "8px" }}>{b.system_kw ? `${b.system_kw} kW system` : "—"}</div>
+
+                {/* Production */}
                 <div style={{ fontSize: "22px", fontWeight: 700, color: kwh ? COLOURS.NAVY : COLOURS.SLATE }}>
                   {kwh != null ? Math.round(kwh) : "—"}
                   {kwh != null && <span style={{ fontSize: "11.5px", color: COLOURS.SLATE, fontWeight: 400, marginLeft: "2px" }}>kWh</span>}
                 </div>
+
+                {/* Savings estimate */}
+                {savings > 0 && (
+                  <div style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.GREEN, marginTop: "3px" }}>
+                    ≈ PKR {savings >= 100000 ? `${(savings / 1000).toFixed(0)}K` : savings.toLocaleString()} saved
+                  </div>
+                )}
+
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "7px" }}>
                   <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: noData ? "#FEF2F2" : "#ECFDF5", color: noData ? COLOURS.RED : COLOURS.GREEN, whiteSpace: "nowrap" }}>
                     {noData ? "No data" : "Active"}
@@ -1879,6 +1976,299 @@ export default function AdminDataPage() {
               </div>
             );
           })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Vehicle detail side panel ─────────────────────────────────────────
+  function renderVehiclePanel() {
+    if (!vehiclePanel) return null;
+    const { vehicleName, plateNumber } = vehiclePanel;
+    const fuel = vehicleDetail?.fuel || [];
+    const maintenance = vehicleDetail?.maintenance || [];
+
+    const totalFuelCost  = fuel.reduce((s, f) => s + (f.amount_pkr || 0), 0);
+    const totalMaintCost = maintenance.reduce((s, m) => s + (m.cost_pkr || 0), 0);
+    const totalRunning   = totalFuelCost + totalMaintCost;
+    const totalLitres    = fuel.reduce((s, f) => s + f.quantity_litres, 0);
+    const totalKm        = fuel.reduce((s, f) => s + (f.mileage_km || 0), 0);
+    const fmtPKR = (n: number) => `PKR ${Math.round(n).toLocaleString()}`;
+
+    // Group by month for summary tab
+    const fuelByMonth: Record<number, { fills: number; amount: number; litres: number }> = {};
+    fuel.forEach((f) => {
+      const mo = parseInt(f.date.split("-")[1], 10);
+      if (!fuelByMonth[mo]) fuelByMonth[mo] = { fills: 0, amount: 0, litres: 0 };
+      fuelByMonth[mo].fills++;
+      fuelByMonth[mo].amount += f.amount_pkr || 0;
+      fuelByMonth[mo].litres += f.quantity_litres;
+    });
+    const maintByMonth: Record<number, { count: number; cost: number }> = {};
+    maintenance.forEach((m) => {
+      const mo = parseInt(m.date.split("-")[1], 10);
+      if (!maintByMonth[mo]) maintByMonth[mo] = { count: 0, cost: 0 };
+      maintByMonth[mo].count++;
+      maintByMonth[mo].cost += m.cost_pkr || 0;
+    });
+
+    const thS: React.CSSProperties = { padding: "8px 12px", textAlign: "left", fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.05em", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFC", whiteSpace: "nowrap" as const };
+    const tdS: React.CSSProperties = { padding: "8px 12px", fontSize: "12px", color: COLOURS.NAVY, borderBottom: `1px solid ${COLOURS.HAIRLINE}` };
+    const thR: React.CSSProperties = { ...thS, textAlign: "right" as const };
+    const tdR: React.CSSProperties = { ...tdS, textAlign: "right" as const };
+
+    return (
+      <>
+        {/* Backdrop */}
+        <div onClick={() => setVehiclePanel(null)} style={{ position: "fixed", inset: 0, zIndex: 9990, backgroundColor: "rgba(15,23,42,0.35)" }} />
+        {/* Panel */}
+        <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 9991, width: "min(720px, 100vw)", backgroundColor: "white", boxShadow: "-4px 0 30px rgba(15,23,42,0.15)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* Header */}
+          <div style={{ padding: "18px 20px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, flexShrink: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: "17px", fontWeight: 800, color: COLOURS.NAVY }}>{vehicleName}</div>
+                <div style={{ fontSize: "12px", color: COLOURS.SLATE, fontFamily: "monospace", marginTop: "2px" }}>{plateNumber}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button onClick={() => { const y = vehicleDetailYear - 1; setVehicleDetailYear(y); loadVehicleDetail(vehiclePanel.vehicleId, y); }}
+                  style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: "pointer", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+                <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, minWidth: "42px", textAlign: "center" }}>{vehicleDetailYear}</span>
+                <button onClick={() => { const y = vehicleDetailYear + 1; setVehicleDetailYear(y); loadVehicleDetail(vehiclePanel.vehicleId, y); }}
+                  disabled={vehicleDetailYear >= CURRENT_YEAR}
+                  style={{ width: "26px", height: "26px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", cursor: vehicleDetailYear >= CURRENT_YEAR ? "default" : "pointer", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", opacity: vehicleDetailYear >= CURRENT_YEAR ? 0.4 : 1 }}>›</button>
+                <button onClick={() => setVehiclePanel(null)}
+                  style={{ marginLeft: "4px", width: "30px", height: "30px", borderRadius: "8px", border: "none", backgroundColor: COLOURS.HAIRLINE, cursor: "pointer", fontSize: "16px", color: COLOURS.SLATE, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+              </div>
+            </div>
+            {/* YTD summary chips */}
+            {!loadingVehicleDetail && (
+              <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, padding: "3px 11px", borderRadius: "20px", backgroundColor: "#EFF6FF", color: "#1D4ED8" }}>⛽ {fmtPKR(totalFuelCost)} fuel</span>
+                <span style={{ fontSize: "12px", fontWeight: 600, padding: "3px 11px", borderRadius: "20px", backgroundColor: "#FFF7ED", color: "#9A3412" }}>🔧 {fmtPKR(totalMaintCost)} maint.</span>
+                <span style={{ fontSize: "12px", fontWeight: 600, padding: "3px 11px", borderRadius: "20px", backgroundColor: "#F0FDF4", color: COLOURS.GREEN }}>Total {fmtPKR(totalRunning)}</span>
+                {totalLitres > 0 && <span style={{ fontSize: "12px", fontWeight: 600, padding: "3px 11px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>{totalLitres.toFixed(0)} L</span>}
+                {totalLitres > 0 && totalKm > 0 && <span style={{ fontSize: "12px", fontWeight: 600, padding: "3px 11px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>{(totalKm / totalLitres).toFixed(1)} km/L avg</span>}
+              </div>
+            )}
+            {/* Tabs */}
+            <div style={{ display: "flex", gap: "4px", marginTop: "12px" }}>
+              {(["fuel", "maintenance", "summary"] as const).map((t) => (
+                <button key={t} onClick={() => setVehicleDetailTab(t)} style={{ padding: "5px 14px", borderRadius: "20px", border: "none", fontSize: "12px", fontWeight: 600, cursor: "pointer", backgroundColor: vehicleDetailTab === t ? COLOURS.NAVY : "transparent", color: vehicleDetailTab === t ? "white" : COLOURS.SLATE }}>
+                  {t === "fuel" ? `Fuel Log${!loadingVehicleDetail && fuel.length ? ` (${fuel.length})` : ""}` : t === "maintenance" ? `Maintenance${!loadingVehicleDetail && maintenance.length ? ` (${maintenance.length})` : ""}` : "YTD Summary"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Body */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+            {loadingVehicleDetail ? (
+              <SkeletonRows count={8} height="38px" />
+            ) : vehicleDetailTab === "fuel" ? (
+              fuel.length === 0 ? (
+                <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No fuel entries for {vehicleDetailYear}.</p>
+              ) : (
+                <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                    <thead>
+                      <tr>
+                        <th style={thS}>Date</th>
+                        <th style={thR}>Qty (L)</th>
+                        <th style={thR}>PKR/L</th>
+                        <th style={thR}>Amount (PKR)</th>
+                        <th style={thR}>Odometer</th>
+                        <th style={thR}>km/L</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fuel.map((f, i) => (
+                        <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#FAFBFC" }}>
+                          <td style={tdS}>{formatDateUK(f.date)}</td>
+                          <td style={tdR}>{f.quantity_litres.toFixed(1)}</td>
+                          <td style={tdR}>{f.price_per_litre.toFixed(1)}</td>
+                          <td style={{ ...tdR, fontWeight: 600 }}>{f.amount_pkr ? Math.round(f.amount_pkr).toLocaleString() : "—"}</td>
+                          <td style={{ ...tdR, color: COLOURS.SLATE, fontFamily: "monospace" }}>{f.current_odometer ? f.current_odometer.toLocaleString() : "—"}</td>
+                          <td style={{ ...tdR, color: f.km_per_litre ? COLOURS.GREEN : COLOURS.SLATE, fontWeight: f.km_per_litre ? 600 : 400 }}>{f.km_per_litre ? f.km_per_litre.toFixed(1) : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ backgroundColor: "#F0F4F8" }}>
+                        <td style={{ ...tdS, fontWeight: 700 }}>Total</td>
+                        <td style={{ ...tdR, fontWeight: 700 }}>{totalLitres.toFixed(1)}</td>
+                        <td style={tdR}></td>
+                        <td style={{ ...tdR, fontWeight: 700 }}>{Math.round(totalFuelCost).toLocaleString()}</td>
+                        <td style={{ ...tdR, color: COLOURS.SLATE, fontFamily: "monospace" }}>{totalKm > 0 ? `${totalKm.toLocaleString()} km` : "—"}</td>
+                        <td style={{ ...tdR, fontWeight: 700, color: COLOURS.GREEN }}>{totalLitres > 0 && totalKm > 0 ? (totalKm / totalLitres).toFixed(1) : "—"}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )
+            ) : vehicleDetailTab === "maintenance" ? (
+              maintenance.length === 0 ? (
+                <p style={{ color: COLOURS.SLATE, fontSize: "13px" }}>No maintenance records for {vehicleDetailYear}.</p>
+              ) : (
+                <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                    <thead>
+                      <tr>
+                        <th style={thS}>Date</th>
+                        <th style={thS}>Type</th>
+                        <th style={thS}>Description</th>
+                        <th style={thR}>Odometer</th>
+                        <th style={thR}>Cost (PKR)</th>
+                        <th style={thS}>Workshop</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {maintenance.map((m, i) => (
+                        <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#FAFBFC" }}>
+                          <td style={{ ...tdS, whiteSpace: "nowrap" as const }}>{formatDateUK(m.date)}</td>
+                          <td style={tdS}><span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 7px", borderRadius: "20px", backgroundColor: "#EFF6FF", color: "#1D4ED8", whiteSpace: "nowrap" as const }}>{m.work_type}</span></td>
+                          <td style={{ ...tdS, color: COLOURS.SLATE, maxWidth: "160px" }}>{m.description || "—"}</td>
+                          <td style={{ ...tdR, fontFamily: "monospace", color: COLOURS.SLATE }}>{m.odometer_km ? m.odometer_km.toLocaleString() : "—"}</td>
+                          <td style={{ ...tdR, fontWeight: 600 }}>{Math.round(m.cost_pkr).toLocaleString()}</td>
+                          <td style={{ ...tdS, color: COLOURS.SLATE }}>{m.workshop || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ backgroundColor: "#F0F4F8" }}>
+                        <td colSpan={4} style={{ ...tdS, fontWeight: 700 }}>Total maintenance cost</td>
+                        <td style={{ ...tdR, fontWeight: 700 }}>{Math.round(totalMaintCost).toLocaleString()}</td>
+                        <td style={tdS}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )
+            ) : (
+              // YTD Summary tab
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", marginBottom: "18px" }}>
+                  <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "white" }}>
+                    <div style={{ fontSize: "18px", fontWeight: 700, color: "#1D4ED8" }}>{fmtPKR(totalFuelCost)}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>Fuel spend</div>
+                  </div>
+                  <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "white" }}>
+                    <div style={{ fontSize: "18px", fontWeight: 700, color: "#9A3412" }}>{fmtPKR(totalMaintCost)}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>Maintenance</div>
+                  </div>
+                  <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "14px 16px", backgroundColor: "white" }}>
+                    <div style={{ fontSize: "18px", fontWeight: 700, color: COLOURS.GREEN }}>{fmtPKR(totalRunning)}</div>
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>Total running cost</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "10px" }}>Month-by-Month — {vehicleDetailYear}</div>
+                <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                    <thead>
+                      <tr>
+                        <th style={thS}>Month</th>
+                        <th style={thR}>Fuel (PKR)</th>
+                        <th style={thR}>Litres</th>
+                        <th style={thR}>km/L</th>
+                        <th style={thR}>Maintenance</th>
+                        <th style={thR}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MONTH_NAMES.map((mn, idx) => {
+                        const mo = idx + 1;
+                        const f  = fuelByMonth[mo];
+                        const m  = maintByMonth[mo];
+                        const rowFuel  = f?.amount || 0;
+                        const rowLit   = f?.litres || 0;
+                        const rowMaint = m?.cost   || 0;
+                        const rowTotal = rowFuel + rowMaint;
+                        const hasData  = rowFuel > 0 || rowMaint > 0;
+                        const kmPerL   = rowLit > 0 && f ? fuel.filter((fl) => parseInt(fl.date.split("-")[1], 10) === mo).reduce((s, fl) => s + (fl.mileage_km || 0), 0) / rowLit : null;
+                        return (
+                          <tr key={mo} style={{ backgroundColor: hasData ? "white" : "#FAFBFC" }}>
+                            <td style={{ ...tdS, fontWeight: hasData ? 600 : 400, color: hasData ? COLOURS.NAVY : COLOURS.SLATE }}>{mn}</td>
+                            <td style={{ ...tdR, color: rowFuel > 0 ? COLOURS.NAVY : COLOURS.SLATE }}>{rowFuel > 0 ? Math.round(rowFuel).toLocaleString() : "—"}</td>
+                            <td style={{ ...tdR, color: COLOURS.SLATE }}>{rowLit > 0 ? `${rowLit.toFixed(0)}L` : "—"}</td>
+                            <td style={{ ...tdR, color: kmPerL ? COLOURS.GREEN : COLOURS.SLATE, fontWeight: kmPerL ? 600 : 400 }}>{kmPerL ? kmPerL.toFixed(1) : "—"}</td>
+                            <td style={{ ...tdR, color: rowMaint > 0 ? "#9A3412" : COLOURS.SLATE }}>{rowMaint > 0 ? Math.round(rowMaint).toLocaleString() : "—"}</td>
+                            <td style={{ ...tdR, fontWeight: hasData ? 700 : 400, color: hasData ? COLOURS.NAVY : COLOURS.SLATE }}>{rowTotal > 0 ? Math.round(rowTotal).toLocaleString() : "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Import modal ──────────────────────────────────────────────────────
+  function renderImportModal() {
+    if (!importModal) return null;
+    const { type, label } = importModal;
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 9998, backgroundColor: "rgba(15,23,42,0.4)", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
+        onClick={() => { setImportModal(null); setImportFile(null); setImportResult(null); }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: "white", borderRadius: "12px", padding: "24px", maxWidth: "500px", width: "100%", boxShadow: "0 20px 60px rgba(15,23,42,0.15)" }}>
+          <div style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "4px" }}>Import {label} Data</div>
+          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "18px" }}>Download the CSV template, fill in your data in Excel (save as CSV), then upload. Existing entries are automatically skipped.</div>
+
+          {/* Step 1 */}
+          <div style={{ backgroundColor: "#F8F9FC", borderRadius: "8px", padding: "14px", marginBottom: "12px" }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>Step 1 — Download Template</div>
+            <button onClick={() => handleDownloadTemplate(type, `${type}_template.csv`)}
+              style={{ padding: "7px 14px", borderRadius: "6px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", fontSize: "12.5px", fontWeight: 600, cursor: "pointer", color: COLOURS.NAVY }}>
+              📥 Download {label} template (.csv)
+            </button>
+            <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "7px" }}>
+              {type === "fuel" && "Columns: Date · Plate Number · Price Per Litre · Quantity · Previous Odometer · Current Odometer"}
+              {type === "maintenance" && "Columns: Date · Plate Number · Work Type · Description · Odometer · Cost · Workshop"}
+              {type === "solar" && "Columns: Date · Site Name · Units Produced (kWh)"}
+            </div>
+          </div>
+
+          {/* Step 2 */}
+          <div style={{ backgroundColor: "#F8F9FC", borderRadius: "8px", padding: "14px", marginBottom: "14px" }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>Step 2 — Upload Filled CSV</div>
+            <input type="file" accept=".csv,.txt"
+              onChange={(e) => { setImportFile(e.target.files?.[0] || null); setImportResult(null); }}
+              style={{ display: "block", fontSize: "12.5px", color: COLOURS.NAVY }} />
+            {importFile && (
+              <div style={{ marginTop: "8px", fontSize: "11.5px", color: COLOURS.SLATE }}>{importFile.name} · {(importFile.size / 1024).toFixed(1)} KB</div>
+            )}
+          </div>
+
+          {/* Result */}
+          {importResult && (
+            <div style={{ borderRadius: "8px", padding: "12px 14px", marginBottom: "14px", backgroundColor: importResult.imported > 0 ? "#ECFDF5" : "#FFFBEB", border: `1px solid ${importResult.imported > 0 ? "#A7F3D0" : "#FDE68A"}` }}>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: importResult.imported > 0 ? COLOURS.GREEN : COLOURS.AMBER }}>
+                ✓ {importResult.imported} row{importResult.imported !== 1 ? "s" : ""} imported · {importResult.skipped} skipped
+              </div>
+              {importResult.errors.length > 0 && (
+                <ul style={{ margin: "6px 0 0", paddingLeft: "18px", fontSize: "11.5px", color: COLOURS.RED }}>
+                  {importResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+            <button onClick={() => { setImportModal(null); setImportFile(null); setImportResult(null); }}
+              style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", fontSize: "12.5px", fontWeight: 600, cursor: "pointer", color: COLOURS.NAVY }}>
+              Close
+            </button>
+            {importFile && !importResult && (
+              <button onClick={handleImport} disabled={importing}
+                style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: COLOURS.NAVY, color: "white", fontSize: "12.5px", fontWeight: 600, cursor: importing ? "not-allowed" : "pointer", opacity: importing ? 0.7 : 1 }}>
+                {importing ? "Importing…" : `Import ${label}`}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -2105,6 +2495,14 @@ export default function AdminDataPage() {
                 <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>
                   {fuelRows.filter((r) => r.month === opsMonth).length} vehicles
                 </span>
+                <button onClick={() => setImportModal({ type: "fuel", label: "Fuel Log" })}
+                  style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  📥 Import
+                </button>
+                <button onClick={() => setImportModal({ type: "maintenance", label: "Maintenance" })}
+                  style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  🔧 Import Maint.
+                </button>
               </div>
               {renderFuel()}
             </div>
@@ -2117,6 +2515,10 @@ export default function AdminDataPage() {
                 <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>
                   {solarBranches.length} systems
                 </span>
+                <button onClick={() => setImportModal({ type: "solar", label: "Solar" })}
+                  style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "20px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  📥 Import
+                </button>
               </div>
               {renderSolar()}
             </div>
@@ -2311,6 +2713,11 @@ export default function AdminDataPage() {
         {confirmElement}
         {toastElement}
       </main>
+
+      {/* Vehicle detail side panel — rendered outside main to avoid clipping */}
+      {renderVehiclePanel()}
+      {/* Import modal */}
+      {renderImportModal()}
     </AuthWrapper>
   );
 }
