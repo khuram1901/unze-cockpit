@@ -4,6 +4,17 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-19 — Production Entry redesigned; bell deep-links fixed; Exceptions removed; v4.0
+
+- **Production Daily Entry page (`/production`) redesigned** to match the Admin Daily Entry format: 5 emoji tab cards (⚙️ Production / 🚛 Dispatch / ⚠️ Breakage / ♻️ Scrap / 🔧 Machine) replace the old all-at-once grid. One section shown at a time; last 6 recent entries for that type shown inline below each form. Notes field moved into relevant sections. All submit logic and dispatch safety rules unchanged. Max width 540px, centred on desktop, full-width on mobile.
+- **Bell notifications now deep-link to filtered Tasks view.** Clicking "Overdue tasks", "Waiting reply", "Submitted — awaiting sign-off", or "Needs explanation" in the bell now opens `/tasks?filter=overdue|waiting|submitted|exception&scope=mine`. TasksList seeds filter + scope from URL params on mount. Pill counts now computed from the scoped list (`myTasksSource`) so they match what's visible on screen.
+- **Exceptions standalone page (`/exceptions`) removed.** It was fully redundant with the bell's "Needs explanation" filter + Tasks page exception filter. `can_view_exceptions` column dropped from `member_permissions` (migration 150). All references removed from `permissions.ts`, `SidebarLayout.tsx`, `useRouteGuard.ts`, `pageRegistry.ts`, and `AccessMatrix.tsx`.
+- **App version bumped to v4.0** — `package.json` and sidebar footer updated.
+- **Admin Entry + Daily Entry hidden from sidebar for all users.** Both pages remain auth-gated and fully operational via direct bookmarked link on mobile. Removed from `PAGE_REGISTRY`; no sidebar card shown.
+- Commits: `84c417e` (Production Entry redesign), `9727b80` (sidebar hiding), plus earlier session commits `9dec5c6`–`92fc9f9` (bell deep-links, Exceptions removal, v4.0 bump).
+
+---
+
 ## 2026-07-18 (night) — Legacy audit records merged into the plan; one structure for everything
 
 Khuram: "remove if duplicate, otherwise merge." Migration `150_audit_merge_legacy.sql` (applied):

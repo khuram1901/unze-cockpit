@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 18/07/2026 (manager-hierarchy task visibility + conditional sign-off + Submit routing, migrations 142–144; notification bell overhaul with Submitted/exception categories + dual-identity fix, migration 148; Folderit search word-matching + sync diagnostic log, migrations 145–146; authority letter Close/Reopen action + expiry-alert cleanup, migration 149; missing `can_edit_operations_targets` column fixed, migration 147; Stock/Manage POs dispatch-form deduplication; app-wide "collapsible items always start closed" rule — see "Manager hierarchy and task routing" and "Notification bell" sections below for the full history).
+> **This is the source of truth.** Read before touching any code. Last updated: 19/07/2026 (Production Daily Entry redesigned to tab-based layout matching Admin Entry; bell notification deep-links fixed to filter Tasks page on arrival; Exceptions standalone page removed; app version bumped to v4.0; Admin Entry + Daily Entry hidden from sidebar — direct-link access only).
 >
 > Previous update: 14/07/2026 (Tasks page rebuild, Phases 3–5: migrations 098–105 — company tag, stage, locked assigned/original-due dates, subtasks with DB-enforced completion gating, due-date history, Stuck status (red), Kanban board, Recurring tab, Team tab, monthly/quarterly RPCs, attention banner, My Tasks tab, real filters, task-detail modal, mini-checklist, comments, WhatsApp auto-remind toggle, calendar picker, meeting chip — see "Tasks page redesign" section for the full history including the mockup-reconciliation pass after Khuram flagged the live page didn't match what was designed).
 >
@@ -140,8 +140,11 @@ app/
 │   └── OpeningBalancesForm.tsx       Form to set/edit per-company starting balances
 │
 ├── production/
-│   ├── page.tsx                      Daily entry page shell
-│   ├── ProductionForm.tsx            Daily production/dispatch/breakage entry form with PO allocation
+│   ├── page.tsx                      Daily entry page shell (hidden from sidebar — direct-link only)
+│   ├── ProductionForm.tsx            Tab-based daily entry: 5 emoji tab cards (⚙️ Production /
+│   │                                 🚛 Dispatch / ⚠️ Breakage / ♻️ Scrap / 🔧 Machine).
+│   │                                 One section at a time; recent entries shown inline below each
+│   │                                 form (last 6 for that type). Matches Admin Entry layout.
 │   └── ReceivablesSection.tsx        Receivables quick-add form embedded in production page
 │
 ├── stock/
@@ -1607,7 +1610,7 @@ PSX portfolio. Holdings table, P&L, dividend tracking (confirmed + unconfirmed),
 Set starting cash balances per company.
 
 #### `/production`
-Daily entry: production qty + PO allocation, dispatch (authority letter lookup → dual write), breakage, machine issues, quick-add receivables.
+Daily entry: tab-based layout (5 emoji cards — ⚙️ Production / 🚛 Dispatch / ⚠️ Breakage / ♻️ Scrap / 🔧 Machine). One form shown at a time; recent entries for that type shown inline below. **Hidden from sidebar — staff access via bookmarked direct link on mobile.** Auth-gated (`useRequireCapability("daily_entry")`).
 
 **Dispatch safety rules (as of 2026-07-08):**
 - "Nothing to report" button requires confirmation if active authority letters with remaining balance exist for the plant.
@@ -1866,6 +1869,9 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 28. **Folderit is read-only from the dashboard** — the `/folderit` page and all folderit API routes only read data from the DB (synced by cron). No write operations to Folderit's API are ever made from the dashboard.
 29. **CEO daily digest replaces individual task emails** — `/api/notifications/ceo-digest` sends one email per weekday (11:30am PKT). Do not re-introduce per-task email notifications to Khuram's addresses.
 30. **Collapsible/expandable UI always starts closed on page load (18/07/2026).** Every accordion-style section, expandable tree row, or open/closed detail panel must default to collapsed when its page first mounts — no `useState(true)` for an expand flag, and no Set-of-"collapsed"-keys pattern that starts empty (since an empty "collapsed" set means everything renders *expanded* by default — invert to tracking "expanded" keys instead, so an empty set correctly means "all closed"). Local component state that resets on navigation already satisfies "closes when you leave a page" for free — the only real risk is persisting expand state in `localStorage`/`sessionStorage`/a URL param/a context that survives across route changes; don't do that for expand/collapse state. **Explicit exception:** deep-links that open one specific item on arrival (`/tasks?task=...` from the notification bell or search, `/my-minutes?meeting=...`) are allowed to auto-expand that one item — that's honouring an explicit link target on a fresh page load, not remembering a previous session's state.
+31. **Admin Entry (`/daily-entry`) and Daily Entry (`/production`) are hidden from the sidebar for all users (19/07/2026).** Both pages remain fully operational — staff access them via a bookmarked direct link on mobile. Both are auth-gated (`useRequireCapability`): visiting without logging in redirects to the login page. Do not re-add these to `PAGE_REGISTRY` without a deliberate decision.
+32. **Bell notifications deep-link into the Tasks page with filter + scope pre-set (19/07/2026).** Each bell item href carries `?filter=overdue|waiting|submitted|exception&scope=mine`. `TasksList.tsx` reads these from `useSearchParams` on mount and seeds `filter` + `myTasksScope` state accordingly. Pill counts are computed from `myTasksSource` (scoped list) so they match what's actually visible on screen.
+33. **Exceptions standalone page (`/exceptions`) removed (19/07/2026).** Fully redundant — the bell's "Needs explanation" filter and the Tasks page `exception` filter cover it. `can_view_exceptions` column dropped from `member_permissions` (migration 150).
 
 ---
 
