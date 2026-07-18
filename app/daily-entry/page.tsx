@@ -61,6 +61,46 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+// Quick-date picker: tap Today / Yesterday / etc., or type DD/MM/YYYY manually
+function QuickDatePicker({ value, onDateChange }: {
+  value: string;
+  onDateChange: (date: string) => void;
+}) {
+  function daysAgo(n: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+  const QUICK = [
+    { label: "Today",      val: daysAgo(0) },
+    { label: "Yesterday",  val: daysAgo(1) },
+    { label: "2 days ago", val: daysAgo(2) },
+    { label: "3 days ago", val: daysAgo(3) },
+  ];
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexWrap: "wrap" }}>
+        {QUICK.map((q) => {
+          const active = value === q.val;
+          return (
+            <button key={q.label} type="button" onClick={() => onDateChange(q.val)}
+              style={{
+                padding: "6px 13px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 600,
+                border: `1.5px solid ${active ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                backgroundColor: active ? COLOURS.NAVY : "white",
+                color: active ? "white" : COLOURS.SLATE,
+                cursor: "pointer",
+              }}>
+              {q.label}
+            </button>
+          );
+        })}
+      </div>
+      <DateInput value={value} onChange={(e) => onDateChange(e.target.value)} />
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────
 
 export default function DailyEntryPage() {
@@ -101,7 +141,7 @@ export default function DailyEntryPage() {
   // ── Maintenance form ───────────────────────────────────────────────
   const [maint, setMaint] = useState({
     vehicle_id: "", date: today,
-    work_type: "Oil Change", description: "",
+    work_types: [] as string[], description: "",
     odometer_km: "", workshop: "", cost_pkr: "", next_service_due: "",
   });
   const [submittingMaint, setSubmittingMaint] = useState(false);
@@ -237,20 +277,20 @@ export default function DailyEntryPage() {
 
   async function submitMaint(e: React.FormEvent) {
     e.preventDefault();
-    if (!maint.vehicle_id || !maint.date || !maint.work_type || !maint.cost_pkr) {
-      showToast("Please fill all required fields", "error"); return;
+    if (!maint.vehicle_id || !maint.date || maint.work_types.length === 0 || !maint.cost_pkr) {
+      showToast("Please select at least one work type and fill all required fields", "error"); return;
     }
     setSubmittingMaint(true);
     const res = await authedFetch("/api/admin/maintenance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(maint),
+      body: JSON.stringify({ ...maint, work_type: maint.work_types.join(", ") }),
     });
     const json = await res.json();
     setSubmittingMaint(false);
     if (json.ok) {
       showToast("Maintenance entry saved ✓", "success");
-      setMaint((m) => ({ ...m, description: "", odometer_km: "", workshop: "", cost_pkr: "", next_service_due: "" }));
+      setMaint((m) => ({ ...m, work_types: [], description: "", odometer_km: "", workshop: "", cost_pkr: "", next_service_due: "" }));
     } else {
       showToast(json.error || "Failed to save", "error");
     }
@@ -317,11 +357,10 @@ export default function DailyEntryPage() {
                 </select>
               </Field>
 
-              <div style={{ ...row2, marginTop: "12px" }}>
+              <div style={{ marginTop: "12px" }}>
                 <Field label="Date *">
-                  <DateInput value={fuel.date} onChange={(e) => setFuel({ ...fuel, date: e.target.value })} />
+                  <QuickDatePicker value={fuel.date} onDateChange={(d) => setFuel((f) => ({ ...f, date: d }))} />
                 </Field>
-                <div />
               </div>
 
               <div style={{ ...row2, marginTop: "12px" }}>
@@ -396,10 +435,13 @@ export default function DailyEntryPage() {
                 </select>
               </Field>
 
-              <div style={{ ...row2, marginTop: "12px" }}>
+              <div style={{ marginTop: "12px" }}>
                 <Field label="Date *">
-                  <DateInput value={solar.date} onChange={(e) => setSolar({ ...solar, date: e.target.value })} />
+                  <QuickDatePicker value={solar.date} onDateChange={(d) => setSolar((s) => ({ ...s, date: d }))} />
                 </Field>
+              </div>
+
+              <div style={{ marginTop: "12px" }}>
                 <Field label="Production (kWh)">
                   <input type="number" step="0.1" min="0" placeholder="e.g. 142.5"
                     value={solar.production_kwh} onChange={(e) => setSolar({ ...solar, production_kwh: e.target.value })}
@@ -464,7 +506,7 @@ export default function DailyEntryPage() {
 
               <div style={{ marginTop: "12px" }}>
                 <Field label="Reading date *">
-                  <DateInput value={utility.reading_date} onChange={(e) => setUtility({ ...utility, reading_date: e.target.value })} />
+                  <QuickDatePicker value={utility.reading_date} onDateChange={(d) => setUtility((u) => ({ ...u, reading_date: d }))} />
                 </Field>
               </div>
 
@@ -518,10 +560,13 @@ export default function DailyEntryPage() {
                 </select>
               </Field>
 
-              <div style={{ ...row2, marginTop: "12px" }}>
+              <div style={{ marginTop: "12px" }}>
                 <Field label="Date *">
-                  <DateInput value={maint.date} onChange={(e) => setMaint({ ...maint, date: e.target.value })} />
+                  <QuickDatePicker value={maint.date} onDateChange={(d) => setMaint((m) => ({ ...m, date: d }))} />
                 </Field>
+              </div>
+
+              <div style={{ marginTop: "12px" }}>
                 <Field label="Odometer (km)">
                   <input type="number" min="0" placeholder="current km"
                     value={maint.odometer_km} onChange={(e) => setMaint({ ...maint, odometer_km: e.target.value })}
@@ -529,13 +574,37 @@ export default function DailyEntryPage() {
                 </Field>
               </div>
 
-              <div style={{ marginTop: "12px" }}>
-                <Field label="Work type *">
-                  <select value={maint.work_type} onChange={(e) => setMaint({ ...maint, work_type: e.target.value })}
-                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box" as const }}>
-                    {MAINTENANCE_TYPES.map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </Field>
+              <div style={{ marginTop: "16px" }}>
+                <label style={labelSt}>Work done * <span style={{ fontSize: "11px", fontWeight: 400, color: COLOURS.SLATE }}>(select all that apply)</span></label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "6px" }}>
+                  {MAINTENANCE_TYPES.map((t) => {
+                    const checked = maint.work_types.includes(t);
+                    return (
+                      <button key={t} type="button"
+                        onClick={() => setMaint((m) => ({
+                          ...m,
+                          work_types: checked
+                            ? m.work_types.filter((x) => x !== t)
+                            : [...m.work_types, t],
+                        }))}
+                        style={{
+                          padding: "8px 14px", borderRadius: RADII.PILL, fontSize: "13px",
+                          fontWeight: checked ? 700 : 500,
+                          border: `2px solid ${checked ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+                          backgroundColor: checked ? "#D1FAE5" : "white",
+                          color: checked ? COLOURS.GREEN : COLOURS.SLATE,
+                          cursor: "pointer",
+                        }}>
+                        {checked ? "✓ " : ""}{t}
+                      </button>
+                    );
+                  })}
+                </div>
+                {maint.work_types.length > 0 && (
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "8px" }}>
+                    Selected: {maint.work_types.join(" · ")}
+                  </div>
+                )}
               </div>
 
               <div style={{ marginTop: "12px" }}>
