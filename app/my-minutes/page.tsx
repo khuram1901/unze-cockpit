@@ -96,6 +96,9 @@ function MyMinutesPage() {
   const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
 
+  // Task filter panel (click a summary card to drill in)
+  const [taskFilter, setTaskFilter] = useState<"in_progress" | "pending" | "completed" | null>(null);
+
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -337,6 +340,23 @@ function MyMinutesPage() {
   const totalPending = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "Not Started" || t.status === "Waiting Reply").length, 0);
   const totalCompleted = filtered.reduce((s, m) => s + getTasksForMeeting(m.id).filter((t) => t.status === "Completed").length, 0);
 
+  // Task panel: flat list of tasks for the active filter, with meeting context
+  const taskPanelItems = taskFilter ? filtered.flatMap((m) =>
+    getTasksForMeeting(m.id)
+      .filter((t) => {
+        if (taskFilter === "in_progress") return t.status === "In Progress";
+        if (taskFilter === "pending") return t.status === "Not Started" || t.status === "Waiting Reply";
+        if (taskFilter === "completed") return t.status === "Completed";
+        return false;
+      })
+      .map((t) => ({ ...t, meetingTitle: m.title, meetingDate: m.meeting_date }))
+  ).sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0;
+    if (!a.due_date) return 1;
+    if (!b.due_date) return -1;
+    return a.due_date.localeCompare(b.due_date);
+  }) : [];
+
   if (!loading && meetings.length === 0 && !isAdmin) {
     return (
       <AuthWrapper>
@@ -357,13 +377,65 @@ function MyMinutesPage() {
 
         {/* Summary strip */}
         {!loading && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-            <CountCard label="Meetings" value={filtered.length} color={COLOURS.BLUE} />
-            <CountCard label="Depts" value={deptMonthGroups.length} color={COLOURS.NAVY} />
-            <CountCard label="In Progress" value={totalOpen} color={totalOpen > 0 ? COLOURS.RED : COLOURS.SLATE} />
-            <CountCard label="Pending" value={totalPending} color={totalPending > 0 ? COLOURS.AMBER : COLOURS.SLATE} />
-            <CountCard label="Completed" value={totalCompleted} color={COLOURS.GREEN} />
-          </div>
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: "8px", marginBottom: taskFilter ? "0" : "14px" }}>
+              <CountCard label="Meetings" value={filtered.length} color={COLOURS.BLUE} />
+              <CountCard label="Depts" value={deptMonthGroups.length} color={COLOURS.NAVY} />
+              {/* Clickable task cards */}
+              {(["in_progress", "pending", "completed"] as const).map((key) => {
+                const value = key === "in_progress" ? totalOpen : key === "pending" ? totalPending : totalCompleted;
+                const colour = key === "in_progress" ? COLOURS.RED : key === "pending" ? COLOURS.AMBER : COLOURS.GREEN;
+                const label = key === "in_progress" ? "In Progress" : key === "pending" ? "Pending" : "Completed";
+                const active = taskFilter === key;
+                return (
+                  <div key={key} onClick={() => setTaskFilter(active ? null : key)} style={{
+                    ...cardStyle as React.CSSProperties,
+                    padding: "16px 20px",
+                    borderTop: `3px solid ${colour}`,
+                    cursor: "pointer",
+                    outline: active ? `2px solid ${colour}` : "none",
+                    outlineOffset: "-1px",
+                    position: "relative",
+                  }}>
+                    <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: COLOURS.SLATE, marginBottom: "10px" }}>{label}</div>
+                    <div style={{ fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em", color: colour }}>{value.toLocaleString()}</div>
+                    {active && <div style={{ position: "absolute", bottom: "6px", right: "8px", fontSize: "10px", color: colour }}>▼ showing</div>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Task panel — shown when a card is clicked */}
+            {taskFilter && (
+              <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "14px", marginTop: "8px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT }}>
+                  <span style={{ fontSize: "12px", fontWeight: 600, color: taskFilter === "in_progress" ? COLOURS.RED : taskFilter === "pending" ? COLOURS.AMBER : COLOURS.GREEN }}>
+                    {taskPanelItems.length} {taskFilter === "in_progress" ? "In Progress" : taskFilter === "pending" ? "Pending" : "Completed"} Task{taskPanelItems.length !== 1 ? "s" : ""}
+                  </span>
+                  <button onClick={() => setTaskFilter(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "16px", color: COLOURS.SLATE, padding: "0 4px", lineHeight: 1 }}>×</button>
+                </div>
+                {taskPanelItems.length === 0 ? (
+                  <div style={{ padding: "16px 14px", fontSize: "12px", color: COLOURS.SLATE }}>No tasks in this category.</div>
+                ) : taskPanelItems.map((t) => (
+                  <a key={t.id} href={`/tasks?task=${t.id}`} style={{
+                    display: "flex", alignItems: "center", gap: "10px",
+                    padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                    textDecoration: "none", backgroundColor: COLOURS.CARD,
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD_ALT; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD; }}>
+                    <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: taskDotColour(t.status), flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: "12px", color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</span>
+                    <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, maxWidth: "140px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.meetingTitle}</span>
+                    <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>{t.assigned_to || "—"}</span>
+                    <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px", textAlign: "right" }}>{t.due_date ? formatDateUK(t.due_date) : "—"}</span>
+                    <StatusBadge status={t.status} />
+                    <span style={{ fontSize: "11px", color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>Open →</span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         {/* Search */}

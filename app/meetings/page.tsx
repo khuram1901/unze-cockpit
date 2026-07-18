@@ -289,6 +289,7 @@ export default function MeetingsPage() {
   const [view, setView] = useState<"meetings" | "decisions">("meetings");
   const [decisionSearch, setDecisionSearch] = useState("");
   const [decisionDeptFilter, setDecisionDeptFilter] = useState("All");
+  const [showOpenTasksPanel, setShowOpenTasksPanel] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
@@ -799,12 +800,66 @@ export default function MeetingsPage() {
 
         {/* Summary strip */}
         {!showMinutesFlow && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "14px" }}>
-            <CountCard label="Pending Review" value={pendingMinutes.length} color={pendingMinutes.length > 0 ? COLOURS.AMBER : COLOURS.SLATE} />
-            <CountCard label="This Month" value={thisMonthMeetings.length} color={COLOURS.NAVY} />
-            <CountCard label="Open Tasks" value={openTasks.length} color={openTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN} />
-            <CountCard label="Total Meetings" value={meetings.length} color={COLOURS.BLUE} />
-          </div>
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: showOpenTasksPanel ? "0" : "14px" }}>
+              <CountCard label="Pending Review" value={pendingMinutes.length} color={pendingMinutes.length > 0 ? COLOURS.AMBER : COLOURS.SLATE} />
+              <CountCard label="This Month" value={thisMonthMeetings.length} color={COLOURS.NAVY} />
+              {/* Clickable Open Tasks card */}
+              <div onClick={() => setShowOpenTasksPanel((p) => !p)} style={{
+                ...cardStyle as React.CSSProperties,
+                padding: "16px 20px",
+                borderTop: `3px solid ${openTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN}`,
+                cursor: "pointer",
+                outline: showOpenTasksPanel ? `2px solid ${COLOURS.RED}` : "none",
+                outlineOffset: "-1px",
+                position: "relative",
+              }}>
+                <div style={{ fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: COLOURS.SLATE, marginBottom: "10px" }}>Open Tasks</div>
+                <div style={{ fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em", color: openTasks.length > 0 ? COLOURS.RED : COLOURS.GREEN }}>{openTasks.length.toLocaleString()}</div>
+                {showOpenTasksPanel && <div style={{ position: "absolute", bottom: "6px", right: "8px", fontSize: "10px", color: COLOURS.RED }}>▼ showing</div>}
+              </div>
+              <CountCard label="Total Meetings" value={meetings.length} color={COLOURS.BLUE} />
+            </div>
+
+            {/* Open Tasks panel */}
+            {showOpenTasksPanel && (() => {
+              const panelTasks = openTasks
+                .map((t) => ({ ...t, meetingTitle: meetings.find((m) => m.id === t.meeting_id)?.title || "Unknown" }))
+                .sort((a, b) => {
+                  if (!a.due_date && !b.due_date) return 0;
+                  if (!a.due_date) return 1;
+                  if (!b.due_date) return -1;
+                  return a.due_date.localeCompare(b.due_date);
+                });
+              return (
+                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", marginBottom: "14px", marginTop: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT }}>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.RED }}>{panelTasks.length} Open Task{panelTasks.length !== 1 ? "s" : ""}</span>
+                    <button onClick={() => setShowOpenTasksPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "16px", color: COLOURS.SLATE, padding: "0 4px", lineHeight: 1 }}>×</button>
+                  </div>
+                  {panelTasks.length === 0 ? (
+                    <div style={{ padding: "16px 14px", fontSize: "12px", color: COLOURS.SLATE }}>No open tasks.</div>
+                  ) : panelTasks.map((t) => (
+                    <a key={t.id} href={`/tasks?task=${t.id}`} style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "8px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                      textDecoration: "none", backgroundColor: COLOURS.CARD,
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD_ALT; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD; }}>
+                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: taskDotColour(t.status), flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: "12px", color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</span>
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, maxWidth: "140px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.meetingTitle}</span>
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>{t.assigned_to || "—"}</span>
+                      <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px", textAlign: "right" }}>{t.due_date ? formatDateUK(t.due_date) : "—"}</span>
+                      <StatusBadge status={t.status} />
+                      <span style={{ fontSize: "11px", color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>Open →</span>
+                    </a>
+                  ))}
+                </div>
+              );
+            })()}
+          </>
         )}
 
         {/* Pending Review */}
