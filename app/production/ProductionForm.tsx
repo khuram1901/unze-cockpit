@@ -6,7 +6,8 @@ import { logAction } from "../lib/audit-log";
 import { formatDateUK, todayPakistanISO } from "../lib/dateUtils";
 import { canAccessDailyEntry, type UserCtx, type PermOverrides } from "../lib/permissions";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
-import { COLOURS, RADII, cardStyle, tableHeaderStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, labelStyle, inputStyle as sharedInputStyle, primaryButtonStyle } from "../lib/SharedUI";
+import { useMobile } from "../lib/useMobile";
 
 type Plant = {
   id: string;
@@ -75,12 +76,14 @@ async function authedFetch(url: string, opts: RequestInit = {}) {
 }
 
 export default function ProductionForm() {
+  const isMobile = useMobile();
   const [plants, setPlants] = useState<Plant[]>([]);
   const [plantId, setPlantId] = useState("");
   const [loadingPlants, setLoadingPlants] = useState(true);
   const [noAccess, setNoAccess] = useState(false);
   const [pastEntries, setPastEntries] = useState<PastEntry[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
+  type FormTab = "production" | "dispatch" | "breakage" | "scrap" | "machine";
+  const [activeForm, setActiveForm] = useState<FormTab>("production");
 
   const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
 
@@ -653,9 +656,74 @@ export default function ProductionForm() {
   const customerPOs = plantPOs.filter((p) => !p.is_system_unallocated);
   const dispatchHasQty = Number(disp31) + Number(disp36) + Number(disp45) + Number(dispMeter) > 0;
 
+  const FORMS: { id: FormTab; label: string; emoji: string }[] = [
+    { id: "production", label: "Production", emoji: "⚙️" },
+    { id: "dispatch",   label: "Dispatch",   emoji: "🚛" },
+    { id: "breakage",   label: "Breakage",   emoji: "⚠️" },
+    { id: "scrap",      label: "Scrap",      emoji: "♻️" },
+    { id: "machine",    label: "Machine",    emoji: "🔧" },
+  ];
+
+  const tabBtnSt = (id: FormTab): React.CSSProperties => ({
+    flex: 1, padding: "10px 4px", borderRadius: RADII.CARD,
+    fontSize: "11.5px", fontWeight: 700, cursor: "pointer",
+    border: `2px solid ${activeForm === id ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+    backgroundColor: activeForm === id ? COLOURS.NAVY : "white",
+    color: activeForm === id ? "white" : COLOURS.SLATE,
+    textAlign: "center" as const, transition: "all 0.15s",
+  });
+
+  function RecentEntries({ type }: { type: "Production" | "Dispatch" | "Breakage" | "Scrap" }) {
+    const rows = pastEntries.filter((e) => e.type === type).slice(0, 6);
+    if (rows.length === 0) return null;
+    const accentColor = type === "Production" ? COLOURS.GREEN : type === "Dispatch" ? COLOURS.BLUE : COLOURS.RED;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return (
+      <div style={{ marginTop: "16px" }}>
+        <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.07em", marginBottom: "8px" }}>
+          Recent {type.toLowerCase()} entries
+        </div>
+        <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", overflow: "hidden", backgroundColor: "white" }}>
+          {rows.map((r, i) => {
+            const total = (r.qty_31 || 0) + (r.qty_36 || 0) + (r.qty_45 || 0) + (r.qty_meter || 0);
+            const isToday = r.entry_date === todayStr;
+            return (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: i < rows.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none", gap: "8px" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY }}>
+                    {formatDateUK(r.entry_date)}
+                    {isToday && <span style={{ marginLeft: "6px", fontSize: "11px", color: COLOURS.BLUE }}>Today</span>}
+                  </div>
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                    {!isMeter
+                      ? ([r.qty_31 > 0 && `${r.qty_31}×31ft`, r.qty_36 > 0 && `${r.qty_36}×36ft`, r.qty_45 > 0 && `${r.qty_45}×45ft`].filter(Boolean).join(" · ") || "Nothing to report")
+                      : (r.qty_meter > 0 ? `${r.qty_meter} meters` : "Nothing to report")
+                    }
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: accentColor, fontVariantNumeric: "tabular-nums" }}>{total}</span>
+                  {canDelete && (
+                    <button onClick={() => deleteEntry(r)} style={{ backgroundColor: "transparent", border: `1px solid ${COLOURS.RED}`, color: COLOURS.RED, borderRadius: RADII.XS, padding: "2px 8px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>×</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {sectionMsg?.section === "history" && (
+          <p style={{ marginTop: "6px", fontSize: "13px", fontWeight: 600, color: sectionMsg.ok ? COLOURS.GREEN : COLOURS.RED }}>{sectionMsg.text}</p>
+        )}
+      </div>
+    );
+  }
+
+  const maxW = isMobile ? "100%" : "540px";
+
   return (
-    <div>
-      {/* Plant & date */}
+    <div style={{ maxWidth: maxW, margin: "0 auto" }}>
+
+      {/* ── Plant & date ── */}
       <div style={{ ...sectionStyle, display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "16px", marginBottom: "20px" }}>
         {plants.length === 1 ? (
           <div>
@@ -665,12 +733,7 @@ export default function ProductionForm() {
         ) : (
           <div style={{ minWidth: "150px" }}>
             <label style={labelStyle}>Plant
-              <select
-                style={{ ...inputStyle, marginBottom: 0, width: "auto", minWidth: "150px" }}
-                value={plantId}
-                onChange={(e) => setPlantId(e.target.value)}
-                required
-              >
+              <select style={{ ...inputStyle, marginBottom: 0, width: "auto", minWidth: "150px" }} value={plantId} onChange={(e) => setPlantId(e.target.value)} required>
                 <option value="">-- Select your plant --</option>
                 {plants.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
               </select>
@@ -679,29 +742,24 @@ export default function ProductionForm() {
         )}
         <div>
           <label style={labelStyle}>Date
-            <DateInputWithCalendar
-              style={{ ...inputStyle, marginBottom: 0, width: "auto" }}
-              value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
-              required
-            />
+            <DateInputWithCalendar style={{ ...inputStyle, marginBottom: 0, width: "auto" }} value={entryDate} onChange={(e) => setEntryDate(e.target.value)} required />
           </label>
         </div>
       </div>
 
-      {/* Today's status summary */}
+      {/* ── Today's status summary ── */}
       {plantId && (() => {
         const todayEntries = pastEntries.filter((e) => e.entry_date === entryDate);
         const hasProd = todayEntries.some((e) => e.type === "Production");
         const hasDisp = todayEntries.some((e) => e.type === "Dispatch");
-        const hasBrk = todayEntries.some((e) => e.type === "Breakage");
+        const hasBrk  = todayEntries.some((e) => e.type === "Breakage");
         const allDone = hasProd && hasDisp;
         return (
           <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
             {[
               { label: "Production", done: hasProd },
-              { label: "Dispatch", done: hasDisp },
-              { label: "Breakage", done: hasBrk },
+              { label: "Dispatch",   done: hasDisp },
+              { label: "Breakage",   done: hasBrk  },
             ].map(({ label, done }) => (
               <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", fontWeight: 500, padding: "6px 12px", borderRadius: RADII.PILL, border: `1px solid ${done ? COLOURS.GREEN : COLOURS.HAIRLINE}`, backgroundColor: done ? COLOURS.SUCCESS_SOFT : COLOURS.CARD, color: done ? COLOURS.GREEN : COLOURS.SLATE }}>
                 {done ? "✓" : "○"} {label}
@@ -718,11 +776,23 @@ export default function ProductionForm() {
         );
       })()}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "14px", alignItems: "start" }}>
-        {/* Production */}
-        {plantId && (
+      {/* ── Section tabs ── */}
+      {plantId && (
+        <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+          {FORMS.map((f) => (
+            <button key={f.id} onClick={() => setActiveForm(f.id)} style={tabBtnSt(f.id)}>
+              <div style={{ fontSize: "18px", marginBottom: "2px" }}>{f.emoji}</div>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── PRODUCTION ── */}
+      {activeForm === "production" && plantId && (
+        <>
           <div style={sectionStyle}>
-            <h3 style={h3}>Production today</h3>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 4px" }}>⚙️ Production today</h2>
             <p style={hint}>Count ALL poles produced, including any that broke. Required daily.</p>
             {!isMeter ? (
               <>
@@ -733,37 +803,26 @@ export default function ProductionForm() {
             ) : (
               <label style={labelStyle}>Single-phase meters produced<input type="number" min="0" style={inputStyle} value={prodMeter} onChange={(e) => setProdMeter(e.target.value)} placeholder="0" /></label>
             )}
-
-            {/* PO allocation */}
             {plantPOs.length > 0 && (
-              <div style={{ marginTop: "10px" }}>
-                <label style={labelStyle}>
-                  Which PO is this production for?
+              <div style={{ marginTop: "4px" }}>
+                <label style={labelStyle}>Which PO is this production for?
                   {loadingPOs ? (
                     <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "4px" }}>Loading POs…</p>
                   ) : (
-                    <select
-                      value={selectedPOId}
-                      onChange={(e) => setSelectedPOId(e.target.value)}
-                      style={{ ...inputStyle, marginTop: "6px" }}
-                    >
+                    <select value={selectedPOId} onChange={(e) => setSelectedPOId(e.target.value)} style={{ ...inputStyle, marginTop: "6px" }}>
                       {customerPOs.map((po) => (
-                        <option key={po.id} value={po.id}>
-                          {po.customer_name} — PO #{po.po_number}{po.po_label ? ` (${po.po_label})` : ""}
-                        </option>
+                        <option key={po.id} value={po.id}>{po.customer_name} — PO #{po.po_number}{po.po_label ? ` (${po.po_label})` : ""}</option>
                       ))}
-                      {systemPO && (
-                        <option key={systemPO.id} value={systemPO.id}>
-                          Unallocated (Unze stock)
-                        </option>
-                      )}
+                      {systemPO && <option key={systemPO.id} value={systemPO.id}>Unallocated (Unze stock)</option>}
                     </select>
                   )}
                 </label>
               </div>
             )}
-
-            <div style={{ ...btnRow, marginTop: "12px" }}>
+            <label style={labelStyle}>Notes (optional)
+              <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" as const }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any issues, e.g. half day, machine down" />
+            </label>
+            <div style={btnRow}>
               <button type="button" onClick={() => submitProduction(false)} disabled={savingSection === "production"} style={submitBtn("production")}>
                 {savingSection === "production" ? "Saving…" : "Submit Production"}
               </button>
@@ -773,12 +832,109 @@ export default function ProductionForm() {
             </div>
             <SectionMessage section="production" />
           </div>
-        )}
+          <RecentEntries type="Production" />
+        </>
+      )}
 
-        {/* Breakage */}
-        {plantId && !isMeter && (
+      {/* ── DISPATCH ── */}
+      {activeForm === "dispatch" && plantId && (
+        <>
           <div style={sectionStyle}>
-            <h3 style={h3}>Breakage today</h3>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 4px" }}>🚛 Dispatch today</h2>
+            <p style={hint}>Select an authority letter to see the contractor and remaining balance.</p>
+            <label style={labelStyle}>
+              Authority letter
+              {loadingLetters ? (
+                <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>Loading letters for this plant…</p>
+              ) : availableLetters.length === 0 ? (
+                <div style={{ backgroundColor: COLOURS.WARNING_SOFT, border: `1px solid ${COLOURS.AMBER}`, borderRadius: RADII.SM, padding: "8px 12px", fontSize: "12px", color: COLOURS.AMBER, fontWeight: 500, marginTop: "4px" }}>
+                  No active authority letters with remaining balance for this plant. Add letters in Stock → Manage POs.
+                </div>
+              ) : (
+                <select style={inputStyle} value={selectedLetterId} onChange={(e) => { setSelectedLetterId(e.target.value); const letter = availableLetters.find((l) => l.id === e.target.value); setLetterLookup(letter || null); }}>
+                  <option value="">— Select authority letter —</option>
+                  {availableLetters.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      #{l.letter_number} · {l.customer_name} · {[l.remaining_31 > 0 && `${l.remaining_31}×31ft`, l.remaining_36 > 0 && `${l.remaining_36}×36ft`, l.remaining_45 > 0 && `${l.remaining_45}×45ft`, l.remaining_meter > 0 && `${l.remaining_meter}×Mtr`].filter(Boolean).join(", ")} remaining{l.expiry_date ? ` · exp ${l.expiry_date}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </label>
+            {letterLookup && (
+              <>
+                <div style={{ border: `1px solid ${isLetterExpired(letterLookup) ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: RADII.CARD, padding: "12px 14px", backgroundColor: isLetterExpired(letterLookup) ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT, marginBottom: "10px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: isLetterExpired(letterLookup) ? COLOURS.RED : COLOURS.GREEN, marginBottom: "4px" }}>
+                    {isLetterExpired(letterLookup) ? "Letter found — EXPIRED" : "Letter found ✓"}
+                  </div>
+                  <div style={{ fontSize: "13.5px", fontWeight: 600, color: COLOURS.NAVY }}>{letterLookup.customer_name} — PO #{letterLookup.po_number}</div>
+                  <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>Contractor: {letterLookup.contractor_name}</div>
+                  <div style={{ marginTop: "8px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    {[
+                      { size: "31ft", authorized: letterLookup.qty_31, remaining: letterLookup.remaining_31 },
+                      { size: "36ft", authorized: letterLookup.qty_36, remaining: letterLookup.remaining_36 },
+                      { size: "40ft", authorized: letterLookup.qty_40 || 0, remaining: letterLookup.remaining_40 || 0 },
+                      { size: "45ft", authorized: letterLookup.qty_45, remaining: letterLookup.remaining_45 },
+                      { size: "Mtr",  authorized: letterLookup.qty_meter, remaining: letterLookup.remaining_meter },
+                    ].filter((s) => s.authorized > 0).map((s) => (
+                      <div key={s.size} style={{ padding: "6px 10px", borderRadius: RADII.SM, backgroundColor: s.remaining > 0 ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, border: `1px solid ${s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED}` }}>
+                        <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase" as const, letterSpacing: "0.06em" }}>{s.size}</div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED, fontVariantNumeric: "tabular-nums" }}>{s.remaining} left</div>
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>of {s.authorized}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {isLetterExpired(letterLookup) && (
+                  <div style={{ backgroundColor: COLOURS.DANGER_SOFT, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "10px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.RED }}>EXPIRED — dispatch not allowed.</span>
+                    <span style={{ fontSize: "12px", color: COLOURS.RED }}>This letter expired on {formatDateUK(letterLookup.expiry_date!)}. No further dispatches can be made against it.</span>
+                  </div>
+                )}
+              </>
+            )}
+            {(letterLookup || availableLetters.length === 0) && (
+              <>
+                {!isMeter ? (
+                  <>
+                    <label>31 ft dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(disp31) > (letterLookup.remaining_31 ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={disp31} onChange={(e) => setDisp31(e.target.value)} placeholder="0" /></label>
+                    <label>36 ft dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(disp36) > (letterLookup.remaining_36 ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={disp36} onChange={(e) => setDisp36(e.target.value)} placeholder="0" /></label>
+                    <label>45 ft dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(disp45) > (letterLookup.remaining_45 ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={disp45} onChange={(e) => setDisp45(e.target.value)} placeholder="0" /></label>
+                  </>
+                ) : (
+                  <label>Single-phase meters dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(dispMeter) > (letterLookup.remaining_meter ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
+                )}
+              </>
+            )}
+            {letterLookup && dispatchHasQty && !isLetterExpired(letterLookup) && (
+              <>
+                <label style={labelStyle}>Released by *<input type="text" style={inputStyle} value={releasedBy} onChange={(e) => setReleasedBy(e.target.value)} placeholder="Name of person who released from store" /></label>
+                <label style={labelStyle}>Vehicle number (optional)<input type="text" style={inputStyle} value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} placeholder="e.g. ABX-123" /></label>
+              </>
+            )}
+            {availableLetters.length === 0 && plantId && (
+              <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "8px", fontStyle: "italic" }}>No active authority letters — only "Nothing to report" can be recorded for this plant today.</p>
+            )}
+            <label style={labelStyle}>Notes (optional)
+              <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" as const }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any notes about this dispatch" />
+            </label>
+            <div style={btnRow}>
+              <button type="button" onClick={() => submitDispatch(false)} disabled={savingSection === "dispatch" || !letterLookup || !!(letterLookup && isLetterExpired(letterLookup))} style={{ ...submitBtn("dispatch"), opacity: (!letterLookup || (letterLookup && isLetterExpired(letterLookup))) ? 0.4 : savingSection === "dispatch" ? 0.7 : 1, cursor: (!letterLookup || (letterLookup && isLetterExpired(letterLookup))) ? "not-allowed" : "pointer" }}>
+                {savingSection === "dispatch" ? "Saving…" : "Submit Dispatch"}
+              </button>
+              <button type="button" onClick={() => submitDispatch(true)} disabled={savingSection === "dispatch"} style={nothingBtn}>Nothing to report</button>
+            </div>
+            <SectionMessage section="dispatch" />
+          </div>
+          <RecentEntries type="Dispatch" />
+        </>
+      )}
+
+      {/* ── BREAKAGE ── */}
+      {activeForm === "breakage" && plantId && !isMeter && (
+        <>
+          <div style={sectionStyle}>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 4px" }}>⚠️ Breakage today</h2>
             <p style={hint}>Of the production above, how many broke? Pick a reason for each size that broke.</p>
             <label style={labelStyle}>31 ft broken<input type="number" min="0" style={inputStyle} value={brk31} onChange={(e) => setBrk31(e.target.value)} placeholder="0" /></label>
             {Number(brk31) > 0 && <ReasonSelect value={reason31} onChange={setReason31} size="31 ft" />}
@@ -793,296 +949,62 @@ export default function ProductionForm() {
               <button type="button" onClick={() => submitBreakage(false)} disabled={savingSection === "breakage"} style={submitBtn("breakage")}>
                 {savingSection === "breakage" ? "Saving…" : "Submit Breakage"}
               </button>
-              <button type="button" onClick={() => submitBreakage(true)} disabled={savingSection === "breakage"} style={nothingBtn}>
-                Nothing to report
-              </button>
+              <button type="button" onClick={() => submitBreakage(true)} disabled={savingSection === "breakage"} style={nothingBtn}>Nothing to report</button>
             </div>
             <SectionMessage section="breakage" />
           </div>
-        )}
+          <RecentEntries type="Breakage" />
+        </>
+      )}
 
-        {/* Dispatch */}
-        {plantId && (
+      {/* ── SCRAP ── */}
+      {activeForm === "scrap" && plantId && !isMeter && (
+        <>
           <div style={sectionStyle}>
-            <h3 style={h3}>Dispatch today</h3>
-            <p style={hint}>Select an authority letter to see the contractor and remaining balance.</p>
-
-            {/* Authority letter dropdown */}
-            <label style={labelStyle}>
-              Authority letter
-              {loadingLetters ? (
-                <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>Loading letters for this plant…</p>
-              ) : availableLetters.length === 0 ? (
-                <div style={{ backgroundColor: COLOURS.WARNING_SOFT, border: `1px solid ${COLOURS.AMBER}`, borderRadius: RADII.SM, padding: "8px 12px", fontSize: "12px", color: COLOURS.AMBER, fontWeight: 500, marginTop: "4px" }}>
-                  No active authority letters with remaining balance for this plant. Add letters in Stock → Manage POs.
-                </div>
-              ) : (
-                <select
-                  style={inputStyle}
-                  value={selectedLetterId}
-                  onChange={(e) => {
-                    setSelectedLetterId(e.target.value);
-                    const letter = availableLetters.find((l) => l.id === e.target.value);
-                    setLetterLookup(letter || null);
-                  }}
-                >
-                  <option value="">— Select authority letter —</option>
-                  {availableLetters.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      #{l.letter_number} · {l.customer_name} · {[
-                        l.remaining_31 > 0 ? `${l.remaining_31}×31ft` : null,
-                        l.remaining_36 > 0 ? `${l.remaining_36}×36ft` : null,
-                        l.remaining_45 > 0 ? `${l.remaining_45}×45ft` : null,
-                        l.remaining_meter > 0 ? `${l.remaining_meter}×Mtr` : null,
-                      ].filter(Boolean).join(", ")} remaining{l.expiry_date ? ` · exp ${l.expiry_date}` : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </label>
-
-            {letterLookup && (
-              <>
-                <div style={{ border: `1px solid ${isLetterExpired(letterLookup) ? COLOURS.RED : COLOURS.GREEN}`, borderRadius: RADII.CARD, padding: "12px 14px", backgroundColor: isLetterExpired(letterLookup) ? COLOURS.DANGER_SOFT : COLOURS.SUCCESS_SOFT, marginBottom: "10px" }}>
-                  <div style={{ fontSize: "12px", fontWeight: 600, color: isLetterExpired(letterLookup) ? COLOURS.RED : COLOURS.GREEN, marginBottom: "4px" }}>
-                    {isLetterExpired(letterLookup) ? "Letter found — EXPIRED" : "Letter found ✓"}
-                  </div>
-                  <div style={{ fontSize: "13.5px", fontWeight: 600, color: COLOURS.NAVY }}>
-                    {letterLookup.customer_name} — PO #{letterLookup.po_number}
-                  </div>
-                  <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                    Contractor: {letterLookup.contractor_name}
-                  </div>
-                  <div style={{ marginTop: "8px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                    {[
-                      { size: "31ft", authorized: letterLookup.qty_31, remaining: letterLookup.remaining_31 },
-                      { size: "36ft", authorized: letterLookup.qty_36, remaining: letterLookup.remaining_36 },
-                      { size: "40ft", authorized: letterLookup.qty_40 || 0, remaining: letterLookup.remaining_40 || 0 },
-                      { size: "45ft", authorized: letterLookup.qty_45, remaining: letterLookup.remaining_45 },
-                      { size: "Mtr", authorized: letterLookup.qty_meter, remaining: letterLookup.remaining_meter },
-                    ].filter((s) => s.authorized > 0).map((s) => (
-                      <div key={s.size} style={{ padding: "6px 10px", borderRadius: RADII.SM, backgroundColor: s.remaining > 0 ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, border: `1px solid ${s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED}` }}>
-                        <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.size}</div>
-                        <div style={{ fontSize: "14px", fontWeight: 600, color: s.remaining > 0 ? COLOURS.GREEN : COLOURS.RED, fontVariantNumeric: "tabular-nums" }}>
-                          {s.remaining} left
-                        </div>
-                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>of {s.authorized}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {isLetterExpired(letterLookup) && (
-                  <div style={{ backgroundColor: COLOURS.DANGER_SOFT, border: `1px solid ${COLOURS.RED}`, borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "10px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.RED }}>EXPIRED — dispatch not allowed.</span>
-                    <span style={{ fontSize: "12px", color: COLOURS.RED }}>
-                      This letter expired on {formatDateUK(letterLookup.expiry_date!)}. No further dispatches can be made against it.
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Qty fields — show when letter found OR when no letters exist (nothing to report flow) */}
-            {(letterLookup || availableLetters.length === 0) && (
-              <>
-                {!isMeter ? (
-                  <>
-                    <label>31 ft dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(disp31) > (letterLookup.remaining_31 ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={disp31} onChange={(e) => setDisp31(e.target.value)} placeholder="0" /></label>
-                    <label>36 ft dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(disp36) > (letterLookup.remaining_36 ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={disp36} onChange={(e) => setDisp36(e.target.value)} placeholder="0" /></label>
-                    <label>45 ft dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(disp45) > (letterLookup.remaining_45 ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={disp45} onChange={(e) => setDisp45(e.target.value)} placeholder="0" /></label>
-                  </>
-                ) : (
-                  <label>Single-phase meters dispatched<input type="number" min="0" style={{ ...inputStyle, border: letterLookup && Number(dispMeter) > (letterLookup.remaining_meter ?? Infinity) ? `1.5px solid ${COLOURS.RED}` : `1px solid ${COLOURS.HAIRLINE}`, opacity: letterLookup && isLetterExpired(letterLookup) ? 0.4 : 1, cursor: letterLookup && isLetterExpired(letterLookup) ? "not-allowed" : "auto", backgroundColor: letterLookup && isLetterExpired(letterLookup) ? COLOURS.CARD_ALT : undefined }} disabled={!!(letterLookup && isLetterExpired(letterLookup))} value={dispMeter} onChange={(e) => setDispMeter(e.target.value)} placeholder="0" /></label>
-                )}
-              </>
-            )}
-
-            {/* Released by + vehicle — show when dispatch qty entered */}
-            {letterLookup && dispatchHasQty && !isLetterExpired(letterLookup) && (
-              <>
-                <label style={labelStyle}>
-                  Released by *
-                  <input type="text" style={inputStyle} value={releasedBy} onChange={(e) => setReleasedBy(e.target.value)} placeholder="Name of person who released from store" />
-                </label>
-                <label style={labelStyle}>
-                  Vehicle number (optional)
-                  <input type="text" style={inputStyle} value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} placeholder="e.g. ABX-123" />
-                </label>
-              </>
-            )}
-
-            {availableLetters.length === 0 && plantId && (
-              <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "8px", fontStyle: "italic" }}>
-                No active authority letters — only "Nothing to report" can be recorded for this plant today.
-              </p>
-            )}
-            <div style={btnRow}>
-              <button type="button" onClick={() => submitDispatch(false)} disabled={savingSection === "dispatch" || !letterLookup || !!(letterLookup && isLetterExpired(letterLookup))} style={{ ...submitBtn("dispatch"), opacity: (!letterLookup || (letterLookup && isLetterExpired(letterLookup))) ? 0.4 : savingSection === "dispatch" ? 0.7 : 1, cursor: (!letterLookup || (letterLookup && isLetterExpired(letterLookup))) ? "not-allowed" : "pointer" }}>
-                {savingSection === "dispatch" ? "Saving…" : "Submit Dispatch"}
-              </button>
-              <button type="button" onClick={() => submitDispatch(true)} disabled={savingSection === "dispatch"} style={nothingBtn}>
-                Nothing to report
-              </button>
-            </div>
-            <SectionMessage section="dispatch" />
-          </div>
-        )}
-
-        {/* Scrap */}
-        {plantId && !isMeter && (
-          <div style={sectionStyle}>
-            <h3 style={h3}>Broken poles processed for scrap today</h3>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 4px" }}>♻️ Scrap processed today</h2>
             <p style={hint}>Broken poles removed/processed. (Reduces broken-pole stock.)</p>
             <label style={labelStyle}>31 ft processed<input type="number" min="0" style={inputStyle} value={scr31} onChange={(e) => setScr31(e.target.value)} placeholder="0" /></label>
             <label style={labelStyle}>36 ft processed<input type="number" min="0" style={inputStyle} value={scr36} onChange={(e) => setScr36(e.target.value)} placeholder="0" /></label>
             <label style={labelStyle}>45 ft processed<input type="number" min="0" style={inputStyle} value={scr45} onChange={(e) => setScr45(e.target.value)} placeholder="0" /></label>
+            <label style={labelStyle}>Notes (optional)
+              <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" as const }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any notes about scrap processing" />
+            </label>
             <div style={btnRow}>
               <button type="button" onClick={() => submitScrap(false)} disabled={savingSection === "scrap"} style={submitBtn("scrap")}>
                 {savingSection === "scrap" ? "Saving…" : "Submit Scrap"}
               </button>
-              <button type="button" onClick={() => submitScrap(true)} disabled={savingSection === "scrap"} style={nothingBtn}>
-                Nothing to report
-              </button>
+              <button type="button" onClick={() => submitScrap(true)} disabled={savingSection === "scrap"} style={nothingBtn}>Nothing to report</button>
             </div>
             <SectionMessage section="scrap" />
           </div>
-        )}
+          <RecentEntries type="Scrap" />
+        </>
+      )}
 
-        {/* Machine */}
-        {plantId && (
-          <div style={sectionStyle}>
-            <h3 style={h3}>Machine status today</h3>
-            <p style={hint}>Report any machine that is down or partially working today. If everything is running normally, click "Nothing to report".</p>
-            <label style={labelStyle}>Machine name<input type="text" style={inputStyle} value={machineName} onChange={(e) => setMachineName(e.target.value)} placeholder="e.g. Spinning Machine #2" /></label>
-            <label style={labelStyle}>Status
-              <select style={inputStyle} value={machineStatus} onChange={(e) => setMachineStatus(e.target.value)}>
-                {MACHINE_STATUSES.map((s) => (<option key={s}>{s}</option>))}
-              </select>
-            </label>
-            <label style={labelStyle}>Expected resolution<input type="text" style={inputStyle} value={machineExpectedResolution} onChange={(e) => setMachineExpectedResolution(e.target.value)} placeholder="e.g. Today 5pm / Tomorrow / Waiting for part" /></label>
-            <label style={labelStyle}>Issue description<textarea style={{ ...inputStyle, height: "80px", resize: "vertical" as const }} value={machineDescription} onChange={(e) => setMachineDescription(e.target.value)} placeholder="What happened?" /></label>
-            <label style={labelStyle}>Action taken<textarea style={{ ...inputStyle, height: "70px", resize: "vertical" as const }} value={machineActionTaken} onChange={(e) => setMachineActionTaken(e.target.value)} placeholder="What has been done so far?" /></label>
-            <div style={btnRow}>
-              <button type="button" onClick={() => submitMachine(false)} disabled={savingSection === "machine"} style={submitBtn("machine")}>
-                {savingSection === "machine" ? "Saving…" : "Submit Machine Issue"}
-              </button>
-              <button type="button" onClick={() => submitMachine(true)} disabled={savingSection === "machine"} style={nothingBtn}>
-                Nothing to report
-              </button>
-            </div>
-            <SectionMessage section="machine" />
-          </div>
-        )}
-      </div>
-
-      {/* General notes */}
-      {plantId && (
-        <div style={{ ...sectionStyle, marginTop: "20px" }}>
-          <label style={labelStyle}>General notes (optional)
-            <textarea style={{ ...inputStyle, height: "60px", resize: "vertical" as const }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any issues, e.g. half day, machine down" />
+      {/* ── MACHINE ── */}
+      {activeForm === "machine" && plantId && (
+        <div style={sectionStyle}>
+          <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: "0 0 4px" }}>🔧 Machine status today</h2>
+          <p style={hint}>Report any machine that is down or partially working today. If everything is running normally, click "Nothing to report".</p>
+          <label style={labelStyle}>Machine name<input type="text" style={inputStyle} value={machineName} onChange={(e) => setMachineName(e.target.value)} placeholder="e.g. Spinning Machine #2" /></label>
+          <label style={labelStyle}>Status
+            <select style={inputStyle} value={machineStatus} onChange={(e) => setMachineStatus(e.target.value)}>
+              {MACHINE_STATUSES.map((s) => (<option key={s}>{s}</option>))}
+            </select>
           </label>
-        </div>
-      )}
-
-      {/* My Past Entries */}
-      {plantId && pastEntries.length > 0 && (
-        <div style={{ marginTop: "20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <h2 style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "18px", fontWeight: 600, color: COLOURS.NAVY, margin: 0, letterSpacing: "-0.01em" }}>
-              My Past Entries (Last 14 Days)
-            </h2>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              style={{ backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "6px 14px", fontSize: "12px", fontWeight: 500, color: COLOURS.NAVY, cursor: "pointer" }}
-            >
-              {showHistory ? "Hide" : `Show (${pastEntries.length})`}
+          <label style={labelStyle}>Expected resolution<input type="text" style={inputStyle} value={machineExpectedResolution} onChange={(e) => setMachineExpectedResolution(e.target.value)} placeholder="e.g. Today 5pm / Tomorrow / Waiting for part" /></label>
+          <label style={labelStyle}>Issue description<textarea style={{ ...inputStyle, height: "80px", resize: "vertical" as const }} value={machineDescription} onChange={(e) => setMachineDescription(e.target.value)} placeholder="What happened?" /></label>
+          <label style={labelStyle}>Action taken<textarea style={{ ...inputStyle, height: "70px", resize: "vertical" as const }} value={machineActionTaken} onChange={(e) => setMachineActionTaken(e.target.value)} placeholder="What has been done so far?" /></label>
+          <div style={btnRow}>
+            <button type="button" onClick={() => submitMachine(false)} disabled={savingSection === "machine"} style={submitBtn("machine")}>
+              {savingSection === "machine" ? "Saving…" : "Submit Machine Issue"}
             </button>
+            <button type="button" onClick={() => submitMachine(true)} disabled={savingSection === "machine"} style={nothingBtn}>Nothing to report</button>
           </div>
-
-          {sectionMsg?.section === "history" && (
-            <div style={{ padding: "10px 14px", marginBottom: "8px", borderRadius: RADII.CARD, fontSize: "13px", fontWeight: 600, backgroundColor: sectionMsg.ok ? COLOURS.SUCCESS_SOFT : COLOURS.DANGER_SOFT, color: sectionMsg.ok ? COLOURS.GREEN : COLOURS.RED, border: `1px solid ${sectionMsg.ok ? COLOURS.GREEN : COLOURS.RED}` }}>
-              {sectionMsg.text}
-            </div>
-          )}
-          {showHistory && (
-            <div style={{ ...cardStyle, borderRadius: RADII.CARD, padding: 0, overflow: "hidden" }}>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "640px" }}>
-                  <thead>
-                    <tr>
-                      <th style={tableHeaderStyle}>Plant</th>
-                      <th style={tableHeaderStyle}>Date</th>
-                      <th style={tableHeaderStyle}>Type</th>
-                      <th style={{ ...tableHeaderStyle, textAlign: "center" }} colSpan={selectedPlant?.type === "meter" ? 4 : 3}>Pole size (qty)</th>
-                      <th style={{ ...tableHeaderStyle, textAlign: "right" }}>Total</th>
-                      {canDelete && <th style={tableHeaderStyle}></th>}
-                    </tr>
-                    <tr>
-                      <th style={histThSub}></th>
-                      <th style={histThSub}></th>
-                      <th style={histThSub}></th>
-                      <th style={{ ...histThSub, textAlign: "center" }}>31&apos;</th>
-                      <th style={{ ...histThSub, textAlign: "center" }}>36&apos;</th>
-                      <th style={{ ...histThSub, textAlign: "center" }}>45&apos;</th>
-                      {selectedPlant?.type === "meter" && <th style={{ ...histThSub, textAlign: "center" }}>Meter</th>}
-                      <th style={histThSub}></th>
-                      {canDelete && <th style={histThSub}></th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pastEntries.map((e, i) => {
-                      const total = (e.qty_31 || 0) + (e.qty_36 || 0) + (e.qty_45 || 0) + (e.qty_meter || 0);
-                      const typeColor = e.type === "Production" ? COLOURS.GREEN : e.type === "Dispatch" ? COLOURS.BLUE : COLOURS.RED;
-                      const typeSoft = e.type === "Production" ? COLOURS.SUCCESS_SOFT : e.type === "Dispatch" ? COLOURS.INFO_SOFT : COLOURS.DANGER_SOFT;
-                      const isToday = e.entry_date === new Date().toISOString().slice(0, 10);
-                      return (
-                        <tr
-                          key={`${e.entry_date}-${e.type}-${i}`}
-                          style={{ backgroundColor: i % 2 === 1 ? COLOURS.CARD_ALT : "transparent" }}
-                        >
-                          <td style={{ ...histTd, fontWeight: 600, color: COLOURS.NAVY }}>{selectedPlant?.name || "—"}</td>
-                          <td style={histTd}>
-                            {formatDateUK(e.entry_date)}
-                            {isToday && <span style={{ marginLeft: "6px", fontSize: "11px", fontWeight: 600, color: COLOURS.BLUE }}>Today</span>}
-                          </td>
-                          <td style={histTd}>
-                            <span style={{ fontSize: "11px", fontWeight: 600, color: typeColor, backgroundColor: typeSoft, padding: "3px 8px", borderRadius: RADII.PILL }}>
-                              {e.type}
-                            </span>
-                          </td>
-                          <td style={{ ...histTd, textAlign: "center", fontFamily: "var(--font-mono)", color: e.qty_31 ? COLOURS.NAVY : COLOURS.INK_400 }}>{e.qty_31 || "–"}</td>
-                          <td style={{ ...histTd, textAlign: "center", fontFamily: "var(--font-mono)", color: e.qty_36 ? COLOURS.NAVY : COLOURS.INK_400 }}>{e.qty_36 || "–"}</td>
-                          <td style={{ ...histTd, textAlign: "center", fontFamily: "var(--font-mono)", color: e.qty_45 ? COLOURS.NAVY : COLOURS.INK_400 }}>{e.qty_45 || "–"}</td>
-                          {selectedPlant?.type === "meter" && (
-                            <td style={{ ...histTd, textAlign: "center", fontFamily: "var(--font-mono)", color: e.qty_meter ? COLOURS.NAVY : COLOURS.INK_400 }}>{e.qty_meter || "–"}</td>
-                          )}
-                          <td style={{ ...histTd, fontWeight: 700, color: COLOURS.NAVY, textAlign: "right", fontFamily: "var(--font-mono)" }}>{total}</td>
-                          {canDelete && (
-                            <td style={histTd}>
-                              <button onClick={() => deleteEntry(e)} style={{
-                                backgroundColor: "transparent", border: `1px solid ${COLOURS.RED}`, color: COLOURS.RED,
-                                borderRadius: RADII.XS, padding: "2px 8px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
-                              }}>×</button>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          <SectionMessage section="machine" />
         </div>
       )}
+
     </div>
   );
 }
-
-const histThSub: React.CSSProperties = {
-  textAlign: "left", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, padding: "0 12px 8px",
-  fontSize: "11px", color: COLOURS.INK_400, fontWeight: 500, backgroundColor: COLOURS.CARD_ALT,
-};
-const histTd: React.CSSProperties = {
-  borderBottom: `1px solid ${COLOURS.HAIRLINE}`, padding: "10px 12px", fontSize: "13px",
-};
