@@ -367,75 +367,84 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
     statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status) || a.company_id.localeCompare(b.company_id) || a.s_no - b.s_no);
 
   const dailyItems = dailySummary?.items || [];
-  const dailyCompanies = COMPANIES.filter((c) => dailyItems.some((d) => d.company_id === c.id));
   const draftKey = (d: DailyItem) => `${d.company_id}|${d.doc_type}`;
 
-  // ═══ Daily entry grid (shared by manager pre-audit card view + pre-audit members) ═══
-  const dailyGrid = dailySummary && (
-    <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "14px" }}>
-      <div style={{ padding: "12px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
-        <div>
-          <span style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>Audit Tasks — daily approvals check</span>
-          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
-            Enter the number of unapproved documents at close of business. Target: zero.
-            {dailySummary.yesterday_total !== null && <> Yesterday: <strong style={{ color: dailySummary.yesterday_total > 0 ? COLOURS.RED : COLOURS.GREEN }}>{dailySummary.yesterday_total} pending</strong>.</>}
+  // ═══ Daily entry grid — pass filterCompanyIds to show only that team's companies ═══
+  function renderDailyGrid(filterCompanyIds?: string[]) {
+    if (!dailySummary) return null;
+    const items = filterCompanyIds
+      ? dailySummary.items.filter((d) => filterCompanyIds.includes(d.company_id))
+      : dailySummary.items;
+    const companies = COMPANIES.filter((c) => items.some((d) => d.company_id === c.id));
+    const filteredTotal = items.reduce((s, d) => s + (d.pending || 0), 0);
+    const filteredEntered = items.filter((d) => d.entered).length;
+    const filteredExpected = items.length;
+    return (
+      <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden", marginBottom: "14px" }}>
+        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+          <div>
+            <span style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>Audit Tasks — daily approvals check</span>
+            <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+              Enter the number of unapproved documents at close of business. Target: zero.
+              {!filterCompanyIds && dailySummary.yesterday_total !== null && <> Yesterday: <strong style={{ color: dailySummary.yesterday_total > 0 ? COLOURS.RED : COLOURS.GREEN }}>{dailySummary.yesterday_total} pending</strong>.</>}
+            </div>
           </div>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: filteredEntered < filteredExpected ? COLOURS.AMBER : COLOURS.GREEN }}>
+            {filteredEntered}/{filteredExpected} entered today · {filteredTotal} pending
+          </span>
         </div>
-        <span style={{ fontSize: "12px", fontWeight: 600, color: dailySummary.entered_count < dailySummary.expected_count ? COLOURS.AMBER : COLOURS.GREEN }}>
-          {dailySummary.entered_count}/{dailySummary.expected_count} entered today · {dailySummary.today_total} pending
-        </span>
-      </div>
-      {dailyCompanies.map((c) => (
-        <div key={c.id}>
-          <div style={{ padding: "7px 16px", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>{c.name}</div>
-          {dailyItems.filter((d) => d.company_id === c.id).map((d) => {
-            const key = draftKey(d);
-            const draft = dailyDraft[key] ?? { pending: d.pending !== null ? String(d.pending) : "", reason: d.reason || "" };
-            const shownPending = draft.pending;
-            return (
-              <div key={key} style={{ padding: "8px 16px", borderTop: `1px solid ${COLOURS.TRACK}`, display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: "160px" }}>
-                  <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{DOC_TYPE_LABELS[d.doc_type] || d.activity}</div>
-                  <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
-                    {isManager ? (
-                      <select value={d.assigned_member_id || ""} onChange={(e) => assignDailyTask(d, e.target.value || null)} style={{ ...inpSm, display: "inline-block", width: "auto" }}>
-                        <option value="">— assign member —</option>
-                        {auditMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                      </select>
-                    ) : (
-                      d.assigned_name || "Unassigned"
-                    )}
+        {companies.map((c) => (
+          <div key={c.id}>
+            <div style={{ padding: "7px 16px", fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em", backgroundColor: COLOURS.CARD_ALT, borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>{c.name}</div>
+            {items.filter((d) => d.company_id === c.id).map((d) => {
+              const key = draftKey(d);
+              const draft = dailyDraft[key] ?? { pending: d.pending !== null ? String(d.pending) : "", reason: d.reason || "" };
+              const shownPending = draft.pending;
+              return (
+                <div key={key} style={{ padding: "8px 16px", borderTop: `1px solid ${COLOURS.TRACK}`, display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: "160px" }}>
+                    <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{DOC_TYPE_LABELS[d.doc_type] || d.activity}</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                      {isManager ? (
+                        <select value={d.assigned_member_id || ""} onChange={(e) => assignDailyTask(d, e.target.value || null)} style={{ ...inpSm, display: "inline-block", width: "auto" }}>
+                          <option value="">— assign member —</option>
+                          {auditMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </select>
+                      ) : (
+                        d.assigned_name || "Unassigned"
+                      )}
+                    </div>
                   </div>
+                  {canEnterDaily ? (
+                    <>
+                      <input type="number" min={0} placeholder="0" value={shownPending}
+                        onChange={(e) => setDailyDraft((prev) => ({ ...prev, [key]: { pending: e.target.value, reason: draft.reason } }))}
+                        style={{ ...inpSm, width: "70px", textAlign: "center", fontWeight: 600, color: parseInt(shownPending || "0", 10) > 0 ? COLOURS.RED : COLOURS.GREEN }} />
+                      {parseInt(shownPending || "0", 10) > 0 && (
+                        <input placeholder="Reason (why pending?)" value={draft.reason}
+                          onChange={(e) => setDailyDraft((prev) => ({ ...prev, [key]: { pending: draft.pending, reason: e.target.value } }))}
+                          style={{ ...inpSm, flex: 1, minWidth: "140px" }} />
+                      )}
+                      {d.entered && <span style={{ fontSize: "11px", color: COLOURS.GREEN }}>✓ saved</span>}
+                    </>
+                  ) : (
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: (d.pending || 0) > 0 ? COLOURS.RED : COLOURS.GREEN }}>
+                      {d.entered ? `${d.pending} pending${d.reason ? ` — ${d.reason}` : ""}` : "not entered yet"}
+                    </span>
+                  )}
                 </div>
-                {canEnterDaily ? (
-                  <>
-                    <input type="number" min={0} placeholder="0" value={shownPending}
-                      onChange={(e) => setDailyDraft((prev) => ({ ...prev, [key]: { pending: e.target.value, reason: draft.reason } }))}
-                      style={{ ...inpSm, width: "70px", textAlign: "center", fontWeight: 600, color: parseInt(shownPending || "0", 10) > 0 ? COLOURS.RED : COLOURS.GREEN }} />
-                    {parseInt(shownPending || "0", 10) > 0 && (
-                      <input placeholder="Reason (why pending?)" value={draft.reason}
-                        onChange={(e) => setDailyDraft((prev) => ({ ...prev, [key]: { pending: draft.pending, reason: e.target.value } }))}
-                        style={{ ...inpSm, flex: 1, minWidth: "140px" }} />
-                    )}
-                    {d.entered && <span style={{ fontSize: "11px", color: COLOURS.GREEN }}>✓ saved</span>}
-                  </>
-                ) : (
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: (d.pending || 0) > 0 ? COLOURS.RED : COLOURS.GREEN }}>
-                    {d.entered ? `${d.pending} pending${d.reason ? ` — ${d.reason}` : ""}` : "not entered yet"}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ))}
-      {canEnterDaily && (
-        <div style={{ padding: "10px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "flex-end" }}>
-          <button disabled={dailySaving} onClick={saveDailyCounts} style={btnNavy}>{dailySaving ? "Saving…" : "Save today's counts"}</button>
-        </div>
-      )}
-    </div>
-  );
+              );
+            })}
+          </div>
+        ))}
+        {canEnterDaily && (
+          <div style={{ padding: "10px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "flex-end" }}>
+            <button disabled={dailySaving} onClick={saveDailyCounts} style={btnNavy}>{dailySaving ? "Saving…" : "Save today's counts"}</button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <section style={{ marginBottom: "22px" }}>
@@ -484,8 +493,25 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                   {isPre ? (
                     dailySummary && (
                       <div style={{ fontSize: "12px" }}>
-                        <span style={{ fontSize: "20px", fontWeight: 700, color: dailySummary.today_total > 0 ? COLOURS.RED : COLOURS.GREEN }}>{dailySummary.today_total}</span>
-                        <span style={{ color: COLOURS.SLATE }}> docs pending today · {dailySummary.entered_count}/{dailySummary.expected_count} entered</span>
+                        {/* Per-company breakdown — each company on its own row */}
+                        {COMPANIES.filter((c) => dailySummary.items.some((d) => d.company_id === c.id)).map((c) => {
+                          const cItems = dailySummary.items.filter((d) => d.company_id === c.id);
+                          const cPending = cItems.reduce((s, d) => s + (d.pending || 0), 0);
+                          const cEntered = cItems.filter((d) => d.entered).length;
+                          const allEntered = cEntered === cItems.length;
+                          const color = cPending > 0 ? COLOURS.RED : allEntered ? COLOURS.GREEN : COLOURS.AMBER;
+                          return (
+                            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                              <span style={{ color: COLOURS.SLATE, fontWeight: 500 }}>{c.shortCode}</span>
+                              <span style={{ fontWeight: 700, color }}>
+                                {cEntered === 0 ? "not entered" : cPending > 0 ? `${cPending} pending` : "✓ clear"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "4px", borderTop: `1px solid ${COLOURS.TRACK}`, paddingTop: "3px" }}>
+                          {dailySummary.entered_count}/{dailySummary.expected_count} entered today
+                        </div>
                       </div>
                     )
                   ) : (
@@ -540,8 +566,8 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
         </div>
       )}
 
-      {/* ═══ Pre-audit view: the daily grid IS the main content ═══ */}
-      {isPreauditView && wv("dept_audit.daily_activities", true) && dailyGrid}
+      {/* ═══ Pre-audit view: the daily grid IS the main content (all companies) ═══ */}
+      {isPreauditView && wv("dept_audit.daily_activities", true) && renderDailyGrid()}
 
       {/* ═══ Audit Projects — post-audit teams ═══ */}
       {selectedTeam && !isPreauditView && wv("dept_audit.plan_checklist", true) && (
@@ -789,7 +815,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
             </div>
             <span style={{ fontSize: "12px", color: COLOURS.SLATE, flexShrink: 0 }}>{dailyOpen ? "▲ Hide" : "▼ Show"}</span>
           </button>
-          {dailyOpen && <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>{dailyGrid}</div>}
+          {dailyOpen && <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>{renderDailyGrid(selectedTeam?.company_ids)}</div>}
         </div>
       )}
     </section>
