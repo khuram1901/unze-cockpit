@@ -168,6 +168,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
   const [newProj, setNewProj] = useState({ company_id: "", name: "", frequency: "Monthly", period: "", target: "" });
   const [dailyOpen, setDailyOpen] = useState(false);
   const [editingAssignKey, setEditingAssignKey] = useState<string | null>(null);
+  const [projectPage, setProjectPage] = useState(0);
   const { ctx: widgetCtx } = useUserCtx();
   const wv = (key: string, def: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, def);
 
@@ -497,7 +498,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
               const active = t.id === selectedTeam?.id;
               const isPre = t.code === "PREAUDIT";
               return (
-                <div key={t.id} onClick={() => { setSelectedTeamId(t.id); setExpandedId(null); }} style={{
+                <div key={t.id} onClick={() => { setSelectedTeamId(t.id); setExpandedId(null); setProjectPage(0); }} style={{
                   backgroundColor: COLOURS.CARD, borderRadius: RADII.CARD, padding: "14px 16px", cursor: "pointer",
                   border: active ? `2px solid ${COLOURS.NAVY}` : `1px solid ${COLOURS.HAIRLINE}`,
                 }}>
@@ -617,7 +618,9 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
           <div style={{ padding: "12px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
             <span style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{selectedTeam.name} — Audit Projects</span>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{sorted.length} projects</span>
+              <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                {sorted.length <= 10 ? `${sorted.length} projects` : `${projectPage * 10 + 1}–${Math.min((projectPage + 1) * 10, sorted.length)} of ${sorted.length} projects`}
+              </span>
               {isManager && <button onClick={() => setAddProjectOpen(!addProjectOpen)} style={btnGhost}>{addProjectOpen ? "Cancel" : "+ Add project"}</button>}
             </div>
           </div>
@@ -657,7 +660,26 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
             </div>
           )}
 
-          {sorted.map((p) => {
+          {/* ── Pagination controls ── */}
+          {sorted.length > 10 && (
+            <div style={{ padding: "10px 16px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: COLOURS.CARD_ALT }}>
+              <button
+                disabled={projectPage === 0}
+                onClick={() => { setProjectPage((p) => p - 1); setExpandedId(null); }}
+                style={{ ...btnGhost, opacity: projectPage === 0 ? 0.4 : 1, cursor: projectPage === 0 ? "default" : "pointer" }}
+              >← Previous</button>
+              <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                Page {projectPage + 1} of {Math.ceil(sorted.length / 10)}
+              </span>
+              <button
+                disabled={(projectPage + 1) * 10 >= sorted.length}
+                onClick={() => { setProjectPage((p) => p + 1); setExpandedId(null); }}
+                style={{ ...btnGhost, opacity: (projectPage + 1) * 10 >= sorted.length ? 0.4 : 1, cursor: (projectPage + 1) * 10 >= sorted.length ? "default" : "pointer" }}
+              >Next →</button>
+            </div>
+          )}
+
+          {sorted.slice(projectPage * 10, (projectPage + 1) * 10).map((p) => {
             const isOpen = expandedId === p.id;
             const od = overdueDays(p.target_date);
             const isOverdue = od > 0 && (p.status === "Planned" || p.status === "In Progress");
