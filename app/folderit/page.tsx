@@ -1486,7 +1486,9 @@ const ISSUE_LABELS: Record<string, { label: string; colour: string }> = {
   bad_filename:    { label: "Bad filename",       colour: COLOURS.SLATE },
 };
 
-function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
+type HealthNav = { company_uuid?: string; issue_type?: string };
+
+function OverviewTab({ isAdmin, onGoToHealth }: { isAdmin: boolean; onGoToHealth: (nav?: HealthNav) => void }) {
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -1514,14 +1516,25 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
       {/* Summary stat row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px", marginBottom: "24px" }}>
         {[
-          { label: "Active Cabinets",  value: data.accounts.length,    colour: NAVY },
-          { label: "Inbox Files",      value: data.inboxFilesTotal,     colour: NAVY },
-          { label: "Filing Issues",    value: totalIssues,              colour: totalIssues > 0 ? COLOURS.RED : COLOURS.GREEN },
-          { label: "Avg Health Score", value: `${avgScore}%`,          colour: avgScore >= 80 ? COLOURS.GREEN : avgScore >= 50 ? COLOURS.AMBER : COLOURS.RED },
-        ].map(({ label, value, colour }) => (
-          <div key={label} style={{ ...cardStyle, padding: "14px 16px" }}>
+          { label: "Active Cabinets",  value: data.accounts.length,    colour: NAVY,                                                                            nav: undefined },
+          { label: "Inbox Files",      value: data.inboxFilesTotal,     colour: NAVY,                                                                            nav: undefined },
+          { label: "Filing Issues",    value: totalIssues,              colour: totalIssues > 0 ? COLOURS.RED : COLOURS.GREEN,                                   nav: {} as HealthNav },
+          { label: "Avg Health Score", value: `${avgScore}%`,          colour: avgScore >= 80 ? COLOURS.GREEN : avgScore >= 50 ? COLOURS.AMBER : COLOURS.RED,  nav: {} as HealthNav },
+        ].map(({ label, value, colour, nav }) => (
+          <div
+            key={label}
+            onClick={nav !== undefined ? () => onGoToHealth(nav) : undefined}
+            style={{
+              ...cardStyle, padding: "14px 16px",
+              cursor: nav !== undefined ? "pointer" : "default",
+              transition: "box-shadow 0.15s",
+            }}
+            onMouseEnter={nav !== undefined ? (e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 12px rgba(0,0,0,0.10)"; } : undefined}
+            onMouseLeave={nav !== undefined ? (e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = ""; } : undefined}
+          >
             <div style={{ fontSize: "11px", color: SLATE, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
             <div style={{ fontSize: "22px", fontWeight: 700, color: colour }}>{value}</div>
+            {nav !== undefined && <div style={{ fontSize: "10px", color: SLATE, marginTop: "4px" }}>View details →</div>}
           </div>
         ))}
       </div>
@@ -1536,10 +1549,11 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
               .map(([type, count]) => {
                 const meta = ISSUE_LABELS[type] ?? { label: type, colour: SLATE };
                 return (
-                  <div key={type} style={{
+                  <div key={type} onClick={() => onGoToHealth({ issue_type: type })} style={{
                     display: "flex", alignItems: "center", gap: "6px",
                     padding: "6px 10px", borderRadius: RADII.CARD,
                     background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.BORDER}`,
+                    cursor: "pointer",
                   }}>
                     <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: meta.colour, display: "inline-block", flexShrink: 0 }} />
                     <span style={{ fontSize: "12px", color: NAVY }}>{meta.label}</span>
@@ -1557,13 +1571,21 @@ function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
           <div style={{ fontSize: "12px", fontWeight: 600, color: NAVY, marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Filing Health by Company</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
             {data.healthSummary.map((co) => (
-              <div key={co.company_uuid} style={{ ...cardStyle, padding: "16px" }}>
+              <div
+                key={co.company_uuid}
+                onClick={() => onGoToHealth({ company_uuid: co.company_uuid })}
+                style={{ ...cardStyle, padding: "16px", cursor: "pointer" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 12px rgba(0,0,0,0.10)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = ""; }}
+              >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
                   <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{co.company_name}</span>
-                  {co.total_issues > 0 && (
+                  {co.total_issues > 0 ? (
                     <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.RED, background: "#FFF0F0", border: "1px solid #FFCDD2", borderRadius: RADII.PILL, padding: "2px 7px" }}>
-                      {co.total_issues} issue{co.total_issues !== 1 ? "s" : ""}
+                      {co.total_issues} issue{co.total_issues !== 1 ? "s" : ""} →
                     </span>
+                  ) : (
+                    <span style={{ fontSize: "11px", color: COLOURS.GREEN }}>✓ Clean</span>
                   )}
                 </div>
                 <HealthScoreDial score={co.score} />
@@ -1634,29 +1656,36 @@ const FILTER_OPTIONS = [
   { value: "bad_filename",    label: "Bad filenames" },
 ];
 
-function FilingHealthTab() {
+function FilingHealthTab({ initialCompany, initialType }: { initialCompany?: string; initialType?: string }) {
   const setPreview = useContext(PreviewContext);
   const [issues, setIssues] = useState<HealthIssue[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [filterType, setFilterType] = useState("");
+  const [filterType, setFilterType] = useState(initialType ?? "");
+  const [filterCompany, setFilterCompany] = useState(initialCompany ?? "");
   const [previewingId, setPreviewingId] = useState<string | null>(null);
 
-  function fetchIssues(type: string) {
+  function fetchIssues(type: string, company: string) {
     setLoading(true);
     const params = new URLSearchParams({ limit: "200" });
     if (type) params.set("issue_type", type);
+    if (company) params.set("company_uuid", company);
     authFetch(`/api/folderit/health?${params}`)
       .then((r) => r.json())
       .then((d) => { setIssues(d.issues ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { fetchIssues(""); }, []);
+  useEffect(() => { fetchIssues(initialType ?? "", initialCompany ?? ""); }, []);
 
   function handleFilter(type: string) {
     setFilterType(type);
-    fetchIssues(type);
+    fetchIssues(type, filterCompany);
+  }
+
+  function clearCompany() {
+    setFilterCompany("");
+    fetchIssues(filterType, "");
   }
 
   async function handleRowClick(iss: HealthIssue) {
@@ -1678,6 +1707,16 @@ function FilingHealthTab() {
 
   return (
     <div>
+      {/* Active company filter banner */}
+      {filterCompany && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", padding: "8px 12px", background: COLOURS.INFO_SOFT ?? "#EFF6FF", borderRadius: RADII.CARD, border: `1px solid ${COLOURS.BORDER}` }}>
+          <span style={{ fontSize: "12px", color: NAVY }}>Filtered by company</span>
+          <button onClick={clearCompany} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: SLATE, textDecoration: "underline", padding: 0 }}>
+            Clear ×
+          </button>
+        </div>
+      )}
+
       {/* Filter pills */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
         {FILTER_OPTIONS.map((opt) => (
@@ -1812,6 +1851,7 @@ function FolderitDashboard() {
   const isMobile = useMobile();
   const { ctx, loading: ctxLoading } = useUserCtx();
   const [pageTab, setPageTab] = useState<"overview" | "browse" | "health">("overview");
+  const [healthNav, setHealthNav] = useState<HealthNav>({});
   const [hrCategories, setHrCategories] = useState<HrCategory[]>([]);
   const [summary, setSummary] = useState<{ pending_approval_count: number; company_inbox_count: number; hr_inbox_count: number } | null>(null);
   const [approvalItems, setApprovalItems] = useState<DetailItem[]>([]);
@@ -1893,9 +1933,23 @@ function FolderitDashboard() {
           ))}
         </div>
 
-        {pageTab === "overview" && <OverviewTab isAdmin={isAdmin} />}
+        {pageTab === "overview" && (
+          <OverviewTab
+            isAdmin={isAdmin}
+            onGoToHealth={(nav) => {
+              setHealthNav(nav ?? {});
+              setPageTab("health");
+            }}
+          />
+        )}
         {pageTab === "browse"   && <BrowseView />}
-        {pageTab === "health"   && <FilingHealthTab />}
+        {pageTab === "health"   && (
+          <FilingHealthTab
+            key={`${healthNav.company_uuid ?? ""}-${healthNav.issue_type ?? ""}`}
+            initialCompany={healthNav.company_uuid}
+            initialType={healthNav.issue_type}
+          />
+        )}
       </main>
       {preview && <PreviewModal url={preview.url} name={preview.name} onClose={() => setPreview(null)} />}
     </PreviewContext.Provider>
