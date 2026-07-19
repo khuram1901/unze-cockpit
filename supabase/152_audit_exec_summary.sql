@@ -61,7 +61,9 @@ begin
       min(ps.target_date) filter (where ps.status in ('Planned','In Progress')
                                     and ps.target_date >= current_date)          as next_deadline
     from audit_teams t
-    join audit_team_companies atc on atc.team_id = t.id
+    -- Join proc_stats directly on team_id — do NOT re-join audit_team_companies here,
+    -- it already produced one row per process inside proc_stats. Re-joining would
+    -- multiply rows by the number of companies in that team (doubles RESTAURANTS).
     join proc_stats ps on ps.team_id = t.id
     -- Exclude pre-audit team from the portfolio view (they do daily checks, not projects)
     where t.code <> 'PREAUDIT'
