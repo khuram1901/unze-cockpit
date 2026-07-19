@@ -17,7 +17,7 @@ import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import TaxComplianceSummary from "../accounts-tax/TaxComplianceSummary";
-import PreauditApprovalsCard from "./PreauditApprovalsCard";
+import AuditProgressCard from "./AuditProgressCard";
 
 const { NAVY, SLATE, BORDER, CANVAS, HAIRLINE, CARD_ALT, INK_700, INK_400, GREEN, AMBER, RED, BLUE, SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT } = COLOURS;
 
@@ -3225,62 +3225,12 @@ function ExecutiveDashboardBody({
       )}
 
       {/* ── PRE-AUDIT APPROVALS (today's unapproved documents) ── */}
-      {wv("home.preaudit_pending", true) && <PreauditApprovalsCard />}
+      {wv("home.audit_progress", true) && <AuditProgressCard />}
 
       {/* ── DEPARTMENT SCORECARD ── */}
       {wv("home.department_scorecard", true) && (<>
       <SectionTitle title="Department Scorecard" />
-      <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", overflow: "hidden", marginBottom: "12px", backgroundColor: COLOURS.CARD }}>
-        {scorecardRows.map((d, i) => {
-          const statusColor = d.status === "GREEN" ? GREEN : d.status === "AMBER" ? AMBER : RED;
-          const softBg = d.status === "GREEN" ? COLOURS.SUCCESS_SOFT : d.status === "AMBER" ? COLOURS.WARNING_SOFT : COLOURS.DANGER_SOFT;
-          const isLegalStub = d.title === "Legal" && d.owner === "Not yet built";
-          const hasPerf = !!d.perf && d.perf.total > 0;
-          const inner = (
-            <div style={{
-              display: "flex", alignItems: "center", gap: "12px",
-              padding: "12px 16px",
-              borderBottom: i < scorecardRows.length - 1 ? `1px solid ${HAIRLINE}` : "none",
-            }}>
-              {/* Left status dot */}
-              <span style={{
-                width: "8px", height: "8px", borderRadius: "50%",
-                backgroundColor: statusColor, flexShrink: 0,
-              }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "13px", fontWeight: 500, color: NAVY }}>{d.title}</div>
-                {d.owner && d.owner !== "—" && (
-                  <div style={{ fontSize: "11px", color: SLATE, marginTop: "2px" }}>{d.owner}</div>
-                )}
-              </div>
-              {/* Task counts */}
-              {hasPerf && (
-                <span style={{ fontSize: "12px", color: SLATE, flexShrink: 0 }}>
-                  <span style={{ color: d.perf!.red > 0 ? RED : SLATE }}>{d.perf!.red}↑</span>
-                  {" / "}
-                  <span style={{ color: d.perf!.amber > 0 ? AMBER : SLATE }}>{d.perf!.amber} active</span>
-                </span>
-              )}
-              {/* Right soft chip */}
-              <span style={{
-                fontSize: "10.5px", fontWeight: 600, color: statusColor, flexShrink: 0,
-                padding: "3px 8px", borderRadius: "999px", backgroundColor: softBg,
-                letterSpacing: "0.04em",
-              }}>{d.status}</span>
-            </div>
-          );
-          return isLegalStub ? (
-            <div key={d.slug} style={{ opacity: 0.55 }}>{inner}</div>
-          ) : (
-            <a key={d.slug} href={`/department/${d.slug}`} style={{ textDecoration: "none", color: "inherit", display: "block", transition: "background-color 0.12s" }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = COLOURS.CARD_ALT; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            >{inner}</a>
-          );
-        })}
-      </div>
-
-      <DrillDownPerformance departmentRows={departmentRows} deptPeopleMap={deptPeopleMap} />
+      <DepartmentScorecardUnified scorecardRows={scorecardRows} deptPeopleMap={deptPeopleMap} isMobile={isMobile} />
       </>)}
     </>
   );

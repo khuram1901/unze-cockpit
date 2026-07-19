@@ -35,7 +35,7 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "home.uk_pension", label: "UK Pension", page: "Executive Dashboard" },
   { key: "home.folderit", label: "Folder-it", page: "Executive Dashboard" },
   { key: "home.department_scorecard", label: "Department Scorecard", page: "Executive Dashboard", tip: "RAG status per department + task load chart" },
-  { key: "home.preaudit_pending", label: "Pre-Audit Approvals (today)", page: "Executive Dashboard", tip: "Unapproved documents recorded daily by the pre-audit team — target zero" },
+  { key: "home.audit_progress", label: "Internal Audit Portfolio", page: "Executive Dashboard", tip: "Per-team audit project completion rates, on-track vs overdue counts, and next deadlines" },
 
   // ── Unze P&L (app/finance/profit-and-loss/page.tsx) ──────────────
   { key: "unze_pnl.attention_banner", label: "Needs-attention banner", page: "Unze P&L" },
