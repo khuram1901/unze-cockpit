@@ -254,22 +254,7 @@ type FolderitTeamUser = {
   email?: string;
   name?: string;
   displayName?: string;
-  firstName?: string;
-  lastName?: string;
 };
-
-/** Derive a human-readable name from an email prefix when Folderit doesn't return one.
- *  e.g. "asif.shakoor@unze.co.uk" → "Asif Shakoor"
- *       "pa.ceo@unze.co.uk"       → "PA CEO"
- *       "taxation1@unze.co.uk"    → "Taxation1"
- */
-function emailToDisplayName(email: string): string {
-  const prefix = email.split("@")[0];
-  return prefix
-    .replace(/[._-]+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 async function syncUserMap(
   db: ReturnType<typeof createServiceClient>,
@@ -299,9 +284,7 @@ async function syncUserMap(
             member_email: u.email!.toLowerCase(),
             account_uid: account.account_uid,
             folderit_user_uid: u.uid,
-            display_name: u.name ?? u.displayName
-              ?? (u.firstName || u.lastName ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : null)
-              ?? emailToDisplayName(u.email!),
+            display_name: u.name ?? u.displayName ?? null,
             synced_at: new Date().toISOString(),
           }));
 
