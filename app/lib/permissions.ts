@@ -534,6 +534,21 @@ export function canAccessAdminEntry(u: UserCtx): boolean {
   return false;
 }
 
+// ── Daily-entry-only restricted mode ────────────────────────────────
+// True when the user has admin entry access but no broader app access.
+// These users should be locked to /daily-entry: no sidebar nav, no
+// Home button. Akhlaq and Sunaina (who have full access) will have
+// canViewExecutiveDashboard or canViewOperations = true, so this
+// returns false for them and they keep full navigation as normal.
+export function isDailyEntryOnly(u: UserCtx): boolean {
+  return (
+    canAccessAdminEntry(u) &&
+    !canViewExecutiveDashboard(u) &&
+    !canViewOperations(u) &&
+    !canViewPADashboard(u)
+  );
+}
+
 // ── Widget-level visibility ───────────────────────────────────────
 // One level below page-level access: canViewExecutiveDashboard() etc.
 // decide whether someone can reach a page at all; this decides which

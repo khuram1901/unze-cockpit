@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import { isDailyEntryOnly } from "../lib/permissions";
 import { supabase } from "../lib/supabase";
 import DateInput from "../lib/DateInput";
 import { COLOURS, RADII, PageHeader, useToast, primaryButtonStyle, inputStyle } from "../lib/SharedUI";
@@ -83,7 +84,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // ── Main page ─────────────────────────────────────────────────────────
 
 export default function DailyEntryPage() {
-  const { checking } = useRequireCapability("admin_entry");
+  const { checking, ctx } = useRequireCapability("admin_entry");
+  const entryOnly = ctx ? isDailyEntryOnly(ctx) : false;
   const isMobile = useMobile();
   const { show: showToast, element: toastElement } = useToast();
 
@@ -440,7 +442,7 @@ export default function DailyEntryPage() {
   return (
     <AuthWrapper>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: maxW, margin: "0 auto" }}>
-        <PageHeader />
+        <PageHeader hideHome={entryOnly} />
         <h1 style={{ fontSize: "20px", fontWeight: 800, color: COLOURS.NAVY, margin: "0 0 4px" }}>Daily Entry</h1>
         <p style={{ fontSize: "13px", color: COLOURS.SLATE, margin: "0 0 20px" }}>
           Log fuel, solar, utility, and vehicle maintenance.

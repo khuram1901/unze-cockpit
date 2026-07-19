@@ -10,7 +10,7 @@ import { formatDateUK, formatMonthUK, workingDaysFromNow } from "../lib/dateUtil
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, DIR_COMPANY_ID, COMPANIES, FINANCE_COMPANIES as ALL_FINANCE_COMPANIES } from "../lib/constants";
 import { useMobile } from "../lib/useMobile";
 import { useUserCtx } from "../lib/useUserCtx";
-import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, widgetVisible, financeCompanies, myIdentityEmails, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { isPA, isPrivileged, canCreateAssignments, canViewFinance, isAdminTier, canViewExecutiveDashboard, widgetVisible, financeCompanies, myIdentityEmails, isDailyEntryOnly, type UserCtx, type PermOverrides } from "../lib/permissions";
 import { achievementStatus, breakageStatus, BREAKAGE_RED_OVER } from "../lib/kpiThresholds";
 import { logAction } from "../lib/audit-log";
 import { DEPARTMENT_CONFIGS, getDepartmentHealthStatus } from "../lib/department-config";
@@ -416,6 +416,10 @@ export default function HomePage() {
   useEffect(() => {
     if (!ctxLoading && ctx && isPA(ctx)) {
       router.replace("/pa");
+    }
+    // Daily-entry-only users have no access to this page — send them home
+    if (!ctxLoading && ctx && isDailyEntryOnly(ctx)) {
+      router.replace("/daily-entry");
     }
   }, [ctxLoading, ctx, router]);
 

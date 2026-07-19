@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase";
+import { supabase, loadMyPermissions } from "../../lib/supabase";
 import { COLOURS } from "../../lib/SharedUI";
+import { isDailyEntryOnly, type PermOverrides } from "../../lib/permissions";
 
 type MemberProfile = {
   role: string | null;
@@ -69,6 +70,15 @@ export default function AuthCallbackPage() {
         router.replace(
           `/login?error=${encodeURIComponent("This Google account isn't registered. Contact your Unze Group administrator.")}`
         );
+        return;
+      }
+
+      // Check if this is a daily-entry-only user (no broader app access)
+      const permData = await loadMyPermissions();
+      const overrides = (permData as PermOverrides | null);
+      const ctx = { email, role: memberData.role ?? null, department: memberData.department ?? null, company: null, overrides, widgetOverrides: null };
+      if (isDailyEntryOnly(ctx)) {
+        router.replace("/daily-entry");
         return;
       }
 

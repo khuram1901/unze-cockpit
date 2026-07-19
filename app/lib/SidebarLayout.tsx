@@ -20,7 +20,7 @@ import {
   canViewPADashboard, canViewInvestments,
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
   canViewIfplPnl,
-  isMainAdmin, isCEO, isSecondaryCEO,
+  isMainAdmin, isCEO, isSecondaryCEO, isDailyEntryOnly,
   type UserCtx,
 } from "./permissions";
 
@@ -183,6 +183,9 @@ export default function SidebarLayout({
   // Build visible nav items from registry + permissions
   const visibleCards = userCtx ? PAGE_REGISTRY.filter((card) => isCardVisible(card, userCtx)) : [];
 
+  // Restricted users: daily-entry access only, no broader app navigation
+  const entryOnly = userCtx ? isDailyEntryOnly(userCtx) : false;
+
   const isPAUser = userCtx ? (userCtx.role === "Executive" || (userCtx.email || "").toLowerCase() === "pa.ceo@unze.co.uk") : false;
   // Everyone lands on the same /home — it self-scopes by company (via
   // financeCompanies()) and role/widget overrides instead of each senior
@@ -196,7 +199,7 @@ export default function SidebarLayout({
     { permKey: "_home", title: "Executive Dashboard", subtitle: "", href: homeHref, icon: "🏠", group: "_top" },
   ];
 
-  const sidebarW = isMobile ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;
+  const sidebarW = (isMobile || entryOnly) ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;
 
   const initials = userName
     .split(" ")
@@ -267,6 +270,8 @@ export default function SidebarLayout({
 
         {/* ── Nav sections ── */}
         <nav style={{ flex: 1, overflowY: "auto", padding: collapsed ? "8px 6px" : "8px 12px" }}>
+          {/* Daily-entry-only users: no navigation links at all */}
+          {!entryOnly && <>
           {/* OVERVIEW group — always-visible Executive Dashboard + Overview items */}
           <div style={{ marginBottom: "4px" }}>
             {!collapsed && (
@@ -343,6 +348,7 @@ export default function SidebarLayout({
               {!collapsed && <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>}
             </button>
           </div>
+          </> /* end !entryOnly nav */}
         </nav>
 
         {/* ── User card + bottom controls ── */}
@@ -455,8 +461,8 @@ export default function SidebarLayout({
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-page)" }}>
-      {/* ── Desktop sidebar ── */}
-      {!isMobile && (
+      {/* ── Desktop sidebar (hidden for daily-entry-only users) ── */}
+      {!isMobile && !entryOnly && (
         <aside style={{
           position: "fixed", top: 0, left: 0, bottom: 0,
           width: `${sidebarW}px`,
@@ -469,8 +475,8 @@ export default function SidebarLayout({
         </aside>
       )}
 
-      {/* ── Mobile overlay ── */}
-      {isMobile && mobileMenuOpen && (
+      {/* ── Mobile overlay (hidden for daily-entry-only users) ── */}
+      {isMobile && mobileMenuOpen && !entryOnly && (
         <>
           <div
             onClick={() => setMobileMenuOpen(false)}
@@ -518,7 +524,7 @@ export default function SidebarLayout({
           display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
-            {isMobile && (
+            {isMobile && !entryOnly && (
               <button
                 onClick={() => setMobileMenuOpen(true)}
                 style={{

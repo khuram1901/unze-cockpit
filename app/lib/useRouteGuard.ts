@@ -57,9 +57,10 @@ async function loadUserCtx(email: string): Promise<UserCtx> {
   };
 }
 
-export function useRequireCapability(cap: Capability): { checking: boolean } {
+export function useRequireCapability(cap: Capability): { checking: boolean; ctx: UserCtx | null } {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
+  const [ctx, setCtx] = useState<UserCtx | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -67,19 +68,20 @@ export function useRequireCapability(cap: Capability): { checking: boolean } {
       const { data: { user } } = await supabase.auth.getUser();
       if (!active) return;
       if (!user?.email) { router.replace("/login"); return; }
-      const ctx = await loadUserCtx(user.email);
+      const loaded = await loadUserCtx(user.email);
       if (!active) return;
-      if (!CHECKS[cap](ctx)) {
+      if (!CHECKS[cap](loaded)) {
         router.replace("/home");
         return;
       }
+      setCtx(loaded);
       setChecking(false);
     }
     check();
     return () => { active = false; };
   }, [cap, router]);
 
-  return { checking };
+  return { checking, ctx };
 }
 
 export function useBlockPA(): { checking: boolean } {

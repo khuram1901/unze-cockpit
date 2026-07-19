@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useMemo, Suspense } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, loadMyPermissions } from "../lib/supabase";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { COLOURS, RADII } from "../lib/SharedUI";
+import { isDailyEntryOnly, type PermOverrides } from "../lib/permissions";
 
 type MemberProfile = {
   role: string | null;
@@ -119,6 +120,15 @@ function LoginPageInner() {
       await supabase.auth.signOut();
       setLoading(false);
       setMessage("Error: This account isn't registered. Contact your Unze Group administrator.");
+      return;
+    }
+
+    // Check if this is a daily-entry-only user (no broader app access)
+    const permData = await loadMyPermissions();
+    const overrides = (permData as PermOverrides | null);
+    const ctx = { email, role: member.role ?? null, department: member.department ?? null, company: null, overrides, widgetOverrides: null };
+    if (isDailyEntryOnly(ctx)) {
+      router.push("/daily-entry");
       return;
     }
 
