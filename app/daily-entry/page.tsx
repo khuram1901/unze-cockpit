@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import DateInput from "../lib/DateInput";
 import { COLOURS, RADII, PageHeader, useToast, primaryButtonStyle, inputStyle } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
+import { routeSubmittedTask } from "../lib/taskRouting";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -24,6 +25,9 @@ type MyTask = {
   priority: string | null;
   status: string;
   notes: string | null;
+  assigned_to: string | null;
+  assigned_to_email: string | null;
+  requires_manager_signoff: boolean | null;
 };
 
 type RecentFuel = {
@@ -241,7 +245,7 @@ export default function DailyEntryPage() {
     if (!email) { setLoadingTasks(false); return; }
     const { data } = await supabase
       .from("tasks")
-      .select("id, description, project, due_date, priority, status, notes")
+      .select("id, description, project, due_date, priority, status, notes, assigned_to, assigned_to_email, requires_manager_signoff")
       .eq("assigned_to_email", email)
       .not("status", "in", '("Completed","Cancelled")')
       .order("due_date", { ascending: true, nullsFirst: false });
@@ -249,20 +253,26 @@ export default function DailyEntryPage() {
     setLoadingTasks(false);
   }
 
-  async function updateTaskStatus(taskId: string, newStatus: string) {
-    setUpdatingTask(taskId);
+  async function updateTaskStatus(task: MyTask, newStatus: string) {
+    setUpdatingTask(task.id);
+    // When submitting, route to manager (same flow as the main Tasks page)
+    const extra = newStatus === "Submitted" && task.status !== "Submitted"
+      ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email, task.requires_manager_signoff !== false)
+      : {};
     await supabase.from("tasks").update({
       status: newStatus,
       updated_at: new Date().toISOString(),
-    }).eq("id", taskId);
-    // Remove from list if completed/cancelled, else update in place
-    if (newStatus === "Completed" || newStatus === "Cancelled") {
-      setMyTasks((prev) => prev.filter((t) => t.id !== taskId));
+      ...extra,
+    }).eq("id", task.id);
+    // Submitted tasks are now reassigned to the manager — remove from this user's list
+    if (newStatus === "Submitted") {
+      setMyTasks((prev) => prev.filter((t) => t.id !== task.id));
+      showToast("Submitted for review ✓");
     } else {
-      setMyTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t));
+      setMyTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, status: newStatus } : t));
+      showToast("Task updated");
     }
     setUpdatingTask(null);
-    showToast(newStatus === "Completed" ? "Task marked complete ✓" : "Task updated");
   }
 
   // ── Submit handlers ────────────────────────────────────────────────
@@ -967,30 +977,22 @@ export default function DailyEntryPage() {
                   )}
 
                   {/* Action buttons */}
-                  <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     {task.status === "Not Started" && (
-                      <button disabled={busy} onClick={() => updateTaskStatus(task.id, "In Progress")}
+                      <button disabled={busy} onClick={() => updateTaskStatus(task, "In Progress")}
                         style={{ ...primaryButtonStyle, fontSize: "12px", padding: "7px 14px", opacity: busy ? 0.6 : 1 }}>
                         {busy ? "…" : "▶ Start"}
                       </button>
                     )}
-                    {(task.status === "In Progress" || task.status === "Waiting Reply") && (
-                      <button disabled={busy} onClick={() => updateTaskStatus(task.id, "Completed")}
+                    {(task.status === "In Progress" || task.status === "Waiting Reply" || task.status === "Not Started") && (
+                      <button disabled={busy} onClick={() => updateTaskStatus(task, "Submitted")}
                         style={{ ...primaryButtonStyle, fontSize: "12px", padding: "7px 14px",
                           backgroundColor: COLOURS.GREEN, opacity: busy ? 0.6 : 1 }}>
-                        {busy ? "…" : "✓ Mark Done"}
+                        {busy ? "…" : "✓ Submit for Review"}
                       </button>
                     )}
-                    {task.status === "Not Started" && (
-                      <button disabled={busy} onClick={() => updateTaskStatus(task.id, "Waiting Reply")}
-                        style={{ fontSize: "12px", padding: "7px 14px", borderRadius: RADII.SM,
-                          border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white",
-                          color: COLOURS.AMBER, fontWeight: 600, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
-                        ⏳ Waiting Reply
-                      </button>
-                    )}
-                    {task.status === "In Progress" && (
-                      <button disabled={busy} onClick={() => updateTaskStatus(task.id, "Waiting Reply")}
+                    {(task.status === "Not Started" || task.status === "In Progress") && (
+                      <button disabled={busy} onClick={() => updateTaskStatus(task, "Waiting Reply")}
                         style={{ fontSize: "12px", padding: "7px 14px", borderRadius: RADII.SM,
                           border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white",
                           color: COLOURS.AMBER, fontWeight: 600, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>

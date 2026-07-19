@@ -269,16 +269,24 @@ async function syncUserMap(
   await Promise.all(
     accounts.map(async (account) => {
       try {
-        const res = await folderitFetch(
-          `/v2/accounts/${account.account_uid}/team-users?per-page=500`
-        );
-        if (!res.ok) {
-          errors.push(`${account.account_name}: team-users fetch ${res.status}`);
+        // Fetch both team-users (explicit members) and users (includes account
+        // owner who doesn't appear in team-users) in parallel, then merge by uid.
+        const [teamRes, usersRes] = await Promise.all([
+          folderitFetch(`/v2/accounts/${account.account_uid}/team-users?per-page=500`),
+          folderitFetch(`/v2/accounts/${account.account_uid}/users?per-page=500`),
+        ]);
+        if (!teamRes.ok && !usersRes.ok) {
+          errors.push(`${account.account_name}: team-users fetch ${teamRes.status}, users fetch ${usersRes.status}`);
           return;
         }
-        const json = await res.json();
-        // Folderit may return a bare array or { users: [...] }
-        const users: FolderitTeamUser[] = json.users ?? json ?? [];
+        const teamJson = teamRes.ok ? await teamRes.json() : null;
+        const usersJson = usersRes.ok ? await usersRes.json() : null;
+        const teamUsers: FolderitTeamUser[] = teamJson?.users ?? teamJson ?? [];
+        const allUsers: FolderitTeamUser[] = usersJson?.users ?? usersJson ?? [];
+        // Merge, deduplicate by uid
+        const byUid = new Map<string, FolderitTeamUser>();
+        for (const u of [...teamUsers, ...allUsers]) { if (u.uid) byUid.set(u.uid, u); }
+        const users = Array.from(byUid.values());
 
         const rows = users
           .filter((u) => {
