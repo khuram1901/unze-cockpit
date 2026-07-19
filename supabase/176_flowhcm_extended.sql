@@ -144,16 +144,18 @@ AS $$
       ) p
     ),
     'long_open', (
-      SELECT json_agg(json_build_object(
-        'position_title', position_title,
-        'flw_company',    flw_company,
-        'days_open',      (CURRENT_DATE - date_opened::date)
-      ))
-      FROM recruitment_positions
-      WHERE status = 'Open'
-        AND date_opened IS NOT NULL
-        AND (CURRENT_DATE - date_opened::date) > 45
-      ORDER BY (CURRENT_DATE - date_opened::date) DESC
+      SELECT json_agg(row_to_json(lp))
+      FROM (
+        SELECT
+          position_title,
+          flw_company,
+          (CURRENT_DATE - date_opened::date) AS days_open
+        FROM recruitment_positions
+        WHERE status = 'Open'
+          AND date_opened IS NOT NULL
+          AND (CURRENT_DATE - date_opened::date) > 45
+        ORDER BY (CURRENT_DATE - date_opened::date) DESC
+      ) lp
     ),
     'last_synced', (
       SELECT synced_at FROM flw_sync_log
