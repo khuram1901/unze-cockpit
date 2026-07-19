@@ -425,6 +425,198 @@ async function syncHrCategory(
   return { filesSynced, errors };
 }
 
+// ── Filing health audit ────────────────────────────────────────────────────
+// Runs every sync. Walks each cabinet's Inbox folder to detect:
+//   inbox_subfolder  — a subfolder exists inside Inbox (structural problem;
+//                      staff are hiding docs in here instead of filing them)
+//   buried_in_inbox  — a file is inside one of those Inbox subfolders
+//                      (should be in Finance / Legal / HR etc. by now)
+//   inbox_stale      — a file has been in Inbox root for >2 days unactioned
+//   bad_filename     — filename looks auto-generated or untitled
+//
+// On each run: all existing issues for the scanned accounts are deleted,
+// then the fresh set is inserted. A file that was fixed in Folderit simply
+// won't appear in the next scan — no manual "resolve" step needed.
+
+type HealthIssueRow = {
+  account_uid: string;
+  company_uuid: string | null;
+  file_uid: string | null;
+  file_name: string;
+  issue_type: string;
+  location_path: string | null;
+  days_old: number | null;
+};
+
+const BAD_FILENAME_PATTERNS: RegExp[] = [
+  /^scan\d*\./i,
+  /^img_?\d+\./i,
+  /^dsc\d+\./i,
+  /^photo\d*\./i,
+  /^screenshot\d*\./i,
+  /^document(\s*\(\d+\))?\./i,
+  /^untitled(\s*\d*)?\./i,
+  /^copy\s+of\s+/i,
+  /^new\s+(document|folder|file)/i,
+  /^file\d*\./i,
+  /^\d+\.(pdf|docx?|xlsx?|pptx?|jpg|png)$/i, // just a number
+  /\(\d+\)\.(pdf|docx?|xlsx?|pptx?|jpg|png)$/i, // ends in (1), (2) etc.
+];
+
+function isBadFilename(name: string): boolean {
+  return BAD_FILENAME_PATTERNS.some((p) => p.test(name.trim()));
+}
+
+function daysSince(unixSeconds: number | null | undefined): number | null {
+  if (!unixSeconds) return null;
+  return Math.floor((Date.now() - unixSeconds * 1000) / (1000 * 60 * 60 * 24));
+}
+
+async function scanFilingHealth(
+  db: ReturnType<typeof createServiceClient>,
+  accounts: AccountMapRow[]
+): Promise<{ issuesFound: number; errors: string[] }> {
+  const errors: string[] = [];
+  const issues: HealthIssueRow[] = [];
+
+  // Look up company_uuid for each account (for role-scoped queries later)
+  const { data: companyLinks } = await db
+    .from("folderit_account_companies")
+    .select("account_uid, company_uuid")
+    .in("account_uid", accounts.map((a) => a.account_uid));
+  const accountCompany = new Map((companyLinks ?? []).map((r) => [r.account_uid, r.company_uuid as string]));
+
+  // Also pull inbox files we already have synced (avoids an extra Folderit call)
+  const { data: inboxRows } = await db
+    .from("folderit_inbox_files")
+    .select("file_uid, name, created_at, account_uid")
+    .in("account_uid", accounts.map((a) => a.account_uid));
+  const inboxByAccount = new Map<string, { file_uid: string; name: string; created_at: string | null }[]>();
+  for (const row of inboxRows ?? []) {
+    const list = inboxByAccount.get(row.account_uid) ?? [];
+    list.push(row);
+    inboxByAccount.set(row.account_uid, list);
+  }
+
+  // Scan each account in parallel (bounded — typically 7 accounts)
+  await Promise.all(
+    accounts.map(async (account) => {
+      if (!account.inbox_folder_uid) return;
+      const companyUuid = accountCompany.get(account.account_uid) ?? null;
+
+      try {
+        // 1. Detect subfolders inside Inbox — each is a structural violation
+        const subfRes = await folderitFetch(
+          `/v2/accounts/${account.account_uid}/folders/${account.inbox_folder_uid}/folders?per-page=500`
+        );
+        const subfJson = subfRes.ok ? await subfRes.json() : null;
+        const inboxSubfolders: { uid: string; name: string }[] =
+          subfJson?.folders ?? subfJson ?? [];
+
+        for (const subfolder of inboxSubfolders) {
+          // Flag the subfolder itself
+          issues.push({
+            account_uid: account.account_uid,
+            company_uuid: companyUuid,
+            file_uid: subfolder.uid,
+            file_name: subfolder.name,
+            issue_type: "inbox_subfolder",
+            location_path: `Inbox / ${subfolder.name}`,
+            days_old: null,
+          });
+
+          // Get files buried inside this subfolder
+          const bfRes = await folderitFetch(
+            `/v2/accounts/${account.account_uid}/folders/${subfolder.uid}/files?per-page=500`
+          );
+          const bfJson = bfRes.ok ? await bfRes.json() : null;
+          const buried: FolderitFile[] = bfJson?.files ?? bfJson ?? [];
+
+          for (const file of buried) {
+            const days = daysSince(file.createdAt);
+            // Always buried_in_inbox — may also have a bad filename
+            issues.push({
+              account_uid: account.account_uid,
+              company_uuid: companyUuid,
+              file_uid: file.uid,
+              file_name: file.name,
+              issue_type: "buried_in_inbox",
+              location_path: `Inbox / ${subfolder.name}/`,
+              days_old: days,
+            });
+            if (isBadFilename(file.name)) {
+              issues.push({
+                account_uid: account.account_uid,
+                company_uuid: companyUuid,
+                file_uid: file.uid,
+                file_name: file.name,
+                issue_type: "bad_filename",
+                location_path: `Inbox / ${subfolder.name}/`,
+                days_old: days,
+              });
+            }
+          }
+        }
+
+        // 2. Check inbox root files (already in folderit_inbox_files)
+        const rootFiles = inboxByAccount.get(account.account_uid) ?? [];
+        for (const file of rootFiles) {
+          const days = file.created_at
+            ? Math.floor((Date.now() - new Date(file.created_at).getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+
+          if (isBadFilename(file.name)) {
+            issues.push({
+              account_uid: account.account_uid,
+              company_uuid: companyUuid,
+              file_uid: file.file_uid,
+              file_name: file.name,
+              issue_type: "bad_filename",
+              location_path: "Inbox/ (root)",
+              days_old: days,
+            });
+          }
+          if (days !== null && days > 2) {
+            issues.push({
+              account_uid: account.account_uid,
+              company_uuid: companyUuid,
+              file_uid: file.file_uid,
+              file_name: file.name,
+              issue_type: "inbox_stale",
+              location_path: "Inbox/ (root)",
+              days_old: days,
+            });
+          }
+        }
+      } catch (e) {
+        errors.push(
+          `${account.account_name}: health scan — ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    })
+  );
+
+  // Replace all health issues for these accounts atomically
+  await db
+    .from("folderit_health_issues")
+    .delete()
+    .in("account_uid", accounts.map((a) => a.account_uid));
+
+  if (issues.length > 0) {
+    // Deduplicate by (account_uid, file_uid, issue_type) before inserting
+    const seen = new Set<string>();
+    const deduped = issues.filter((iss) => {
+      const key = `${iss.account_uid}:${iss.file_uid ?? ""}:${iss.issue_type}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    await db.from("folderit_health_issues").insert(deduped);
+  }
+
+  return { issuesFound: issues.length, errors };
+}
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization") ?? "";
   const isCron = CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`;
@@ -470,8 +662,8 @@ export async function GET(request: NextRequest) {
     (aliases ?? []).map((a) => [a.alias_email.toLowerCase(), a.dashboard_email.toLowerCase()])
   );
 
-  // Accounts, HR categories, and user mapping are all independent — run in parallel.
-  const [accountResults, hrResults, userMapResult] = await Promise.all([
+  // Accounts, HR categories, user mapping, and health audit are all independent — run in parallel.
+  const [accountResults, hrResults, userMapResult, healthResult] = await Promise.all([
     Promise.all(
       (accounts as AccountMapRow[]).map(async (account) => {
         const [inbox, approvals] = await Promise.all([
@@ -483,6 +675,7 @@ export async function GET(request: NextRequest) {
     ),
     Promise.all(((hrCategories ?? []) as HrCategoryRow[]).map((c) => syncHrCategory(db, c))),
     syncUserMap(db, accounts as AccountMapRow[], memberEmails, aliasMap),
+    scanFilingHealth(db, accounts as AccountMapRow[]),
   ]);
 
   for (const { inbox, approvals } of accountResults) {
@@ -499,6 +692,7 @@ export async function GET(request: NextRequest) {
   }
   usersSynced = userMapResult.usersSynced;
   errors.push(...userMapResult.errors);
+  errors.push(...healthResult.errors);
 
   // Persist a record of this run — previously the debug/error info below
   // only ever lived in this HTTP response, which nothing reads (Vercel
@@ -516,6 +710,7 @@ export async function GET(request: NextRequest) {
       users_synced: usersSynced,
       audit_entries_scanned: auditEntriesScanned,
       candidates_found: candidatesFound,
+      health_issues_found: healthResult.issuesFound,
       distinct_event_types: Array.from(sampleEventsSeen),
       errors,
     });
@@ -531,8 +726,7 @@ export async function GET(request: NextRequest) {
     invitesSynced,
     hrCategoryFilesSynced: hrFilesSynced,
     usersSynced,
-    // Debug fields to sanity-check the audit-trail approach — remove once
-    // invitesSynced has been confirmed against a real pending approval.
+    healthIssuesFound: healthResult.issuesFound,
     debug: {
       auditEntriesScanned,
       candidatesFound,

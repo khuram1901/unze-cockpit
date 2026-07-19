@@ -1288,10 +1288,314 @@ function BrowseView() {
 // down as props, removes both the extra round trip and the duplicate
 // one. company-breakdown 403s harmlessly for non-admins (cheap role
 // check, fully parallel with everything else, doesn't block anything).
+// ── Overview tab — health scores + sync status ─────────────────────────────
+
+type OverviewData = {
+  accounts: { account_uid: string; account_name: string; scope: string }[];
+  healthSummary: {
+    company_uuid: string;
+    company_name: string;
+    score: number;
+    total_issues: number;
+    breakdown: Record<string, number>;
+  }[];
+  lastSyncAt: string | null;
+  lastSyncOk: boolean | null;
+  inboxFilesTotal: number;
+  issueBreakdown: Record<string, number>;
+};
+
+function HealthScoreDial({ score }: { score: number }) {
+  const colour = score >= 80 ? COLOURS.GREEN : score >= 50 ? COLOURS.AMBER : COLOURS.RED;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      <div style={{
+        width: "44px", height: "44px", borderRadius: "50%",
+        border: `3px solid ${colour}`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: "13px", fontWeight: 700, color: colour, flexShrink: 0,
+      }}>
+        {score}
+      </div>
+      <div style={{
+        height: "6px", flex: 1, borderRadius: "3px",
+        background: COLOURS.BORDER, overflow: "hidden",
+      }}>
+        <div style={{ width: `${score}%`, height: "100%", background: colour, borderRadius: "3px", transition: "width 0.4s" }} />
+      </div>
+    </div>
+  );
+}
+
+const ISSUE_LABELS: Record<string, { label: string; colour: string }> = {
+  inbox_subfolder: { label: "Inbox subfolder",   colour: COLOURS.RED },
+  buried_in_inbox: { label: "Buried in Inbox",   colour: COLOURS.RED },
+  inbox_stale:     { label: "Stale in Inbox",    colour: COLOURS.AMBER },
+  bad_filename:    { label: "Bad filename",       colour: COLOURS.SLATE },
+};
+
+function OverviewTab({ isAdmin }: { isAdmin: boolean }) {
+  const [data, setData] = useState<OverviewData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    authFetch("/api/folderit/overview")
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ color: SLATE, fontSize: "13px" }}>Loading overview…</div>;
+  if (!data) return null;
+
+  const totalIssues = Object.values(data.issueBreakdown).reduce((a, b) => a + b, 0);
+  const avgScore = data.healthSummary.length
+    ? Math.round(data.healthSummary.reduce((a, c) => a + c.score, 0) / data.healthSummary.length)
+    : 100;
+
+  const lastSync = data.lastSyncAt
+    ? new Date(data.lastSyncAt).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "Not yet run";
+
+  return (
+    <div>
+      {/* Summary stat row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px", marginBottom: "24px" }}>
+        {[
+          { label: "Active Cabinets",  value: data.accounts.length,    colour: NAVY },
+          { label: "Inbox Files",      value: data.inboxFilesTotal,     colour: NAVY },
+          { label: "Filing Issues",    value: totalIssues,              colour: totalIssues > 0 ? COLOURS.RED : COLOURS.GREEN },
+          { label: "Avg Health Score", value: `${avgScore}%`,          colour: avgScore >= 80 ? COLOURS.GREEN : avgScore >= 50 ? COLOURS.AMBER : COLOURS.RED },
+        ].map(({ label, value, colour }) => (
+          <div key={label} style={{ ...cardStyle, padding: "14px 16px" }}>
+            <div style={{ fontSize: "11px", color: SLATE, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
+            <div style={{ fontSize: "22px", fontWeight: 700, color: colour }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Issue breakdown */}
+      {totalIssues > 0 && (
+        <div style={{ ...cardStyle, padding: "16px", marginBottom: "24px" }}>
+          <div style={{ fontSize: "12px", fontWeight: 600, color: NAVY, marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Issue Breakdown</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+            {Object.entries(data.issueBreakdown)
+              .filter(([, count]) => count > 0)
+              .map(([type, count]) => {
+                const meta = ISSUE_LABELS[type] ?? { label: type, colour: SLATE };
+                return (
+                  <div key={type} style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "6px 10px", borderRadius: RADII.CARD,
+                    background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.BORDER}`,
+                  }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: meta.colour, display: "inline-block", flexShrink: 0 }} />
+                    <span style={{ fontSize: "12px", color: NAVY }}>{meta.label}</span>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: meta.colour }}>{count}</span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Health scores per company */}
+      {data.healthSummary.length > 0 && (
+        <div style={{ marginBottom: "24px" }}>
+          <div style={{ fontSize: "12px", fontWeight: 600, color: NAVY, marginBottom: "10px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Filing Health by Company</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "12px" }}>
+            {data.healthSummary.map((co) => (
+              <div key={co.company_uuid} style={{ ...cardStyle, padding: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{co.company_name}</span>
+                  {co.total_issues > 0 && (
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.RED, background: "#FFF0F0", border: "1px solid #FFCDD2", borderRadius: RADII.PILL, padding: "2px 7px" }}>
+                      {co.total_issues} issue{co.total_issues !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+                <HealthScoreDial score={co.score} />
+                {co.total_issues > 0 && (
+                  <div style={{ marginTop: "8px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                    {Object.entries(co.breakdown).filter(([, n]) => n > 0).map(([type, n]) => {
+                      const meta = ISSUE_LABELS[type] ?? { label: type, colour: SLATE };
+                      return (
+                        <span key={type} style={{ fontSize: "10px", color: meta.colour, background: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.PILL, padding: "2px 6px" }}>
+                          {n} {meta.label.toLowerCase()}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sync status */}
+      <div style={{ ...cardStyle, padding: "12px 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+        <span style={{ width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
+          background: data.lastSyncOk === false ? COLOURS.RED : data.lastSyncOk === true ? COLOURS.GREEN : SLATE }} />
+        <span style={{ fontSize: "12px", color: SLATE }}>
+          Last sync: <span style={{ fontWeight: 600, color: NAVY }}>{lastSync}</span>
+          {data.lastSyncOk === false && <span style={{ color: COLOURS.RED, marginLeft: "6px" }}>⚠ Errors reported</span>}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Filing Health tab — full audit results table ────────────────────────────
+
+type HealthIssue = {
+  id: string;
+  account_uid: string;
+  company_uuid: string | null;
+  file_uid: string | null;
+  file_name: string;
+  issue_type: string;
+  location_path: string | null;
+  days_old: number | null;
+  detected_at: string;
+};
+
+function IssueTypeBadge({ type }: { type: string }) {
+  const meta = ISSUE_LABELS[type] ?? { label: type, colour: SLATE };
+  return (
+    <span style={{
+      fontSize: "10px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.PILL,
+      color: meta.colour, background: meta.colour + "18",
+      border: `1px solid ${meta.colour}44`, whiteSpace: "nowrap",
+    }}>
+      {meta.label}
+    </span>
+  );
+}
+
+const FILTER_OPTIONS = [
+  { value: "",               label: "All issues" },
+  { value: "inbox_subfolder", label: "Inbox subfolders" },
+  { value: "buried_in_inbox", label: "Buried in Inbox" },
+  { value: "inbox_stale",     label: "Stale in Inbox" },
+  { value: "bad_filename",    label: "Bad filenames" },
+];
+
+function FilingHealthTab() {
+  const [issues, setIssues] = useState<HealthIssue[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [filterType, setFilterType] = useState("");
+
+  function fetchIssues(type: string) {
+    setLoading(true);
+    const params = new URLSearchParams({ limit: "200" });
+    if (type) params.set("issue_type", type);
+    authFetch(`/api/folderit/health?${params}`)
+      .then((r) => r.json())
+      .then((d) => { setIssues(d.issues ?? []); setTotal(d.total ?? 0); })
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { fetchIssues(""); }, []);
+
+  function handleFilter(type: string) {
+    setFilterType(type);
+    fetchIssues(type);
+  }
+
+  const noIssues = !loading && issues.length === 0;
+
+  return (
+    <div>
+      {/* Filter pills */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
+        {FILTER_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => handleFilter(opt.value)}
+            style={{
+              padding: "5px 12px", borderRadius: RADII.PILL, fontSize: "12px", fontWeight: 500,
+              border: `1px solid ${filterType === opt.value ? NAVY : COLOURS.BORDER}`,
+              background: filterType === opt.value ? NAVY : "white",
+              color: filterType === opt.value ? "white" : SLATE,
+              cursor: "pointer",
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+        {total > 0 && (
+          <span style={{ fontSize: "12px", color: SLATE, alignSelf: "center", marginLeft: "4px" }}>
+            {total} issue{total !== 1 ? "s" : ""} found
+          </span>
+        )}
+      </div>
+
+      {loading && <div style={{ color: SLATE, fontSize: "13px" }}>Loading health issues…</div>}
+
+      {noIssues && (
+        <div style={{ ...cardStyle, padding: "32px", textAlign: "center" }}>
+          <div style={{ fontSize: "28px", marginBottom: "8px" }}>✅</div>
+          <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.GREEN, marginBottom: "4px" }}>No issues found</div>
+          <div style={{ fontSize: "12px", color: SLATE }}>
+            {filterType ? `No ${ISSUE_LABELS[filterType]?.label.toLowerCase() ?? filterType} issues detected.` : "All cabinets are filing correctly."}
+          </div>
+        </div>
+      )}
+
+      {!loading && issues.length > 0 && (
+        <div style={{ ...cardStyle, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: COLOURS.CARD_ALT }}>
+                {["Issue", "File / Folder", "Location", "Age", "Company"].map((h) => (
+                  <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {issues.map((iss, i) => (
+                <tr key={iss.id} style={{ borderBottom: i < issues.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none" }}>
+                  <td style={{ padding: "9px 12px", verticalAlign: "middle" }}>
+                    <IssueTypeBadge type={iss.issue_type} />
+                  </td>
+                  <td style={{ padding: "9px 12px", fontSize: "12px", color: NAVY, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {iss.file_name}
+                  </td>
+                  <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE, maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {iss.location_path ?? "—"}
+                  </td>
+                  <td style={{ padding: "9px 12px", fontSize: "12px", color: iss.days_old !== null && iss.days_old > 2 ? COLOURS.AMBER : NAVY, whiteSpace: "nowrap" }}>
+                    {iss.days_old !== null ? `${iss.days_old}d` : "—"}
+                  </td>
+                  <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE }}>
+                    {/* company_uuid would need a lookup — location_path gives enough context */}
+                    {iss.account_uid.substring(0, 8)}…
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {total > issues.length && (
+            <div style={{ padding: "10px 12px", fontSize: "11px", color: SLATE, borderTop: `1px solid ${COLOURS.BORDER}`, background: COLOURS.CARD_ALT }}>
+              Showing {issues.length} of {total} issues
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Four-tab dashboard shell ────────────────────────────────────────────────
+
 function FolderitDashboard() {
   const isMobile = useMobile();
   const { ctx, loading: ctxLoading } = useUserCtx();
-  const [pageTab, setPageTab] = useState<"overview" | "browse">("overview");
+  const [pageTab, setPageTab] = useState<"overview" | "browse" | "health" | "alerts">("overview");
   const [hrCategories, setHrCategories] = useState<HrCategory[]>([]);
   const [summary, setSummary] = useState<{ pending_approval_count: number; company_inbox_count: number; hr_inbox_count: number } | null>(null);
   const [approvalItems, setApprovalItems] = useState<DetailItem[]>([]);
@@ -1339,38 +1643,45 @@ function FolderitDashboard() {
   const hasHrAccess = canViewFolderitHr(ctx);
   const hrInboxCount = summary?.hr_inbox_count ?? 0;
 
+  const TABS: { key: typeof pageTab; label: string }[] = [
+    { key: "overview", label: "Overview" },
+    { key: "browse",   label: "Browse Files" },
+    { key: "health",   label: "Filing Health" },
+    { key: "alerts",   label: "Alerts" },
+  ];
+
   return (
     <PreviewContext.Provider value={setPreview}>
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader />
-        <h1 style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.01em", color: NAVY, marginTop: "8px", marginBottom: "4px" }}>Folder-it Dashboard</h1>
+        <h1 style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.01em", color: NAVY, marginTop: "8px", marginBottom: "4px" }}>Folder-it</h1>
         <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px" }}>
-          Documents pending approval &amp; filing — read-only status view. Act on anything by opening Folderit directly.
+          Read-only view of your Folderit cabinets. To file or move documents, open Folderit directly.
         </div>
 
         {/* Tab bar */}
         <div style={{ display: "flex", gap: "0", borderBottom: `2px solid ${COLOURS.BORDER}`, marginBottom: "20px" }}>
-          {(["overview", "browse"] as const).map((tab) => (
+          {TABS.map(({ key, label }) => (
             <button
-              key={tab}
-              onClick={() => setPageTab(tab)}
+              key={key}
+              onClick={() => setPageTab(key)}
               style={{
                 background: "none", border: "none", cursor: "pointer",
                 padding: "8px 18px", fontSize: "13px", fontWeight: 500,
-                color: pageTab === tab ? COLOURS.NAVY : COLOURS.SLATE,
-                borderBottom: pageTab === tab ? `2px solid ${COLOURS.NAVY}` : "2px solid transparent",
+                color: pageTab === key ? COLOURS.NAVY : COLOURS.SLATE,
+                borderBottom: pageTab === key ? `2px solid ${COLOURS.NAVY}` : "2px solid transparent",
                 marginBottom: "-2px", transition: "color 0.15s",
-                textTransform: "capitalize",
               }}
             >
-              {tab === "overview" ? "Overview" : "Browse Files"}
+              {label}
             </button>
           ))}
         </div>
 
-        {pageTab === "browse" ? (
-          <BrowseView />
-        ) : (
+        {pageTab === "overview" && <OverviewTab isAdmin={isAdmin} />}
+        {pageTab === "browse"   && <BrowseView />}
+        {pageTab === "health"   && <FilingHealthTab />}
+        {pageTab === "alerts"   && (
           <>
             <FolderitSearchBox />
             {isAdmin ? (
