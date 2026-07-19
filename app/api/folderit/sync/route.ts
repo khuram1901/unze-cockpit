@@ -249,6 +249,61 @@ type FolderitFolder = {
   name?: string;
 };
 
+type FolderitTeamUser = {
+  uid: string;
+  email?: string;
+  name?: string;
+  displayName?: string;
+};
+
+async function syncUserMap(
+  db: ReturnType<typeof createServiceClient>,
+  accounts: AccountMapRow[],
+  memberEmails: Set<string>
+): Promise<{ usersSynced: number; errors: string[] }> {
+  const errors: string[] = [];
+  let usersSynced = 0;
+
+  await Promise.all(
+    accounts.map(async (account) => {
+      try {
+        const res = await folderitFetch(
+          `/v2/accounts/${account.account_uid}/team-users?per-page=500`
+        );
+        if (!res.ok) {
+          errors.push(`${account.account_name}: team-users fetch ${res.status}`);
+          return;
+        }
+        const json = await res.json();
+        // Folderit may return a bare array or { users: [...] }
+        const users: FolderitTeamUser[] = json.users ?? json ?? [];
+
+        const rows = users
+          .filter((u) => u.email && memberEmails.has(u.email.toLowerCase()))
+          .map((u) => ({
+            member_email: u.email!.toLowerCase(),
+            account_uid: account.account_uid,
+            folderit_user_uid: u.uid,
+            display_name: u.name ?? u.displayName ?? null,
+            synced_at: new Date().toISOString(),
+          }));
+
+        if (rows.length) {
+          const { error: upsertErr } = await db
+            .from("folderit_user_map")
+            .upsert(rows, { onConflict: "member_email,account_uid" });
+          if (upsertErr) errors.push(`${account.account_name}: user map upsert — ${upsertErr.message}`);
+          else usersSynced += rows.length;
+        }
+      } catch (e) {
+        errors.push(`${account.account_name}: user map error — ${e instanceof Error ? e.message : String(e)}`);
+      }
+    })
+  );
+
+  return { usersSynced, errors };
+}
+
 // How deep to recurse into HR subfolders. The "Policies & SOPs" tree has
 // nested folders (01-Archive, 02-Policies & SOPs, etc.) — a flat fetch of
 // the top folder only picked up its 3 loose files and missed everything
@@ -362,6 +417,7 @@ export async function GET(request: NextRequest) {
   let inboxSynced = 0;
   let invitesSynced = 0;
   let hrFilesSynced = 0;
+  let usersSynced = 0;
   let auditEntriesScanned = 0;
   let candidatesFound = 0;
   const sampleEventsSeen = new Set<string>();
@@ -377,15 +433,15 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: accountsErr?.message ?? "No active Folderit accounts mapped" }, { status: 500 });
   }
 
-  const { data: hrCategories } = await db
-    .from("folderit_hr_categories")
-    .select("category_name, account_uid, folder_uid")
-    .eq("is_active", true);
+  const [{ data: hrCategories }, { data: members }] = await Promise.all([
+    db.from("folderit_hr_categories").select("category_name, account_uid, folder_uid").eq("is_active", true),
+    db.from("members").select("email"),
+  ]);
 
-  // Accounts (and HR categories) are independent of each other — sync all
-  // of them in parallel instead of one at a time to stay well inside
-  // Vercel's function time limit.
-  const [accountResults, hrResults] = await Promise.all([
+  const memberEmails = new Set((members ?? []).map((m) => m.email.toLowerCase()));
+
+  // Accounts, HR categories, and user mapping are all independent — run in parallel.
+  const [accountResults, hrResults, userMapResult] = await Promise.all([
     Promise.all(
       (accounts as AccountMapRow[]).map(async (account) => {
         const [inbox, approvals] = await Promise.all([
@@ -396,6 +452,7 @@ export async function GET(request: NextRequest) {
       })
     ),
     Promise.all(((hrCategories ?? []) as HrCategoryRow[]).map((c) => syncHrCategory(db, c))),
+    syncUserMap(db, accounts as AccountMapRow[], memberEmails),
   ]);
 
   for (const { inbox, approvals } of accountResults) {
@@ -410,6 +467,8 @@ export async function GET(request: NextRequest) {
     hrFilesSynced += hr.filesSynced;
     errors.push(...hr.errors);
   }
+  usersSynced = userMapResult.usersSynced;
+  errors.push(...userMapResult.errors);
 
   // Persist a record of this run — previously the debug/error info below
   // only ever lived in this HTTP response, which nothing reads (Vercel
@@ -424,6 +483,7 @@ export async function GET(request: NextRequest) {
       inbox_files_synced: inboxSynced,
       invites_synced: invitesSynced,
       hr_files_synced: hrFilesSynced,
+      users_synced: usersSynced,
       audit_entries_scanned: auditEntriesScanned,
       candidates_found: candidatesFound,
       distinct_event_types: Array.from(sampleEventsSeen),
@@ -440,6 +500,7 @@ export async function GET(request: NextRequest) {
     inboxFilesSynced: inboxSynced,
     invitesSynced,
     hrCategoryFilesSynced: hrFilesSynced,
+    usersSynced,
     // Debug fields to sanity-check the audit-trail approach — remove once
     // invitesSynced has been confirmed against a real pending approval.
     debug: {
