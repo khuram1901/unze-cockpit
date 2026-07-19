@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useContext, createContext } from "react";
+import React, { useEffect, useState, useContext, createContext } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
 import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle } from "../lib/SharedUI";
@@ -905,77 +905,126 @@ async function fetchBrowsePreviewBlobUrl(fileUid: string, accountUid: string): P
   return URL.createObjectURL(blob);
 }
 
+// ── Tree node for the left-panel folder sidebar ───────────────────────────
+type TreeNode = {
+  folder: BrowseFolder;
+  children: TreeNode[];
+  depth: number;
+};
+
+function fileIcon(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "📄";
+  if (["xlsx", "xls", "csv"].includes(ext)) return "📊";
+  if (["docx", "doc"].includes(ext)) return "📝";
+  if (["pptx", "ppt"].includes(ext)) return "📑";
+  if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext)) return "🖼️";
+  return "📎";
+}
+
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatFileDate(ts: number | null): string {
+  if (!ts) return "—";
+  const d = new Date(ts * 1000);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 function BrowseView() {
   const setPreview = useContext(PreviewContext);
   const [accounts, setAccounts] = useState<BrowseAccount[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
-  const [folderStack, setFolderStack] = useState<BrowseFolder[]>([]);
-  const [folders, setFolders] = useState<BrowseFolder[]>([]);
-  const [files, setFiles] = useState<BrowseFile[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [browseError, setBrowseError] = useState<string | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<BrowseAccount | null>(null);
+  // Left panel: folder tree (top-level folders from /access, lazily expanded)
+  const [rootFolders, setRootFolders] = useState<BrowseFolder[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<Map<string, BrowseFolder[]>>(new Map());
+  const [selectedFolder, setSelectedFolder] = useState<BrowseFolder | null>(null);
+  // Right panel: contents of the selected folder
+  const [rightFolders, setRightFolders] = useState<BrowseFolder[]>([]);
+  const [rightFiles, setRightFiles] = useState<BrowseFile[]>([]);
+  const [rightLoading, setRightLoading] = useState(false);
+  const [rightError, setRightError] = useState<string | null>(null);
   const [previewingFile, setPreviewingFile] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [rootLoading, setRootLoading] = useState(false);
 
   useEffect(() => {
     authFetch("/api/folderit/accounts")
       .then((r) => r.json())
-      .then((j) => setAccounts(j.accounts ?? []));
+      .then((j) => { setAccounts(j.accounts ?? []); setAccountsLoading(false); });
   }, []);
 
-  async function loadFolder(accountUid: string, folderUid: string | null) {
-    setLoading(true);
-    setBrowseError(null);
-    setNote(null);
+  async function loadRootFolders(acc: BrowseAccount) {
+    setRootLoading(true);
+    setRootFolders([]);
+    setExpandedFolders(new Map());
+    setSelectedFolder(null);
+    setRightFolders([]);
+    setRightFiles([]);
+    setRightError(null);
     try {
-      const url = folderUid
-        ? `/api/folderit/browse?account_uid=${accountUid}&folder_uid=${encodeURIComponent(folderUid)}`
-        : `/api/folderit/browse?account_uid=${accountUid}`;
-      const res = await authFetch(url);
+      const res = await authFetch(`/api/folderit/browse?account_uid=${acc.account_uid}`);
       const json = await res.json();
-      if (!res.ok) {
-        setBrowseError(json.error ?? "Failed to load folder");
-        setFolders([]);
-        setFiles([]);
-      } else {
-        setFolders(json.folders ?? []);
-        setFiles(json.files ?? []);
-        if (json.note) setNote(json.note);
-      }
+      setRootFolders((json.folders ?? []).sort((a: BrowseFolder, b: BrowseFolder) => a.name.localeCompare(b.name)));
     } catch {
-      setBrowseError("Network error — couldn't load folder");
+      setRootFolders([]);
     } finally {
-      setLoading(false);
+      setRootLoading(false);
     }
   }
 
-  function selectAccount(acc: BrowseAccount) {
-    setSelectedAccount(acc.account_uid);
-    setFolderStack([]);
-    loadFolder(acc.account_uid, null);
+  async function loadFolderContents(accountUid: string, folderUid: string) {
+    setRightLoading(true);
+    setRightError(null);
+    setRightFolders([]);
+    setRightFiles([]);
+    try {
+      const res = await authFetch(`/api/folderit/browse?account_uid=${accountUid}&folder_uid=${encodeURIComponent(folderUid)}`);
+      const json = await res.json();
+      if (!res.ok) { setRightError(json.error ?? "Failed to load folder"); return; }
+      setRightFolders((json.folders ?? []).sort((a: BrowseFolder, b: BrowseFolder) => a.name.localeCompare(b.name)));
+      setRightFiles((json.files ?? []).sort((a: BrowseFile, b: BrowseFile) => a.name.localeCompare(b.name)));
+    } catch {
+      setRightError("Network error");
+    } finally {
+      setRightLoading(false);
+    }
   }
 
-  function openFolder(folder: BrowseFolder) {
-    setFolderStack((prev) => [...prev, folder]);
-    loadFolder(selectedAccount!, folder.uid);
-  }
-
-  function navigateTo(index: number) {
-    if (index < 0) {
-      setFolderStack([]);
-      loadFolder(selectedAccount!, null);
+  async function toggleFolder(folder: BrowseFolder, accountUid: string) {
+    const isExpanded = expandedFolders.has(folder.uid);
+    if (isExpanded) {
+      // Collapse
+      const next = new Map(expandedFolders);
+      next.delete(folder.uid);
+      setExpandedFolders(next);
     } else {
-      const newStack = folderStack.slice(0, index + 1);
-      setFolderStack(newStack);
-      loadFolder(selectedAccount!, newStack[newStack.length - 1].uid);
+      // Expand: fetch subfolders
+      const res = await authFetch(`/api/folderit/browse?account_uid=${accountUid}&folder_uid=${encodeURIComponent(folder.uid)}`);
+      const json = res.ok ? await res.json() : { folders: [] };
+      const next = new Map(expandedFolders);
+      next.set(folder.uid, (json.folders ?? []).sort((a: BrowseFolder, b: BrowseFolder) => a.name.localeCompare(b.name)));
+      setExpandedFolders(next);
     }
+  }
+
+  function selectFolder(folder: BrowseFolder) {
+    setSelectedFolder(folder);
+    loadFolderContents(selectedAccount!.account_uid, folder.uid);
   }
 
   async function openFile(file: BrowseFile) {
     if (previewingFile) return;
     setPreviewingFile(file.uid);
     try {
-      const url = await fetchBrowsePreviewBlobUrl(file.uid, selectedAccount!);
+      const url = await fetchBrowsePreviewBlobUrl(file.uid, selectedAccount!.account_uid);
       setPreview({ url, name: file.name });
     } catch (e) {
       window.alert(e instanceof Error ? e.message : "Couldn't preview this document.");
@@ -984,143 +1033,247 @@ function BrowseView() {
     }
   }
 
-  const selectedAcc = accounts.find((a) => a.account_uid === selectedAccount);
-
+  // ── Cabinet selection screen ──────────────────────────────────────────────
   if (!selectedAccount) {
+    const CABINET_ICONS: Record<string, string> = {
+      UTPL: "🏭", IFPL: "👟", RST: "🍽️", SMI: "💼", UZL: "🇬🇧", DIR: "👨‍👩‍👧", ALM: "🌿",
+    };
     return (
-      <>
-        <SectionTitle title="Select a cabinet to browse" />
-        {accounts.length === 0 ? (
+      <div>
+        <div style={{ marginBottom: "20px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY, letterSpacing: "-0.02em" }}>
+            Document Cabinets
+          </div>
+          <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "4px" }}>
+            Select a company to browse its Folderit filing cabinet
+          </div>
+        </div>
+        {accountsLoading ? (
+          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Loading cabinets…</div>
+        ) : accounts.length === 0 ? (
           <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>
             No Folderit accounts linked to your profile yet. The daily sync will populate this automatically.
           </div>
         ) : (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "12px" }}>
             {accounts.map((acc) => {
               const sc = acc.company?.short_code ?? "?";
-              const badge = COMPANY_BADGE_STYLES[sc as keyof typeof COMPANY_BADGE_STYLES] ??
-                { bg: COLOURS.CARD_ALT, text: COLOURS.SLATE };
+              const badge = COMPANY_BADGE_STYLES[sc as keyof typeof COMPANY_BADGE_STYLES] ?? { bg: COLOURS.CARD_ALT, text: COLOURS.SLATE };
+              const icon = CABINET_ICONS[sc] ?? "🗂️";
               return (
-                <button
+                <div
                   key={acc.account_uid}
-                  onClick={() => selectAccount(acc)}
+                  onClick={() => { setSelectedAccount(acc); loadRootFolders(acc); }}
                   style={{
-                    ...cardStyle, padding: "16px 20px", cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: "10px",
-                    border: `1px solid ${COLOURS.BORDER}`, background: "#fff",
+                    ...cardStyle,
+                    padding: "20px",
+                    cursor: "pointer",
+                    border: `1px solid ${COLOURS.BORDER}`,
+                    display: "flex", flexDirection: "column", gap: "12px",
+                    transition: "box-shadow 0.15s, border-color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = SHADOWS.HOVER;
+                    (e.currentTarget as HTMLDivElement).style.borderColor = COLOURS.NAVY + "40";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
+                    (e.currentTarget as HTMLDivElement).style.borderColor = COLOURS.BORDER;
                   }}
                 >
-                  <span style={{
-                    background: badge.bg, color: badge.text, borderRadius: RADII.SM,
-                    padding: "2px 7px", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em",
-                  }}>{sc}</span>
-                  <span style={{ fontSize: "14px", fontWeight: 500, color: COLOURS.NAVY }}>
-                    {acc.company?.name ?? acc.account_name}
-                  </span>
-                </button>
+                  <div style={{ fontSize: "28px" }}>{icon}</div>
+                  <div>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "6px" }}>
+                      {acc.company?.name ?? acc.account_name}
+                    </div>
+                    <span style={{
+                      fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em",
+                      padding: "2px 7px", borderRadius: RADII.PILL,
+                      background: badge.bg, color: badge.text,
+                      border: `1px solid ${badge.text}22`,
+                    }}>{sc}</span>
+                  </div>
+                  <div style={{ fontSize: "12px", color: COLOURS.SLATE, display: "flex", alignItems: "center", gap: "4px", marginTop: "auto" }}>
+                    <span>Open cabinet</span>
+                    <span>›</span>
+                  </div>
+                </div>
               );
             })}
           </div>
         )}
-      </>
+      </div>
     );
   }
 
-  return (
-    <>
-      {/* Breadcrumb nav */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "16px" }}>
-        <button
-          onClick={() => { setSelectedAccount(null); setFolderStack([]); setFolders([]); setFiles([]); }}
-          style={{ background: "none", border: "none", cursor: "pointer", color: COLOURS.SLATE, fontSize: "13px", padding: 0 }}
-        >
-          Cabinets
-        </button>
-        <span style={{ color: COLOURS.BORDER }}>›</span>
-        <button
-          onClick={() => navigateTo(-1)}
-          style={{
-            background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "13px",
-            color: folderStack.length === 0 ? COLOURS.NAVY : COLOURS.SLATE,
-            fontWeight: folderStack.length === 0 ? 600 : 400,
-          }}
-        >
-          {selectedAcc?.company?.name ?? selectedAcc?.account_name}
-        </button>
-        {folderStack.map((f, i) => (
-          <span key={f.uid} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ color: COLOURS.BORDER }}>›</span>
-            <button
-              onClick={() => navigateTo(i)}
-              style={{
-                background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "13px",
-                color: i === folderStack.length - 1 ? COLOURS.NAVY : COLOURS.SLATE,
-                fontWeight: i === folderStack.length - 1 ? 600 : 400,
-              }}
-            >
-              {f.name}
-            </button>
-          </span>
-        ))}
-      </div>
+  // ── Two-panel browser ─────────────────────────────────────────────────────
+  const sc = selectedAccount.company?.short_code ?? "?";
+  const badge = COMPANY_BADGE_STYLES[sc as keyof typeof COMPANY_BADGE_STYLES] ?? { bg: COLOURS.CARD_ALT, text: COLOURS.SLATE };
 
-      {loading && <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Loading…</div>}
-      {browseError && <div style={{ color: COLOURS.RED, fontSize: "13px" }}>{browseError}</div>}
-      {note && <div style={{ color: COLOURS.AMBER, fontSize: "13px", marginBottom: "12px" }}>{note}</div>}
-
-      {!loading && !browseError && (
-        <div style={{ borderRadius: RADII.CARD, overflow: "hidden", border: `1px solid ${COLOURS.BORDER}` }}>
-          {folders.sort((a, b) => a.name.localeCompare(b.name)).map((folder) => (
-            <div
-              key={folder.uid}
-              onClick={() => openFolder(folder)}
-              style={{
-                display: "flex", alignItems: "center", gap: "10px",
-                padding: "11px 16px", cursor: "pointer",
-                borderBottom: `1px solid ${COLOURS.BORDER}`,
-                color: COLOURS.NAVY, fontSize: "13px", background: "#fff",
-                transition: "background 0.1s",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = COLOURS.CARD_ALT)}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
-            >
-              <span style={{ fontSize: "15px", flexShrink: 0 }}>📁</span>
-              <span style={{ fontWeight: 500 }}>{folder.name}</span>
-            </div>
-          ))}
-          {files.sort((a, b) => a.name.localeCompare(b.name)).map((file) => {
-            const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-            const icon = ext === "pdf" ? "📄" : ["xlsx", "xls"].includes(ext) ? "📊"
-              : ["docx", "doc"].includes(ext) ? "📝" : "📎";
-            const isPreviewing = previewingFile === file.uid;
-            return (
-              <div
-                key={file.uid}
-                onClick={() => openFile(file)}
-                style={{
-                  display: "flex", alignItems: "center", gap: "10px",
-                  padding: "11px 16px", cursor: isPreviewing ? "wait" : "pointer",
-                  borderBottom: `1px solid ${COLOURS.BORDER}`,
-                  color: COLOURS.NAVY, fontSize: "13px", background: "#fff",
-                  opacity: isPreviewing ? 0.6 : 1, transition: "background 0.1s",
-                }}
-                onMouseEnter={(e) => !isPreviewing && (e.currentTarget.style.background = COLOURS.CARD_ALT)}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
-              >
-                <span style={{ fontSize: "15px", flexShrink: 0 }}>{icon}</span>
-                <span style={{ flex: 1 }}>{file.name}</span>
-                {isPreviewing && <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>Opening…</span>}
-              </div>
-            );
-          })}
-          {folders.length === 0 && files.length === 0 && !note && (
-            <div style={{ padding: "16px", color: COLOURS.SLATE, fontSize: "13px" }}>
-              This folder is empty.
-            </div>
+  function renderFolderTree(folders: BrowseFolder[], depth: number): React.ReactNode {
+    return folders.map((folder) => {
+      const isSelected = selectedFolder?.uid === folder.uid;
+      const children = expandedFolders.get(folder.uid);
+      const isExpanded = children !== undefined;
+      return (
+        <div key={folder.uid}>
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              padding: `7px 12px 7px ${12 + depth * 14}px`,
+              cursor: "pointer", fontSize: "13px",
+              background: isSelected ? COLOURS.NAVY : "transparent",
+              color: isSelected ? "#fff" : COLOURS.NAVY,
+              borderRadius: "4px", margin: "1px 4px",
+              fontWeight: isSelected ? 600 : 400,
+            }}
+            onClick={() => { selectFolder(folder); if (selectedAccount) toggleFolder(folder, selectedAccount.account_uid); }}
+          >
+            <span style={{ fontSize: "11px", width: "12px", flexShrink: 0, color: isSelected ? "#ffffff88" : COLOURS.SLATE }}>
+              {isExpanded ? "▼" : "▶"}
+            </span>
+            <span style={{ fontSize: "13px", flexShrink: 0 }}>📁</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder.name}</span>
+          </div>
+          {isExpanded && children && children.length > 0 && (
+            <div>{renderFolderTree(children, depth + 1)}</div>
           )}
         </div>
-      )}
-    </>
+      );
+    });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+      {/* Header bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+        <button
+          onClick={() => { setSelectedAccount(null); setRootFolders([]); }}
+          style={{
+            background: "none", border: "none", cursor: "pointer", padding: "4px 8px 4px 0",
+            color: COLOURS.SLATE, fontSize: "13px", display: "flex", alignItems: "center", gap: "4px",
+          }}
+        >
+          ‹ All Cabinets
+        </button>
+        <span style={{ color: COLOURS.BORDER }}>|</span>
+        <span style={{
+          fontSize: "10px", fontWeight: 700, letterSpacing: "0.06em", padding: "2px 7px",
+          borderRadius: RADII.PILL, background: badge.bg, color: badge.text, border: `1px solid ${badge.text}22`,
+        }}>{sc}</span>
+        <span style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY }}>
+          {selectedAccount.company?.name ?? selectedAccount.account_name}
+        </span>
+      </div>
+
+      {/* Two-panel layout */}
+      <div style={{
+        display: "flex", border: `1px solid ${COLOURS.BORDER}`,
+        borderRadius: RADII.CARD, overflow: "hidden", minHeight: "520px",
+        background: "#fff",
+      }}>
+        {/* Left: folder tree */}
+        <div style={{
+          width: "240px", flexShrink: 0, borderRight: `1px solid ${COLOURS.BORDER}`,
+          background: COLOURS.CARD_ALT, overflowY: "auto", padding: "8px 0",
+        }}>
+          <div style={{ padding: "8px 12px 4px", fontSize: "10.5px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+            Folders
+          </div>
+          {rootLoading ? (
+            <div style={{ padding: "12px 16px", color: COLOURS.SLATE, fontSize: "13px" }}>Loading…</div>
+          ) : rootFolders.length === 0 ? (
+            <div style={{ padding: "12px 16px", color: COLOURS.SLATE, fontSize: "13px" }}>No folders</div>
+          ) : (
+            renderFolderTree(rootFolders, 0)
+          )}
+        </div>
+
+        {/* Right: file list */}
+        <div style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
+          {!selectedFolder ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "10px", color: COLOURS.SLATE }}>
+              <span style={{ fontSize: "32px" }}>📂</span>
+              <span style={{ fontSize: "13px" }}>Select a folder on the left to view its contents</span>
+            </div>
+          ) : rightLoading ? (
+            <div style={{ padding: "16px", color: COLOURS.SLATE, fontSize: "13px" }}>Loading…</div>
+          ) : rightError ? (
+            <div style={{ padding: "16px", color: COLOURS.RED, fontSize: "13px" }}>{rightError}</div>
+          ) : (
+            <>
+              {/* Column header */}
+              <div style={{
+                display: "grid", gridTemplateColumns: "1fr 80px 100px",
+                padding: "9px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                background: COLOURS.CARD_ALT,
+              }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>Name</span>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "right" }}>Size</span>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "right" }}>Date</span>
+              </div>
+
+              {/* Sub-folders */}
+              {rightFolders.map((folder) => (
+                <div
+                  key={folder.uid}
+                  onClick={() => { selectFolder(folder); }}
+                  style={{
+                    display: "grid", gridTemplateColumns: "1fr 80px 100px",
+                    padding: "10px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                    cursor: "pointer", transition: "background 0.1s",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = COLOURS.CARD_ALT)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                    <span style={{ fontSize: "15px", flexShrink: 0 }}>📁</span>
+                    <span style={{ fontSize: "13px", fontWeight: 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folder.name}</span>
+                  </div>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, textAlign: "right" }}>—</span>
+                  <span style={{ fontSize: "12px", color: COLOURS.SLATE, textAlign: "right" }}>—</span>
+                </div>
+              ))}
+
+              {/* Files */}
+              {rightFiles.map((file) => {
+                const isPreviewing = previewingFile === file.uid;
+                return (
+                  <div
+                    key={file.uid}
+                    onClick={() => openFile(file)}
+                    style={{
+                      display: "grid", gridTemplateColumns: "1fr 80px 100px",
+                      padding: "10px 16px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                      cursor: isPreviewing ? "wait" : "pointer",
+                      opacity: isPreviewing ? 0.6 : 1, transition: "background 0.1s",
+                    }}
+                    onMouseEnter={(e) => !isPreviewing && (e.currentTarget.style.background = COLOURS.CARD_ALT)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                      <span style={{ fontSize: "15px", flexShrink: 0 }}>{fileIcon(file.name)}</span>
+                      <span style={{ fontSize: "13px", color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {file.name}
+                      </span>
+                      {isPreviewing && <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>Opening…</span>}
+                    </div>
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, textAlign: "right" }}>{formatFileSize(file.size)}</span>
+                    <span style={{ fontSize: "12px", color: COLOURS.SLATE, textAlign: "right" }}>{formatFileDate(file.createdAt)}</span>
+                  </div>
+                );
+              })}
+
+              {rightFolders.length === 0 && rightFiles.length === 0 && (
+                <div style={{ padding: "32px 16px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>
+                  This folder is empty.
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
