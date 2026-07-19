@@ -217,7 +217,7 @@ function CreateChallanForm({ onSuccess, onCancel }: { onSuccess: () => void; onC
           </div>
           <div>
             <label style={labelStyle}>Contribution Month (1st of month)</label>
-            <DateInput value={form.month} onChange={v => set("month", v)} placeholder="DD/MM/YYYY" style={inputStyle} />
+            <DateInput value={form.month} onChange={e => set("month", e.target.value)} placeholder="DD/MM/YYYY" style={inputStyle} />
             <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
               Enter the 1st of the month, e.g. 01/07/2026
             </div>
@@ -291,7 +291,7 @@ function OverviewTab({
     onRefresh();
   }
 
-  if (loading) return <SkeletonRows n={6} />;
+  if (loading) return <SkeletonRows count={6} />;
 
   const s = summary;
   const hasPending = (s?.pending_list?.length ?? 0) > 0;
@@ -303,10 +303,10 @@ function OverviewTab({
 
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
-        <CountCard label="Pending Challans" value={s?.pending_challans  ?? 0} colour={COLOURS.AMBER} />
-        <CountCard label="Overdue"          value={s?.overdue_challans  ?? 0} colour={COLOURS.RED}   />
-        <CountCard label="Paid This Month"  value={s?.paid_this_month   ?? 0} colour={COLOURS.GREEN} />
-        <CountCard label="Pending (PKR)"    value={fmtPKR(s?.total_pending_pkr)} colour={COLOURS.NAVY} />
+        <CountCard label="Pending Challans" value={s?.pending_challans  ?? 0} color={COLOURS.AMBER} />
+        <CountCard label="Overdue"          value={s?.overdue_challans  ?? 0} color={COLOURS.RED}   />
+        <CountCard label="Paid This Month"  value={s?.paid_this_month   ?? 0} color={COLOURS.GREEN} />
+        <CountCard label="Pending (PKR)"    value={fmtPKR(s?.total_pending_pkr)} color={COLOURS.NAVY} />
       </div>
 
       {/* Registration snapshot */}
@@ -356,7 +356,7 @@ function OverviewTab({
       {/* Pending challans list */}
       {hasPending && (
         <div>
-          <SectionTitle>Pending Challans — Awaiting Deposit by Admin</SectionTitle>
+          <SectionTitle title="Pending Challans — Awaiting Deposit by Admin" />
           <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
@@ -423,7 +423,7 @@ function OverviewTab({
       {canWrite(userRole) && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <SectionTitle>Raise a New Challan</SectionTitle>
+            <SectionTitle title="Raise a New Challan" />
             {!showForm && (
               <button onClick={() => setShowForm(true)} style={primaryButtonStyle}>
                 + Raise Challan
@@ -535,7 +535,7 @@ function PaymentsTab() {
         ))}
       </div>
 
-      {loading ? <SkeletonRows n={8} /> : (
+      {loading ? <SkeletonRows count={8} /> : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
             <thead>
@@ -595,7 +595,7 @@ function RegistrationsTab() {
     })();
   }, []);
 
-  if (loading) return <SkeletonRows n={10} />;
+  if (loading) return <SkeletonRows count={10} />;
 
   const grouped: Record<string, Registration[]> = {};
   for (const r of rows) {
@@ -611,7 +611,7 @@ function RegistrationsTab() {
       </div>
       {entityOrder.filter(e => grouped[e]?.length).map(entity => (
         <div key={entity}>
-          <SectionTitle>{ENTITY_DISPLAY[entity] ?? entity}</SectionTitle>
+          <SectionTitle title={ENTITY_DISPLAY[entity] ?? entity} />
           <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
@@ -668,7 +668,7 @@ const INNER_TABS: { key: EobiInnerTab; label: string }[] = [
 ];
 
 export default function HREobi() {
-  const { member } = useUserCtx();
+  const { ctx: member } = useUserCtx();
   const [activeTab, setActiveTab]     = useState<EobiInnerTab>("overview");
   const [summary, setSummary]         = useState<Summary | null>(null);
   const [summaryLoading, setLoading]  = useState(true);

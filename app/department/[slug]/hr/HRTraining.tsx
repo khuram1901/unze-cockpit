@@ -541,7 +541,7 @@ function AddSessionForm({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
           </div>
           <div>
             <label style={labelStyle}>Date *</label>
-            <DateInput value={form.session_date} onChange={v => set("session_date", v)} placeholder="DD/MM/YYYY" style={inputStyle} />
+            <DateInput value={form.session_date} onChange={e => set("session_date", e.target.value)} placeholder="DD/MM/YYYY" style={inputStyle} />
           </div>
           <div>
             <label style={labelStyle}>Duration (hours)</label>
@@ -686,7 +686,7 @@ function CalendarTab({
         </div>
       </div>
 
-      {loading ? <SkeletonRows n={5} /> : (
+      {loading ? <SkeletonRows count={5} /> : (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
           {/* Day headers */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", backgroundColor: "#F8FAFC" }}>
@@ -831,7 +831,7 @@ function SessionsTab({
         ))}
       </div>
 
-      {loading ? <SkeletonRows n={8} /> : (
+      {loading ? <SkeletonRows count={8} /> : (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
@@ -892,7 +892,7 @@ const INNER_TABS: { key: TdInnerTab; label: string }[] = [
 ];
 
 export default function HRTraining() {
-  const { member } = useUserCtx();
+  const { ctx: member } = useUserCtx();
   const [activeTab, setActiveTab]     = useState<TdInnerTab>("calendar");
   const [summary, setSummary]         = useState<TdSummary | null>(null);
   const [summaryLoading, setLoading]  = useState(true);
@@ -973,14 +973,14 @@ export default function HRTraining() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* KPI cards */}
-      {summaryLoading ? <SkeletonRows n={1} /> : summary && (
+      {summaryLoading ? <SkeletonRows count={1} /> : summary && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px" }}>
-          <CountCard label="Upcoming"          value={summary.upcoming_count}         colour={COLOURS.BLUE}  />
-          <CountCard label="Planned (month)"   value={summary.planned_this_month}     colour={COLOURS.AMBER} />
-          <CountCard label="Completed (month)" value={summary.completed_this_month}   colour={COLOURS.GREEN} />
-          <CountCard label="Trained YTD"       value={summary.total_attendees_ytd}    colour={COLOURS.NAVY}  />
-          <CountCard label="Cost YTD"          value={fmtPKR(summary.total_cost_ytd)} colour={COLOURS.SLATE} />
-          <CountCard label="Avg Feedback"      value={summary.avg_feedback_score ? `${summary.avg_feedback_score}/5` : "—"} colour={COLOURS.AMBER} />
+          <CountCard label="Upcoming"          value={summary.upcoming_count}         color={COLOURS.BLUE}  />
+          <CountCard label="Planned (month)"   value={summary.planned_this_month}     color={COLOURS.AMBER} />
+          <CountCard label="Completed (month)" value={summary.completed_this_month}   color={COLOURS.GREEN} />
+          <CountCard label="Trained YTD"       value={summary.total_attendees_ytd}    color={COLOURS.NAVY}  />
+          <CountCard label="Cost YTD"          value={fmtPKR(summary.total_cost_ytd)} color={COLOURS.SLATE} />
+          <CountCard label="Avg Feedback"      value={summary.avg_feedback_score ? `${summary.avg_feedback_score}/5` : "—"} color={COLOURS.AMBER} />
         </div>
       )}
 

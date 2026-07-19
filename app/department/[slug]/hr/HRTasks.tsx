@@ -240,7 +240,7 @@ function TaskRow({
 
 function AddTaskForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
   const { show, element } = useToast();
-  const { member } = useUserCtx();
+  const { ctx: member } = useUserCtx();
   const [saving, setSaving]   = useState(false);
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [members, setMembers]     = useState<{ email: string }[]>([]);
@@ -265,7 +265,7 @@ function AddTaskForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
       if (co) setCompanies(co);
       if (mb) setMembers(mb);
       if (co?.[0] && !form.company_id) setForm(p => ({ ...p, company_id: co[0].id }));
-      if (member?.email && !form.assigned_to) setForm(p => ({ ...p, assigned_to: member.email }));
+      if (member?.email && !form.assigned_to) setForm(p => ({ ...p, assigned_to: member?.email ?? "" }));
     });
   }, []);
 
@@ -358,7 +358,7 @@ function AddTaskForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
           </div>
           <div>
             <label style={labelStyle}>Due Date</label>
-            <DateInput value={form.due_date} onChange={v => set("due_date", v)} placeholder="DD/MM/YYYY" style={inputStyle} />
+            <DateInput value={form.due_date} onChange={e => set("due_date", e.target.value)} placeholder="DD/MM/YYYY" style={inputStyle} />
           </div>
           <div>
             <label style={labelStyle}>Linked Employee (optional)</label>
@@ -409,7 +409,7 @@ function AddTaskForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel:
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export default function HRTasks() {
-  const { member } = useUserCtx();
+  const { ctx: member } = useUserCtx();
   const [tasks, setTasks]         = useState<Task[]>([]);
   const [summary, setSummary]     = useState<TaskSummary | null>(null);
   const [loading, setLoading]     = useState(true);
@@ -463,12 +463,12 @@ export default function HRTasks() {
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px" }}>
-        <CountCard label="Open"             value={s?.open_count           ?? 0} colour={COLOURS.BLUE}  />
-        <CountCard label="In Progress"      value={s?.in_progress_count    ?? 0} colour={COLOURS.AMBER} />
-        <CountCard label="Overdue"          value={s?.overdue_count        ?? 0} colour={COLOURS.RED}   />
-        <CountCard label="Due Today"        value={s?.due_today_count      ?? 0} colour={COLOURS.AMBER} />
-        <CountCard label="Done This Month"  value={s?.completed_this_month ?? 0} colour={COLOURS.GREEN} />
-        <CountCard label="High Priority"    value={s?.high_priority_open   ?? 0} colour={COLOURS.RED}   />
+        <CountCard label="Open"             value={s?.open_count           ?? 0} color={COLOURS.BLUE}  />
+        <CountCard label="In Progress"      value={s?.in_progress_count    ?? 0} color={COLOURS.AMBER} />
+        <CountCard label="Overdue"          value={s?.overdue_count        ?? 0} color={COLOURS.RED}   />
+        <CountCard label="Due Today"        value={s?.due_today_count      ?? 0} color={COLOURS.AMBER} />
+        <CountCard label="Done This Month"  value={s?.completed_this_month ?? 0} color={COLOURS.GREEN} />
+        <CountCard label="High Priority"    value={s?.high_priority_open   ?? 0} color={COLOURS.RED}   />
       </div>
 
       {/* Overdue warning */}
@@ -510,7 +510,7 @@ export default function HRTasks() {
       )}
 
       {/* Task table */}
-      {loading ? <SkeletonRows n={10} /> : (
+      {loading ? <SkeletonRows count={10} /> : (
         <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
             <thead>
