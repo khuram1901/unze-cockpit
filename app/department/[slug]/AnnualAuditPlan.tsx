@@ -468,83 +468,60 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
       {/* ═══ Team cards — managers ═══ */}
       {isManager && wv("dept_audit.team_cards", true) && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px", marginBottom: "8px" }}>
-            {teams.map((t) => {
+          {/* ═══ Post-audit cards + pre-audit mini cards side by side ═══ */}
+          <div style={{ display: "flex", gap: "12px", marginBottom: "8px", flexWrap: isMobile ? "wrap" : "nowrap" }}>
+            {teams.filter((t) => t.code !== "PREAUDIT").map((t) => {
               const active = t.id === selectedTeam?.id;
-              const isPre = t.code === "PREAUDIT";
+              const preTeam = teams.find((x) => x.code === "PREAUDIT");
+              const compItems = dailySummary?.items.filter((d) => t.company_ids.includes(d.company_id)) || [];
+              const visibleCompanies = COMPANIES.filter((c) => compItems.some((d) => d.company_id === c.id));
               return (
-                <div key={t.id} onClick={() => { setSelectedTeamId(t.id); setExpandedId(null); setProjectPage(0); }} style={{
-                  backgroundColor: COLOURS.CARD, borderRadius: RADII.CARD, padding: "14px 16px", cursor: "pointer",
-                  border: active ? `2px solid ${COLOURS.NAVY}` : `1px solid ${COLOURS.HAIRLINE}`,
-                }}>
-                  <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.name}</div>
-                  <div style={{ fontSize: "12px", color: COLOURS.SLATE, margin: "2px 0 8px" }}>
-                    {t.members.length > 0 ? t.members.map((m) => m.name.split(" ")[0]).join(" + ") : "No members"}
-                    {!isPre && t.company_ids.length > 0 && <> · {t.company_ids.map(shortCode).join(" + ")}</>}
+                <div key={t.id} style={{ display: "flex", gap: "8px", flex: 1, minWidth: isMobile ? "100%" : 0 }}>
+                  {/* Post-audit card */}
+                  <div onClick={() => { setSelectedTeamId(t.id); setExpandedId(null); setProjectPage(0); }} style={{
+                    flex: 2, backgroundColor: COLOURS.CARD, borderRadius: RADII.CARD, padding: "14px 16px", cursor: "pointer",
+                    border: active ? `2px solid ${COLOURS.NAVY}` : `1px solid ${COLOURS.HAIRLINE}`,
+                  }}>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{t.name}</div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, margin: "2px 0 8px" }}>
+                      {t.members.length > 0 ? t.members.map((m) => m.name.split(" ")[0]).join(" + ") : "No members"}
+                      {t.company_ids.length > 0 && <> · {t.company_ids.map(shortCode).join(" + ")}</>}
+                    </div>
+                    <div style={{ height: "6px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, marginBottom: "8px" }}>
+                      <div style={{ width: `${t.total > 0 ? Math.round((100 * t.done) / t.total) : 0}%`, height: "100%", backgroundColor: COLOURS.GREEN, borderRadius: RADII.PILL }} />
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", fontSize: "12px", flexWrap: "wrap" }}>
+                      <span style={{ color: COLOURS.GREEN, fontWeight: 600 }}>{t.done} done</span>
+                      <span style={{ color: COLOURS.AMBER, fontWeight: 600 }}>{t.running} running</span>
+                      <span style={{ color: t.stuck > 0 ? COLOURS.RED : COLOURS.SLATE, fontWeight: 600 }}>{t.stuck} stuck</span>
+                      {t.overdue > 0 && <span style={{ color: COLOURS.RED, fontWeight: 600 }}>{t.overdue} overdue</span>}
+                    </div>
                   </div>
-                  {isPre ? (
-                    dailySummary && (
-                      <div style={{ fontSize: "12px" }}>
-                        {/* Per-company breakdown — each company on its own row */}
-                        {COMPANIES.filter((c) => dailySummary.items.some((d) => d.company_id === c.id)).map((c) => {
-                          const cItems = dailySummary.items.filter((d) => d.company_id === c.id);
-                          const cPending = cItems.reduce((s, d) => s + (d.pending || 0), 0);
-                          const cEntered = cItems.filter((d) => d.entered).length;
-                          const allEntered = cEntered === cItems.length;
-                          const color = cPending > 0 ? COLOURS.RED : allEntered ? COLOURS.GREEN : COLOURS.AMBER;
-                          return (
-                            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                              <span style={{ color: COLOURS.SLATE, fontWeight: 500 }}>{c.shortCode}</span>
-                              <span style={{ fontWeight: 700, color }}>
-                                {cEntered === 0 ? "not entered" : cPending > 0 ? `${cPending} pending` : "✓ clear"}
-                              </span>
-                            </div>
-                          );
-                        })}
-                        <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "4px", borderTop: `1px solid ${COLOURS.TRACK}`, paddingTop: "3px" }}>
-                          {dailySummary.entered_count}/{dailySummary.expected_count} entered today
+
+                  {/* Pre-audit mini card — click to open pre-audit view */}
+                  <div onClick={() => { setSelectedTeamId(preTeam?.id || null); setExpandedId(null); setProjectPage(0); }} style={{
+                    flex: 1, backgroundColor: COLOURS.CARD, borderRadius: RADII.CARD, padding: "12px 14px", cursor: "pointer",
+                    border: `1px solid ${COLOURS.HAIRLINE}`,
+                  }}>
+                    <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px" }}>Pre-audit</div>
+                    {dailySummary && visibleCompanies.length > 0 ? visibleCompanies.map((c) => {
+                      const cItems = compItems.filter((d) => d.company_id === c.id);
+                      const cPending = cItems.reduce((s, d) => s + (d.pending || 0), 0);
+                      const cEntered = cItems.filter((d) => d.entered).length;
+                      const allEntered = cEntered === cItems.length;
+                      const color = cPending > 0 ? COLOURS.RED : allEntered ? COLOURS.GREEN : COLOURS.AMBER;
+                      return (
+                        <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                          <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{c.shortCode}</span>
+                          <span style={{ fontSize: "12px", fontWeight: 700, color }}>
+                            {cEntered === 0 ? "—" : cPending > 0 ? `${cPending} pending` : "✓ clear"}
+                          </span>
                         </div>
-                      </div>
-                    )
-                  ) : (
-                    <>
-                      <div style={{ height: "6px", backgroundColor: COLOURS.TRACK, borderRadius: RADII.PILL, marginBottom: "8px" }}>
-                        <div style={{ width: `${t.total > 0 ? Math.round((100 * t.done) / t.total) : 0}%`, height: "100%", backgroundColor: COLOURS.GREEN, borderRadius: RADII.PILL }} />
-                      </div>
-                      <div style={{ display: "flex", gap: "8px", fontSize: "12px", flexWrap: "wrap" }}>
-                        <span style={{ color: COLOURS.GREEN, fontWeight: 600 }}>{t.done} done</span>
-                        <span style={{ color: COLOURS.AMBER, fontWeight: 600 }}>{t.running} running</span>
-                        <span style={{ color: t.stuck > 0 ? COLOURS.RED : COLOURS.SLATE, fontWeight: 600 }}>{t.stuck} stuck</span>
-                        {t.overdue > 0 && <span style={{ color: COLOURS.RED, fontWeight: 600 }}>{t.overdue} overdue</span>}
-                      </div>
-                      {/* ── Pre-audit mini-panel for this team's companies ── */}
-                      {dailySummary && (() => {
-                        const compItems = dailySummary.items.filter((d) => t.company_ids.includes(d.company_id));
-                        if (compItems.length === 0) return null;
-                        const visibleCompanies = COMPANIES.filter((c) => compItems.some((d) => d.company_id === c.id));
-                        return (
-                          <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${COLOURS.TRACK}` }}>
-                            <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "5px" }}>Pre-audit today</div>
-                            {visibleCompanies.map((c) => {
-                              const cItems = compItems.filter((d) => d.company_id === c.id);
-                              const cPending = cItems.reduce((s, d) => s + (d.pending || 0), 0);
-                              const cEntered = cItems.filter((d) => d.entered).length;
-                              const allEntered = cEntered === cItems.length;
-                              const color = cPending > 0 ? COLOURS.RED : allEntered ? COLOURS.GREEN : COLOURS.AMBER;
-                              return (
-                                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
-                                  <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{c.shortCode}</span>
-                                  <span style={{ fontSize: "11px", fontWeight: 700, color }}>
-                                    {cEntered === 0 ? "not entered" : cPending > 0 ? `${cPending} pending` : "✓ clear"}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </>
-                  )}
+                      );
+                    }) : (
+                      <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>No data</span>
+                    )}
+                  </div>
                 </div>
               );
             })}
