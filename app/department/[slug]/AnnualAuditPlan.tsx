@@ -167,6 +167,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [newProj, setNewProj] = useState({ company_id: "", name: "", frequency: "Monthly", period: "", target: "" });
   const [dailyOpen, setDailyOpen] = useState(false);
+  const [editingAssignKey, setEditingAssignKey] = useState<string | null>(null);
   const { ctx: widgetCtx } = useUserCtx();
   const wv = (key: string, def: boolean) => !!widgetCtx && widgetVisible(widgetCtx, key, def);
 
@@ -406,10 +407,25 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                     <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{DOC_TYPE_LABELS[d.doc_type] || d.activity}</div>
                     <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
                       {isManager ? (
-                        <select value={d.assigned_member_id || ""} onChange={(e) => assignDailyTask(d, e.target.value || null)} style={{ ...inpSm, display: "inline-block", width: "auto" }}>
-                          <option value="">— assign member —</option>
-                          {auditMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
+                        editingAssignKey === key ? (
+                          <select
+                            autoFocus
+                            value={d.assigned_member_id || ""}
+                            onChange={(e) => { assignDailyTask(d, e.target.value || null); setEditingAssignKey(null); }}
+                            onBlur={() => setEditingAssignKey(null)}
+                            style={{ ...inpSm, display: "inline-block", width: "auto" }}
+                          >
+                            <option value="">— assign member —</option>
+                            {auditMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                        ) : (
+                          <span
+                            onClick={() => setEditingAssignKey(key)}
+                            style={{ cursor: "pointer", color: d.assigned_name ? COLOURS.NAVY : COLOURS.SLATE, textDecoration: "underline dotted", textUnderlineOffset: "2px" }}
+                          >
+                            {d.assigned_name || "assign member"}
+                          </span>
+                        )
                       ) : (
                         d.assigned_name || "Unassigned"
                       )}
@@ -525,6 +541,32 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                         <span style={{ color: t.stuck > 0 ? COLOURS.RED : COLOURS.SLATE, fontWeight: 600 }}>{t.stuck} stuck</span>
                         {t.overdue > 0 && <span style={{ color: COLOURS.RED, fontWeight: 600 }}>{t.overdue} overdue</span>}
                       </div>
+                      {/* ── Pre-audit mini-panel for this team's companies ── */}
+                      {dailySummary && (() => {
+                        const compItems = dailySummary.items.filter((d) => t.company_ids.includes(d.company_id));
+                        if (compItems.length === 0) return null;
+                        const visibleCompanies = COMPANIES.filter((c) => compItems.some((d) => d.company_id === c.id));
+                        return (
+                          <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${COLOURS.TRACK}` }}>
+                            <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "5px" }}>Pre-audit today</div>
+                            {visibleCompanies.map((c) => {
+                              const cItems = compItems.filter((d) => d.company_id === c.id);
+                              const cPending = cItems.reduce((s, d) => s + (d.pending || 0), 0);
+                              const cEntered = cItems.filter((d) => d.entered).length;
+                              const allEntered = cEntered === cItems.length;
+                              const color = cPending > 0 ? COLOURS.RED : allEntered ? COLOURS.GREEN : COLOURS.AMBER;
+                              return (
+                                <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
+                                  <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{c.shortCode}</span>
+                                  <span style={{ fontSize: "11px", fontWeight: 700, color }}>
+                                    {cEntered === 0 ? "not entered" : cPending > 0 ? `${cPending} pending` : "✓ clear"}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </>
                   )}
                 </div>
