@@ -1,13 +1,15 @@
 /**
  * GET /api/folderit/live-search?q=xxx
  *
- * Searches ALL documents in Folderit by calling Folderit's own search API
- * for each account the user can see. Unlike /api/folderit/search (which only
- * searches synced inbox + HR files), this searches every filed document too.
+ * Searches Folderit documents by calling Folderit's own search API.
  *
- * Role-scoped:
- *  - Admin / CEO  → all accounts
- *  - Everyone else → only accounts linked to their company
+ * Access rules:
+ *  - Member role → 403 (search not available)
+ *  - Admin / CEO → all accounts
+ *  - Manager / Executive (and any other non-Member role) → only accounts
+ *    they are explicitly mapped to in folderit_user_map. This ensures
+ *    they can only discover filenames in cabinets Folderit has granted
+ *    them access to, not every cabinet linked to their company.
  *
  * Returns up to 10 results per account, max 60 total, each with a direct
  * Folderit URL so the user can open the document in one click.
@@ -46,36 +48,55 @@ export async function GET(request: NextRequest) {
     .eq("email", email)
     .maybeSingle();
 
+  const role = member?.role ?? null;
+
   const isAdmin =
     email === "khuram1901@gmail.com" ||
-    member?.role === "Admin" ||
-    member?.role === "CEO";
+    role === "Admin" ||
+    role === "CEO";
 
-  // Determine which accounts to search
-  let accountQuery = db
-    .from("folderit_account_map")
-    .select("account_uid, account_name")
-    .eq("is_active", true)
-    .neq("scope", "excluded")
-    .neq("scope", "pending");
-
-  if (!isAdmin) {
-    if (!member?.company_id) return Response.json({ items: [] });
-    const { data: companyAccounts } = await db
-      .from("folderit_account_companies")
-      .select("account_uid")
-      .eq("company_uuid", member.company_id);
-    const accountUids = (companyAccounts ?? []).map((r: { account_uid: string }) => r.account_uid);
-    if (!accountUids.length) return Response.json({ items: [] });
-    accountQuery = accountQuery.in("account_uid", accountUids);
+  // Members cannot use global search
+  if (!isAdmin && role === "Member") {
+    return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  const { data: accounts } = await accountQuery;
-  if (!accounts?.length) return Response.json({ items: [] });
+  let accountsToSearch: { account_uid: string; account_name: string }[] = [];
+
+  if (isAdmin) {
+    // Admin / CEO — search all active accounts
+    const { data } = await db
+      .from("folderit_account_map")
+      .select("account_uid, account_name")
+      .eq("is_active", true)
+      .neq("scope", "excluded")
+      .neq("scope", "pending");
+    accountsToSearch = data ?? [];
+  } else {
+    // Manager / Executive etc. — restrict to accounts they are explicitly
+    // mapped to in folderit_user_map (i.e. Folderit has granted them access).
+    const { data: mappings } = await db
+      .from("folderit_user_map")
+      .select("account_uid")
+      .eq("member_email", email);
+
+    const mappedUids = (mappings ?? []).map((m: { account_uid: string }) => m.account_uid);
+    if (!mappedUids.length) return Response.json({ items: [] });
+
+    const { data } = await db
+      .from("folderit_account_map")
+      .select("account_uid, account_name")
+      .eq("is_active", true)
+      .neq("scope", "excluded")
+      .neq("scope", "pending")
+      .in("account_uid", mappedUids);
+    accountsToSearch = data ?? [];
+  }
+
+  if (!accountsToSearch.length) return Response.json({ items: [] });
 
   // Search Folderit for each account in parallel
   const perAccount = await Promise.all(
-    accounts.map(async (account) => {
+    accountsToSearch.map(async (account) => {
       try {
         const res = await folderitFetch(
           `/v2/accounts/${account.account_uid}/search?query=${encodeURIComponent(q)}&per-page=10`
@@ -94,7 +115,6 @@ export async function GET(request: NextRequest) {
             folder_uid: h.folderUid ?? null,
             folder_name: h.folderName ?? null,
             created_at: h.createdAt ? new Date(h.createdAt * 1000).toISOString() : null,
-            // Direct Folderit URL
             folderit_url: h.type === "folder"
               ? `https://my.folderit.com/folder/index/?uid=${h.uid}`
               : `https://my.folderit.com/file/view/?uid=${h.uid}`,
