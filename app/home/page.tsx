@@ -489,7 +489,7 @@ export default function HomePage() {
   const [facilitySynopsis, setFacilitySynopsis] = useState<{ bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[]>([]);
   const [guaranteeAlerts, setGuaranteeAlerts] = useState<GuaranteeAlertItem[]>([]);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
-  const [bannerOpen, setBannerOpen] = useState(false);
+  const [bannerOpen, setBannerOpen] = useState(true);
   const [actioningTask, setActioningTask] = useState<string | null>(null);
 
   async function quickTaskAction(taskId: string, newStatus: string) {
@@ -2651,6 +2651,12 @@ function ExecutiveDashboardBody({
           overflow: "hidden",
           marginBottom: "14px",
         }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 12px", borderBottom: `1px solid ${hasCritical ? DANGER_SOFT : WARNING_SOFT}` }}>
+            <button
+              onClick={() => setBannerOpen(false)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, color: hasCritical ? RED : AMBER, padding: "2px 6px" }}
+            >▲ Collapse</button>
+          </div>
           <div>
             {attentionRows.map((row) => {
                 const isOpen = expandedCard === row.id;
