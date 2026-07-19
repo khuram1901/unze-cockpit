@@ -940,6 +940,150 @@ function formatFileDate(ts: number | null): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+// ─── Global Folderit Search ────────────────────────────────────────────────
+type SearchHit = {
+  uid: string;
+  name: string;
+  type: string;
+  account_uid: string;
+  account_name: string;
+  folder_uid: string | null;
+  folder_name: string | null;
+  created_at: string | null;
+  folderit_url: string;
+};
+
+function GlobalSearchBox() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchHit[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boxRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const q = e.target.value;
+    setQuery(q);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (q.trim().length < 2) {
+      setResults([]);
+      setOpen(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await authFetch(`/api/folderit/live-search?q=${encodeURIComponent(q.trim())}`);
+        if (res.ok) {
+          const data = await res.json();
+          setResults(data.items ?? []);
+          setOpen(true);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+  }
+
+  return (
+    <div ref={boxRef} style={{ position: "relative", marginBottom: "8px" }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: "8px",
+        border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD,
+        background: "white", padding: "0 12px", height: "40px",
+        boxShadow: SHADOWS.CARD,
+      }}>
+        <span style={{ color: COLOURS.SLATE, fontSize: "15px" }}>🔍</span>
+        <input
+          value={query}
+          onChange={handleChange}
+          onFocus={() => results.length > 0 && setOpen(true)}
+          placeholder="Search all Folderit documents…"
+          style={{
+            border: "none", outline: "none", flex: 1,
+            fontSize: "13px", color: COLOURS.NAVY, background: "transparent",
+          }}
+        />
+        {loading && <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>Searching…</span>}
+        {query && (
+          <button
+            onClick={() => { setQuery(""); setResults([]); setOpen(false); }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: COLOURS.SLATE, fontSize: "16px", padding: 0 }}
+          >×</button>
+        )}
+      </div>
+
+      {open && results.length > 0 && (
+        <div style={{
+          position: "absolute", top: "44px", left: 0, right: 0, zIndex: 100,
+          background: "white", border: `1px solid ${COLOURS.BORDER}`,
+          borderRadius: RADII.CARD, boxShadow: SHADOWS.DROPDOWN ?? "0 4px 16px rgba(0,0,0,0.12)",
+          maxHeight: "360px", overflowY: "auto",
+        }}>
+          <div style={{ padding: "8px 12px 4px", fontSize: "11px", color: COLOURS.SLATE, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+            {results.length} result{results.length !== 1 ? "s" : ""}
+          </div>
+          {results.map((hit) => (
+            <a
+              key={hit.uid}
+              href={hit.folderit_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex", alignItems: "flex-start", gap: "10px",
+                padding: "8px 12px", borderTop: `1px solid ${COLOURS.BORDER}`,
+                textDecoration: "none", color: "inherit",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = COLOURS.CARD_ALT ?? "#F8F9FA")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
+            >
+              <span style={{ fontSize: "16px", flexShrink: 0, marginTop: "1px" }}>
+                {hit.type === "folder" ? "📁" : "📄"}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {hit.name}
+                </div>
+                <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                  {hit.account_name}{hit.folder_name ? ` › ${hit.folder_name}` : ""}
+                </div>
+              </div>
+              <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, alignSelf: "center" }}>↗</span>
+            </a>
+          ))}
+          {results.length === 60 && (
+            <div style={{ padding: "6px 12px", fontSize: "11px", color: COLOURS.SLATE, textAlign: "center" }}>
+              Showing first 60 results — refine your search for more
+            </div>
+          )}
+        </div>
+      )}
+
+      {open && query.length >= 2 && !loading && results.length === 0 && (
+        <div style={{
+          position: "absolute", top: "44px", left: 0, right: 0, zIndex: 100,
+          background: "white", border: `1px solid ${COLOURS.BORDER}`,
+          borderRadius: RADII.CARD, boxShadow: SHADOWS.DROPDOWN ?? "0 4px 16px rgba(0,0,0,0.12)",
+          padding: "16px 12px", fontSize: "13px", color: COLOURS.SLATE, textAlign: "center",
+        }}>
+          No documents found for "{query}"
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BrowseView() {
   const setPreview = useContext(PreviewContext);
   const [accounts, setAccounts] = useState<BrowseAccount[]>([]);
@@ -1042,7 +1186,8 @@ function BrowseView() {
     };
     return (
       <div>
-        <div style={{ marginBottom: "20px" }}>
+        <GlobalSearchBox />
+        <div style={{ marginBottom: "20px", marginTop: "20px" }}>
           <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY, letterSpacing: "-0.02em" }}>
             Document Cabinets
           </div>
@@ -1569,12 +1714,12 @@ function FilingHealthTab() {
       {!loading && issues.length > 0 && (
         <div style={{ ...cardStyle, overflow: "hidden" }}>
           <div style={{ padding: "8px 12px", fontSize: "11px", color: SLATE, borderBottom: `1px solid ${COLOURS.BORDER}`, background: COLOURS.CARD_ALT }}>
-            Click any file row to preview it. Inbox subfolder rows cannot be previewed — open Folderit directly to move or delete them.
+            Click a row to preview the document, or use the <strong>↗</strong> link to open it directly in Folderit where you can move or delete it.
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: COLOURS.CARD_ALT }}>
-                {["Issue", "File / Folder", "Location", "Age", "Company"].map((h) => (
+                {["Issue", "File / Folder", "Location", "Age", "Company", ""].map((h) => (
                   <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
                     {h}
                   </th>
@@ -1585,11 +1730,19 @@ function FilingHealthTab() {
               {issues.map((iss, i) => {
                 const isFolder = iss.issue_type === "inbox_subfolder";
                 const isPreviewing = previewingId === iss.id;
+                // Construct the direct Folderit URL:
+                //   folders → /folder/index/?uid=...
+                //   files   → /file/view/?uid=...
+                const folderitUrl = iss.file_uid
+                  ? isFolder
+                    ? `https://my.folderit.com/folder/index/?uid=${iss.file_uid}`
+                    : `https://my.folderit.com/file/view/?uid=${iss.file_uid}`
+                  : null;
                 return (
                   <tr
                     key={iss.id}
                     onClick={() => handleRowClick(iss)}
-                    title={isFolder ? "This is a folder — open Folderit to act on it" : "Click to preview this document"}
+                    title={isFolder ? "This is a folder — use ↗ to open in Folderit" : "Click to preview · use ↗ to open in Folderit"}
                     style={{
                       borderBottom: i < issues.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none",
                       cursor: isFolder ? "default" : "pointer",
@@ -1602,10 +1755,10 @@ function FilingHealthTab() {
                     <td style={{ padding: "9px 12px", verticalAlign: "middle" }}>
                       <IssueTypeBadge type={iss.issue_type} />
                     </td>
-                    <td style={{ padding: "9px 12px", fontSize: "12px", color: isFolder ? SLATE : NAVY, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "9px 12px", fontSize: "12px", color: isFolder ? SLATE : NAVY, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {isPreviewing ? <span style={{ color: SLATE }}>Loading…</span> : iss.file_name}
                     </td>
-                    <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE, maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE, maxWidth: "170px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {iss.location_path ?? "—"}
                     </td>
                     <td style={{ padding: "9px 12px", fontSize: "12px", color: iss.days_old !== null && iss.days_old > 2 ? COLOURS.AMBER : NAVY, whiteSpace: "nowrap" }}>
@@ -1613,6 +1766,26 @@ function FilingHealthTab() {
                     </td>
                     <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE }}>
                       {iss.company_name ?? "—"}
+                    </td>
+                    <td style={{ padding: "9px 12px", textAlign: "right" }}>
+                      {folderitUrl && (
+                        <a
+                          href={folderitUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Open in Folderit"
+                          style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            width: "26px", height: "26px", borderRadius: RADII.CARD,
+                            border: `1px solid ${COLOURS.BORDER}`, color: SLATE,
+                            fontSize: "13px", textDecoration: "none",
+                            background: "white",
+                          }}
+                        >
+                          ↗
+                        </a>
+                      )}
                     </td>
                   </tr>
                 );
