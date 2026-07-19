@@ -4,7 +4,7 @@ import { useEffect, useState, useContext, createContext } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
 import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle } from "../lib/SharedUI";
-import { COMPANIES, ALM_COMPANY_ID, DIR_COMPANY_ID } from "../lib/constants";
+import { COMPANIES, ALM_COMPANY_ID, DIR_COMPANY_ID, SMI_COMPANY_ID, UZL_COMPANY_ID } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
 import { useMobile } from "../lib/useMobile";
 import { isAdminTier, canViewFolderitHr } from "../lib/permissions";
@@ -45,16 +45,18 @@ function severityColor(days: number): string {
 const { NAVY, SLATE, HAIRLINE, AMBER, BLUE, GREEN, CARD_ALT } = COLOURS;
 
 const COMPANY_BADGE_STYLES: Record<string, { bg: string; text: string }> = {
-  UTPL: { bg: COLOURS.INFO_SOFT, text: COLOURS.BLUE },
+  UTPL: { bg: COLOURS.INFO_SOFT,    text: COLOURS.BLUE },
   IFPL: { bg: COLOURS.SUCCESS_SOFT, text: COLOURS.GREEN },
   BRNH: { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
-  HD: { bg: "#F3EEF9", text: "#6E45B8" },
-  ALM: { bg: COLOURS.CARD_ALT, text: COLOURS.SLATE },
-  DIR: { bg: COLOURS.CARD_ALT, text: COLOURS.NAVY },
+  HD:   { bg: "#F3EEF9",            text: "#6E45B8" },
+  ALM:  { bg: COLOURS.CARD_ALT,     text: COLOURS.SLATE },
+  DIR:  { bg: COLOURS.CARD_ALT,     text: COLOURS.NAVY },
   // Merged Baranh + Haute Dolci card on this page — its own badge colour
   // (distinct from both) so it reads as one company in the chart, not a
   // clash of the two it's made from.
-  RST: { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
+  RST:  { bg: COLOURS.WARNING_SOFT, text: COLOURS.AMBER },
+  SMI:  { bg: "#F5F3FF",            text: "#5B21B6" }, // S&M Investments — violet
+  UZL:  { bg: "#FFF7ED",            text: "#C2410C" }, // Unze London — orange
 };
 
 function CompanyBadge({ shortCode }: { shortCode: string }) {
