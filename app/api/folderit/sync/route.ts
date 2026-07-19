@@ -259,7 +259,9 @@ type FolderitTeamUser = {
 async function syncUserMap(
   db: ReturnType<typeof createServiceClient>,
   accounts: AccountMapRow[],
-  memberEmails: Set<string>
+  memberEmails: Set<string>,
+  // alias_email (Folderit) → dashboard_email (app login), from folderit_email_aliases
+  aliasMap: Map<string, string>
 ): Promise<{ usersSynced: number; errors: string[] }> {
   const errors: string[] = [];
   let usersSynced = 0;
@@ -279,14 +281,24 @@ async function syncUserMap(
         const users: FolderitTeamUser[] = json.users ?? json ?? [];
 
         const rows = users
-          .filter((u) => u.email && memberEmails.has(u.email.toLowerCase()))
-          .map((u) => ({
-            member_email: u.email!.toLowerCase(),
-            account_uid: account.account_uid,
-            folderit_user_uid: u.uid,
-            display_name: u.name ?? u.displayName ?? null,
-            synced_at: new Date().toISOString(),
-          }));
+          .filter((u) => {
+            if (!u.email) return false;
+            const fe = u.email.toLowerCase();
+            return memberEmails.has(fe) || aliasMap.has(fe);
+          })
+          .map((u) => {
+            const fe = u.email!.toLowerCase();
+            // Prefer the alias resolution (dashboard email) over the raw Folderit
+            // email so rows are always keyed by the user's app login address.
+            const dashboardEmail = aliasMap.get(fe) ?? fe;
+            return {
+              member_email: dashboardEmail,
+              account_uid: account.account_uid,
+              folderit_user_uid: u.uid,
+              display_name: u.name ?? u.displayName ?? null,
+              synced_at: new Date().toISOString(),
+            };
+          });
 
         if (rows.length) {
           const { error: upsertErr } = await db
@@ -433,12 +445,17 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: accountsErr?.message ?? "No active Folderit accounts mapped" }, { status: 500 });
   }
 
-  const [{ data: hrCategories }, { data: members }] = await Promise.all([
+  const [{ data: hrCategories }, { data: members }, { data: aliases }] = await Promise.all([
     db.from("folderit_hr_categories").select("category_name, account_uid, folder_uid").eq("is_active", true),
     db.from("members").select("email"),
+    db.from("folderit_email_aliases").select("dashboard_email, alias_email"),
   ]);
 
   const memberEmails = new Set((members ?? []).map((m) => m.email.toLowerCase()));
+  // alias_email (Folderit login) → dashboard_email (app login)
+  const aliasMap = new Map(
+    (aliases ?? []).map((a) => [a.alias_email.toLowerCase(), a.dashboard_email.toLowerCase()])
+  );
 
   // Accounts, HR categories, and user mapping are all independent — run in parallel.
   const [accountResults, hrResults, userMapResult] = await Promise.all([
@@ -452,7 +469,7 @@ export async function GET(request: NextRequest) {
       })
     ),
     Promise.all(((hrCategories ?? []) as HrCategoryRow[]).map((c) => syncHrCategory(db, c))),
-    syncUserMap(db, accounts as AccountMapRow[], memberEmails),
+    syncUserMap(db, accounts as AccountMapRow[], memberEmails, aliasMap),
   ]);
 
   for (const { inbox, approvals } of accountResults) {
