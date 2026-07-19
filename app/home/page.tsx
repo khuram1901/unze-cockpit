@@ -3413,59 +3413,148 @@ function SlimAlert({ color, text }: { color: string; text: string }) {
 }
 void SlimAlert;
 
-function DrillDownPerformance({ departmentRows, deptPeopleMap }: { departmentRows: PerformanceRow[]; deptPeopleMap: Map<string, PerformanceRow[]> }) {
-  const [selectedDept, setSelectedDept] = useState<string | null>(null);
+function DepartmentScorecardUnified({
+  scorecardRows,
+  deptPeopleMap,
+  isMobile,
+}: {
+  scorecardRows: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string; perf: PerformanceRow | null; hasConfig: boolean }[];
+  deptPeopleMap: Map<string, PerformanceRow[]>;
+  isMobile: boolean;
+}) {
+  const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
 
-  if (departmentRows.length === 0) return <p style={{ color: SLATE, fontSize: "13px" }}>No task data yet.</p>;
+  if (scorecardRows.length === 0)
+    return <p style={{ color: SLATE, fontSize: "13px" }}>No department data yet.</p>;
 
-  const chartData = departmentRows.map((d) => ({
-    name: d.name.length > 16 ? d.name.slice(0, 14) + "…" : d.name,
-    fullName: d.name,
-    Overdue: d.red,
-    "In Progress": d.amber,
-    Completed: d.green,
-  }));
-
-  const selectedPeople = selectedDept ? (deptPeopleMap.get(selectedDept) || []).filter((p) => p.total > 0) : [];
+  const RAG_COLOUR: Record<"GREEN" | "AMBER" | "RED", string> = { GREEN, AMBER, RED };
 
   return (
-    <div style={{ ...execCard(NAVY), overflow: "hidden", marginBottom: "12px", padding: 0 }}>
-      <div style={{ padding: "24px" }}>
-        <div style={{ fontSize: "10.5px", fontWeight: 500, color: SLATE, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "16px", fontFamily: "var(--font-sans, Inter, sans-serif)" }}>Task Load by Department — click a bar to drill down</div>
-        <div style={{ minHeight: "220px" }}>
-        <ResponsiveContainer width="100%" height={Math.max(220, departmentRows.length * 46)}>
-          <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 0, bottom: 0 }} onClick={(state: unknown) => { const s = state as { activePayload?: { payload?: { fullName?: string } }[] }; const fn = s?.activePayload?.[0]?.payload?.fullName; if (fn) setSelectedDept(selectedDept === fn ? null : fn); }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={HAIRLINE} horizontal={false} />
-            <XAxis type="number" tick={{ fontSize: 12, fill: SLATE }} />
-            <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: SLATE, fontWeight: 500 }} width={130} />
-            <Tooltip />
-            <Legend iconType="square" wrapperStyle={{ fontSize: "12px", color: SLATE }} />
-            <Bar dataKey="Overdue" stackId="a" fill={RED} radius={[0, 0, 0, 0]} cursor="pointer" name="Overdue" opacity={0.75} />
-            <Bar dataKey="In Progress" stackId="a" fill={AMBER} cursor="pointer" name="In Progress" opacity={0.75} />
-            <Bar dataKey="Completed" stackId="a" fill={GREEN} radius={[0, 4, 4, 0]} cursor="pointer" name="Completed" opacity={0.75} />
-          </BarChart>
-        </ResponsiveContainer>
-        </div>
-      </div>
-
-      {selectedDept && selectedPeople.length > 0 && (
-        <div style={{ borderTop: `1px solid ${HAIRLINE}`, padding: "10px 14px", backgroundColor: COLOURS.CARD_ALT }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{selectedDept} — People</span>
-            <button onClick={() => setSelectedDept(null)} style={{ background: "transparent", border: `1px solid ${HAIRLINE}`, borderRadius: RADII.XS, padding: "3px 10px", fontSize: "13px", color: SLATE, cursor: "pointer" }}>Close</button>
-          </div>
-          {selectedPeople.map((person) => (
-            <div key={person.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{person.name}</span>
-              <div style={{ display: "flex", gap: "10px", fontSize: "13px", fontWeight: 700 }}>
-                {person.red > 0 && <span style={{ color: RED }}>{person.red} overdue</span>}
-                {person.amber > 0 && <span style={{ color: AMBER }}>{person.amber} active</span>}
-                {person.green > 0 && <span style={{ color: GREEN }}>{person.green} done</span>}
-              </div>
-            </div>
-          ))}
+    <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", overflow: "hidden", backgroundColor: COLOURS.CARD, marginBottom: "12px" }}>
+      {/* Column headers — desktop only */}
+      {!isMobile && (
+        <div style={{ display: "grid", gridTemplateColumns: "8px 1fr 90px 130px 16px", gap: "0 12px", padding: "8px 16px 6px", borderBottom: `1px solid ${HAIRLINE}`, backgroundColor: CARD_ALT }}>
+          <div />
+          <div style={{ fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.07em" }}>Department</div>
+          <div style={{ fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "center" }}>Task mix</div>
+          <div style={{ fontSize: "10.5px", fontWeight: 600, color: SLATE, textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "right" }}>Overdue · Active</div>
+          <div />
         </div>
       )}
+
+      {scorecardRows.map((row, idx) => {
+        const isLegal = row.slug === "legal" && !row.hasConfig;
+        const isExpanded = expandedSlug === row.slug;
+        const perf = row.perf;
+        const total = perf?.total ?? 0;
+        const people = (deptPeopleMap.get(perf?.name ?? row.title) ?? []).filter((p) => p.total > 0);
+        const canExpand = !isLegal && people.length > 0;
+        const isLast = idx === scorecardRows.length - 1;
+        const rowBg = row.status === "RED" && !isLegal ? "rgba(179,38,30,0.03)" : "transparent";
+
+        return (
+          <div key={row.slug}>
+            {/* Main row */}
+            <div
+              onClick={canExpand ? () => setExpandedSlug(isExpanded ? null : row.slug) : undefined}
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "8px 1fr auto 16px" : "8px 1fr 90px 130px 16px",
+                gap: "0 12px",
+                alignItems: "center",
+                padding: "12px 16px",
+                borderBottom: !isLast || isExpanded ? `1px solid ${HAIRLINE}` : "none",
+                backgroundColor: rowBg,
+                cursor: canExpand ? "pointer" : "default",
+                opacity: isLegal ? 0.5 : 1,
+              }}
+            >
+              {/* RAG dot */}
+              <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: RAG_COLOUR[row.status], flexShrink: 0 }} />
+
+              {/* Name + owner */}
+              <div style={{ minWidth: 0 }}>
+                {row.hasConfig ? (
+                  <a
+                    href={`/department/${row.slug}`}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ fontSize: "13px", fontWeight: 700, color: NAVY, textDecoration: "none" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.textDecoration = "underline"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.textDecoration = "none"; }}
+                  >
+                    {row.title}
+                  </a>
+                ) : (
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: NAVY }}>{row.title}</span>
+                )}
+                {row.owner && row.owner !== "—" && (
+                  <div style={{ fontSize: "11px", color: SLATE, marginTop: "1px" }}>{row.owner}</div>
+                )}
+              </div>
+
+              {/* Mini stacked bar — desktop only */}
+              {!isMobile && (
+                <div style={{ height: "8px", borderRadius: "4px", overflow: "hidden", backgroundColor: HAIRLINE, display: "flex" }}>
+                  {total > 0 ? (
+                    <>
+                      {perf!.red > 0 && <div style={{ flex: perf!.red, backgroundColor: RED }} />}
+                      {perf!.amber > 0 && <div style={{ flex: perf!.amber, backgroundColor: AMBER }} />}
+                      {perf!.green > 0 && <div style={{ flex: perf!.green, backgroundColor: GREEN }} />}
+                    </>
+                  ) : (
+                    <div style={{ flex: 1, backgroundColor: HAIRLINE }} />
+                  )}
+                </div>
+              )}
+
+              {/* Counts */}
+              <div style={{ fontSize: "12px", textAlign: "right", whiteSpace: "nowrap" }}>
+                {total > 0 ? (
+                  <>
+                    {perf!.red > 0 && <span style={{ color: RED, fontWeight: 700 }}>{perf!.red} overdue</span>}
+                    {perf!.red > 0 && perf!.amber > 0 && <span style={{ color: SLATE }}> · </span>}
+                    {perf!.amber > 0 && <span style={{ color: AMBER, fontWeight: 600 }}>{perf!.amber} active</span>}
+                    {perf!.red === 0 && perf!.amber === 0 && <span style={{ color: GREEN, fontWeight: 600 }}>All done</span>}
+                  </>
+                ) : (
+                  <span style={{ color: SLATE }}>No tasks</span>
+                )}
+              </div>
+
+              {/* Chevron */}
+              <div style={{ fontSize: "11px", color: SLATE, textAlign: "right", userSelect: "none" }}>
+                {canExpand ? (isExpanded ? "▲" : "▼") : ""}
+              </div>
+            </div>
+
+            {/* Person drill-down */}
+            {isExpanded && people.length > 0 && (
+              <div style={{ borderBottom: isLast ? "none" : `1px solid ${HAIRLINE}`, backgroundColor: CARD_ALT }}>
+                {people.map((person, pi) => (
+                  <div key={person.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 16px 8px 36px", borderBottom: pi < people.length - 1 ? `1px solid ${HAIRLINE}` : "none" }}>
+                    <span style={{ fontSize: "12px", fontWeight: 600, color: NAVY }}>{person.name}</span>
+                    <div style={{ display: "flex", gap: "10px", fontSize: "12px" }}>
+                      {person.red > 0 && <span style={{ color: RED, fontWeight: 700 }}>{person.red} overdue</span>}
+                      {person.amber > 0 && <span style={{ color: AMBER, fontWeight: 600 }}>{person.amber} active</span>}
+                      {person.green > 0 && <span style={{ color: GREEN }}>{person.green} done</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Legend */}
+      <div style={{ display: "flex", gap: "16px", padding: "10px 16px", borderTop: `1px solid ${HAIRLINE}`, backgroundColor: CARD_ALT }}>
+        {([{ color: RED, label: "Overdue" }, { color: AMBER, label: "Active" }, { color: GREEN, label: "Done" }] as { color: string; label: string }[]).map(({ color, label }) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", color: SLATE }}>
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: color }} />
+            {label}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
