@@ -10,9 +10,11 @@ import HRPayroll from "./hr/HRPayroll";
 import HREobi from "./hr/HREobi";
 import HRTraining from "./hr/HRTraining";
 import HRTasks from "./hr/HRTasks";
+import HRWorkforce from "./hr/HRWorkforce";
 
 // ─── Tab definitions ────────────────────────────────────────────────────────
 const HR_TABS = [
+  { key: "workforce",    label: "Workforce" },
   { key: "recruitment",  label: "Recruitment" },
   { key: "onboarding",   label: "Onboarding" },
   { key: "offboarding",  label: "Off-boarding" },
@@ -47,7 +49,7 @@ function ComingSoon({ label }: { label: string }) {
 // ─── Main dashboard ─────────────────────────────────────────────────────────
 export default function HRDashboard() {
   const isMobile = useMobile();
-  const [activeTab, setActiveTab] = useState<HRTab>("recruitment");
+  const [activeTab, setActiveTab] = useState<HRTab>("workforce");
 
   const tabBarStyle: React.CSSProperties = {
     display: "flex",
@@ -87,6 +89,7 @@ export default function HRDashboard() {
       </div>
 
       {/* Tab content */}
+      {activeTab === "workforce"    && <HRWorkforce />}
       {activeTab === "recruitment"  && <HRRecruitment />}
       {activeTab === "onboarding"   && <HROnboarding />}
       {activeTab === "offboarding"  && <HROffboarding />}

@@ -876,6 +876,254 @@ function AdminView({
   );
 }
 
+// ── Browse tab: full folder-tree file browser ──────────────────────────
+
+type BrowseAccount = {
+  account_uid: string;
+  account_name: string;
+  company: { id: string; name: string; short_code: string } | null;
+};
+type BrowseFolder = { uid: string; name: string };
+type BrowseFile = { uid: string; name: string; createdAt: number | null; size: number | null };
+
+// Same as fetchPreviewBlobUrl but passes account_uid explicitly — browse
+// files aren't in the inbox/HR sync tables so the RPC lookup would 404.
+async function fetchBrowsePreviewBlobUrl(fileUid: string, accountUid: string): Promise<string> {
+  const res = await authFetch(
+    `/api/folderit/file-url?file=${encodeURIComponent(fileUid)}&account_uid=${encodeURIComponent(accountUid)}`
+  );
+  const contentType = res.headers.get("content-type") || "";
+  if (!res.ok || contentType.includes("application/json")) {
+    let message = "Couldn't preview this document.";
+    try {
+      const json = await res.json();
+      if (json?.error) message = json.error;
+    } catch { /* use default */ }
+    throw new Error(message);
+  }
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+function BrowseView() {
+  const setPreview = useContext(PreviewContext);
+  const [accounts, setAccounts] = useState<BrowseAccount[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [folderStack, setFolderStack] = useState<BrowseFolder[]>([]);
+  const [folders, setFolders] = useState<BrowseFolder[]>([]);
+  const [files, setFiles] = useState<BrowseFile[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [browseError, setBrowseError] = useState<string | null>(null);
+  const [previewingFile, setPreviewingFile] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    authFetch("/api/folderit/accounts")
+      .then((r) => r.json())
+      .then((j) => setAccounts(j.accounts ?? []));
+  }, []);
+
+  async function loadFolder(accountUid: string, folderUid: string | null) {
+    setLoading(true);
+    setBrowseError(null);
+    setNote(null);
+    try {
+      const url = folderUid
+        ? `/api/folderit/browse?account_uid=${accountUid}&folder_uid=${encodeURIComponent(folderUid)}`
+        : `/api/folderit/browse?account_uid=${accountUid}`;
+      const res = await authFetch(url);
+      const json = await res.json();
+      if (!res.ok) {
+        setBrowseError(json.error ?? "Failed to load folder");
+        setFolders([]);
+        setFiles([]);
+      } else {
+        setFolders(json.folders ?? []);
+        setFiles(json.files ?? []);
+        if (json.note) setNote(json.note);
+      }
+    } catch {
+      setBrowseError("Network error — couldn't load folder");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function selectAccount(acc: BrowseAccount) {
+    setSelectedAccount(acc.account_uid);
+    setFolderStack([]);
+    loadFolder(acc.account_uid, null);
+  }
+
+  function openFolder(folder: BrowseFolder) {
+    setFolderStack((prev) => [...prev, folder]);
+    loadFolder(selectedAccount!, folder.uid);
+  }
+
+  function navigateTo(index: number) {
+    if (index < 0) {
+      setFolderStack([]);
+      loadFolder(selectedAccount!, null);
+    } else {
+      const newStack = folderStack.slice(0, index + 1);
+      setFolderStack(newStack);
+      loadFolder(selectedAccount!, newStack[newStack.length - 1].uid);
+    }
+  }
+
+  async function openFile(file: BrowseFile) {
+    if (previewingFile) return;
+    setPreviewingFile(file.uid);
+    try {
+      const url = await fetchBrowsePreviewBlobUrl(file.uid, selectedAccount!);
+      setPreview({ url, name: file.name });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Couldn't preview this document.");
+    } finally {
+      setPreviewingFile(null);
+    }
+  }
+
+  const selectedAcc = accounts.find((a) => a.account_uid === selectedAccount);
+
+  if (!selectedAccount) {
+    return (
+      <>
+        <SectionTitle title="Select a cabinet to browse" />
+        {accounts.length === 0 ? (
+          <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>
+            No Folderit accounts linked to your profile yet. The daily sync will populate this automatically.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+            {accounts.map((acc) => {
+              const sc = acc.company?.short_code ?? "?";
+              const badge = COMPANY_BADGE_STYLES[sc as keyof typeof COMPANY_BADGE_STYLES] ??
+                { bg: COLOURS.CARD_ALT, text: COLOURS.SLATE };
+              return (
+                <button
+                  key={acc.account_uid}
+                  onClick={() => selectAccount(acc)}
+                  style={{
+                    ...cardStyle, padding: "16px 20px", cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: "10px",
+                    border: `1px solid ${COLOURS.BORDER}`, background: "#fff",
+                  }}
+                >
+                  <span style={{
+                    background: badge.bg, color: badge.text, borderRadius: RADII.SM,
+                    padding: "2px 7px", fontSize: "11px", fontWeight: 600, letterSpacing: "0.04em",
+                  }}>{sc}</span>
+                  <span style={{ fontSize: "14px", fontWeight: 500, color: COLOURS.NAVY }}>
+                    {acc.company?.name ?? acc.account_name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {/* Breadcrumb nav */}
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "16px" }}>
+        <button
+          onClick={() => { setSelectedAccount(null); setFolderStack([]); setFolders([]); setFiles([]); }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: COLOURS.SLATE, fontSize: "13px", padding: 0 }}
+        >
+          Cabinets
+        </button>
+        <span style={{ color: COLOURS.BORDER }}>›</span>
+        <button
+          onClick={() => navigateTo(-1)}
+          style={{
+            background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "13px",
+            color: folderStack.length === 0 ? COLOURS.NAVY : COLOURS.SLATE,
+            fontWeight: folderStack.length === 0 ? 600 : 400,
+          }}
+        >
+          {selectedAcc?.company?.name ?? selectedAcc?.account_name}
+        </button>
+        {folderStack.map((f, i) => (
+          <span key={f.uid} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ color: COLOURS.BORDER }}>›</span>
+            <button
+              onClick={() => navigateTo(i)}
+              style={{
+                background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: "13px",
+                color: i === folderStack.length - 1 ? COLOURS.NAVY : COLOURS.SLATE,
+                fontWeight: i === folderStack.length - 1 ? 600 : 400,
+              }}
+            >
+              {f.name}
+            </button>
+          </span>
+        ))}
+      </div>
+
+      {loading && <div style={{ color: COLOURS.SLATE, fontSize: "13px" }}>Loading…</div>}
+      {browseError && <div style={{ color: COLOURS.RED, fontSize: "13px" }}>{browseError}</div>}
+      {note && <div style={{ color: COLOURS.AMBER, fontSize: "13px", marginBottom: "12px" }}>{note}</div>}
+
+      {!loading && !browseError && (
+        <div style={{ borderRadius: RADII.CARD, overflow: "hidden", border: `1px solid ${COLOURS.BORDER}` }}>
+          {folders.sort((a, b) => a.name.localeCompare(b.name)).map((folder) => (
+            <div
+              key={folder.uid}
+              onClick={() => openFolder(folder)}
+              style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                padding: "11px 16px", cursor: "pointer",
+                borderBottom: `1px solid ${COLOURS.BORDER}`,
+                color: COLOURS.NAVY, fontSize: "13px", background: "#fff",
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = COLOURS.CARD_ALT)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+            >
+              <span style={{ fontSize: "15px", flexShrink: 0 }}>📁</span>
+              <span style={{ fontWeight: 500 }}>{folder.name}</span>
+            </div>
+          ))}
+          {files.sort((a, b) => a.name.localeCompare(b.name)).map((file) => {
+            const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+            const icon = ext === "pdf" ? "📄" : ["xlsx", "xls"].includes(ext) ? "📊"
+              : ["docx", "doc"].includes(ext) ? "📝" : "📎";
+            const isPreviewing = previewingFile === file.uid;
+            return (
+              <div
+                key={file.uid}
+                onClick={() => openFile(file)}
+                style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  padding: "11px 16px", cursor: isPreviewing ? "wait" : "pointer",
+                  borderBottom: `1px solid ${COLOURS.BORDER}`,
+                  color: COLOURS.NAVY, fontSize: "13px", background: "#fff",
+                  opacity: isPreviewing ? 0.6 : 1, transition: "background 0.1s",
+                }}
+                onMouseEnter={(e) => !isPreviewing && (e.currentTarget.style.background = COLOURS.CARD_ALT)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+              >
+                <span style={{ fontSize: "15px", flexShrink: 0 }}>{icon}</span>
+                <span style={{ flex: 1 }}>{file.name}</span>
+                {isPreviewing && <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>Opening…</span>}
+              </div>
+            );
+          })}
+          {folders.length === 0 && files.length === 0 && !note && (
+            <div style={{ padding: "16px", color: COLOURS.SLATE, fontSize: "13px" }}>
+              This folder is empty.
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 // Every fetch the initial page needs, in one place, fired in parallel on
 // mount — Khuram: "Folderit is working very slow. When I go into that
 // page, it takes a while for the page to load." Previously this was a
@@ -890,6 +1138,7 @@ function AdminView({
 function FolderitDashboard() {
   const isMobile = useMobile();
   const { ctx, loading: ctxLoading } = useUserCtx();
+  const [pageTab, setPageTab] = useState<"overview" | "browse">("overview");
   const [hrCategories, setHrCategories] = useState<HrCategory[]>([]);
   const [summary, setSummary] = useState<{ pending_approval_count: number; company_inbox_count: number; hr_inbox_count: number } | null>(null);
   const [approvalItems, setApprovalItems] = useState<DetailItem[]>([]);
@@ -942,32 +1191,57 @@ function FolderitDashboard() {
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden" }}>
         <PageHeader />
         <h1 style={{ fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontSize: "22px", fontWeight: 600, letterSpacing: "-0.01em", color: NAVY, marginTop: "8px", marginBottom: "4px" }}>Folder-it Dashboard</h1>
-        <div style={{ fontSize: "13px", color: SLATE, marginBottom: "20px" }}>
+        <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px" }}>
           Documents pending approval &amp; filing — read-only status view. Act on anything by opening Folderit directly.
         </div>
 
-        <FolderitSearchBox />
+        {/* Tab bar */}
+        <div style={{ display: "flex", gap: "0", borderBottom: `2px solid ${COLOURS.BORDER}`, marginBottom: "20px" }}>
+          {(["overview", "browse"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setPageTab(tab)}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                padding: "8px 18px", fontSize: "13px", fontWeight: 500,
+                color: pageTab === tab ? COLOURS.NAVY : COLOURS.SLATE,
+                borderBottom: pageTab === tab ? `2px solid ${COLOURS.NAVY}` : "2px solid transparent",
+                marginBottom: "-2px", transition: "color 0.15s",
+                textTransform: "capitalize",
+              }}
+            >
+              {tab === "overview" ? "Overview" : "Browse Files"}
+            </button>
+          ))}
+        </div>
 
-        {isAdmin ? (
-          <AdminView
-            hrCategories={hrCategories}
-            hrInboxCount={hrInboxCount}
-            hasHrAccess={hasHrAccess}
-            approvalCount={summary?.pending_approval_count ?? 0}
-            approvalItems={approvalItems}
-            companyBreakdown={companyBreakdown}
-          />
+        {pageTab === "browse" ? (
+          <BrowseView />
         ) : (
-          <MemberView
-            hrCategories={hrCategories}
-            hrInboxCount={hrInboxCount}
-            hasHrAccess={hasHrAccess}
-            companyName={ctx.company}
-            approvalCount={summary?.pending_approval_count ?? 0}
-            approvalItems={approvalItems}
-            inboxCount={summary?.company_inbox_count ?? 0}
-            inboxItems={memberInboxItems}
-          />
+          <>
+            <FolderitSearchBox />
+            {isAdmin ? (
+              <AdminView
+                hrCategories={hrCategories}
+                hrInboxCount={hrInboxCount}
+                hasHrAccess={hasHrAccess}
+                approvalCount={summary?.pending_approval_count ?? 0}
+                approvalItems={approvalItems}
+                companyBreakdown={companyBreakdown}
+              />
+            ) : (
+              <MemberView
+                hrCategories={hrCategories}
+                hrInboxCount={hrInboxCount}
+                hasHrAccess={hasHrAccess}
+                companyName={ctx.company}
+                approvalCount={summary?.pending_approval_count ?? 0}
+                approvalItems={approvalItems}
+                inboxCount={summary?.company_inbox_count ?? 0}
+                inboxItems={memberInboxItems}
+              />
+            )}
+          </>
         )}
       </main>
       {preview && <PreviewModal url={preview.url} name={preview.name} onClose={() => setPreview(null)} />}

@@ -168,13 +168,11 @@ export async function GET(request: NextRequest) {
   const fileUid = request.nextUrl.searchParams.get("file");
   if (!fileUid) return Response.json({ error: "Missing file" }, { status: 400 });
 
-  const db = createServiceClient();
+  // Optional: Browse tab passes account_uid explicitly so we skip the RPC
+  // lookup (browse files aren't necessarily in the inbox/HR sync tables).
+  const explicitAccountUid = request.nextUrl.searchParams.get("account_uid");
 
-  const { data: accountUid, error: lookupErr } = await db.rpc("get_folderit_file_account", {
-    p_file_uid: fileUid,
-  });
-  if (lookupErr) return Response.json({ error: lookupErr.message }, { status: 500 });
-  if (!accountUid) return Response.json({ error: "File not found" }, { status: 404 });
+  const db = createServiceClient();
 
   // Select everything permission-checking might need up front (id +
   // department, on top of role/company_id) so the HR-gated branch below
@@ -193,39 +191,65 @@ export async function GET(request: NextRequest) {
     member?.role === "Admin" ||
     member?.role === "CEO";
 
-  if (!isAdmin) {
-    // HR documents are locked behind can_view_folderit_hr (off by default,
-    // granted per-member via Members > Access Matrix > Folderit > HR).
-    // Everything else is scoped to the caller's own company, as before.
-    const { data: hrMatch } = await db
-      .from("folderit_hr_categories")
-      .select("category_name")
-      .eq("account_uid", accountUid)
-      .limit(1)
-      .maybeSingle();
+  let accountUid: string | null = explicitAccountUid;
 
-    if (hrMatch) {
-      let overrides: PermOverrides | null = null;
-      if (member?.id) {
-        const { data: perms } = await db
-          .from("member_permissions")
-          .select("*")
-          .eq("member_id", member.id)
-          .maybeSingle();
-        overrides = (perms as PermOverrides) || null;
-      }
-      const ctx: UserCtx = { email, role: member?.role ?? null, department: member?.department ?? null, overrides };
-      if (!canViewFolderitHr(ctx)) return Response.json({ error: "Forbidden" }, { status: 403 });
-    } else {
-      const { data: companyMatch } = await db
-        .from("folderit_account_companies")
-        .select("company_uuid")
-        .eq("account_uid", accountUid)
-        .eq("company_uuid", member?.company_id ?? "")
+  if (explicitAccountUid) {
+    // Browse-tab path: account is already known. For non-admins, verify they
+    // are mapped to this account via the user map (set during sync).
+    if (!isAdmin) {
+      const { data: mapping } = await db
+        .from("folderit_user_map")
+        .select("folderit_user_uid")
+        .eq("member_email", email)
+        .eq("account_uid", explicitAccountUid)
         .maybeSingle();
-      if (!companyMatch) return Response.json({ error: "Forbidden" }, { status: 403 });
+      if (!mapping) return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+  } else {
+    // Legacy path: look up account from synced inbox/HR tables via RPC.
+    const { data: rpcResult, error: lookupErr } = await db.rpc("get_folderit_file_account", {
+      p_file_uid: fileUid,
+    });
+    if (lookupErr) return Response.json({ error: lookupErr.message }, { status: 500 });
+    if (!rpcResult) return Response.json({ error: "File not found" }, { status: 404 });
+    accountUid = rpcResult as string;
+
+    if (!isAdmin) {
+      // HR documents are locked behind can_view_folderit_hr (off by default,
+      // granted per-member via Members > Access Matrix > Folderit > HR).
+      // Everything else is scoped to the caller's own company, as before.
+      const { data: hrMatch } = await db
+        .from("folderit_hr_categories")
+        .select("category_name")
+        .eq("account_uid", accountUid)
+        .limit(1)
+        .maybeSingle();
+
+      if (hrMatch) {
+        let overrides: PermOverrides | null = null;
+        if (member?.id) {
+          const { data: perms } = await db
+            .from("member_permissions")
+            .select("*")
+            .eq("member_id", member.id)
+            .maybeSingle();
+          overrides = (perms as PermOverrides) || null;
+        }
+        const ctx: UserCtx = { email, role: member?.role ?? null, department: member?.department ?? null, overrides };
+        if (!canViewFolderitHr(ctx)) return Response.json({ error: "Forbidden" }, { status: 403 });
+      } else {
+        const { data: companyMatch } = await db
+          .from("folderit_account_companies")
+          .select("company_uuid")
+          .eq("account_uid", accountUid)
+          .eq("company_uuid", member?.company_id ?? "")
+          .maybeSingle();
+        if (!companyMatch) return Response.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
   }
+
+  if (!accountUid) return Response.json({ error: "Could not determine account" }, { status: 500 });
 
   try {
     // Poll until Folderit finishes converting the file to a PDF rendition.

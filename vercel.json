@@ -64,6 +64,10 @@
     {
       "path": "/api/notifications/ceo-digest",
       "schedule": "30 6 * * 1-5"
+    },
+    {
+      "path": "/api/flowhcm/sync",
+      "schedule": "0 */2 * * *"
     }
   ]
 }

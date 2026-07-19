@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 
@@ -123,59 +123,61 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
   );
 }
 
-// ── Import button component ──────────────────────────────────────────────────────
-function ImportButton({ onImported }: { onImported: (msg: string) => void }) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = useState(false);
+// ── FlowHCM sync button ──────────────────────────────────────────────────────────
+type SyncLog = { synced_at: string; status: string; records_synced: number } | null;
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setLoading(true);
+function SyncButton({ onSynced, syncLog }: { onSynced: (msg: string) => void; syncLog: SyncLog }) {
+  const [syncing, setSyncing] = useState(false);
 
+  async function handleSync() {
+    setSyncing(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-
-      const res = await authedFetch("/api/hr/recruitment/import", {
+      const res = await authedFetch("/api/flowhcm/sync", {
         method: "POST",
-        body: fd,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modules: ["recruitment"] }),
       });
-
       const json = await res.json();
-
-      if (!res.ok) {
-        onImported("Error: " + (json.error ?? "Import failed"));
+      if (json.status === "not_configured") {
+        onSynced("FlowHCM not connected yet — add FLOWHCM_TOKEN to Vercel env vars.");
+      } else if (json.errors?.length) {
+        onSynced("Sync error: " + json.errors.join("; "));
       } else {
-        onImported(
-          `Import complete — ${json.positions_inserted} new positions, ${json.positions_updated} updated, ${json.candidates_inserted} candidates imported.`
-        );
+        const r = json.results?.recruitment ?? 0;
+        onSynced(`Sync complete — ${r} records refreshed from FlowHCM.`);
       }
     } catch {
-      onImported("Error: Network failure during import.");
+      onSynced("Error: Network failure during sync.");
     } finally {
-      setLoading(false);
-      if (fileRef.current) fileRef.current.value = "";
+      setSyncing(false);
     }
   }
 
+  const lastSynced = syncLog?.synced_at
+    ? formatDateUK(syncLog.synced_at.slice(0, 10)) + " · " + syncLog.records_synced + " records"
+    : null;
+
   return (
-    <>
-      <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFile} />
+    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      {lastSynced && (
+        <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>
+          Last sync: {lastSynced}
+        </span>
+      )}
       <button
-        onClick={() => fileRef.current?.click()}
-        disabled={loading}
+        onClick={handleSync}
+        disabled={syncing}
         style={{
           padding: "7px 16px", fontSize: "13px", fontWeight: 600,
-          borderRadius: RADII.PILL, cursor: loading ? "wait" : "pointer",
+          borderRadius: RADII.PILL, cursor: syncing ? "wait" : "pointer",
           border: `1px solid ${COLOURS.HAIRLINE}`,
           backgroundColor: COLOURS.CARD, color: COLOURS.NAVY,
-          opacity: loading ? 0.7 : 1,
+          opacity: syncing ? 0.7 : 1,
         }}
       >
-        {loading ? "Importing…" : "⬆ Import from FlowHCM"}
+        {syncing ? "Syncing…" : "↻ Sync from FlowHCM"}
       </button>
-    </>
+    </div>
   );
 }
 
@@ -393,6 +395,7 @@ export default function HRRecruitment() {
   const [search, setSearch]       = useState("");
   const [message, setMessage]     = useState("");
   const [panelPos, setPanelPos]   = useState<Position | null>(null);
+  const [syncLog, setSyncLog]     = useState<SyncLog>(null);
 
   function showMsg(text: string) {
     setMessage(text);
@@ -402,14 +405,18 @@ export default function HRRecruitment() {
   async function loadData() {
     setLoading(true);
     try {
-      const [sumRes, posRes] = await Promise.all([
+      const [sumRes, posRes, statusRes] = await Promise.all([
         authedFetch("/api/hr/recruitment/summary"),
         authedFetch("/api/hr/recruitment/positions"),
+        authedFetch("/api/flowhcm/status"),
       ]);
-      const sumData = await sumRes.json();
-      const posData = await posRes.json();
+      const sumData    = await sumRes.json();
+      const posData    = await posRes.json();
+      const statusData = await statusRes.json();
       setSummary(sumData.summary ?? null);
       setPositions(posData.positions ?? []);
+      const log = (statusData.sync_log ?? []) as { module: string; synced_at: string; status: string; records_synced: number }[];
+      setSyncLog(log.find(l => l.module === "recruitment") ?? null);
     } finally {
       setLoading(false);
     }
@@ -509,8 +516,8 @@ export default function HRRecruitment() {
           />
         </div>
 
-        {/* Right: Import button */}
-        <ImportButton onImported={(msg) => { showMsg(msg); loadData(); }} />
+        {/* Right: FlowHCM sync */}
+        <SyncButton syncLog={syncLog} onSynced={(msg) => { showMsg(msg); loadData(); }} />
       </div>
 
       {/* Count label */}
@@ -553,7 +560,7 @@ export default function HRRecruitment() {
         ) : filtered.length === 0 ? (
           <div style={{ padding: "32px", textAlign: "center", color: COLOURS.SLATE, fontSize: "14px" }}>
             {positions.length === 0
-              ? 'No positions yet. Click "Import from FlowHCM" to load your recruitment data.'
+              ? 'No positions yet. Click "Sync from FlowHCM" to pull your recruitment data.'
               : "No positions match the current filters."}
           </div>
         ) : (
