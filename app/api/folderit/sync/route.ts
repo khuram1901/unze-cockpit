@@ -448,19 +448,22 @@ type HealthIssueRow = {
   days_old: number | null;
 };
 
+// Patterns for filenames that are clearly auto-generated or meaningless.
+// Deliberately conservative — we only flag names where the filename itself
+// gives no information about the document's content. Descriptive names
+// that happen to have a copy-number suffix like "E-26373 (2).pdf" are NOT
+// flagged here — the name is still meaningful.
 const BAD_FILENAME_PATTERNS: RegExp[] = [
-  /^scan\d*\./i,
-  /^img_?\d+\./i,
-  /^dsc\d+\./i,
-  /^photo\d*\./i,
-  /^screenshot\d*\./i,
-  /^document(\s*\(\d+\))?\./i,
-  /^untitled(\s*\d*)?\./i,
-  /^copy\s+of\s+/i,
-  /^new\s+(document|folder|file)/i,
-  /^file\d*\./i,
-  /^\d+\.(pdf|docx?|xlsx?|pptx?|jpg|png)$/i, // just a number
-  /\(\d+\)\.(pdf|docx?|xlsx?|pptx?|jpg|png)$/i, // ends in (1), (2) etc.
+  /^scan\d*\./i,            // scan.pdf, scan001.pdf
+  /^img_?\d+\./i,           // IMG_4521.jpg, img001.png
+  /^dsc\d+\./i,             // DSC00123.jpg (camera default)
+  /^photo\d*\./i,           // photo.jpg, photo001.png
+  /^screenshot\d*[\s_-]/i,  // Screenshot 2024-01-01 ...
+  /^document\./i,           // document.pdf (no other words)
+  /^untitled\./i,           // untitled.docx
+  /^copy\s+of\s+/i,         // copy of contract.pdf
+  /^new\s+(document|folder|file)\./i, // new document.docx
+  /^\d+\.(pdf|docx?|xlsx?|pptx?|jpg|jpeg|png)$/i, // purely numeric: 1234.pdf
 ];
 
 function isBadFilename(name: string): boolean {

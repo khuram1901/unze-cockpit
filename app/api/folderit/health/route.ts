@@ -46,11 +46,11 @@ export async function GET(request: NextRequest) {
   let query = db
     .from("folderit_health_issues")
     .select(
-      "id, account_uid, company_uuid, file_uid, file_name, issue_type, location_path, days_old, detected_at",
+      "id, account_uid, company_uuid, file_uid, file_name, issue_type, location_path, days_old, detected_at, companies(name)",
       { count: "exact" }
     )
-    .order("detected_at", { ascending: false })
     .order("issue_type")
+    .order("days_old", { ascending: false, nullsFirst: false })
     .range(offset, offset + limit - 1);
 
   if (!isAdmin) {
@@ -84,11 +84,19 @@ export async function GET(request: NextRequest) {
     query = query.eq("issue_type", filterType);
   }
 
-  const { data: issues, error, count } = await query;
+  const { data: rawIssues, error, count } = await query;
 
   if (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
-  return Response.json({ issues: issues ?? [], total: count ?? 0 });
+  // Flatten the companies join so the frontend gets a plain company_name string
+  const issues = (rawIssues ?? []).map((iss) => {
+    const co = iss.companies as { name: string } | { name: string }[] | null;
+    const company_name = Array.isArray(co) ? (co[0]?.name ?? null) : (co?.name ?? null);
+    const { companies: _drop, ...rest } = iss as typeof iss & { companies: unknown };
+    return { ...rest, company_name };
+  });
+
+  return Response.json({ issues, total: count ?? 0 });
 }

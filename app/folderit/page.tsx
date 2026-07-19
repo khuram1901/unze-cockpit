@@ -1307,6 +1307,8 @@ type OverviewData = {
 
 function HealthScoreDial({ score }: { score: number }) {
   const colour = score >= 80 ? COLOURS.GREEN : score >= 50 ? COLOURS.AMBER : COLOURS.RED;
+  // Always show at least a sliver in the bar so it doesn't look broken at 0
+  const barWidth = score === 0 ? 2 : Math.max(score, 5);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
       <div style={{
@@ -1321,7 +1323,7 @@ function HealthScoreDial({ score }: { score: number }) {
         height: "6px", flex: 1, borderRadius: "3px",
         background: COLOURS.BORDER, overflow: "hidden",
       }}>
-        <div style={{ width: `${score}%`, height: "100%", background: colour, borderRadius: "3px", transition: "width 0.4s" }} />
+        <div style={{ width: `${barWidth}%`, height: "100%", background: colour, borderRadius: "3px", transition: "width 0.4s" }} />
       </div>
     </div>
   );
@@ -1452,6 +1454,7 @@ type HealthIssue = {
   id: string;
   account_uid: string;
   company_uuid: string | null;
+  company_name: string | null;
   file_uid: string | null;
   file_name: string;
   issue_type: string;
@@ -1572,8 +1575,7 @@ function FilingHealthTab() {
                     {iss.days_old !== null ? `${iss.days_old}d` : "—"}
                   </td>
                   <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE }}>
-                    {/* company_uuid would need a lookup — location_path gives enough context */}
-                    {iss.account_uid.substring(0, 8)}…
+                    {iss.company_name ?? "—"}
                   </td>
                 </tr>
               ))}
@@ -1595,7 +1597,7 @@ function FilingHealthTab() {
 function FolderitDashboard() {
   const isMobile = useMobile();
   const { ctx, loading: ctxLoading } = useUserCtx();
-  const [pageTab, setPageTab] = useState<"overview" | "browse" | "health" | "alerts">("overview");
+  const [pageTab, setPageTab] = useState<"overview" | "browse" | "health">("overview");
   const [hrCategories, setHrCategories] = useState<HrCategory[]>([]);
   const [summary, setSummary] = useState<{ pending_approval_count: number; company_inbox_count: number; hr_inbox_count: number } | null>(null);
   const [approvalItems, setApprovalItems] = useState<DetailItem[]>([]);
@@ -1647,7 +1649,6 @@ function FolderitDashboard() {
     { key: "overview", label: "Overview" },
     { key: "browse",   label: "Browse Files" },
     { key: "health",   label: "Filing Health" },
-    { key: "alerts",   label: "Alerts" },
   ];
 
   return (
@@ -1681,32 +1682,6 @@ function FolderitDashboard() {
         {pageTab === "overview" && <OverviewTab isAdmin={isAdmin} />}
         {pageTab === "browse"   && <BrowseView />}
         {pageTab === "health"   && <FilingHealthTab />}
-        {pageTab === "alerts"   && (
-          <>
-            <FolderitSearchBox />
-            {isAdmin ? (
-              <AdminView
-                hrCategories={hrCategories}
-                hrInboxCount={hrInboxCount}
-                hasHrAccess={hasHrAccess}
-                approvalCount={summary?.pending_approval_count ?? 0}
-                approvalItems={approvalItems}
-                companyBreakdown={companyBreakdown}
-              />
-            ) : (
-              <MemberView
-                hrCategories={hrCategories}
-                hrInboxCount={hrInboxCount}
-                hasHrAccess={hasHrAccess}
-                companyName={ctx.company}
-                approvalCount={summary?.pending_approval_count ?? 0}
-                approvalItems={approvalItems}
-                inboxCount={summary?.company_inbox_count ?? 0}
-                inboxItems={memberInboxItems}
-              />
-            )}
-          </>
-        )}
       </main>
       {preview && <PreviewModal url={preview.url} name={preview.name} onClose={() => setPreview(null)} />}
     </PreviewContext.Provider>
