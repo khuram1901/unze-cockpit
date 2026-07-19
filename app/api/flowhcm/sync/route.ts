@@ -12,7 +12,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
-import { flowhcm } from "../../../../lib/flowhcm-client";
+import {
+  flowhcm,
+  FlwPayrollRecord,
+  FlwPerformanceReview,
+  FlwTrainingRecord,
+  FlwDisciplinaryAction,
+  FlwLoan,
+} from "../../../../lib/flowhcm-client";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -211,6 +218,158 @@ function mapPipelineStage(pipelineStatus: string | null): string {
   return "Applied";
 }
 
+// ── Extended module syncs ──────────────────────────────────────────────────────
+
+async function syncPayroll(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  // Current month + previous month to catch late processing
+  const now  = new Date();
+  const months = [
+    `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    `${now.getFullYear()}-${String(now.getMonth()).padStart(2, "0")}`,
+  ].filter(m => m.slice(5) !== "00"); // guard January edge case
+
+  let total = 0;
+  for (const month of months) {
+    const records = await flowhcm.getPayroll(month);
+    const rows = records.map((r: FlwPayrollRecord) => ({
+      pay_month:         `${month}-01`,
+      employee_code:     r.employeeCode,
+      employee_name:     r.employeeName,
+      department:        r.department,
+      station:           r.station,
+      designation:       r.designation,
+      basic_salary:      r.basicSalary   ?? 0,
+      gross_salary:      r.grossSalary   ?? 0,
+      net_salary:        r.netSalary     ?? 0,
+      total_deductions:  r.totalDeductions  ?? 0,
+      total_allowances:  r.totalAllowances  ?? 0,
+      status:            r.status,
+      synced_at:         new Date().toISOString(),
+    }));
+    if (rows.length > 0) {
+      const { error } = await db
+        .from("flw_payroll_monthly")
+        .upsert(rows, { onConflict: "pay_month,employee_code" });
+      if (error) throw new Error(error.message);
+    }
+    total += rows.length;
+  }
+  await logSync(db, "payroll", "success", total, Date.now() - t0);
+  return total;
+}
+
+async function syncPerformance(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const reviews = await flowhcm.getPerformanceReviews();
+  const rows = reviews.map((r: FlwPerformanceReview) => ({
+    flw_id:          r.id,
+    employee_code:   r.employeeCode,
+    employee_name:   r.employeeName,
+    department:      r.department,
+    station:         r.station,
+    review_period:   r.reviewPeriod,
+    review_type:     r.reviewType,
+    status:          r.status,
+    rating:          r.rating,
+    due_date:        r.dueDate?.slice(0, 10) ?? null,
+    completed_date:  r.completedDate?.slice(0, 10) ?? null,
+    reviewer_name:   r.reviewerName,
+    reviewer_code:   r.reviewerCode,
+    remarks:         r.remarks,
+    synced_at:       new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db
+      .from("flw_performance_reviews")
+      .upsert(rows, { onConflict: "flw_id" });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "performance", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncTrainingRecords(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const records = await flowhcm.getTrainingRecords();
+  const rows = records.map((r: FlwTrainingRecord) => ({
+    flw_id:         r.id,
+    employee_code:  r.employeeCode,
+    employee_name:  r.employeeName,
+    department:     r.department,
+    training_title: r.trainingTitle,
+    training_date:  r.trainingDate?.slice(0, 10) ?? null,
+    training_type:  r.trainingType,
+    status:         r.status,
+    score:          r.score,
+    trainer:        r.trainer,
+    venue:          r.venue,
+    synced_at:      new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db
+      .from("flw_training_records")
+      .upsert(rows, { onConflict: "flw_id" });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "training_records", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncDisciplinary(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const actions = await flowhcm.getDisciplinary();
+  const rows = actions.map((r: FlwDisciplinaryAction) => ({
+    flw_id:            r.id,
+    employee_code:     r.employeeCode,
+    employee_name:     r.employeeName,
+    department:        r.department,
+    station:           r.station,
+    notice_type:       r.noticeType,
+    issue_date:        r.issueDate?.slice(0, 10) ?? null,
+    response_due_date: r.responseDueDate?.slice(0, 10) ?? null,
+    status:            r.status,
+    description:       r.description,
+    issued_by:         r.issuedBy,
+    synced_at:         new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db
+      .from("flw_disciplinary")
+      .upsert(rows, { onConflict: "flw_id" });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "disciplinary", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
+async function syncLoans(db: ReturnType<typeof createServiceClient>) {
+  const t0 = Date.now();
+  const loans = await flowhcm.getLoans();
+  const rows = loans.map((r: FlwLoan) => ({
+    flw_id:             r.id,
+    employee_code:      r.employeeCode,
+    employee_name:      r.employeeName,
+    department:         r.department,
+    loan_type:          r.loanType,
+    principal_amount:   r.principalAmount   ?? 0,
+    outstanding_amount: r.outstandingAmount ?? 0,
+    monthly_deduction:  r.monthlyDeduction  ?? 0,
+    start_date:         r.startDate?.slice(0, 10) ?? null,
+    expected_end_date:  r.expectedEndDate?.slice(0, 10) ?? null,
+    status:             r.status,
+    synced_at:          new Date().toISOString(),
+  }));
+  if (rows.length > 0) {
+    const { error } = await db
+      .from("flw_loans")
+      .upsert(rows, { onConflict: "flw_id" });
+    if (error) throw new Error(error.message);
+  }
+  await logSync(db, "loans", "success", rows.length, Date.now() - t0);
+  return rows.length;
+}
+
 // ── Main handler ───────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -238,14 +397,23 @@ export async function POST(request: NextRequest) {
 
   // Parse which modules to sync (default: all)
   const body = await request.json().catch(() => ({})) as { modules?: string[] };
-  const modules = body.modules ?? ["employees", "attendance", "leave", "recruitment"];
+  const ALL_MODULES = [
+    "employees", "attendance", "leave", "recruitment",
+    "payroll", "performance", "training_records", "disciplinary", "loans",
+  ];
+  const modules = body.modules ?? ALL_MODULES;
 
   for (const mod of modules) {
     try {
-      if (mod === "employees")   results.employees   = await syncEmployees(db);
-      if (mod === "attendance")  results.attendance  = await syncAttendance(db);
-      if (mod === "leave")       results.leave       = await syncLeave(db);
-      if (mod === "recruitment") results.recruitment = await syncRecruitment(db);
+      if (mod === "employees")        results.employees        = await syncEmployees(db);
+      if (mod === "attendance")       results.attendance       = await syncAttendance(db);
+      if (mod === "leave")            results.leave            = await syncLeave(db);
+      if (mod === "recruitment")      results.recruitment      = await syncRecruitment(db);
+      if (mod === "payroll")          results.payroll          = await syncPayroll(db);
+      if (mod === "performance")      results.performance      = await syncPerformance(db);
+      if (mod === "training_records") results.training_records = await syncTrainingRecords(db);
+      if (mod === "disciplinary")     results.disciplinary     = await syncDisciplinary(db);
+      if (mod === "loans")            results.loans            = await syncLoans(db);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`${mod}: ${msg}`);

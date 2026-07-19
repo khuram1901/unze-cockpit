@@ -110,6 +110,80 @@ export type FlwJobRequest = {
   status:        string;
 };
 
+export type FlwPayrollRecord = {
+  employeeCode:      string;
+  employeeName:      string;
+  department:        string | null;
+  station:           string | null;
+  designation:       string | null;
+  payMonth:          string;       // YYYY-MM-DD (first of month)
+  basicSalary:       number;
+  grossSalary:       number;
+  netSalary:         number;
+  totalDeductions:   number;
+  totalAllowances:   number;
+  status:            string;       // Processed | Draft | Cancelled
+};
+
+export type FlwPerformanceReview = {
+  id:              string;
+  employeeCode:    string;
+  employeeName:    string;
+  department:      string | null;
+  station:         string | null;
+  reviewPeriod:    string | null;  // e.g. "2025-H1"
+  reviewType:      string | null;  // Annual | Mid-Year | Probation | Confirmation
+  status:          string;         // Pending | Submitted | Approved | Overdue
+  rating:          number | null;
+  dueDate:         string | null;
+  completedDate:   string | null;
+  reviewerName:    string | null;
+  reviewerCode:    string | null;
+  remarks:         string | null;
+};
+
+export type FlwTrainingRecord = {
+  id:            string;
+  employeeCode:  string;
+  employeeName:  string;
+  department:    string | null;
+  trainingTitle: string;
+  trainingDate:  string | null;
+  trainingType:  string | null;  // Internal | External | Online
+  status:        string;         // Attended | Absent | Pending
+  score:         number | null;
+  trainer:       string | null;
+  venue:         string | null;
+};
+
+export type FlwDisciplinaryAction = {
+  id:              string;
+  employeeCode:    string;
+  employeeName:    string;
+  department:      string | null;
+  station:         string | null;
+  noticeType:      string;         // Verbal Warning | Written Warning | Show Cause | Suspension | Termination
+  issueDate:       string | null;
+  responseDueDate: string | null;
+  status:          string;         // Open | Closed | Appealed | Pending Response
+  description:     string | null;
+  issuedBy:        string | null;
+};
+
+export type FlwLoan = {
+  id:               string;
+  employeeCode:     string;
+  employeeName:     string;
+  department:       string | null;
+  loanType:         string;
+  principalAmount:  number;
+  outstandingAmount: number;
+  monthlyDeduction: number;
+  startDate:        string | null;
+  expectedEndDate:  string | null;
+  status:           string;  // Active | Completed | Cancelled
+};
+
 // ── Core fetch helper ──────────────────────────────────────────────────────────
 
 function isConfigured(): boolean {
@@ -216,5 +290,58 @@ export const flowhcm = {
   /** Job requests = open positions */
   async getJobRequests(): Promise<FlwJobRequest[]> {
     return fetchAll<FlwJobRequest>("JobRequest/FillGrid");
+  },
+
+  /**
+   * Monthly payroll records.
+   * month: "YYYY-MM" (default: current month)
+   * NOTE: Endpoint name needs verification once API token is available.
+   */
+  async getPayroll(month?: string): Promise<FlwPayrollRecord[]> {
+    const now  = new Date();
+    const mon  = month ?? now.toISOString().slice(0, 7);
+    return fetchAll<FlwPayrollRecord>("PayrollProcessing/FillGrid", {
+      fromDate: `${mon}-01`,
+      toDate:   new Date(parseInt(mon.slice(0,4)), parseInt(mon.slice(5,7)), 0)
+                  .toISOString().slice(0, 10),
+    });
+  },
+
+  /**
+   * Performance / appraisal reviews (all statuses).
+   * NOTE: Endpoint name needs verification once API token is available.
+   */
+  async getPerformanceReviews(): Promise<FlwPerformanceReview[]> {
+    return fetchAll<FlwPerformanceReview>("PerformanceReview/FillGrid");
+  },
+
+  /**
+   * Training attendance records for a date range.
+   * Default: current year to today.
+   * NOTE: Endpoint name needs verification once API token is available.
+   */
+  async getTrainingRecords(fromDate?: string, toDate?: string): Promise<FlwTrainingRecord[]> {
+    const today = new Date().toISOString().slice(0, 10);
+    const yearStart = `${today.slice(0, 4)}-01-01`;
+    return fetchAll<FlwTrainingRecord>("TrainingAttendance/FillGrid", {
+      fromDate: fromDate ?? yearStart,
+      toDate:   toDate   ?? today,
+    });
+  },
+
+  /**
+   * Disciplinary actions (warnings, show-causes, suspensions).
+   * NOTE: Endpoint name needs verification once API token is available.
+   */
+  async getDisciplinary(): Promise<FlwDisciplinaryAction[]> {
+    return fetchAll<FlwDisciplinaryAction>("DisciplinaryAction/FillGrid");
+  },
+
+  /**
+   * Employee loans — all active and historical.
+   * NOTE: Endpoint name needs verification once API token is available.
+   */
+  async getLoans(): Promise<FlwLoan[]> {
+    return fetchAll<FlwLoan>("LoanRequest/FillGrid");
   },
 };

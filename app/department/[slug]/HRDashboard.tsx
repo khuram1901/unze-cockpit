@@ -11,10 +11,12 @@ import HREobi from "./hr/HREobi";
 import HRTraining from "./hr/HRTraining";
 import HRTasks from "./hr/HRTasks";
 import HRWorkforce from "./hr/HRWorkforce";
+import HRInsights from "./hr/HRInsights";
 
 // ─── Tab definitions ────────────────────────────────────────────────────────
 const HR_TABS = [
   { key: "workforce",    label: "Workforce" },
+  { key: "insights",     label: "HR Insights" },
   { key: "recruitment",  label: "Recruitment" },
   { key: "onboarding",   label: "Onboarding" },
   { key: "offboarding",  label: "Off-boarding" },
@@ -90,6 +92,7 @@ export default function HRDashboard() {
 
       {/* Tab content */}
       {activeTab === "workforce"    && <HRWorkforce />}
+      {activeTab === "insights"     && <HRInsights />}
       {activeTab === "recruitment"  && <HRRecruitment />}
       {activeTab === "onboarding"   && <HROnboarding />}
       {activeTab === "offboarding"  && <HROffboarding />}

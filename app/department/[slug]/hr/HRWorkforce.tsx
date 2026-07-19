@@ -91,7 +91,7 @@ function SyncStrip({ log, onSync, syncing }: {
   onSync:  () => void;
   syncing: boolean;
 }) {
-  const modules = ["employees", "attendance", "leave", "recruitment"];
+  const modules = ["employees", "attendance", "leave", "recruitment", "payroll", "performance", "training_records", "disciplinary", "loans"];
   return (
     <div style={{
       display: "flex",
