@@ -406,31 +406,6 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                 <div key={key} style={{ padding: "8px 16px", borderTop: `1px solid ${COLOURS.TRACK}`, display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: "160px" }}>
                     <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{DOC_TYPE_LABELS[d.doc_type] || d.activity}</div>
-                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
-                      {isManager ? (
-                        editingAssignKey === key ? (
-                          <select
-                            autoFocus
-                            value={d.assigned_member_id || ""}
-                            onChange={(e) => { assignDailyTask(d, e.target.value || null); setEditingAssignKey(null); }}
-                            onBlur={() => setEditingAssignKey(null)}
-                            style={{ ...inpSm, display: "inline-block", width: "auto" }}
-                          >
-                            <option value="">— assign member —</option>
-                            {auditMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                          </select>
-                        ) : (
-                          <span
-                            onClick={() => setEditingAssignKey(key)}
-                            style={{ cursor: "pointer", color: d.assigned_name ? COLOURS.NAVY : COLOURS.SLATE, textDecoration: "underline dotted", textUnderlineOffset: "2px" }}
-                          >
-                            {d.assigned_name || "assign member"}
-                          </span>
-                        )
-                      ) : (
-                        d.assigned_name || "Unassigned"
-                      )}
-                    </div>
                   </div>
                   {canEnterDaily ? (
                     <>
