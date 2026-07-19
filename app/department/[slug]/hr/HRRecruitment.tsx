@@ -1,427 +1,700 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase, loadMyPermissions } from "../../../lib/supabase";
-import { COMPANIES, getCompanyById } from "../../../lib/constants";
+import { useEffect, useRef, useState } from "react";
+import { supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
-import DateInputWithCalendar from "../../../lib/DateInputWithCalendar";
+
+async function authedFetch(url: string, opts: RequestInit = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  return fetch(url, {
+    ...opts,
+    headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${session?.access_token}` },
+  });
+}
 import { useMobile } from "../../../lib/useMobile";
 import {
-  COLOURS, RADII, cardStyle, SectionTitle, StatusBadge,
-  WARNING_BANNER_STYLE, WARNING_BANNER_INNER, WARNING_TITLE_COLOR,
+  COLOURS, RADII, cardStyle, SectionTitle, CountCard, SkeletonRows,
 } from "../../../lib/SharedUI";
-import { logAction } from "../../../lib/audit-log";
-import { canCreateAssignments, widgetVisible, type UserCtx, type PermOverrides } from "../../../lib/permissions";
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import NewTaskForm from "../../../tasks/NewTaskForm";
-import { useUserCtx } from "../../../lib/useUserCtx";
+
+// ── Types ───────────────────────────────────────────────────────────────────────
+type Summary = {
+  total: number;
+  open: number;
+  filled: number;
+  on_hold: number;
+  long_open: number;
+  avg_days_to_hire: number | null;
+  filled_this_month: number;
+};
 
 type Position = {
   id: string;
   position_title: string;
-  department: string | null;
+  flw_company: string;
+  salary_range: string | null;
+  assigned_to: string | null;
   date_opened: string | null;
+  date_closed: string | null;
+  days_open: number | null;
+  required_count: number;
   status: string;
-  notes: string | null;
-  created_at: string;
-  company_id: string | null;
+  selected_candidate: string | null;
+  offered_salary: string | null;
+  flw_remarks: string | null;
+  candidate_count: number;
 };
 
-const today = new Date().toISOString().slice(0, 10);
-const STATUSES = ["Open", "Interviewing", "Offered", "Filled", "Cancelled"];
-const DEPARTMENTS = ["Unze Trading Ops", "Finance", "HR", "Admin", "Legal", "Sales", "Audit"];
+type Candidate = {
+  id: string;
+  name: string;
+  contact: string | null;
+  email: string | null;
+  personality_test: string | null;
+  overview: string | null;
+  cv_link: string | null;
+  feedback: Record<string, string>;
+  stage: string;
+  offer_amount: string | null;
+  date_of_joining: string | null;
+};
 
-function daysSince(dateStr: string | null): number {
-  if (!dateStr) return 0;
-  return Math.floor((Date.now() - new Date(dateStr + "T00:00:00").getTime()) / 86400000);
+// ── Helpers ─────────────────────────────────────────────────────────────────────
+const STATUS_COLOURS: Record<string, string> = {
+  Open:         COLOURS.AMBER,
+  Interviewing: "#2563EB",
+  Offered:      "#7C3AED",
+  "On Hold":    COLOURS.SLATE,
+  Filled:       COLOURS.GREEN,
+  Cancelled:    COLOURS.RED,
+};
+
+const STAGE_COLOURS: Record<string, string> = {
+  Applied:    COLOURS.SLATE,
+  Screening:  COLOURS.AMBER,
+  Interview:  "#2563EB",
+  Offer:      "#7C3AED",
+  Hired:      COLOURS.GREEN,
+  Rejected:   COLOURS.RED,
+};
+
+function StatusPill({ status }: { status: string }) {
+  const colour = STATUS_COLOURS[status] ?? COLOURS.SLATE;
+  return (
+    <span style={{
+      display: "inline-block", fontSize: "11px", fontWeight: 600,
+      padding: "3px 10px", borderRadius: RADII.PILL,
+      color: colour, backgroundColor: colour + "1A", whiteSpace: "nowrap",
+    }}>
+      {status}
+    </span>
+  );
 }
 
-const inp: React.CSSProperties = {
-  display: "block", width: "100%", padding: "7px 10px", marginTop: "3px",
-  border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, fontSize: "14px",
-  boxSizing: "border-box", color: COLOURS.NAVY,
-};
-const lbl: React.CSSProperties = {
-  display: "block", fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE,
-  textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px",
-};
+function StagePill({ stage }: { stage: string }) {
+  const colour = STAGE_COLOURS[stage] ?? COLOURS.SLATE;
+  return (
+    <span style={{
+      display: "inline-block", fontSize: "11px", fontWeight: 600,
+      padding: "2px 8px", borderRadius: RADII.PILL,
+      color: colour, backgroundColor: colour + "18",
+    }}>
+      {stage}
+    </span>
+  );
+}
 
+// ── Filter pill row ──────────────────────────────────────────────────────────────
+const FILTER_STATUSES = ["All", "Open", "On Hold", "Filled"];
+
+function FilterPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "5px 12px", fontSize: "13px", fontWeight: 500,
+        borderRadius: RADII.PILL, cursor: "pointer", border: "none",
+        backgroundColor: active ? COLOURS.NAVY : COLOURS.HAIRLINE,
+        color: active ? "#FFF" : COLOURS.SLATE,
+        transition: "background 0.15s",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ── Import button component ──────────────────────────────────────────────────────
+function ImportButton({ onImported }: { onImported: (msg: string) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLoading(true);
+
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await authedFetch("/api/hr/recruitment/import", {
+        method: "POST",
+        body: fd,
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        onImported("Error: " + (json.error ?? "Import failed"));
+      } else {
+        onImported(
+          `Import complete — ${json.positions_inserted} new positions, ${json.positions_updated} updated, ${json.candidates_inserted} candidates imported.`
+        );
+      }
+    } catch {
+      onImported("Error: Network failure during import.");
+    } finally {
+      setLoading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <>
+      <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFile} />
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={loading}
+        style={{
+          padding: "7px 16px", fontSize: "13px", fontWeight: 600,
+          borderRadius: RADII.PILL, cursor: loading ? "wait" : "pointer",
+          border: `1px solid ${COLOURS.HAIRLINE}`,
+          backgroundColor: COLOURS.CARD, color: COLOURS.NAVY,
+          opacity: loading ? 0.7 : 1,
+        }}
+      >
+        {loading ? "Importing…" : "⬆ Import from FlowHCM"}
+      </button>
+    </>
+  );
+}
+
+// ── Candidate slide-over ─────────────────────────────────────────────────────────
+function CandidatePanel({
+  position,
+  onClose,
+}: {
+  position: Position;
+  onClose: () => void;
+}) {
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    authedFetch(`/api/hr/recruitment/candidates?position_id=${position.id}`)
+      .then((r: Response) => r.json())
+      .then((d: { candidates?: Candidate[] }) => { setCandidates(d.candidates ?? []); setLoading(false); });
+  }, [position.id]);
+
+  const overlayStyle: React.CSSProperties = {
+    position: "fixed", inset: 0, zIndex: 1000,
+    backgroundColor: "rgba(15,23,32,0.45)",
+  };
+
+  const panelStyle: React.CSSProperties = {
+    position: "fixed", top: 0, right: 0, bottom: 0, zIndex: 1001,
+    width: "min(600px, 100vw)",
+    backgroundColor: "#FFF",
+    boxShadow: "-4px 0 32px rgba(0,0,0,0.12)",
+    display: "flex", flexDirection: "column",
+    overflowY: "auto",
+  };
+
+  const stageCount = (stage: string) => candidates.filter((c) => c.stage === stage).length;
+
+  return (
+    <>
+      <div style={overlayStyle} onClick={onClose} />
+      <div style={panelStyle}>
+        {/* Header */}
+        <div style={{
+          padding: "20px 24px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+          position: "sticky", top: 0, backgroundColor: "#FFF", zIndex: 2,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: 700, color: COLOURS.NAVY }}>
+                {position.position_title}
+              </div>
+              <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "3px" }}>
+                {position.flw_company}
+                {position.salary_range && ` · ${position.salary_range}`}
+                {position.date_opened && ` · Opened ${formatDateUK(position.date_opened)}`}
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                fontSize: "22px", color: COLOURS.SLATE, padding: "0 4px",
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Position status + selected candidate */}
+          <div style={{ display: "flex", gap: "8px", marginTop: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <StatusPill status={position.status} />
+            {position.selected_candidate && (
+              <span style={{ fontSize: "12px", color: COLOURS.GREEN, fontWeight: 600 }}>
+                ✓ {position.selected_candidate}
+                {position.offered_salary && ` @ ${position.offered_salary}`}
+              </span>
+            )}
+          </div>
+
+          {/* Pipeline summary pills */}
+          {!loading && candidates.length > 0 && (
+            <div style={{ display: "flex", gap: "6px", marginTop: "10px", flexWrap: "wrap" }}>
+              {["Applied","Screening","Interview","Offer","Hired","Rejected"].map((s) => {
+                const n = stageCount(s);
+                if (n === 0) return null;
+                return <StagePill key={s} stage={`${s} (${n})`} />;
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Candidate list */}
+        <div style={{ padding: "16px 24px", flex: 1 }}>
+          {loading ? (
+            <SkeletonRows count={4} />
+          ) : candidates.length === 0 ? (
+            <div style={{ color: COLOURS.SLATE, fontSize: "14px", padding: "20px 0", textAlign: "center" }}>
+              No candidates imported for this position.
+              {position.flw_remarks && (
+                <div style={{ marginTop: "12px", fontSize: "13px", fontStyle: "italic", lineHeight: 1.5 }}>
+                  "{position.flw_remarks}"
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {candidates.map((c) => {
+                const isOpen = expandedId === c.id;
+                return (
+                  <div
+                    key={c.id}
+                    style={{
+                      border: `1px solid ${COLOURS.HAIRLINE}`,
+                      borderLeft: `3px solid ${STAGE_COLOURS[c.stage] ?? COLOURS.SLATE}`,
+                      borderRadius: RADII.CARD,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      onClick={() => setExpandedId(isOpen ? null : c.id)}
+                      style={{
+                        padding: "10px 14px", cursor: "pointer",
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        backgroundColor: isOpen ? COLOURS.CARD_ALT : "#FFF",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{c.name}</div>
+                        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                          {c.contact && c.contact}
+                          {c.contact && c.email && " · "}
+                          {c.email && c.email}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <StagePill stage={c.stage} />
+                        {c.offer_amount && (
+                          <span style={{ fontSize: "12px", color: COLOURS.GREEN, fontWeight: 600 }}>
+                            {c.offer_amount}
+                          </span>
+                        )}
+                        <span style={{ color: COLOURS.SLATE, fontSize: "14px" }}>{isOpen ? "▼" : "▶"}</span>
+                      </div>
+                    </div>
+
+                    {isOpen && (
+                      <div style={{
+                        padding: "12px 14px", borderTop: `1px solid ${COLOURS.HAIRLINE}`,
+                        backgroundColor: COLOURS.CARD_ALT, fontSize: "13px", color: COLOURS.NAVY,
+                      }}>
+                        {c.personality_test && (
+                          <div style={{ marginBottom: "8px" }}>
+                            <span style={{ color: COLOURS.SLATE, fontWeight: 500 }}>Personality Test: </span>
+                            {c.personality_test}
+                          </div>
+                        )}
+                        {c.date_of_joining && (
+                          <div style={{ marginBottom: "8px" }}>
+                            <span style={{ color: COLOURS.SLATE, fontWeight: 500 }}>Date of Joining: </span>
+                            {formatDateUK(c.date_of_joining)}
+                          </div>
+                        )}
+                        {c.cv_link && (
+                          <div style={{ marginBottom: "8px" }}>
+                            <a href={c.cv_link} target="_blank" rel="noopener noreferrer"
+                              style={{ color: COLOURS.GREEN, textDecoration: "none", fontWeight: 500 }}>
+                              View CV / Portfolio →
+                            </a>
+                          </div>
+                        )}
+                        {c.overview && (
+                          <div style={{ marginBottom: "8px" }}>
+                            <div style={{ color: COLOURS.SLATE, fontWeight: 500, marginBottom: "4px" }}>Overview:</div>
+                            <div style={{ lineHeight: 1.55, whiteSpace: "pre-line", color: COLOURS.SLATE }}>
+                              {c.overview.slice(0, 500)}{c.overview.length > 500 ? "…" : ""}
+                            </div>
+                          </div>
+                        )}
+                        {Object.keys(c.feedback).length > 0 && (
+                          <div>
+                            <div style={{ color: COLOURS.SLATE, fontWeight: 500, marginBottom: "6px" }}>Feedback:</div>
+                            {Object.entries(c.feedback).map(([k, v]) => (
+                              <div key={k} style={{ marginBottom: "8px" }}>
+                                <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.07em", color: COLOURS.SLATE, fontWeight: 600 }}>
+                                  {k}
+                                </div>
+                                <div style={{ lineHeight: 1.5, color: COLOURS.NAVY, marginTop: "2px" }}>
+                                  {v.slice(0, 400)}{v.length > 400 ? "…" : ""}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Main component ───────────────────────────────────────────────────────────────
 export default function HRRecruitment() {
   const isMobile = useMobile();
-  const [items, setItems] = useState<Position[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [showTaskForm, setShowTaskForm] = useState(false);
-  const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [bannerOpen, setBannerOpen] = useState(false);
-  const { ctx: widgetCtx } = useUserCtx();
-  const wv = (key: string, defaultVisible: boolean) =>
-    !!widgetCtx && widgetVisible(widgetCtx, key, defaultVisible);
+  const [summary, setSummary]     = useState<Summary | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [filter, setFilter]       = useState("All");
+  const [search, setSearch]       = useState("");
+  const [message, setMessage]     = useState("");
+  const [panelPos, setPanelPos]   = useState<Position | null>(null);
 
-  const [title, setTitle] = useState("");
-  const [dept, setDept] = useState("");
-  const [dateOpened, setDateOpened] = useState(today);
-  const [notes, setNotes] = useState("");
-  const [companyId, setCompanyId] = useState("");
+  function showMsg(text: string) {
+    setMessage(text);
+    setTimeout(() => setMessage(""), 6000);
+  }
 
   async function loadData() {
     setLoading(true);
-    const { data } = await supabase
-      .from("recruitment_positions")
-      .select("id, position_title, department, date_opened, status, notes, created_at, company_id")
-      .order("created_at", { ascending: false });
-    setItems(data || []);
-
-    const { data: userData } = await supabase.auth.getUser();
-    if (userData.user?.email) {
-      const { data: memberData } = await supabase
-        .from("members")
-        .select("role, department, company")
-        .eq("email", userData.user.email)
-        .maybeSingle();
-      if (memberData) {
-        let overrides: PermOverrides | null = null;
-        const p = await loadMyPermissions();
-        if (p) overrides = p as PermOverrides;
-        setUserCtx({
-          email: userData.user.email,
-          role: memberData.role,
-          department: memberData.department,
-          company: memberData.company,
-          overrides,
-        });
-      }
+    try {
+      const [sumRes, posRes] = await Promise.all([
+        authedFetch("/api/hr/recruitment/summary"),
+        authedFetch("/api/hr/recruitment/positions"),
+      ]);
+      const sumData = await sumRes.json();
+      const posData = await posRes.json();
+      setSummary(sumData.summary ?? null);
+      setPositions(posData.positions ?? []);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => { loadData(); }, []);
 
-  function showMsg(text: string) {
-    setMessage(text);
-    setTimeout(() => setMessage(""), 4000);
-  }
+  // Filtered + searched list
+  const filtered = positions.filter((p) => {
+    const statusMatch = filter === "All" || p.status === filter;
+    if (!statusMatch) return false;
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      p.position_title.toLowerCase().includes(q) ||
+      p.flw_company.toLowerCase().includes(q) ||
+      (p.selected_candidate ?? "").toLowerCase().includes(q) ||
+      (p.assigned_to ?? "").toLowerCase().includes(q)
+    );
+  });
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
-    if (!companyId) { showMsg("Company is required."); return; }
-    setSaving(true);
-    const { error } = await supabase.from("recruitment_positions").insert({
-      company_id: companyId, position_title: title, department: dept || null,
-      date_opened: dateOpened || null, notes: notes || null, status: "Open",
-    });
-    setSaving(false);
-    if (error) { showMsg("Error: " + error.message); return; }
-    logAction("Created", "recruitment_positions", title);
-    showMsg("Position added.");
-    setTitle(""); setDept(""); setDateOpened(today); setNotes(""); setCompanyId("");
-    setShowForm(false);
-    loadData();
-  }
-
-  async function updateStatus(id: string, newStatus: string) {
-    const updates: Record<string, unknown> = { status: newStatus };
-    if (newStatus === "Filled") {
-      const item = items.find((i) => i.id === id);
-      if (item?.date_opened) updates.time_to_hire_days = daysSince(item.date_opened);
-    }
-    await supabase.from("recruitment_positions").update(updates).eq("id", id);
-    logAction("Updated", "recruitment_positions", `Status → ${newStatus}`, id);
-    loadData();
-  }
-
-  const open      = items.filter((i) => i.status === "Open" || i.status === "Interviewing");
-  const filled    = items.filter((i) => i.status === "Filled").length;
-  const longOpen  = open.filter((i) => daysSince(i.date_opened) > 60);
-  const offered   = items.filter((i) => i.status === "Offered").length;
-
-  const donutData = [
-    { name: "Open",         value: items.filter((i) => i.status === "Open").length,         color: COLOURS.AMBER },
-    { name: "Interviewing", value: items.filter((i) => i.status === "Interviewing").length, color: COLOURS.BLUE },
-    { name: "Offered",      value: offered,                                                  color: COLOURS.PURPLE },
-    { name: "Filled",       value: filled,                                                   color: COLOURS.GREEN },
-  ].filter((d) => d.value > 0);
+  const longOpen = positions.filter(
+    (p) => p.status === "Open" && (p.days_open ?? 0) > 60
+  );
 
   return (
     <>
+      {/* Message toast */}
       {message && (
         <div style={{
           border: `1px solid ${COLOURS.HAIRLINE}`,
           borderLeft: `4px solid ${message.startsWith("Error") ? COLOURS.RED : COLOURS.GREEN}`,
           borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px",
-          backgroundColor: COLOURS.CARD, fontSize: "14px", color: COLOURS.NAVY,
+          backgroundColor: COLOURS.CARD, fontSize: "13px", color: COLOURS.NAVY,
         }}>
           {message}
         </div>
       )}
 
-      {/* Alert banner */}
-      {wv("dept_hr.attention_banner", true) && !loading && longOpen.length > 0 && (
-        <div style={WARNING_BANNER_STYLE}>
-          <div
-            onClick={() => setBannerOpen(!bannerOpen)}
-            style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "20px" }}>⚠</span>
-              <div>
-                <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
-                  {longOpen.length} position{longOpen.length > 1 ? "s" : ""} open for 60+ days
-                </div>
-                <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
-                  {longOpen.map((i) => `${i.position_title} (${daysSince(i.date_opened)}d)`).join(" · ")}
-                </div>
-              </div>
-            </div>
-            <span style={{ fontSize: "13px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
-              {bannerOpen ? "▲" : "▼"}
-            </span>
-          </div>
-          {bannerOpen && (
-            <div style={WARNING_BANNER_INNER}>
-              {longOpen.map((i) => (
-                <div
-                  key={i.id}
-                  onClick={() => { setExpandedId(i.id); setBannerOpen(false); }}
-                  style={{
-                    padding: "8px 16px 8px 48px", borderBottom: `1px solid ${COLOURS.TRACK}`,
-                    cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{i.position_title}</div>
-                    <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>
-                      {i.department || "—"} · Opened: {formatDateUK(i.date_opened)}
-                    </div>
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 700, color: COLOURS.RED }}>
-                    {daysSince(i.date_opened)}d open
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* KPI + Donut */}
-      {wv("dept_hr.kpi_charts", true) && !loading && (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px" }}>
-            {[
-              { label: "Open Positions", value: open.length },
-              { label: "Filled",         value: filled },
-              { label: "Open 60+ Days",  value: longOpen.length },
-              { label: "Total",          value: items.length },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ ...cardStyle, padding: "16px 20px" }}>
-                <div style={{
-                  fontSize: "10.5px", fontWeight: 500, letterSpacing: "0.08em",
-                  textTransform: "uppercase", color: COLOURS.SLATE, marginBottom: "10px",
-                }}>
-                  {label}
-                </div>
-                <div style={{
-                  fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
-                  fontSize: "26px", fontWeight: 600, letterSpacing: "-0.02em",
-                  fontVariantNumeric: "tabular-nums", color: COLOURS.NAVY,
-                }}>
-                  {value.toLocaleString()}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {donutData.length > 0 && (
-            <div style={{
-              border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD,
-              padding: "16px 20px", backgroundColor: COLOURS.CARD,
-            }}>
-              <div style={{
-                fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE,
-                textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "10px",
-              }}>
-                Recruitment Pipeline
-              </div>
-              <ResponsiveContainer width="100%" height={160}>
-                <PieChart>
-                  <Pie data={donutData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
-                    {donutData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                  </Pie>
-                  <Tooltip formatter={(value, name) => [`${value} position${Number(value) > 1 ? "s" : ""}`, name]} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
-                {donutData.map((d) => (
-                  <div key={d.name} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", color: COLOURS.SLATE }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: d.color }} />
-                    {d.name} ({d.value})
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Add button + form */}
-      {wv("dept_hr.records_table", true) && (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <SectionTitle title="Positions" />
-            <button
-              onClick={() => setShowForm(!showForm)}
-              style={{
-                backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none",
-                borderRadius: RADII.PILL, padding: "8px 16px", fontSize: "13px",
-                fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              {showForm ? "Cancel" : "+ Add"}
-            </button>
-          </div>
-
-          {showForm && (
-            <div style={{
-              border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`,
-              borderRadius: RADII.CARD, padding: "24px", backgroundColor: COLOURS.CARD, marginBottom: "14px",
-            }}>
-              <form onSubmit={handleAdd}>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "8px" }}>
-                  <label style={lbl}>
-                    Company
-                    <select style={inp} value={companyId} onChange={(e) => setCompanyId(e.target.value)} required>
-                      <option value="">Select</option>
-                      {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </label>
-                  <label style={lbl}>
-                    Position Title
-                    <input style={inp} value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Finance Manager" />
-                  </label>
-                  <label style={lbl}>
-                    Department
-                    <select style={inp} value={dept} onChange={(e) => setDept(e.target.value)} required>
-                      <option value="">Select</option>
-                      {DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}
-                    </select>
-                  </label>
-                  <label style={lbl}>
-                    Date Opened
-                    <DateInputWithCalendar style={inp} value={dateOpened} onChange={(e) => setDateOpened(e.target.value)} required />
-                  </label>
-                  <label style={{ ...lbl, gridColumn: isMobile ? undefined : "1 / -1" }}>
-                    Notes
-                    <textarea style={{ ...inp, height: "50px" }} value={notes} onChange={(e) => setNotes(e.target.value)} />
-                  </label>
-                </div>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  style={{
-                    backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none",
-                    borderRadius: RADII.PILL, padding: "8px 20px", fontSize: "13px",
-                    fontWeight: 600, cursor: "pointer", marginTop: "8px",
-                  }}
-                >
-                  {saving ? "Saving…" : "Save"}
-                </button>
-              </form>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Issue Task */}
-      {userCtx && canCreateAssignments(userCtx) && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
-          <button
-            onClick={() => setShowTaskForm(!showTaskForm)}
-            style={{
-              backgroundColor: COLOURS.NAVY, color: COLOURS.CARD, border: "none",
-              borderRadius: RADII.PILL, padding: "8px 16px", fontSize: "13px",
-              fontWeight: 600, cursor: "pointer",
-            }}
-          >
-            {showTaskForm ? "Cancel" : "+ Issue Task"}
-          </button>
-        </div>
-      )}
-      {showTaskForm && (
+      {/* 60+ days alert banner */}
+      {!loading && longOpen.length > 0 && (
         <div style={{
-          border: `1px solid ${COLOURS.HAIRLINE}`, borderTop: `3px solid ${COLOURS.NAVY}`,
-          borderRadius: RADII.CARD, marginBottom: "14px", overflow: "hidden",
+          backgroundColor: COLOURS.AMBER + "12",
+          border: `1px solid ${COLOURS.AMBER}55`,
+          borderLeft: `4px solid ${COLOURS.AMBER}`,
+          borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px",
+          fontSize: "13px",
         }}>
-          <NewTaskForm onCreated={() => { setShowTaskForm(false); loadData(); }} />
+          <span style={{ fontWeight: 700, color: COLOURS.AMBER }}>⚠ {longOpen.length} position{longOpen.length > 1 ? "s" : ""} open 60+ days: </span>
+          <span style={{ color: COLOURS.NAVY }}>
+            {longOpen.map((p) => `${p.position_title} (${p.days_open}d)`).join(" · ")}
+          </span>
         </div>
       )}
 
-      {/* Records */}
-      {wv("dept_hr.records_table", true) && (
-        loading ? (
-          <p style={{ color: COLOURS.SLATE }}>Loading…</p>
-        ) : items.length === 0 ? (
+      {/* KPI cards */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5, 1fr)",
+        gap: "10px", marginBottom: "16px",
+      }}>
+        {loading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} style={{ ...cardStyle, padding: "16px 20px", height: "80px" }} />
+          ))
+        ) : summary ? (
+          <>
+            <CountCard label="Open"           value={summary.open}               color={COLOURS.AMBER} />
+            <CountCard label="On Hold"        value={summary.on_hold}            color={COLOURS.SLATE} />
+            <CountCard label="Filled"         value={summary.filled}             color={COLOURS.GREEN} />
+            <CountCard label="Total"          value={summary.total}              color={COLOURS.NAVY}  />
+            <CountCard label="Avg Days Hire"  value={summary.avg_days_to_hire ?? "—"} color={COLOURS.AMBER} />
+          </>
+        ) : null}
+      </div>
+
+      {/* Toolbar: search + filter + import */}
+      <div style={{
+        display: "flex", flexWrap: "wrap", gap: "8px",
+        alignItems: "center", justifyContent: "space-between",
+        marginBottom: "12px",
+      }}>
+        {/* Left: filter pills + search */}
+        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+          {FILTER_STATUSES.map((s) => (
+            <FilterPill key={s} label={s} active={filter === s} onClick={() => setFilter(s)} />
+          ))}
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search position, company…"
+            style={{
+              padding: "5px 10px", fontSize: "13px",
+              border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL,
+              color: COLOURS.NAVY, outline: "none", width: "180px",
+            }}
+          />
+        </div>
+
+        {/* Right: Import button */}
+        <ImportButton onImported={(msg) => { showMsg(msg); loadData(); }} />
+      </div>
+
+      {/* Count label */}
+      {!loading && (
+        <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "8px" }}>
+          Showing {filtered.length} of {positions.length} positions
+        </div>
+      )}
+
+      {/* Positions table */}
+      <div style={{
+        border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD,
+        backgroundColor: COLOURS.CARD, overflow: "hidden",
+      }}>
+        {/* Table header */}
+        {!isMobile && (
           <div style={{
-            border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD,
-            padding: "24px", backgroundColor: COLOURS.CARD, color: COLOURS.SLATE,
+            display: "grid",
+            gridTemplateColumns: "3fr 1.5fr 1.2fr 1fr 1.2fr 1.5fr 1fr",
+            padding: "8px 16px",
+            backgroundColor: "#F8FAFC",
+            borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+            fontSize: "10.5px", fontWeight: 600, letterSpacing: "0.07em",
+            textTransform: "uppercase", color: COLOURS.SLATE,
           }}>
-            No positions yet.
+            <div>Position</div>
+            <div>Company</div>
+            <div>Salary Range</div>
+            <div>Recruiter</div>
+            <div>Opened</div>
+            <div>Filled By / Remarks</div>
+            <div>Status</div>
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ padding: "16px" }}>
+            <SkeletonRows count={8} />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: "32px", textAlign: "center", color: COLOURS.SLATE, fontSize: "14px" }}>
+            {positions.length === 0
+              ? 'No positions yet. Click "Import from FlowHCM" to load your recruitment data.'
+              : "No positions match the current filters."}
           </div>
         ) : (
-          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.CARD, backgroundColor: COLOURS.CARD, overflow: "hidden" }}>
-            {items.map((item) => {
-              const isOpen = expandedId === item.id;
-              const days   = daysSince(item.date_opened);
-              const isLong = days > 60 && item.status !== "Filled" && item.status !== "Cancelled";
+          filtered.map((pos, idx) => {
+            const isLast   = idx === filtered.length - 1;
+            const isLong   = pos.status === "Open" && (pos.days_open ?? 0) > 60;
+
+            if (isMobile) {
               return (
-                <div key={item.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                  <div
-                    onClick={() => setExpandedId(isOpen ? null : item.id)}
-                    style={{
-                      padding: "10px 16px", cursor: "pointer",
-                      display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px",
-                      backgroundColor: isLong ? COLOURS.DANGER_SOFT : isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "15px", fontWeight: 600, color: COLOURS.NAVY }}>{item.position_title}</div>
-                      <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px" }}>
-                        {getCompanyById(item.company_id || "")?.shortCode || "—"} · {item.department || "—"} · Opened: {formatDateUK(item.date_opened)} · {days}d
+                <div
+                  key={pos.id}
+                  onClick={() => setPanelPos(pos)}
+                  style={{
+                    padding: "12px 14px",
+                    borderBottom: isLast ? "none" : `1px solid ${COLOURS.HAIRLINE}`,
+                    cursor: "pointer",
+                    backgroundColor: isLong ? COLOURS.AMBER + "0A" : "transparent",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>
+                        {pos.position_title}
                       </div>
-                    </div>
-                    <div style={{ display: "flex", gap: "6px", alignItems: "center", flexShrink: 0 }}>
-                      <StatusBadge status={item.status} />
-                      <span style={{ color: COLOURS.SLATE, fontSize: "14px" }}>{isOpen ? "▼" : "▶"}</span>
-                    </div>
-                  </div>
-                  {isOpen && (
-                    <div style={{
-                      padding: "12px 16px", backgroundColor: COLOURS.CARD_ALT,
-                      borderTop: `1px solid ${COLOURS.HAIRLINE}`,
-                    }}>
-                      {item.notes && (
-                        <div style={{ fontSize: "14px", color: COLOURS.SLATE, marginBottom: "8px" }}>Notes: {item.notes}</div>
+                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                        {pos.flw_company}
+                        {pos.salary_range && ` · ${pos.salary_range}`}
+                      </div>
+                      {pos.selected_candidate && (
+                        <div style={{ fontSize: "12px", color: COLOURS.GREEN, marginTop: "2px" }}>
+                          ✓ {pos.selected_candidate}
+                        </div>
                       )}
-                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                        <span style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Status:</span>
-                        <select
-                          value={item.status}
-                          onChange={(e) => updateStatus(item.id, e.target.value)}
-                          style={{ padding: "5px 8px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, fontSize: "14px" }}
-                        >
-                          {STATUSES.map((s) => <option key={s}>{s}</option>)}
-                        </select>
-                      </div>
+                    </div>
+                    <StatusPill status={pos.status} />
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={pos.id}
+                onClick={() => setPanelPos(pos)}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "3fr 1.5fr 1.2fr 1fr 1.2fr 1.5fr 1fr",
+                  padding: "10px 16px",
+                  borderBottom: isLast ? "none" : `1px solid ${COLOURS.HAIRLINE}`,
+                  cursor: "pointer",
+                  alignItems: "center",
+                  backgroundColor: isLong ? COLOURS.AMBER + "0A" : "transparent",
+                  transition: "background 0.1s",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isLong) (e.currentTarget as HTMLDivElement).style.backgroundColor = COLOURS.CARD_ALT;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.backgroundColor = isLong ? COLOURS.AMBER + "0A" : "transparent";
+                }}
+              >
+                {/* Position */}
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY }}>
+                    {pos.position_title}
+                    {pos.required_count > 1 && (
+                      <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontWeight: 400, marginLeft: "6px" }}>
+                        ×{pos.required_count}
+                      </span>
+                    )}
+                  </div>
+                  {pos.candidate_count > 0 && (
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>
+                      {pos.candidate_count} candidate{pos.candidate_count > 1 ? "s" : ""}
                     </div>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        )
+
+                {/* Company */}
+                <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{pos.flw_company}</div>
+
+                {/* Salary */}
+                <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{pos.salary_range ?? "—"}</div>
+
+                {/* Recruiter */}
+                <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>{pos.assigned_to ?? "—"}</div>
+
+                {/* Date opened + days */}
+                <div>
+                  <div style={{ fontSize: "12px", color: COLOURS.NAVY }}>
+                    {pos.date_opened ? formatDateUK(pos.date_opened) : "—"}
+                  </div>
+                  {pos.days_open != null && pos.status !== "Filled" && (
+                    <div style={{
+                      fontSize: "11px",
+                      color: (pos.days_open > 60) ? COLOURS.RED : COLOURS.SLATE,
+                      fontWeight: pos.days_open > 60 ? 600 : 400,
+                    }}>
+                      {pos.days_open}d open
+                    </div>
+                  )}
+                  {pos.status === "Filled" && pos.date_closed && (
+                    <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>
+                      Filled {formatDateUK(pos.date_closed)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Selected candidate / remarks */}
+                <div>
+                  {pos.selected_candidate ? (
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.GREEN }}>
+                        ✓ {pos.selected_candidate}
+                      </div>
+                      {pos.offered_salary && (
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE }}>
+                          @ {pos.offered_salary}
+                        </div>
+                      )}
+                    </div>
+                  ) : pos.flw_remarks ? (
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
+                      {pos.flw_remarks.slice(0, 60)}{pos.flw_remarks.length > 60 ? "…" : ""}
+                    </div>
+                  ) : (
+                    <span style={{ color: COLOURS.SLATE, fontSize: "12px" }}>—</span>
+                  )}
+                </div>
+
+                {/* Status */}
+                <div><StatusPill status={pos.status} /></div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Candidate slide-over panel */}
+      {panelPos && (
+        <CandidatePanel position={panelPos} onClose={() => setPanelPos(null)} />
       )}
     </>
   );
