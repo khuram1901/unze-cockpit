@@ -14,7 +14,17 @@ type Vehicle  = { id: string; name: string; plate_number: string; odometer_unit:
 type Branch   = { id: string; name: string; system_kw: number | null };
 type Location = { id: string; name: string; entity: string; default_disco: string | null };
 
-type FormType = "fuel" | "solar" | "utility" | "maintenance";
+type FormType = "fuel" | "solar" | "utility" | "maintenance" | "tasks";
+
+type MyTask = {
+  id: string;
+  description: string;
+  project: string | null;
+  due_date: string | null;
+  priority: string | null;
+  status: string;
+  notes: string | null;
+};
 
 type RecentFuel = {
   date: string; quantity_litres: number; price_per_litre: number;
@@ -120,6 +130,11 @@ export default function DailyEntryPage() {
   const [recentSolar,   setRecentSolar]   = useState<RecentSolar[]>([]);
   const [recentUtility, setRecentUtility] = useState<RecentUtility[]>([]);
 
+  // ── My tasks ───────────────────────────────────────────────────────
+  const [myTasks,       setMyTasks]       = useState<MyTask[]>([]);
+  const [loadingTasks,  setLoadingTasks]  = useState(false);
+  const [updatingTask,  setUpdatingTask]  = useState<string | null>(null);
+
   // ── Computed fuel values ───────────────────────────────────────────
   const fuelAmount = fuel.price_per_litre && fuel.quantity_litres
     ? (parseFloat(fuel.price_per_litre) * parseFloat(fuel.quantity_litres)).toFixed(2)
@@ -212,6 +227,43 @@ export default function DailyEntryPage() {
     authedFetch(`/api/admin/recent-entries?form=utility&locationId=${utility.location_id}&meterLabel=${encodeURIComponent(utility.meter_label)}`)
       .then((r) => r.json()).then((j) => setRecentUtility(j.data || []));
   }, [utility.location_id, utility.meter_label, locations]);
+
+  // Load my tasks when tasks tab is opened
+  useEffect(() => {
+    if (activeForm !== "tasks" || checking) return;
+    loadMyTasks();
+  }, [activeForm, checking]);
+
+  async function loadMyTasks() {
+    setLoadingTasks(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const email = session?.user?.email;
+    if (!email) { setLoadingTasks(false); return; }
+    const { data } = await supabase
+      .from("tasks")
+      .select("id, description, project, due_date, priority, status, notes")
+      .eq("assigned_to_email", email)
+      .not("status", "in", '("Completed","Cancelled")')
+      .order("due_date", { ascending: true, nullsFirst: false });
+    setMyTasks(data || []);
+    setLoadingTasks(false);
+  }
+
+  async function updateTaskStatus(taskId: string, newStatus: string) {
+    setUpdatingTask(taskId);
+    await supabase.from("tasks").update({
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    }).eq("id", taskId);
+    // Remove from list if completed/cancelled, else update in place
+    if (newStatus === "Completed" || newStatus === "Cancelled") {
+      setMyTasks((prev) => prev.filter((t) => t.id !== taskId));
+    } else {
+      setMyTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus } : t));
+    }
+    setUpdatingTask(null);
+    showToast(newStatus === "Completed" ? "Task marked complete ✓" : "Task updated");
+  }
 
   // ── Submit handlers ────────────────────────────────────────────────
   async function submitFuel(e: React.FormEvent) {
@@ -347,11 +399,12 @@ export default function DailyEntryPage() {
     { id: "solar",       label: "Solar",        emoji: "☀️" },
     { id: "utility",     label: "Utilities",    emoji: "🔌" },
     { id: "maintenance", label: "Maintenance",  emoji: "🔧" },
+    { id: "tasks",       label: "My Tasks",     emoji: "✅" },
   ];
 
   const btnSt = (id: FormType): React.CSSProperties => ({
-    flex: 1, padding: "12px 4px", borderRadius: RADII.CARD,
-    fontSize: "12px", fontWeight: 700, cursor: "pointer",
+    padding: isMobile ? "10px 2px" : "12px 4px", borderRadius: RADII.CARD,
+    fontSize: isMobile ? "10px" : "12px", fontWeight: 700, cursor: "pointer",
     border: `2px solid ${activeForm === id ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
     backgroundColor: activeForm === id ? COLOURS.NAVY : "white",
     color: activeForm === id ? "white" : COLOURS.SLATE,
@@ -384,10 +437,10 @@ export default function DailyEntryPage() {
         </p>
 
         {/* Form selector */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px", marginBottom: "20px" }}>
           {FORMS.map((f) => (
             <button key={f.id} onClick={() => setActiveForm(f.id)} style={btnSt(f.id)}>
-              <div style={{ fontSize: "20px", marginBottom: "2px" }}>{f.emoji}</div>
+              <div style={{ fontSize: isMobile ? "18px" : "20px", marginBottom: "2px" }}>{f.emoji}</div>
               {f.label}
             </button>
           ))}
@@ -827,6 +880,128 @@ export default function DailyEntryPage() {
             </div>
           )}
           </>
+        )}
+
+        {/* ── MY TASKS ── */}
+        {activeForm === "tasks" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, margin: 0 }}>✅ My Tasks</h2>
+              <button onClick={loadMyTasks} disabled={loadingTasks}
+                style={{ fontSize: "12px", color: COLOURS.GREEN, background: "none", border: "none", cursor: "pointer", fontWeight: 600, padding: 0 }}>
+                {loadingTasks ? "Loading…" : "Refresh"}
+              </button>
+            </div>
+
+            {loadingTasks && (
+              <div style={{ color: COLOURS.SLATE, fontSize: "13px", textAlign: "center", padding: "32px 0" }}>Loading tasks…</div>
+            )}
+
+            {!loadingTasks && myTasks.length === 0 && (
+              <div style={{ ...sectionCard, textAlign: "center", padding: "32px 20px" }}>
+                <div style={{ fontSize: "28px", marginBottom: "8px" }}>🎉</div>
+                <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>All clear!</div>
+                <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>No open tasks assigned to you.</div>
+              </div>
+            )}
+
+            {!loadingTasks && myTasks.map((task) => {
+              const isOverdue = task.due_date && task.due_date < today;
+              const priorityColor =
+                task.priority === "Urgent" ? COLOURS.RED :
+                task.priority === "High"   ? COLOURS.AMBER :
+                COLOURS.SLATE;
+              const statusColor =
+                task.status === "In Progress"    ? COLOURS.GREEN :
+                task.status === "Waiting Reply"  ? COLOURS.AMBER :
+                COLOURS.SLATE;
+              const busy = updatingTask === task.id;
+
+              return (
+                <div key={task.id} style={{
+                  ...sectionCard, marginBottom: "10px", padding: "14px 16px",
+                  borderLeft: `4px solid ${isOverdue ? COLOURS.RED : task.status === "In Progress" ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
+                }}>
+                  {/* Priority + status row */}
+                  <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexWrap: "wrap" }}>
+                    {task.priority && (
+                      <span style={{
+                        fontSize: "10px", fontWeight: 700, padding: "2px 7px",
+                        borderRadius: RADII.PILL, backgroundColor: `${priorityColor}18`, color: priorityColor,
+                      }}>{task.priority}</span>
+                    )}
+                    <span style={{
+                      fontSize: "10px", fontWeight: 600, padding: "2px 7px",
+                      borderRadius: RADII.PILL, backgroundColor: COLOURS.CARD_ALT, color: statusColor,
+                    }}>{task.status}</span>
+                    {isOverdue && (
+                      <span style={{
+                        fontSize: "10px", fontWeight: 700, padding: "2px 7px",
+                        borderRadius: RADII.PILL, backgroundColor: "#FDECEA", color: COLOURS.RED,
+                      }}>Overdue</span>
+                    )}
+                  </div>
+
+                  {/* Description */}
+                  <p style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, margin: "0 0 4px", lineHeight: "1.4" }}>
+                    {task.description}
+                  </p>
+
+                  {/* Project + due date */}
+                  <div style={{ display: "flex", gap: "12px", fontSize: "11.5px", color: COLOURS.SLATE, marginBottom: "10px" }}>
+                    {task.project && <span>📁 {task.project}</span>}
+                    {task.due_date && (
+                      <span style={{ color: isOverdue ? COLOURS.RED : COLOURS.SLATE }}>
+                        📅 {task.due_date.split("-").reverse().join("/")}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Notes */}
+                  {task.notes && (
+                    <p style={{ fontSize: "11.5px", color: COLOURS.SLATE, margin: "0 0 10px",
+                      padding: "6px 10px", backgroundColor: COLOURS.CARD_ALT,
+                      borderRadius: RADII.SM, borderLeft: `3px solid ${COLOURS.HAIRLINE}` }}>
+                      {task.notes}
+                    </p>
+                  )}
+
+                  {/* Action buttons */}
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {task.status === "Not Started" && (
+                      <button disabled={busy} onClick={() => updateTaskStatus(task.id, "In Progress")}
+                        style={{ ...primaryButtonStyle, fontSize: "12px", padding: "7px 14px", opacity: busy ? 0.6 : 1 }}>
+                        {busy ? "…" : "▶ Start"}
+                      </button>
+                    )}
+                    {(task.status === "In Progress" || task.status === "Waiting Reply") && (
+                      <button disabled={busy} onClick={() => updateTaskStatus(task.id, "Completed")}
+                        style={{ ...primaryButtonStyle, fontSize: "12px", padding: "7px 14px",
+                          backgroundColor: COLOURS.GREEN, opacity: busy ? 0.6 : 1 }}>
+                        {busy ? "…" : "✓ Mark Done"}
+                      </button>
+                    )}
+                    {task.status === "Not Started" && (
+                      <button disabled={busy} onClick={() => updateTaskStatus(task.id, "Waiting Reply")}
+                        style={{ fontSize: "12px", padding: "7px 14px", borderRadius: RADII.SM,
+                          border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white",
+                          color: COLOURS.AMBER, fontWeight: 600, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
+                        ⏳ Waiting Reply
+                      </button>
+                    )}
+                    {task.status === "In Progress" && (
+                      <button disabled={busy} onClick={() => updateTaskStatus(task.id, "Waiting Reply")}
+                        style={{ fontSize: "12px", padding: "7px 14px", borderRadius: RADII.SM,
+                          border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white",
+                          color: COLOURS.AMBER, fontWeight: 600, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
+                        ⏳ Waiting Reply
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
 
         {toastElement}
