@@ -101,9 +101,33 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // ── Root: get folders the user has been shared ────────────────────
+    // ── Root: list folders the user can see ──────────────────────────
+    //
+    // Admins use the root folders endpoint directly — it returns real folder
+    // names. The /access endpoint (used for non-admins) only returns UIDs for
+    // the account owner, so folder names would show as unreadable codes.
+    //
+    // Non-admins use /access so Folderit enforces their permissions.
+    if (isAdmin) {
+      const rootRes = await folderitFetch(
+        `/v2/accounts/${accountUid}/folders?per-page=500`
+      );
+      if (!rootRes.ok) {
+        const body = await rootRes.text().catch(() => "");
+        return Response.json(
+          { error: `Folderit /folders returned ${rootRes.status}: ${body}` },
+          { status: 502 }
+        );
+      }
+      const rootJson = await rootRes.json();
+      const rootFolders: FolderitRawItem[] = rootJson?.folders ?? rootJson ?? [];
+      return Response.json({
+        folders: rootFolders.map((f) => ({ uid: f.uid, name: f.name ?? f.uid })),
+        files: [],
+      });
+    }
+
     if (!mapping) {
-      // Admin without a user mapping yet (sync hasn't run or user not in Folderit)
       return Response.json({
         folders: [],
         files: [],
@@ -124,16 +148,11 @@ export async function GET(request: NextRequest) {
     }
 
     const accessJson = await accessRes.json();
-
-    // Defensive shape handling — Folderit may wrap in .items, .shares,
-    // or return a bare array. We also include the raw sample in development
-    // so we can see the real shape and refine if needed.
     const raw: AccessItem[] = accessJson?.items ?? accessJson?.shares ?? accessJson ?? [];
 
     const folders = raw
       .filter((item) => {
         const t = item.type ?? item.entityType ?? "";
-        // Include explicit folders, or items with no type hint (assume folder)
         return t === "folder" || t === "" || t === undefined;
       })
       .map((item) => ({
@@ -142,13 +161,7 @@ export async function GET(request: NextRequest) {
       }))
       .filter((f) => f.uid);
 
-    return Response.json({
-      folders,
-      files: [],
-      // Debug: include a raw sample (first 3 items) so we can verify the
-      // /access response shape on first use and remove this once confirmed.
-      _accessSample: raw.slice(0, 3),
-    });
+    return Response.json({ folders, files: [] });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : "Browse failed" },

@@ -122,8 +122,10 @@ const PreviewContext = createContext<(target: PreviewTarget) => void>(() => {});
 // which caused the browser to download it no matter what the frontend did
 // with it. A blob: URL has no such disposition; the browser renders it
 // inline in the iframe based on its Content-Type alone.
-async function fetchPreviewBlobUrl(fileUid: string): Promise<string> {
-  const res = await authFetch(`/api/folderit/file-url?file=${encodeURIComponent(fileUid)}`);
+async function fetchPreviewBlobUrl(fileUid: string, accountUid?: string): Promise<string> {
+  const params = new URLSearchParams({ file: fileUid });
+  if (accountUid) params.set("account_uid", accountUid);
+  const res = await authFetch(`/api/folderit/file-url?${params}`);
   const contentType = res.headers.get("content-type") || "";
   if (!res.ok || contentType.includes("application/json")) {
     let message = "Couldn't preview this document.";
@@ -1485,10 +1487,12 @@ const FILTER_OPTIONS = [
 ];
 
 function FilingHealthTab() {
+  const setPreview = useContext(PreviewContext);
   const [issues, setIssues] = useState<HealthIssue[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState("");
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
 
   function fetchIssues(type: string) {
     setLoading(true);
@@ -1505,6 +1509,21 @@ function FilingHealthTab() {
   function handleFilter(type: string) {
     setFilterType(type);
     fetchIssues(type);
+  }
+
+  async function handleRowClick(iss: HealthIssue) {
+    // Inbox subfolders are folders, not files — can't preview
+    if (iss.issue_type === "inbox_subfolder" || !iss.file_uid) return;
+    if (previewingId === iss.id) return;
+    setPreviewingId(iss.id);
+    try {
+      const url = await fetchPreviewBlobUrl(iss.file_uid!, iss.account_uid ?? undefined);
+      setPreview({ url, name: iss.file_name });
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Couldn't preview this document.");
+    } finally {
+      setPreviewingId(null);
+    }
   }
 
   const noIssues = !loading && issues.length === 0;
@@ -1549,6 +1568,9 @@ function FilingHealthTab() {
 
       {!loading && issues.length > 0 && (
         <div style={{ ...cardStyle, overflow: "hidden" }}>
+          <div style={{ padding: "8px 12px", fontSize: "11px", color: SLATE, borderBottom: `1px solid ${COLOURS.BORDER}`, background: COLOURS.CARD_ALT }}>
+            Click any file row to preview it. Inbox subfolder rows cannot be previewed — open Folderit directly to move or delete them.
+          </div>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: COLOURS.CARD_ALT }}>
@@ -1560,25 +1582,41 @@ function FilingHealthTab() {
               </tr>
             </thead>
             <tbody>
-              {issues.map((iss, i) => (
-                <tr key={iss.id} style={{ borderBottom: i < issues.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none" }}>
-                  <td style={{ padding: "9px 12px", verticalAlign: "middle" }}>
-                    <IssueTypeBadge type={iss.issue_type} />
-                  </td>
-                  <td style={{ padding: "9px 12px", fontSize: "12px", color: NAVY, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {iss.file_name}
-                  </td>
-                  <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE, maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {iss.location_path ?? "—"}
-                  </td>
-                  <td style={{ padding: "9px 12px", fontSize: "12px", color: iss.days_old !== null && iss.days_old > 2 ? COLOURS.AMBER : NAVY, whiteSpace: "nowrap" }}>
-                    {iss.days_old !== null ? `${iss.days_old}d` : "—"}
-                  </td>
-                  <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE }}>
-                    {iss.company_name ?? "—"}
-                  </td>
-                </tr>
-              ))}
+              {issues.map((iss, i) => {
+                const isFolder = iss.issue_type === "inbox_subfolder";
+                const isPreviewing = previewingId === iss.id;
+                return (
+                  <tr
+                    key={iss.id}
+                    onClick={() => handleRowClick(iss)}
+                    title={isFolder ? "This is a folder — open Folderit to act on it" : "Click to preview this document"}
+                    style={{
+                      borderBottom: i < issues.length - 1 ? `1px solid ${COLOURS.BORDER}` : "none",
+                      cursor: isFolder ? "default" : "pointer",
+                      background: isPreviewing ? COLOURS.CARD_ALT : "white",
+                      transition: "background 0.1s",
+                    }}
+                    onMouseEnter={(e) => { if (!isFolder) (e.currentTarget as HTMLElement).style.background = COLOURS.CARD_ALT; }}
+                    onMouseLeave={(e) => { if (!isFolder && !isPreviewing) (e.currentTarget as HTMLElement).style.background = "white"; }}
+                  >
+                    <td style={{ padding: "9px 12px", verticalAlign: "middle" }}>
+                      <IssueTypeBadge type={iss.issue_type} />
+                    </td>
+                    <td style={{ padding: "9px 12px", fontSize: "12px", color: isFolder ? SLATE : NAVY, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {isPreviewing ? <span style={{ color: SLATE }}>Loading…</span> : iss.file_name}
+                    </td>
+                    <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE, maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {iss.location_path ?? "—"}
+                    </td>
+                    <td style={{ padding: "9px 12px", fontSize: "12px", color: iss.days_old !== null && iss.days_old > 2 ? COLOURS.AMBER : NAVY, whiteSpace: "nowrap" }}>
+                      {iss.days_old !== null ? `${iss.days_old}d` : "—"}
+                    </td>
+                    <td style={{ padding: "9px 12px", fontSize: "11px", color: SLATE }}>
+                      {iss.company_name ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {total > issues.length && (
