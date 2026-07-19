@@ -448,7 +448,12 @@ export async function GET(request: NextRequest) {
   const [{ data: hrCategories }, { data: members }, { data: aliases }] = await Promise.all([
     db.from("folderit_hr_categories").select("category_name, account_uid, folder_uid").eq("is_active", true),
     db.from("members").select("email"),
-    db.from("folderit_email_aliases").select("dashboard_email, alias_email"),
+    // Exclude the admin gmail account — it's covered by isAdmin checks
+    // everywhere, so it doesn't need Folderit user map entries. Without
+    // this exclusion, k.saleem@unze.co.uk would be ambiguously aliased to
+    // both k.saleem@unzegroup.com AND khuram1901@gmail.com, and the Map
+    // would resolve to whichever comes last. We always want the CEO account.
+    db.from("folderit_email_aliases").select("dashboard_email, alias_email").neq("dashboard_email", "khuram1901@gmail.com"),
   ]);
 
   const memberEmails = new Set((members ?? []).map((m) => m.email.toLowerCase()));
