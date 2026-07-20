@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { requireAuth } from "../../../../lib/api-auth";
+import { requireAuth } from "../../../lib/api-auth";
 
 const RSS_URL = "https://feeds.bbci.co.uk/news/business/rss.xml";
 

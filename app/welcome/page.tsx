@@ -404,7 +404,7 @@ export default function WelcomePage() {
 
           {/* ── CTA button ───────────────────────────────────── */}
           <button
-            onClick={() => router.push("/home")}
+            onClick={() => router.replace("/home")}
             style={{
               display: "block",
               width: "100%",

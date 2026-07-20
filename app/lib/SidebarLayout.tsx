@@ -68,8 +68,9 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   if (card.permKey === "_backups") return ["khuram1901@gmail.com", "k.saleem@unzegroup.com"].includes((ctx.email || "").toLowerCase());
   if (card.permKey.startsWith("_")) return true;
   const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
-  if (isPACtx && card.permKey === "can_view_pa_dashboard") return false;
-  if ((isMainAdmin(ctx) || isCEO(ctx)) && (card.permKey === "can_view_executive_dashboard" || card.permKey === "can_view_pa_dashboard")) return false;
+  // PA dashboard + executive dashboard are added manually via alwaysItems; hide from registry to avoid duplicates
+  if (card.permKey === "can_view_pa_dashboard") return false;
+  if (card.permKey === "can_view_executive_dashboard") return false;
   // Opening Balances reuses the "can_edit_finance" permKey (it has no
   // permission key of its own yet) and isn't scoped by company like the
   // Finance pages are, so it can't be handled by the scope check below —
@@ -193,11 +194,20 @@ export default function SidebarLayout({
   // dedicated /ceo-kamran page on 16 Jul 2026 for exactly this reason: two
   // near-identical pages meant every change had to be made twice, and
   // toggles built for one silently didn't affect the other.
-  const homeHref = isPAUser ? "/pa" : "/home";
-
+  // Welcome page is the universal home for all users
   const alwaysItems: PageCard[] = [
-    { permKey: "_home", title: "Executive Dashboard", subtitle: "", href: homeHref, icon: "🏠", group: "_top" },
+    { permKey: "_home", title: "Home", subtitle: "Your daily brief", href: "/welcome", icon: "🏠", group: "_top" },
   ];
+
+  // Executive Dashboard shortcut — shown for CEO/admin users below the Home link
+  const canSeeExecDash = userCtx && !isPAUser && !entryOnly && canViewExecutiveDashboard(userCtx);
+  if (canSeeExecDash) {
+    alwaysItems.push({ permKey: "_exec", title: "Executive Dashboard", subtitle: "", href: "/home", icon: "📊", group: "_top" });
+  }
+  // PA users keep their own dashboard shortcut
+  if (isPAUser) {
+    alwaysItems.push({ permKey: "_pa", title: "PA Dashboard", subtitle: "", href: "/pa", icon: "⚡", group: "_top" });
+  }
 
   const sidebarW = (isMobile || entryOnly) ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;
 
@@ -455,7 +465,10 @@ export default function SidebarLayout({
   }
 
   // Derive page title from current path
-  const currentPage = [...alwaysItems, ...PAGE_REGISTRY].find((p) => isActive(p.href));
+  const extraPages = [
+    { href: "/welcome", title: "Home", subtitle: "Your daily brief" },
+  ];
+  const currentPage = [...alwaysItems, ...extraPages, ...PAGE_REGISTRY].find((p) => isActive(p.href));
   const pageTitle = currentPage?.title || "Dashboard";
   const pageSubtitle = currentPage?.subtitle || "";
 
