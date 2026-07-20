@@ -32,8 +32,9 @@ type Member = {
   email: string | null;
   department: string | null;
   business_unit: string | null;
-  // company_id added by migration 183 — links directly to companies table
-  company_id: string | null;
+  // task_default_company_id added by migration 183 — task-only default company,
+  // separate from the member's group-level company profile.
+  task_default_company_id: string | null;
 };
 
 type Company = {
@@ -139,7 +140,7 @@ export default function QuickAddTask({
   useEffect(() => {
     async function load() {
       const [mRes, cRes] = await Promise.all([
-        supabase.from("members").select("id, name, email, department, business_unit, company_id").eq("is_active", true).order("name", { ascending: true }),
+        supabase.from("members").select("id, name, email, department, business_unit, task_default_company_id").eq("is_active", true).order("name", { ascending: true }),
         supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
       ]);
       if (mRes.data) setMembers(mRes.data);
@@ -180,10 +181,10 @@ export default function QuickAddTask({
     ? members.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()))
     : members.slice(0, 8);
 
-  // Resolve company: prefer the direct company_id on the member (migration 183),
-  // fall back to business_unit short-code match for older records.
+  // Resolve company: prefer task_default_company_id (migration 183),
+  // fall back to business_unit short-code match for any member not yet covered.
   const autoCompany: Company | null = selected
-    ? (companies.find((c) => c.id === selected.company_id)
+    ? (companies.find((c) => c.id === selected.task_default_company_id)
         ?? companies.find((c) => c.short_code === selected.business_unit)
         ?? null)
     : null;
