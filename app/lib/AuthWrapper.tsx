@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase, loadMyPermissions } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
+import ChatPanel from "./ChatPanel";
 import { canSeeAllTasks, isSecondaryCEO, myIdentityEmails, type UserCtx, type PermOverrides } from "./permissions";
 import { COLOURS } from "./SharedUI";
 
@@ -231,27 +232,34 @@ export default function AuthWrapper({
     : SLATE;
 
   return (
-    <SidebarLayout
-      userCtx={userCtx}
-      userName={displayName(member, email)}
-      userEmail={email || ""}
-      userRole={displayRoleLabel}
-      roleColor={roleColor}
-      notifCount={notifCount}
-      notifItems={notifItems}
-      searchOpen={searchOpen}
-      setSearchOpen={setSearchOpen}
-      searchQuery={searchQuery}
-      setSearchQuery={setSearchQuery}
-      searchResults={searchResults}
-      searching={searching}
-      searchRef={searchRef}
-      notifOpen={notifOpen}
-      setNotifOpen={setNotifOpen}
-      notifRef={notifRef}
-      onSignOut={handleSignOut}
-    >
-      {children}
-    </SidebarLayout>
+    <>
+      <SidebarLayout
+        userCtx={userCtx}
+        userName={displayName(member, email)}
+        userEmail={email || ""}
+        userRole={displayRoleLabel}
+        roleColor={roleColor}
+        notifCount={notifCount}
+        notifItems={notifItems}
+        searchOpen={searchOpen}
+        setSearchOpen={setSearchOpen}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchResults={searchResults}
+        searching={searching}
+        searchRef={searchRef}
+        notifOpen={notifOpen}
+        setNotifOpen={setNotifOpen}
+        notifRef={notifRef}
+        onSignOut={handleSignOut}
+      >
+        {children}
+      </SidebarLayout>
+      <ChatPanel
+        email={email}
+        memberId={member?.id ?? null}
+        memberName={displayName(member, email)}
+      />
+    </>
   );
 }
