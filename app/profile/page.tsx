@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
@@ -10,6 +10,8 @@ import {
   cardStyle, inputStyle, labelStyle, primaryButtonStyle,
   PageHeader, SectionTitle, displayRole, useConfirm, SkeletonRows,
 } from "../lib/SharedUI";
+
+const PHOTO_MAX_KB = 150;
 
 // ── role chip — mirrors MembersManager pattern ───────────────────
 function roleChip(r: string, email?: string): React.CSSProperties {
@@ -31,6 +33,15 @@ export default function ProfilePage() {
   const isMobile = useMobile();
   const dlg = useConfirm();
   const [email, setEmail] = useState("");
+  const [memberId, setMemberId] = useState<string | null>(null);
+  const [memberFirstName, setMemberFirstName] = useState<string | null>(null);
+  const [memberLastName, setMemberLastName] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -77,12 +88,16 @@ export default function ProfilePage() {
     setMfaEnabled(verified.length > 0);
     if (verified.length > 0) setFactorId(verified[0].id);
 
-    // Load notification preferences
+    // Load member profile + notification preferences
     if (user?.email) {
       const { data: member } = await supabase.from("members")
-        .select("role, notif_task_assigned, notif_task_overdue, notif_escalations, notif_meetings, notif_daily_digest")
+        .select("id, first_name, last_name, role, photo_url, notif_task_assigned, notif_task_overdue, notif_escalations, notif_meetings, notif_daily_digest")
         .eq("email", user.email).maybeSingle();
       if (member) {
+        setMemberId(member.id);
+        setMemberFirstName(member.first_name ?? null);
+        setMemberLastName(member.last_name ?? null);
+        setPhotoUrl(member.photo_url ?? null);
         setUserRole(member.role || "");
         setNotifPrefs({
           notif_task_assigned: member.notif_task_assigned ?? true,
@@ -276,10 +291,89 @@ export default function ProfilePage() {
     setChangingPw(false);
   }
 
+  // ── photo upload helpers ─────────────────────────────────────────
+  async function handlePhotoFile(file: File) {
+    setPhotoError(null);
+    if (!file.type.startsWith("image/")) { setPhotoError("Please select an image file."); return; }
+
+    // Resize + compress via canvas
+    const url = URL.createObjectURL(file);
+    const img  = new Image();
+    img.src    = url;
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; });
+
+    const MAX = 600;
+    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width  = Math.round(img.width  * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+
+    let quality = 0.9;
+    let result: Blob | null = null;
+    while (quality >= 0.5) {
+      result = await new Promise<Blob | null>(res => canvas.toBlob(res, "image/jpeg", quality));
+      if (result && result.size <= PHOTO_MAX_KB * 1000) break;
+      quality -= 0.1;
+    }
+    if (!result || result.size > PHOTO_MAX_KB * 1000) {
+      setPhotoError(`Image still too large after compression. Try a smaller photo.`);
+      return;
+    }
+    setPhotoBlob(result);
+    setPhotoPreview(canvas.toDataURL("image/jpeg", 0.9));
+  }
+
+  async function savePhoto() {
+    if (!photoBlob || !memberId) return;
+    setPhotoSaving(true);
+    setPhotoError(null);
+    try {
+      const fd = new FormData();
+      fd.append("memberId", memberId);
+      fd.append("photo", new File([photoBlob], "photo.jpg", { type: "image/jpeg" }));
+      const res  = await authFetch("/api/members/photo", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { setPhotoError(json.error || "Upload failed."); }
+      else {
+        setPhotoUrl(json.photoUrl);
+        setPhotoPreview(null);
+        setPhotoBlob(null);
+        logAction("Updated", "members", "Uploaded profile photo");
+      }
+    } catch { setPhotoError("Network error."); }
+    finally { setPhotoSaving(false); }
+  }
+
+  async function removePhoto() {
+    if (!memberId) return;
+    setPhotoSaving(true);
+    setPhotoError(null);
+    try {
+      const res = await authFetch("/api/members/photo", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId }),
+      });
+      if (res.ok) {
+        setPhotoUrl(null);
+        setPhotoPreview(null);
+        setPhotoBlob(null);
+        logAction("Updated", "members", "Removed profile photo");
+      }
+    } catch { setPhotoError("Network error."); }
+    finally { setPhotoSaving(false); }
+  }
+
   // ── derived display values ───────────────────────────────────────
-  const displayName = email === "k.saleem@unzegroup.com" ? "Khuram Saleem" : email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const displayName = (memberFirstName || memberLastName)
+    ? `${memberFirstName || ""} ${memberLastName || ""}`.trim()
+    : email === "k.saleem@unzegroup.com" ? "Khuram Saleem"
+    : email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const roleLabel = displayRole(userRole, email) || userRole || "Member";
   const initials = avatarInitials(email);
+  const currentPhotoSrc = photoPreview || photoUrl;
 
   return (
     <AuthWrapper>
@@ -314,22 +408,52 @@ export default function ProfilePage() {
               marginBottom: "20px",
               flexWrap: isMobile ? "wrap" : "nowrap",
             }}>
-              {/* Gradient avatar */}
-              <div style={{
-                width: "64px",
-                height: "64px",
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
-                display: "grid",
-                placeItems: "center",
-                color: "#fff",
-                fontSize: "22px",
-                fontWeight: 600,
-                fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
-                flexShrink: 0,
-              }}>
-                {initials}
+              {/* Avatar — click to upload */}
+              <div
+                onClick={() => photoInputRef.current?.click()}
+                title="Click to change photo"
+                style={{
+                  width: "72px",
+                  height: "72px",
+                  borderRadius: "50%",
+                  background: currentPhotoSrc ? "none" : "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#fff",
+                  fontSize: "22px",
+                  fontWeight: 600,
+                  fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                  flexShrink: 0,
+                  cursor: "pointer",
+                  position: "relative",
+                  overflow: "hidden",
+                  border: `2px solid ${COLOURS.HAIRLINE}`,
+                }}>
+                {currentPhotoSrc
+                  ? <img src={currentPhotoSrc} alt={initials} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  : initials}
+                {/* hover overlay */}
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: "rgba(0,0,0,0.35)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "11px", color: "#fff", fontWeight: 500,
+                  opacity: 0,
+                  transition: "opacity 0.15s",
+                }}
+                  onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.opacity = "0"; }}
+                >
+                  Edit
+                </div>
               </div>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoFile(f); e.target.value = ""; }}
+              />
 
               {/* Name + role + email */}
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -378,6 +502,7 @@ export default function ProfilePage() {
               width: "fit-content",
             }}>
               {[
+                { id: "photo", label: "Photo" },
                 { id: "2fa", label: "2FA" },
                 { id: "password", label: "Password" },
                 { id: "notifications", label: "Notifications" },
@@ -396,6 +521,78 @@ export default function ProfilePage() {
                   {s.label}
                 </a>
               ))}
+            </div>
+
+            {/* ── Profile photo ───────────────────────────────────── */}
+            <div id="photo">
+              <SectionTitle title="Profile Photo" />
+            </div>
+            <div style={{ ...cardStyle, marginBottom: "16px" }}>
+              <div style={settingCardHead}>
+                <div style={settingCardTitle}>
+                  <span style={iconMark}>📷</span>
+                  Profile photo
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap" }}>
+                {/* Preview circle */}
+                <div style={{
+                  width: "80px", height: "80px", borderRadius: "50%", flexShrink: 0,
+                  background: currentPhotoSrc ? "none" : "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
+                  display: "grid", placeItems: "center",
+                  color: "#fff", fontSize: "24px", fontWeight: 600,
+                  border: `2px solid ${COLOURS.HAIRLINE}`,
+                  overflow: "hidden",
+                }}>
+                  {currentPhotoSrc
+                    ? <img src={currentPhotoSrc} alt={initials} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    : initials}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "12px", lineHeight: 1.5 }}>
+                    Click your avatar above or use the button below. Max {PHOTO_MAX_KB} KB — images are automatically compressed.
+                  </p>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <button
+                      onClick={() => photoInputRef.current?.click()}
+                      disabled={photoSaving}
+                      style={{ ...primaryButtonStyle, opacity: photoSaving ? 0.5 : 1 }}
+                    >
+                      {currentPhotoSrc ? "Change photo" : "Upload photo"}
+                    </button>
+                    {photoPreview && photoBlob && (
+                      <button
+                        onClick={savePhoto}
+                        disabled={photoSaving}
+                        style={{ ...primaryButtonStyle, backgroundColor: COLOURS.GREEN, border: `1px solid ${COLOURS.GREEN}`, opacity: photoSaving ? 0.5 : 1 }}
+                      >
+                        {photoSaving ? "Saving..." : "Save"}
+                      </button>
+                    )}
+                    {photoPreview && (
+                      <button
+                        onClick={() => { setPhotoPreview(null); setPhotoBlob(null); }}
+                        disabled={photoSaving}
+                        style={{ ...primaryButtonStyle, backgroundColor: "transparent", color: COLOURS.SLATE, border: `1px solid ${COLOURS.HAIRLINE}` }}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    {photoUrl && !photoPreview && (
+                      <button
+                        onClick={removePhoto}
+                        disabled={photoSaving}
+                        style={{ ...primaryButtonStyle, backgroundColor: "transparent", color: COLOURS.RED, border: `1px solid ${COLOURS.RED}`, opacity: photoSaving ? 0.5 : 1 }}
+                      >
+                        {photoSaving ? "Removing..." : "Remove photo"}
+                      </button>
+                    )}
+                  </div>
+                  {photoError && (
+                    <div style={{ fontSize: "12px", color: COLOURS.RED, marginTop: "8px" }}>{photoError}</div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* ── Email card ───────────────────────────────────────── */}

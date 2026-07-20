@@ -9,16 +9,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
-  // Only admins can update member photos
   const supabase = createServiceClient();
-  const { data: me } = await supabase
-    .from("members")
-    .select("role")
-    .eq("email", auth.email)
-    .maybeSingle();
-  if (!me || (me.role !== "Admin" && me.role !== "CEO" && me.role !== "Executive")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   // Parse multipart — the client sends: memberId (field) + photo (file)
   let formData: FormData;
@@ -30,6 +21,20 @@ export async function POST(request: NextRequest) {
 
   if (!memberId || !file) {
     return NextResponse.json({ error: "memberId and photo are required" }, { status: 400 });
+  }
+
+  // Any user may upload their own photo. Admins/CEOs may upload for anyone.
+  const { data: me } = await supabase
+    .from("members")
+    .select("id, role")
+    .eq("email", auth.email)
+    .maybeSingle();
+
+  const isAdmin = me && (me.role === "Admin" || me.role === "CEO" || me.role === "Executive");
+  const isOwn   = me?.id === memberId;
+
+  if (!isAdmin && !isOwn) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   // Validate size — canvas should compress well under this
