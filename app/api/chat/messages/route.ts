@@ -59,15 +59,33 @@ export async function GET(req: Request) {
     return Response.json({ error: error.message }, { status: 500 });
   }
 
+  const now = new Date().toISOString();
+
   // Stamp last_read_at so unread count resets for this user
   await db
     .from("chat_participants")
-    .update({ last_read_at: new Date().toISOString() })
+    .update({ last_read_at: now })
     .eq("conversation_id", conversationId)
     .eq("member_id", member.id);
 
+  // Fetch other participants' last_read_at for read receipts (✓✓)
+  const { data: otherParticipants } = await db
+    .from("chat_participants")
+    .select("last_read_at")
+    .eq("conversation_id", conversationId)
+    .neq("member_id", member.id);
+
+  // The latest read timestamp among all other participants
+  const othersLastReadAt = otherParticipants?.reduce<string | null>((latest, p) => {
+    if (!latest) return p.last_read_at;
+    return p.last_read_at > latest ? p.last_read_at : latest;
+  }, null) ?? null;
+
   // Return in chronological order (oldest first for display)
-  return Response.json((messages ?? []).reverse());
+  return Response.json({
+    messages: (messages ?? []).reverse(),
+    others_last_read_at: othersLastReadAt,
+  });
 }
 
 // POST /api/chat/messages
