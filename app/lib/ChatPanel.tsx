@@ -618,7 +618,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                       {filteredConvs.map((conv) => (
                         <SwipeRow
                           key={conv.conversation_id}
-                          leftBg={conv.is_archived ? COLOURS.GREEN : "#B4791F"}
+                          leftBg={COLOURS.GREEN}
                           leftLabel={conv.is_archived ? "↩ Unarchive" : "📁 Archive"}
                           rightBg={COLOURS.RED}
                           rightLabel="🗑 Delete"
