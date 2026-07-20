@@ -646,7 +646,13 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // I can see", not "the whole company".
   const myIdentities = myIdentityEmails(myEmail);
   const myTasksSource = myTasksScope === "mine"
-    ? allOpen.filter((t) => (t.assigned_to_email && myIdentities.includes(t.assigned_to_email.toLowerCase())) || myCoAssignedTaskIds.has(t.id))
+    ? allOpen.filter((t) =>
+        // Tasks assigned to me (primary or co-assignee)
+        (t.assigned_to_email && myIdentities.includes(t.assigned_to_email.toLowerCase())) ||
+        myCoAssignedTaskIds.has(t.id) ||
+        // Tasks I created — so the creator always sees tasks they assigned to others
+        (t.assigned_by_email && myIdentities.includes(t.assigned_by_email.toLowerCase()))
+      )
     : allOpen;
   function myTaskGroup(task: Task): string {
     if (isOverdue(task)) return "Overdue";

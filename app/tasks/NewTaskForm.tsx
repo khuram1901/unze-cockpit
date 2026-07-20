@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
+import MentionTextarea, { MentionMember } from "../lib/MentionTextarea";
 
 type Member = {
   id: string;
@@ -117,6 +118,18 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
   const [subtasks, setSubtasks] = useState<string[]>([]);
   const [subtaskInput, setSubtaskInput] = useState("");
+
+  // Track which members were added via @mention so we can show them as pills
+  // below the notes field. Adding via @mention also auto-ticks them in the
+  // assignee checkbox list (same assignedToIds state).
+  const [mentionedMemberIds, setMentionedMemberIds] = useState<string[]>([]);
+
+  function handleMentionAdded(member: MentionMember) {
+    // Add to assignees if not already there
+    setAssignedToIds((prev) => prev.includes(member.id) ? prev : [...prev, member.id]);
+    // Track which ones came via @mention (for the pill display)
+    setMentionedMemberIds((prev) => prev.includes(member.id) ? prev : [...prev, member.id]);
+  }
 
   useEffect(() => {
     async function loadInitialData() {
@@ -272,6 +285,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
     setNotes("");
     setSubtasks([]);
     setSubtaskInput("");
+    setMentionedMemberIds([]);
 
     router.refresh();
     onCreated?.();
@@ -533,15 +547,61 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
             </div>
           </label>
 
-          <label style={{ gridColumn: "1 / -1" }}>
-            <span style={kickerStyle}>Notes / context</span>
-            <textarea
-              style={{ ...inputStyle, height: "70px" }}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <span style={kickerStyle}>
+              Notes / context — type @ to mention and assign a colleague
+            </span>
+            <MentionTextarea
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add background, numbers, document references, or instructions."
+              onChange={setNotes}
+              members={members}
+              onMentionAdded={handleMentionAdded}
+              placeholder="Add background, numbers, document references, or instructions. Type @ to assign someone inline."
+              style={{ ...inputStyle, height: "70px", marginTop: "4px", marginBottom: mentionedMemberIds.length > 0 ? "6px" : "12px" }}
+              rows={3}
             />
-          </label>
+            {mentionedMemberIds.length > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  marginBottom: "12px",
+                  padding: "6px 10px",
+                  backgroundColor: COLOURS.CARD_ALT,
+                  border: `1px solid ${COLOURS.HAIRLINE}`,
+                  borderRadius: RADII.SM,
+                  fontSize: "12px",
+                  color: COLOURS.SLATE,
+                }}
+              >
+                <span style={{ fontWeight: 500 }}>Added via @mention:</span>
+                {mentionedMemberIds.map((id) => {
+                  const m = members.find((x) => x.id === id);
+                  if (!m) return null;
+                  return (
+                    <span
+                      key={id}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        backgroundColor: "#E8EDFF",
+                        color: COLOURS.BLUE,
+                        borderRadius: RADII.PILL,
+                        padding: "2px 8px",
+                        fontWeight: 600,
+                        fontSize: "12px",
+                      }}
+                    >
+                      @{m.name}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
         </div>
 
