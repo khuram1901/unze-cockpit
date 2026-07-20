@@ -1,6 +1,48 @@
 import { requireAuth } from "@/app/lib/api-auth";
 import { createServiceClient } from "@/app/lib/supabase-server";
 
+// PATCH /api/chat/conversations
+// Body: { conversation_id, action: "archive" | "unarchive" | "delete" }
+// Operates on the calling user's chat_participants row only —
+// other participants are never affected.
+export async function PATCH(req: Request) {
+  const auth = await requireAuth(req);
+  if (auth instanceof Response) return auth;
+
+  const { conversation_id, action } = await req.json() as {
+    conversation_id: string;
+    action: "archive" | "unarchive" | "delete";
+  };
+
+  if (!conversation_id || !["archive", "unarchive", "delete"].includes(action)) {
+    return Response.json({ error: "conversation_id and action required" }, { status: 400 });
+  }
+
+  const db = createServiceClient();
+
+  const { data: member } = await db
+    .from("members")
+    .select("id")
+    .eq("email", auth.email)
+    .single();
+
+  if (!member) return Response.json({ error: "Member not found" }, { status: 404 });
+
+  const update =
+    action === "archive"   ? { is_archived: true }  :
+    action === "unarchive" ? { is_archived: false } :
+                             { is_deleted: true };
+
+  const { error } = await db
+    .from("chat_participants")
+    .update(update)
+    .eq("conversation_id", conversation_id)
+    .eq("member_id", member.id);
+
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ ok: true });
+}
+
 // GET /api/chat/conversations
 // Returns all conversations for the authenticated user via the
 // get_my_conversations RPC — one round-trip, fully assembled.
