@@ -173,6 +173,14 @@ export default function AccountsTaxDashboard() {
   const [scheduleEntries, setScheduleEntries] = useState<Map<string, ScheduleStatus>>(new Map());
   const [returnFilings, setReturnFilings] = useState<Map<string, boolean>>(new Map());
 
+  // Pre-computed KPIs and summaries from the get_tax_dashboard_summary RPC
+  type RpcSectionSummary = { completed: number; inProgress: number; notStarted: number; total: number; pct: number };
+  const [rpcScheduleKpis, setRpcScheduleKpis] = useState({ notStarted: 0, inProgress: 0, extAuditors: 0, completed: 0 });
+  const [rpcFilingKpis, setRpcFilingKpis] = useState({ filed: 0, notFiled: 0, overdue: 0 });
+  const [rpcOverdueItems, setRpcOverdueItems] = useState<{ entityLabel: string; returnLabel: string; period: string }[]>([]);
+  const [rpcPendingSignoffs, setRpcPendingSignoffs] = useState<{ entityLabel: string; sectionLabel: string }[]>([]);
+  const [rpcSectionSummaries, setRpcSectionSummaries] = useState<Record<string, RpcSectionSummary>>({});
+
   // Tracks which sections are EXPANDED (not collapsed) — starting empty
   // means every section defaults to closed on mount/page-open, per the
   // house rule that collapsible items always start closed.
@@ -221,29 +229,31 @@ export default function AccountsTaxDashboard() {
   const loadData = useCallback(async (year: string) => {
     setLoading(true);
 
-    const [schedRes, filingRes, schedYearsRes, filingYearsRes, signoffRes] = await Promise.all([
-      supabase.from("tax_schedule_entries").select("tax_year, section, step_index, entity_key, status").eq("tax_year", year),
-      supabase.from("tax_return_filings").select("tax_year, return_type, entity_key, period_key, filed").eq("tax_year", year),
-      supabase.from("tax_schedule_entries").select("tax_year").order("tax_year"),
-      supabase.from("tax_return_filings").select("tax_year").order("tax_year"),
-      supabase.from("tax_accounts_signoffs").select("section, entity_key, signed_off, signed_off_by, signed_off_at").eq("tax_year", year),
-    ]);
+    // Single RPC call — replaces 5 parallel queries + 8 JS aggregation loops (Rule 0)
+    const { data: rpc, error } = await supabase.rpc("get_tax_dashboard_summary", { p_tax_year: year });
 
+    if (error || !rpc) {
+      console.error("get_tax_dashboard_summary RPC error:", error);
+      setLoading(false);
+      return;
+    }
+
+    // Build Maps for interactive grid cell rendering
     const sm = new Map<string, ScheduleStatus>();
-    for (const r of schedRes.data || []) {
-      sm.set(`${r.tax_year}:${r.section}:${r.step_index}:${r.entity_key}`, r.status as ScheduleStatus);
+    for (const r of (rpc.schedule_entries ?? []) as { section: string; step_index: number; entity_key: string; status: string }[]) {
+      sm.set(`${year}:${r.section}:${r.step_index}:${r.entity_key}`, r.status as ScheduleStatus);
     }
     setScheduleEntries(sm);
 
     const fm = new Map<string, boolean>();
-    for (const r of filingRes.data || []) {
-      fm.set(`${r.tax_year}:${r.return_type}:${r.entity_key}:${r.period_key}`, r.filed);
+    for (const r of (rpc.return_filings ?? []) as { return_type: string; entity_key: string; period_key: string; filed: boolean }[]) {
+      fm.set(`${year}:${r.return_type}:${r.entity_key}:${r.period_key}`, r.filed);
     }
     setReturnFilings(fm);
 
     const sofm = new Map<string, boolean>();
     const sofmeta = new Map<string, { by: string; at: string }>();
-    for (const r of signoffRes.data || []) {
+    for (const r of (rpc.signoffs ?? []) as { section: string; entity_key: string; signed_off: boolean; signed_off_by: string | null; signed_off_at: string | null }[]) {
       const k = `${year}:${r.section}:${r.entity_key}`;
       sofm.set(k, r.signed_off);
       if (r.signed_off && r.signed_off_by && r.signed_off_at) {
@@ -256,11 +266,50 @@ export default function AccountsTaxDashboard() {
     const { data: { user } } = await supabase.auth.getUser();
     setIsShakeel(user?.email?.toLowerCase() === SHAKEEL_EMAIL.toLowerCase());
 
-    const dbYears = Array.from(new Set([
-      ...(schedYearsRes.data || []).map((r) => r.tax_year),
-      ...(filingYearsRes.data || []).map((r) => r.tax_year),
-    ])).sort();
+    // Schedule KPIs (pre-computed in Postgres)
+    const sk = rpc.schedule_kpis ?? {};
+    setRpcScheduleKpis({
+      notStarted:  sk.not_started  ?? 0,
+      inProgress:  sk.in_progress  ?? 0,
+      extAuditors: sk.ext_auditors ?? 0,
+      completed:   sk.completed    ?? 0,
+    });
 
+    // Filing KPIs (pre-computed in Postgres)
+    const fk = rpc.filing_kpis ?? {};
+    setRpcFilingKpis({
+      filed:    fk.filed    ?? 0,
+      notFiled: fk.not_filed ?? 0,
+      overdue:  fk.overdue   ?? 0,
+    });
+
+    // Overdue items (pre-computed in Postgres)
+    setRpcOverdueItems(
+      ((rpc.overdue_items ?? []) as { entity_label: string; return_label: string; period: string }[]).map((o) => ({
+        entityLabel: o.entity_label,
+        returnLabel: o.return_label,
+        period: o.period,
+      }))
+    );
+
+    // Pending sign-offs (pre-computed in Postgres)
+    setRpcPendingSignoffs(
+      ((rpc.pending_signoffs ?? []) as { entity_label: string; section_label: string }[]).map((p) => ({
+        entityLabel: p.entity_label,
+        sectionLabel: p.section_label,
+      }))
+    );
+
+    // Section summaries — transform snake_case → camelCase
+    const rawSummaries = (rpc.section_summaries ?? {}) as Record<string, { completed: number; in_progress: number; not_started: number; total: number; pct: number }>;
+    const summaries: Record<string, { completed: number; inProgress: number; notStarted: number; total: number; pct: number }> = {};
+    for (const [k, v] of Object.entries(rawSummaries)) {
+      summaries[k] = { completed: v.completed ?? 0, inProgress: v.in_progress ?? 0, notStarted: v.not_started ?? 0, total: v.total ?? 0, pct: v.pct ?? 0 };
+    }
+    setRpcSectionSummaries(summaries);
+
+    // Available years — merge DB years with always-shown current + prev year
+    const dbYears = (rpc.available_years ?? []) as string[];
     const currentYear = getCurrentTaxYear();
     const prev = prevFiscalYear(currentYear);
     const allYears = Array.from(new Set([prev, ...dbYears, currentYear])).sort();
@@ -455,121 +504,6 @@ export default function AccountsTaxDashboard() {
   const today = new Date();
   const fiscalSections = getFiscalSections(selectedYear);
 
-  // Schedule KPIs — totals across all sections and entities
-  function getAllScheduleCounts() {
-    let notStarted = 0, inProgress = 0, extAuditors = 0, completed = 0;
-    const allSections = [...fiscalSections.map((s) => ({ key: s.key, entities: QUARTERLY_ENTITIES, steps: QUARTERLY_STEPS })),
-      { key: "Annual", entities: ANNUAL_ENTITIES, steps: ANNUAL_STEPS }];
-    for (const sec of allSections) {
-      for (const e of sec.entities) {
-        for (let i = 1; i <= sec.steps.length; i++) {
-          const s = getScheduleStatus(sec.key, i, e.key);
-          if (s === "Completed") completed++;
-          else if (s === "In Progress") inProgress++;
-          else if (s === "External Auditors") extAuditors++;
-          else notStarted++;
-        }
-      }
-    }
-    return { notStarted, inProgress, extAuditors, completed };
-  }
-
-  // Overdue items for banner
-  type OverdueItem = { entityLabel: string; returnLabel: string; period: string };
-  const overdueItems: OverdueItem[] = [];
-
-  for (const rt of RETURN_TYPES) {
-    if (rt.frequency === "monthly") {
-      for (const sec of fiscalSections) {
-        for (const month of sec.months) {
-          for (const ek of rt.entities) {
-            const filed = getFiled(rt.key, ek, month);
-            if (isOverdue(rt.key, month, filed, today, selectedYear)) {
-              const entity = [...QUARTERLY_ENTITIES,...ANNUAL_ENTITIES].find((e) => e.key === ek);
-              overdueItems.push({ entityLabel: entity?.label ?? ek, returnLabel: rt.label, period: month });
-            }
-          }
-        }
-      }
-    } else {
-      for (const q of ["Q1","Q2","Q3","Q4"] as Quarter[]) {
-        for (const ek of rt.entities) {
-          const filed = getFiled(rt.key, ek, q);
-          if (isOverdue(rt.key, q, filed, today, selectedYear)) {
-            const entity = QUARTERLY_ENTITIES.find((e) => e.key === ek);
-            overdueItems.push({ entityLabel: entity?.label ?? ek, returnLabel: rt.label, period: q });
-          }
-        }
-      }
-    }
-  }
-
-  // Items needing attention — sign-offs pending even though every step is
-  // marked Completed (Khuram, 17/07/2026: "items need attention" widget).
-  // Reuses allStepsComplete()/signoffs exactly as the per-row sign-off
-  // button does, so this banner never disagrees with what's clickable
-  // further down the page.
-  type PendingSignoff = { entityLabel: string; sectionLabel: string };
-  const pendingSignoffs: PendingSignoff[] = [];
-  const attentionSections = [
-    ...fiscalSections.map((s) => ({ key: s.key as string, label: s.label, entities: QUARTERLY_ENTITIES, stepCount: QUARTERLY_STEPS.length })),
-    { key: "Annual", label: "Annual", entities: ANNUAL_ENTITIES, stepCount: ANNUAL_STEPS.length },
-  ];
-  for (const sec of attentionSections) {
-    for (const e of sec.entities) {
-      const k = `${selectedYear}:${sec.key}:${e.key}`;
-      if (allStepsComplete(sec.key, e.key, scheduleEntries, sec.stepCount) && !(signoffs.get(k) ?? false)) {
-        pendingSignoffs.push({ entityLabel: e.label, sectionLabel: sec.label });
-      }
-    }
-  }
-
-  // Return Filings KPIs — all periods across all return types
-  function getAllFilingCounts() {
-    let filed = 0, notFiled = 0, overdue = 0;
-    for (const rt of RETURN_TYPES) {
-      if (rt.frequency === "monthly") {
-        for (const sec of fiscalSections) {
-          for (const month of sec.months) {
-            for (const ek of rt.entities) {
-              const f = getFiled(rt.key, ek, month);
-              if (f) filed++;
-              else if (isOverdue(rt.key, month, f, today, selectedYear)) overdue++;
-              else notFiled++;
-            }
-          }
-        }
-      } else {
-        for (const q of ["Q1","Q2","Q3","Q4"] as Quarter[]) {
-          for (const ek of rt.entities) {
-            const f = getFiled(rt.key, ek, q);
-            if (f) filed++;
-            else if (isOverdue(rt.key, q, f, today, selectedYear)) overdue++;
-            else notFiled++;
-          }
-        }
-      }
-    }
-    return { filed, notFiled, overdue };
-  }
-
-  // ── Section summary chips ──
-
-  function getSectionSummary(sectionKey: string, entities: typeof QUARTERLY_ENTITIES, steps: string[]) {
-    let completed = 0, inProgress = 0, notStarted = 0;
-    for (const e of entities) {
-      for (let i = 1; i <= steps.length; i++) {
-        const s = getScheduleStatus(sectionKey, i, e.key);
-        if (s === "Completed") completed++;
-        else if (s === "Not Started") notStarted++;
-        else inProgress++;
-      }
-    }
-    const total = entities.length * steps.length;
-    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-    return { completed, inProgress, notStarted, total, pct };
-  }
-
   // ── Design tokens ──
 
   const { NAVY, SLATE, HAIRLINE, CARD, CARD_ALT, CANVAS, GREEN, AMBER, RED, BLUE,
@@ -684,40 +618,40 @@ export default function AccountsTaxDashboard() {
       {/* ── Items need attention (Khuram, 17/07/2026) — overdue filings +
           sign-offs pending, toggleable per person via the widget system. ── */}
       {wv("accounts_tax.attention_banner", true) && !loading && (
-        overdueItems.length > 0 || pendingSignoffs.length > 0 ? (
+        rpcOverdueItems.length > 0 || rpcPendingSignoffs.length > 0 ? (
           <div style={{ marginBottom: "16px" }}>
             <SectionTitle title="Items need attention" style={{ margin: "0 0 10px" }} />
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {overdueItems.length > 0 && (
+              {rpcOverdueItems.length > 0 && (
                 <div style={{ backgroundColor: DANGER_SOFT, borderLeft: `4px solid ${RED}`, borderRadius: RADII.CARD, padding: "12px 16px" }}>
                   <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
-                    {overdueItems.length} return{overdueItems.length !== 1 ? "s" : ""} overdue — past 15th deadline and not yet filed
+                    {rpcOverdueItems.length} return{rpcOverdueItems.length !== 1 ? "s" : ""} overdue — past 15th deadline and not yet filed
                   </div>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    {overdueItems.slice(0, 8).map((item, i) => (
+                    {rpcOverdueItems.slice(0, 8).map((item, i) => (
                       <span key={i} style={{ fontSize: "11px", fontWeight: 600, color: RED, backgroundColor: DANGER_SOFT, padding: "2px 8px", borderRadius: RADII.PILL, border: "1px solid #EDB5B2" }}>
                         {item.entityLabel} · {item.returnLabel} ({item.period})
                       </span>
                     ))}
-                    {overdueItems.length > 8 && (
-                      <span style={{ fontSize: "11px", color: RED, alignSelf: "center" }}>+{overdueItems.length - 8} more</span>
+                    {rpcOverdueItems.length > 8 && (
+                      <span style={{ fontSize: "11px", color: RED, alignSelf: "center" }}>+{rpcOverdueItems.length - 8} more</span>
                     )}
                   </div>
                 </div>
               )}
-              {pendingSignoffs.length > 0 && (
+              {rpcPendingSignoffs.length > 0 && (
                 <div style={{ backgroundColor: WARNING_SOFT, borderLeft: `4px solid ${AMBER}`, borderRadius: RADII.CARD, padding: "12px 16px" }}>
                   <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
-                    {pendingSignoffs.length} account{pendingSignoffs.length !== 1 ? "s" : ""} awaiting sign-off — every step is Completed, waiting on Shakeel
+                    {rpcPendingSignoffs.length} account{rpcPendingSignoffs.length !== 1 ? "s" : ""} awaiting sign-off — every step is Completed, waiting on Shakeel
                   </div>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    {pendingSignoffs.slice(0, 8).map((item, i) => (
+                    {rpcPendingSignoffs.slice(0, 8).map((item, i) => (
                       <span key={i} style={{ fontSize: "11px", fontWeight: 600, color: AMBER, backgroundColor: WARNING_SOFT, padding: "2px 8px", borderRadius: RADII.PILL, border: "1px solid #F6D28A" }}>
                         {item.entityLabel} · {item.sectionLabel}
                       </span>
                     ))}
-                    {pendingSignoffs.length > 8 && (
-                      <span style={{ fontSize: "11px", color: AMBER, alignSelf: "center" }}>+{pendingSignoffs.length - 8} more</span>
+                    {rpcPendingSignoffs.length > 8 && (
+                      <span style={{ fontSize: "11px", color: AMBER, alignSelf: "center" }}>+{rpcPendingSignoffs.length - 8} more</span>
                     )}
                   </div>
                 </div>
@@ -749,23 +683,19 @@ export default function AccountsTaxDashboard() {
             <SectionTitle title="Accounts Schedule" style={{ margin: "0 0 12px" }} />
 
             {/* Schedule KPI cards */}
-            {(() => {
-              const { notStarted, inProgress, extAuditors, completed } = getAllScheduleCounts();
-              return (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "16px" }}>
-                  <CountCard label="Not Started" value={notStarted} color={SLATE} />
-                  <CountCard label="In Progress" value={inProgress} color={AMBER} />
-                  <CountCard label="Ext. Auditors" value={extAuditors} color={BLUE} />
-                  <CountCard label="Completed" value={completed} color={GREEN} />
-                </div>
-              );
-            })()}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "16px" }}>
+              <CountCard label="Not Started" value={rpcScheduleKpis.notStarted} color={SLATE} />
+              <CountCard label="In Progress" value={rpcScheduleKpis.inProgress} color={AMBER} />
+              <CountCard label="Ext. Auditors" value={rpcScheduleKpis.extAuditors} color={BLUE} />
+              <CountCard label="Completed" value={rpcScheduleKpis.completed} color={GREEN} />
+            </div>
 
             {/* Q1–Q4 sections */}
             {fiscalSections.map((sec) => {
               const steps = QUARTERLY_STEPS;
               const entities = QUARTERLY_ENTITIES;
-              const summary = getSectionSummary(sec.key, entities, steps);
+              const rawSum = rpcSectionSummaries[sec.key];
+              const summary = rawSum ?? { completed: 0, inProgress: 0, notStarted: entities.length * steps.length, total: entities.length * steps.length, pct: 0 };
               const collapsed = !expandedSections.has(sec.key);
 
               return (
@@ -940,7 +870,8 @@ export default function AccountsTaxDashboard() {
               const sectionKey = "Annual";
               const steps = ANNUAL_STEPS;
               const entities = ANNUAL_ENTITIES;
-              const summary = getSectionSummary(sectionKey, entities, steps);
+              const rawAnnualSum = rpcSectionSummaries[sectionKey];
+              const summary = rawAnnualSum ?? { completed: 0, inProgress: 0, notStarted: entities.length * steps.length, total: entities.length * steps.length, pct: 0 };
               const collapsed = !expandedSections.has(sectionKey);
 
               return (
@@ -1024,16 +955,11 @@ export default function AccountsTaxDashboard() {
             <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px" }}>Monthly and quarterly tax return filing status — due 15th of each period</div>
 
             {/* Filing KPI cards */}
-            {(() => {
-              const { filed, notFiled, overdue } = getAllFilingCounts();
-              return (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "16px" }}>
-                  <CountCard label="Filed" value={filed} color={GREEN} />
-                  <CountCard label="Not Filed" value={notFiled} color={SLATE} />
-                  {overdue > 0 && <CountCard label="Overdue" value={overdue} color={RED} />}
-                </div>
-              );
-            })()}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: "8px", marginBottom: "16px" }}>
+              <CountCard label="Filed" value={rpcFilingKpis.filed} color={GREEN} />
+              <CountCard label="Not Filed" value={rpcFilingKpis.notFiled} color={SLATE} />
+              {rpcFilingKpis.overdue > 0 && <CountCard label="Overdue" value={rpcFilingKpis.overdue} color={RED} />}
+            </div>
 
             {/* Quarter tab selector */}
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "20px" }}>
