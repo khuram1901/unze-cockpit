@@ -279,7 +279,7 @@ export default function SidebarLayout({
         </div>
 
         {/* ── Nav sections ── */}
-        <nav style={{ flex: 1, overflowY: "auto", padding: collapsed ? "8px 6px" : "8px 12px" }}>
+        <nav style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: collapsed ? "8px 6px" : "8px 12px" }}>
           {/* Daily-entry-only users: no navigation links at all */}
           {!entryOnly && <>
           {/* OVERVIEW group — always-visible Executive Dashboard + Overview items */}

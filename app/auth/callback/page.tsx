@@ -11,16 +11,14 @@ type MemberProfile = {
   department: string | null;
 };
 
-// Mirrors app/login/page.tsx's getLandingRoute — kept in sync manually
-// (small enough that a shared import isn't worth the extra indirection).
+// Mirrors app/login/page.tsx's getLandingRoute — kept in sync manually.
 function getLandingRoute(profile: MemberProfile | null, email: string) {
   const lower = email.toLowerCase();
-  if (lower === "khuram1901@gmail.com") return "/home";
   if (lower === "pa.ceo@unze.co.uk") return "/pa";
   const role = profile?.role || "Member";
   if (role === "Executive") return "/pa";
-  if (role === "Admin") return "/home";
-  return "/home";
+  // Everyone (including Admin/CEO) lands on the welcome page first
+  return "/welcome";
 }
 
 // Landing page after "Sign in with Google". Handles both OAuth flow
