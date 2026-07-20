@@ -170,9 +170,26 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!activeRef.current) return;
-    currentXRef.current = e.clientX; // always keep this up to date
+    currentXRef.current = e.clientX;
     const delta = e.clientX - startXRef.current;
     if (Math.abs(delta) > 8) draggedRef.current = true;
+
+    // Auto-fire as soon as threshold is crossed — don't wait for release
+    if (delta > THRESHOLD) {
+      activeRef.current = false;
+      if (rowRef.current) { rowRef.current.style.transition = "transform 0.15s ease"; rowRef.current.style.transform = "translateX(110%)"; }
+      if (rightRevealRef.current) rightRevealRef.current.style.width = "100%";
+      setTimeout(onSwipeRight, 150);
+      return;
+    }
+    if (delta < -THRESHOLD) {
+      activeRef.current = false;
+      if (rowRef.current) { rowRef.current.style.transition = "transform 0.15s ease"; rowRef.current.style.transform = "translateX(-110%)"; }
+      if (leftRevealRef.current) leftRevealRef.current.style.width = "100%";
+      setTimeout(onSwipeLeft, 150);
+      return;
+    }
+
     applyDelta(delta);
   };
 
@@ -627,34 +644,32 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
               </div>
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              {/* Archived chats link — always visible at the top */}
-              {!q && (
-                <button
-                  onClick={() => { setView("archived"); loadArchivedConversations(); }}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    width: "100%", padding: "9px 14px",
-                    background: "none", border: "none", borderBottom: `1px solid ${BORDER}`,
-                    cursor: "pointer", textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                >
-                  <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: SLATE }}>
-                    <span style={{
-                      width: 34, height: 34, borderRadius: "50%",
-                      background: "#EEF0F3", display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 15, flexShrink: 0,
-                    }}>📁</span>
-                    Archived chats
-                  </span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ color: INK_400, flexShrink: 0 }}>
-                    <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-              )}
+            {/* Archived chats — pinned above the scroll, always visible */}
+            <button
+              onClick={() => { setView("archived"); loadArchivedConversations(); }}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                width: "100%", padding: "9px 14px", flexShrink: 0,
+                background: CANVAS, border: "none", borderBottom: `1px solid ${BORDER}`,
+                cursor: "pointer", textAlign: "left",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = BORDER)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = CANVAS)}
+            >
+              <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: SLATE, fontWeight: 500 }}>
+                <span style={{
+                  width: 34, height: 34, borderRadius: "50%",
+                  background: BORDER, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 16, flexShrink: 0,
+                }}>📁</span>
+                Archived chats
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ color: INK_400, flexShrink: 0 }}>
+                <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
 
+            <div style={{ flex: 1, overflowY: "auto" }}>
               {loadingConvs && filteredConvs.length === 0 && filteredMembers.length === 0 ? (
                 <div style={{ padding: 24, textAlign: "center", color: SLATE, fontSize: 13 }}>Loading…</div>
               ) : (
