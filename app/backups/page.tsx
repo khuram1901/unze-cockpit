@@ -10,7 +10,7 @@ import { COMPANIES } from "../lib/constants";
 
 const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 
-type Backup = { name: string; sizeKB: number | null; createdAt: string };
+type Backup = { name: string; sizeKB: number | null; createdAt: string; driveLink: string | null };
 type ArchivedDoc = {
   id: string; doc_type: string; company_id: string;
   position_date: string | null; original_filename: string;
@@ -32,6 +32,7 @@ export default function BackupsPage() {
 
   // ── State ──────────────────────────────────────────────────────────
   const [backups, setBackups] = useState<Backup[]>([]);
+  const [driveFolderLink, setDriveFolderLink] = useState<string | null>(null);
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [runningBackup, setRunningBackup] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -89,6 +90,7 @@ export default function BackupsPage() {
     const res = await authFetch("/api/admin/list-backups");
     const json = await res.json();
     setBackups(json.backups || []);
+    setDriveFolderLink(json.driveFolderLink || null);
     setLoadingBackups(false);
   }
 
@@ -201,11 +203,17 @@ export default function BackupsPage() {
             <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 9px", borderRadius: "20px", backgroundColor: COLOURS.HAIRLINE, color: COLOURS.SLATE }}>{backups.length} saved</span>
           </div>
 
-          <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+          <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
             <button onClick={handleRunBackup} disabled={runningBackup}
               style={{ ...primaryButtonStyle, opacity: runningBackup ? 0.6 : 1 }}>
               {runningBackup ? "Running…" : "Run backup now"}
             </button>
+            {driveFolderLink && (
+              <a href={driveFolderLink} target="_blank" rel="noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "8px 14px", borderRadius: "20px", fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, textDecoration: "none", cursor: "pointer" }}>
+                📁 View Google Drive folder
+              </a>
+            )}
           </div>
 
           {loadingBackups ? (
@@ -222,7 +230,13 @@ export default function BackupsPage() {
                     <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>{b.name}</div>
                     <div style={{ fontSize: "13px", color: COLOURS.SLATE }}>{formatDateTimeUK(b.createdAt)} · {b.sizeKB ? `${b.sizeKB} KB` : "—"}</div>
                   </div>
-                  <div style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {b.driveLink && (
+                      <a href={b.driveLink} target="_blank" rel="noreferrer"
+                        style={{ padding: "6px 12px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.SLATE, textDecoration: "none", cursor: "pointer" }}>
+                        Drive ↗
+                      </a>
+                    )}
                     <button onClick={() => handleDownloadBackup(b.name)}
                       style={{ padding: "6px 12px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 500, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer" }}>
                       Download
