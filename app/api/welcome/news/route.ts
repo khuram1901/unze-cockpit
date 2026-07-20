@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "../../../lib/api-auth";
 
-const RSS_URL = "https://feeds.bbci.co.uk/news/business/rss.xml";
+const FEEDS = [
+  { source: "BBC",         url: "https://feeds.bbci.co.uk/news/business/rss.xml",       color: "#BB1919" },
+  { source: "Sky News",    url: "https://feeds.skynews.com/feeds/rss/business.xml",      color: "#003DA5" },
+  { source: "Al Jazeera", url: "https://www.aljazeera.com/xml/rss/all.xml",              color: "#009E49" },
+];
 
 function extract(tag: string, block: string): string {
   const cdata = block.match(new RegExp(`<${tag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`));
@@ -21,26 +25,42 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+async function fetchFeed(feed: typeof FEEDS[0]) {
+  try {
+    const res = await fetch(feed.url, {
+      headers: { "User-Agent": "UnzeCockpit/1.0" },
+      next: { revalidate: 900 },
+    });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => m[1]);
+    return itemBlocks.slice(0, 4).map(block => ({
+      title:  extract("title",   block),
+      link:   extract("link",    block),
+      ago:    timeAgo(extract("pubDate", block)),
+      source: feed.source,
+      color:  feed.color,
+    })).filter(s => s.title);
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
-  try {
-    const res = await fetch(RSS_URL, {
-      headers: { "User-Agent": "UnzeCockpit/1.0" },
-      next: { revalidate: 900 }, // cache 15 min server-side
-    });
-    if (!res.ok) throw new Error(`${res.status}`);
-    const xml = await res.text();
-    const itemBlocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m => m[1]);
-    const stories = itemBlocks.slice(0, 6).map(block => ({
-      title: extract("title", block),
-      link:  extract("link",  block),
-      ago:   timeAgo(extract("pubDate", block)),
-    })).filter(s => s.title);
-    return Response.json({ stories });
-  } catch (err) {
-    console.error("News RSS error:", err instanceof Error ? err.message : err);
-    return Response.json({ stories: [] });
+  // Fetch all three feeds in parallel; failures are silent (returns [])
+  const results = await Promise.all(FEEDS.map(fetchFeed));
+
+  // Round-robin interleave: BBC[0], Sky[0], AJ[0], BBC[1], Sky[1], AJ[1]...
+  const stories: typeof results[0] = [];
+  const maxLen = Math.max(...results.map(r => r.length));
+  for (let i = 0; i < maxLen; i++) {
+    for (const feed of results) {
+      if (feed[i]) stories.push(feed[i]);
+    }
   }
+
+  return Response.json({ stories: stories.slice(0, 9) });
 }
