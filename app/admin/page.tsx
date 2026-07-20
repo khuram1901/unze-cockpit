@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
-import { widgetVisible } from "../lib/permissions";
+import { widgetVisible, isAdminTier } from "../lib/permissions";
 import { useUserCtx } from "../lib/useUserCtx";
 import { authFetch, supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
@@ -223,7 +223,11 @@ export default function AdminDataPage() {
   const [regStatusFilter, setRegStatusFilter] = useState("");
   const [regTypeFilter, setRegTypeFilter] = useState<"" | "EOBI" | "Social Security">("");
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-  const [canManageLocations, setCanManageLocations] = useState(false);
+  // Derived from ctx — no separate queries needed. True for admin-tier users
+  // and for anyone explicitly granted can_manage_locations in member_permissions.
+  const canManageLocations = ctx
+    ? (isAdminTier(ctx) || !!ctx.overrides?.can_manage_locations)
+    : false;
 
   // ── Add location modal state ───────────────────────────────────────
   const [addingLocation, setAddingLocation] = useState(false);
@@ -307,20 +311,6 @@ export default function AdminDataPage() {
   // ── Initial setup ──────────────────────────────────────────────────
   useEffect(() => {
     if (checking) return;
-    // Check can_manage_locations for admin emails and permitted members
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return;
-      const ADMIN_EMAILS_UI = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
-      const isAdmin = ADMIN_EMAILS_UI.includes(user.email?.toLowerCase() || "");
-      if (isAdmin) { setCanManageLocations(true); return; }
-      const { data: member } = await supabase
-        .from("members").select("id").eq("email", user.email!).single();
-      if (member) {
-        const { data: perm } = await supabase
-          .from("member_permissions").select("can_manage_locations").eq("member_id", member.id).single();
-        if (perm?.can_manage_locations) setCanManageLocations(true);
-      }
-    });
     loadRegistrations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checking]);
