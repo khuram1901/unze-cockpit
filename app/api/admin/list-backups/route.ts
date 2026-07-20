@@ -3,12 +3,12 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
 const BACKUPS_BUCKET = "backups";
-const ADMIN_EMAIL = "khuram1901@gmail.com";
+const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
-  if (auth.email.toLowerCase() !== ADMIN_EMAIL) {
+  if (!ADMIN_EMAILS.includes(auth.email.toLowerCase())) {
     return Response.json({ error: "Admin only" }, { status: 403 });
   }
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
-  if (auth.email.toLowerCase() !== ADMIN_EMAIL) {
+  if (!ADMIN_EMAILS.includes(auth.email.toLowerCase())) {
     return Response.json({ error: "Admin only" }, { status: 403 });
   }
 
