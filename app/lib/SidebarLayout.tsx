@@ -481,7 +481,7 @@ export default function SidebarLayout({
           width: `${sidebarW}px`,
           zIndex: 30,
           transition: "width 0.2s ease",
-          overflowX: "hidden",
+          overflow: "hidden",
           borderRight: "1px solid var(--sidebar-border)",
         }}>
           <SidebarContent />
