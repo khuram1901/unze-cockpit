@@ -116,10 +116,10 @@ type SwipeRowProps = {
 
 function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipeRight, borderColor, children }: SwipeRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
-  // These start at width:0 and grow only when swiping in their direction
-  const rightRevealRef = useRef<HTMLDivElement>(null); // red, grows from left on swipe-right
-  const leftRevealRef = useRef<HTMLDivElement>(null);  // amber, grows from right on swipe-left
+  const rightRevealRef = useRef<HTMLDivElement>(null); // delete — grows from left on swipe-right
+  const leftRevealRef = useRef<HTMLDivElement>(null);  // archive — grows from right on swipe-left
   const startXRef = useRef(0);
+  const currentXRef = useRef(0); // tracked continuously so pointercancel has reliable data
   const activeRef = useRef(false);
   const draggedRef = useRef(false);
   const THRESHOLD = 80;
@@ -130,35 +130,24 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
     if (leftRevealRef.current) leftRevealRef.current.style.width = "0";
   };
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    startXRef.current = e.clientX;
-    activeRef.current = true;
-    draggedRef.current = false;
-    if (rowRef.current) rowRef.current.style.transition = "none";
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!activeRef.current) return;
-    const delta = e.clientX - startXRef.current;
-    if (Math.abs(delta) > 8) draggedRef.current = true;
+  const applyDelta = (delta: number) => {
     const clamped = Math.max(-120, Math.min(120, delta));
     if (rowRef.current) rowRef.current.style.transform = `translateX(${clamped}px)`;
     if (delta > 0) {
-      // Swiping right → reveal delete (red) growing from the left
       if (rightRevealRef.current) rightRevealRef.current.style.width = `${Math.min(delta, 120)}px`;
       if (leftRevealRef.current) leftRevealRef.current.style.width = "0";
     } else {
-      // Swiping left → reveal archive (amber) growing from the right
       if (leftRevealRef.current) leftRevealRef.current.style.width = `${Math.min(-delta, 120)}px`;
       if (rightRevealRef.current) rightRevealRef.current.style.width = "0";
     }
   };
 
-  const handlePointerUp = (e: React.PointerEvent) => {
+  // commit uses currentXRef so it works even when called from pointercancel
+  // (which may fire with clientX=0 when the browser steals a scroll gesture)
+  const commit = () => {
     if (!activeRef.current) return;
     activeRef.current = false;
-    const delta = e.clientX - startXRef.current;
+    const delta = currentXRef.current - startXRef.current;
     if (delta > THRESHOLD) {
       if (rowRef.current) { rowRef.current.style.transition = "transform 0.18s ease"; rowRef.current.style.transform = "translateX(110%)"; }
       setTimeout(onSwipeRight, 180);
@@ -170,19 +159,36 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
     }
   };
 
+  const handlePointerDown = (e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    startXRef.current = e.clientX;
+    currentXRef.current = e.clientX;
+    activeRef.current = true;
+    draggedRef.current = false;
+    if (rowRef.current) rowRef.current.style.transition = "none";
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!activeRef.current) return;
+    currentXRef.current = e.clientX; // always keep this up to date
+    const delta = e.clientX - startXRef.current;
+    if (Math.abs(delta) > 8) draggedRef.current = true;
+    applyDelta(delta);
+  };
+
   return (
     <div style={{ position: "relative", overflow: "hidden", borderBottom: `1px solid ${borderColor}` }}>
-      {/* Delete reveal: anchored LEFT, width grows as you swipe right */}
+      {/* Delete: anchored left, grows on swipe-right */}
       <div ref={rightRevealRef} style={{
         position: "absolute", left: 0, top: 0, bottom: 0, width: 0,
         background: rightBg, overflow: "hidden",
-        display: "flex", alignItems: "center", justifyContent: "flex-start",
+        display: "flex", alignItems: "center",
         paddingLeft: 16, color: "#fff", fontSize: 12, fontWeight: 600,
         pointerEvents: "none", whiteSpace: "nowrap",
       }}>
         {rightLabel}
       </div>
-      {/* Archive reveal: anchored RIGHT, width grows as you swipe left */}
+      {/* Archive: anchored right, grows on swipe-left */}
       <div ref={leftRevealRef} style={{
         position: "absolute", right: 0, top: 0, bottom: 0, width: 0,
         background: leftBg, overflow: "hidden",
@@ -192,14 +198,15 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
       }}>
         {leftLabel}
       </div>
-      {/* The sliding row */}
+      {/* Sliding row — touchAction pan-y lets the browser scroll vertically
+          but passes horizontal movement to our pointer handlers */}
       <div
         ref={rowRef}
-        style={{ position: "relative", zIndex: 1 }}
+        style={{ position: "relative", zIndex: 1, touchAction: "pan-y" }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onPointerUp={commit}
+        onPointerCancel={commit}
         onClickCapture={(e) => { if (draggedRef.current) { e.stopPropagation(); e.preventDefault(); } }}
       >
         {children}
