@@ -116,15 +116,18 @@ type SwipeRowProps = {
 
 function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipeRight, borderColor, children }: SwipeRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
+  // These start at width:0 and grow only when swiping in their direction
+  const rightRevealRef = useRef<HTMLDivElement>(null); // red, grows from left on swipe-right
+  const leftRevealRef = useRef<HTMLDivElement>(null);  // amber, grows from right on swipe-left
   const startXRef = useRef(0);
   const activeRef = useRef(false);
   const draggedRef = useRef(false);
-  const THRESHOLD = 72;
+  const THRESHOLD = 80;
 
   const reset = () => {
-    if (!rowRef.current) return;
-    rowRef.current.style.transition = "transform 0.2s ease";
-    rowRef.current.style.transform = "translateX(0)";
+    if (rowRef.current) { rowRef.current.style.transition = "transform 0.2s ease"; rowRef.current.style.transform = "translateX(0)"; }
+    if (rightRevealRef.current) rightRevealRef.current.style.width = "0";
+    if (leftRevealRef.current) leftRevealRef.current.style.width = "0";
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -139,9 +142,16 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
     if (!activeRef.current) return;
     const delta = e.clientX - startXRef.current;
     if (Math.abs(delta) > 8) draggedRef.current = true;
-    if (rowRef.current) {
-      const clamped = Math.max(-120, Math.min(120, delta));
-      rowRef.current.style.transform = `translateX(${clamped}px)`;
+    const clamped = Math.max(-120, Math.min(120, delta));
+    if (rowRef.current) rowRef.current.style.transform = `translateX(${clamped}px)`;
+    if (delta > 0) {
+      // Swiping right → reveal delete (red) growing from the left
+      if (rightRevealRef.current) rightRevealRef.current.style.width = `${Math.min(delta, 120)}px`;
+      if (leftRevealRef.current) leftRevealRef.current.style.width = "0";
+    } else {
+      // Swiping left → reveal archive (amber) growing from the right
+      if (leftRevealRef.current) leftRevealRef.current.style.width = `${Math.min(-delta, 120)}px`;
+      if (rightRevealRef.current) rightRevealRef.current.style.width = "0";
     }
   };
 
@@ -150,16 +160,10 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
     activeRef.current = false;
     const delta = e.clientX - startXRef.current;
     if (delta > THRESHOLD) {
-      if (rowRef.current) {
-        rowRef.current.style.transition = "transform 0.18s ease";
-        rowRef.current.style.transform = "translateX(110%)";
-      }
+      if (rowRef.current) { rowRef.current.style.transition = "transform 0.18s ease"; rowRef.current.style.transform = "translateX(110%)"; }
       setTimeout(onSwipeRight, 180);
     } else if (delta < -THRESHOLD) {
-      if (rowRef.current) {
-        rowRef.current.style.transition = "transform 0.18s ease";
-        rowRef.current.style.transform = "translateX(-110%)";
-      }
+      if (rowRef.current) { rowRef.current.style.transition = "transform 0.18s ease"; rowRef.current.style.transform = "translateX(-110%)"; }
       setTimeout(onSwipeLeft, 180);
     } else {
       reset();
@@ -168,23 +172,25 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
 
   return (
     <div style={{ position: "relative", overflow: "hidden", borderBottom: `1px solid ${borderColor}` }}>
-      {/* Revealed on swipe-left (archive) */}
-      <div style={{
-        position: "absolute", inset: 0, background: leftBg,
-        display: "flex", alignItems: "center", justifyContent: "flex-end",
-        paddingRight: 18, color: "#fff", fontSize: 12, fontWeight: 600,
-        pointerEvents: "none",
-      }}>
-        {leftLabel}
-      </div>
-      {/* Revealed on swipe-right (delete) */}
-      <div style={{
-        position: "absolute", inset: 0, background: rightBg,
+      {/* Delete reveal: anchored LEFT, width grows as you swipe right */}
+      <div ref={rightRevealRef} style={{
+        position: "absolute", left: 0, top: 0, bottom: 0, width: 0,
+        background: rightBg, overflow: "hidden",
         display: "flex", alignItems: "center", justifyContent: "flex-start",
-        paddingLeft: 18, color: "#fff", fontSize: 12, fontWeight: 600,
-        pointerEvents: "none",
+        paddingLeft: 16, color: "#fff", fontSize: 12, fontWeight: 600,
+        pointerEvents: "none", whiteSpace: "nowrap",
       }}>
         {rightLabel}
+      </div>
+      {/* Archive reveal: anchored RIGHT, width grows as you swipe left */}
+      <div ref={leftRevealRef} style={{
+        position: "absolute", right: 0, top: 0, bottom: 0, width: 0,
+        background: leftBg, overflow: "hidden",
+        display: "flex", alignItems: "center", justifyContent: "flex-end",
+        paddingRight: 16, color: "#fff", fontSize: 12, fontWeight: 600,
+        pointerEvents: "none", whiteSpace: "nowrap",
+      }}>
+        {leftLabel}
       </div>
       {/* The sliding row */}
       <div
