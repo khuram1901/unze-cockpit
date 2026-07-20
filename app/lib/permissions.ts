@@ -535,17 +535,26 @@ export function canAccessAdminEntry(u: UserCtx): boolean {
 }
 
 // ── Daily-entry-only restricted mode ────────────────────────────────
-// True when the user has admin entry access but no broader app access.
-// These users should be locked to /daily-entry: no sidebar nav, no
-// Home button. Akhlaq and Sunaina (who have full access) will have
-// canViewExecutiveDashboard or canViewOperations = true, so this
-// returns false for them and they keep full navigation as normal.
+// True ONLY when can_access_admin_entry is the user's sole capability.
+// We check every meaningful permission so that Sunaina (who also has
+// admin_ops, dept_admin, can_create_tasks etc.) is never caught here —
+// she has broader access and keeps full navigation as normal.
 export function isDailyEntryOnly(u: UserCtx): boolean {
   return (
     canAccessAdminEntry(u) &&
     !canViewExecutiveDashboard(u) &&
     !canViewOperations(u) &&
-    !canViewPADashboard(u)
+    !canViewPADashboard(u) &&
+    !canAccessAdminOps(u) &&
+    !canCreateAssignments(u) &&
+    !canViewDepartment(u, "Admin") &&
+    !canViewDepartment(u, "HR") &&
+    !canViewDepartment(u, "Tax") &&
+    !canViewDepartment(u, "Audit") &&
+    !canViewDepartment(u, "IT") &&
+    !canViewDepartment(u, "Unze Trading Ops") &&
+    !canViewFinance(u) &&
+    !canViewReceivables(u)
   );
 }
 
