@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { widgetVisible } from "../lib/permissions";
@@ -258,6 +258,7 @@ export default function AdminDataPage() {
   // vehicleDetailYear = fiscal year START year
   const [vehicleDetailYear, setVehicleDetailYear] = useState(CURRENT_FY_START);
   const [loadingVehicleDetail, setLoadingVehicleDetail] = useState(false);
+  const vehicleDetailCache = useRef<Map<string, { fuel: FuelFill[]; maintenance: MaintenanceRecord[] }>>(new Map());
 
   // ── Import modal ───────────────────────────────────────────────────
   const [importModal, setImportModal] = useState<{
@@ -424,11 +425,16 @@ export default function AdminDataPage() {
   }
 
   async function loadVehicleDetail(vehicleId: string, year: number) {
+    const cacheKey = `${vehicleId}:${year}`;
+    const cached = vehicleDetailCache.current.get(cacheKey);
+    if (cached) { setVehicleDetail(cached); return; }
     setLoadingVehicleDetail(true);
     setVehicleDetail(null);
     const res = await authFetch(`/api/admin/vehicle-detail?vehicleId=${vehicleId}&year=${year}`);
     const json = await res.json();
-    setVehicleDetail(json.data || { fuel: [], maintenance: [] });
+    const data = json.data || { fuel: [], maintenance: [] };
+    vehicleDetailCache.current.set(cacheKey, data);
+    setVehicleDetail(data);
     setLoadingVehicleDetail(false);
   }
 
@@ -1326,7 +1332,9 @@ export default function AdminDataPage() {
         <td
           onClick={() => openComplianceEdit(r, type)}
           title={`Click to edit ${type}`}
-          style={{ padding: "10px 14px", cursor: "pointer", verticalAlign: "top" }}
+          style={{ padding: "10px 14px", cursor: "pointer", verticalAlign: "top", transition: "background-color 0.1s" }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLTableCellElement).style.backgroundColor = COLOURS.CARD_ALT; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLTableCellElement).style.backgroundColor = ""; }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
             <span style={statusBadge(vals.status)}>{vals.status || "Pending"}</span>

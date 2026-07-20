@@ -1035,32 +1035,6 @@ export default function AccountsTaxDashboard() {
               );
             })()}
 
-            {/* Overdue alert banner */}
-            {overdueItems.length > 0 && (
-              <div style={{ backgroundColor: DANGER_SOFT, borderLeft: `4px solid ${RED}`, borderRadius: RADII.CARD, padding: "14px 18px", marginBottom: "16px" }}>
-                <div style={{ fontSize: "13px", fontWeight: 700, color: NAVY, marginBottom: "6px" }}>
-                  {overdueItems.length} return{overdueItems.length !== 1 ? "s" : ""} overdue — past 15th deadline and not yet filed
-                </div>
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "6px" }}>
-                  {Object.entries(
-                    overdueItems.reduce<Record<string, number>>((acc, item) => {
-                      acc[item.returnLabel] = (acc[item.returnLabel] || 0) + 1;
-                      return acc;
-                    }, {})
-                  ).map(([label, count]) => (
-                    <span key={label} style={{
-                      fontSize: "11px", fontWeight: 600, color: RED,
-                      backgroundColor: DANGER_SOFT,
-                      padding: "2px 8px", borderRadius: RADII.PILL,
-                      border: "1px solid #EDB5B2",
-                    }}>
-                      {label}: {count}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Quarter tab selector */}
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "20px" }}>
               {(["Q1","Q2","Q3","Q4"] as Quarter[]).map((q) => {
