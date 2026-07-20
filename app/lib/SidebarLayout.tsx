@@ -246,7 +246,7 @@ export default function SidebarLayout({
 
     return (
       <div style={{
-        display: "flex", flexDirection: "column", height: "100%",
+        display: "flex", flexDirection: "column", height: "100vh",
         backgroundColor: "var(--bg-sidebar)",
         color: "var(--text-sidebar)",
       }}>
@@ -256,6 +256,7 @@ export default function SidebarLayout({
           borderBottom: `1px solid var(--sidebar-border)`,
           display: "flex", alignItems: "center", gap: "10px",
           justifyContent: collapsed ? "center" : "flex-start",
+          flexShrink: 0,
         }}>
           {/* Brand mark — dark square with "U" */}
           <div style={{
@@ -366,6 +367,7 @@ export default function SidebarLayout({
           borderTop: "1px solid var(--sidebar-border)",
           padding: collapsed ? "12px 6px" : "12px 12px",
           display: "flex", flexDirection: "column", gap: "2px",
+          flexShrink: 0,
         }}>
           {/* User card */}
           <div style={{
