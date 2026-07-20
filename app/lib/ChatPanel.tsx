@@ -198,11 +198,10 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
       }}>
         {leftLabel}
       </div>
-      {/* Sliding row — touchAction pan-y lets the browser scroll vertically
-          but passes horizontal movement to our pointer handlers */}
+      {/* Sliding row */}
       <div
         ref={rowRef}
-        style={{ position: "relative", zIndex: 1, touchAction: "pan-y" }}
+        style={{ position: "relative", zIndex: 1, touchAction: "pan-y", willChange: "transform" }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={commit}
@@ -240,7 +239,9 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   const [openingDm, setOpeningDm] = useState<string | null>(null); // email of member being opened
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  const [view, setView] = useState<"main" | "archived">("main");
+  const [archivedConvs, setArchivedConvs] = useState<Conversation[]>([]);
+  const [loadingArchived, setLoadingArchived] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -253,15 +254,26 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
 
   // ── Load conversations ──────────────────────────────────────────
 
-  const loadConversations = useCallback(async (includeArchived = false) => {
+  const loadConversations = useCallback(async () => {
     if (!memberId) return;
     setLoadingConvs(true);
     const { data } = await supabase.rpc("get_my_conversations", {
       p_member_id: memberId,
-      p_include_archived: includeArchived,
+      p_include_archived: false,
     });
     if (data) setConversations(data as Conversation[]);
     setLoadingConvs(false);
+  }, [memberId]);
+
+  const loadArchivedConversations = useCallback(async () => {
+    if (!memberId) return;
+    setLoadingArchived(true);
+    const { data } = await supabase.rpc("get_my_conversations", {
+      p_member_id: memberId,
+      p_include_archived: true,
+    });
+    if (data) setArchivedConvs((data as Conversation[]).filter((c) => c.is_archived));
+    setLoadingArchived(false);
   }, [memberId]);
 
   const conversationAction = useCallback(async (
@@ -269,14 +281,17 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     action: "archive" | "unarchive" | "delete"
   ) => {
     // Optimistic update
-    if (action === "delete") {
+    if (action === "archive") {
       setConversations((prev) => prev.filter((c) => c.conversation_id !== convId));
-    } else {
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.conversation_id === convId ? { ...c, is_archived: action === "archive" } : c
-        )
-      );
+    } else if (action === "unarchive") {
+      setArchivedConvs((prev) => {
+        const conv = prev.find((c) => c.conversation_id === convId);
+        if (conv) setConversations((cs) => [{ ...conv, is_archived: false }, ...cs]);
+        return prev.filter((c) => c.conversation_id !== convId);
+      });
+    } else if (action === "delete") {
+      setConversations((prev) => prev.filter((c) => c.conversation_id !== convId));
+      setArchivedConvs((prev) => prev.filter((c) => c.conversation_id !== convId));
     }
     await authedFetch("/api/chat/conversations", {
       method: "PATCH",
@@ -305,8 +320,8 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   }, [email, allMembers.length]);
 
   useEffect(() => {
-    if (isOpen) { loadConversations(showArchived); loadMembers(); }
-  }, [isOpen, loadConversations, loadMembers, showArchived]);
+    if (isOpen) { loadConversations(); loadMembers(); }
+  }, [isOpen, loadConversations, loadMembers]);
 
   // Focus search when panel opens
   useEffect(() => {
@@ -544,9 +559,12 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
           borderBottom: `1px solid ${BORDER}`,
           flexShrink: 0,
         }}>
-          {activeConv && (
+          {(activeConv || view === "archived") && (
             <button
-              onClick={() => { setActiveConv(null); setMessages([]); setOthersLastReadAt(null); }}
+              onClick={() => {
+                if (activeConv) { setActiveConv(null); setMessages([]); setOthersLastReadAt(null); }
+                else { setView("main"); }
+              }}
               style={{ background: "none", border: "none", cursor: "pointer", color: SLATE, padding: "2px 4px 2px 0", display: "flex" }}
               aria-label="Back"
             >
@@ -570,7 +588,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
             fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 600,
             color: NAVY, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
-            {activeConv ? convDisplayName(activeConv) : "Messages"}
+            {activeConv ? convDisplayName(activeConv) : view === "archived" ? "Archived chats" : "Messages"}
           </span>
           <button
             onClick={onClose}
@@ -584,7 +602,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
         </div>
 
         {/* ── List view ── */}
-        {!activeConv && (
+        {!activeConv && view === "main" && (
           <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
             {/* Search bar */}
             <div style={{ padding: "10px 12px", borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
@@ -610,6 +628,33 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
             </div>
 
             <div style={{ flex: 1, overflowY: "auto" }}>
+              {/* Archived chats link — always visible at the top */}
+              {!q && (
+                <button
+                  onClick={() => { setView("archived"); loadArchivedConversations(); }}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    width: "100%", padding: "9px 14px",
+                    background: "none", border: "none", borderBottom: `1px solid ${BORDER}`,
+                    cursor: "pointer", textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: SLATE }}>
+                    <span style={{
+                      width: 34, height: 34, borderRadius: "50%",
+                      background: "#EEF0F3", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 15, flexShrink: 0,
+                    }}>📁</span>
+                    Archived chats
+                  </span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ color: INK_400, flexShrink: 0 }}>
+                    <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              )}
+
               {loadingConvs && filteredConvs.length === 0 && filteredMembers.length === 0 ? (
                 <div style={{ padding: 24, textAlign: "center", color: SLATE, fontSize: 13 }}>Loading…</div>
               ) : (
@@ -738,35 +783,75 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                     <div style={{ padding: 32, textAlign: "center" }}>
                       <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
                       <div style={{ fontSize: 13, color: SLATE }}>
-                        {q ? "No results found" : showArchived ? "No archived chats" : "No conversations yet"}
+                        {q ? "No results found" : "No conversations yet"}
                       </div>
-                      {!q && !showArchived && <div style={{ fontSize: 12, color: INK_400, marginTop: 4 }}>
+                      {!q && <div style={{ fontSize: 12, color: INK_400, marginTop: 4 }}>
                         Search for someone above to get started.
                       </div>}
                     </div>
                   )}
-
-                  {/* Archived toggle */}
-                  {!q && (
-                    <button
-                      onClick={() => {
-                        const next = !showArchived;
-                        setShowArchived(next);
-                        loadConversations(next);
-                      }}
-                      style={{
-                        display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                        width: "100%", padding: "10px 14px",
-                        background: "none", border: "none", borderTop: showArchived ? `1px solid ${BORDER}` : "none",
-                        cursor: "pointer", fontSize: 12, color: SLATE,
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = NAVY)}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = SLATE)}
-                    >
-                      📁 {showArchived ? "Hide archived chats" : "View archived chats"}
-                    </button>
-                  )}
                 </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Archived chats view ── */}
+        {!activeConv && view === "archived" && (
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {loadingArchived ? (
+                <div style={{ padding: 24, textAlign: "center", color: SLATE, fontSize: 13 }}>Loading…</div>
+              ) : archivedConvs.length === 0 ? (
+                <div style={{ padding: 40, textAlign: "center" }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>📁</div>
+                  <div style={{ fontSize: 13, color: SLATE }}>No archived chats</div>
+                </div>
+              ) : (
+                archivedConvs.map((conv) => (
+                  <SwipeRow
+                    key={conv.conversation_id}
+                    leftBg={COLOURS.GREEN}
+                    leftLabel="↩ Unarchive"
+                    rightBg={COLOURS.RED}
+                    rightLabel="🗑 Delete"
+                    onSwipeLeft={() => conversationAction(conv.conversation_id, "unarchive")}
+                    onSwipeRight={() => conversationAction(conv.conversation_id, "delete")}
+                    borderColor={BORDER}
+                  >
+                    <button
+                      onClick={() => { setActiveConv(conv); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        width: "100%", padding: "9px 14px",
+                        background: "none", border: "none",
+                        cursor: "pointer", textAlign: "left",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                    >
+                      <div style={{
+                        width: 38, height: 38, borderRadius: "50%",
+                        background: avatarBg(conv.conversation_id),
+                        color: "#fff", fontSize: 13, fontWeight: 600,
+                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        opacity: 0.6,
+                      }}>
+                        {initials(convDisplayName(conv))}
+                      </div>
+                      <div style={{ flex: 1, overflow: "hidden" }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {convDisplayName(conv)}
+                        </div>
+                        <div style={{ fontSize: 11, color: INK_400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
+                          {conv.last_message || "No messages"}
+                          {conv.last_message_at && <span style={{ marginLeft: 6 }}>· {timeLabel(conv.last_message_at)}</span>}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 11, color: COLOURS.GREEN, fontWeight: 500, flexShrink: 0 }}>Swipe ←</span>
+                    </button>
+                  </SwipeRow>
+                ))
               )}
             </div>
           </div>
