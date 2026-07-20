@@ -100,10 +100,16 @@ function Ticks({ read }: { read: boolean }) {
 
 // ── Main component ────────────────────────────────────────────────
 
-type Props = { email: string | null; memberId: string | null; memberName: string };
+type Props = {
+  email: string | null;
+  memberId: string | null;
+  memberName: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+};
 
-export default function ChatPanel({ email, memberId, memberName }: Props) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function ChatPanel({ email, memberId, memberName, isOpen, onToggle, onClose }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [allMembers, setAllMembers] = useState<MemberOption[]>([]);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
@@ -341,7 +347,7 @@ export default function ChatPanel({ email, memberId, memberName }: Props) {
     <>
       {/* ── Floating button ── */}
       <button
-        onClick={() => { setIsOpen((o) => !o); if (activeConv && !isOpen) { /* keep state */ } }}
+        onClick={onToggle}
         aria-label="Chat"
         style={{
           position: "fixed", bottom: 24, right: 24,
@@ -425,7 +431,7 @@ export default function ChatPanel({ email, memberId, memberName }: Props) {
             {activeConv ? convDisplayName(activeConv) : "Messages"}
           </span>
           <button
-            onClick={() => setIsOpen(false)}
+            onClick={onClose}
             style={{ background: "none", border: "none", cursor: "pointer", color: SLATE, padding: 4, display: "flex" }}
             aria-label="Close"
           >

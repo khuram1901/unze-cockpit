@@ -40,7 +40,8 @@ function getGreeting(): string {
 
 function getLandingRoute(profile: MemberProfile | null, email: string) {
   const lower = email.toLowerCase();
-  if (lower === "khuram1901@gmail.com") return "/home";
+  // Khuram's accounts land on the welcome page first for a fast, personalised start
+  if (lower === "khuram1901@gmail.com" || lower === "k.saleem@unzegroup.com") return "/welcome";
   if (lower === "pa.ceo@unze.co.uk") return "/pa";
   const role = profile?.role || "Member";
   if (role === "Executive") return "/pa";

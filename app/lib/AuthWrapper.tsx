@@ -44,7 +44,8 @@ export default function AuthWrapper({
   const [searching, setSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifItems, setNotifItems] = useState<{ label: string; count: number; href: string }[]>([]);
+  const [notifItems, setNotifItems] = useState<{ label: string; count: number; href: string; action?: () => void }[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const searchCacheRef = useRef<{
     tasks: { id: string; description: string; assigned_to: string | null; status: string }[];
@@ -119,13 +120,14 @@ export default function AuthWrapper({
     // Tasks-page filter (?filter=...&scope=mine) instead of the bare /tasks
     // URL — clicking "Overdue" now actually shows only overdue tasks, not
     // the whole list. See TasksList.tsx's filterFromUrl/scopeFromUrl read.
-    const items: { label: string; count: number; href: string }[] = [];
+    const items: { label: string; count: number; href: string; action?: () => void }[] = [];
     if (counts.overdue_count > 0) items.push({ label: "Overdue tasks", count: counts.overdue_count, href: "/tasks?filter=overdue&scope=mine" });
     if (counts.waiting_count > 0) items.push({ label: "Waiting reply", count: counts.waiting_count, href: "/tasks?filter=waiting&scope=mine" });
     if (counts.submitted_count > 0) items.push({ label: "Submitted — awaiting your sign-off", count: counts.submitted_count, href: "/tasks?filter=submitted&scope=mine" });
     if (counts.exception_count > 0) items.push({ label: "Needs explanation", count: counts.exception_count, href: "/tasks?filter=exception&scope=mine" });
     if (isAdmin && counts.machines_down_count > 0) items.push({ label: "Machines down", count: counts.machines_down_count, href: "/dashboard" });
     if (isAdmin && counts.pending_minutes_count > 0) items.push({ label: "Minutes pending", count: counts.pending_minutes_count, href: "/meetings" });
+    if (counts.chat_unread_count > 0) items.push({ label: "Unread messages", count: counts.chat_unread_count, href: "#", action: () => setChatOpen(true) });
 
     setNotifItems(items);
     setNotifCount(items.reduce((s, i) => s + i.count, 0));
@@ -139,6 +141,8 @@ export default function AuthWrapper({
         .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => loadNotifications())
         .on("postgres_changes", { event: "*", schema: "public", table: "machine_issues" }, () => loadNotifications())
         .on("postgres_changes", { event: "*", schema: "public", table: "pending_minutes" }, () => loadNotifications())
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, () => loadNotifications())
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_participants" }, () => loadNotifications())
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
@@ -259,6 +263,9 @@ export default function AuthWrapper({
         email={email}
         memberId={member?.id ?? null}
         memberName={displayName(member, email)}
+        isOpen={chatOpen}
+        onToggle={() => setChatOpen((o) => !o)}
+        onClose={() => setChatOpen(false)}
       />
     </>
   );

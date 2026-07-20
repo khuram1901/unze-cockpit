@@ -19,3 +19,5 @@ export const TRIGGER_ESCALATION = "escalation";
 // digest recipients because the CEO's tasks are generally not routed to
 // themselves; this fires to the *manager*, not the submitter.
 export const TRIGGER_TASK_SUBMITTED = "task_submitted";
+// Fired when a chat message is sent to a participant who hasn't read it yet.
+export const TRIGGER_CHAT_MESSAGE = "chat_message";

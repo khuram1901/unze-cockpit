@@ -1,5 +1,16 @@
 import { requireAuth } from "@/app/lib/api-auth";
 import { createServiceClient } from "@/app/lib/supabase-server";
+import { sendNotificationEmail } from "@/app/lib/send-email";
+import { TRIGGER_CHAT_MESSAGE } from "@/app/lib/notification-types";
+import webpush from "web-push";
+
+if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    "mailto:k.saleem@unzegroup.com",
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+}
 
 // GET /api/chat/messages?conversation_id=...&before=<ISO>
 // Returns the last 50 messages for the conversation (paginated via `before`).
@@ -155,5 +166,91 @@ export async function POST(req: Request) {
     return Response.json({ error: "Failed to send message" }, { status: 500 });
   }
 
+  // Fire-and-forget: push + email to other participants who haven't read recently
+  notifyOtherParticipants(db, conversation_id, member.id, senderName, auth.email, content.trim()).catch(console.error);
+
   return Response.json(message, { status: 201 });
+}
+
+// ── Notification helper ───────────────────────────────────────────
+// Runs after the message is saved. Sends a push notification and/or
+// email to each participant who is NOT the sender.
+// Email is skipped if they've read the conversation in the last 5 minutes
+// (i.e. they're actively in the app and don't need an email).
+
+async function notifyOtherParticipants(
+  db: ReturnType<typeof createServiceClient>,
+  conversationId: string,
+  senderId: string,
+  senderName: string,
+  senderEmail: string,
+  messageContent: string,
+) {
+  // Fetch all other participants with their email, push subscriptions, and last_read_at
+  const { data: others } = await db
+    .from("chat_participants")
+    .select("member_id, last_read_at, members(email, name, first_name, last_name, notify_email)")
+    .eq("conversation_id", conversationId)
+    .neq("member_id", senderId);
+
+  if (!others?.length) return;
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://pulse.unze.co.uk";
+  const preview = messageContent.length > 80 ? messageContent.slice(0, 80) + "…" : messageContent;
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+  await Promise.allSettled(
+    others.map(async (participant) => {
+      const m = participant.members as unknown as {
+        email: string;
+        name: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        notify_email: boolean | null;
+      } | null;
+      if (!m?.email) return;
+
+      const recipientEmail = m.email;
+      const recipientName = `${m.first_name ?? ""} ${m.last_name ?? ""}`.trim() || m.name || recipientEmail;
+      const wasRecentlyActive = participant.last_read_at >= fiveMinutesAgo;
+
+      // ── Push notification (always, if they have a subscription) ──
+      const { data: subs } = await db
+        .from("push_subscriptions")
+        .select("subscription")
+        .eq("user_email", recipientEmail);
+
+      if (subs?.length && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+        const payload = JSON.stringify({
+          title: `New message from ${senderName}`,
+          body: preview,
+          url: appUrl,
+        });
+        for (const row of subs) {
+          webpush.sendNotification(row.subscription, payload).catch(async (err: unknown) => {
+            const code = (err as { statusCode?: number })?.statusCode;
+            if (code === 410 || code === 404) {
+              await db.from("push_subscriptions").delete()
+                .eq("user_email", recipientEmail).eq("subscription", row.subscription);
+            }
+          });
+        }
+      }
+
+      // ── Email (only if they haven't been active in the last 5 minutes) ──
+      if (!wasRecentlyActive && m.notify_email !== false) {
+        await sendNotificationEmail({
+          to: recipientEmail,
+          subject: `New message from ${senderName}`,
+          heading: `${senderName} sent you a message`,
+          body: `<p style="font-style:italic;color:#334155">"${preview}"</p><p style="margin-top:12px;color:#64748b;font-size:13px">Open the app to reply.</p>`,
+          linkUrl: appUrl,
+          linkLabel: "Open Dashboard",
+          triggerType: TRIGGER_CHAT_MESSAGE,
+          triggerRecordId: conversationId,
+          recipientName,
+        });
+      }
+    })
+  );
 }

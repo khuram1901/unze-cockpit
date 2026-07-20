@@ -109,6 +109,16 @@ async function handleCheckInbox(isCron: boolean) {
         const from = headers.find((h) => h.name?.toLowerCase() === "from")?.value || "Unknown";
         const date = headers.find((h) => h.name?.toLowerCase() === "date")?.value || "";
 
+        // Skip system emails that should never appear as meeting minutes —
+        // the daily backup email gets auto-labelled by Gmail filters and
+        // must be excluded here so it never reaches the approval queue.
+        const SKIP_SUBJECT_PATTERNS = [/backup/i, /cockpit backup/i];
+        const SKIP_FROM_PATTERNS = [/noreply\.unzecockpit/i];
+        const isSystemEmail =
+          SKIP_SUBJECT_PATTERNS.some((p) => p.test(subject)) ||
+          SKIP_FROM_PATTERNS.some((p) => p.test(from));
+        if (isSystemEmail) continue;
+
         let bodyText = "";
 
         const findAttachments = (parts: GmailPart[]): GmailPart[] => {

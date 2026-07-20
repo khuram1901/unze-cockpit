@@ -2663,11 +2663,13 @@ function ExecutiveDashboardBody({
           </div>
           <div>
             {attentionRows.map((row) => {
-                const isOpen = expandedCard === row.id;
+                // null means "nothing collapsed" — all rows start expanded.
+                // Clicking a row focuses it (others collapse); clicking again restores all.
+                const isOpen = expandedCard === null || expandedCard === row.id;
                 return (
                   <div key={row.id}>
                     <div
-                      onClick={() => row.items.length > 0 ? setExpandedCard(isOpen ? null : row.id) : undefined}
+                      onClick={() => row.items.length > 0 ? setExpandedCard(isOpen && expandedCard !== null ? null : row.id) : undefined}
                       style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center",
                         padding: "9px 16px", cursor: row.items.length > 0 ? "pointer" : "default",

@@ -121,7 +121,7 @@ type SidebarLayoutProps = {
   userRole: string;
   roleColor: string;
   notifCount: number;
-  notifItems: { label: string; count: number; href: string }[];
+  notifItems: { label: string; count: number; href: string; action?: () => void }[];
   searchOpen: boolean;
   setSearchOpen: (v: boolean) => void;
   searchQuery: string;
@@ -664,7 +664,7 @@ export default function SidebarLayout({
                     </div>
                   ) : (
                     notifItems.map((item) => (
-                      <a key={item.label} href={item.href} onClick={() => setNotifOpen(false)}
+                      <a key={item.label} href={item.href} onClick={(e) => { if (item.action) { e.preventDefault(); item.action(); } setNotifOpen(false); }}
                         style={{
                           display: "flex", justifyContent: "space-between", alignItems: "center",
                           padding: "10px 14px", borderBottom: "1px solid var(--border-light)",
