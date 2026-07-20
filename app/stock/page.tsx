@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
-import { supabase } from "../lib/supabase";
+import { authFetch, supabase } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { COLOURS, RADII, PageHeader, SectionTitle, SkeletonRows, ErrorBanner, useToast } from "../lib/SharedUI";
 import { formatDateUK, todayPakistanISO } from "../lib/dateUtils";
@@ -57,13 +57,6 @@ type Plant = { id: string; name: string; type: string };
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 
 function sizeRow(label: string, qty: number | null, colour?: string) {
   if (!qty) return null;
@@ -404,7 +397,7 @@ export default function StockPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await authedFetch(`/api/stock/summary?plantId=${plantId}`);
+      const res = await authFetch(`/api/stock/summary?plantId=${plantId}`);
       const json = await res.json();
       if (json.error) { setError(json.error); return; }
       setSummary(json.summary || []);

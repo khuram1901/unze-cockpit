@@ -5,7 +5,7 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { widgetVisible } from "../lib/permissions";
 import { useUserCtx } from "../lib/useUserCtx";
-import { supabase } from "../lib/supabase";
+import { authFetch, supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { useMobile } from "../lib/useMobile";
 import DateInput from "../lib/DateInput";
@@ -80,13 +80,6 @@ type TabId = "registrations" | "payments" | "compliance" | "documents" | "operat
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTH_FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -368,7 +361,7 @@ export default function AdminDataPage() {
   // ── Data loaders ───────────────────────────────────────────────────
   async function loadRegistrations() {
     setLoadingRegs(true);
-    const res = await authedFetch("/api/admin/registrations");
+    const res = await authFetch("/api/admin/registrations");
     const json = await res.json();
     setRegistrations(json.data || []);
     setLoadingRegs(false);
@@ -376,7 +369,7 @@ export default function AdminDataPage() {
 
   async function loadPayments() {
     setLoadingPayments(true);
-    const res = await authedFetch(`/api/admin/payments?year=${paymentYear}`);
+    const res = await authFetch(`/api/admin/payments?year=${paymentYear}`);
     const json = await res.json();
     setPaymentRows(json.data || []);
     setLoadingPayments(false);
@@ -384,7 +377,7 @@ export default function AdminDataPage() {
 
   async function loadCompliance() {
     setLoadingCompliance(true);
-    const res = await authedFetch("/api/admin/compliance");
+    const res = await authFetch("/api/admin/compliance");
     const json = await res.json();
     setCompliance(json.data || []);
     setLoadingCompliance(false);
@@ -392,7 +385,7 @@ export default function AdminDataPage() {
 
   async function loadNtnDocs() {
     setLoadingNtn(true);
-    const res = await authedFetch("/api/admin/documents?type=ntn");
+    const res = await authFetch("/api/admin/documents?type=ntn");
     const json = await res.json();
     setNtnDocs(json.data || []);
     setLoadingNtn(false);
@@ -400,7 +393,7 @@ export default function AdminDataPage() {
 
   async function loadLicences() {
     setLoadingLicences(true);
-    const res = await authedFetch("/api/admin/documents?type=licences");
+    const res = await authFetch("/api/admin/documents?type=licences");
     const json = await res.json();
     setRestaurantLicences(json.data || []);
     setLoadingLicences(false);
@@ -408,7 +401,7 @@ export default function AdminDataPage() {
 
   async function loadFuel() {
     setLoadingFuel(true);
-    const res = await authedFetch(`/api/admin/operations?type=fuel&year=${opsYear}`);
+    const res = await authFetch(`/api/admin/operations?type=fuel&year=${opsYear}`);
     const json = await res.json();
     setFuelRows(json.data || []);
     setLoadingFuel(false);
@@ -416,7 +409,7 @@ export default function AdminDataPage() {
 
   async function loadSolar() {
     setLoadingSolar(true);
-    const res = await authedFetch(`/api/admin/operations?type=solar&year=${opsYear}`);
+    const res = await authFetch(`/api/admin/operations?type=solar&year=${opsYear}`);
     const json = await res.json();
     setSolarBranches(json.data || []);
     setLoadingSolar(false);
@@ -424,7 +417,7 @@ export default function AdminDataPage() {
 
   async function loadUtility() {
     setLoadingUtility(true);
-    const res = await authedFetch(`/api/admin/operations?type=utility&year=${opsYear}`);
+    const res = await authFetch(`/api/admin/operations?type=utility&year=${opsYear}`);
     const json = await res.json();
     setUtilityLocations(json.data || []);
     setLoadingUtility(false);
@@ -433,7 +426,7 @@ export default function AdminDataPage() {
   async function loadVehicleDetail(vehicleId: string, year: number) {
     setLoadingVehicleDetail(true);
     setVehicleDetail(null);
-    const res = await authedFetch(`/api/admin/vehicle-detail?vehicleId=${vehicleId}&year=${year}`);
+    const res = await authFetch(`/api/admin/vehicle-detail?vehicleId=${vehicleId}&year=${year}`);
     const json = await res.json();
     setVehicleDetail(json.data || { fuel: [], maintenance: [] });
     setLoadingVehicleDetail(false);
@@ -446,7 +439,7 @@ export default function AdminDataPage() {
     const form = new FormData();
     form.append("type", importModal.type);
     form.append("file", importFile);
-    const res = await authedFetch("/api/admin/import", { method: "POST", body: form });
+    const res = await authFetch("/api/admin/import", { method: "POST", body: form });
     const json = await res.json();
     setImportResult(json);
     setImporting(false);
@@ -457,7 +450,7 @@ export default function AdminDataPage() {
   }
 
   async function handleDownloadTemplate(type: string, filename: string) {
-    const res = await authedFetch(`/api/admin/import?type=${type}`);
+    const res = await authFetch(`/api/admin/import?type=${type}`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -471,7 +464,7 @@ export default function AdminDataPage() {
   async function saveRegistration() {
     if (!editingReg) return;
     setRegSaving(true);
-    const res = await authedFetch("/api/admin/registrations", {
+    const res = await authFetch("/api/admin/registrations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -493,7 +486,7 @@ export default function AdminDataPage() {
   }
 
   async function saveRegInline(location_id: string, _name: string, type: "EOBI" | "Social Security", status: string) {
-    const res = await authedFetch("/api/admin/registrations", {
+    const res = await authFetch("/api/admin/registrations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ location_id, registration_type: type, status, notes: "" }),
@@ -525,7 +518,7 @@ export default function AdminDataPage() {
   async function saveCompliance() {
     if (!editingCompliance) return;
     setSavingCompliance(true);
-    const res = await authedFetch("/api/admin/compliance", {
+    const res = await authFetch("/api/admin/compliance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -551,7 +544,7 @@ export default function AdminDataPage() {
   async function saveNtn() {
     if (!editingNtn) return;
     setSavingNtn(true);
-    const res = await authedFetch("/api/admin/documents", {
+    const res = await authFetch("/api/admin/documents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -577,7 +570,7 @@ export default function AdminDataPage() {
   async function saveLicence() {
     if (!editingLicence) return;
     setSavingLicence(true);
-    const res = await authedFetch("/api/admin/documents", {
+    const res = await authFetch("/api/admin/documents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -603,7 +596,7 @@ export default function AdminDataPage() {
   async function addLocation() {
     if (!newLocation.name.trim()) return;
     setSavingLocation(true);
-    const res = await authedFetch("/api/admin/locations", {
+    const res = await authFetch("/api/admin/locations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newLocation),
@@ -630,7 +623,7 @@ export default function AdminDataPage() {
   async function removeLocation(location_id: string, name: string) {
     const ok = await confirm(`Remove "${name}" from the active locations list? Its existing data is preserved.`);
     if (!ok) return;
-    const res = await authedFetch(`/api/admin/locations?id=${location_id}`, { method: "DELETE" });
+    const res = await authFetch(`/api/admin/locations?id=${location_id}`, { method: "DELETE" });
     const json = await res.json();
     if (json.ok) { showToast(`${name} removed`, "success"); loadRegistrations(); }
     else showToast(json.error || "Failed to remove", "error");
@@ -639,7 +632,7 @@ export default function AdminDataPage() {
   async function savePayment() {
     if (!addingPayment) return;
     setSavingPayment(true);
-    const res = await authedFetch("/api/admin/payments", {
+    const res = await authFetch("/api/admin/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1759,7 +1752,7 @@ export default function AdminDataPage() {
 
   // ── Manage Fleet handlers ──────────────────────────────────────────
   async function openManageFleet() {
-    const res = await authedFetch("/api/admin/vehicles");
+    const res = await authFetch("/api/admin/vehicles");
     const json = await res.json();
     setAllVehicles(json.data || []);
     setVehicleForm(null);
@@ -1769,7 +1762,7 @@ export default function AdminDataPage() {
   async function saveVehicle() {
     if (!vehicleForm || !vehicleForm.name.trim() || !vehicleForm.plate_number.trim()) return;
     setSavingVehicle(true);
-    const res = await authedFetch("/api/admin/vehicles", {
+    const res = await authFetch("/api/admin/vehicles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(vehicleForm),
@@ -1780,7 +1773,7 @@ export default function AdminDataPage() {
       showToast(vehicleForm.id ? "Vehicle updated ✓" : "Vehicle added ✓", "success");
       setVehicleForm(null);
       // Refresh list + reload ops data so it appears immediately
-      const r = await authedFetch("/api/admin/vehicles");
+      const r = await authFetch("/api/admin/vehicles");
       setAllVehicles((await r.json()).data || []);
       loadFuel();
     } else {
@@ -1790,7 +1783,7 @@ export default function AdminDataPage() {
 
   // ── Manage Solar Sites handlers ────────────────────────────────────
   async function openManageSolar() {
-    const res = await authedFetch("/api/admin/solar-branches");
+    const res = await authFetch("/api/admin/solar-branches");
     const json = await res.json();
     setAllSolarBranches(json.data || []);
     setSolarForm(null);
@@ -1800,7 +1793,7 @@ export default function AdminDataPage() {
   async function saveSolarBranch() {
     if (!solarForm || !solarForm.name.trim()) return;
     setSavingSolar(true);
-    const res = await authedFetch("/api/admin/solar-branches", {
+    const res = await authFetch("/api/admin/solar-branches", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(solarForm),
@@ -1810,7 +1803,7 @@ export default function AdminDataPage() {
     if (json.ok) {
       showToast(solarForm.id ? "Site updated ✓" : "Site added ✓", "success");
       setSolarForm(null);
-      const r = await authedFetch("/api/admin/solar-branches");
+      const r = await authFetch("/api/admin/solar-branches");
       setAllSolarBranches((await r.json()).data || []);
       loadSolar();
     } else {
@@ -1820,7 +1813,7 @@ export default function AdminDataPage() {
 
   // ── Manage Utility Sites handlers ──────────────────────────────────
   async function openManageUtility() {
-    const res = await authedFetch("/api/admin/locations");
+    const res = await authFetch("/api/admin/locations");
     const json = await res.json();
     setAllLocations(json.data || []);
     setLocationForm(null);
@@ -1832,7 +1825,7 @@ export default function AdminDataPage() {
     setSavingUtilityLoc(true);
     if (locationForm.id) {
       // Edit existing
-      const res = await authedFetch("/api/admin/locations", {
+      const res = await authFetch("/api/admin/locations", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: locationForm.id, name: locationForm.name, entity: locationForm.entity, location_type: locationForm.location_type, province: locationForm.province, is_active: locationForm.is_active, default_disco: locationForm.default_disco }),
@@ -1842,7 +1835,7 @@ export default function AdminDataPage() {
       if (json.ok) {
         showToast("Site updated ✓", "success");
         setLocationForm(null);
-        const r = await authedFetch("/api/admin/locations");
+        const r = await authFetch("/api/admin/locations");
         setAllLocations((await r.json()).data || []);
         loadUtility();
       } else {
@@ -1850,7 +1843,7 @@ export default function AdminDataPage() {
       }
     } else {
       // Create new (uses the full RPC which creates compliance records too)
-      const res = await authedFetch("/api/admin/locations", {
+      const res = await authFetch("/api/admin/locations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: locationForm.name, entity: locationForm.entity, location_type: locationForm.location_type, province: locationForm.province, default_disco: locationForm.default_disco }),
@@ -1860,7 +1853,7 @@ export default function AdminDataPage() {
       if (json.ok) {
         showToast("Site added ✓", "success");
         setLocationForm(null);
-        const r = await authedFetch("/api/admin/locations");
+        const r = await authFetch("/api/admin/locations");
         setAllLocations((await r.json()).data || []);
         loadUtility();
       } else {

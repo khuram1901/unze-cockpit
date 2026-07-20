@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "../../../lib/supabase";
+import { authFetch, supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 import DateInput from "../../../lib/DateInput";
 import { useMobile } from "../../../lib/useMobile";
@@ -13,13 +13,6 @@ import {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 
 const ENTITIES = ["IFPL", "Baranh", "HD", "UTPL"] as const;
 type Entity = (typeof ENTITIES)[number];
@@ -169,7 +162,7 @@ function CreateChallanForm({ onSuccess, onCancel }: { onSuccess: () => void; onC
     if (!form.month) { show("Please select the contribution month.", "error"); return; }
     setSaving(true);
     try {
-      const res = await authedFetch("/api/hr/eobi", {
+      const res = await authFetch("/api/hr/eobi", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -280,7 +273,7 @@ function OverviewTab({
 
   async function deleteChallan(id: string) {
     if (!confirm("Remove this pending challan? This cannot be undone.")) return;
-    const res = await authedFetch("/api/hr/eobi", {
+    const res = await authFetch("/api/hr/eobi", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
@@ -588,7 +581,7 @@ function RegistrationsTab() {
 
   useEffect(() => {
     (async () => {
-      const res = await authedFetch("/api/admin/registrations");
+      const res = await authFetch("/api/admin/registrations");
       const json = await res.json();
       if (json.data) setRows(json.data);
       setLoading(false);
@@ -676,7 +669,7 @@ export default function HREobi() {
   const loadSummary = useCallback(async () => {
     setLoading(true);
     try {
-      const res  = await authedFetch("/api/hr/eobi");
+      const res  = await authFetch("/api/hr/eobi");
       const json = await res.json();
       if (json.data) setSummary(json.data);
     } finally {

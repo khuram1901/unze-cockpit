@@ -1,18 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../../../lib/supabase";
+import { authFetch, supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 import { COLOURS, RADII, CountCard, SectionTitle, SkeletonRows } from "../../../lib/SharedUI";
 import { useMobile } from "../../../lib/useMobile";
 
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 
@@ -638,7 +631,7 @@ export default function HRInsights() {
     setLoading(true);
     setError(null);
     try {
-      const res  = await authedFetch("/api/flowhcm/status");
+      const res  = await authFetch("/api/flowhcm/status");
       const json = await res.json() as InsightsPayload;
       setData(json);
     } catch (e) {
@@ -653,7 +646,7 @@ export default function HRInsights() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await authedFetch("/api/flowhcm/sync", {
+      await authFetch("/api/flowhcm/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modules: ["payroll", "performance", "training_records", "disciplinary", "loans", "recruitment"] }),

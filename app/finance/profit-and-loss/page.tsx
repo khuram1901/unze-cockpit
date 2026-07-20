@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ResponsiveContainer, ComposedChart, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, ReferenceLine } from "recharts";
 import AuthWrapper from "../../lib/AuthWrapper";
-import { supabase } from "../../lib/supabase";
+import { authFetch, supabase } from "../../lib/supabase";
 import { COLOURS, RADII, cardStyle, PageHeader, SkeletonRows } from "../../lib/SharedUI";
 import { useRequireCapability } from "../../lib/useRouteGuard";
 import { canEditFinance, financeCompanies, widgetVisible } from "../../lib/permissions";
@@ -68,11 +68,6 @@ const BUCKET_COLOURS: Record<string, string> = {
   "Finance costs": COLOURS.RED,
   "Other expenses": COLOURS.SLATE,
 };
-
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}` } });
-}
 
 const chipBtn = (active: boolean): React.CSSProperties => ({
   padding: "5px 13px",
@@ -223,7 +218,7 @@ export default function ProfitAndLossPage() {
     for (const file of uploadFiles) {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await authedFetch("/api/pnl/upload-unze", { method: "POST", body: formData });
+      const res = await authFetch("/api/pnl/upload-unze", { method: "POST", body: formData });
       const body = await res.json();
       if (body.accepted) anyAccepted = true;
       setUploadResults((prev) => [...prev, { fileName: file.name, accepted: !!body.accepted, summary: body.summary || body.error || "Unknown error", checks: body.checks || [] }]);
@@ -241,7 +236,7 @@ export default function ProfitAndLossPage() {
     setGenerating(true);
     setInsightError("");
     try {
-      const res = await authedFetch("/api/pnl/ceo-insights", {
+      const res = await authFetch("/api/pnl/ceo-insights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyId, from: monthFrom, to: monthTo, plant: plantFilter }),

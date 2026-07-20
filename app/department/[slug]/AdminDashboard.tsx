@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase";
+import { authFetch, supabase } from "../../lib/supabase";
 import { COLOURS, RADII, PageHeader } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
 
@@ -47,13 +47,6 @@ type AdminSummary = {
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-async function authedFetch(url: string) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    headers: { Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 
 function pct(registered: number, total: number): number {
   if (!total) return 0;
@@ -203,7 +196,7 @@ export default function AdminDashboard() {
       setLoading(true);
       setError(null);
       try {
-        const res = await authedFetch("/api/admin/summary");
+        const res = await authFetch("/api/admin/summary");
         const json = await res.json();
         if (json.error) { setError(json.error); return; }
         setSummary(json.data as AdminSummary);

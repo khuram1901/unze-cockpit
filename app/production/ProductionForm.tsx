@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase, loadMyPermissions } from "../lib/supabase";
+import { authFetch, supabase, loadMyPermissions } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { formatDateUK, todayPakistanISO } from "../lib/dateUtils";
 import { canAccessDailyEntry, type UserCtx, type PermOverrides } from "../lib/permissions";
@@ -69,11 +69,6 @@ type PastEntry = {
   qty_meter: number;
   type: "Production" | "Dispatch" | "Breakage" | "Scrap";
 };
-
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}`, "Content-Type": "application/json" } });
-}
 
 export default function ProductionForm() {
   const isMobile = useMobile();
@@ -209,7 +204,7 @@ export default function ProductionForm() {
       if (!plantId) { setPlantPOs([]); setSelectedPOId(""); return; }
       setLoadingPOs(true);
       try {
-        const res = await authedFetch(`/api/stock/purchase-orders?plantId=${plantId}`);
+        const res = await authFetch(`/api/stock/purchase-orders?plantId=${plantId}`);
         const json = await res.json();
         const list: PO[] = json.purchaseOrders || [];
         setPlantPOs(list);
@@ -231,7 +226,7 @@ export default function ProductionForm() {
     setLoadingLetters(true);
     setSelectedLetterId("");
     setLetterLookup(null);
-    authedFetch(`/api/stock/authority-letters?plantId=${plantId}&listAll=true`)
+    authFetch(`/api/stock/authority-letters?plantId=${plantId}&listAll=true`)
       .then((r) => r.json())
       .then((json) => {
         const today = todayPakistanISO();
@@ -340,7 +335,7 @@ export default function ProductionForm() {
 
     // Submit PO allocation if a PO is selected and there are quantities
     if (!nothing && entryData?.id && selectedPOId && (qty31 + qty36 + qty45 + qtyMeter > 0)) {
-      const allocRes = await authedFetch("/api/stock/production-allocations", {
+      const allocRes = await authFetch("/api/stock/production-allocations", {
         method: "POST",
         body: JSON.stringify({
           entry_id: entryData.id,
@@ -442,7 +437,7 @@ export default function ProductionForm() {
 
     // Save to dispatch_records (stock system) if not "nothing"
     if (!nothing && letterLookup) {
-      const recRes = await authedFetch("/api/stock/dispatch-records", {
+      const recRes = await authFetch("/api/stock/dispatch-records", {
         method: "POST",
         body: JSON.stringify({
           authority_letter_id: letterLookup.id,

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import AuthWrapper from "../../lib/AuthWrapper";
 import { useRequireCapability, loadUserCtx } from "../../lib/useRouteGuard";
-import { supabase, loadMyWidgetOverrides } from "../../lib/supabase";
+import { authFetch, supabase, loadMyWidgetOverrides } from "../../lib/supabase";
 import { canViewGuaranteeFinancials, canManageGuarantees, widgetVisible } from "../../lib/permissions";
 import { useMobile } from "../../lib/useMobile";
 import { COLOURS, RADII, PageHeader, SectionTitle, CountCard, cardStyle, useToast, useConfirm, primaryButtonStyle, inputStyle, labelStyle } from "../../lib/SharedUI";
@@ -58,14 +58,6 @@ type Totals = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}`, "Content-Type": "application/json" },
-  });
-}
 
 function pkr(n: number) {
   return "PKR " + Math.round(n).toLocaleString("en-PK");
@@ -467,7 +459,7 @@ export default function GuaranteesPage() {
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    const res = await authedFetch("/api/finance/guarantees");
+    const res = await authFetch("/api/finance/guarantees");
     const json = await res.json();
     if (json.error) { setError(json.error); setLoading(false); return; }
     setFacilities(json.facilities || []);
@@ -523,7 +515,7 @@ export default function GuaranteesPage() {
       toast("A bank facility must be selected", "error"); return;
     }
     setSaving(true);
-    const res = await authedFetch("/api/finance/guarantees", { method: "POST", body: JSON.stringify({
+    const res = await authFetch("/api/finance/guarantees", { method: "POST", body: JSON.stringify({
       ...addForm, amount: Number(addForm.amount),
       cash_margin_pct: Number(addForm.cash_margin_pct) || 5,
       bank_charges: Number(addForm.bank_charges) || 0,
@@ -564,7 +556,7 @@ export default function GuaranteesPage() {
   async function saveEdit() {
     if (!editId) return;
     setSavingEdit(true);
-    const res = await authedFetch("/api/finance/guarantees", { method: "PATCH", body: JSON.stringify({
+    const res = await authFetch("/api/finance/guarantees", { method: "PATCH", body: JSON.stringify({
       id: editId, ...editForm,
       amount: Number(editForm.amount),
       cash_margin_pct: Number(editForm.cash_margin_pct) || 5,
@@ -603,7 +595,7 @@ export default function GuaranteesPage() {
       toast("A bank facility must be selected for the Performance Guarantee", "error"); return;
     }
     setSavingConvert(true);
-    const res = await authedFetch("/api/finance/guarantees", { method: "PATCH", body: JSON.stringify({
+    const res = await authFetch("/api/finance/guarantees", { method: "PATCH", body: JSON.stringify({
       id: convertId, action: "convert", ...convertForm,
       amount: Number(convertForm.amount),
       cash_margin_pct: Number(convertForm.cash_margin_pct) || 5,
@@ -627,7 +619,7 @@ export default function GuaranteesPage() {
     setSavingStatus(true);
     const body: Record<string, unknown> = { id, status };
     if (status === "Returned" && returnedDate) body.returned_date = returnedDate;
-    const res = await authedFetch("/api/finance/guarantees", { method: "PATCH", body: JSON.stringify(body) });
+    const res = await authFetch("/api/finance/guarantees", { method: "PATCH", body: JSON.stringify(body) });
     const json = await res.json();
     setSavingStatus(false);
     if (json.error) { toast(json.error, "error"); return; }
@@ -639,7 +631,7 @@ export default function GuaranteesPage() {
   async function saveFacility() {
     if (!facilityForm.bank_name || !facilityForm.total_limit) { toast("Bank name and limit are required", "error"); return; }
     setSavingFacility(true);
-    const res = await authedFetch("/api/finance/guarantee-facilities", { method: "POST", body: JSON.stringify({
+    const res = await authFetch("/api/finance/guarantee-facilities", { method: "POST", body: JSON.stringify({
       ...facilityForm, total_limit: Number(facilityForm.total_limit),
     })});
     const json = await res.json();
@@ -666,7 +658,7 @@ export default function GuaranteesPage() {
       toast("Bank name, facility name and limit are required", "error"); return;
     }
     setSavingEditFacility(true);
-    const res = await authedFetch("/api/finance/guarantee-facilities", { method: "PATCH", body: JSON.stringify({
+    const res = await authFetch("/api/finance/guarantee-facilities", { method: "PATCH", body: JSON.stringify({
       id: editFacilityId, ...editFacilityForm, total_limit: Number(editFacilityForm.total_limit),
     })});
     const json = await res.json();
@@ -679,7 +671,7 @@ export default function GuaranteesPage() {
   // ── Delete facility ──
   async function deleteFacility(f: Facility) {
     if (!confirm(`Delete "${f.facility_name || f.facility_type}" at ${f.bank_name}? This cannot be undone.`)) return;
-    const res = await authedFetch("/api/finance/guarantee-facilities", { method: "DELETE", body: JSON.stringify({ id: f.id }) });
+    const res = await authFetch("/api/finance/guarantee-facilities", { method: "DELETE", body: JSON.stringify({ id: f.id }) });
     const json = await res.json();
     if (json.error) { toast(json.error, "error"); return; }
     toast("Facility deleted", "success");
@@ -695,7 +687,7 @@ export default function GuaranteesPage() {
     );
     if (!confirmed) return;
     setDeletingId(g.id);
-    const res = await authedFetch("/api/finance/guarantees", { method: "DELETE", body: JSON.stringify({ id: g.id }) });
+    const res = await authFetch("/api/finance/guarantees", { method: "DELETE", body: JSON.stringify({ id: g.id }) });
     const json = await res.json();
     setDeletingId(null);
     if (json.error) { toast(json.error, "error"); return; }

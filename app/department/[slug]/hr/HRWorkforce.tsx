@@ -1,18 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "../../../lib/supabase";
+import { authFetch, supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 import { COLOURS, RADII, CountCard, SectionTitle, SkeletonRows } from "../../../lib/SharedUI";
 import { useMobile } from "../../../lib/useMobile";
 
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 type DeptRow = { department: string; headcount: number };
@@ -228,7 +221,7 @@ export default function HRWorkforce() {
     setLoading(true);
     setError(null);
     try {
-      const res = await authedFetch("/api/flowhcm/status");
+      const res = await authFetch("/api/flowhcm/status");
       const json = await res.json() as StatusPayload;
       setData(json);
     } catch (e) {
@@ -243,7 +236,7 @@ export default function HRWorkforce() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await authedFetch("/api/flowhcm/sync", { method: "POST", body: "{}", headers: { "Content-Type": "application/json" } });
+      await authFetch("/api/flowhcm/sync", { method: "POST", body: "{}", headers: { "Content-Type": "application/json" } });
       await load();
     } finally {
       setSyncing(false);

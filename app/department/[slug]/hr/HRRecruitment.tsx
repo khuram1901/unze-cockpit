@@ -1,16 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "../../../lib/supabase";
+import { authFetch, supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 import { useMobile } from "../../../lib/useMobile";
 import {
   COLOURS, RADII, cardStyle, SectionTitle, CountCard, SkeletonRows,
@@ -132,7 +125,7 @@ function SyncButton({ onSynced, syncLog }: { onSynced: (msg: string) => void; sy
   async function handleSync() {
     setSyncing(true);
     try {
-      const res = await authedFetch("/api/flowhcm/sync", {
+      const res = await authFetch("/api/flowhcm/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modules: ["recruitment"] }),
@@ -195,7 +188,7 @@ function CandidatePanel({
 
   useEffect(() => {
     setLoading(true);
-    authedFetch(`/api/hr/recruitment/candidates?position_id=${position.id}`)
+    authFetch(`/api/hr/recruitment/candidates?position_id=${position.id}`)
       .then((r: Response) => r.json())
       .then((d: { candidates?: Candidate[] }) => { setCandidates(d.candidates ?? []); setLoading(false); });
   }, [position.id]);
@@ -406,9 +399,9 @@ export default function HRRecruitment() {
     setLoading(true);
     try {
       const [sumRes, posRes, statusRes] = await Promise.all([
-        authedFetch("/api/hr/recruitment/summary"),
-        authedFetch("/api/hr/recruitment/positions"),
-        authedFetch("/api/flowhcm/status"),
+        authFetch("/api/hr/recruitment/summary"),
+        authFetch("/api/hr/recruitment/positions"),
+        authFetch("/api/flowhcm/status"),
       ]);
       const sumData    = await sumRes.json();
       const posData    = await posRes.json();

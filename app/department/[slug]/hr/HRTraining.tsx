@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "../../../lib/supabase";
+import { authFetch, supabase } from "../../../lib/supabase";
 import { formatDateUK } from "../../../lib/dateUtils";
 import DateInput from "../../../lib/DateInput";
 import { useMobile } from "../../../lib/useMobile";
@@ -13,13 +13,6 @@ import {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers ?? {}), Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 
 function fmtPKR(n: number | null | undefined) {
   if (n == null) return "—";
@@ -148,7 +141,7 @@ function SessionDetail({
   async function syncFeedback() {
     setSyncing(true);
     try {
-      const res  = await authedFetch("/api/hr/td/sync-feedback", {
+      const res  = await authFetch("/api/hr/td/sync-feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: session.session_id }),

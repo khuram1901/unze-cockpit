@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import AuthWrapper from "../../lib/AuthWrapper";
 import { useRequireCapability } from "../../lib/useRouteGuard";
-import { supabase } from "../../lib/supabase";
+import { authFetch, supabase } from "../../lib/supabase";
 import { useMobile } from "../../lib/useMobile";
 import {
   COLOURS, RADII, PageHeader, SectionTitle, CountCard,
@@ -59,14 +59,6 @@ type ActiveTab = "pos" | "letters" | "contractors" | "performance";
 // ─────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}`, "Content-Type": "application/json" },
-  });
-}
-
 type ExpiryStatus = "Expired" | "Expiring7" | "Expiring14" | "Active" | "Complete";
 
 function expiryStatus(expiry: string | null, totalRemaining: number): ExpiryStatus {
@@ -313,14 +305,14 @@ export default function StockManagePage() {
   const loadPOs = useCallback(async () => {
     if (!selectedPlant) return;
     setLoading(true);
-    const res = await authedFetch(`/api/stock/purchase-orders?plantId=${selectedPlant}&includeClosed=true`);
+    const res = await authFetch(`/api/stock/purchase-orders?plantId=${selectedPlant}&includeClosed=true`);
     const json = await res.json();
     setPOs(json.purchaseOrders || []);
     setLoading(false);
   }, [selectedPlant]);
 
   const loadContractors = useCallback(async () => {
-    const res = await authedFetch("/api/stock/contractors");
+    const res = await authFetch("/api/stock/contractors");
     const json = await res.json();
     setContractors(json.contractors || []);
   }, []);
@@ -329,7 +321,7 @@ export default function StockManagePage() {
     if (!selectedPlant) return;
     setPerfLoading(true);
     try {
-      const res = await authedFetch(`/api/stock/contractor-performance?plantId=${selectedPlant}`);
+      const res = await authFetch(`/api/stock/contractor-performance?plantId=${selectedPlant}`);
       const json = await res.json();
       setPerformance(json.performance || []);
     } finally {
@@ -341,7 +333,7 @@ export default function StockManagePage() {
     if (!selectedPlant) return;
     setAllLettersLoading(true);
     try {
-      const res = await authedFetch(`/api/stock/authority-letters?plantId=${selectedPlant}&listAll=true`);
+      const res = await authFetch(`/api/stock/authority-letters?plantId=${selectedPlant}&listAll=true`);
       const json = await res.json();
       const sorted = (json.letters || []).sort((a: FlatLetter, b: FlatLetter) => {
         const aExp = a.expiry_date ? new Date(a.expiry_date).getTime() : Infinity;
@@ -362,7 +354,7 @@ export default function StockManagePage() {
     if (!poForm.customer_name || !poForm.po_number) { toast("Customer name and PO number are required", "error"); return; }
     const plant = plants.find((p) => p.id === selectedPlant);
     setSavingPO(true);
-    const res = await authedFetch("/api/stock/purchase-orders", {
+    const res = await authFetch("/api/stock/purchase-orders", {
       method: "POST",
       body: JSON.stringify({
         plant_id: selectedPlant, plant_name: plant?.name || "",
@@ -390,7 +382,7 @@ export default function StockManagePage() {
   async function closePO(po: PO) {
     const ok = await confirm(`Close PO #${po.po_number} for ${po.customer_name}? It will stay visible but greyed out.`, true);
     if (!ok) return;
-    const res = await authedFetch("/api/stock/purchase-orders", { method: "PATCH", body: JSON.stringify({ id: po.id, status: "Closed" }) });
+    const res = await authFetch("/api/stock/purchase-orders", { method: "PATCH", body: JSON.stringify({ id: po.id, status: "Closed" }) });
     const json = await res.json();
     if (json.error) { toast(json.error, "error"); return; }
     toast("PO closed", "success");
@@ -404,7 +396,7 @@ export default function StockManagePage() {
     setBulkClosing(true);
     const ids = Array.from(selectedPOs);
     await Promise.all(ids.map((id) =>
-      authedFetch("/api/stock/purchase-orders", { method: "PATCH", body: JSON.stringify({ id, status: "Closed" }) })
+      authFetch("/api/stock/purchase-orders", { method: "PATCH", body: JSON.stringify({ id, status: "Closed" }) })
     ));
     setBulkClosing(false);
     setSelectedPOs(new Set());
@@ -432,7 +424,7 @@ export default function StockManagePage() {
     if (!editPOId) return;
     if (!editPOForm.customer_name || !editPOForm.po_number) { toast("Customer name and PO number are required", "error"); return; }
     setSavingEditPO(true);
-    const res = await authedFetch("/api/stock/purchase-orders", {
+    const res = await authFetch("/api/stock/purchase-orders", {
       method: "PATCH",
       body: JSON.stringify({
         id: editPOId,
@@ -461,7 +453,7 @@ export default function StockManagePage() {
     const ids = Array.from(selectedPOs);
     let errors = 0;
     for (const id of ids) {
-      const res = await authedFetch("/api/stock/purchase-orders", { method: "DELETE", body: JSON.stringify({ id }) });
+      const res = await authFetch("/api/stock/purchase-orders", { method: "DELETE", body: JSON.stringify({ id }) });
       const json = await res.json();
       if (json.error) errors++;
     }
@@ -479,7 +471,7 @@ export default function StockManagePage() {
       toast("All letter fields are required", "error"); return;
     }
     setSavingLetter(true);
-    const res = await authedFetch("/api/stock/authority-letters", {
+    const res = await authFetch("/api/stock/authority-letters", {
       method: "POST",
       body: JSON.stringify({
         po_id: selectedPOId, contractor_id: letterForm.contractor_id,
@@ -507,7 +499,7 @@ export default function StockManagePage() {
 
   async function loadLetters(poId: string) {
     setLettersLoading(true);
-    const res = await authedFetch(`/api/stock/authority-letters?poId=${poId}`);
+    const res = await authFetch(`/api/stock/authority-letters?poId=${poId}`);
     const json = await res.json();
     setLetters(json.letters || []);
     setLettersLoading(false);
@@ -532,7 +524,7 @@ export default function StockManagePage() {
   async function saveEditLetter() {
     if (!editLetterId) return;
     setSavingEditLetter(true);
-    const res = await authedFetch("/api/stock/authority-letters", {
+    const res = await authFetch("/api/stock/authority-letters", {
       method: "PATCH",
       body: JSON.stringify({
         id: editLetterId,
@@ -566,7 +558,7 @@ export default function StockManagePage() {
       true
     );
     if (!ok) return;
-    const res = await authedFetch("/api/stock/authority-letters", { method: "PATCH", body: JSON.stringify({ id: l.id, close: closing }) });
+    const res = await authFetch("/api/stock/authority-letters", { method: "PATCH", body: JSON.stringify({ id: l.id, close: closing }) });
     const json = await res.json();
     if (json.error) { toast(json.error, "error"); return; }
     toast(closing ? "Letter closed" : "Letter reopened", "success");
@@ -577,7 +569,7 @@ export default function StockManagePage() {
     const ok = await confirm(`Permanently delete authority letter #${l.letter_number}? This cannot be undone.`, true);
     if (!ok) return;
     setDeletingLetterId(l.id);
-    const res = await authedFetch("/api/stock/authority-letters", { method: "DELETE", body: JSON.stringify({ id: l.id }) });
+    const res = await authFetch("/api/stock/authority-letters", { method: "DELETE", body: JSON.stringify({ id: l.id }) });
     const json = await res.json();
     setDeletingLetterId(null);
     if (json.error) { toast(json.error, "error"); return; }
@@ -592,7 +584,7 @@ export default function StockManagePage() {
   async function saveContractor() {
     if (!contractorForm.name) { toast("Contractor name is required", "error"); return; }
     setSavingContractor(true);
-    const res = await authedFetch("/api/stock/contractors", { method: "POST", body: JSON.stringify({ ...contractorForm }) });
+    const res = await authFetch("/api/stock/contractors", { method: "POST", body: JSON.stringify({ ...contractorForm }) });
     const json = await res.json();
     setSavingContractor(false);
     if (json.error) { toast(json.error, "error"); return; }
@@ -611,7 +603,7 @@ export default function StockManagePage() {
     if (!editContractorId) return;
     if (!editContractorForm.name) { toast("Name is required", "error"); return; }
     setSavingEditContractor(true);
-    const res = await authedFetch("/api/stock/contractors", { method: "PATCH", body: JSON.stringify({ id: editContractorId, ...editContractorForm }) });
+    const res = await authFetch("/api/stock/contractors", { method: "PATCH", body: JSON.stringify({ id: editContractorId, ...editContractorForm }) });
     const json = await res.json();
     setSavingEditContractor(false);
     if (json.error) { toast(json.error, "error"); return; }
@@ -624,7 +616,7 @@ export default function StockManagePage() {
     const ok = await confirm(`Permanently delete contractor "${c.name}"? This cannot be undone.`, true);
     if (!ok) return;
     setDeletingContractorId(c.id);
-    const res = await authedFetch("/api/stock/contractors", { method: "DELETE", body: JSON.stringify({ id: c.id }) });
+    const res = await authFetch("/api/stock/contractors", { method: "DELETE", body: JSON.stringify({ id: c.id }) });
     const json = await res.json();
     setDeletingContractorId(null);
     if (json.error) { toast(json.error, "error"); return; }
@@ -637,7 +629,7 @@ export default function StockManagePage() {
   // ─────────────────────────────────────────────────────────────
   async function loadDispatches(letterId: string) {
     setDispatchesLoading(true);
-    const res = await authedFetch(`/api/stock/dispatch-records?letterId=${letterId}`);
+    const res = await authFetch(`/api/stock/dispatch-records?letterId=${letterId}`);
     const json = await res.json();
     setDispatches(json.dispatches || []);
     setDispatchesLoading(false);
@@ -656,7 +648,7 @@ export default function StockManagePage() {
   async function saveEditDispatch() {
     if (!editDispatchId) return;
     setSavingEditDispatch(true);
-    const res = await authedFetch("/api/stock/dispatch-records", {
+    const res = await authFetch("/api/stock/dispatch-records", {
       method: "PATCH",
       body: JSON.stringify({
         id: editDispatchId,

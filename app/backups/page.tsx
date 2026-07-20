@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
-import { supabase } from "../lib/supabase";
+import { authFetch, supabase } from "../lib/supabase";
 import { COLOURS, RADII, PageHeader, useToast, primaryButtonStyle, inputStyle } from "../lib/SharedUI";
 import { formatDateUK, formatDateTimeUK } from "../lib/dateUtils";
 import { COMPANIES } from "../lib/constants";
@@ -18,13 +18,6 @@ type ArchivedDoc = {
   uploaded_by: string | null; created_at: string;
 };
 
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 
 function companyName(id: string) {
   return COMPANIES.find((c) => c.id === id)?.shortCode || id.slice(0, 8);
@@ -78,7 +71,7 @@ export default function BackupsPage() {
     const params = new URLSearchParams();
     if (docTypeFilter) params.set("docType", docTypeFilter);
     if (companyFilter) params.set("companyId", companyFilter);
-    const res = await authedFetch(`/api/admin/list-documents?${params.toString()}`);
+    const res = await authFetch(`/api/admin/list-documents?${params.toString()}`);
     const json = await res.json();
     setDocs(json.documents || []);
     setLoadingDocs(false);
@@ -93,7 +86,7 @@ export default function BackupsPage() {
   // ── Data loaders ───────────────────────────────────────────────────
   async function loadBackups() {
     setLoadingBackups(true);
-    const res = await authedFetch("/api/admin/list-backups");
+    const res = await authFetch("/api/admin/list-backups");
     const json = await res.json();
     setBackups(json.backups || []);
     setLoadingBackups(false);
@@ -106,7 +99,7 @@ export default function BackupsPage() {
     setRunningBackup(true);
     setStatusMsg(null);
     try {
-      const res = await authedFetch("/api/backup");
+      const res = await authFetch("/api/backup");
       const json = await res.json();
       if (json.ok) {
         setStatusMsg({ text: `Backup complete — ${json.tables} tables, ${json.totalRows} rows.`, ok: true });
@@ -121,7 +114,7 @@ export default function BackupsPage() {
   }
 
   async function handleDownloadBackup(name: string) {
-    const res = await authedFetch("/api/admin/list-backups", {
+    const res = await authFetch("/api/admin/list-backups", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filename: name }),
@@ -132,7 +125,7 @@ export default function BackupsPage() {
   }
 
   async function handleDownloadDoc(doc: ArchivedDoc) {
-    const res = await authedFetch("/api/admin/list-documents", {
+    const res = await authFetch("/api/admin/list-documents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ storagePath: doc.storage_path }),
@@ -147,7 +140,7 @@ export default function BackupsPage() {
     setRestoring(true);
     setStatusMsg(null);
     try {
-      const res = await authedFetch("/api/admin/restore", {
+      const res = await authFetch("/api/admin/restore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirm: "RESTORE_FROM_BACKUP", filename: restoreTarget }),

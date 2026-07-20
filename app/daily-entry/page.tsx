@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
 import { isDailyEntryOnly } from "../lib/permissions";
-import { supabase } from "../lib/supabase";
+import { authFetch, supabase } from "../lib/supabase";
 import DateInput from "../lib/DateInput";
 import { COLOURS, RADII, PageHeader, useToast, primaryButtonStyle, inputStyle } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
@@ -47,13 +47,6 @@ type RecentUtility = {
 
 // ── Helper ────────────────────────────────────────────────────────────
 
-async function authedFetch(url: string, opts: RequestInit = {}) {
-  const { data: { session } } = await supabase.auth.getSession();
-  return fetch(url, {
-    ...opts,
-    headers: { ...(opts.headers || {}), Authorization: `Bearer ${session?.access_token}` },
-  });
-}
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -160,7 +153,7 @@ export default function DailyEntryPage() {
   // ── Load meta on mount ─────────────────────────────────────────────
   useEffect(() => {
     if (checking) return;
-    authedFetch("/api/admin/entry-meta")
+    authFetch("/api/admin/entry-meta")
       .then((r) => r.json())
       .then((json) => {
         setVehicles(json.vehicles || []);
@@ -178,7 +171,7 @@ export default function DailyEntryPage() {
   useEffect(() => {
     if (!fuel.vehicle_id) return;
     setLoadingOdo(true);
-    authedFetch(`/api/admin/fuel?vehicle_id=${fuel.vehicle_id}`)
+    authFetch(`/api/admin/fuel?vehicle_id=${fuel.vehicle_id}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.data?.current_odometer) {
@@ -188,17 +181,17 @@ export default function DailyEntryPage() {
         }
         setLoadingOdo(false);
       });
-    authedFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
+    authFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
       .then((r) => r.json()).then((j) => setRecentFuel(j.data || []));
   }, [fuel.vehicle_id]);
 
   // Recent maintenance + last ODO when maintenance vehicle changes
   useEffect(() => {
     if (!maint.vehicle_id) return;
-    authedFetch(`/api/admin/recent-entries?form=maintenance&vehicleId=${maint.vehicle_id}`)
+    authFetch(`/api/admin/recent-entries?form=maintenance&vehicleId=${maint.vehicle_id}`)
       .then((r) => r.json()).then((j) => setRecentMaint(j.data || []));
     // Load last recorded odometer for this vehicle (reuse fuel endpoint)
-    authedFetch(`/api/admin/fuel?vehicle_id=${maint.vehicle_id}`)
+    authFetch(`/api/admin/fuel?vehicle_id=${maint.vehicle_id}`)
       .then((r) => r.json())
       .then((json) => setLastMaintOdo(json.data?.current_odometer ?? null));
   }, [maint.vehicle_id]);
@@ -206,7 +199,7 @@ export default function DailyEntryPage() {
   // Recent solar when branch changes
   useEffect(() => {
     if (!solar.branch_id) return;
-    authedFetch(`/api/admin/recent-entries?form=solar&branchId=${solar.branch_id}`)
+    authFetch(`/api/admin/recent-entries?form=solar&branchId=${solar.branch_id}`)
       .then((r) => r.json()).then((j) => setRecentSolar(j.data || []));
   }, [solar.branch_id]);
 
@@ -220,7 +213,7 @@ export default function DailyEntryPage() {
       setUtility((u) => ({ ...u, utility_company: loc.default_disco! }));
     }
     setLoadingLastReading(true);
-    authedFetch(`/api/admin/utility?location_id=${utility.location_id}&meter_label=${encodeURIComponent(utility.meter_label)}`)
+    authFetch(`/api/admin/utility?location_id=${utility.location_id}&meter_label=${encodeURIComponent(utility.meter_label)}`)
       .then((r) => r.json())
       .then((json) => {
         if (json.data?.current_reading != null) {
@@ -230,7 +223,7 @@ export default function DailyEntryPage() {
         }
         setLoadingLastReading(false);
       });
-    authedFetch(`/api/admin/recent-entries?form=utility&locationId=${utility.location_id}&meterLabel=${encodeURIComponent(utility.meter_label)}`)
+    authFetch(`/api/admin/recent-entries?form=utility&locationId=${utility.location_id}&meterLabel=${encodeURIComponent(utility.meter_label)}`)
       .then((r) => r.json()).then((j) => setRecentUtility(j.data || []));
   }, [utility.location_id, utility.meter_label, locations]);
 
@@ -294,7 +287,7 @@ export default function DailyEntryPage() {
       }
     }
     setSubmittingFuel(true);
-    const res = await authedFetch("/api/admin/fuel", {
+    const res = await authFetch("/api/admin/fuel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(fuel),
@@ -304,7 +297,7 @@ export default function DailyEntryPage() {
     if (json.ok) {
       showToast("Fuel entry saved ✓", "success");
       setFuel((f) => ({ ...f, price_per_litre: "", quantity_litres: "", current_odometer: "", notes: "" }));
-      authedFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
+      authFetch(`/api/admin/recent-entries?form=fuel&vehicleId=${fuel.vehicle_id}`)
         .then((r) => r.json()).then((j) => setRecentFuel(j.data || []));
     } else {
       showToast(json.error || "Failed to save", "error");
@@ -317,7 +310,7 @@ export default function DailyEntryPage() {
       showToast("Please select a branch and date", "error"); return;
     }
     setSubmittingSolar(true);
-    const res = await authedFetch("/api/admin/solar", {
+    const res = await authFetch("/api/admin/solar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(solar),
@@ -327,7 +320,7 @@ export default function DailyEntryPage() {
     if (json.ok) {
       showToast("Solar reading saved ✓", "success");
       setSolar((s) => ({ ...s, production_kwh: "", notes: "", status: "Active" }));
-      authedFetch(`/api/admin/recent-entries?form=solar&branchId=${solar.branch_id}`)
+      authFetch(`/api/admin/recent-entries?form=solar&branchId=${solar.branch_id}`)
         .then((r) => r.json()).then((j) => setRecentSolar(j.data || []));
     } else {
       showToast(json.error || "Failed to save", "error");
@@ -349,7 +342,7 @@ export default function DailyEntryPage() {
       }
     }
     setSubmittingUtility(true);
-    const res = await authedFetch("/api/admin/utility", {
+    const res = await authFetch("/api/admin/utility", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(utility),
@@ -359,7 +352,7 @@ export default function DailyEntryPage() {
     if (json.ok) {
       showToast("Utility reading saved ✓", "success");
       setUtility((u) => ({ ...u, current_reading: "", bill_amount_pkr: "" }));
-      authedFetch(`/api/admin/recent-entries?form=utility&locationId=${utility.location_id}&meterLabel=${encodeURIComponent(utility.meter_label)}`)
+      authFetch(`/api/admin/recent-entries?form=utility&locationId=${utility.location_id}&meterLabel=${encodeURIComponent(utility.meter_label)}`)
         .then((r) => r.json()).then((j) => setRecentUtility(j.data || []));
     } else {
       showToast(json.error || "Failed to save", "error");
@@ -381,7 +374,7 @@ export default function DailyEntryPage() {
       }
     }
     setSubmittingMaint(true);
-    const res = await authedFetch("/api/admin/maintenance", {
+    const res = await authFetch("/api/admin/maintenance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...maint, work_type: maint.work_types.join(", ") }),
@@ -391,7 +384,7 @@ export default function DailyEntryPage() {
     if (json.ok) {
       showToast("Maintenance entry saved ✓", "success");
       setMaint((m) => ({ ...m, work_types: [], description: "", odometer_km: "", workshop: "", cost_pkr: "", next_service_due: "" }));
-      authedFetch(`/api/admin/recent-entries?form=maintenance&vehicleId=${maint.vehicle_id}`)
+      authFetch(`/api/admin/recent-entries?form=maintenance&vehicleId=${maint.vehicle_id}`)
         .then((r) => r.json()).then((j) => setRecentMaint(j.data || []));
     } else {
       showToast(json.error || "Failed to save", "error");
