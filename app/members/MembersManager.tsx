@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { useMobile } from "../lib/useMobile";
 import { logAction } from "../lib/audit-log";
@@ -29,6 +29,7 @@ type Member = {
   notify_email: boolean;
   notify_whatsapp: boolean;
   phone_e164: string | null;
+  photo_url: string | null;
 };
 
 type Plant = { id: string; name: string };
@@ -111,6 +112,206 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
 });
 
 type ActiveTab = "people" | "matrix" | "ownership" | "offboard" | "orgchart";
+
+/* ─── Photo upload + face-crop component ───────────────────────────────── */
+const PHOTO_SIZE   = 300;  // canvas output px
+const PHOTO_MAX_KB = 150;  // max KB after compression
+
+function PhotoUpload({
+  member,
+  onSaved,
+  onRemoved,
+}: {
+  member: Member;
+  onSaved: (url: string) => void;
+  onRemoved: () => void;
+}) {
+  const [preview, setPreview]   = useState<string | null>(null);
+  const [blob,    setBlob]      = useState<Blob | null>(null);
+  const [saving,  setSaving]    = useState(false);
+  const [error,   setError]     = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setError(null);
+    if (!file.type.startsWith("image/")) { setError("Please select an image file."); return; }
+
+    // Load into an Image element
+    const url = URL.createObjectURL(file);
+    const img  = new Image();
+    img.src    = url;
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; });
+
+    // ── Face detection ──────────────────────────────────────────────────
+    let cropX = img.width  * 0.5;  // default: horizontal centre
+    let cropY = img.height * 0.3;  // default: 30% from top (where faces usually are)
+    let cropR = Math.min(img.width, img.height) * 0.45;
+
+    try {
+      // FaceDetector is Chrome/Edge only — graceful fallback for other browsers
+      if ("FaceDetector" in window) {
+        // @ts-expect-error — FaceDetector is not in standard TS types yet
+        const fd = new window.FaceDetector({ fastMode: true });
+        const faces = await fd.detect(img);
+        if (faces.length > 0) {
+          // Pick the largest face
+          const face = faces.reduce((a: { boundingBox: DOMRectReadOnly }, b: { boundingBox: DOMRectReadOnly }) =>
+            b.boundingBox.width > a.boundingBox.width ? b : a);
+          const bb = face.boundingBox;
+          cropX = bb.x + bb.width  / 2;
+          cropY = bb.y + bb.height / 2;
+          // Crop radius = 1.4× the face box half-width so we get shoulders too
+          cropR = Math.max(bb.width, bb.height) * 0.7;
+        }
+      }
+    } catch { /* ignore — use defaults */ }
+
+    // ── Canvas crop ─────────────────────────────────────────────────────
+    const canvas  = document.createElement("canvas");
+    canvas.width  = PHOTO_SIZE;
+    canvas.height = PHOTO_SIZE;
+    const ctx = canvas.getContext("2d")!;
+
+    // Clip to circle
+    ctx.beginPath();
+    ctx.arc(PHOTO_SIZE / 2, PHOTO_SIZE / 2, PHOTO_SIZE / 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Draw the cropped region scaled to fill the circle
+    const scale = PHOTO_SIZE / (cropR * 2);
+    const sx    = cropX - cropR;
+    const sy    = cropY - cropR;
+    const sw    = cropR * 2;
+    const sh    = cropR * 2;
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
+
+    URL.revokeObjectURL(url);
+
+    // ── Compress to JPEG ────────────────────────────────────────────────
+    // Try quality levels until we're under PHOTO_MAX_KB
+    let quality = 0.9;
+    let result: Blob | null = null;
+    while (quality >= 0.5) {
+      result = await new Promise<Blob | null>(res => canvas.toBlob(res, "image/jpeg", quality));
+      if (result && result.size <= PHOTO_MAX_KB * 1000) break;
+      quality -= 0.1;
+    }
+    if (!result) { setError("Could not process image."); return; }
+    if (result.size > PHOTO_MAX_KB * 1000) {
+      setError(`Image still too large (${Math.round(result.size / 1000)} KB) after compression. Try a simpler photo.`);
+      return;
+    }
+
+    setBlob(result);
+    setPreview(canvas.toDataURL("image/jpeg", 0.9));
+  }
+
+  async function save() {
+    if (!blob) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("memberId", member.id);
+      fd.append("photo", new File([blob], "photo.jpg", { type: "image/jpeg" }));
+      const res = await authFetch("/api/members/photo", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error || "Upload failed."); }
+      else { setPreview(null); setBlob(null); onSaved(json.photoUrl); }
+    } catch { setError("Network error."); }
+    finally { setSaving(false); }
+  }
+
+  async function remove() {
+    if (!member.photo_url) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await authFetch("/api/members/photo", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ memberId: member.id }) });
+      if (res.ok) { onRemoved(); setPreview(null); setBlob(null); }
+      else { const j = await res.json(); setError(j.error || "Remove failed."); }
+    } catch { setError("Network error."); }
+    finally { setSaving(false); }
+  }
+
+  const currentSrc = preview || member.photo_url || null;
+  const initials   = getInitials(member.first_name, member.last_name, member.name);
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "14px", padding: "10px 0", marginBottom: "6px" }}>
+      {/* Circle preview */}
+      <div style={{
+        width: "64px", height: "64px", borderRadius: "50%", flexShrink: 0,
+        border: `2px solid ${COLOURS.HAIRLINE}`,
+        overflow: "hidden", backgroundColor: COLOURS.CARD_ALT,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        {currentSrc ? (
+          <img src={currentSrc} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span style={{ fontSize: "20px", fontWeight: 700, color: COLOURS.SLATE }}>
+            {initials}
+          </span>
+        )}
+      </div>
+
+      {/* Controls */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "5px", flex: 1 }}>
+        <div style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Profile Photo
+        </div>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={saving}
+            style={{ ...smallBtn(COLOURS.BLUE), fontSize: "12px", padding: "3px 10px" }}
+          >
+            {member.photo_url || preview ? "Change" : "Upload photo"}
+          </button>
+          {preview && blob && (
+            <button
+              onClick={save}
+              disabled={saving}
+              style={{ ...smallBtn(COLOURS.GREEN, true), fontSize: "12px", padding: "3px 10px" }}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          )}
+          {preview && (
+            <button
+              onClick={() => { setPreview(null); setBlob(null); }}
+              disabled={saving}
+              style={{ ...smallBtn(COLOURS.SLATE), fontSize: "12px", padding: "3px 10px" }}
+            >
+              Cancel
+            </button>
+          )}
+          {member.photo_url && !preview && (
+            <button
+              onClick={remove}
+              disabled={saving}
+              style={{ ...smallBtn(COLOURS.RED), fontSize: "12px", padding: "3px 10px" }}
+            >
+              {saving ? "Removing…" : "Remove"}
+            </button>
+          )}
+        </div>
+        {error && <div style={{ fontSize: "11px", color: COLOURS.RED }}>{error}</div>}
+        <div style={{ fontSize: "10px", color: COLOURS.INK_400 }}>
+          Any size · auto-cropped to face · max {PHOTO_MAX_KB} KB after compression
+        </div>
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+      />
+    </div>
+  );
+}
 
 // Renders one person plus everyone under them as a proper branching tree —
 // node, a stem down, a horizontal bar across siblings, then a stem down to
@@ -232,7 +433,7 @@ export default function MembersManager() {
       }
     }
     const { data } = await supabase.from("members")
-      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, manager_id, position_title, is_active, notify_email, notify_whatsapp, phone_e164")
+      .select("id, first_name, last_name, name, email, role, department, business_unit, company, is_hod, manager_id, position_title, is_active, notify_email, notify_whatsapp, phone_e164, photo_url")
       .order("first_name", { ascending: true });
     if (data) setMembers(data);
 
@@ -887,14 +1088,17 @@ export default function MembersManager() {
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
                       <div style={{
                         width: "32px", height: "32px", borderRadius: "50%",
-                        background: avatarGradient,
+                        background: m.photo_url ? "none" : avatarGradient,
                         display: "flex", alignItems: "center", justifyContent: "center",
                         flexShrink: 0,
                         color: "#fff",
                         fontSize: "11px", fontWeight: 600,
                         fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                        overflow: "hidden",
                       }}>
-                        {initials}
+                        {m.photo_url
+                          ? <img src={m.photo_url} alt={initials} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                          : initials}
                       </div>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -943,6 +1147,13 @@ export default function MembersManager() {
                   {/* ── Edit panel ──────────────────────────────────── */}
                   {isAdmin && isEditing && (
                     <div style={{ padding: "8px 12px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT }}>
+                      {/* ── Photo upload ── */}
+                      <PhotoUpload
+                        member={m}
+                        onSaved={(url) => setMembers((prev) => prev.map((x) => x.id === m.id ? { ...x, photo_url: url } : x))}
+                        onRemoved={() => setMembers((prev) => prev.map((x) => x.id === m.id ? { ...x, photo_url: null } : x))}
+                      />
+                      <div style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}`, marginBottom: "8px" }} />
                       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(120px, 1fr))", gap: "6px", marginBottom: "6px", alignItems: "end" }}>
                         <div><label style={lblC}>First Name</label><input style={inpC} defaultValue={m.first_name || ""} onBlur={(e) => { if (e.target.value !== (m.first_name || "")) updateMember(m.id, { first_name: e.target.value }); }} /></div>
                         <div><label style={lblC}>Last Name</label><input style={inpC} defaultValue={m.last_name || ""} onBlur={(e) => { if (e.target.value !== (m.last_name || "")) updateMember(m.id, { last_name: e.target.value }); }} /></div>
