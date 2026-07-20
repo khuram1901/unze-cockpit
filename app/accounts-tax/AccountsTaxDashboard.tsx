@@ -370,8 +370,8 @@ export default function AccountsTaxDashboard() {
 
   // ── Sign-off helpers ──
 
-  function allStepsComplete(section: string, entityKey: string, entries: Map<string, ScheduleStatus>): boolean {
-    for (let i = 1; i <= 5; i++) {
+  function allStepsComplete(section: string, entityKey: string, entries: Map<string, ScheduleStatus>, stepCount: number): boolean {
+    for (let i = 1; i <= stepCount; i++) {
       if (entries.get(`${selectedYear}:${section}:${i}:${entityKey}`) !== "Completed") return false;
     }
     return true;
@@ -419,7 +419,7 @@ export default function AccountsTaxDashboard() {
       created_at: now,
     });
 
-    fetch("/api/cron/tax-alerts", {
+    authFetch("/api/cron/tax-alerts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ taxYear: selectedYear }),
@@ -512,13 +512,13 @@ export default function AccountsTaxDashboard() {
   type PendingSignoff = { entityLabel: string; sectionLabel: string };
   const pendingSignoffs: PendingSignoff[] = [];
   const attentionSections = [
-    ...fiscalSections.map((s) => ({ key: s.key as string, label: s.label, entities: QUARTERLY_ENTITIES })),
-    { key: "Annual", label: "Annual", entities: ANNUAL_ENTITIES },
+    ...fiscalSections.map((s) => ({ key: s.key as string, label: s.label, entities: QUARTERLY_ENTITIES, stepCount: QUARTERLY_STEPS.length })),
+    { key: "Annual", label: "Annual", entities: ANNUAL_ENTITIES, stepCount: ANNUAL_STEPS.length },
   ];
   for (const sec of attentionSections) {
     for (const e of sec.entities) {
       const k = `${selectedYear}:${sec.key}:${e.key}`;
-      if (allStepsComplete(sec.key, e.key, scheduleEntries) && !(signoffs.get(k) ?? false)) {
+      if (allStepsComplete(sec.key, e.key, scheduleEntries, sec.stepCount) && !(signoffs.get(k) ?? false)) {
         pendingSignoffs.push({ entityLabel: e.label, sectionLabel: sec.label });
       }
     }
@@ -848,7 +848,7 @@ export default function AccountsTaxDashboard() {
                               const k = `${selectedYear}:${sec.key}:${e.key}`;
                               const done = signoffs.get(k) ?? false;
                               const meta = signoffMeta.get(k);
-                              const allComplete = allStepsComplete(sec.key, e.key, scheduleEntries);
+                              const allComplete = allStepsComplete(sec.key, e.key, scheduleEntries, steps.length);
 
                               if (done) {
                                 return (
