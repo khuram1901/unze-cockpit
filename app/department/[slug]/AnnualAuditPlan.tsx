@@ -46,7 +46,7 @@ const FREQ_BADGE: Record<string, { bg: string; text: string }> = {
 };
 const FREQUENCIES = ["Monthly", "Quarterly", "Semi-annually", "Annually"];
 
-type Viewer = { is_manager: boolean; team_id: string | null };
+type Viewer = { is_manager: boolean; team_id: string | null; member_id: string | null };
 
 type Team = {
   id: string; code: string; name: string; sort_order: number;

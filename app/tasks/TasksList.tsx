@@ -121,7 +121,7 @@ function getWeekStart(d: Date): string {
 // getMonthLabel/getQuarterLabel removed — labels now come straight from
 // get_tasks_monthly_chart()/get_tasks_quarterly_chart() (migration 102).
 
-export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean }) {
+export default function TasksList({ currentRole, canSeeAll, canReview, canDelete, canImport, department }: { currentRole: string; canSeeAll?: boolean; canReview?: boolean; canDelete?: boolean; canImport?: boolean; department?: string | null }) {
   const isMobile = useMobile();
   const searchParams = useSearchParams();
   const taskIdFromUrl = searchParams.get("task");
@@ -1277,11 +1277,14 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "8px",
           marginBottom: "12px", padding: "12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, backgroundColor: COLOURS.CARD,
         }}>
-          <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">All companies</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            <option value="group">Group / needs review</option>
-          </select>
+          {/* Audit dept non-managers only see their own tasks — company filter is noise for them */}
+          {!(department === "Audit" && !isPrivileged) && (
+            <select value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
+              <option value="all">All companies</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="group">Group / needs review</option>
+            </select>
+          )}
           <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">All departments</option>
             {departmentOptions.map((d) => <option key={d} value={d}>{d}</option>)}

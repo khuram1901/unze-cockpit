@@ -53,7 +53,7 @@ export default function TasksPageClient() {
         </Modal>
       )}
 
-      <TasksList currentRole={role} canSeeAll={seeAll} canReview={review} canDelete={canDelete} canImport={impExp} />
+      <TasksList currentRole={role} canSeeAll={seeAll} canReview={review} canDelete={canDelete} canImport={impExp} department={ctx?.department ?? null} />
     </>
   );
 }
