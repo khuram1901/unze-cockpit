@@ -32,6 +32,8 @@ type Member = {
   email: string | null;
   department: string | null;
   business_unit: string | null;
+  // company_id added by migration 183 — links directly to companies table
+  company_id: string | null;
 };
 
 type Company = {
@@ -79,13 +81,18 @@ function dateShortcuts(): { label: string; value: string }[] {
 // ── Voice types ───────────────────────────────────────────────────────────────
 type VoicePhase = "idle" | "listening" | "parsed";
 
-// Extend window to avoid TS errors on browser speech APIs
+// SpeechRecognition isn't in this project's DOM lib — declare on window so TS
+// doesn't complain when we read it at runtime in Chrome / Android Chrome / Edge.
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    SpeechRecognition: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    webkitSpeechRecognition: any;
   }
 }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SpeechRecognitionAny = any;
 
 export default function QuickAddTask({
   onCreated,
@@ -101,9 +108,8 @@ export default function QuickAddTask({
   const shortcuts = dateShortcuts();
 
   // Remote data
-  const [members,         setMembers]         = useState<Member[]>([]);
-  const [companies,       setCompanies]       = useState<Company[]>([]);
-  const [assignedBy,      setAssignedBy]      = useState("");
+  const [members,   setMembers]   = useState<Member[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
 
   // Form state
   const [description, setDescription] = useState("");
@@ -115,11 +121,14 @@ export default function QuickAddTask({
   const [showPicker,  setShowPicker]  = useState(false);
   const [saving,      setSaving]      = useState(false);
 
-  // Voice state
+  // Voice state — lazy init checks browser APIs without a useEffect
   const [voicePhase,     setVoicePhase]     = useState<VoicePhase>("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
-  const [voiceSupported, setVoiceSupported] = useState(false);
-  const recognitionRef  = useRef<SpeechRecognition | null>(null);
+  const [voiceSupported]                    = useState<boolean>(() =>
+    typeof window !== "undefined" &&
+    !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+  );
+  const recognitionRef  = useRef<SpeechRecognitionAny>(null);
   const transcriptRef   = useRef("");
 
   const inputRef    = useRef<HTMLInputElement>(null);
@@ -129,25 +138,14 @@ export default function QuickAddTask({
   // ── Load members + companies ────────────────────────────────────────────
   useEffect(() => {
     async function load() {
-      const { data: userData } = await supabase.auth.getUser();
-      const email = userData.user?.email || "";
-
-      const { data: me } = await supabase.from("members").select("name").eq("email", email).single();
-      setAssignedBy(me?.name || email);
-
       const [mRes, cRes] = await Promise.all([
-        supabase.from("members").select("id, name, email, department, business_unit").eq("is_active", true).order("name", { ascending: true }),
+        supabase.from("members").select("id, name, email, department, business_unit, company_id").eq("is_active", true).order("name", { ascending: true }),
         supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
       ]);
       if (mRes.data) setMembers(mRes.data);
       if (cRes.data) setCompanies(cRes.data);
     }
     load();
-  }, []);
-
-  // ── Detect voice support ────────────────────────────────────────────────
-  useEffect(() => {
-    setVoiceSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition));
   }, []);
 
   // ── Auto-start voice (from ?voice=1 URL param / Siri shortcut) ─────────
@@ -182,8 +180,12 @@ export default function QuickAddTask({
     ? members.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()))
     : members.slice(0, 8);
 
+  // Resolve company: prefer the direct company_id on the member (migration 183),
+  // fall back to business_unit short-code match for older records.
   const autoCompany: Company | null = selected
-    ? (companies.find((c) => c.short_code === selected.business_unit) ?? null)
+    ? (companies.find((c) => c.id === selected.company_id)
+        ?? companies.find((c) => c.short_code === selected.business_unit)
+        ?? null)
     : null;
 
   const shortcutLabel = shortcuts.find((s) => s.value === dueDate)?.label;
@@ -231,8 +233,10 @@ export default function QuickAddTask({
     rec.interimResults   = true;
     rec.maxAlternatives  = 1;
 
-    rec.onresult = (e) => {
-      const t = Array.from(e.results).map((r) => r[0].transcript).join("");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const t = Array.from(e.results as any[]).map((r: any) => r[0].transcript as string).join("");
       transcriptRef.current = t;
       setLiveTranscript(t);
     };
@@ -246,7 +250,8 @@ export default function QuickAddTask({
       });
     };
 
-    rec.onerror = (e) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onerror = (e: any) => {
       setVoicePhase("idle");
       setLiveTranscript("");
       if (e.error !== "aborted") {
@@ -475,35 +480,49 @@ export default function QuickAddTask({
             <div ref={wrapperRef} style={{ position: "relative" }}>
               {selected ? (
                 <div style={{
-                  display: "flex", alignItems: "center", gap: "10px",
-                  padding: "8px 12px",
                   border: `1px solid ${ACCENT.border}`,
-                  borderRadius: RADII.SM, backgroundColor: ACCENT.bg,
+                  borderRadius: RADII.SM,
+                  backgroundColor: ACCENT.bg,
+                  overflow: "hidden",
                 }}>
-                  <div style={{
-                    width: "30px", height: "30px", borderRadius: "50%",
-                    backgroundColor: avColour(selected.name).bg,
-                    color: avColour(selected.name).text,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: "11px", fontWeight: 700, flexShrink: 0,
-                    border: `1px solid ${ACCENT.border}`,
-                  }}>
-                    {initials(selected.name)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: ACCENT.text }}>
-                      {selected.name}
+                  {/* Top row: avatar + name + clear */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 12px" }}>
+                    <div style={{
+                      width: "32px", height: "32px", borderRadius: "50%",
+                      backgroundColor: avColour(selected.name).bg,
+                      color: avColour(selected.name).text,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "11px", fontWeight: 700, flexShrink: 0,
+                      border: `1px solid ${ACCENT.border}`,
+                    }}>
+                      {initials(selected.name)}
                     </div>
-                    {(selected.department || autoCompany) && (
-                      <div style={{ fontSize: "11px", color: ACCENT.text, opacity: 0.75 }}>
-                        {[selected.department, autoCompany?.short_code].filter(Boolean).join(" · ")}
-                        {" "}— auto‑filled
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: ACCENT.text }}>
+                        {selected.name}
                       </div>
-                    )}
+                    </div>
+                    <button type="button" onClick={clear} aria-label="Clear assignee"
+                      style={{ background: "none", border: "none", padding: "2px 6px", cursor: "pointer", color: ACCENT.text, fontSize: "16px", lineHeight: 1, flexShrink: 0 }}
+                    >×</button>
                   </div>
-                  <button type="button" onClick={clear} aria-label="Clear assignee"
-                    style={{ background: "none", border: "none", padding: "2px 6px", cursor: "pointer", color: ACCENT.text, fontSize: "16px", lineHeight: 1, flexShrink: 0 }}
-                  >×</button>
+                  {/* Auto-fill detail row */}
+                  <div style={{
+                    borderTop: `1px solid ${ACCENT.border}`,
+                    padding: "6px 12px",
+                    display: "flex", gap: "16px", flexWrap: "wrap",
+                  }}>
+                    {[
+                      { label: "Company",    value: autoCompany?.name ?? "—" },
+                      { label: "Department", value: selected.department ?? "—" },
+                      { label: "Priority",   value: "Medium" },
+                    ].map(({ label, value }) => (
+                      <div key={label} style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                        <span style={{ fontSize: "9.5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: ACCENT.text, opacity: 0.6 }}>{label}</span>
+                        <span style={{ fontSize: "12px", fontWeight: 500, color: ACCENT.text }}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <input
@@ -604,31 +623,19 @@ export default function QuickAddTask({
               )}
             </div>
 
-            {/* Auto-fill summary */}
-            {selected && autoCompany && (
-              <div style={{
-                fontSize: "11px", color: COLOURS.SLATE,
-                paddingTop: "8px", borderTop: `1px solid ${COLOURS.HAIRLINE}`,
-                display: "flex", flexDirection: "column", gap: "2px",
-              }}>
-                <span>✓ {autoCompany.name} · {selected.department || "No department"} · Priority: Medium</span>
-                <span>✓ Status: Not Started · Assigned by {assignedBy || "you"}</span>
-              </div>
-            )}
-
-            {/* Company warning */}
+            {/* Company unresolved — show compact warning */}
             {selected && !autoCompany && (
               <div style={{
                 fontSize: "11px", color: COLOURS.AMBER,
                 backgroundColor: "#FBF1DE", border: `1px solid #E8C97A`,
                 borderRadius: RADII.SM, padding: "7px 10px",
               }}>
-                ⚠ Can&apos;t detect {selected.name}&apos;s company automatically.{" "}
+                ⚠ Company not set for {selected.name} yet.{" "}
                 <button type="button" onClick={onMoreOptions} style={{
                   background: "none", border: "none", padding: 0,
                   color: COLOURS.AMBER, fontWeight: 600, cursor: "pointer",
                   textDecoration: "underline", fontSize: "11px",
-                }}>Use full form</button>{" "}to set it manually.
+                }}>Use full form</button>{" "}to pick it, or apply migration 183 first.
               </div>
             )}
           </>

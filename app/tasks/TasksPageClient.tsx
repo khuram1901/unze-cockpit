@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { COLOURS, SHADOWS, PageHeader } from "../lib/SharedUI";
 import { useUserCtx } from "../lib/useUserCtx";
@@ -17,21 +17,13 @@ export default function TasksPageClient() {
   const { ctx, loading } = useUserCtx();
   const searchParams = useSearchParams();
 
-  // quick = inline quick-add panel; full = full NewTaskForm modal
-  const [showQuick,      setShowQuick]      = useState(false);
-  const [showFull,       setShowFull]       = useState(false);
-  // autoStartVoice: true when ?voice=1 is in the URL (Siri shortcut / Android share)
-  const [autoStartVoice, setAutoStartVoice] = useState(false);
+  // ?voice=1 in the URL (Siri shortcut / Android home screen shortcut) —
+  // open quick panel immediately and auto-trigger the mic.
+  const voiceParam = searchParams.get("voice") === "1";
 
-  // Detect ?voice=1 — opens quick panel and triggers mic automatically.
-  // Staff can create a Siri Shortcut (iOS) or Android Home Screen shortcut
-  // that opens: https://<your-domain>/tasks?voice=1
-  useEffect(() => {
-    if (searchParams.get("voice") === "1") {
-      setShowQuick(true);
-      setAutoStartVoice(true);
-    }
-  }, [searchParams]);
+  const [showQuick,      setShowQuick]      = useState(voiceParam);
+  const [showFull,       setShowFull]       = useState(false);
+  const [autoStartVoice, setAutoStartVoice] = useState(voiceParam);
 
   if (loading) return <p style={{ color: COLOURS.SLATE }}>Loading tasks…</p>;
 
