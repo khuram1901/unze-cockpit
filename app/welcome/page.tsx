@@ -91,9 +91,9 @@ function Card({ children, accentColor, style }: { children: React.ReactNode; acc
   );
 }
 
-function CardLabel({ children, color }: { children: React.ReactNode; color?: string }) {
+function CardLabel({ children, color, style }: { children: React.ReactNode; color?: string; style?: React.CSSProperties }) {
   return (
-    <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: color ?? INK_400, marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
+    <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: color ?? INK_400, marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px", ...style }}>
       {children}
     </div>
   );
@@ -113,6 +113,8 @@ export default function WelcomePage() {
   const [weather,      setWeather]      = useState<Weather | null>(null);
   const [fx,           setFx]           = useState<FxRates | null>(null);
   const [tick,         setTick]         = useState(0);
+  const [expandedDay,  setExpandedDay]  = useState<number | null>(null); // null = all collapsed, 0/1/2 = that day expanded
+  const [newsExpanded, setNewsExpanded] = useState(false);
 
   /* live clock */
   useEffect(() => {
@@ -362,10 +364,12 @@ export default function WelcomePage() {
           {/* ── ROW 2: 3-day calendar ─────────────────────────────── */}
           <div style={{ display: "grid", gridTemplateColumns: col3, gap, marginBottom: gap }}>
             {[0, 1, 2].map(offset => {
-              const dateStr = dayOffset(offset);
-              const events  = calEvents.filter(e => e.start.slice(0, 10) === dateStr);
-              const color   = DAY_COLORS[offset];
-              const label   = dayLabel(offset);
+              const dateStr  = dayOffset(offset);
+              const events   = calEvents.filter(e => e.start.slice(0, 10) === dateStr);
+              const color    = DAY_COLORS[offset];
+              const label    = dayLabel(offset);
+              const isExpanded = expandedDay === offset;
+              const PREVIEW  = 3;
               return (
                 <Card key={offset} accentColor={color}>
                   <CardLabel color={color}>
@@ -382,7 +386,7 @@ export default function WelcomePage() {
                     <div style={{ fontSize: "13px", color: INK_400, fontStyle: "italic" }}>Nothing scheduled.</div>
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                      {events.slice(0, 4).map((ev, i) => {
+                      {(isExpanded ? events : events.slice(0, PREVIEW)).map((ev, i) => {
                         const start = fmtEvtTime(ev.start);
                         const end   = fmtEvtTime(ev.end);
                         const time  = start === "All day" ? "All day" : `${start}–${end}`;
@@ -404,10 +408,17 @@ export default function WelcomePage() {
                           </div>
                         );
                       })}
-                      {events.length > 4 && (
-                        <div style={{ fontSize: "12px", color: INK_400, paddingLeft: "8px", marginTop: "2px" }}>
-                          +{events.length - 4} more
-                        </div>
+                      {events.length > PREVIEW && (
+                        <button
+                          onClick={() => setExpandedDay(isExpanded ? null : offset)}
+                          style={{
+                            marginTop: "4px", background: "none", border: "none",
+                            fontSize: "12px", fontWeight: 600, color: color,
+                            cursor: "pointer", textAlign: "left", padding: "2px 8px",
+                          }}
+                        >
+                          {isExpanded ? "▲ Show less" : `▼ Show all ${events.length} events`}
+                        </button>
                       )}
                     </div>
                   )}
@@ -418,7 +429,21 @@ export default function WelcomePage() {
 
           {/* ── ROW 3: news ───────────────────────────────────────── */}
           <Card accentColor={NAVY} style={{ marginBottom: "8px" }}>
-            <CardLabel color={NAVY}>📰 Latest News</CardLabel>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+              <CardLabel color={NAVY} style={{ marginBottom: 0 }}>📰 Latest News</CardLabel>
+              {news.length > 0 && (
+                <button
+                  onClick={() => setNewsExpanded(v => !v)}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    fontSize: "12px", fontWeight: 600, color: NAVY,
+                    padding: "2px 6px",
+                  }}
+                >
+                  {newsExpanded ? "▲ Show less" : "▼ Show more"}
+                </button>
+              )}
+            </div>
             {news.length === 0 ? (
               <div style={{ color: INK_400, fontSize: "13px" }}>Loading headlines…</div>
             ) : (
@@ -427,7 +452,7 @@ export default function WelcomePage() {
                 gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr",
                 gap: "0",
               }}>
-                {news.map((s, i) => (
+                {(newsExpanded ? news : news.slice(0, 6)).map((s, i) => (
                   <a
                     key={i}
                     href={s.link}

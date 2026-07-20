@@ -1748,10 +1748,7 @@ export default function HomePage() {
             recAgingByCustomer={recAgingByCustomer}
             showFinance={showFinance}
             setShowFinance={setShowFinance}
-            expandedCard={expandedCard}
-            setExpandedCard={setExpandedCard}
-            bannerOpen={bannerOpen}
-            setBannerOpen={setBannerOpen}
+
             deptHealth={deptHealth}
             investmentData={investmentData}
             pensionSummary={pensionSummary}
@@ -2330,7 +2327,7 @@ export default function HomePage() {
 function ExecutiveDashboardBody({
   ctx, lastUpdated, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations, stuckReceivables,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
-  expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
+  deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
   facilitySynopsis, guaranteeAlerts, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
   taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve,
 }: {
@@ -2349,10 +2346,6 @@ function ExecutiveDashboardBody({
   recAgingByCustomer: { customer: string; "0-30": number; "31-60": number; "61-90": number; "90+": number; total: number }[];
   showFinance: boolean;
   setShowFinance: (v: boolean) => void;
-  expandedCard: string | null;
-  setExpandedCard: (v: string | null) => void;
-  bannerOpen: boolean;
-  setBannerOpen: (v: boolean) => void;
   deptHealth: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[];
   investmentData: InvestmentSummary | null;
   pensionSummary: { gbp: number; pkr: number; netGain: number; totalReturn: number; contributed: number; feesPaid: number } | null;
@@ -2562,9 +2555,8 @@ function ExecutiveDashboardBody({
           >
             {/* Row 1 — alerts */}
             <div
-              onClick={() => setBannerOpen(!bannerOpen)}
               style={{
-                padding: "9px 14px", cursor: "pointer",
+                padding: "9px 14px",
                 display: "flex", alignItems: "center", gap: "10px",
               }}
             >
@@ -2592,7 +2584,6 @@ function ExecutiveDashboardBody({
                   </span>
                 )}
               </div>
-              <span style={{ fontSize: "13px", color: hasCritical ? RED : AMBER, fontWeight: 700, flexShrink: 0 }}>{bannerOpen ? "▲ Hide" : "▼ Show"}</span>
             </div>
             {/* Row 2 — ops strip */}
             <div style={{
@@ -2646,7 +2637,7 @@ function ExecutiveDashboardBody({
       </div>
 
       {/* ── SECTION 1: NEEDS YOUR ATTENTION (expanded detail) ── */}
-      {hasAttention && bannerOpen ? (
+      {hasAttention ? (
         <div style={{
           border: `1px solid ${hasCritical ? DANGER_SOFT : WARNING_SOFT}`,
           borderLeft: `4px solid ${hasCritical ? RED : AMBER}`,
@@ -2655,25 +2646,15 @@ function ExecutiveDashboardBody({
           overflow: "hidden",
           marginBottom: "14px",
         }}>
-          <div style={{ display: "flex", justifyContent: "flex-end", padding: "6px 12px", borderBottom: `1px solid ${hasCritical ? DANGER_SOFT : WARNING_SOFT}` }}>
-            <button
-              onClick={() => setBannerOpen(false)}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, color: hasCritical ? RED : AMBER, padding: "2px 6px" }}
-            >▲ Collapse</button>
-          </div>
           <div>
             {attentionRows.map((row) => {
-                // null means "nothing collapsed" — all rows start expanded.
-                // Clicking a row focuses it (others collapse); clicking again restores all.
-                const isOpen = expandedCard === null || expandedCard === row.id;
                 return (
                   <div key={row.id}>
                     <div
-                      onClick={() => row.items.length > 0 ? setExpandedCard(isOpen && expandedCard !== null ? null : row.id) : undefined}
                       style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center",
-                        padding: "9px 16px", cursor: row.items.length > 0 ? "pointer" : "default",
-                        backgroundColor: isOpen ? COLOURS.CARD : "transparent",
+                        padding: "9px 16px",
+                        backgroundColor: COLOURS.CARD,
                         borderBottom: `1px solid ${hasCritical ? DANGER_SOFT : WARNING_SOFT}`,
                       }}
                     >
@@ -2686,11 +2667,8 @@ function ExecutiveDashboardBody({
                         }}>{row.count}</span>
                         <span style={{ fontSize: "16px", fontWeight: 600, color: NAVY }}>{row.label}</span>
                       </div>
-                      {row.items.length > 0 && (
-                        <span style={{ fontSize: "15px", color: SLATE }}>{isOpen ? "▼" : "▶"}</span>
-                      )}
                     </div>
-                    {isOpen && row.items.length > 0 && (
+                    {row.items.length > 0 && (
                       <div style={{ backgroundColor: COLOURS.CARD }}>
                         {row.items.map((item) => {
                           const href = item.taskId ? `/tasks?task=${item.taskId}` : undefined;
