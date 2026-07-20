@@ -4,6 +4,39 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-20 — Monday blueprint refresh (scheduled)
+
+**Files changed in BLUEPRINT.md:**
+- Header date updated: 19/07/2026 → 20/07/2026; summary of all changes below added to front-matter
+- `app/tasks/` — added `QuickAddTask.tsx` and updated `TasksPageClient.tsx`, `TasksList.tsx`, `NewTaskForm.tsx` entries
+- `app/lib/` — added `ChatPanel.tsx`, `MentionTextarea.tsx`; updated `supabase.ts` (authFetch), `AuthWrapper.tsx`, `permissions.ts` (isDailyEntryOnly fix)
+- `app/accounts-tax/AccountsTaxDashboard.tsx` — noted Rule 0 RPC migration
+- `app/admin/page.tsx` — noted can_manage_locations server-side check
+- `api/backup/route.ts` — updated to reflect Google Drive upload (was Gmail email)
+- `api/admin/list-backups/route.ts` — updated to reflect Drive links
+- `api/chat/` — new section added (conversations + messages routes)
+- Database schema note — migration count updated 001–072 → 001–183; recent migrations listed
+- Recovery instructions — migration count updated; backup note updated for Drive
+- Decisions Locked In — added #34 (authFetch canonical) and #35 (backup → Drive)
+
+**Behaviour changes found (commits since 19/07/2026):**
+- **In-app chat** (`feat: in-app chat`): floating `ChatPanel` in `AuthWrapper`, 1-to-1 and group conversations, Supabase Realtime on `chat_messages`. Migration 183 creates `chat_conversations`, `chat_participants`, `chat_messages` tables with RLS + `get_my_conversations` / `find_direct_conversation` RPCs.
+- **Quick-add task panel** (`feat: quick-add task panel`): new `QuickAddTask.tsx` — 3-step flow (description → assignee → due date shortcut). Company/dept/priority auto-inferred from assignee. Embedded in `TasksPageClient.tsx` as a slide-in panel.
+- **@mention assignment in task notes** (`feat: @mention assignment`): new `MentionTextarea.tsx` used in `NewTaskForm.tsx`; typing "@" opens member dropdown, selecting auto-adds as assignee. Task creator now appears in their own Mine tab.
+- **Accounts & Tax Rule 0** (`Rule 0: replace 5 queries + 8 JS loops`): `AccountsTaxDashboard.tsx` now calls single `get_tax_dashboard_summary` RPC (migration 181). Removes all JS aggregation from the component.
+- **authFetch centralised** (`refactor: replace 15 local authedFetch copies`): all client-side API calls now import `authFetch` from `lib/supabase`. 15 inline copies removed.
+- **Backup → Google Drive** (`Backup: replace Gmail email with Google Drive upload`): `/api/backup` saves to 'Unze Cockpit Backups' Drive folder. Backups list page now shows Drive folder link + per-file Drive URLs.
+- **isDailyEntryOnly tightened** (`fix: tighten isDailyEntryOnly`): members with admin_ops / dept / task overrides correctly excluded from the daily-entry-only restriction.
+- **can_manage_locations server-side** (`Move can_manage_locations check server-side`): `admin/page.tsx` now derives from `ctx.overrides`; hardcoded email list removed.
+- **Audit daily log scoped to assigned member** (`Point 1+2: scope audit daily log`): `audit_daily_log_summary()` RPC filters by `assigned_member_id` for non-manager callers (migration 153). Tasks page company filter hidden for non-privileged Audit dept members.
+- **Tax migrations**: 179 (`tax_accounts_signoffs` table), 180 (`last_email_sent_at` column), 181 (`get_tax_dashboard_summary` RPC), 182 (gmail_source on tax notices).
+
+**Decisions:**
+- #34: `authFetch` from `lib/supabase` is the only permitted authenticated fetch helper — no local copies.
+- #35: Backup delivery is Google Drive upload; no email delivery of backup files.
+
+---
+
 ## 2026-07-19 (session 2) — Mobile overhaul; Admin Ops widgets; manager edit dropdown; JS audit; TypeScript clean
 
 - **Full mobile responsiveness overhaul** across all major pages. `useMobile()` hook (768px breakpoint) used app-wide to switch multi-column grids to single-column on mobile. Global CSS additions in `globals.css`: `font-size: 16px !important` on all inputs/selects/textareas (iOS auto-zoom prevention), `min-height: 44px` on touch targets, `.card-mobile-pad` utility class. Pages fixed: Tasks bulk-action toolbar (column layout on mobile, action groups stacked), P&L (3 chart grids now 1-col on mobile), Admin Operations (3-col form grids → 2-col, YTD stats grid → 2-col), PA Dashboard (KPI grid 3-col → 2-col), Operations Dashboard (tab strip full-width on mobile). Earlier session had already fixed Daily Entry, Stock, Members, Meetings, Investments.

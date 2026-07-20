@@ -1,8 +1,8 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 19/07/2026 (session 2 — mobile responsiveness overhaul across all pages; Admin Operations tab-level widget gating added; manager assignment dropdown added to Members edit panel; JS aggregation audit completed; TypeScript clean).
+> **This is the source of truth.** Read before touching any code. Last updated: 20/07/2026 (in-app chat with Supabase Realtime; quick-add task panel; @mention assignment in task notes; backup changed to Google Drive upload; Accounts & Tax Rule 0 RPC; authFetch centralised in lib/supabase.ts; isDailyEntryOnly tightened; can_manage_locations moved server-side; audit daily log scoped to assigned member).
 >
-> Previous update: 19/07/2026 (Production Daily Entry redesigned to tab-based layout matching Admin Entry; bell notification deep-links fixed to filter Tasks page on arrival; Exceptions standalone page removed; app version bumped to v4.0; Admin Entry + Daily Entry hidden from sidebar — direct-link access only).
+> Previous update: 19/07/2026 (session 2 — mobile responsiveness overhaul across all pages; Admin Operations tab-level widget gating added; manager assignment dropdown added to Members edit panel; JS aggregation audit completed; TypeScript clean).
 >
 > Previous update: 14/07/2026 (Tasks page rebuild, Phases 3–5: migrations 098–105 — company tag, stage, locked assigned/original-due dates, subtasks with DB-enforced completion gating, due-date history, Stuck status (red), Kanban board, Recurring tab, Team tab, monthly/quarterly RPCs, attention banner, My Tasks tab, real filters, task-detail modal, mini-checklist, comments, WhatsApp auto-remind toggle, calendar picker, meeting chip — see "Tasks page redesign" section for the full history including the mockup-reconciliation pass after Khuram flagged the live page didn't match what was designed).
 >
@@ -96,7 +96,10 @@ app/
 │   ├── AccountsTaxDashboard.tsx      Full dashboard: quarterly accounts schedule (5 entities × 5 steps),
 │   │                                 annual accounts schedule (10 entities × 6 steps),
 │   │                                 monthly/quarterly return filings (FBR Sales Tax, PRA Tax, Income Tax),
-│   │                                 fiscal-year navigation, overdue detection per deadline
+│   │                                 fiscal-year navigation, overdue detection per deadline.
+│   │                                 Rule 0 compliant (20/07/2026): replaced 5 separate queries + 8 JS
+│   │                                 loops with single `get_tax_dashboard_summary` RPC call
+│   │                                 (supabase/181_get_tax_dashboard_summary.sql).
 │   └── TaxComplianceSummary.tsx      Summary card component — shows filing %, schedule completion
 │                                     per quarter. Used on home page as a clickable summary tile.
 │
@@ -155,9 +158,17 @@ app/
 │
 ├── tasks/
 │   ├── page.tsx                      Tasks page shell
-│   ├── TasksPageClient.tsx           Tasks page client — view switcher, filters
-│   ├── TasksList.tsx                 Task list component — department/weekly/monthly/timeline views
-│   ├── NewTaskForm.tsx               Create/edit task form — description, owner, due date (required)
+│   ├── TasksPageClient.tsx           Tasks page client — view switcher, filters. Hosts QuickAddTask
+│   │                                 panel (slides in from right when "+" is tapped).
+│   ├── TasksList.tsx                 Task list component — department/weekly/monthly/timeline views.
+│   │                                 Company filter hidden for non-privileged Audit dept members.
+│   ├── NewTaskForm.tsx               Create/edit task form — description, owner, due date (required).
+│   │                                 Notes field now uses MentionTextarea: typing "@" opens member
+│   │                                 dropdown, selecting auto-adds them as an assignee.
+│   ├── QuickAddTask.tsx              Ultra-minimal 3-step task creation: (1) type description,
+│   │                                 (2) pick assignee (type-to-filter), (3) tap a due-date shortcut.
+│   │                                 Company/dept/priority/status inferred from assignee. "More options"
+│   │                                 falls through to the full NewTaskForm modal.
 │   └── TaskStatus.tsx                Inline status badge/selector component
 │
 ├── calendar/page.tsx                 Calendar — tasks view by due date
@@ -222,6 +233,8 @@ app/
 │                                     member, auto-jump to the first visible tab.
 │                                     All colours via COLOURS tokens; RADII.CARD, RADII.PILL, RADII.SM
 │                                     used throughout; no raw hex. Mobile responsive (2-col grids on mobile).
+│                                     `can_manage_locations` check is now server-side — derived from
+│                                     ctx.overrides; hardcoded email list removed (20/07/2026).
 │
 ├── monthly-operations-targets/page.tsx  Monthly production/dispatch targets per plant.
 │                                     Full Genspark restyle: all var(--*) and raw hex replaced
@@ -233,10 +246,16 @@ app/
 │                                     Search across company inboxes + HR policies + HR inbox.
 │
 └── lib/
-    ├── supabase.ts                   Supabase browser client + loadMyPermissions helper
+    ├── supabase.ts                   Supabase browser client + loadMyPermissions helper.
+│   │                                 Also exports `authFetch(url, init?)` — the canonical
+│   │                                 authenticated fetch for all client API calls. Replaces 15
+│   │                                 previous local `authedFetch` copies (refactored 20/07/2026).
     ├── supabase-server.ts            createServiceClient() — server-side (bypasses RLS)
     ├── api-auth.ts                   requireAuth(req) — validates Bearer token in API routes
-    ├── permissions.ts                Central permission functions — SINGLE SOURCE OF TRUTH
+    ├── permissions.ts                Central permission functions — SINGLE SOURCE OF TRUTH.
+│   │                                 `isDailyEntryOnly` tightened (20/07/2026): members with
+│   │                                 admin_ops, dept, or task overrides are correctly excluded
+│   │                                 from the daily-entry-only restriction (fixes Sunaina's access).
     ├── pageRegistry.ts               PAGE_REGISTRY — maps permKeys to home dashboard cards
     │                                 GROUP_ORDER: Overview → Operations → Departments → Finance →
     │                                 My Workspace → Settings → Preferences
@@ -247,7 +266,16 @@ app/
 │                                     investments, system_backups, stock, guarantees.
 │                                     useRequireDepartment: special-case for Shakeel on Tax dept.
     ├── useUserCtx.ts                 useUserCtx() hook — loads user role/dept/overrides
-    ├── AuthWrapper.tsx               Wraps app — handles auth state, notification bell, sidebar
+    ├── AuthWrapper.tsx               Wraps app — handles auth state, notification bell, sidebar,
+│   │                                 and the floating ChatPanel (rendered once at app root).
+    ├── ChatPanel.tsx                 Floating in-app chat panel — slides in from the right.
+│   │                                 1-to-1 and group conversations via Supabase Realtime.
+│   │                                 Conversation list + message thread view. Avatar initials with
+│   │                                 seeded palette. Unread count badge on the chat icon in the header.
+│   │                                 Data: api/chat/conversations + api/chat/messages routes.
+    ├── MentionTextarea.tsx           Textarea with "@" mention support — detects "@" keypress, shows
+│   │                                 filtered member dropdown, inserts "@Name" and calls
+│   │                                 onMentionAdded(member). Used in NewTaskForm notes field.
     ├── SidebarLayout.tsx             Sidebar nav + mobile header — visibility via PERM_FUNC map.
     │                                 SIDEBAR_GROUPS order: Overview → Operations → Departments →
     │                                 Finance → My Workspace → Settings.
@@ -304,14 +332,22 @@ app/
 api/
 ├── admin/
 │   ├── cron-health/route.ts          GET — checks health of 6 integrations (Gmail, Calendar, etc.)
-│   ├── list-backups/route.ts         GET — lists backup files in Supabase Storage
+│   ├── list-backups/route.ts         GET — lists backup files in Supabase Storage + returns Google
+│   │                                 Drive folder URL and per-file Drive links (20/07/2026).
 │   ├── list-documents/route.ts       GET — lists source documents archive
 │   └── restore/route.ts              POST — restores a backup
 ├── auth/
 │   ├── change-password/route.ts      POST — change own password
 │   ├── reset-password/route.ts       POST — request password reset email
 │   └── set-password/route.ts         POST — set password (invite flow)
-├── backup/route.ts                   POST — trigger manual backup to Supabase Storage
+├── backup/route.ts                   POST — trigger manual backup. Uploads JSON to Google Drive
+│                                     folder 'Unze Cockpit Backups' (changed 20/07/2026 from emailing
+│                                     the backup; requires Drive scope on k.saleem OAuth token).
+├── chat/
+│   ├── conversations/route.ts        GET — list my conversations (calls get_my_conversations RPC).
+│   │                                 POST — create 1-to-1 or group conversation.
+│   └── messages/route.ts             GET — fetch messages for a conversation.
+│                                     POST — send a message to a conversation.
 ├── calendar/
 │   ├── create-event/route.ts         POST — create Google Calendar event
 │   └── freebusy/route.ts             GET — check calendar free/busy (auth required)
@@ -581,7 +617,7 @@ All major pages have been made mobile-safe (iPhone + Android). Approach:
 
 ## 4. Complete Database Schema
 
-> Source of truth: `supabase/` migration files 001–072. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run.
+> Source of truth: `supabase/` migration files 001–183. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run. Recent migrations (20/07/2026): 153 (audit visibility — daily log scoped to assigned member), 179 (tax_accounts_signoffs table), 180 (last_email_sent_at on tax_deadline_alerts), 181 (get_tax_dashboard_summary RPC), 182 (tax_notices gmail_source field), 183 (chat tables — chat_conversations, chat_participants, chat_messages with Realtime).
 
 ### Core tables
 
@@ -1915,6 +1951,8 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 33. **Admin Entry (`/daily-entry`) and Daily Entry (`/production`) are hidden from the sidebar for all users (19/07/2026).** Both pages remain fully operational — staff access them via a bookmarked direct link on mobile. Both are auth-gated (`useRequireCapability`): visiting without logging in redirects to the login page. Do not re-add these to `PAGE_REGISTRY` without a deliberate decision.
 32. **Bell notifications deep-link into the Tasks page with filter + scope pre-set (19/07/2026).** Each bell item href carries `?filter=overdue|waiting|submitted|exception&scope=mine`. `TasksList.tsx` reads these from `useSearchParams` on mount and seeds `filter` + `myTasksScope` state accordingly. Pill counts are computed from `myTasksSource` (scoped list) so they match what's actually visible on screen.
 33. **Exceptions standalone page (`/exceptions`) removed (19/07/2026).** Fully redundant — the bell's "Needs explanation" filter and the Tasks page `exception` filter cover it. `can_view_exceptions` column dropped from `member_permissions` (migration 150).
+34. **`authFetch` is the canonical authenticated fetch for all client-side API calls (20/07/2026).** Exported from `app/lib/supabase.ts`. Never write a local copy of `authedFetch` in a page or component — always import `authFetch` from `lib/supabase`. The 15 previous copies were removed in the refactor commit.
+35. **Backup uploads to Google Drive, not Gmail (20/07/2026).** `/api/backup` saves to the 'Unze Cockpit Backups' Drive folder using the k.saleem Google token. The backups list page links to the Drive folder and per-file Drive URLs. Email delivery of backup files is removed.
 
 ---
 
@@ -1945,8 +1983,8 @@ npm install
 
 ### Step 2: Restore the database
 1. Log in to Supabase dashboard → create a new project
-2. Run all SQL migration files in order (001 through 095) via the Supabase SQL Editor. Pension tables (`pension_funds`, `pension_fund_prices`) and the original `get_pension_summary` RPC were applied directly without a numbered migration file and must also be run.
-3. Restore data from the most recent backup (available in Supabase Storage or via the `/admin` page backup list)
+2. Run all SQL migration files in order (001 through 183) via the Supabase SQL Editor. Pension tables (`pension_funds`, `pension_fund_prices`) and the original `get_pension_summary` RPC were applied directly without a numbered migration file and must also be run.
+3. Restore data from the most recent backup (available in Supabase Storage, or via the `/admin` page backup list which links to Google Drive for recent backups)
 
 ### Step 3: Configure environment
 Set all environment variables in Vercel (see Section 1).
