@@ -12,7 +12,7 @@ export default function RootPage() {
     async function check() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        router.replace("/home");
+        router.replace("/welcome");
       } else {
         router.replace("/login");
       }
