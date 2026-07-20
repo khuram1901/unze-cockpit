@@ -493,7 +493,7 @@ export default function HomePage() {
   const [facilitySynopsis, setFacilitySynopsis] = useState<{ bank_name: string; bank_total_limit: number; bank_seized: number; bank_available: number; bank_utilisation_pct: number; active_guarantees: number; overdue_count: number }[]>([]);
   const [guaranteeAlerts, setGuaranteeAlerts] = useState<GuaranteeAlertItem[]>([]);
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
-  const [bannerOpen, setBannerOpen] = useState(true);
+  const [bannerOpen, setBannerOpen] = useState(false);
   const [actioningTask, setActioningTask] = useState<string | null>(null);
 
   async function quickTaskAction(taskId: string, newStatus: string) {
@@ -1750,6 +1750,8 @@ export default function HomePage() {
             setShowFinance={setShowFinance}
             expandedCard={expandedCard}
             setExpandedCard={setExpandedCard}
+            bannerOpen={bannerOpen}
+            setBannerOpen={setBannerOpen}
             deptHealth={deptHealth}
             investmentData={investmentData}
             pensionSummary={pensionSummary}
@@ -2328,7 +2330,7 @@ export default function HomePage() {
 function ExecutiveDashboardBody({
   ctx, lastUpdated, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations, stuckReceivables,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
-  expandedCard, setExpandedCard, deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
+  expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
   facilitySynopsis, guaranteeAlerts, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
   taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve,
 }: {
@@ -2349,6 +2351,8 @@ function ExecutiveDashboardBody({
   setShowFinance: (v: boolean) => void;
   expandedCard: string | null;
   setExpandedCard: (v: string | null) => void;
+  bannerOpen: boolean;
+  setBannerOpen: (v: (prev: boolean) => boolean) => void;
   deptHealth: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[];
   investmentData: InvestmentSummary | null;
   pensionSummary: { gbp: number; pkr: number; netGain: number; totalReturn: number; contributed: number; feesPaid: number } | null;
@@ -2558,8 +2562,9 @@ function ExecutiveDashboardBody({
           >
             {/* Row 1 — alerts */}
             <div
+              onClick={() => setBannerOpen(v => !v)}
               style={{
-                padding: "9px 14px",
+                padding: "9px 14px", cursor: "pointer",
                 display: "flex", alignItems: "center", gap: "10px",
               }}
             >
@@ -2587,6 +2592,9 @@ function ExecutiveDashboardBody({
                   </span>
                 )}
               </div>
+              <span style={{ fontSize: "13px", color: hasCritical ? RED : AMBER, fontWeight: 700, flexShrink: 0 }}>
+                {bannerOpen ? "▲" : "▼"}
+              </span>
             </div>
             {/* Row 2 — ops strip */}
             <div style={{
@@ -2640,7 +2648,7 @@ function ExecutiveDashboardBody({
       </div>
 
       {/* ── SECTION 1: NEEDS YOUR ATTENTION (expanded detail) ── */}
-      {hasAttention ? (
+      {hasAttention && bannerOpen ? (
         <div style={{
           border: `1px solid ${hasCritical ? DANGER_SOFT : WARNING_SOFT}`,
           borderLeft: `4px solid ${hasCritical ? RED : AMBER}`,
