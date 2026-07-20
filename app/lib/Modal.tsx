@@ -40,7 +40,7 @@ export default function Modal({
     >
       <div style={{
         background: COLOURS.CARD, borderRadius: RADII.CARD, width: "100%", maxWidth,
-        overflow: "hidden", boxShadow: SHADOWS.MODAL,
+        boxShadow: SHADOWS.MODAL,
       }}>
         {children}
       </div>
