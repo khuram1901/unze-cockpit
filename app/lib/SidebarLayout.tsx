@@ -114,6 +114,283 @@ const SIDEBAR_GROUPS = [
 const SIDEBAR_W = 256;
 const SIDEBAR_COLLAPSED_W = 68;
 
+// ── NavItem (module-level — must NOT be defined inside SidebarLayout) ──
+// Defining components inside another component creates a new function reference
+// on every render, causing React to unmount/remount the child (resetting scroll).
+function NavItem({ item, active, collapsed: isCollapsed }: { item: PageCard; active: boolean; collapsed: boolean }) {
+  return (
+    <Link
+      href={item.href}
+      title={isCollapsed ? item.title : undefined}
+      style={{
+        display: "flex", alignItems: "center", gap: "10px",
+        justifyContent: isCollapsed ? "center" : "flex-start",
+        padding: isCollapsed ? "8px" : "8px 10px 8px 7px",
+        borderRadius: "8px",
+        backgroundColor: active ? COLOURS.NAVY : "transparent",
+        borderLeft: active && !isCollapsed ? `3px solid ${COLOURS.BLUE}` : "3px solid transparent",
+        color: active ? "#FFFFFF" : "var(--text-sidebar)",
+        textDecoration: "none",
+        fontSize: "13.5px",
+        fontWeight: active ? 500 : 400,
+        fontFamily: "var(--font-sans, Inter, sans-serif)",
+        transition: "background-color 0.15s ease",
+        marginBottom: "2px",
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = "transparent"; }}
+    >
+      {!isCollapsed && (
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {item.title}
+        </span>
+      )}
+      {isCollapsed && (
+        <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>
+          {item.icon}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+type SidebarContentProps = {
+  collapsed: boolean;
+  setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
+  isMobile: boolean;
+  entryOnly: boolean;
+  alwaysItems: PageCard[];
+  visibleCards: PageCard[];
+  isActive: (href: string) => boolean;
+  toggleTheme: () => void;
+  theme: string;
+  initials: string;
+  userName: string;
+  userRole: string;
+  onSignOut: () => void;
+};
+
+// ── SidebarContent (module-level — must NOT be defined inside SidebarLayout) ──
+function SidebarContent({
+  collapsed,
+  setCollapsed,
+  isMobile,
+  entryOnly,
+  alwaysItems,
+  visibleCards,
+  isActive,
+  toggleTheme,
+  theme,
+  initials,
+  userName,
+  userRole,
+  onSignOut,
+}: SidebarContentProps) {
+  const sideItemStyle = (active: boolean): React.CSSProperties => ({
+    display: "flex", alignItems: "center",
+    gap: "10px",
+    justifyContent: collapsed ? "center" : "flex-start",
+    padding: collapsed ? "8px" : "8px 10px",
+    borderRadius: "8px",
+    backgroundColor: active ? COLOURS.NAVY : "transparent",
+    color: active ? "#FFFFFF" : "var(--text-sidebar)",
+    textDecoration: "none",
+    fontSize: "13.5px",
+    fontWeight: active ? 500 : 400,
+    fontFamily: "var(--font-sans, Inter, sans-serif)",
+    transition: "background-color 0.15s ease",
+    marginBottom: "2px",
+    cursor: "pointer",
+    border: "none",
+    width: "100%",
+    textAlign: "left" as const,
+  });
+
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", height: "100vh",
+      backgroundColor: "var(--bg-sidebar)",
+      color: "var(--text-sidebar)",
+    }}>
+      {/* ── Brand ── */}
+      <div style={{
+        padding: collapsed ? "20px 10px 20px" : "20px 16px 20px",
+        borderBottom: `1px solid var(--sidebar-border)`,
+        display: "flex", alignItems: "center", gap: "10px",
+        justifyContent: collapsed ? "center" : "flex-start",
+        flexShrink: 0,
+      }}>
+        {/* Brand mark — dark square with "U" */}
+        <div style={{
+          width: "28px", height: "28px", borderRadius: "8px",
+          backgroundColor: COLOURS.NAVY, color: "#fff",
+          display: "grid", placeItems: "center",
+          fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+          fontWeight: 700, fontSize: "14px", letterSpacing: "-0.02em",
+          flexShrink: 0,
+        }}>U</div>
+        {!collapsed && (
+          <div>
+            <div style={{
+              fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+              fontWeight: 600, fontSize: "15px", letterSpacing: "-0.01em",
+              color: "var(--text-sidebar-active)", lineHeight: 1.2,
+            }}>Unze Group</div>
+            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "1px" }}>Operations</div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Nav sections ── */}
+      <nav style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: collapsed ? "8px 6px" : "8px 12px" }}>
+        {/* Daily-entry-only users: no navigation links at all */}
+        {!entryOnly && <>
+        {/* OVERVIEW group — always-visible Executive Dashboard + Overview items */}
+        <div style={{ marginBottom: "4px" }}>
+          {!collapsed && (
+            <div style={{
+              fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
+              textTransform: "uppercase", letterSpacing: "0.12em",
+              padding: "16px 10px 6px",
+            }}>Overview</div>
+          )}
+          {collapsed && <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />}
+          {/* Executive Dashboard — always first */}
+          {alwaysItems.map((item) => (
+            <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
+          ))}
+          {/* Overview-group permission-gated items (PA Dashboard) */}
+          {visibleCards
+            .filter((c) => c.group === "Overview")
+            .sort((a, b) => a.title.localeCompare(b.title))
+            .map((card) => (
+              <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
+            ))}
+        </div>
+
+        {/* Permission-gated groups */}
+        {SIDEBAR_GROUPS.filter((g) => g !== "Overview").map((groupName) => {
+          const groupCards = visibleCards
+            .filter((c) => c.group === groupName)
+            .sort((a, b) => a.title.trim().toLowerCase().localeCompare(b.title.trim().toLowerCase()));
+          if (groupCards.length === 0) return null;
+          return (
+            <div key={groupName} style={{ marginBottom: "4px" }}>
+              {!collapsed && (
+                <div style={{
+                  fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
+                  textTransform: "uppercase", letterSpacing: "0.12em",
+                  padding: "16px 10px 6px",
+                }}>
+                  {groupName}
+                </div>
+              )}
+              {collapsed && (
+                <div style={{
+                  width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)",
+                  margin: "10px auto 6px",
+                }} />
+              )}
+              {groupCards.map((card) => (
+                <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
+              ))}
+            </div>
+          );
+        })}
+
+        {/* PREFERENCES — dark mode */}
+        <div style={{ marginBottom: "4px" }}>
+          {!collapsed && (
+            <div style={{
+              fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
+              textTransform: "uppercase", letterSpacing: "0.12em",
+              padding: "16px 10px 6px",
+            }}>Preferences</div>
+          )}
+          {collapsed && <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />}
+          <button
+            onClick={toggleTheme}
+            style={sideItemStyle(false)}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+          >
+            <span style={{ fontSize: "16px", flexShrink: 0, width: "18px", textAlign: "center" }}>
+              {theme === "light" ? "🌙" : "☀️"}
+            </span>
+            {!collapsed && <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>}
+          </button>
+        </div>
+        </> /* end !entryOnly nav */}
+      </nav>
+
+      {/* ── User card + bottom controls ── */}
+      <div style={{
+        borderTop: "1px solid var(--sidebar-border)",
+        padding: collapsed ? "12px 6px" : "12px 12px",
+        display: "flex", flexDirection: "column", gap: "2px",
+        flexShrink: 0,
+      }}>
+        {/* User card */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: "10px",
+          padding: collapsed ? "8px" : "8px 10px",
+          justifyContent: collapsed ? "center" : "flex-start",
+        }}>
+          <div style={{
+            width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
+            background: "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
+            color: "#fff", display: "grid", placeItems: "center",
+            fontSize: "12px", fontWeight: 600,
+          }}>
+            {initials}
+          </div>
+          {!collapsed && (
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{
+                fontSize: "13px", fontWeight: 600, color: "var(--text-sidebar-active)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>{userName}</div>
+              <div style={{
+                fontSize: "11px", color: "var(--text-muted)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>{userRole}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Collapse toggle — desktop only */}
+        {!isMobile && (
+          <button
+            onClick={() => setCollapsed((v) => !v)}
+            style={sideItemStyle(false)}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>
+              {collapsed ? "»" : "«"}
+            </span>
+            {!collapsed && <span style={{ color: "var(--text-muted)" }}>Collapse</span>}
+          </button>
+        )}
+
+        {/* Sign out */}
+        <button
+          onClick={onSignOut}
+          style={{ ...sideItemStyle(false), color: COLOURS.RED }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = COLOURS.DANGER_SOFT; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+          title="Sign out"
+        >
+          <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>↪</span>
+          {!collapsed && <span>Sign Out</span>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type SidebarLayoutProps = {
   children: React.ReactNode;
   userCtx: UserCtx | null;
@@ -222,250 +499,6 @@ export default function SidebarLayout({
     return pathname === href;
   }
 
-  // ── Sidebar content (shared between mobile overlay and desktop fixed) ──
-  function SidebarContent() {
-    const sideItemStyle = (active: boolean): React.CSSProperties => ({
-      display: "flex", alignItems: "center",
-      gap: "10px",
-      justifyContent: collapsed ? "center" : "flex-start",
-      padding: collapsed ? "8px" : "8px 10px",
-      borderRadius: "8px",
-      backgroundColor: active ? COLOURS.NAVY : "transparent",
-      color: active ? "#FFFFFF" : "var(--text-sidebar)",
-      textDecoration: "none",
-      fontSize: "13.5px",
-      fontWeight: active ? 500 : 400,
-      fontFamily: "var(--font-sans, Inter, sans-serif)",
-      transition: "background-color 0.15s ease",
-      marginBottom: "2px",
-      cursor: "pointer",
-      border: "none",
-      width: "100%",
-      textAlign: "left" as const,
-    });
-
-    return (
-      <div style={{
-        display: "flex", flexDirection: "column", height: "100vh",
-        backgroundColor: "var(--bg-sidebar)",
-        color: "var(--text-sidebar)",
-      }}>
-        {/* ── Brand ── */}
-        <div style={{
-          padding: collapsed ? "20px 10px 20px" : "20px 16px 20px",
-          borderBottom: `1px solid var(--sidebar-border)`,
-          display: "flex", alignItems: "center", gap: "10px",
-          justifyContent: collapsed ? "center" : "flex-start",
-          flexShrink: 0,
-        }}>
-          {/* Brand mark — dark square with "U" */}
-          <div style={{
-            width: "28px", height: "28px", borderRadius: "8px",
-            backgroundColor: COLOURS.NAVY, color: "#fff",
-            display: "grid", placeItems: "center",
-            fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
-            fontWeight: 700, fontSize: "14px", letterSpacing: "-0.02em",
-            flexShrink: 0,
-          }}>U</div>
-          {!collapsed && (
-            <div>
-              <div style={{
-                fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
-                fontWeight: 600, fontSize: "15px", letterSpacing: "-0.01em",
-                color: "var(--text-sidebar-active)", lineHeight: 1.2,
-              }}>Unze Group</div>
-              <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "1px" }}>Operations</div>
-            </div>
-          )}
-        </div>
-
-        {/* ── Nav sections ── */}
-        <nav style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: collapsed ? "8px 6px" : "8px 12px" }}>
-          {/* Daily-entry-only users: no navigation links at all */}
-          {!entryOnly && <>
-          {/* OVERVIEW group — always-visible Executive Dashboard + Overview items */}
-          <div style={{ marginBottom: "4px" }}>
-            {!collapsed && (
-              <div style={{
-                fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
-                textTransform: "uppercase", letterSpacing: "0.12em",
-                padding: "16px 10px 6px",
-              }}>Overview</div>
-            )}
-            {collapsed && <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />}
-            {/* Executive Dashboard — always first */}
-            {alwaysItems.map((item) => (
-              <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
-            ))}
-            {/* Overview-group permission-gated items (PA Dashboard) */}
-            {visibleCards
-              .filter((c) => c.group === "Overview")
-              .sort((a, b) => a.title.localeCompare(b.title))
-              .map((card) => (
-                <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
-              ))}
-          </div>
-
-          {/* Permission-gated groups */}
-          {SIDEBAR_GROUPS.filter((g) => g !== "Overview").map((groupName) => {
-            const groupCards = visibleCards
-              .filter((c) => c.group === groupName)
-              .sort((a, b) => a.title.trim().toLowerCase().localeCompare(b.title.trim().toLowerCase()));
-            if (groupCards.length === 0) return null;
-            return (
-              <div key={groupName} style={{ marginBottom: "4px" }}>
-                {!collapsed && (
-                  <div style={{
-                    fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
-                    textTransform: "uppercase", letterSpacing: "0.12em",
-                    padding: "16px 10px 6px",
-                  }}>
-                    {groupName}
-                  </div>
-                )}
-                {collapsed && (
-                  <div style={{
-                    width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)",
-                    margin: "10px auto 6px",
-                  }} />
-                )}
-                {groupCards.map((card) => (
-                  <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
-                ))}
-              </div>
-            );
-          })}
-
-          {/* PREFERENCES — dark mode */}
-          <div style={{ marginBottom: "4px" }}>
-            {!collapsed && (
-              <div style={{
-                fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
-                textTransform: "uppercase", letterSpacing: "0.12em",
-                padding: "16px 10px 6px",
-              }}>Preferences</div>
-            )}
-            {collapsed && <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />}
-            <button
-              onClick={toggleTheme}
-              style={sideItemStyle(false)}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-              title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-            >
-              <span style={{ fontSize: "16px", flexShrink: 0, width: "18px", textAlign: "center" }}>
-                {theme === "light" ? "🌙" : "☀️"}
-              </span>
-              {!collapsed && <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>}
-            </button>
-          </div>
-          </> /* end !entryOnly nav */}
-        </nav>
-
-        {/* ── User card + bottom controls ── */}
-        <div style={{
-          borderTop: "1px solid var(--sidebar-border)",
-          padding: collapsed ? "12px 6px" : "12px 12px",
-          display: "flex", flexDirection: "column", gap: "2px",
-          flexShrink: 0,
-        }}>
-          {/* User card */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: "10px",
-            padding: collapsed ? "8px" : "8px 10px",
-            justifyContent: collapsed ? "center" : "flex-start",
-          }}>
-            <div style={{
-              width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
-              background: "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
-              color: "#fff", display: "grid", placeItems: "center",
-              fontSize: "12px", fontWeight: 600,
-            }}>
-              {initials}
-            </div>
-            {!collapsed && (
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{
-                  fontSize: "13px", fontWeight: 600, color: "var(--text-sidebar-active)",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>{userName}</div>
-                <div style={{
-                  fontSize: "11px", color: "var(--text-muted)",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }}>{userRole}</div>
-              </div>
-            )}
-          </div>
-
-          {/* Collapse toggle — desktop only */}
-          {!isMobile && (
-            <button
-              onClick={() => setCollapsed((v) => !v)}
-              style={sideItemStyle(false)}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>
-                {collapsed ? "»" : "«"}
-              </span>
-              {!collapsed && <span style={{ color: "var(--text-muted)" }}>Collapse</span>}
-            </button>
-          )}
-
-          {/* Sign out */}
-          <button
-            onClick={onSignOut}
-            style={{ ...sideItemStyle(false), color: COLOURS.RED }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = COLOURS.DANGER_SOFT; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            title="Sign out"
-          >
-            <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>↪</span>
-            {!collapsed && <span>Sign Out</span>}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  function NavItem({ item, active, collapsed: isCollapsed }: { item: PageCard; active: boolean; collapsed: boolean }) {
-    return (
-      <Link
-        href={item.href}
-        title={isCollapsed ? item.title : undefined}
-        style={{
-          display: "flex", alignItems: "center", gap: "10px",
-          justifyContent: isCollapsed ? "center" : "flex-start",
-          padding: isCollapsed ? "8px" : "8px 10px 8px 7px",
-          borderRadius: "8px",
-          backgroundColor: active ? COLOURS.NAVY : "transparent",
-          borderLeft: active && !isCollapsed ? `3px solid ${COLOURS.BLUE}` : "3px solid transparent",
-          color: active ? "#FFFFFF" : "var(--text-sidebar)",
-          textDecoration: "none",
-          fontSize: "13.5px",
-          fontWeight: active ? 500 : 400,
-          fontFamily: "var(--font-sans, Inter, sans-serif)",
-          transition: "background-color 0.15s ease",
-          marginBottom: "2px",
-        }}
-        onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
-        onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = "transparent"; }}
-      >
-        {!isCollapsed && (
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {item.title}
-          </span>
-        )}
-        {isCollapsed && (
-          <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>
-            {item.icon}
-          </span>
-        )}
-      </Link>
-    );
-  }
-
   // Derive page title from current path
   const extraPages = [
     { href: "/welcome", title: "Home", subtitle: "Your daily brief" },
@@ -486,7 +519,21 @@ export default function SidebarLayout({
           overflow: "hidden",
           borderRight: "1px solid var(--sidebar-border)",
         }}>
-          <SidebarContent />
+          <SidebarContent
+            collapsed={collapsed}
+            setCollapsed={setCollapsed}
+            isMobile={isMobile}
+            entryOnly={entryOnly}
+            alwaysItems={alwaysItems}
+            visibleCards={visibleCards}
+            isActive={isActive}
+            toggleTheme={toggleTheme}
+            theme={theme}
+            initials={initials}
+            userName={userName}
+            userRole={userRole}
+            onSignOut={onSignOut}
+          />
         </aside>
       )}
 
@@ -506,7 +553,21 @@ export default function SidebarLayout({
             width: `${SIDEBAR_W}px`, zIndex: 50,
             boxShadow: "4px 0 20px rgba(0,0,0,0.3)",
           }}>
-            <SidebarContent />
+            <SidebarContent
+              collapsed={collapsed}
+              setCollapsed={setCollapsed}
+              isMobile={isMobile}
+              entryOnly={entryOnly}
+              alwaysItems={alwaysItems}
+              visibleCards={visibleCards}
+              isActive={isActive}
+              toggleTheme={toggleTheme}
+              theme={theme}
+              initials={initials}
+              userName={userName}
+              userRole={userRole}
+              onSignOut={onSignOut}
+            />
           </aside>
         </>
       )}
