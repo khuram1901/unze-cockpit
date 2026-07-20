@@ -99,6 +99,109 @@ function Ticks({ read }: { read: boolean }) {
   );
 }
 
+// ── Swipe-to-action row wrapper ───────────────────────────────────
+// Swipe right → reveals rightBg (delete). Swipe left → reveals leftBg (archive).
+// Works with both touch and mouse drag. Blocks the click event after a real drag.
+
+type SwipeRowProps = {
+  leftBg: string;
+  leftLabel: string;
+  rightBg: string;
+  rightLabel: string;
+  onSwipeLeft: () => void;
+  onSwipeRight: () => void;
+  borderColor: string;
+  children: React.ReactNode;
+};
+
+function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipeRight, borderColor, children }: SwipeRowProps) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const startXRef = useRef(0);
+  const activeRef = useRef(false);
+  const draggedRef = useRef(false);
+  const THRESHOLD = 72;
+
+  const reset = () => {
+    if (!rowRef.current) return;
+    rowRef.current.style.transition = "transform 0.2s ease";
+    rowRef.current.style.transform = "translateX(0)";
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    startXRef.current = e.clientX;
+    activeRef.current = true;
+    draggedRef.current = false;
+    if (rowRef.current) rowRef.current.style.transition = "none";
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!activeRef.current) return;
+    const delta = e.clientX - startXRef.current;
+    if (Math.abs(delta) > 8) draggedRef.current = true;
+    if (rowRef.current) {
+      const clamped = Math.max(-120, Math.min(120, delta));
+      rowRef.current.style.transform = `translateX(${clamped}px)`;
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!activeRef.current) return;
+    activeRef.current = false;
+    const delta = e.clientX - startXRef.current;
+    if (delta > THRESHOLD) {
+      if (rowRef.current) {
+        rowRef.current.style.transition = "transform 0.18s ease";
+        rowRef.current.style.transform = "translateX(110%)";
+      }
+      setTimeout(onSwipeRight, 180);
+    } else if (delta < -THRESHOLD) {
+      if (rowRef.current) {
+        rowRef.current.style.transition = "transform 0.18s ease";
+        rowRef.current.style.transform = "translateX(-110%)";
+      }
+      setTimeout(onSwipeLeft, 180);
+    } else {
+      reset();
+    }
+  };
+
+  return (
+    <div style={{ position: "relative", overflow: "hidden", borderBottom: `1px solid ${borderColor}` }}>
+      {/* Revealed on swipe-left (archive) */}
+      <div style={{
+        position: "absolute", inset: 0, background: leftBg,
+        display: "flex", alignItems: "center", justifyContent: "flex-end",
+        paddingRight: 18, color: "#fff", fontSize: 12, fontWeight: 600,
+        pointerEvents: "none",
+      }}>
+        {leftLabel}
+      </div>
+      {/* Revealed on swipe-right (delete) */}
+      <div style={{
+        position: "absolute", inset: 0, background: rightBg,
+        display: "flex", alignItems: "center", justifyContent: "flex-start",
+        paddingLeft: 18, color: "#fff", fontSize: 12, fontWeight: 600,
+        pointerEvents: "none",
+      }}>
+        {rightLabel}
+      </div>
+      {/* The sliding row */}
+      <div
+        ref={rowRef}
+        style={{ position: "relative", zIndex: 1 }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onClickCapture={(e) => { if (draggedRef.current) { e.stopPropagation(); e.preventDefault(); } }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────
 
 type Props = {
@@ -125,8 +228,6 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null); // conversation_id with open menu
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -154,7 +255,6 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     convId: string,
     action: "archive" | "unarchive" | "delete"
   ) => {
-    setMenuOpenId(null);
     // Optimistic update
     if (action === "delete") {
       setConversations((prev) => prev.filter((c) => c.conversation_id !== convId));
@@ -199,16 +299,6 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   useEffect(() => {
     if (isOpen && !activeConv) setTimeout(() => searchRef.current?.focus(), 120);
   }, [isOpen, activeConv]);
-
-  // Close conversation menu when clicking outside
-  useEffect(() => {
-    if (!menuOpenId) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpenId(null);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpenId]);
 
   // Realtime: refresh conversation list on any new message
   useEffect(() => {
@@ -520,21 +610,26 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                         </div>
                       )}
                       {filteredConvs.map((conv) => (
-                        <div
+                        <SwipeRow
                           key={conv.conversation_id}
-                          style={{ position: "relative", borderBottom: `1px solid ${BORDER}` }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                          leftBg={conv.is_archived ? COLOURS.GREEN : "#B4791F"}
+                          leftLabel={conv.is_archived ? "↩ Unarchive" : "📁 Archive"}
+                          rightBg={COLOURS.RED}
+                          rightLabel="🗑 Delete"
+                          onSwipeLeft={() => conversationAction(conv.conversation_id, conv.is_archived ? "unarchive" : "archive")}
+                          onSwipeRight={() => conversationAction(conv.conversation_id, "delete")}
+                          borderColor={BORDER}
                         >
                           <button
                             onClick={() => { setSearch(""); setActiveConv(conv); }}
                             style={{
                               display: "flex", alignItems: "center", gap: 10,
-                              width: "100%", padding: "9px 14px 9px 14px",
-                              paddingRight: 40,
+                              width: "100%", padding: "9px 14px",
                               background: "none", border: "none",
                               cursor: "pointer", textAlign: "left",
                             }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
                           >
                             <div style={{
                               width: 38, height: 38, borderRadius: "50%",
@@ -581,68 +676,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                               </div>
                             </div>
                           </button>
-
-                          {/* ··· menu button */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === conv.conversation_id ? null : conv.conversation_id); }}
-                            style={{
-                              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-                              background: "none", border: "none", cursor: "pointer",
-                              color: SLATE, padding: "4px 6px", borderRadius: RADII.SM,
-                              fontSize: 16, lineHeight: 1,
-                            }}
-                            aria-label="Conversation options"
-                          >
-                            ···
-                          </button>
-
-                          {/* Dropdown menu */}
-                          {menuOpenId === conv.conversation_id && (
-                            <div
-                              ref={menuRef}
-                              style={{
-                                position: "absolute", right: 10, top: "100%",
-                                background: CARD, border: `1px solid ${BORDER}`,
-                                borderRadius: RADII.CARD, boxShadow: SHADOWS.DROPDOWN,
-                                zIndex: 20, minWidth: 140, overflow: "hidden",
-                              }}
-                            >
-                              {conv.is_archived ? (
-                                <button
-                                  onClick={() => conversationAction(conv.conversation_id, "unarchive")}
-                                  style={{ display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: 13, color: NAVY }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                                >
-                                  📤 Unarchive
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => conversationAction(conv.conversation_id, "archive")}
-                                  style={{ display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: 13, color: NAVY }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                                >
-                                  📁 Archive
-                                </button>
-                              )}
-                              <button
-                                onClick={() => {
-                                  if (confirm("Remove this chat from your list? The other person can still see it.")) {
-                                    conversationAction(conv.conversation_id, "delete");
-                                  } else {
-                                    setMenuOpenId(null);
-                                  }
-                                }}
-                                style={{ display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none", borderTop: `1px solid ${BORDER}`, cursor: "pointer", textAlign: "left", fontSize: 13, color: COLOURS.RED }}
-                                onMouseEnter={(e) => (e.currentTarget.style.background = COLOURS.DANGER_SOFT)}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                              >
-                                🗑 Delete chat
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                        </SwipeRow>
                       ))}
                     </>
                   )}
