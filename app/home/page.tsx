@@ -1748,7 +1748,8 @@ export default function HomePage() {
             recAgingByCustomer={recAgingByCustomer}
             showFinance={showFinance}
             setShowFinance={setShowFinance}
-
+            expandedCard={expandedCard}
+            setExpandedCard={setExpandedCard}
             deptHealth={deptHealth}
             investmentData={investmentData}
             pensionSummary={pensionSummary}
@@ -2327,7 +2328,7 @@ export default function HomePage() {
 function ExecutiveDashboardBody({
   ctx, lastUpdated, selectedDate, setSelectedDate, summaries, machineIssues, tasks, escalations, stuckReceivables,
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
-  deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
+  expandedCard, setExpandedCard, deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
   facilitySynopsis, guaranteeAlerts, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
   taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve,
 }: {
@@ -2346,6 +2347,8 @@ function ExecutiveDashboardBody({
   recAgingByCustomer: { customer: string; "0-30": number; "31-60": number; "61-90": number; "90+": number; total: number }[];
   showFinance: boolean;
   setShowFinance: (v: boolean) => void;
+  expandedCard: string | null;
+  setExpandedCard: (v: string | null) => void;
   deptHealth: { slug: string; title: string; status: "GREEN" | "AMBER" | "RED"; owner: string; detail: string }[];
   investmentData: InvestmentSummary | null;
   pensionSummary: { gbp: number; pkr: number; netGain: number; totalReturn: number; contributed: number; feesPaid: number } | null;
@@ -2648,14 +2651,18 @@ function ExecutiveDashboardBody({
         }}>
           <div>
             {attentionRows.map((row) => {
+                // null = all collapsed; clicking a row expands it, clicking again collapses
+                const isOpen = expandedCard === row.id;
                 return (
                   <div key={row.id}>
                     <div
+                      onClick={() => row.items.length > 0 ? setExpandedCard(isOpen ? null : row.id) : undefined}
                       style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center",
                         padding: "9px 16px",
-                        backgroundColor: COLOURS.CARD,
+                        backgroundColor: isOpen ? COLOURS.CARD : "transparent",
                         borderBottom: `1px solid ${hasCritical ? DANGER_SOFT : WARNING_SOFT}`,
+                        cursor: row.items.length > 0 ? "pointer" : "default",
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -2667,8 +2674,11 @@ function ExecutiveDashboardBody({
                         }}>{row.count}</span>
                         <span style={{ fontSize: "16px", fontWeight: 600, color: NAVY }}>{row.label}</span>
                       </div>
+                      {row.items.length > 0 && (
+                        <span style={{ fontSize: "13px", color: SLATE }}>{isOpen ? "▲" : "▼"}</span>
+                      )}
                     </div>
-                    {row.items.length > 0 && (
+                    {isOpen && row.items.length > 0 && (
                       <div style={{ backgroundColor: COLOURS.CARD }}>
                         {row.items.map((item) => {
                           const href = item.taskId ? `/tasks?task=${item.taskId}` : undefined;
