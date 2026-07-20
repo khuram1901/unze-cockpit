@@ -122,19 +122,24 @@ export default function QuickAddTask({
   const [showPicker,  setShowPicker]  = useState(false);
   const [saving,      setSaving]      = useState(false);
 
-  // Voice state — lazy init checks browser APIs without a useEffect
+  // Voice state
   const [voicePhase,     setVoicePhase]     = useState<VoicePhase>("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
-  const [voiceSupported]                    = useState<boolean>(() =>
-    typeof window !== "undefined" &&
-    !!(window.SpeechRecognition || window.webkitSpeechRecognition)
-  );
+  // voiceSupported starts false (SSR-safe), then flips to true on the client
+  // if the browser supports SpeechRecognition. Can't use lazy useState init
+  // because that runs on the server where window is undefined.
+  const [voiceSupported, setVoiceSupported] = useState(false);
   const recognitionRef  = useRef<SpeechRecognitionAny>(null);
   const transcriptRef   = useRef("");
 
   const inputRef    = useRef<HTMLInputElement>(null);
   const wrapperRef  = useRef<HTMLDivElement>(null);
   const voiceAutoStartedRef = useRef(false);
+
+  // ── Detect voice support after hydration (window not available on server) ─
+  useEffect(() => {
+    setVoiceSupported(!!(window.SpeechRecognition || window.webkitSpeechRecognition));
+  }, []);
 
   // ── Load members + companies ────────────────────────────────────────────
   useEffect(() => {

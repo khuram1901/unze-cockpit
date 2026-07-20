@@ -155,12 +155,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const [deptBreakdown, setDeptBreakdown] = useState<DeptBreakdownRow[]>([]);
   const [deptBreakdownOpen, setDeptBreakdownOpen] = useState(false);
   const [kpiDrawer, setKpiDrawer] = useState<string | null>(null);
-  // Defaults to "everyone" — this was "mine" back when the tab was called
-  // "My Tasks", but now List sits alongside Board/Tree/Timeline as a
-  // general view, so it should show the same task set they do by
-  // default. The Mine/Everyone toggle is still there for anyone who
-  // wants to narrow it down to just their own.
-  const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">(scopeFromUrl === "mine" ? "mine" : "everyone");
+  // Default to "mine" — the CEO lands on their own action items first,
+  // not the whole company's task list. "Everyone" is one tap away.
+  const [myTasksScope, setMyTasksScope] = useState<"mine" | "everyone">(scopeFromUrl === "everyone" ? "everyone" : "mine");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [ownerFilter, setOwnerFilter] = useState<string>("all");
@@ -204,9 +201,12 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const isPrivileged = canSeeAll ?? (currentRole === "Admin" || currentRole === "CEO" || currentRole === "Executive");
 
   async function loadTasks() {
-    const { data: userData } = await supabase.auth.getUser();
-    const email = userData.user?.email || null;
-    setMyEmail(email);
+    // getSession() reads from the local token cache — no extra network call.
+    // We call this first so email is available for the co-assignee lookup,
+    // and then we batch setMyEmail + setTasks in the same state update at
+    // the end so the Mine filter never runs with tasks but no email.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const email = sessionData.session?.user?.email || null;
 
     // Co-assignee ids for the current user — needed even for privileged
     // users (the Mine/Everyone toggle uses it), and critically also used
@@ -252,6 +252,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     if (error) {
       setErrorMsg(error.message);
     } else {
+      // Set email and tasks together so the Mine filter never renders
+      // with tasks loaded but myEmail still null (which shows an empty list).
+      setMyEmail(email);
       setTasks(data || []);
       const taskIds = (data || []).map((t) => t.id);
       if (taskIds.length > 0) {
