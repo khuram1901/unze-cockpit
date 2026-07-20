@@ -2,7 +2,7 @@
   "name": "Unze Pulse Dashboard",
   "short_name": "Unze Pulse",
   "description": "Unze Group operations and finance dashboard",
-  "start_url": "/executive",
+  "start_url": "/welcome",
   "display": "standalone",
   "scope": "/",
   "serviceworker": {
