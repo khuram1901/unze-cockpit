@@ -131,6 +131,7 @@ export default function QuickAddTask({
   const [voiceSupported, setVoiceSupported] = useState(false);
   const recognitionRef  = useRef<SpeechRecognitionAny>(null);
   const transcriptRef   = useRef("");
+  const listenTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inputRef    = useRef<HTMLInputElement>(null);
   const wrapperRef  = useRef<HTMLDivElement>(null);
@@ -176,9 +177,12 @@ export default function QuickAddTask({
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
-  // ── Cleanup recognition on unmount ──────────────────────────────────────
+  // ── Cleanup recognition + timer on unmount ──────────────────────────────
   useEffect(() => {
-    return () => { recognitionRef.current?.abort(); };
+    return () => {
+      recognitionRef.current?.abort();
+      if (listenTimerRef.current) clearTimeout(listenTimerRef.current);
+    };
   }, []);
 
   // ── Derived ─────────────────────────────────────────────────────────────
@@ -202,23 +206,51 @@ export default function QuickAddTask({
     if (!transcript.trim()) return;
     const parsed = parseVoiceTask(transcript);
 
-    if (parsed.description) setDescription(parsed.description);
-    if (parsed.dueDate)     setDueDate(parsed.dueDate);
+    let resolvedDescription = "";
+    let resolvedDueDate = "";
+    let resolvedMember: Member | null = null;
+
+    if (parsed.description) { resolvedDescription = parsed.description; setDescription(parsed.description); }
+    if (parsed.dueDate)     { resolvedDueDate = parsed.dueDate; setDueDate(parsed.dueDate); }
 
     if (parsed.assigneeName) {
       const match = matchMemberByName(parsed.assigneeName, currentMembers);
       if (match) {
+        resolvedMember = match;
         setSelected(match);
         setSearch("");
         setShowDrop(false);
       } else {
-        // Name not matched — pre-fill the search box so user can pick manually
         setSearch(parsed.assigneeName);
         setShowDrop(true);
       }
     }
 
     setVoicePhase("parsed");
+
+    // Auto-submit if voice filled all required fields — no extra tap needed.
+    // We resolve the company inline here (same logic as the autoCompany derived value)
+    // because state updates are async and autoCompany won't reflect the new
+    // selected member until the next render.
+    if (resolvedDescription && resolvedMember && resolvedDueDate) {
+      setCompanies((currentCompanies) => {
+        const company = currentCompanies.find((c) => c.id === resolvedMember!.task_default_company_id)
+          ?? currentCompanies.find((c) => c.short_code === resolvedMember!.business_unit)
+          ?? null;
+        if (company) {
+          // Small delay so the user sees the filled form flash before it submits
+          setTimeout(() => {
+            setDescription((d) => {
+              // Trigger submit programmatically via the form
+              const form = document.querySelector("form");
+              if (form) form.requestSubmit();
+              return d;
+            });
+          }, 1200);
+        }
+        return currentCompanies;
+      });
+    }
   }, []);
 
   // ── Voice: start listening ───────────────────────────────────────────────
@@ -241,16 +273,28 @@ export default function QuickAddTask({
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onresult = (e: any) => {
+      // Accumulate final segments; fall back to interim for live display
+      let finalText = "";
+      let interimText = "";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const t = Array.from(e.results as any[]).map((r: any) => r[0].transcript as string).join("");
-      transcriptRef.current = t;
-      setLiveTranscript(t);
+      for (let i = 0; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interimText += r[0].transcript;
+      }
+      const display = finalText || interimText;
+      transcriptRef.current = finalText || interimText;
+      setLiveTranscript(display);
+
+      // Stop as soon as Chrome emits a final result — don't wait for
+      // onend which can be slow or never fire in continuous ambient noise.
+      if (finalText) rec.stop();
     };
 
     rec.onend = () => {
+      if (listenTimerRef.current) clearTimeout(listenTimerRef.current);
       const final = transcriptRef.current;
       setMembers((current) => {
-        // applyTranscript needs current members — read from state inside setter
         applyTranscript(final, current);
         return current;
       });
@@ -258,6 +302,7 @@ export default function QuickAddTask({
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rec.onerror = (e: any) => {
+      if (listenTimerRef.current) clearTimeout(listenTimerRef.current);
       setVoicePhase("idle");
       setLiveTranscript("");
       if (e.error !== "aborted") {
@@ -267,6 +312,9 @@ export default function QuickAddTask({
 
     recognitionRef.current = rec;
     rec.start();
+
+    // 12-second safety net — force-stop if Chrome never emits a final result
+    listenTimerRef.current = setTimeout(() => rec.stop(), 12000);
   }
 
   function stopListening() {
