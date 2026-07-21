@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo, Suspense } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { COLOURS, RADII } from "../lib/SharedUI";
@@ -105,17 +104,10 @@ function LoginPageInner() {
       return;
     }
 
-    // "Keep me signed in" — Supabase always writes the session to localStorage
-    // after a successful sign-in. If the user did NOT tick the checkbox, we
-    // remove it from localStorage immediately so the session only lives in
-    // memory for this browser session (clears when all tabs are closed).
-    if (!keepSignedIn) {
-      try {
-        const projectRef = supabaseUrl.split("//")[1]?.split(".")[0] ?? "";
-        const lsKey = `sb-${projectRef}-auth-token`;
-        localStorage.removeItem(lsKey);
-      } catch { /* non-critical — some browsers block localStorage access */ }
-    }
+    // Session is persisted via Supabase's own localStorage mechanism.
+    // Supabase JS v2 re-reads from storage on every getSession() call, so
+    // manually removing the key immediately breaks auth for the current tab.
+    // Session lifetime is governed by Supabase's refresh-token expiry instead.
 
     const { data: member } = await supabase
       .from("members")
