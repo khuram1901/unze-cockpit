@@ -1,1128 +1,1027 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
-import { useRouter } from "next/navigation";
+import {
+  useCallback, useEffect, useRef, useState,
+  type ReactNode, type CSSProperties,
+} from "react";
+import Link from "next/link";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch, supabase } from "../lib/supabase";
 import { COLOURS, RADII } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
+import { formatDateUK } from "../lib/dateUtils";
 
 const {
   NAVY, SLATE, HAIRLINE, GREEN, AMBER, RED, BLUE,
-  INK_400, CANVAS, SUCCESS_SOFT, DANGER_SOFT, WARNING_SOFT,
+  INK_400, INK_700, CANVAS, CARD_ALT,
+  SUCCESS_SOFT, WARNING_SOFT, DANGER_SOFT,
 } = COLOURS;
+const BLUE_SOFT  = "#E8EBFC";
+const PURPLE     = "#7C4CA5";
+const PURPLE_SOFT = "#F2E8FA";
 
-/* ─── types ─────────────────────────────────────────────────── */
-type CalEvent  = { start: string; end: string; title?: string };
-type NewsStory = { title: string; link: string; ago: string; source: string; color: string };
-type FxRates   = { USD: number; GBP: number; CNY: number };
-type Weather   = { temp: number; apparent: number; humidity: number; code: number; city: string };
-
-type TaskItem = {
-  id: string;
-  description: string;
-  due_date: string | null;
-  priority: string | null;
-  status: string;
-};
-
-type TeamTaskItem = TaskItem & {
-  assigned_to: string | null;
-  assigned_to_email: string | null;
-};
-
-// Shape the API can return (union of all roles)
+/* ─── types ──────────────────────────────────────────────────── */
+type QuickLink   = { href: string; title: string; icon: string; color: string };
+type TaskItem    = { id: string; description: string; due_date: string; priority: string; status: string; assigned_to?: string; assigned_to_email?: string; assigned_by?: string };
+type TeamMember  = { name: string; email: string; overdueCount: number; todayCount: number };
 type WelcomeData = {
-  firstName: string;
-  role: string | null;
-  department: string | null;
-  // Admin/CEO/Exec
-  overdueTaskCount?: number;
-  machineIssueCount?: number;
-  // HOD (Manager)
-  teamOverdueCount?: number;
-  teamPendingCount?: number;
+  firstName:          string;
+  role:               string | null;
+  department:         string | null;
+  photoUrl:           string | null;
+  quickLinks:         QuickLink[];
+  myOverdueCount:     number;
+  myTodayCount:       number;
+  myTomorrowCount:    number;
+  myWeekCount:        number;
+  myTasks:            TaskItem[];
+  // Manager extras
+  teamSize?:           number;
+  teamOverdueCount?:   number;
+  teamTodayCount?:     number;
   teamCompletedMonth?: number;
-  myOverdueCount?: number;
-  myTodayCount?: number;
-  teamOverdueTasks?: TeamTaskItem[];
-  myTasks?: TaskItem[];
-  // Member
-  myUpcomingCount?: number;
+  teamOverdueTasks?:   TaskItem[];
+  teamMemberStatus?:   TeamMember[];
+  // Privileged extras
+  groupOverdueCount?:  number;
+  machineIssueCount?:  number;
 };
+type Weather = { temp: number; apparent: number; humidity: number; code: number; city: string };
+type FxRates  = { USD: number; GBP: number; CNY: number };
+type Holding  = { ticker: string; company_name: string; quantity: number; buy_price: number; current_price?: number };
 
 /* ─── WMO weather codes ──────────────────────────────────────── */
 const WMO: Record<number, [string, string]> = {
-  0: ["Clear sky", "☀️"], 1: ["Mainly clear", "🌤️"], 2: ["Partly cloudy", "⛅"], 3: ["Overcast", "☁️"],
-  45: ["Foggy", "🌫️"], 48: ["Icy fog", "🌫️"],
-  51: ["Light drizzle", "🌦️"], 53: ["Drizzle", "🌦️"], 55: ["Heavy drizzle", "🌦️"],
-  61: ["Slight rain", "🌧️"], 63: ["Rain", "🌧️"], 65: ["Heavy rain", "🌧️"],
-  71: ["Light snow", "❄️"], 73: ["Snow", "❄️"], 75: ["Heavy snow", "❄️"],
-  80: ["Showers", "🌦️"], 82: ["Heavy showers", "⛈️"],
-  95: ["Thunderstorm", "⛈️"], 96: ["Thunderstorm + hail", "⛈️"],
+  0: ["Clear sky","☀️"],1:["Mainly clear","🌤️"],2:["Partly cloudy","⛅"],3:["Overcast","☁️"],
+  45:["Foggy","🌫️"],48:["Icy fog","🌫️"],
+  51:["Light drizzle","🌦️"],53:["Drizzle","🌦️"],55:["Heavy drizzle","🌦️"],
+  61:["Slight rain","🌧️"],63:["Rain","🌧️"],65:["Heavy rain","🌧️"],
+  71:["Light snow","❄️"],73:["Snow","❄️"],75:["Heavy snow","❄️"],
+  80:["Showers","🌦️"],82:["Heavy showers","⛈️"],
+  95:["Thunderstorm","⛈️"],96:["Thunderstorm + hail","⛈️"],
 };
-function wmo(code: number): [string, string] { return WMO[code] ?? ["Unknown", "🌡️"]; }
+function wmo(code: number): [string, string] { return WMO[code] ?? ["Unknown","🌡️"]; }
 
-/* ─── world clocks ────────────────────────────────────────────── */
-const CLOCKS = [
-  { city: "Lahore",   tz: "Asia/Karachi",    flag: "🇵🇰", color: GREEN },
-  { city: "London",   tz: "Europe/London",   flag: "🇬🇧", color: BLUE },
-  { city: "Dubai",    tz: "Asia/Dubai",       flag: "🇦🇪", color: AMBER },
-  { city: "New York", tz: "America/New_York", flag: "🇺🇸", color: "#C0392B" },
+/* ─── Motivational quotes (seeded by day-of-year) ───────────── */
+const QUOTES = [
+  ["The secret of getting ahead is getting started.","Mark Twain"],
+  ["Leadership is not about being in charge. It is about taking care of those in your charge.","Simon Sinek"],
+  ["Excellence is never an accident. It is the result of high intention and sincere effort.","Aristotle"],
+  ["The best way to predict the future is to create it.","Peter Drucker"],
+  ["Quality means doing it right when no one is looking.","Henry Ford"],
+  ["Success is not final, failure is not fatal — it is the courage to continue that counts.","Winston Churchill"],
+  ["The greatest glory in living lies not in never falling, but in rising every time we fall.","Nelson Mandela"],
+  ["Management is doing things right; leadership is doing the right things.","Peter Drucker"],
+  ["Coming together is a beginning. Keeping together is progress. Working together is success.","Henry Ford"],
+  ["Perfection is not attainable, but if we chase perfection we can catch excellence.","Vince Lombardi"],
+  ["Growth is never by mere chance; it is the result of forces working together.","James Cash Penney"],
+  ["The measure of intelligence is the ability to change.","Albert Einstein"],
+  ["Opportunities don't happen. You create them.","Chris Grosser"],
+  ["Don't count the days, make the days count.","Muhammad Ali"],
+  ["The only place where success comes before work is in the dictionary.","Vidal Sassoon"],
+  ["Believe you can and you're halfway there.","Theodore Roosevelt"],
+  ["Act as if what you do makes a difference. It does.","William James"],
+  ["Either you run the day, or the day runs you.","Jim Rohn"],
+  ["The strength of the team is each individual member. The strength of each member is the team.","Phil Jackson"],
+  ["The function of leadership is to produce more leaders, not more followers.","Ralph Nader"],
+  ["An organisation's ability to learn and translate that learning into action rapidly is the ultimate competitive advantage.","Jack Welch"],
+  ["The harder you work for something, the greater you will feel when you achieve it.","Unknown"],
+  ["Dream big. Work hard. Stay focused. Surround yourself with good people.","Unknown"],
+  ["Success usually comes to those who are too busy to be looking for it.","Henry David Thoreau"],
+  ["Don't be afraid to give up the good to go for the great.","John D. Rockefeller"],
+  ["I find that the harder I work, the more luck I seem to have.","Thomas Jefferson"],
+  ["Do not wait to strike till the iron is hot, but make it hot by striking.","W. B. Yeats"],
+  ["The only way to do great work is to love what you do.","Steve Jobs"],
+  ["It is not the mountain we conquer but ourselves.","Edmund Hillary"],
+  ["What we do today, right now, will have an accumulated effect on all our tomorrows.","Alexandra Stoddard"],
+  ["In the middle of every difficulty lies opportunity.","Albert Einstein"],
 ];
+function getDailyQuote(): [string, string] {
+  const doy = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
+  return QUOTES[doy % QUOTES.length] as [string, string];
+}
 
-/* ─── currency config ────────────────────────────────────────── */
-const CURRENCIES = [
-  { code: "USD", symbol: "$", flag: "🇺🇸", label: "US Dollar",    key: "USD" as const, color: "#27AE60" },
-  { code: "GBP", symbol: "£", flag: "🇬🇧", label: "British Pound", key: "GBP" as const, color: "#2C3E8C" },
-  { code: "CNY", symbol: "¥", flag: "🇨🇳", label: "Chinese Yuan",  key: "CNY" as const, color: "#C0392B" },
-];
-
-/* ─── department → dashboard URL map ─────────────────────────── */
-const DEPT_DASHBOARD: Record<string, string> = {
-  "HR":                "/department/hr",
-  "Admin":             "/department/admin",
-  "Audit":             "/department/audit",
-  "Tax":               "/department/tax",
-  "Legal":             "/department/tax",        // alias
-  "IT":                "/department/it",
-  "Finance":           "/finance",
-  "Unze Trading Ops":  "/dashboard",
-  "Sales":             "/dashboard",
-};
-
-/* ─── helpers ─────────────────────────────────────────────────── */
+/* ─── helpers ────────────────────────────────────────────────── */
 function greeting() {
   const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
-function longDate() {
-  return new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+function tz(zone: string) {
+  return new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: zone });
 }
-function clockStr(tz: string) {
-  return new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: tz });
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function tomorrowStr() { return new Date(Date.now() + 86400000).toISOString().slice(0, 10); }
+function daysOverdue(due: string) {
+  return Math.max(0, Math.floor((Date.now() - new Date(due).getTime()) / 86400000));
 }
-function shortTime(tz: string) {
-  return new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz });
+function avatarInitials(firstName: string) {
+  return (firstName || "U").slice(0, 2).toUpperCase();
 }
-function fmtEvtTime(iso: string) {
-  if (!iso.includes("T")) return "All day";
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" });
+function avatarGrad(role: string | null) {
+  if (role === "CEO" || role === "Admin") return "linear-gradient(135deg, #B4791F, #e8a83c)";
+  if (role === "Manager")                 return "linear-gradient(135deg, #0F7B5F, #1aad87)";
+  if (role === "Executive")               return "linear-gradient(135deg, #7C4CA5, #a066d4)";
+  return                                        "linear-gradient(135deg, #5B6FC9, #3B4CCA)";
 }
-function dayOffset(n: number) {
-  return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+function roleBadgeStyle(role: string | null): CSSProperties {
+  if (role === "CEO" || role === "Admin")
+    return { background: "rgba(59,76,202,0.25)", color: "#B4BFFF", border: "1px solid rgba(59,76,202,0.4)" };
+  if (role === "Manager")
+    return { background: "rgba(15,123,95,0.25)", color: "#7DD9C2", border: "1px solid rgba(15,123,95,0.4)" };
+  if (role === "Executive")
+    return { background: "rgba(124,76,165,0.25)", color: "#D4A8F0", border: "1px solid rgba(124,76,165,0.4)" };
+  return { background: "rgba(100,116,139,0.25)", color: "#CBD5E1", border: "1px solid rgba(100,116,139,0.3)" };
 }
-function dayLabel(n: number) {
-  if (n === 0) return "Today";
-  if (n === 1) return "Tomorrow";
-  return new Date(Date.now() + n * 86400000).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
+function roleLabel(role: string | null, email?: string) {
+  if (email === "khuram1901@gmail.com" || email === "k.saleem@unzegroup.com") return "CEO & Founder";
+  if (role === "CEO")       return "CEO";
+  if (role === "Admin")     return "Admin";
+  if (role === "Executive") return "Executive";
+  if (role === "Manager")   return "Head of Department";
+  return "Member";
 }
-function daysOverdue(dueDate: string): number {
-  const due = new Date(dueDate);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.floor((now.getTime() - due.getTime()) / 86400000);
+function iconBg(color: string): CSSProperties {
+  const map: Record<string, string> = {
+    blue: BLUE_SOFT, green: SUCCESS_SOFT, amber: WARNING_SOFT,
+    red: DANGER_SOFT, purple: PURPLE_SOFT, slate: "#F1F5F9",
+    navy: "rgba(15,23,32,0.07)",
+  };
+  return { background: map[color] ?? BLUE_SOFT };
 }
-function daysUntil(dueDate: string): number {
-  const due = new Date(dueDate);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.floor((due.getTime() - now.getTime()) / 86400000);
-}
-function todayISO() { return new Date().toISOString().slice(0, 10); }
 
-const DAY_COLORS = [GREEN, BLUE, SLATE];
+/* ─── Avatar with conic ring ─────────────────────────────────── */
+function AvatarRing({ photoUrl, initials, role, size = 88 }: { photoUrl: string | null; initials: string; role: string | null; size?: number }) {
+  const gap = 4;
+  const outer = size + gap * 2;
+  return (
+    <div style={{ position: "relative", width: outer, height: outer, flexShrink: 0 }}>
+      {/* Conic gradient ring */}
+      <div style={{
+        position: "absolute", inset: 0, borderRadius: "50%",
+        background: "conic-gradient(from 180deg, #3B4CCA, #7B8EF2, #0F7B5F, #5BC4A0, #3B4CCA)",
+        filter: "blur(1px)", opacity: 0.85,
+      }} />
+      {/* Mask */}
+      <div style={{ position: "absolute", inset: 3, borderRadius: "50%", background: "#162232" }} />
+      {/* Photo or initials */}
+      {photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photoUrl} alt={initials} style={{
+          position: "absolute", inset: gap, borderRadius: "50%",
+          width: size, height: size, objectFit: "cover",
+          border: "2px solid rgba(255,255,255,0.15)", zIndex: 1,
+        }} />
+      ) : (
+        <div style={{
+          position: "absolute", inset: gap, borderRadius: "50%", zIndex: 1,
+          background: avatarGrad(role),
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
+          fontWeight: 800, fontSize: size * 0.31, color: "#fff",
+          border: "2px solid rgba(255,255,255,0.15)",
+        }}>
+          {initials}
+        </div>
+      )}
+    </div>
+  );
+}
 
-/* ─── shared card shell ───────────────────────────────────────── */
-function Card({ children, accentColor, style }: { children: ReactNode; accentColor?: string; style?: CSSProperties }) {
+/* ─── Purpose banner ─────────────────────────────────────────── */
+function PurposeBanner() {
   return (
     <div style={{
-      backgroundColor: "white",
-      border: `1px solid ${HAIRLINE}`,
-      borderRadius: RADII.CARD,
-      borderTop: accentColor ? `3px solid ${accentColor}` : undefined,
-      padding: "18px 20px",
-      display: "flex",
-      flexDirection: "column",
-      ...style,
+      background: "#fff", borderBottom: `1px solid ${HAIRLINE}`,
+      padding: "10px 40px", display: "flex", alignItems: "center", gap: 12,
     }}>
-      {children}
+      <div style={{
+        width: 3, height: 28, borderRadius: 2, flexShrink: 0,
+        background: `linear-gradient(180deg, ${BLUE}, ${GREEN})`,
+      }} />
+      <p style={{ fontSize: 12.5, color: SLATE, lineHeight: 1.45, margin: 0 }}>
+        <strong style={{ color: NAVY, fontWeight: 600 }}>Our purpose: </strong>
+        To manufacture world-class energy meters and premium footwear — building a Pakistan that leads in quality, precision, and global trade.
+      </p>
     </div>
   );
 }
 
-function CardLabel({ children, color, style }: { children: ReactNode; color?: string; style?: CSSProperties }) {
+/* ─── Task Banner ────────────────────────────────────────────── */
+type TaskBannerProps = {
+  myOverdue: number; myToday: number; myTomorrow: number; myWeek: number;
+  teamOverdue?: number; teamToday?: number;
+};
+function TaskBanner({ myOverdue, myToday, myTomorrow, myWeek, teamOverdue, teamToday }: TaskBannerProps) {
+  const pill = (num: number, label: string, cls: CSSProperties): ReactNode => (
+    <Link href="/tasks" style={{
+      display: "flex", alignItems: "center", gap: 6,
+      padding: "5px 14px", borderRadius: 20, textDecoration: "none",
+      fontSize: 12.5, fontWeight: 600, transition: "opacity .15s",
+      ...cls,
+    }}>
+      <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--font-display,'Inter Tight',sans-serif)" }}>{num}</span>
+      {label}
+    </Link>
+  );
+  const sep = <span style={{ color: HAIRLINE, fontSize: 16, margin: "0 4px" }}>|</span>;
+  const lbl = (t: string) => (
+    <span style={{ fontSize: 11.5, fontWeight: 600, color: INK_400, textTransform: "uppercase", letterSpacing: "0.08em" }}>{t}</span>
+  );
   return (
-    <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: color ?? INK_400, marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px", ...style }}>
-      {children}
+    <div style={{
+      background: "#fff", borderBottom: `1px solid ${HAIRLINE}`,
+      padding: "12px 40px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+    }}>
+      {lbl("My tasks")}
+      {pill(myOverdue,  "Overdue",    { background: DANGER_SOFT,  color: RED,   border: `1px solid #EAC4C2` })}
+      {pill(myToday,    "Due Today",  { background: WARNING_SOFT, color: AMBER, border: `1px solid #E8D5B0` })}
+      {pill(myTomorrow, "Tomorrow",   { background: BLUE_SOFT,    color: BLUE,  border: `1px solid #C7CDF5` })}
+      {pill(myWeek,     "This Week",  { background: SUCCESS_SOFT, color: GREEN, border: `1px solid #AFDDD2` })}
+      {(teamOverdue !== undefined || teamToday !== undefined) && sep}
+      {(teamOverdue !== undefined || teamToday !== undefined) && lbl("Team")}
+      {teamOverdue !== undefined && pill(teamOverdue, "Team Overdue", { background: DANGER_SOFT,  color: RED,   border: `1px solid #EAC4C2` })}
+      {teamToday   !== undefined && pill(teamToday,   "Team Today",   { background: WARNING_SOFT, color: AMBER, border: `1px solid #E8D5B0` })}
     </div>
   );
 }
 
-function PriorityDot({ priority }: { priority: string | null }) {
-  const color = priority === "High" ? RED : priority === "Medium" ? AMBER : SLATE;
-  return <span style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: color, flexShrink: 0, display: "inline-block", marginTop: "4px" }} />;
+/* ─── World Clocks + Weather (shared card) ───────────────────── */
+function ClockWeatherCard({ tick, weather }: { tick: number; weather: Weather | null }) {
+  void tick; // used to trigger re-render
+  return (
+    <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+      {/* Clocks */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)" }}>
+        {[
+          { city: "Lahore",   zone: "Asia/Karachi" },
+          { city: "London",   zone: "Europe/London" },
+          { city: "New York", zone: "America/New_York" },
+        ].map((c, i) => (
+          <div key={c.city} style={{
+            padding: "14px 12px", textAlign: "center",
+            borderRight: i < 2 ? `1px solid ${HAIRLINE}` : undefined,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: INK_400, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>{c.city}</div>
+            <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 20, color: NAVY, letterSpacing: "-0.03em" }}>{tz(c.zone)}</div>
+          </div>
+        ))}
+      </div>
+      {/* Weather */}
+      {weather && (
+        <div style={{ borderTop: `1px solid ${HAIRLINE}`, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 26 }}>{wmo(weather.code)[1]}</span>
+          <div>
+            <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 18, color: NAVY }}>{weather.temp}°C</div>
+            <div style={{ fontSize: 11.5, color: INK_400 }}>{wmo(weather.code)[0]} · feels {weather.apparent}°C</div>
+          </div>
+          <div style={{ marginLeft: "auto", textAlign: "right" }}>
+            <div style={{ fontSize: 12, color: SLATE, fontWeight: 500 }}>{weather.humidity}% humid</div>
+            <div style={{ fontSize: 10.5, color: INK_400 }}>Lahore, PK</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-/* ─── main page ───────────────────────────────────────────────── */
-export default function WelcomePage() {
-  const router   = useRouter();
-  const isMobile = useMobile();
-  const tickRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+/* ─── Quote of the Day ───────────────────────────────────────── */
+function QuoteCard() {
+  const [text, author] = getDailyQuote();
+  return (
+    <div style={{
+      background: `linear-gradient(135deg, ${NAVY} 0%, #1a2a42 100%)`,
+      borderRadius: RADII.CARD, padding: 22, position: "relative", overflow: "hidden",
+    }}>
+      <div style={{
+        position: "absolute", top: -10, left: 12, fontSize: 100,
+        fontFamily: "Georgia,serif", color: "rgba(255,255,255,0.05)", lineHeight: 1, fontWeight: 700,
+      }}>"</div>
+      <p style={{ fontSize: 13.5, lineHeight: 1.65, color: "rgba(255,255,255,0.88)", fontStyle: "italic", position: "relative", margin: 0 }}>
+        "{text}"
+      </p>
+      <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.4)", marginTop: 12, fontStyle: "normal", margin: "12px 0 0" }}>— {author}</p>
+    </div>
+  );
+}
 
-  const [data,         setData]         = useState<WelcomeData | null>(null);
-  const [calEvents,    setCalEvents]    = useState<CalEvent[]>([]);
-  const [news,         setNews]         = useState<NewsStory[]>([]);
-  const [weather,      setWeather]      = useState<Weather | null>(null);
-  const [fx,           setFx]           = useState<FxRates | null>(null);
-  const [tick,         setTick]         = useState(0);
-  const [expandedDay,  setExpandedDay]  = useState<number | null>(null);
-  const [newsExpanded, setNewsExpanded] = useState(false);
+/* ─── Quick Links card ───────────────────────────────────────── */
+function QuickLinksCard({ links }: { links: QuickLink[] }) {
+  return (
+    <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+      <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}` }}>
+        <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, letterSpacing: "-0.01em", margin: 0 }}>Quick Links</h3>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, padding: "14px 16px" }}>
+        {links.map((l) => (
+          <Link key={l.href} href={l.href} style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+            padding: "11px 6px", borderRadius: 10, textDecoration: "none", transition: "background .15s",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <div style={{
+              width: 38, height: 38, borderRadius: 10,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16, ...iconBg(l.color),
+            }}>{l.icon}</div>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: INK_700, textAlign: "center", lineHeight: 1.2 }}>{l.title}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  /* live clock */
+/* ─── Task section label ─────────────────────────────────────── */
+function SectionLabel({ color, children }: { color: string; children: ReactNode }) {
+  return (
+    <div style={{
+      fontSize: 10.5, fontWeight: 700, color, textTransform: "uppercase",
+      letterSpacing: "0.1em", padding: "10px 0 6px",
+    }}>● {children}</div>
+  );
+}
+
+/* ─── Single task row ────────────────────────────────────────── */
+function TaskRow({ task, today, tomorrow }: { task: TaskItem; today: string; tomorrow: string }) {
+  const isOverdue  = task.due_date < today;
+  const isToday    = task.due_date === today;
+  const dotColor   = isOverdue ? RED : isToday ? AMBER : BLUE;
+  const badgeBg    = isOverdue ? DANGER_SOFT  : isToday ? WARNING_SOFT : BLUE_SOFT;
+  const badgeFg    = isOverdue ? RED : isToday ? AMBER : BLUE;
+  const badgeLabel = isOverdue
+    ? `${daysOverdue(task.due_date)}d overdue`
+    : isToday ? "Today"
+    : task.due_date === tomorrow ? "Tomorrow"
+    : formatDateUK(task.due_date);
+
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
+      <div style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0, marginTop: 5 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, color: INK_700, lineHeight: 1.35 }}>{task.description}</div>
+        <div style={{ fontSize: 11, color: INK_400, marginTop: 3 }}>
+          {task.assigned_by ? `From ${task.assigned_by}` : "Self assigned"} · {task.priority ?? "Medium"} priority
+        </div>
+      </div>
+      <div style={{
+        fontSize: 10.5, fontWeight: 600, padding: "2px 8px", borderRadius: 10,
+        background: badgeBg, color: badgeFg, flexShrink: 0, alignSelf: "flex-start", marginTop: 2, whiteSpace: "nowrap",
+      }}>{badgeLabel}</div>
+    </div>
+  );
+}
+
+/* ─── My Tasks card ──────────────────────────────────────────── */
+function MyTasksCard({ tasks, title = "My Tasks", subtitle = "Personal assignments" }: { tasks: TaskItem[]; title?: string; subtitle?: string }) {
+  const today    = todayStr();
+  const tomorrow = tomorrowStr();
+  const overdue  = tasks.filter(t => t.due_date < today);
+  const dueToday = tasks.filter(t => t.due_date === today);
+  const upcoming = tasks.filter(t => t.due_date > today);
+  return (
+    <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+      <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, letterSpacing: "-0.01em", margin: 0 }}>{title}</h3>
+          <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>{subtitle}</p>
+        </div>
+        <Link href="/tasks" style={{ fontSize: 12, color: BLUE, fontWeight: 500, textDecoration: "none" }}>View all →</Link>
+      </div>
+      <div style={{ padding: "4px 20px 16px" }}>
+        {overdue.length > 0 && (
+          <>
+            <SectionLabel color={RED}>Overdue</SectionLabel>
+            {overdue.map(t => <TaskRow key={t.id} task={t} today={today} tomorrow={tomorrow} />)}
+          </>
+        )}
+        {dueToday.length > 0 && (
+          <>
+            <SectionLabel color={AMBER}>Due Today</SectionLabel>
+            {dueToday.map(t => <TaskRow key={t.id} task={t} today={today} tomorrow={tomorrow} />)}
+          </>
+        )}
+        {upcoming.length > 0 && (
+          <>
+            <SectionLabel color={BLUE}>Upcoming</SectionLabel>
+            {upcoming.map(t => <TaskRow key={t.id} task={t} today={today} tomorrow={tomorrow} />)}
+          </>
+        )}
+        {tasks.length === 0 && (
+          <div style={{ padding: "20px 0", textAlign: "center", color: INK_400, fontSize: 13 }}>
+            ✓ No tasks due this week — you&apos;re all clear!
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Member color from index ────────────────────────────────── */
+const MEMBER_COLORS = ["#5B6FC9","#0F7B5F","#B4791F","#7C4CA5","#B3261E","#3B7BC8","#1a8c6e"];
+function memberColor(i: number) { return MEMBER_COLORS[i % MEMBER_COLORS.length]; }
+
+/* ─── Team Status card ───────────────────────────────────────── */
+function TeamStatusCard({ data }: { data: WelcomeData }) {
+  const members  = data.teamMemberStatus ?? [];
+  const dept     = data.department ?? "Department";
+  const teamSize = data.teamSize ?? members.length + 1;
+  return (
+    <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+      <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, letterSpacing: "-0.01em", margin: 0 }}>Team Status</h3>
+          <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>{dept} · {teamSize} member{teamSize !== 1 ? "s" : ""}</p>
+        </div>
+        <Link href="/tasks" style={{ fontSize: 12, color: BLUE, fontWeight: 500, textDecoration: "none" }}>Tasks →</Link>
+      </div>
+      <div style={{ padding: "4px 20px 10px" }}>
+        {members.map((m, i) => (
+          <div key={m.email} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+              background: memberColor(i), display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 10, fontWeight: 700, color: "#fff",
+            }}>
+              {m.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: INK_700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
+            <div style={{ display: "flex", gap: 5 }}>
+              {m.overdueCount > 0 && (
+                <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 8, background: DANGER_SOFT, color: RED }}>
+                  {m.overdueCount} overdue
+                </span>
+              )}
+              {m.todayCount > 0 && (
+                <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 8, background: WARNING_SOFT, color: AMBER }}>
+                  {m.todayCount} today
+                </span>
+              )}
+              {m.overdueCount === 0 && m.todayCount === 0 && (
+                <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 8, background: SUCCESS_SOFT, color: GREEN }}>
+                  ✓ clear
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+        {members.length === 0 && (
+          <div style={{ padding: "16px 0", textAlign: "center", color: INK_400, fontSize: 13 }}>No team members found.</div>
+        )}
+      </div>
+      {/* Mini stat bar */}
+      <div style={{ borderTop: `1px solid ${HAIRLINE}`, display: "grid", gridTemplateColumns: "repeat(3,1fr)" }}>
+        {[
+          { num: data.teamOverdueCount ?? 0,   label: "Overdue",      color: RED   },
+          { num: data.teamTodayCount ?? 0,     label: "Today",        color: AMBER },
+          { num: data.teamCompletedMonth ?? 0, label: "Done this mo", color: GREEN },
+        ].map((s, i) => (
+          <div key={s.label} style={{
+            padding: "12px 10px", textAlign: "center",
+            borderRight: i < 2 ? `1px solid ${HAIRLINE}` : undefined,
+          }}>
+            <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 22, color: s.color, letterSpacing: "-0.03em" }}>{s.num}</div>
+            <div style={{ fontSize: 10.5, color: INK_400, marginTop: 3 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Team Overdue Tasks card (HOD) ──────────────────────────── */
+function TeamOverdueCard({ data }: { data: WelcomeData }) {
+  const today    = todayStr();
+  const tomorrow = tomorrowStr();
+  const tasks    = data.teamOverdueTasks ?? [];
+  const members  = data.teamMemberStatus ?? [];
+  const dept     = data.department ?? "Department";
+  const teamSize = data.teamSize ?? members.length + 1;
+
+  return (
+    <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+      <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, letterSpacing: "-0.01em", margin: 0 }}>Team Overdue Tasks</h3>
+          <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>
+            {dept} · {data.teamOverdueCount ?? tasks.length} overdue across {teamSize} members
+          </p>
+        </div>
+        <Link href="/tasks" style={{ fontSize: 12, color: BLUE, fontWeight: 500, textDecoration: "none" }}>All tasks →</Link>
+      </div>
+      <div style={{ padding: "4px 20px 10px" }}>
+        {tasks.length === 0
+          ? <div style={{ padding: "20px 0", textAlign: "center", color: INK_400, fontSize: 13 }}>✓ No team overdue tasks — great job!</div>
+          : tasks.map(t => <TaskRow key={t.id} task={{ ...t, assigned_by: t.assigned_to || t.assigned_to_email?.split("@")[0] || "" }} today={today} tomorrow={tomorrow} />)
+        }
+      </div>
+      {/* Member status below */}
+      {members.length > 0 && (
+        <div style={{ borderTop: `1px solid ${HAIRLINE}`, padding: "10px 20px" }}>
+          {members.map((m, i) => (
+            <div key={m.email} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: i < members.length - 1 ? `1px solid ${HAIRLINE}` : undefined }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                background: memberColor(i), display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 9.5, fontWeight: 700, color: "#fff",
+              }}>
+                {m.name.slice(0, 2).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, fontSize: 12, fontWeight: 600, color: INK_700 }}>{m.name}</div>
+              <div style={{ display: "flex", gap: 4 }}>
+                {m.overdueCount > 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: DANGER_SOFT, color: RED }}>{m.overdueCount} overdue</span>}
+                {m.todayCount > 0   && <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: WARNING_SOFT, color: AMBER }}>{m.todayCount} today</span>}
+                {m.overdueCount === 0 && m.todayCount === 0 && <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: SUCCESS_SOFT, color: GREEN }}>✓ clear</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── HOD dark stat strip ────────────────────────────────────── */
+function HodStatStrip({ data }: { data: WelcomeData }) {
+  const stats = [
+    { label: "Team size",             value: data.teamSize ?? 0,            color: "#fff"    },
+    { label: "Team overdue",          value: data.teamOverdueCount ?? 0,    color: "#F8E4E2" },
+    { label: "Completed this month",  value: data.teamCompletedMonth ?? 0,  color: "#7DD9C2" },
+    { label: "Pending today",         value: data.teamTodayCount ?? 0,      color: "#FBF1DE" },
+    { label: "My overdue",            value: data.myOverdueCount,           color: data.myOverdueCount > 0 ? "#F8E4E2" : "#7DD9C2" },
+  ];
+  return (
+    <div style={{
+      background: "linear-gradient(90deg, #0c1520 0%, #111d2e 100%)",
+      borderBottom: "1px solid rgba(255,255,255,0.06)",
+      padding: "14px 40px", display: "flex", gap: 40, alignItems: "center",
+    }}>
+      {stats.map((s, i) => (
+        <>
+          <div key={s.label} style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4, whiteSpace: "nowrap" }}>{s.label}</div>
+            <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 20, color: s.color }}>{s.value}</div>
+          </div>
+          {i < stats.length - 1 && <div style={{ width: 1, height: 32, background: "rgba(255,255,255,0.08)" }} />}
+        </>
+      ))}
+    </div>
+  );
+}
+
+/* ─── CEO dark stat strip ────────────────────────────────────── */
+function CeoStatStrip({ data }: { data: WelcomeData }) {
+  return (
+    <div style={{
+      background: "linear-gradient(90deg, #0a1118 0%, #0f1820 100%)",
+      borderBottom: "1px solid rgba(255,255,255,0.06)",
+      padding: "14px 40px", display: "flex", gap: 0, alignItems: "center",
+    }}>
+      {[
+        {
+          label: "Group tasks",
+          sub: [
+            { n: data.groupOverdueCount ?? 0,  l: "Overdue", c: "#F8E4E2" },
+            { n: data.myTodayCount,             l: "Today",   c: "#FBF1DE" },
+          ],
+        },
+        { label: "Machine issues", single: { n: data.machineIssueCount ?? 0, c: data.machineIssueCount ? "#FBF1DE" : "#7DD9C2" } },
+        {
+          label: "My tasks",
+          sub: [
+            { n: data.myOverdueCount, l: "Overdue", c: data.myOverdueCount > 0 ? "#F8E4E2" : "#7DD9C2" },
+            { n: data.myTodayCount,   l: "Today",   c: "#FBF1DE" },
+          ],
+        },
+      ].map((block, bi) => (
+        <div key={block.label} style={{
+          paddingRight: 32, marginRight: 32,
+          borderRight: bi < 2 ? "1px solid rgba(255,255,255,0.07)" : undefined,
+        }}>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>{block.label}</div>
+          {block.single ? (
+            <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 26, color: block.single.c, letterSpacing: "-0.03em", lineHeight: 1 }}>{block.single.n}</div>
+          ) : (
+            <div style={{ display: "flex", gap: 16 }}>
+              {(block.sub ?? []).map(s => (
+                <div key={s.l}>
+                  <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 18, color: s.c }}>{s.n}</div>
+                  <div style={{ fontSize: 9.5, color: "rgba(255,255,255,0.3)" }}>{s.l}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── FX strip (CEO hero right) ──────────────────────────────── */
+function FxStrip({ fx }: { fx: FxRates | null }) {
+  if (!fx) return null;
+  const pairs = [
+    { label: "USD/PKR", value: fx.USD },
+    { label: "GBP/PKR", value: fx.GBP },
+    { label: "CNY/PKR", value: fx.CNY },
+  ];
+  return (
+    <div style={{
+      display: "flex", gap: 0,
+      background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 10, overflow: "hidden",
+    }}>
+      {pairs.map((p, i) => (
+        <div key={p.label} style={{
+          padding: "10px 14px", textAlign: "center",
+          borderRight: i < 2 ? "1px solid rgba(255,255,255,0.08)" : undefined,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>{p.label}</div>
+          <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 16, color: "#fff" }}>{p.value.toFixed(0)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Portfolio card (CEO) ───────────────────────────────────── */
+function PortfolioCard({ holdings, portfolioTotal }: { holdings: Holding[]; portfolioTotal: number | null }) {
+  return (
+    <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+      <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, letterSpacing: "-0.01em", margin: 0 }}>Portfolio</h3>
+          <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>PSX investments · live</p>
+        </div>
+        <Link href="/investments" style={{ fontSize: 12, color: BLUE, fontWeight: 500, textDecoration: "none" }}>View →</Link>
+      </div>
+      {portfolioTotal !== null && (
+        <div style={{ padding: "14px 20px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <div>
+            <div style={{ fontSize: 11, color: INK_400 }}>Portfolio value</div>
+            <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 20, color: NAVY, letterSpacing: "-0.03em" }}>
+              ₨ {(portfolioTotal / 1000).toFixed(0)}K
+            </div>
+          </div>
+          <Link href="/investments" style={{ fontSize: 11.5, color: BLUE, fontWeight: 500, textDecoration: "none" }}>Full breakdown →</Link>
+        </div>
+      )}
+      <div style={{ padding: "4px 20px 12px" }}>
+        {holdings.length === 0
+          ? <div style={{ padding: "16px 0", textAlign: "center", color: INK_400, fontSize: 13 }}>No holdings found.</div>
+          : holdings.slice(0, 5).map(h => (
+              <div key={h.ticker} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: `1px solid ${HAIRLINE}` }}>
+                <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 12, color: NAVY, width: 54, flexShrink: 0 }}>{h.ticker}</div>
+                <div style={{ fontSize: 11.5, color: INK_400, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.company_name}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: INK_700, textAlign: "right", whiteSpace: "nowrap" }}>
+                  {h.quantity.toLocaleString()} u
+                </div>
+              </div>
+            ))
+        }
+        {holdings.length > 5 && (
+          <div style={{ padding: "8px 0", fontSize: 11.5, color: BLUE, fontWeight: 500, textAlign: "center" }}>
+            +{holdings.length - 5} more holdings →
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Shared hero section ────────────────────────────────────── */
+type HeroProps = {
+  data: WelcomeData;
+  tick: number;
+  weather: Weather | null;
+  fx?: FxRates | null;
+  email?: string;
+};
+function Hero({ data, tick, weather, fx, email }: HeroProps) {
+  void tick;
+  const initials = avatarInitials(data.firstName);
+  const deptLabel = data.department ? `${data.department}` : "Unze Group";
+  return (
+    <div style={{
+      background: "linear-gradient(135deg, #0F1720 0%, #162232 60%, #1a2a42 100%)",
+      position: "relative", overflow: "hidden", padding: "40px 40px 36px",
+    }}>
+      {/* Radial glow accents */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        background: `
+          radial-gradient(ellipse 600px 300px at 80% -20%, rgba(59,76,202,0.18) 0%, transparent 70%),
+          radial-gradient(ellipse 400px 400px at -10% 120%, rgba(15,123,95,0.12) 0%, transparent 60%)
+        `,
+      }} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "flex-start", gap: 28 }}>
+        {/* Avatar */}
+        <AvatarRing photoUrl={data.photoUrl} initials={initials} role={data.role} />
+        {/* Name + badges */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", fontWeight: 400, letterSpacing: "0.02em", textTransform: "uppercase", marginBottom: 5 }}>
+            {greeting()}
+          </div>
+          <h1 style={{
+            fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
+            fontWeight: 800, fontSize: "clamp(22px,4vw,32px)", color: "#fff",
+            letterSpacing: "-0.025em", lineHeight: 1.1, margin: "0 0 10px",
+          }}>
+            {data.firstName}
+          </h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "3px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 600,
+              ...roleBadgeStyle(data.role),
+            }}>
+              {roleLabel(data.role, email)}
+            </span>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "3px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 600,
+              background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.6)",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}>
+              {deptLabel}
+            </span>
+          </div>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.42)", fontStyle: "italic", lineHeight: 1.5, margin: 0, maxWidth: 520 }}>
+            <strong style={{ color: "rgba(255,255,255,0.65)", fontStyle: "normal", fontWeight: 500 }}>Unze Group</strong>
+            {" "}— Engineering precision. Global style. Pakistani heart.
+          </p>
+        </div>
+        {/* Right: clocks + weather + fx (CEO) */}
+        <div style={{ marginLeft: "auto", flexShrink: 0, display: "flex", flexDirection: "column", gap: 14, alignItems: "flex-end" }}>
+          {/* World clocks */}
+          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+            {[
+              { city: "Lahore",   zone: "Asia/Karachi" },
+              { city: "London",   zone: "Europe/London" },
+              { city: "New York", zone: "America/New_York" },
+            ].map((c, i, arr) => (
+              <div key={c.city} style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>{c.city}</div>
+                  <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 700, fontSize: 18, color: "#fff", letterSpacing: "-0.02em" }}>{tz(c.zone)}</div>
+                </div>
+                {i < arr.length - 1 && <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.1)" }} />}
+              </div>
+            ))}
+          </div>
+          {/* Weather chip */}
+          {weather && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 12, padding: "8px 14px",
+            }}>
+              <span style={{ fontSize: 20 }}>{wmo(weather.code)[1]}</span>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", fontFamily: "var(--font-display,'Inter Tight',sans-serif)" }}>{weather.temp}°C</div>
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.45)" }}>{wmo(weather.code)[0]} · Lahore</div>
+              </div>
+            </div>
+          )}
+          {/* FX strip (CEO only) */}
+          {fx && <FxStrip fx={fx} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Layout: Member ─────────────────────────────────────────── */
+function MemberLayout({ data, tick, weather, email }: { data: WelcomeData; tick: number; weather: Weather | null; email?: string }) {
+  return (
+    <>
+      <Hero data={data} tick={tick} weather={weather} email={email} />
+      <PurposeBanner />
+      <TaskBanner myOverdue={data.myOverdueCount} myToday={data.myTodayCount} myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, padding: "24px 40px 40px" }}>
+        <MyTasksCard tasks={data.myTasks} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <QuoteCard />
+          <ClockWeatherCard tick={tick} weather={weather} />
+          <QuickLinksCard links={data.quickLinks} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ─── Layout: Manager ────────────────────────────────────────── */
+function ManagerLayout({ data, tick, weather, email }: { data: WelcomeData; tick: number; weather: Weather | null; email?: string }) {
+  const hasTeam = (data.teamMemberStatus ?? []).length > 0;
+  return (
+    <>
+      <Hero data={data} tick={tick} weather={weather} email={email} />
+      <PurposeBanner />
+      <TaskBanner
+        myOverdue={data.myOverdueCount} myToday={data.myTodayCount}
+        myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
+        teamOverdue={data.teamOverdueCount} teamToday={data.teamTodayCount}
+      />
+      <div style={{ display: "grid", gridTemplateColumns: hasTeam ? "1fr 1fr 320px" : "1fr 320px", gap: 20, padding: "24px 40px 40px" }}>
+        <MyTasksCard tasks={data.myTasks} />
+        {hasTeam && <TeamStatusCard data={data} />}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <QuoteCard />
+          <QuickLinksCard links={data.quickLinks} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ─── Layout: HOD (Manager with team overdue list) ───────────── */
+function HodLayout({ data, tick, weather, email }: { data: WelcomeData; tick: number; weather: Weather | null; email?: string }) {
+  return (
+    <>
+      <Hero data={data} tick={tick} weather={weather} email={email} />
+      <HodStatStrip data={data} />
+      <PurposeBanner />
+      <TaskBanner
+        myOverdue={data.myOverdueCount} myToday={data.myTodayCount}
+        myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
+        teamOverdue={data.teamOverdueCount} teamToday={data.teamTodayCount}
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 320px", gap: 20, padding: "24px 40px 40px" }}>
+        <TeamOverdueCard data={data} />
+        <MyTasksCard tasks={data.myTasks} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <QuoteCard />
+          <QuickLinksCard links={data.quickLinks} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ─── Layout: CEO / Admin / Executive ───────────────────────── */
+function CeoLayout({ data, tick, weather, fx, holdings, portfolioTotal, email }: {
+  data: WelcomeData; tick: number; weather: Weather | null;
+  fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null; email?: string;
+}) {
+  const showPortfolio = holdings.length > 0 || portfolioTotal !== null;
+  const cols = showPortfolio
+    ? "1fr 1fr 1fr 300px"
+    : "1fr 1fr 300px";
+  return (
+    <>
+      <Hero data={data} tick={tick} weather={weather} fx={fx} email={email} />
+      <CeoStatStrip data={data} />
+      <PurposeBanner />
+      <TaskBanner myOverdue={data.myOverdueCount} myToday={data.myTodayCount} myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount} />
+      <div style={{ display: "grid", gridTemplateColumns: cols, gap: 20, padding: "24px 40px 40px" }}>
+        <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal CEO assignments" />
+        {/* Group task health card */}
+        <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+          <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}` }}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, margin: 0 }}>Group Task Health</h3>
+            <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>All teams · live snapshot</p>
+          </div>
+          <div style={{ padding: "12px 20px" }}>
+            {[
+              { label: "Group overdue tasks",  value: data.groupOverdueCount ?? 0,  color: RED,   soft: DANGER_SOFT  },
+              { label: "Machine issues open",  value: data.machineIssueCount ?? 0,  color: AMBER, soft: WARNING_SOFT },
+              { label: "My tasks overdue",     value: data.myOverdueCount,          color: data.myOverdueCount > 0 ? RED : GREEN, soft: data.myOverdueCount > 0 ? DANGER_SOFT : SUCCESS_SOFT },
+              { label: "My tasks due today",   value: data.myTodayCount,            color: AMBER, soft: WARNING_SOFT },
+            ].map(row => (
+              <div key={row.label} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "12px 0", borderBottom: `1px solid ${HAIRLINE}`,
+              }}>
+                <span style={{ fontSize: 13, color: INK_700 }}>{row.label}</span>
+                <span style={{
+                  fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
+                  fontWeight: 800, fontSize: 18, color: row.color,
+                  background: row.soft, padding: "2px 12px", borderRadius: 8,
+                }}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+            <div style={{ paddingTop: 14, textAlign: "center" }}>
+              <Link href="/tasks" style={{ fontSize: 12, color: BLUE, fontWeight: 600, textDecoration: "none" }}>View all group tasks →</Link>
+            </div>
+          </div>
+        </div>
+        {showPortfolio && <PortfolioCard holdings={holdings} portfolioTotal={portfolioTotal} />}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <QuoteCard />
+          <ClockWeatherCard tick={tick} weather={weather} />
+          <QuickLinksCard links={data.quickLinks} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ─── Main page ──────────────────────────────────────────────── */
+function WelcomePageInner() {
+  const [data,           setData]           = useState<WelcomeData | null>(null);
+  const [weather,        setWeather]        = useState<Weather | null>(null);
+  const [fx,             setFx]             = useState<FxRates | null>(null);
+  const [holdings,       setHoldings]       = useState<Holding[]>([]);
+  const [portfolioTotal, setPortfolioTotal] = useState<number | null>(null);
+  const [tick,           setTick]           = useState(0);
+  const [email,          setEmail]          = useState<string | undefined>(undefined);
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clock tick
   useEffect(() => {
     tickRef.current = setInterval(() => setTick(n => n + 1), 1000);
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
   }, []);
 
-  /* weather */
-  const fetchWeather = useCallback(async (lat: number, lon: number) => {
+  // Main data load
+  const load = useCallback(async () => {
+    const { data: { user } } = await (await import("../lib/supabase")).supabase.auth.getUser();
+    setEmail(user?.email ?? undefined);
+
+    const res = await authFetch("/api/welcome");
+    if (res.ok) setData(await res.json());
+
+    // Weather (Lahore: 31.5497°N, 74.3436°E)
     try {
-      const [wRes, gRes] = await Promise.all([
-        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code&timezone=auto`),
-        fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`),
-      ]);
-      const [wd, gd] = await Promise.all([wRes.json(), gRes.json()]);
-      const city = gd?.address?.city || gd?.address?.town || gd?.address?.village || "Your location";
-      setWeather({
-        temp:     Math.round(wd.current.temperature_2m),
-        apparent: Math.round(wd.current.apparent_temperature),
-        humidity: wd.current.relative_humidity_2m,
-        code:     wd.current.weather_code,
-        city,
-      });
-    } catch { /* non-fatal */ }
+      const wRes = await fetch(
+        "https://api.open-meteo.com/v1/forecast?latitude=31.5497&longitude=74.3436&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code&timezone=Asia/Karachi",
+        { cache: "no-store" }
+      );
+      if (wRes.ok) {
+        const w = await wRes.json();
+        setWeather({
+          temp:     Math.round(w.current.temperature_2m),
+          apparent: Math.round(w.current.apparent_temperature),
+          humidity: Math.round(w.current.relative_humidity_2m),
+          code:     w.current.weather_code,
+          city:     "Lahore",
+        });
+      }
+    } catch { /* weather is optional */ }
   }, []);
 
-  /* main data load */
+  // FX + investments load (CEO/Admin/Exec only, after data.role is known)
   useEffect(() => {
-    let active = true;
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace("/login"); return; }
+    if (!data) return;
+    const isPriv = data.role === "CEO" || data.role === "Admin" || data.role === "Executive";
+    if (!isPriv) return;
 
-      const today = dayOffset(0);
-      const role = (await supabase.from("members").select("role").eq("email", user.email!).maybeSingle()).data?.role ?? null;
+    // FX
+    authFetch("/api/fx/multi").then(r => r.ok && r.json().then(setFx)).catch(() => {});
 
-      // For HODs and Members we only need the welcome API + weather
-      // For Admin/CEO/Exec we also load calendar, FX, and news
-      const isPrivileged = !role || role === "Admin" || role === "CEO" || role === "Executive";
-
-      const fetches: Promise<unknown>[] = [authFetch("/api/welcome")];
-      if (isPrivileged) {
-        fetches.push(
-          authFetch(`/api/calendar/freebusy?date=${today}`),
-          authFetch("/api/fx/multi"),
-          authFetch("/api/welcome/news"),
-        );
-      } else if (role === "Member") {
-        // Members want FX too (they picked clocks + weather, no FX — skip)
+    // Investments
+    supabase.from("holdings").select("ticker, company_name, quantity, buy_price").order("ticker").then(({ data: h }) => {
+      if (h && h.length > 0) {
+        setHoldings(h as Holding[]);
+        const total = (h as Holding[]).reduce((s, x) => s + x.quantity * x.buy_price, 0);
+        setPortfolioTotal(total);
       }
+    });
+  }, [data]);
 
-      const [summaryRes, calRes, fxRes, newsRes] = await Promise.all(fetches) as Response[];
+  useEffect(() => { load(); }, [load]);
 
-      if (!active) return;
-
-      if (summaryRes?.ok) {
-        const s: WelcomeData = await summaryRes.json();
-        setData(s);
-      }
-      if (calRes?.ok) {
-        const c = await calRes.json();
-        const cutoff = dayOffset(3);
-        setCalEvents(
-          ((c.busy || []) as CalEvent[])
-            .filter(e => e.start.slice(0, 10) >= today && e.start.slice(0, 10) < cutoff)
-            .sort((a, b) => a.start.localeCompare(b.start))
-        );
-      }
-      if (fxRes?.ok)  { const f = await fxRes.json();  setFx(f); }
-      if (newsRes?.ok){ const n = await newsRes.json(); setNews(n.stories || []); }
-
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          p  => fetchWeather(p.coords.latitude, p.coords.longitude),
-          () => fetchWeather(31.5204, 74.3587),
-        );
-      } else { fetchWeather(31.5204, 74.3587); }
-    }
-    load();
-    return () => { active = false; };
-  }, [router, fetchWeather]);
-
-  void tick; // consumed indirectly by clockStr re-renders
-
-  const role = data?.role ?? null;
-
-  // ── HOD layout ────────────────────────────────────────────────
-  if (role === "Manager") {
+  if (!data) {
     return (
-      <AuthWrapper>
-        <HODLayout
-          data={data!}
-          isMobile={isMobile}
-          router={router}
-          clockStr={clockStr}
-        />
-      </AuthWrapper>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: CANVAS }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: "50%",
+            border: `3px solid ${HAIRLINE}`, borderTopColor: BLUE,
+            animation: "spin 0.8s linear infinite", margin: "0 auto 12px",
+          }} />
+          <p style={{ color: INK_400, fontSize: 13 }}>Loading your dashboard…</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
     );
   }
 
-  // ── Member layout ─────────────────────────────────────────────
-  if (role === "Member") {
-    return (
-      <AuthWrapper>
-        <MemberLayout
-          data={data!}
-          weather={weather}
-          isMobile={isMobile}
-          router={router}
-          clockStr={clockStr}
-          shortTime={shortTime}
-          wmo={wmo}
-        />
-      </AuthWrapper>
-    );
-  }
+  const isPriv    = data.role === "CEO" || data.role === "Admin" || data.role === "Executive";
+  const isManager = data.role === "Manager";
+  const hasTeamOverdue = isManager && (data.teamOverdueTasks ?? []).length > 0;
 
-  // ── Admin / CEO / Executive (or loading) — original layout ────
-  const gap   = "12px";
-  const col4  = isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr";
-  const col3  = isMobile ? "1fr" : "1fr 1fr 1fr";
-  const overdueCount  = data?.overdueTaskCount ?? 0;
-  const machineCount  = data?.machineIssueCount ?? 0;
+  return (
+    <div style={{ background: CANVAS, minHeight: "100vh" }}>
+      {isPriv
+        ? <CeoLayout     data={data} tick={tick} weather={weather} fx={fx} holdings={holdings} portfolioTotal={portfolioTotal} email={email} />
+        : hasTeamOverdue
+        ? <HodLayout     data={data} tick={tick} weather={weather} email={email} />
+        : isManager
+        ? <ManagerLayout data={data} tick={tick} weather={weather} email={email} />
+        : <MemberLayout  data={data} tick={tick} weather={weather} email={email} />
+      }
+    </div>
+  );
+}
 
+export default function WelcomePage() {
   return (
     <AuthWrapper>
-      <div style={{ backgroundColor: CANVAS, minHeight: "100vh", paddingBottom: "40px" }}>
-
-        {/* ── HERO ──────────────────────────────────────────────── */}
-        <div style={{
-          background: `linear-gradient(135deg, ${NAVY} 0%, #1B2B40 60%, #1A3350 100%)`,
-          padding: isMobile ? "28px 18px 24px" : "36px 36px 30px",
-          marginBottom: "20px",
-          display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          alignItems: isMobile ? "flex-start" : "center",
-          justifyContent: "space-between",
-          gap: "16px",
-          position: "relative",
-          overflow: "hidden",
-        }}>
-          <div style={{ position: "absolute", right: isMobile ? "-60px" : "120px", top: "-80px", width: "260px", height: "260px", borderRadius: "50%", background: "rgba(59,76,202,0.12)", pointerEvents: "none" }} />
-          <div style={{ position: "absolute", right: isMobile ? "10px" : "60px", bottom: "-40px", width: "140px", height: "140px", borderRadius: "50%", background: "rgba(59,76,202,0.08)", pointerEvents: "none" }} />
-
-          <div style={{ position: "relative" }}>
-            <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "8px" }}>{longDate()}</div>
-            <div style={{ fontSize: isMobile ? "26px" : "34px", fontWeight: 800, color: "white", lineHeight: 1.2 }}>
-              {greeting()}{data?.firstName ? `, ${data.firstName}` : ""}.
-            </div>
-            <div style={{ fontSize: "14px", color: "rgba(255,255,255,0.4)", marginTop: "6px" }}>Here's your morning brief.</div>
-            <div style={{ display: "flex", gap: "10px", marginTop: "18px", flexWrap: "wrap" }}>
-              <HeroBadge count={overdueCount} label="overdue" color="#F87171" bg="rgba(248,113,113,0.15)" />
-              <HeroBadge count={machineCount} label={machineCount === 1 ? "machine issue" : "machine issues"} color="#FCD34D" bg="rgba(252,211,77,0.12)" />
-            </div>
-          </div>
-
-          <div style={{ position: "relative", textAlign: isMobile ? "left" : "right", flexShrink: 0 }}>
-            <div style={{ fontSize: isMobile ? "38px" : "52px", fontWeight: 700, fontFamily: "monospace", color: "white", letterSpacing: "2px", lineHeight: 1 }}>
-              {clockStr("Asia/Karachi")}
-            </div>
-            <div style={{ fontSize: "11px", fontWeight: 600, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginTop: "4px", textTransform: "uppercase" }}>
-              Pakistan Standard Time · PKT
-            </div>
-            <button
-              onClick={() => router.replace("/home")}
-              style={{ marginTop: "14px", padding: "9px 22px", backgroundColor: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: RADII.PILL, color: "white", fontSize: "13px", fontWeight: 600, cursor: "pointer", letterSpacing: "0.02em" }}
-            >
-              Open Dashboard →
-            </button>
-          </div>
-        </div>
-
-        <div style={{ padding: isMobile ? "0 12px" : "0 20px" }}>
-
-          {/* ── ROW 1: clocks + weather + FX + stats ─────────────── */}
-          <div style={{ display: "grid", gridTemplateColumns: col4, gap, marginBottom: gap }}>
-
-            <Card accentColor={NAVY}>
-              <CardLabel color={NAVY}>🌍 World Clocks</CardLabel>
-              <div style={{ display: "flex", flexDirection: "column", gap: "11px" }}>
-                {CLOCKS.map(c => (
-                  <div key={c.tz} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "18px", lineHeight: 1 }}>{c.flag}</span>
-                      <div style={{ fontSize: "12px", fontWeight: 600, color: NAVY }}>{c.city}</div>
-                    </div>
-                    <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "monospace", color: "white", backgroundColor: c.color, padding: "2px 8px", borderRadius: "6px" }}>
-                      {shortTime(c.tz)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <Card accentColor={BLUE}>
-              <CardLabel color={BLUE}>🌤 Weather</CardLabel>
-              {weather ? (
-                <div>
-                  <div style={{ fontSize: "11px", fontWeight: 600, color: SLATE, marginBottom: "8px" }}>{weather.city}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "36px", lineHeight: 1 }}>{wmo(weather.code)[1]}</span>
-                    <span style={{ fontSize: "34px", fontWeight: 800, color: NAVY, lineHeight: 1 }}>{weather.temp}°C</span>
-                  </div>
-                  <div style={{ fontSize: "13px", color: SLATE, marginTop: "4px", fontWeight: 500 }}>{wmo(weather.code)[0]}</div>
-                  <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
-                    <Chip label={`Feels ${weather.apparent}°C`} color={BLUE} />
-                    <Chip label={`${weather.humidity}% humidity`} color={SLATE} />
-                  </div>
-                </div>
-              ) : (
-                <div style={{ color: INK_400, fontSize: "13px", marginTop: "4px" }}>Locating…</div>
-              )}
-            </Card>
-
-            <Card accentColor={GREEN} style={{ gridColumn: isMobile ? "span 2" : "span 1" }}>
-              <CardLabel color={GREEN}>💱 PKR Exchange</CardLabel>
-              {fx ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {CURRENCIES.map(c => (
-                    <div key={c.code} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: "8px", backgroundColor: CANVAS }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "18px" }}>{c.flag}</span>
-                        <div>
-                          <div style={{ fontSize: "12px", fontWeight: 700, color: c.color }}>{c.code}</div>
-                          <div style={{ fontSize: "10px", color: INK_400 }}>{c.label}</div>
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: "16px", fontWeight: 800, fontFamily: "monospace", color: NAVY }}>₨ {fx[c.key].toFixed(0)}</div>
-                        <div style={{ fontSize: "10px", color: INK_400 }}>per {c.symbol}1</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ color: INK_400, fontSize: "13px" }}>Loading rates…</div>
-              )}
-            </Card>
-
-            <Card accentColor={overdueCount > 0 ? RED : GREEN}>
-              <CardLabel color={overdueCount > 0 ? RED : GREEN}>📋 At a Glance</CardLabel>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", flex: 1 }}>
-                <StatRow colour={overdueCount > 0 ? RED : GREEN} count={overdueCount}
-                  label={overdueCount === 1 ? "overdue task" : "overdue tasks"} empty="All tasks on track" />
-                <StatRow colour={machineCount > 0 ? AMBER : GREEN} count={machineCount}
-                  label={machineCount === 1 ? "machine issue" : "machine issues"} empty="All machines running" />
-              </div>
-              <a href="/home" style={{ fontSize: "12px", color: BLUE, fontWeight: 600, textDecoration: "none", marginTop: "12px", paddingTop: "12px", borderTop: `1px solid ${HAIRLINE}`, display: "block" }}>
-                Open dashboard →
-              </a>
-            </Card>
-          </div>
-
-          {/* ── ROW 2: 3-day calendar ─────────────────────────────── */}
-          <div style={{ display: "grid", gridTemplateColumns: col3, gap, marginBottom: gap }}>
-            {[0, 1, 2].map(offset => {
-              const dateStr  = dayOffset(offset);
-              const events   = calEvents.filter(e => e.start.slice(0, 10) === dateStr);
-              const color    = DAY_COLORS[offset];
-              const label    = dayLabel(offset);
-              const isExpanded = expandedDay === offset;
-              const PREVIEW  = 3;
-              return (
-                <Card key={offset} accentColor={color}>
-                  <CardLabel color={color}>
-                    📅 {label}
-                    <span style={{ marginLeft: "auto", fontSize: "10px", fontWeight: 700, backgroundColor: color, color: "white", padding: "1px 7px", borderRadius: "20px" }}>
-                      {events.length} {events.length === 1 ? "event" : "events"}
-                    </span>
-                  </CardLabel>
-                  {events.length === 0 ? (
-                    <div style={{ fontSize: "13px", color: INK_400, fontStyle: "italic" }}>Nothing scheduled.</div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                      {(isExpanded ? events : events.slice(0, PREVIEW)).map((ev, i) => {
-                        const start = fmtEvtTime(ev.start);
-                        const end   = fmtEvtTime(ev.end);
-                        const time  = start === "All day" ? "All day" : `${start}–${end}`;
-                        return (
-                          <div key={i} style={{ display: "flex", gap: "10px", alignItems: "flex-start", padding: "6px 8px", borderRadius: "6px", backgroundColor: i % 2 === 0 ? CANVAS : "transparent" }}>
-                            <span style={{ fontSize: "10px", fontWeight: 600, color: "white", backgroundColor: color, padding: "2px 6px", borderRadius: "4px", flexShrink: 0, marginTop: "1px", minWidth: "70px", textAlign: "center" }}>{time}</span>
-                            <span style={{ fontSize: "13px", color: NAVY, fontWeight: 500, lineHeight: 1.35 }}>{ev.title || "Busy"}</span>
-                          </div>
-                        );
-                      })}
-                      {events.length > PREVIEW && (
-                        <button onClick={() => setExpandedDay(isExpanded ? null : offset)} style={{ marginTop: "4px", background: "none", border: "none", fontSize: "12px", fontWeight: 600, color, cursor: "pointer", textAlign: "left", padding: "2px 8px" }}>
-                          {isExpanded ? "▲ Show less" : `▼ Show all ${events.length} events`}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* ── ROW 3: news ───────────────────────────────────────── */}
-          <Card accentColor={NAVY} style={{ marginBottom: "8px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-              <CardLabel color={NAVY} style={{ marginBottom: 0 }}>📰 Latest News</CardLabel>
-              {news.length > 0 && (
-                <button onClick={() => setNewsExpanded(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", fontWeight: 600, color: NAVY, padding: "2px 6px" }}>
-                  {newsExpanded ? "▲ Show less" : "▼ Show more"}
-                </button>
-              )}
-            </div>
-            {news.length === 0 ? (
-              <div style={{ color: INK_400, fontSize: "13px" }}>Loading headlines…</div>
-            ) : (
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "0" }}>
-                {(newsExpanded ? news : news.slice(0, 6)).map((s, i) => (
-                  <a key={i} href={s.link} target="_blank" rel="noreferrer"
-                    style={{ textDecoration: "none", display: "block", padding: "10px 14px", borderBottom: `1px solid ${HAIRLINE}`, borderRight: (!isMobile && (i % 3 !== 2)) ? `1px solid ${HAIRLINE}` : "none" }}
-                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = CANVAS; }}
-                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "5px" }}>
-                      <span style={{ fontSize: "9px", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", color: "white", backgroundColor: s.color, letterSpacing: "0.05em", textTransform: "uppercase", flexShrink: 0 }}>{s.source}</span>
-                      {s.ago && <span style={{ fontSize: "10px", color: INK_400 }}>{s.ago}</span>}
-                    </div>
-                    <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, lineHeight: 1.4 }}>{s.title}</div>
-                  </a>
-                ))}
-              </div>
-            )}
-          </Card>
-
-        </div>
-      </div>
+      <WelcomePageInner />
     </AuthWrapper>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   HOD LAYOUT
-   ═══════════════════════════════════════════════════════════════ */
-function HODLayout({
-  data,
-  isMobile,
-  router,
-  clockStr,
-}: {
-  data: WelcomeData;
-  isMobile: boolean;
-  router: ReturnType<typeof useRouter>;
-  clockStr: (tz: string) => string;
-}) {
-  const {
-    firstName = "",
-    department = "",
-    teamOverdueCount = 0,
-    teamPendingCount = 0,
-    teamCompletedMonth = 0,
-    myOverdueCount = 0,
-    myTodayCount = 0,
-    teamOverdueTasks = [],
-    myTasks = [],
-  } = data;
-
-  const deptDashHref = (department && DEPT_DASHBOARD[department]) || "/dashboard";
-  const today = todayISO();
-  const gap = "12px";
-  const col2 = isMobile ? "1fr" : "2fr 1fr";
-  const col3 = isMobile ? "1fr" : "1fr 1fr 1fr";
-
-  const hasTeamIssues = teamOverdueCount > 0;
-  const hasMyIssues   = myOverdueCount > 0 || myTodayCount > 0;
-
-  return (
-    <div style={{ backgroundColor: CANVAS, minHeight: "100vh", paddingBottom: "40px" }}>
-
-      {/* ── HERO ─────────────────────────────────────────────────── */}
-      <div style={{
-        background: `linear-gradient(135deg, ${NAVY} 0%, #1B2B40 60%, #1A3350 100%)`,
-        padding: isMobile ? "28px 18px 24px" : "36px 36px 30px",
-        marginBottom: "20px",
-        display: "flex",
-        flexDirection: isMobile ? "column" : "row",
-        alignItems: isMobile ? "flex-start" : "center",
-        justifyContent: "space-between",
-        gap: "16px",
-        position: "relative",
-        overflow: "hidden",
-      }}>
-        <div style={{ position: "absolute", right: isMobile ? "-60px" : "180px", top: "-80px", width: "260px", height: "260px", borderRadius: "50%", background: "rgba(59,76,202,0.10)", pointerEvents: "none" }} />
-
-        <div style={{ position: "relative" }}>
-          <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "8px" }}>{longDate()}</div>
-          <div style={{ fontSize: isMobile ? "26px" : "34px", fontWeight: 800, color: "white", lineHeight: 1.2 }}>
-            {greeting()}{firstName ? `, ${firstName}` : ""}.
-          </div>
-          {department && (
-            <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.45)", marginTop: "5px", fontWeight: 500 }}>
-              {department} · Head of Department
-            </div>
-          )}
-
-          {/* Status badges */}
-          <div style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
-            {teamOverdueCount > 0 && (
-              <HeroBadge count={teamOverdueCount} label={`team task${teamOverdueCount !== 1 ? "s" : ""} overdue`} color="#F87171" bg="rgba(248,113,113,0.15)" />
-            )}
-            {teamOverdueCount === 0 && teamPendingCount > 0 && (
-              <HeroBadge count={teamPendingCount} label="team tasks on track" color="#6EE7B7" bg="rgba(110,231,183,0.15)" />
-            )}
-            {myOverdueCount > 0 && (
-              <HeroBadge count={myOverdueCount} label={`of mine overdue`} color="#FCD34D" bg="rgba(252,211,77,0.12)" />
-            )}
-            {myOverdueCount === 0 && myTodayCount > 0 && (
-              <HeroBadge count={myTodayCount} label="due today" color="#FCD34D" bg="rgba(252,211,77,0.12)" />
-            )}
-            {!hasTeamIssues && !hasMyIssues && (
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "4px 12px", borderRadius: "20px", backgroundColor: "rgba(110,231,183,0.15)" }}>
-                <span style={{ fontSize: "13px" }}>✓</span>
-                <span style={{ fontSize: "12px", color: "#6EE7B7", fontWeight: 600 }}>All clear — no overdue items</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Clock + quick action */}
-        <div style={{ position: "relative", textAlign: isMobile ? "left" : "right", flexShrink: 0 }}>
-          <div style={{ fontSize: isMobile ? "36px" : "48px", fontWeight: 700, fontFamily: "monospace", color: "white", letterSpacing: "2px", lineHeight: 1 }}>
-            {clockStr("Asia/Karachi")}
-          </div>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginTop: "4px", textTransform: "uppercase" }}>
-            Pakistan Standard Time
-          </div>
-          <button
-            onClick={() => router.push(deptDashHref)}
-            style={{ marginTop: "14px", padding: "9px 20px", backgroundColor: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: RADII.PILL, color: "white", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-          >
-            {department || "Department"} Dashboard →
-          </button>
-        </div>
-      </div>
-
-      <div style={{ padding: isMobile ? "0 12px" : "0 20px" }}>
-
-        {/* ── ROW 1: Team Pulse + My Tasks ─────────────────────── */}
-        <div style={{ display: "grid", gridTemplateColumns: col2, gap, marginBottom: gap }}>
-
-          {/* Team Pulse */}
-          <Card accentColor={hasTeamIssues ? RED : GREEN}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <CardLabel style={{ marginBottom: 0 }} color={hasTeamIssues ? RED : GREEN}>
-                👥 Team Pulse — Overdue
-              </CardLabel>
-              {teamOverdueCount > 0 && (
-                <span style={{ fontSize: "11px", fontWeight: 700, backgroundColor: DANGER_SOFT, color: RED, padding: "3px 10px", borderRadius: "20px" }}>
-                  {teamOverdueCount} overdue
-                </span>
-              )}
-            </div>
-
-            {teamOverdueTasks.length === 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-start" }}>
-                <div style={{ fontSize: "15px" }}>✅</div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: "#059669" }}>No overdue team tasks</div>
-                <div style={{ fontSize: "12px", color: INK_400 }}>
-                  {teamPendingCount} task{teamPendingCount !== 1 ? "s" : ""} active · {teamCompletedMonth} completed this month
-                </div>
-              </div>
-            ) : (
-              <>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
-                  {teamOverdueTasks.map((t) => {
-                    const days = t.due_date ? daysOverdue(t.due_date) : 0;
-                    const isCritical = days >= 7;
-                    return (
-                      <div key={t.id} style={{
-                        display: "flex", gap: "10px", alignItems: "flex-start",
-                        padding: "8px 10px", borderRadius: "8px",
-                        backgroundColor: isCritical ? DANGER_SOFT : CANVAS,
-                        borderLeft: `3px solid ${isCritical ? RED : AMBER}`,
-                      }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, lineHeight: 1.3, marginBottom: "3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {t.description}
-                          </div>
-                          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                            {t.assigned_to && (
-                              <span style={{ fontSize: "11px", color: SLATE, fontWeight: 500 }}>
-                                {t.assigned_to.split(" ")[0]}
-                              </span>
-                            )}
-                            {t.priority && (
-                              <span style={{ fontSize: "10px", fontWeight: 700, color: t.priority === "High" ? RED : t.priority === "Medium" ? AMBER : SLATE }}>
-                                {t.priority}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <span style={{
-                          fontSize: "11px", fontWeight: 700, flexShrink: 0,
-                          color: isCritical ? RED : AMBER,
-                          backgroundColor: isCritical ? "rgba(239,68,68,0.1)" : "rgba(251,191,36,0.15)",
-                          padding: "2px 8px", borderRadius: "12px",
-                        }}>
-                          {days}d
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: `1px solid ${HAIRLINE}` }}>
-                  <span style={{ fontSize: "12px", color: INK_400 }}>
-                    {teamPendingCount} active · {teamCompletedMonth} done this month
-                  </span>
-                  <a href="/tasks" style={{ fontSize: "12px", color: BLUE, fontWeight: 600, textDecoration: "none" }}>
-                    All tasks →
-                  </a>
-                </div>
-              </>
-            )}
-          </Card>
-
-          {/* My Tasks */}
-          <Card accentColor={myOverdueCount > 0 ? AMBER : (myTodayCount > 0 ? BLUE : GREEN)}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <CardLabel style={{ marginBottom: 0 }} color={myOverdueCount > 0 ? AMBER : BLUE}>
-                📋 My Tasks
-              </CardLabel>
-              {(myOverdueCount > 0 || myTodayCount > 0) && (
-                <span style={{ fontSize: "11px", fontWeight: 700, backgroundColor: myOverdueCount > 0 ? WARNING_SOFT : SUCCESS_SOFT, color: myOverdueCount > 0 ? AMBER : GREEN, padding: "3px 10px", borderRadius: "20px" }}>
-                  {myOverdueCount > 0 ? `${myOverdueCount} overdue` : `${myTodayCount} today`}
-                </span>
-              )}
-            </div>
-
-            {myTasks.length === 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <div style={{ fontSize: "15px" }}>✅</div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: "#059669" }}>You're all caught up</div>
-                <div style={{ fontSize: "12px", color: INK_400 }}>No tasks overdue or due today</div>
-              </div>
-            ) : (
-              <>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px" }}>
-                  {myTasks.map((t) => {
-                    const isOverdue = t.due_date ? t.due_date < today : false;
-                    const isToday   = t.due_date === today;
-                    const days = t.due_date && isOverdue ? daysOverdue(t.due_date) : 0;
-                    return (
-                      <div key={t.id} style={{
-                        display: "flex", gap: "8px", alignItems: "flex-start",
-                        padding: "7px 10px", borderRadius: "7px",
-                        backgroundColor: isOverdue ? WARNING_SOFT : (isToday ? "rgba(59,130,246,0.06)" : CANVAS),
-                        borderLeft: `3px solid ${isOverdue ? AMBER : (isToday ? BLUE : SLATE)}`,
-                      }}>
-                        <PriorityDot priority={t.priority} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: "13px", fontWeight: 500, color: NAVY, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {t.description}
-                          </div>
-                          <div style={{ fontSize: "11px", color: isOverdue ? AMBER : (isToday ? BLUE : INK_400), fontWeight: 600, marginTop: "2px" }}>
-                            {isOverdue ? `${days}d overdue` : "Due today"}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <a href="/tasks" style={{ fontSize: "12px", color: BLUE, fontWeight: 600, textDecoration: "none", paddingTop: "10px", borderTop: `1px solid ${HAIRLINE}`, display: "block" }}>
-                  View all my tasks →
-                </a>
-              </>
-            )}
-          </Card>
-        </div>
-
-        {/* ── ROW 2: Team stats + Dept KPI + Quick links ───────── */}
-        <div style={{ display: "grid", gridTemplateColumns: col3, gap, marginBottom: gap }}>
-
-          {/* Team health summary */}
-          <Card accentColor={BLUE}>
-            <CardLabel color={BLUE}>📊 Team Health</CardLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <HealthRow label="Overdue" value={teamOverdueCount} color={teamOverdueCount > 0 ? RED : GREEN} total={teamOverdueCount + teamPendingCount} />
-              <HealthRow label="Active" value={teamPendingCount} color={BLUE} total={teamOverdueCount + teamPendingCount} />
-              <div style={{ borderTop: `1px solid ${HAIRLINE}`, paddingTop: "10px", marginTop: "2px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "12px", color: INK_400, fontWeight: 500 }}>Completed this month</span>
-                  <span style={{ fontSize: "15px", fontWeight: 800, color: GREEN }}>{teamCompletedMonth}</span>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          {/* Department quick-access */}
-          <Card accentColor={NAVY}>
-            <CardLabel color={NAVY}>🏢 {department || "Department"}</CardLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
-              <QuickLink href={deptDashHref} label="Department Dashboard" icon="📈" />
-              <QuickLink href="/tasks" label="All Team Tasks" icon="✅" />
-              <QuickLink href="/meetings" label="Meetings & Minutes" icon="🗓" />
-              <QuickLink href="/my-minutes" label="My Minutes" icon="📝" />
-            </div>
-          </Card>
-
-          {/* My task breakdown */}
-          <Card accentColor={myOverdueCount > 0 ? AMBER : GREEN}>
-            <CardLabel color={myOverdueCount > 0 ? AMBER : GREEN}>🙋 My Overview</CardLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <HealthRow label="Overdue" value={myOverdueCount} color={myOverdueCount > 0 ? RED : GREEN} />
-              <HealthRow label="Due today" value={myTodayCount} color={myTodayCount > 0 ? AMBER : SLATE} />
-            </div>
-            <a href="/tasks" style={{ fontSize: "12px", color: BLUE, fontWeight: 600, textDecoration: "none", marginTop: "auto", paddingTop: "14px" }}>
-              Open task list →
-            </a>
-          </Card>
-        </div>
-
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   MEMBER LAYOUT
-   ═══════════════════════════════════════════════════════════════ */
-function MemberLayout({
-  data,
-  weather,
-  isMobile,
-  router,
-  clockStr,
-  shortTime,
-  wmo: wmoFn,
-}: {
-  data: WelcomeData;
-  weather: Weather | null;
-  isMobile: boolean;
-  router: ReturnType<typeof useRouter>;
-  clockStr: (tz: string) => string;
-  shortTime: (tz: string) => string;
-  wmo: (code: number) => [string, string];
-}) {
-  const {
-    firstName = "",
-    myOverdueCount = 0,
-    myTodayCount = 0,
-    myUpcomingCount = 0,
-    myTasks = [],
-  } = data;
-
-  const today = todayISO();
-  const gap = "12px";
-
-  const overdueTasks  = myTasks.filter(t => t.due_date && t.due_date < today);
-  const todayTasks    = myTasks.filter(t => t.due_date === today);
-  const upcomingTasks = myTasks.filter(t => t.due_date && t.due_date > today);
-
-  const hasAnyTasks = myTasks.length > 0;
-
-  return (
-    <div style={{ backgroundColor: CANVAS, minHeight: "100vh", paddingBottom: "40px" }}>
-
-      {/* ── HERO ─────────────────────────────────────────────────── */}
-      <div style={{
-        background: `linear-gradient(135deg, ${NAVY} 0%, #1B2B40 60%, #1A3350 100%)`,
-        padding: isMobile ? "28px 18px 24px" : "36px 36px 30px",
-        marginBottom: "20px",
-        display: "flex",
-        flexDirection: isMobile ? "column" : "row",
-        alignItems: isMobile ? "flex-start" : "center",
-        justifyContent: "space-between",
-        gap: "16px",
-        position: "relative",
-        overflow: "hidden",
-      }}>
-        <div style={{ position: "absolute", right: isMobile ? "-60px" : "180px", top: "-80px", width: "260px", height: "260px", borderRadius: "50%", background: "rgba(59,76,202,0.10)", pointerEvents: "none" }} />
-
-        <div style={{ position: "relative" }}>
-          <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "8px" }}>{longDate()}</div>
-          <div style={{ fontSize: isMobile ? "26px" : "34px", fontWeight: 800, color: "white", lineHeight: 1.2 }}>
-            {greeting()}{firstName ? `, ${firstName}` : ""}.
-          </div>
-          <div style={{ fontSize: "14px", color: "rgba(255,255,255,0.4)", marginTop: "6px" }}>Here's your task view for today.</div>
-
-          <div style={{ display: "flex", gap: "10px", marginTop: "16px", flexWrap: "wrap" }}>
-            {myOverdueCount > 0 && (
-              <HeroBadge count={myOverdueCount} label={`overdue task${myOverdueCount !== 1 ? "s" : ""}`} color="#F87171" bg="rgba(248,113,113,0.15)" />
-            )}
-            {myTodayCount > 0 && (
-              <HeroBadge count={myTodayCount} label={`due today`} color="#FCD34D" bg="rgba(252,211,77,0.12)" />
-            )}
-            {myUpcomingCount > 0 && (
-              <HeroBadge count={myUpcomingCount} label="coming up" color="#93C5FD" bg="rgba(147,197,253,0.12)" />
-            )}
-            {myOverdueCount === 0 && myTodayCount === 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "4px 12px", borderRadius: "20px", backgroundColor: "rgba(110,231,183,0.15)" }}>
-                <span style={{ fontSize: "13px" }}>✓</span>
-                <span style={{ fontSize: "12px", color: "#6EE7B7", fontWeight: 600 }}>Nothing overdue — great work!</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div style={{ position: "relative", textAlign: isMobile ? "left" : "right", flexShrink: 0 }}>
-          <div style={{ fontSize: isMobile ? "36px" : "48px", fontWeight: 700, fontFamily: "monospace", color: "white", letterSpacing: "2px", lineHeight: 1 }}>
-            {clockStr("Asia/Karachi")}
-          </div>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginTop: "4px", textTransform: "uppercase" }}>
-            Pakistan Standard Time
-          </div>
-          <button
-            onClick={() => router.push("/tasks")}
-            style={{ marginTop: "14px", padding: "9px 20px", backgroundColor: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: RADII.PILL, color: "white", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-          >
-            Open Task List →
-          </button>
-        </div>
-      </div>
-
-      <div style={{ padding: isMobile ? "0 12px" : "0 20px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "3fr 2fr", gap }}>
-
-          {/* ── Left: My Tasks ───────────────────────────────────── */}
-          <div style={{ display: "flex", flexDirection: "column", gap }}>
-
-            {/* Overdue */}
-            {overdueTasks.length > 0 && (
-              <Card accentColor={RED}>
-                <CardLabel color={RED}>
-                  🚨 Overdue
-                  <span style={{ marginLeft: "auto", fontSize: "10px", fontWeight: 700, backgroundColor: DANGER_SOFT, color: RED, padding: "2px 8px", borderRadius: "12px" }}>
-                    {overdueTasks.length}
-                  </span>
-                </CardLabel>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {overdueTasks.map((t) => {
-                    const days = t.due_date ? daysOverdue(t.due_date) : 0;
-                    return (
-                      <div key={t.id} style={{ display: "flex", gap: "8px", alignItems: "flex-start", padding: "8px 10px", borderRadius: "8px", backgroundColor: DANGER_SOFT, borderLeft: `3px solid ${RED}` }}>
-                        <PriorityDot priority={t.priority} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, lineHeight: 1.3, marginBottom: "2px" }}>{t.description}</div>
-                          <div style={{ fontSize: "11px", color: RED, fontWeight: 700 }}>{days} day{days !== 1 ? "s" : ""} overdue</div>
-                        </div>
-                        {t.priority && (
-                          <span style={{ fontSize: "10px", fontWeight: 700, color: t.priority === "High" ? RED : AMBER, flexShrink: 0 }}>{t.priority}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            )}
-
-            {/* Due today */}
-            {todayTasks.length > 0 && (
-              <Card accentColor={AMBER}>
-                <CardLabel color={AMBER}>
-                  📅 Due Today
-                  <span style={{ marginLeft: "auto", fontSize: "10px", fontWeight: 700, backgroundColor: WARNING_SOFT, color: AMBER, padding: "2px 8px", borderRadius: "12px" }}>
-                    {todayTasks.length}
-                  </span>
-                </CardLabel>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {todayTasks.map((t) => (
-                    <div key={t.id} style={{ display: "flex", gap: "8px", alignItems: "flex-start", padding: "8px 10px", borderRadius: "8px", backgroundColor: WARNING_SOFT, borderLeft: `3px solid ${AMBER}` }}>
-                      <PriorityDot priority={t.priority} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, lineHeight: 1.3 }}>{t.description}</div>
-                        {t.priority && (
-                          <div style={{ fontSize: "11px", color: t.priority === "High" ? RED : AMBER, fontWeight: 600, marginTop: "2px" }}>{t.priority} priority</div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            )}
-
-            {/* Upcoming next 7 days */}
-            {upcomingTasks.length > 0 && (
-              <Card accentColor={BLUE}>
-                <CardLabel color={BLUE}>
-                  🔜 Upcoming — Next 7 Days
-                  <span style={{ marginLeft: "auto", fontSize: "10px", fontWeight: 700, backgroundColor: SUCCESS_SOFT, color: BLUE, padding: "2px 8px", borderRadius: "12px" }}>
-                    {upcomingTasks.length}
-                  </span>
-                </CardLabel>
-                <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                  {upcomingTasks.map((t) => {
-                    const days = t.due_date ? daysUntil(t.due_date) : 0;
-                    const dueLabel = days === 1 ? "Tomorrow" : `In ${days} days`;
-                    return (
-                      <div key={t.id} style={{ display: "flex", gap: "8px", alignItems: "center", padding: "7px 10px", borderRadius: "7px", backgroundColor: CANVAS }}>
-                        <PriorityDot priority={t.priority} />
-                        <div style={{ flex: 1, minWidth: 0, fontSize: "13px", fontWeight: 500, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {t.description}
-                        </div>
-                        <span style={{ fontSize: "11px", fontWeight: 600, color: BLUE, flexShrink: 0, backgroundColor: "rgba(59,130,246,0.1)", padding: "2px 7px", borderRadius: "10px" }}>
-                          {dueLabel}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
-            )}
-
-            {/* All clear state */}
-            {!hasAnyTasks && (
-              <Card accentColor={GREEN}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "30px 20px", gap: "12px", textAlign: "center" }}>
-                  <div style={{ fontSize: "40px" }}>✅</div>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: "#059669" }}>All caught up!</div>
-                  <div style={{ fontSize: "13px", color: INK_400 }}>No tasks overdue, due today, or in the next 7 days.</div>
-                  <a href="/tasks" style={{ fontSize: "13px", color: BLUE, fontWeight: 600, textDecoration: "none" }}>View all tasks →</a>
-                </div>
-              </Card>
-            )}
-
-            {/* Footer link */}
-            {hasAnyTasks && (
-              <div style={{ textAlign: "right" }}>
-                <a href="/tasks" style={{ fontSize: "12px", color: BLUE, fontWeight: 600, textDecoration: "none" }}>View full task list →</a>
-              </div>
-            )}
-          </div>
-
-          {/* ── Right: Clocks + Weather ───────────────────────────── */}
-          <div style={{ display: "flex", flexDirection: "column", gap }}>
-
-            {/* World Clocks */}
-            <Card accentColor={NAVY}>
-              <CardLabel color={NAVY}>🌍 World Clocks</CardLabel>
-              <div style={{ display: "flex", flexDirection: "column", gap: "11px" }}>
-                {CLOCKS.map(c => (
-                  <div key={c.tz} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "18px", lineHeight: 1 }}>{c.flag}</span>
-                      <div style={{ fontSize: "12px", fontWeight: 600, color: NAVY }}>{c.city}</div>
-                    </div>
-                    <div style={{ fontSize: "15px", fontWeight: 700, fontFamily: "monospace", color: "white", backgroundColor: c.color, padding: "2px 8px", borderRadius: "6px" }}>
-                      {shortTime(c.tz)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Weather */}
-            <Card accentColor={BLUE}>
-              <CardLabel color={BLUE}>🌤 Weather</CardLabel>
-              {weather ? (
-                <div>
-                  <div style={{ fontSize: "11px", fontWeight: 600, color: SLATE, marginBottom: "8px" }}>{weather.city}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "36px", lineHeight: 1 }}>{wmoFn(weather.code)[1]}</span>
-                    <span style={{ fontSize: "34px", fontWeight: 800, color: NAVY, lineHeight: 1 }}>{weather.temp}°C</span>
-                  </div>
-                  <div style={{ fontSize: "13px", color: SLATE, marginTop: "4px", fontWeight: 500 }}>{wmoFn(weather.code)[0]}</div>
-                  <div style={{ display: "flex", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
-                    <Chip label={`Feels ${weather.apparent}°C`} color={BLUE} />
-                    <Chip label={`${weather.humidity}% humidity`} color={SLATE} />
-                  </div>
-                </div>
-              ) : (
-                <div style={{ color: INK_400, fontSize: "13px" }}>Locating…</div>
-              )}
-            </Card>
-
-            {/* Quick links */}
-            <Card accentColor={SLATE}>
-              <CardLabel color={SLATE}>🔗 Quick Links</CardLabel>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <QuickLink href="/tasks"    label="My Tasks"    icon="✅" />
-                <QuickLink href="/calendar" label="Calendar"    icon="📅" />
-                <QuickLink href="/profile"  label="My Profile"  icon="👤" />
-              </div>
-            </Card>
-
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── sub-components ──────────────────────────────────────────── */
-
-function HeroBadge({ count, label, color, bg }: { count: number; label: string; color: string; bg: string }) {
-  if (count === 0) return null;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "4px 10px", borderRadius: "20px", backgroundColor: bg }}>
-      <span style={{ fontSize: "13px", fontWeight: 800, color }}>{count}</span>
-      <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.6)", fontWeight: 500 }}>{label}</span>
-    </div>
-  );
-}
-
-function Chip({ label, color }: { label: string; color: string }) {
-  return (
-    <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: "20px", color, backgroundColor: color === BLUE ? "#EEF1FC" : COLOURS.HAIRLINE }}>
-      {label}
-    </span>
-  );
-}
-
-function StatRow({ colour, count, label, empty }: { colour: string; count: number; label: string; empty: string }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: "8px", backgroundColor: CANVAS }}>
-      <span style={{ fontSize: "13px", color: count > 0 ? colour : "#059669", fontWeight: 600 }}>
-        {count > 0 ? label : empty}
-      </span>
-      {count > 0 && (
-        <span style={{ fontSize: "18px", fontWeight: 800, color: colour }}>{count}</span>
-      )}
-    </div>
-  );
-}
-
-function HealthRow({ label, value, color, total }: { label: string; value: number; color: string; total?: number }) {
-  const pct = total ? Math.round((value / total) * 100) : 0;
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: total ? "5px" : "0" }}>
-        <span style={{ fontSize: "12px", color: INK_400, fontWeight: 500 }}>{label}</span>
-        <span style={{ fontSize: "16px", fontWeight: 800, color }}>{value}</span>
-      </div>
-      {total !== undefined && total > 0 && (
-        <div style={{ height: "4px", backgroundColor: HAIRLINE, borderRadius: "2px" }}>
-          <div style={{ height: "100%", width: `${pct}%`, backgroundColor: color, borderRadius: "2px", transition: "width 0.4s ease" }} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function QuickLink({ href, label, icon }: { href: string; label: string; icon: string }) {
-  return (
-    <a href={href} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "9px 12px", borderRadius: "8px", backgroundColor: CANVAS, border: `1px solid ${HAIRLINE}`, textDecoration: "none", transition: "background 0.15s" }}
-      onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#EEF1FC"; }}
-      onMouseLeave={e => { e.currentTarget.style.backgroundColor = CANVAS; }}
-    >
-      <span style={{ fontSize: "16px" }}>{icon}</span>
-      <span style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>{label}</span>
-      <span style={{ marginLeft: "auto", color: INK_400, fontSize: "12px" }}>→</span>
-    </a>
   );
 }
