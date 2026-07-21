@@ -651,9 +651,9 @@ function FxStrip({ fx }: { fx: FxRates | null }) {
 }
 
 /* ─── Portfolio card (CEO) ───────────────────────────────────── */
-function PortfolioCard({ holdings, portfolioTotal, pensionGbp, gbpPkr }: {
+function PortfolioCard({ holdings, portfolioTotal, pensionGbp = null, gbpPkr = null }: {
   holdings: Holding[]; portfolioTotal: number | null;
-  pensionGbp: number | null; gbpPkr: number | null;
+  pensionGbp?: number | null; gbpPkr?: number | null;
 }) {
   const pensionPkr = pensionGbp != null && gbpPkr != null ? pensionGbp * gbpPkr : null;
   const grandTotal = portfolioTotal != null && pensionPkr != null
