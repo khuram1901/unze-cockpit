@@ -860,6 +860,65 @@ function HodLayout({ data, tick, weather, email }: { data: WelcomeData; tick: nu
 }
 
 /* ─── Layout: CEO / Admin / Executive ───────────────────────── */
+/* ─── Kamran layout — CEO with own /home exec dashboard ─────── */
+// Kamran (kamran@unze.co.uk) already has a dedicated executive operations
+// dashboard at /home. His welcome page must NOT duplicate that content
+// (Group Task Health, Portfolio, machine issues etc.) — those live there.
+// Instead: personal tasks + FX + clocks/weather + quote + exec dashboard link.
+function KamranLayout({ data, tick, weather, fx }: {
+  data: WelcomeData; tick: number; weather: Weather | null; fx: FxRates | null;
+}) {
+  return (
+    <>
+      <Hero data={data} tick={tick} weather={weather} fx={fx} email="kamran@unze.co.uk" />
+      <PurposeBanner />
+      <TaskBanner
+        myOverdue={data.myOverdueCount} myToday={data.myTodayCount}
+        myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, padding: "24px 40px 40px" }}>
+        <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal assignments" />
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Executive Dashboard shortcut */}
+          <div style={{
+            background: NAVY, borderRadius: RADII.CARD, padding: "20px 24px",
+            display: "flex", flexDirection: "column", gap: 10,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Executive</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "white" }}>Your Operations Dashboard</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
+              Production, dispatch, cash, receivables and team KPIs — all in one view.
+            </div>
+            <Link href="/home" style={{
+              display: "inline-block", marginTop: 4,
+              padding: "8px 18px", background: "rgba(255,255,255,0.12)",
+              border: "1px solid rgba(255,255,255,0.2)", borderRadius: RADII.PILL,
+              color: "white", fontSize: 13, fontWeight: 600, textDecoration: "none", textAlign: "center",
+            }}>
+              Open Dashboard →
+            </Link>
+          </div>
+          {/* FX if available */}
+          {fx && (
+            <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, padding: "14px 18px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: SLATE, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>PKR Rates</div>
+              {(["USD","GBP","CNY"] as const).map(k => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${HAIRLINE}` }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: INK_700 }}>{k}</span>
+                  <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "monospace", color: NAVY }}>₨ {fx[k].toFixed(0)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <QuoteCard />
+          <ClockWeatherCard tick={tick} weather={weather} />
+          <QuickLinksCard links={data.quickLinks} />
+        </div>
+      </div>
+    </>
+  );
+}
+
 function CeoLayout({ data, tick, weather, fx, holdings, portfolioTotal, email }: {
   data: WelcomeData; tick: number; weather: Weather | null;
   fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null; email?: string;
@@ -963,24 +1022,26 @@ function WelcomePageInner() {
     } catch { /* weather is optional */ }
   }, []);
 
-  // FX + investments load (CEO/Admin/Exec only, after data.role is known)
+  // FX + investments load (CEO/Admin/Exec only, after data.role and email are known)
   useEffect(() => {
-    if (!data) return;
+    if (!data || email === undefined) return;
     const isPriv = data.role === "CEO" || data.role === "Admin" || data.role === "Executive";
     if (!isPriv) return;
 
-    // FX
+    // FX (all privileged users, including Kamran)
     authFetch("/api/fx/multi").then(r => { if (r.ok) r.json().then(setFx); }).catch(() => {});
 
-    // Investments
-    supabase.from("holdings").select("ticker, company_name, quantity, buy_price").order("ticker").then(({ data: h }) => {
-      if (h && h.length > 0) {
-        setHoldings(h as Holding[]);
-        const total = (h as Holding[]).reduce((s, x) => s + x.quantity * x.buy_price, 0);
-        setPortfolioTotal(total);
-      }
-    });
-  }, [data]);
+    // Investments — only for users who see CeoLayout (not Kamran — his /home has this)
+    if (email !== "kamran@unze.co.uk") {
+      supabase.from("holdings").select("ticker, company_name, quantity, buy_price").order("ticker").then(({ data: h }) => {
+        if (h && h.length > 0) {
+          setHoldings(h as Holding[]);
+          const total = (h as Holding[]).reduce((s, x) => s + x.quantity * x.buy_price, 0);
+          setPortfolioTotal(total);
+        }
+      });
+    }
+  }, [data, email]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1000,13 +1061,16 @@ function WelcomePageInner() {
     );
   }
 
+  const isKamran  = email === "kamran@unze.co.uk";
   const isPriv    = data.role === "CEO" || data.role === "Admin" || data.role === "Executive";
   const isManager = data.role === "Manager";
   const hasTeamOverdue = isManager && (data.teamOverdueTasks ?? []).length > 0;
 
   return (
     <div style={{ background: CANVAS, minHeight: "100vh" }}>
-      {isPriv
+      {isKamran
+        ? <KamranLayout  data={data} tick={tick} weather={weather} fx={fx} />
+        : isPriv
         ? <CeoLayout     data={data} tick={tick} weather={weather} fx={fx} holdings={holdings} portfolioTotal={portfolioTotal} email={email} />
         : hasTeamOverdue
         ? <HodLayout     data={data} tick={tick} weather={weather} email={email} />
