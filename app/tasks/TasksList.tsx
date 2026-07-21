@@ -343,14 +343,24 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   if (errorMsg) return <ErrorBanner message={errorMsg} onRetry={loadTasks} />;
 
   // Audit members with no general tasks assigned: suppress the full KPI +
-  // filter UI (which would be empty and confusing) and show a quiet note.
+  // filter UI (which would be empty and confusing) and show a labelled
+  // section with a quiet note instead — so the section is still visually
+  // present alongside the AuditTasksPanel above it.
   // Privileged users (canSeeAll = true, e.g. Audit Manager Shahid) still
   // see the full list since they review tasks across the whole team.
   if (department === "Audit" && !isPrivileged && tasks.length === 0) {
     return (
-      <p style={{ color: COLOURS.SLATE, fontSize: "14px", margin: "4px 0 0 0" }}>
-        No general tasks assigned to you right now.
-      </p>
+      <div style={{ marginTop: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            General Tasks
+          </span>
+          <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+        </div>
+        <p style={{ color: COLOURS.SLATE, fontSize: "13px", margin: 0 }}>
+          No general tasks assigned to you right now.
+        </p>
+      </div>
     );
   }
 
