@@ -1402,28 +1402,31 @@ function WelcomePageInner() {
     if (email !== "kamran@unze.co.uk") {
       // Use the portfolio summary RPC so total reflects CURRENT market prices, not cost basis
       const today = new Date().toISOString().slice(0, 10);
-      supabase.rpc("get_portfolio_summary_full", { p_as_of: today, p_alert_pct: -3, p_div_days: 7 }).then(({ data: summary }) => {
-        const totals = (summary as any)?.totals;
-        if (totals?.total_value != null) setPortfolioTotal(totals.total_value);
-        // Also fetch holdings list for the card rows
-        supabase.from("holdings").select("ticker, company_name, quantity, buy_price, current_price:price_history(price)").order("ticker").then(({ data: h }) => {
-          if (h && h.length > 0) setHoldings(h as unknown as Holding[]);
-        });
-      }).catch(() => {
-        // Fallback: plain holdings with cost basis
-        supabase.from("holdings").select("ticker, company_name, quantity, buy_price").order("ticker").then(({ data: h }) => {
-          if (h && h.length > 0) {
-            setHoldings(h as Holding[]);
-            const total = (h as Holding[]).reduce((s, x) => s + x.quantity * x.buy_price, 0);
-            setPortfolioTotal(total);
-          }
-        });
-      });
+      (async () => {
+        const { data: summary, error: rpcErr } = await supabase.rpc("get_portfolio_summary_full", { p_as_of: today, p_alert_pct: -3, p_div_days: 7 });
+        if (!rpcErr) {
+          const totals = (summary as any)?.totals;
+          if (totals?.total_value != null) setPortfolioTotal(totals.total_value);
+          // Also fetch holdings list for the card rows
+          supabase.from("holdings").select("ticker, company_name, quantity, buy_price, current_price:price_history(price)").order("ticker").then(({ data: h }) => {
+            if (h && h.length > 0) setHoldings(h as unknown as Holding[]);
+          });
+        } else {
+          // Fallback: plain holdings with cost basis
+          supabase.from("holdings").select("ticker, company_name, quantity, buy_price").order("ticker").then(({ data: h }) => {
+            if (h && h.length > 0) {
+              setHoldings(h as Holding[]);
+              const total = (h as Holding[]).reduce((s, x) => s + x.quantity * x.buy_price, 0);
+              setPortfolioTotal(total);
+            }
+          });
+        }
+      })();
       // Fetch Aviva/pension total
       supabase.rpc("get_pension_summary").then(({ data: ps }) => {
         const row = (ps as any)?.[0] ?? null;
         if (row?.total_value_gbp != null) setPensionGbp(parseFloat(row.total_value_gbp));
-      }).catch(() => {});
+      });
     }
   }, [data, email]);
 
