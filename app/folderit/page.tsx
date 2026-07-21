@@ -4,6 +4,7 @@ import React, { useEffect, useState, useContext, createContext } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
 import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader } from "../lib/SharedUI";
+import { useRequireCapability } from "../lib/useRouteGuard";
 import { useUserCtx } from "../lib/useUserCtx";
 import { useMobile } from "../lib/useMobile";
 
@@ -1081,7 +1082,9 @@ function FilingHealthTab({ initialCompany, initialType }: { initialCompany?: str
 
 function FolderitDashboard() {
   const isMobile = useMobile();
-  const { ctx, loading: ctxLoading } = useUserCtx();
+  // Route guard — users without any Folderit grant in the Access Matrix
+  // are redirected away even if they hit /folderit directly by URL.
+  const { checking, ctx } = useRequireCapability("folderit");
   const [pageTab, setPageTab] = useState<"overview" | "browse" | "health">("overview");
   const [healthNav, setHealthNav] = useState<HealthNav>({});
   const [preview, setPreview] = useState<PreviewTarget>(null);
@@ -1094,7 +1097,7 @@ function FolderitDashboard() {
     };
   }, [preview]);
 
-  if (ctxLoading || !ctx) {
+  if (checking || !ctx) {
     return <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden", color: SLATE }}>Loading…</main>;
   }
 

@@ -19,7 +19,7 @@ import {
   canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry,
   canViewPADashboard, canViewInvestments,
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
-  canViewIfplPnl,
+  canViewIfplPnl, canAccessFolderit,
   isMainAdmin, isCEO, isSecondaryCEO, isDailyEntryOnly,
   type UserCtx,
 } from "./permissions";
@@ -66,6 +66,12 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   const perms = ctx.overrides as Record<string, boolean | string | null> | null;
   if (card.permKey === "_admin_settings") return isMainAdmin(ctx);
   if (card.permKey === "_backups") return ["khuram1901@gmail.com", "k.saleem@unzegroup.com"].includes((ctx.email || "").toLowerCase());
+  // Folder-it is only visible with an explicit Access Matrix grant
+  // (HR or a company tick) — or Admin/CEO. Khuram: "i have removed
+  // folder it with many users but they can still see folder it on the
+  // side bar" — the startsWith("_") catch-all below was showing it to
+  // everyone unconditionally.
+  if (card.permKey === "_folderit") return canAccessFolderit(ctx);
   if (card.permKey.startsWith("_")) return true;
   const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
   // PA dashboard + executive dashboard are added manually via alwaysItems; hide from registry to avoid duplicates

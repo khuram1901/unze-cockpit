@@ -499,6 +499,16 @@ export function hasAnyFolderitCompanyGrant(u: UserCtx): boolean {
   return FOLDERIT_COMPANY_PERMS.some(([key]) => ov(u, key) === true);
 }
 
+// Whether the user can access the Folder-it page AT ALL. Khuram
+// (22/07/2026): "i have removed folder it with many users but they can
+// still see folder it on the side bar and access it" — access is now
+// driven ENTIRELY by the Access Matrix Folderit ticks. No ticks (and not
+// Admin/CEO) → no sidebar card, no page, no data.
+export function canAccessFolderit(u: UserCtx): boolean {
+  if (isAdminTier(u)) return true;
+  return canViewFolderitHr(u) || hasAnyFolderitCompanyGrant(u);
+}
+
 // ── Task ownership ──────────────────────────────────────────────
 // Kamran (CEO2_EMAIL) added 16 Jul 2026 — his tasks get the same
 // protection Khuram's and the PA's already did; a pre-existing gap since
