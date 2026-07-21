@@ -970,7 +970,7 @@ function WelcomePageInner() {
     if (!isPriv) return;
 
     // FX
-    authFetch("/api/fx/multi").then(r => r.ok && r.json().then(setFx)).catch(() => {});
+    authFetch("/api/fx/multi").then(r => { if (r.ok) r.json().then(setFx); }).catch(() => {});
 
     // Investments
     supabase.from("holdings").select("ticker, company_name, quantity, buy_price").order("ticker").then(({ data: h }) => {
