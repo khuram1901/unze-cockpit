@@ -19,7 +19,7 @@ import {
   canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry,
   canViewPADashboard, canViewInvestments,
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
-  canViewIfplPnl, canAccessFolderit,
+  canViewIfplPnl,
   isMainAdmin, isCEO, isSecondaryCEO, isDailyEntryOnly,
   type UserCtx,
 } from "./permissions";
@@ -66,12 +66,6 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   const perms = ctx.overrides as Record<string, boolean | string | null> | null;
   if (card.permKey === "_admin_settings") return isMainAdmin(ctx);
   if (card.permKey === "_backups") return ["khuram1901@gmail.com", "k.saleem@unzegroup.com"].includes((ctx.email || "").toLowerCase());
-  // Folder-it is only visible with an explicit Access Matrix grant
-  // (HR or a company tick) — or Admin/CEO. Khuram: "i have removed
-  // folder it with many users but they can still see folder it on the
-  // side bar" — the startsWith("_") catch-all below was showing it to
-  // everyone unconditionally.
-  if (card.permKey === "_folderit") return canAccessFolderit(ctx);
   if (card.permKey.startsWith("_")) return true;
   const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
   // PA dashboard + executive dashboard are added manually via alwaysItems; hide from registry to avoid duplicates
@@ -128,6 +122,7 @@ function NavItem({ item, active, collapsed: isCollapsed }: { item: PageCard; act
     <Link
       href={item.href}
       title={isCollapsed ? item.title : undefined}
+      onClick={item.permKey === "_exec" ? () => { if (typeof window !== "undefined") sessionStorage.setItem("exec_nav", "1"); } : undefined}
       style={{
         display: "flex", alignItems: "center", gap: "10px",
         justifyContent: isCollapsed ? "center" : "flex-start",
@@ -173,7 +168,6 @@ type SidebarContentProps = {
   initials: string;
   userName: string;
   userRole: string;
-  userPhotoUrl?: string | null;
   onSignOut: () => void;
 };
 
@@ -191,7 +185,6 @@ function SidebarContent({
   initials,
   userName,
   userRole,
-  userPhotoUrl,
   onSignOut,
 }: SidebarContentProps) {
   const sideItemStyle = (active: boolean): React.CSSProperties => ({
@@ -347,15 +340,11 @@ function SidebarContent({
         }}>
           <div style={{
             width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
-            background: userPhotoUrl ? "none" : "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
+            background: "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
             color: "#fff", display: "grid", placeItems: "center",
             fontSize: "12px", fontWeight: 600,
-            overflow: "hidden", position: "relative",
           }}>
-            {userPhotoUrl
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={userPhotoUrl} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
-              : initials}
+            {initials}
           </div>
           {!collapsed && (
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -410,7 +399,6 @@ type SidebarLayoutProps = {
   userEmail: string;
   userRole: string;
   roleColor: string;
-  userPhotoUrl?: string | null;
   notifCount: number;
   notifItems: { label: string; count: number; href: string; action?: () => void }[];
   searchOpen: boolean;
@@ -446,7 +434,6 @@ export default function SidebarLayout({
   setNotifOpen,
   notifRef,
   onSignOut,
-  userPhotoUrl,
 }: SidebarLayoutProps) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
@@ -546,7 +533,6 @@ export default function SidebarLayout({
             initials={initials}
             userName={userName}
             userRole={userRole}
-            userPhotoUrl={userPhotoUrl}
             onSignOut={onSignOut}
           />
         </aside>
@@ -581,7 +567,6 @@ export default function SidebarLayout({
               initials={initials}
               userName={userName}
               userRole={userRole}
-              userPhotoUrl={userPhotoUrl}
               onSignOut={onSignOut}
             />
           </aside>
