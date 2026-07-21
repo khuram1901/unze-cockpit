@@ -50,6 +50,7 @@ type WelcomeData = {
 type Weather = { temp: number; apparent: number; humidity: number; code: number; city: string };
 type FxRates  = { USD: number; GBP: number; CNY: number; AED?: number };
 type Holding  = { ticker: string; company_name: string; quantity: number; buy_price: number; current_price?: number };
+type CalEvent  = { start: string; end: string; title?: string };
 
 /* ─── WMO weather codes ──────────────────────────────────────── */
 const WMO: Record<number, [string, string]> = {
@@ -114,6 +115,16 @@ function todayStr() { return new Date().toISOString().slice(0, 10); }
 function tomorrowStr() { return new Date(Date.now() + 86400000).toISOString().slice(0, 10); }
 function daysOverdue(due: string) {
   return Math.max(0, Math.floor((Date.now() - new Date(due).getTime()) / 86400000));
+}
+function dayOffset(n: number) { return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
+function dayLabel(n: number) {
+  if (n === 0) return "Today";
+  if (n === 1) return "Tomorrow";
+  return new Date(Date.now() + n * 86400000).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" });
+}
+function fmtEvtTime(iso: string) {
+  if (!iso.includes("T")) return "All day";
+  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Karachi" });
 }
 function avatarInitials(firstName: string) {
   return (firstName || "U").slice(0, 2).toUpperCase();
@@ -656,38 +667,32 @@ function PortfolioCard({ holdings, portfolioTotal, pensionGbp = null, gbpPkr = n
   pensionGbp?: number | null; gbpPkr?: number | null;
 }) {
   const pensionPkr = pensionGbp != null && gbpPkr != null ? pensionGbp * gbpPkr : null;
-  const grandTotal = portfolioTotal != null && pensionPkr != null
-    ? portfolioTotal + pensionPkr
-    : (portfolioTotal ?? pensionPkr);
   return (
     <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
       <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, letterSpacing: "-0.01em", margin: 0 }}>Portfolio</h3>
-          <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>PSX + Aviva pension · live</p>
+          <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>PSX investments · live</p>
         </div>
         <Link href="/investments" style={{ fontSize: 12, color: BLUE, fontWeight: 500, textDecoration: "none" }}>View →</Link>
       </div>
-      {grandTotal !== null && (
+      {portfolioTotal != null && (
         <div style={{ padding: "14px 20px", borderBottom: `1px solid ${HAIRLINE}` }}>
-          <div style={{ fontSize: 11, color: INK_400, marginBottom: 4 }}>Total portfolio value</div>
-          <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 22, color: NAVY, letterSpacing: "-0.03em", marginBottom: 8 }}>
-            ₨ {Math.round(grandTotal).toLocaleString()}
+          <div style={{ fontSize: 11, color: INK_400, marginBottom: 4 }}>PSX portfolio value</div>
+          <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 22, color: NAVY, letterSpacing: "-0.03em" }}>
+            ₨ {Math.round(portfolioTotal).toLocaleString()}
           </div>
-          <div style={{ display: "flex", gap: 16 }}>
-            {portfolioTotal != null && (
-              <div>
-                <div style={{ fontSize: 10, color: INK_400, textTransform: "uppercase", letterSpacing: "0.06em" }}>PSX</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: INK_700 }}>₨ {Math.round(portfolioTotal).toLocaleString()}</div>
-              </div>
-            )}
-            {pensionGbp != null && (
-              <div>
-                <div style={{ fontSize: 10, color: INK_400, textTransform: "uppercase", letterSpacing: "0.06em" }}>Aviva</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: INK_700 }}>£{Math.round(pensionGbp).toLocaleString()}{pensionPkr != null ? ` · ₨ ${Math.round(pensionPkr).toLocaleString()}` : ""}</div>
-              </div>
-            )}
+        </div>
+      )}
+      {pensionGbp != null && (
+        <div style={{ padding: "14px 20px", borderBottom: `1px solid ${HAIRLINE}` }}>
+          <div style={{ fontSize: 11, color: INK_400, marginBottom: 4 }}>Aviva pension value</div>
+          <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 22, color: NAVY, letterSpacing: "-0.03em" }}>
+            £{Math.round(pensionGbp).toLocaleString()}
           </div>
+          {pensionPkr != null && (
+            <div style={{ fontSize: 12, color: INK_400, marginTop: 3 }}>₨ {Math.round(pensionPkr).toLocaleString()}</div>
+          )}
         </div>
       )}
       <div style={{ padding: "4px 20px 12px" }}>
@@ -1183,10 +1188,85 @@ function KhuramHero({ data, tick, weather, fx }: {
   );
 }
 
+/* ─── 3-Day Calendar ──────────────────────────────────────────── */
+const CAL_COLORS = [BLUE, GREEN, AMBER];
+
+function ThreeDayCalendar({ calEvents }: { calEvents: CalEvent[] }) {
+  const [expandedDay, setExpandedDay] = useState<number | null>(null);
+  const PREVIEW = 3;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, padding: "0 40px 4px" }}>
+      {[0, 1, 2].map(offset => {
+        const dateStr  = dayOffset(offset);
+        const events   = calEvents.filter(e => e.start.slice(0, 10) === dateStr);
+        const color    = CAL_COLORS[offset];
+        const label    = dayLabel(offset);
+        const isExpanded = expandedDay === offset;
+        return (
+          <div key={offset} style={{
+            background: CARD_ALT, border: `1px solid ${HAIRLINE}`,
+            borderRadius: RADII.CARD, borderTop: `3px solid ${color}`,
+            overflow: "hidden",
+          }}>
+            <div style={{ padding: "10px 16px 8px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.07em" }}>📅 {label}</div>
+              <span style={{ fontSize: 10, fontWeight: 700, background: color, color: "white", padding: "1px 7px", borderRadius: 20 }}>
+                {events.length} {events.length === 1 ? "event" : "events"}
+              </span>
+            </div>
+            <div style={{ padding: "8px 16px 10px" }}>
+              {events.length === 0 ? (
+                <div style={{ fontSize: 12, color: INK_400, fontStyle: "italic", padding: "4px 0" }}>Nothing scheduled.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {(isExpanded ? events : events.slice(0, PREVIEW)).map((ev, i) => {
+                    const start = fmtEvtTime(ev.start);
+                    const end   = fmtEvtTime(ev.end);
+                    const time  = start === "All day" ? "All day" : `${start}–${end}`;
+                    return (
+                      <div key={i} style={{
+                        display: "flex", gap: 8, alignItems: "flex-start",
+                        padding: "5px 8px", borderRadius: 6,
+                        background: i % 2 === 0 ? CANVAS : "transparent",
+                      }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, color: "white",
+                          background: color, padding: "2px 6px",
+                          borderRadius: 4, flexShrink: 0, marginTop: 1,
+                          minWidth: 68, textAlign: "center",
+                        }}>{time}</span>
+                        <span style={{ fontSize: 12, color: NAVY, fontWeight: 500, lineHeight: 1.35 }}>
+                          {ev.title || "Busy"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {events.length > PREVIEW && (
+                    <button
+                      onClick={() => setExpandedDay(isExpanded ? null : offset)}
+                      style={{
+                        marginTop: 2, background: "none", border: "none",
+                        fontSize: 11, fontWeight: 600, color,
+                        cursor: "pointer", textAlign: "left", padding: "2px 8px",
+                      }}
+                    >
+                      {isExpanded ? "▲ Show less" : `▼ Show all ${events.length} events`}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ─── Layout: Khuram ─────────────────────────────────────────── */
-function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal, pensionGbp }: {
+function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal, pensionGbp, calEvents }: {
   data: WelcomeData; tick: number; weather: Weather | null;
-  fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null; pensionGbp: number | null;
+  fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null; pensionGbp: number | null; calEvents: CalEvent[];
 }) {
   const showPortfolio = holdings.length > 0 || portfolioTotal !== null;
   const cols = showPortfolio ? "1fr 1fr 420px 300px" : "1fr 1fr 300px";
@@ -1196,6 +1276,7 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal, pensi
       <CeoStatStrip data={data} />
       <PurposeBanner />
       <TaskBanner myOverdue={data.myOverdueCount} myToday={data.myTodayCount} myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount} />
+      <ThreeDayCalendar calEvents={calEvents} />
       <div style={{ display: "grid", gridTemplateColumns: cols, gap: 20, padding: "24px 40px 40px" }}>
         <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal CEO assignments" />
         <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
@@ -1352,6 +1433,7 @@ function WelcomePageInner() {
   const [holdings,       setHoldings]       = useState<Holding[]>([]);
   const [portfolioTotal, setPortfolioTotal] = useState<number | null>(null);
   const [pensionGbp,     setPensionGbp]     = useState<number | null>(null);
+  const [calEvents,      setCalEvents]      = useState<CalEvent[]>([]);
   const [tick,           setTick]           = useState(0);
   const [email,          setEmail]          = useState<string | undefined>(undefined);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1427,6 +1509,20 @@ function WelcomePageInner() {
         const row = (ps as any)?.[0] ?? null;
         if (row?.total_value_gbp != null) setPensionGbp(parseFloat(row.total_value_gbp));
       });
+      // Calendar (Khuram only)
+      if (email === "khuram1901@gmail.com" || email === "k.saleem@unzegroup.com") {
+        const calToday = dayOffset(0);
+        const calCutoff = dayOffset(3);
+        authFetch(`/api/calendar/freebusy?date=${calToday}`).then(r => {
+          if (r.ok) r.json().then((c: any) => {
+            setCalEvents(
+              ((c.busy || []) as CalEvent[])
+                .filter((e: CalEvent) => e.start.slice(0, 10) >= calToday && e.start.slice(0, 10) < calCutoff)
+                .sort((a: CalEvent, b: CalEvent) => a.start.localeCompare(b.start))
+            );
+          });
+        }).catch(() => {});
+      }
     }
   }, [data, email]);
 
@@ -1457,7 +1553,7 @@ function WelcomePageInner() {
   return (
     <div style={{ background: CANVAS, minHeight: "100vh" }}>
       {isKhuram
-        ? <KhuramLayout  data={data} tick={tick} weather={weather} fx={fx} holdings={holdings} portfolioTotal={portfolioTotal} pensionGbp={pensionGbp} />
+        ? <KhuramLayout  data={data} tick={tick} weather={weather} fx={fx} holdings={holdings} portfolioTotal={portfolioTotal} pensionGbp={pensionGbp} calEvents={calEvents} />
         : isKamran
         ? <KamranLayout  data={data} tick={tick} weather={weather} fx={fx} />
         : isPriv
