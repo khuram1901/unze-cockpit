@@ -10,6 +10,7 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import AccessMatrix from "./AccessMatrix";
 import AccessControlPanel from "./AccessControlPanel";
 import WidgetVisibilityPanel from "./WidgetVisibilityPanel";
+import PhotoCropModal from "../lib/PhotoCropModal";
 import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, isMainAdmin, canAddMembers, canImportExport, PROTECTED_EMAILS, type UserCtx, type PermOverrides } from "../lib/permissions";
 
 type Member = {
@@ -114,7 +115,6 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
 type ActiveTab = "people" | "matrix" | "ownership" | "offboard" | "orgchart";
 
 /* ─── Photo upload + face-crop component ───────────────────────────────── */
-const PHOTO_SIZE   = 300;  // canvas output px
 const PHOTO_MAX_KB = 150;  // max KB after compression
 
 function PhotoUpload({
@@ -126,85 +126,23 @@ function PhotoUpload({
   onSaved: (url: string) => void;
   onRemoved: () => void;
 }) {
-  const [preview, setPreview]   = useState<string | null>(null);
-  const [blob,    setBlob]      = useState<Blob | null>(null);
-  const [saving,  setSaving]    = useState(false);
-  const [error,   setError]     = useState<string | null>(null);
+  const [preview,  setPreview]  = useState<string | null>(null);
+  const [blob,     setBlob]     = useState<Blob | null>(null);
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+  const [cropFile, setCropFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  async function handleFile(file: File) {
+  function handleFile(file: File) {
     setError(null);
     if (!file.type.startsWith("image/")) { setError("Please select an image file."); return; }
+    setCropFile(file);
+  }
 
-    // Load into an Image element
-    const url = URL.createObjectURL(file);
-    const img  = new Image();
-    img.src    = url;
-    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; });
-
-    // ── Face detection ──────────────────────────────────────────────────
-    let cropX = img.width  * 0.5;  // default: horizontal centre
-    let cropY = img.height * 0.3;  // default: 30% from top (where faces usually are)
-    let cropR = Math.min(img.width, img.height) * 0.45;
-
-    try {
-      // FaceDetector is Chrome/Edge only — graceful fallback for other browsers
-      if ("FaceDetector" in window) {
-        // @ts-expect-error — FaceDetector is not in standard TS types yet
-        const fd = new window.FaceDetector({ fastMode: true });
-        const faces = await fd.detect(img);
-        if (faces.length > 0) {
-          // Pick the largest face
-          const face = faces.reduce((a: { boundingBox: DOMRectReadOnly }, b: { boundingBox: DOMRectReadOnly }) =>
-            b.boundingBox.width > a.boundingBox.width ? b : a);
-          const bb = face.boundingBox;
-          cropX = bb.x + bb.width  / 2;
-          cropY = bb.y + bb.height / 2;
-          // Crop radius = 1.4× the face box half-width so we get shoulders too
-          cropR = Math.max(bb.width, bb.height) * 0.7;
-        }
-      }
-    } catch { /* ignore — use defaults */ }
-
-    // ── Canvas crop ─────────────────────────────────────────────────────
-    // Save as a plain square JPEG — no canvas circle clip.
-    // JPEG has no alpha channel, so a canvas circle clip produces black
-    // corners which bleed through the CSS circle. Let CSS handle the circle.
-    const canvas  = document.createElement("canvas");
-    canvas.width  = PHOTO_SIZE;
-    canvas.height = PHOTO_SIZE;
-    const ctx = canvas.getContext("2d")!;
-
-    // White background so JPEG corners are clean
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, PHOTO_SIZE, PHOTO_SIZE);
-
-    // Draw the face-centred square crop scaled to fill the canvas
-    const sx = cropX - cropR;
-    const sy = cropY - cropR;
-    const sw = cropR * 2;
-    const sh = cropR * 2;
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
-
-    URL.revokeObjectURL(url);
-
-    // ── Compress to JPEG ────────────────────────────────────────────────
-    // Try quality levels until we're under PHOTO_MAX_KB
-    let quality = 0.9;
-    let result: Blob | null = null;
-    while (quality >= 0.5) {
-      result = await new Promise<Blob | null>(res => canvas.toBlob(res, "image/jpeg", quality));
-      if (result && result.size <= PHOTO_MAX_KB * 1000) break;
-      quality -= 0.1;
-    }
-    if (!result) { setError("Could not process image."); return; }
-    if (result.size > PHOTO_MAX_KB * 1000) {
-      setError(`Image still too large (${Math.round(result.size / 1000)} KB) after compression. Try a simpler photo.`);
-      return;
-    }
-
-    setBlob(result);
-    setPreview(canvas.toDataURL("image/jpeg", 0.9));
+  function onCropDone(croppedBlob: Blob, preview: string) {
+    setBlob(croppedBlob);
+    setPreview(preview);
+    setCropFile(null);
   }
 
   async function save() {
@@ -239,6 +177,15 @@ function PhotoUpload({
   const initials   = getInitials(member.first_name, member.last_name, member.name);
 
   return (
+    <>
+    {cropFile && (
+      <PhotoCropModal
+        file={cropFile}
+        maxKb={PHOTO_MAX_KB}
+        onDone={onCropDone}
+        onCancel={() => setCropFile(null)}
+      />
+    )}
     <div style={{ display: "flex", alignItems: "center", gap: "14px", padding: "10px 0", marginBottom: "6px" }}>
       {/* Circle preview */}
       <div style={{
@@ -313,6 +260,7 @@ function PhotoUpload({
         onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
       />
     </div>
+    </>
   );
 }
 

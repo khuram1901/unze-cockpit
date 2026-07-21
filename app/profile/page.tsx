@@ -10,6 +10,7 @@ import {
   cardStyle, inputStyle, labelStyle, primaryButtonStyle,
   PageHeader, SectionTitle, displayRole, useConfirm, SkeletonRows,
 } from "../lib/SharedUI";
+import PhotoCropModal from "../lib/PhotoCropModal";
 
 const PHOTO_MAX_KB = 150;
 
@@ -41,6 +42,7 @@ export default function ProfilePage() {
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoSaving, setPhotoSaving] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoCropFile, setPhotoCropFile] = useState<File | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -292,37 +294,16 @@ export default function ProfilePage() {
   }
 
   // ── photo upload helpers ─────────────────────────────────────────
-  async function handlePhotoFile(file: File) {
+  function handlePhotoFile(file: File) {
     setPhotoError(null);
     if (!file.type.startsWith("image/")) { setPhotoError("Please select an image file."); return; }
+    setPhotoCropFile(file);
+  }
 
-    // Resize + compress via canvas
-    const url = URL.createObjectURL(file);
-    const img  = new Image();
-    img.src    = url;
-    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; });
-
-    const MAX = 600;
-    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-    const canvas = document.createElement("canvas");
-    canvas.width  = Math.round(img.width  * scale);
-    canvas.height = Math.round(img.height * scale);
-    canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-    URL.revokeObjectURL(url);
-
-    let quality = 0.9;
-    let result: Blob | null = null;
-    while (quality >= 0.5) {
-      result = await new Promise<Blob | null>(res => canvas.toBlob(res, "image/jpeg", quality));
-      if (result && result.size <= PHOTO_MAX_KB * 1000) break;
-      quality -= 0.1;
-    }
-    if (!result || result.size > PHOTO_MAX_KB * 1000) {
-      setPhotoError(`Image still too large after compression. Try a smaller photo.`);
-      return;
-    }
-    setPhotoBlob(result);
-    setPhotoPreview(canvas.toDataURL("image/jpeg", 0.9));
+  function onPhotoCropDone(blob: Blob, preview: string) {
+    setPhotoBlob(blob);
+    setPhotoPreview(preview);
+    setPhotoCropFile(null);
   }
 
   async function savePhoto() {
@@ -377,6 +358,14 @@ export default function ProfilePage() {
 
   return (
     <AuthWrapper>
+      {photoCropFile && (
+        <PhotoCropModal
+          file={photoCropFile}
+          maxKb={PHOTO_MAX_KB}
+          onDone={onPhotoCropDone}
+          onCancel={() => setPhotoCropFile(null)}
+        />
+      )}
       {dlg.element}
       <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: 760, minWidth: 0 }}>
         <PageHeader />
