@@ -166,7 +166,8 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // Do NOT call setPointerCapture — it routes pointerup to this div and the
+    // subsequent click event never reaches the inner button's onClick handler.
     startXRef.current = e.clientX;
     currentXRef.current = e.clientX;
     activeRef.current = true;
@@ -201,7 +202,15 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
   };
 
   return (
-    <div style={{ position: "relative", overflow: "hidden", borderBottom: `1px solid ${borderColor}` }}>
+    // Handlers go on the outer wrapper (not rowRef) so clicks on the inner
+    // button bubble up naturally — no pointer capture needed.
+    <div
+      style={{ position: "relative", overflow: "hidden", borderBottom: `1px solid ${borderColor}` }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={commit}
+      onPointerCancel={commit}
+    >
       {/* Delete: anchored left, grows on swipe-right */}
       <div ref={rightRevealRef} style={{
         position: "absolute", left: 0, top: 0, bottom: 0, width: 0,
@@ -222,18 +231,10 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
       }}>
         {leftLabel}
       </div>
-      {/* Sliding row */}
+      {/* Sliding row — no pointer events here, handled by outer wrapper */}
       <div
         ref={rowRef}
         style={{ position: "relative", zIndex: 1, touchAction: "pan-y", willChange: "transform" }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={commit}
-        onPointerCancel={commit}
-        onClickCapture={(e) => {
-          // Only block the click if a swipe action actually fired — not just any movement
-          if (swipedRef.current) { e.stopPropagation(); e.preventDefault(); swipedRef.current = false; }
-        }}
       >
         {children}
       </div>
