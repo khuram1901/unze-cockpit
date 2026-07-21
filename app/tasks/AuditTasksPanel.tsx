@@ -102,7 +102,7 @@ export default function AuditTasksPanel() {
   const load = useCallback(async () => {
     setLoading(true);
     const { data: result, error } = await supabase.rpc("audit_my_tasks").single();
-    if (!error && result && !("error" in result) && (result as MyTasksData).projects?.length > 0) {
+    if (!error && result && !("error" in (result as object)) && (result as MyTasksData).projects?.length > 0) {
       setData(result as MyTasksData);
     } else {
       setData(null);
