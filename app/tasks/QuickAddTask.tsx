@@ -99,10 +99,12 @@ export default function QuickAddTask({
   onCreated,
   onMoreOptions,
   autoStartVoice = false,
+  prefillText = "",
 }: {
   onCreated?: () => void;
   onMoreOptions?: () => void;
   autoStartVoice?: boolean;
+  prefillText?: string;
 }) {
   const router    = useRouter();
   const toast     = useToast();
@@ -154,6 +156,17 @@ export default function QuickAddTask({
     }
     load();
   }, []);
+
+  // ── Apply prefillText from ?text= URL param (Siri dictation shortcut) ──
+  // Runs once, after members have loaded. Parses the text the same way
+  // voice input does — fills description, assignee, and due date, then
+  // shows "Filled from voice — review and confirm" in the header.
+  const prefillAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!prefillText || prefillAppliedRef.current || members.length === 0) return;
+    prefillAppliedRef.current = true;
+    applyTranscript(prefillText, members);
+  }, [prefillText, members, applyTranscript]);
 
   // ── Auto-start voice (from ?voice=1 URL param / Siri shortcut) ─────────
   useEffect(() => {

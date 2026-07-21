@@ -21,7 +21,12 @@ export default function TasksPageClient() {
   // open quick panel immediately and auto-trigger the mic.
   const voiceParam = searchParams.get("voice") === "1";
 
-  const [showQuick,      setShowQuick]      = useState(voiceParam);
+  // ?text=... in the URL — Siri dictation shortcut passes transcribed text
+  // directly without needing the browser mic. When present, open the panel
+  // and pre-fill the form via parseVoiceTask (same as voice input does).
+  const textParam = searchParams.get("text") || "";
+
+  const [showQuick,      setShowQuick]      = useState(voiceParam || !!textParam);
   const [showFull,       setShowFull]       = useState(false);
   const [autoStartVoice, setAutoStartVoice] = useState(voiceParam);
 
@@ -73,6 +78,7 @@ export default function TasksPageClient() {
           onCreated={() => { setShowQuick(false); setAutoStartVoice(false); }}
           onMoreOptions={openFull}
           autoStartVoice={autoStartVoice}
+          prefillText={textParam}
         />
       )}
 

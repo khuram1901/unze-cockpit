@@ -870,8 +870,8 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               )}
             </div>
           </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
-            {task.priority && <PriorityBadge priority={task.priority} />}
+          <div style={{ display: "flex", gap: isMobile ? "4px" : "8px", alignItems: "center", flexShrink: 0 }}>
+            {!isMobile && task.priority && <PriorityBadge priority={task.priority} />}
             <StatusBadge status={task.status} />
             {task.due_date && (
               <span
@@ -879,7 +879,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 style={{
                   fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", fontSize: "12px",
                   color: overdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: overdue ? 700 : 500,
-                  minWidth: "76px", textAlign: "right",
+                  minWidth: isMobile ? "62px" : "76px", textAlign: "right", whiteSpace: "nowrap",
                 }}
               >
                 {formatDateUK(task.due_date)}{od > 0 && ` · ${od}d`}
@@ -894,7 +894,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   }
 
   return (
-    <div>
+    <div style={{ paddingBottom: isMobile ? 160 : 0 }}>
       {toast.element}
 
       <TaskDetailModal
@@ -917,7 +917,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           they still stand out; the urgent count now lives as a small
           sub-label under Overdue instead of its own tile. ═══ */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap", alignItems: "stretch" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))", gap: "8px", flex: 1 }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fit, minmax(${isMobile ? "88px" : "108px"}, 1fr))`, gap: "8px", flex: 1 }}>
           {[
             { label: "Open",          value: kpi?.open_count ?? allOpen.length,          accent: COLOURS.NAVY, soft: COLOURS.CARD,       border: COLOURS.HAIRLINE },
             { label: "Overdue",       value: kpi?.overdue_count ?? overdueTasks.length,   accent: COLOURS.RED,  soft: COLOURS.DANGER_SOFT, border: COLOURS.RED,
@@ -1121,14 +1121,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
         padding: "8px 2px 10px",
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
           <div style={{ display: "flex", gap: "4px" }}>
             {(["team", "recurring"] as const).map((v) => (
               <button key={v} onClick={() => setTimeView(v)} style={{
                 backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
                 color: timeView === v ? "white" : COLOURS.NAVY,
                 border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-                borderRadius: RADII.PILL, padding: "6px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer",
+                borderRadius: RADII.PILL, padding: isMobile ? "6px 10px" : "6px 14px",
+                fontSize: isMobile ? "12px" : "13px", fontWeight: 600, cursor: "pointer",
                 textTransform: "capitalize",
               }}>{v}</button>
             ))}
@@ -1143,7 +1144,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 style={{
                   backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
                   border: `1px solid ${timeView === v ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-                  borderRadius: RADII.SM, width: "34px", height: "34px",
+                  borderRadius: RADII.SM, width: isMobile ? "30px" : "34px", height: isMobile ? "30px" : "34px",
                   display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
                 }}
               >
