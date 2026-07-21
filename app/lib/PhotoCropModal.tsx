@@ -7,9 +7,6 @@ const CROP_OFF  = 10;            // gap between container edge and crop circle
 const CROP_DISP = 260;           // crop circle display diameter
 const CROP_R    = CROP_DISP / 2; // 130px
 const OUT_PX    = 300;           // output canvas size
-// Start 30 % larger than the min-cover zoom so the user always has room to
-// drag in both directions on the first open.
-const ZOOM_PADDING = 1.3;
 
 interface Props {
   file:     File;
@@ -22,14 +19,14 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
   const [imgEl,   setImgEl]   = useState<HTMLImageElement | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [offset,  setOffset]  = useState({ x: 0, y: 0 });
-  const [zoom,    setZoom]    = useState(ZOOM_PADDING);
-  const [minZoom, setMinZoom] = useState(ZOOM_PADDING);
+  const [zoom,    setZoom]    = useState(1);
+  const [minZoom, setMinZoom] = useState(0.1);
+  const [maxZoom, setMaxZoom] = useState(3);
   const [error,   setError]   = useState<string | null>(null);
 
   const dragging  = useRef(false);
   const dragStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
-  // Keep a ref so clampOffset can always read the latest zoom without stale closures
-  const zoomRef = useRef(ZOOM_PADDING);
+  const zoomRef   = useRef(1);
 
   // ── Load image from file ──────────────────────────────────────────────────
   useEffect(() => {
@@ -39,20 +36,27 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
     img.onload = () => {
       setImgEl(img);
 
-      // Base scale: shorter dimension fills the crop circle exactly (zoom = 1)
+      // Base scale: shorter dimension fills the crop circle at zoom=1
       const base = CROP_DISP / Math.min(img.naturalWidth, img.naturalHeight);
 
-      // Minimum zoom needed so BOTH dimensions cover the crop circle
-      const mz = Math.max(
+      // coverZoom: minimum zoom so BOTH dimensions cover the crop circle
+      const coverZoom = Math.max(
         CROP_DISP / (img.naturalWidth  * base),
         CROP_DISP / (img.naturalHeight * base),
       );
-      // Start at ZOOM_PADDING × the minimum so there is room to drag
-      const initialZoom = mz * ZOOM_PADDING;
-      // FIX: minZoom = mz (bare minimum to cover the circle), NOT initialZoom.
-      // Previously minZoom was set to initialZoom, meaning the slider minimum
-      // equalled the starting value and users could only zoom IN, never out.
-      setMinZoom(mz);
+
+      // fitZoom: zoom out until the ENTIRE image fits inside the container
+      // This lets users see their full photo and pick the right crop area
+      const fitZoom = Math.min(
+        CONTAINER / (img.naturalWidth  * base),
+        CONTAINER / (img.naturalHeight * base),
+      );
+
+      // Start at coverZoom × 1.3 so there is room to drag in all directions
+      const initialZoom = coverZoom * 1.3;
+
+      setMinZoom(fitZoom);           // can zoom all the way out to see full image
+      setMaxZoom(coverZoom * 3);     // can zoom in to 3× the cover minimum
       setZoom(initialZoom);
       zoomRef.current = initialZoom;
 
@@ -66,7 +70,6 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
   }, [file]);
 
   // ── Display size helpers ──────────────────────────────────────────────────
-  // Only dw is computed; dh follows the natural aspect ratio to avoid distortion.
   function getDisplayW(z: number) {
     if (!imgEl) return CROP_DISP;
     const base = CROP_DISP / Math.min(imgEl.naturalWidth, imgEl.naturalHeight);
@@ -77,12 +80,24 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
     return dw * (imgEl.naturalHeight / imgEl.naturalWidth);
   }
 
-  // ── Clamp offset so the crop circle is always fully covered ──────────────
+  // ── Clamp offset ──────────────────────────────────────────────────────────
+  // When image is smaller than the crop circle (zoomed out), centre it.
+  // When image covers the circle, constrain so the circle is always filled.
   function clampOffset(ox: number, oy: number, z?: number) {
     const dw = getDisplayW(z ?? zoomRef.current);
     const dh = getDisplayH(dw);
-    const cropRight  = CROP_OFF + CROP_DISP; // 270
-    const cropBottom = CROP_OFF + CROP_DISP; // 270
+
+    // Image is smaller than crop circle: just keep it centred
+    if (dw < CROP_DISP || dh < CROP_DISP) {
+      return {
+        x: (CONTAINER - dw) / 2,
+        y: (CONTAINER - dh) / 2,
+      };
+    }
+
+    // Image covers the circle: keep the circle fully filled
+    const cropRight  = CROP_OFF + CROP_DISP;
+    const cropBottom = CROP_OFF + CROP_DISP;
     return {
       x: Math.min(CROP_OFF, Math.max(cropRight  - dw, ox)),
       y: Math.min(CROP_OFF, Math.max(cropBottom - dh, oy)),
@@ -117,7 +132,6 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
   function handleZoom(z: number) {
     zoomRef.current = z;
     setZoom(z);
-    // Re-clamp after zoom changes image size
     setOffset(prev => clampOffset(prev.x, prev.y, z));
   }
 
@@ -188,7 +202,7 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
             Position your photo
           </div>
           <div style={{ fontSize: "12px", color: "#64748B" }}>
-            Drag to reposition · use the slider to zoom
+            Drag to reposition · slide left to zoom out
           </div>
         </div>
 
@@ -214,7 +228,6 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
           onTouchMove={onTouchMove}
           onTouchEnd={onPointerUp}
         >
-          {/* Image — only width is set; browser computes height from natural aspect ratio */}
           {blobUrl && imgEl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -256,16 +269,17 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
 
         {/* Zoom slider */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "13px", color: "#64748B", flexShrink: 0 }}>Zoom</span>
+          <span style={{ fontSize: "12px", color: "#64748B", flexShrink: 0 }}>−</span>
           <input
             type="range"
             min={minZoom}
-            max={minZoom * 3}
+            max={maxZoom}
             step={0.01}
             value={zoom}
             onChange={(e) => handleZoom(parseFloat(e.target.value))}
             style={{ flex: 1, accentColor: "#0F7B5F" }}
           />
+          <span style={{ fontSize: "12px", color: "#64748B", flexShrink: 0 }}>+</span>
         </div>
 
         {error && (
