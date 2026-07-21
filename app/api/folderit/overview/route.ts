@@ -14,6 +14,7 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "../../../lib/api-auth";
 import { createServiceClient } from "../../../lib/supabase-server";
+import { resolveFolderitAccess } from "../../../lib/folderit-access";
 
 export const runtime = "nodejs";
 
@@ -24,44 +25,20 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient();
 
-  const { data: member } = await db
-    .from("members")
-    .select("role, company_id")
-    .eq("email", email)
-    .maybeSingle();
-
-  const isAdmin =
-    email === "khuram1901@gmail.com" ||
-    member?.role === "Admin" ||
-    member?.role === "CEO";
-
   // --- Determine which account_uids this user may see ---
-  let visibleAccountUids: string[] | null = null; // null = all
+  // (own company + Access Matrix grants; HR grant → HR cabinet only;
+  //  admin → all. See lib/folderit-access.ts.)
+  const access = await resolveFolderitAccess(db, email);
+  const visibleAccountUids = access.accountUids; // null = all
 
-  if (!isAdmin) {
-    if (!member?.company_id) {
-      return Response.json({
-        accounts: [],
-        healthSummary: [],
-        lastSyncAt: null,
-        inboxFilesTotal: 0,
-        issueBreakdown: { inbox_subfolder: 0, buried_in_inbox: 0, inbox_stale: 0, bad_filename: 0 },
-      });
-    }
-    const { data: companyAccounts } = await db
-      .from("folderit_account_companies")
-      .select("account_uid")
-      .eq("company_uuid", member.company_id);
-    visibleAccountUids = (companyAccounts ?? []).map((r: { account_uid: string }) => r.account_uid);
-    if (!(visibleAccountUids as string[]).length) {
-      return Response.json({
-        accounts: [],
-        healthSummary: [],
-        lastSyncAt: null,
-        inboxFilesTotal: 0,
-        issueBreakdown: { inbox_subfolder: 0, buried_in_inbox: 0, inbox_stale: 0, bad_filename: 0 },
-      });
-    }
+  if (visibleAccountUids !== null && visibleAccountUids.length === 0) {
+    return Response.json({
+      accounts: [],
+      healthSummary: [],
+      lastSyncAt: null,
+      inboxFilesTotal: 0,
+      issueBreakdown: { inbox_subfolder: 0, buried_in_inbox: 0, inbox_stale: 0, bad_filename: 0 },
+    });
   }
 
   // Run all queries in parallel

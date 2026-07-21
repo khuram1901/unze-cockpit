@@ -16,6 +16,7 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "../../../lib/api-auth";
 import { createServiceClient } from "../../../lib/supabase-server";
+import { resolveFolderitAccess } from "../../../lib/folderit-access";
 
 export const runtime = "nodejs";
 
@@ -26,17 +27,10 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient();
 
-  // Determine caller's role & company
-  const { data: member } = await db
-    .from("members")
-    .select("role, company_id")
-    .eq("email", email)
-    .maybeSingle();
-
-  const isAdmin =
-    email === "khuram1901@gmail.com" ||
-    member?.role === "Admin" ||
-    member?.role === "CEO";
+  const access = await resolveFolderitAccess(db, email);
+  if (access.accountUids !== null && access.accountUids.length === 0) {
+    return Response.json({ issues: [], total: 0 });
+  }
 
   const sp = new URL(request.url).searchParams;
   const filterType = sp.get("issue_type") ?? undefined;
@@ -53,31 +47,23 @@ export async function GET(request: NextRequest) {
     .order("days_old", { ascending: false, nullsFirst: false })
     .range(offset, offset + limit - 1);
 
-  if (!isAdmin) {
-    // Non-admin: restrict to their company
-    if (!member?.company_id) {
-      return Response.json({ issues: [], total: 0 });
-    }
-    // Look up the account_uid(s) for this company
+  // Scope to the user's visible cabinets (null = admin, sees all)
+  if (access.accountUids !== null) {
+    query = query.in("account_uid", access.accountUids);
+  }
+
+  // Optional filter to one company — applies within the visible set, so
+  // it's safe for any role (a non-admin filtering a company they can't
+  // see just intersects to nothing).
+  const filterCompany = sp.get("company_uuid");
+  if (filterCompany) {
     const { data: companyAccounts } = await db
       .from("folderit_account_companies")
       .select("account_uid")
-      .eq("company_uuid", member.company_id);
+      .eq("company_uuid", filterCompany);
     const accountUids = (companyAccounts ?? []).map((r: { account_uid: string }) => r.account_uid);
     if (!accountUids.length) return Response.json({ issues: [], total: 0 });
     query = query.in("account_uid", accountUids);
-  } else {
-    // Admin can optionally filter to a specific company
-    const filterCompany = sp.get("company_uuid");
-    if (filterCompany) {
-      const { data: companyAccounts } = await db
-        .from("folderit_account_companies")
-        .select("account_uid")
-        .eq("company_uuid", filterCompany);
-      const accountUids = (companyAccounts ?? []).map((r: { account_uid: string }) => r.account_uid);
-      if (!accountUids.length) return Response.json({ issues: [], total: 0 });
-      query = query.in("account_uid", accountUids);
-    }
   }
 
   if (filterType) {

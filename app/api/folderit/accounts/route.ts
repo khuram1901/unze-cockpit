@@ -1,13 +1,15 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
+import { resolveFolderitAccess } from "../../../lib/folderit-access";
 
 // Returns the list of Folderit accounts the current user can browse,
 // with company names resolved. Used by the Browse tab to populate the
 // account/company selector.
 //
 // Admin/CEO: all active non-excluded accounts.
-// Everyone else: only accounts where they have a folderit_user_map entry.
+// HR grant: HR cabinet only.
+// Everyone else: own company's cabinet(s) + Access Matrix company grants.
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -16,21 +18,12 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient();
 
-  const { data: member } = await db
-    .from("members")
-    .select("role")
-    .eq("email", email)
-    .maybeSingle();
-
-  const isAdmin =
-    email === "khuram1901@gmail.com" ||
-    member?.role === "Admin" ||
-    member?.role === "CEO";
+  const access = await resolveFolderitAccess(db, email);
 
   // Fetch the relevant account UIDs
   let accountUids: string[] = [];
 
-  if (isAdmin) {
+  if (access.accountUids === null) {
     const { data: allAccounts } = await db
       .from("folderit_account_map")
       .select("account_uid")
@@ -38,11 +31,7 @@ export async function GET(request: NextRequest) {
       .neq("scope", "excluded");
     accountUids = (allAccounts ?? []).map((r) => r.account_uid);
   } else {
-    const { data: mappings } = await db
-      .from("folderit_user_map")
-      .select("account_uid")
-      .eq("member_email", email);
-    accountUids = (mappings ?? []).map((r) => r.account_uid);
+    accountUids = access.accountUids;
   }
 
   if (!accountUids.length) {

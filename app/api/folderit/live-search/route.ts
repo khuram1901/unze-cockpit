@@ -6,10 +6,9 @@
  * Access rules:
  *  - Member role → 403 (search not available)
  *  - Admin / CEO → all accounts
- *  - Manager / Executive (and any other non-Member role) → only accounts
- *    they are explicitly mapped to in folderit_user_map. This ensures
- *    they can only discover filenames in cabinets Folderit has granted
- *    them access to, not every cabinet linked to their company.
+ *  - Everyone else → the same company-scoped visibility as the rest of
+ *    the Folderit dashboard (own company + Access Matrix grants; HR
+ *    grant → HR cabinet only). See lib/folderit-access.ts.
  *
  * Returns up to 10 results per account, max 60 total, each with a direct
  * Folderit URL so the user can open the document in one click.
@@ -19,6 +18,7 @@ import { NextRequest } from "next/server";
 import { requireAuth } from "../../../lib/api-auth";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { folderitFetch } from "../../../lib/folderit-auth";
+import { resolveFolderitAccess } from "../../../lib/folderit-access";
 
 export const runtime = "nodejs";
 
@@ -42,57 +42,30 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient();
 
-  const { data: member } = await db
-    .from("members")
-    .select("role, company_id")
-    .eq("email", email)
-    .maybeSingle();
-
-  const role = member?.role ?? null;
-
-  const isAdmin =
-    email === "khuram1901@gmail.com" ||
-    role === "Admin" ||
-    role === "CEO";
+  // Company-scoped visibility: own company + Access Matrix grants; HR
+  // grant → HR cabinet only; admin → all. See lib/folderit-access.ts.
+  const access = await resolveFolderitAccess(db, email);
 
   // Members cannot use global search
-  if (!isAdmin && role === "Member") {
+  if (!access.isAdmin && access.role === "Member") {
     return Response.json({ error: "Access denied" }, { status: 403 });
   }
 
-  let accountsToSearch: { account_uid: string; account_name: string }[] = [];
+  let accountQuery = db
+    .from("folderit_account_map")
+    .select("account_uid, account_name")
+    .eq("is_active", true)
+    .neq("scope", "excluded")
+    .neq("scope", "pending");
 
-  if (isAdmin) {
-    // Admin / CEO — search all active accounts
-    const { data } = await db
-      .from("folderit_account_map")
-      .select("account_uid, account_name")
-      .eq("is_active", true)
-      .neq("scope", "excluded")
-      .neq("scope", "pending");
-    accountsToSearch = data ?? [];
-  } else {
-    // Manager / Executive etc. — restrict to accounts they are explicitly
-    // mapped to in folderit_user_map (i.e. Folderit has granted them access).
-    const { data: mappings } = await db
-      .from("folderit_user_map")
-      .select("account_uid")
-      .eq("member_email", email);
-
-    const mappedUids = (mappings ?? []).map((m: { account_uid: string }) => m.account_uid);
-    if (!mappedUids.length) return Response.json({ items: [] });
-
-    const { data } = await db
-      .from("folderit_account_map")
-      .select("account_uid, account_name")
-      .eq("is_active", true)
-      .neq("scope", "excluded")
-      .neq("scope", "pending")
-      .in("account_uid", mappedUids);
-    accountsToSearch = data ?? [];
+  if (access.accountUids !== null) {
+    if (!access.accountUids.length) return Response.json({ items: [] });
+    accountQuery = accountQuery.in("account_uid", access.accountUids);
   }
 
-  if (!accountsToSearch.length) return Response.json({ items: [] });
+  const { data: accountsToSearch } = await accountQuery;
+
+  if (!accountsToSearch?.length) return Response.json({ items: [] });
 
   // Search Folderit for each account in parallel
   const perAccount = await Promise.all(

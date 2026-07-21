@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { folderitFetch } from "../../../lib/folderit-auth";
-import { canViewFolderitHr, type UserCtx, type PermOverrides } from "../../../lib/permissions";
+import { resolveFolderitAccess } from "../../../lib/folderit-access";
 
 export const maxDuration = 60; // conversion-heavy files (xlsx, docx) can take a while to render to PDF
 
@@ -174,38 +174,14 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient();
 
-  // Select everything permission-checking might need up front (id +
-  // department, on top of role/company_id) so the HR-gated branch below
-  // never has to re-query members a second time — that duplicate lookup
-  // was adding a full extra DB round trip to every single HR "policy"
-  // preview. Khuram: "when we're trying to look up the policies, it
-  // takes a bit of a while to pull up the policy."
-  const { data: member } = await db
-    .from("members")
-    .select("id, role, department, company_id")
-    .eq("email", email)
-    .maybeSingle();
-
-  const isAdmin =
-    email === "khuram1901@gmail.com" ||
-    member?.role === "Admin" ||
-    member?.role === "CEO";
+  // ONE visibility rule for all of Folderit — own company + Access Matrix
+  // grants; HR grant → HR cabinet only; admin → all cabinets. See
+  // lib/folderit-access.ts.
+  const access = await resolveFolderitAccess(db, email);
 
   let accountUid: string | null = explicitAccountUid;
 
-  if (explicitAccountUid) {
-    // Browse-tab path: account is already known. For non-admins, verify they
-    // are mapped to this account via the user map (set during sync).
-    if (!isAdmin) {
-      const { data: mapping } = await db
-        .from("folderit_user_map")
-        .select("folderit_user_uid")
-        .eq("member_email", email)
-        .eq("account_uid", explicitAccountUid)
-        .maybeSingle();
-      if (!mapping) return Response.json({ error: "Forbidden" }, { status: 403 });
-    }
-  } else {
+  if (!explicitAccountUid) {
     // Legacy path: look up account from synced inbox/HR tables via RPC.
     const { data: rpcResult, error: lookupErr } = await db.rpc("get_folderit_file_account", {
       p_file_uid: fileUid,
@@ -213,40 +189,11 @@ export async function GET(request: NextRequest) {
     if (lookupErr) return Response.json({ error: lookupErr.message }, { status: 500 });
     if (!rpcResult) return Response.json({ error: "File not found" }, { status: 404 });
     accountUid = rpcResult as string;
+  }
 
-    if (!isAdmin) {
-      // HR documents are locked behind can_view_folderit_hr (off by default,
-      // granted per-member via Members > Access Matrix > Folderit > HR).
-      // Everything else is scoped to the caller's own company, as before.
-      const { data: hrMatch } = await db
-        .from("folderit_hr_categories")
-        .select("category_name")
-        .eq("account_uid", accountUid)
-        .limit(1)
-        .maybeSingle();
-
-      if (hrMatch) {
-        let overrides: PermOverrides | null = null;
-        if (member?.id) {
-          const { data: perms } = await db
-            .from("member_permissions")
-            .select("*")
-            .eq("member_id", member.id)
-            .maybeSingle();
-          overrides = (perms as PermOverrides) || null;
-        }
-        const ctx: UserCtx = { email, role: member?.role ?? null, department: member?.department ?? null, overrides };
-        if (!canViewFolderitHr(ctx)) return Response.json({ error: "Forbidden" }, { status: 403 });
-      } else {
-        const { data: companyMatch } = await db
-          .from("folderit_account_companies")
-          .select("company_uuid")
-          .eq("account_uid", accountUid)
-          .eq("company_uuid", member?.company_id ?? "")
-          .maybeSingle();
-        if (!companyMatch) return Response.json({ error: "Forbidden" }, { status: 403 });
-      }
-    }
+  // Non-admins may only preview files in cabinets they can see
+  if (access.accountUids !== null && !access.accountUids.includes(accountUid!)) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (!accountUid) return Response.json({ error: "Could not determine account" }, { status: 500 });

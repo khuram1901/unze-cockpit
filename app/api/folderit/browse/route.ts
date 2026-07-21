@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { folderitFetch } from "../../../lib/folderit-auth";
+import { resolveFolderitAccess } from "../../../lib/folderit-access";
 
 // Folder/file browser for the Folderit Browse tab.
 //
@@ -49,32 +50,29 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient();
 
-  const { data: member } = await db
-    .from("members")
-    .select("role")
-    .eq("email", email)
-    .maybeSingle();
+  // Company-scoped visibility: own company + Access Matrix grants; HR
+  // grant → HR cabinet only; admin → all. See lib/folderit-access.ts.
+  const access = await resolveFolderitAccess(db, email);
+  const isAdmin = access.isAdmin;
 
-  const isAdmin =
-    email === "khuram1901@gmail.com" ||
-    member?.role === "Admin" ||
-    member?.role === "CEO";
+  // Non-admins may only browse cabinets in their visible set
+  if (!isAdmin && !(access.accountUids ?? []).includes(accountUid)) {
+    return Response.json(
+      { error: "You do not have access to this Folderit account" },
+      { status: 403 }
+    );
+  }
 
-  // Look up the user's Folderit UID for this account
+  // Look up the user's Folderit UID for this account — when present, the
+  // /access endpoint is used so Folderit's own folder-level permissions
+  // are respected. When absent, the user still gets the cabinet because
+  // their company grants it (root /folders path below).
   const { data: mapping } = await db
     .from("folderit_user_map")
     .select("folderit_user_uid")
     .eq("member_email", email)
     .eq("account_uid", accountUid)
     .maybeSingle();
-
-  // Non-admins must have a mapping to browse this account
-  if (!isAdmin && !mapping) {
-    return Response.json(
-      { error: "You do not have access to this Folderit account" },
-      { status: 403 }
-    );
-  }
 
   try {
     // ── Drill into a specific folder ──────────────────────────────────
@@ -103,12 +101,11 @@ export async function GET(request: NextRequest) {
 
     // ── Root: list folders the user can see ──────────────────────────
     //
-    // Admins use the root folders endpoint directly — it returns real folder
-    // names. The /access endpoint (used for non-admins) only returns UIDs for
-    // the account owner, so folder names would show as unreadable codes.
-    //
-    // Non-admins use /access so Folderit enforces their permissions.
-    if (isAdmin) {
+    // Admins — and company-granted users with no Folderit user mapping —
+    // use the root folders endpoint directly (it returns real folder
+    // names). Users WITH a Folderit mapping use /access instead, so
+    // Folderit's own folder-level permissions are enforced for them.
+    if (isAdmin || !mapping) {
       const rootRes = await folderitFetch(
         `/v2/accounts/${accountUid}/folders?per-page=500`
       );
@@ -124,14 +121,6 @@ export async function GET(request: NextRequest) {
       return Response.json({
         folders: rootFolders.map((f) => ({ uid: f.uid, name: f.name ?? f.uid })),
         files: [],
-      });
-    }
-
-    if (!mapping) {
-      return Response.json({
-        folders: [],
-        files: [],
-        note: "User not yet mapped to this Folderit account. Run the sync cron to populate.",
       });
     }
 
