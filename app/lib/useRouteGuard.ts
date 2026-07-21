@@ -72,7 +72,7 @@ export function useRequireCapability(cap: Capability): { checking: boolean; ctx:
       const loaded = await loadUserCtx(user.email);
       if (!active) return;
       if (!CHECKS[cap](loaded)) {
-        router.replace("/home");
+        router.replace("/welcome");
         return;
       }
       setCtx(loaded);
@@ -107,7 +107,7 @@ export function useRequireDepartment(departmentName: string): { checking: boolea
         return;
       }
       if (!canViewDepartment(ctx, departmentName)) {
-        router.replace("/home");
+        router.replace("/welcome");
         return;
       }
       setChecking(false);
