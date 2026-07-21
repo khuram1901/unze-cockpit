@@ -1171,7 +1171,7 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal }: {
   fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null;
 }) {
   const showPortfolio = holdings.length > 0 || portfolioTotal !== null;
-  const cols = showPortfolio ? "1fr 1fr 1fr 300px" : "1fr 1fr 300px";
+  const cols = showPortfolio ? "1fr 1fr 420px 300px" : "1fr 1fr 300px";
   return (
     <>
       <KhuramHero data={data} tick={tick} weather={weather} fx={fx} />
@@ -1214,6 +1214,7 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal }: {
         {showPortfolio && <PortfolioCard holdings={holdings} portfolioTotal={portfolioTotal} />}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
+          <ClockWeatherCard tick={tick} weather={weather} />
           <QuickLinksCard links={data.quickLinks} />
         </div>
       </div>
