@@ -206,17 +206,12 @@ export default function QuickAddTask({
     if (!transcript.trim()) return;
     const parsed = parseVoiceTask(transcript);
 
-    let resolvedDescription = "";
-    let resolvedDueDate = "";
-    let resolvedMember: Member | null = null;
-
-    if (parsed.description) { resolvedDescription = parsed.description; setDescription(parsed.description); }
-    if (parsed.dueDate)     { resolvedDueDate = parsed.dueDate; setDueDate(parsed.dueDate); }
+    if (parsed.description) setDescription(parsed.description);
+    if (parsed.dueDate)     setDueDate(parsed.dueDate);
 
     if (parsed.assigneeName) {
       const match = matchMemberByName(parsed.assigneeName, currentMembers);
       if (match) {
-        resolvedMember = match;
         setSelected(match);
         setSearch("");
         setShowDrop(false);
@@ -227,30 +222,8 @@ export default function QuickAddTask({
     }
 
     setVoicePhase("parsed");
-
-    // Auto-submit if voice filled all required fields — no extra tap needed.
-    // We resolve the company inline here (same logic as the autoCompany derived value)
-    // because state updates are async and autoCompany won't reflect the new
-    // selected member until the next render.
-    if (resolvedDescription && resolvedMember && resolvedDueDate) {
-      setCompanies((currentCompanies) => {
-        const company = currentCompanies.find((c) => c.id === resolvedMember!.task_default_company_id)
-          ?? currentCompanies.find((c) => c.short_code === resolvedMember!.business_unit)
-          ?? null;
-        if (company) {
-          // Small delay so the user sees the filled form flash before it submits
-          setTimeout(() => {
-            setDescription((d) => {
-              // Trigger submit programmatically via the form
-              const form = document.querySelector("form");
-              if (form) form.requestSubmit();
-              return d;
-            });
-          }, 1200);
-        }
-        return currentCompanies;
-      });
-    }
+    // No auto-submit — show the filled form so the user can review and
+    // confirm before saving. They tap "Confirm task" when ready.
   }, []);
 
   // ── Voice: start listening ───────────────────────────────────────────────

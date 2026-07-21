@@ -649,13 +649,21 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // I can see", not "the whole company".
   const myIdentities = myIdentityEmails(myEmail);
   const myTasksSource = myTasksScope === "mine"
-    ? allOpen.filter((t) =>
-        // Tasks assigned to me (primary or co-assignee)
-        (t.assigned_to_email && myIdentities.includes(t.assigned_to_email.toLowerCase())) ||
-        myCoAssignedTaskIds.has(t.id) ||
-        // Tasks I created — so the creator always sees tasks they assigned to others
-        (t.assigned_by_email && myIdentities.includes(t.assigned_by_email.toLowerCase()))
-      )
+    ? allOpen.filter((t) => {
+        const myEmails = myIdentities;
+        const byMe = !!(t.assigned_by_email && myEmails.includes(t.assigned_by_email.toLowerCase()));
+        const toMe = !!(t.assigned_to_email && myEmails.includes(t.assigned_to_email.toLowerCase()));
+        // "Mine" = tasks that need MY personal action right now:
+        // 1. Assigned directly to me
+        if (toMe) return true;
+        // 2. Co-assigned to me
+        if (myCoAssignedTaskIds.has(t.id)) return true;
+        // 3. I assigned it and the team has Submitted it back for my sign-off
+        if (byMe && t.status === "Submitted") return true;
+        // 4. I assigned it and the team is waiting for my reply
+        if (byMe && t.status === "Waiting Reply" && t.reply_required) return true;
+        return false;
+      })
     : allOpen;
   function myTaskGroup(task: Task): string {
     if (isOverdue(task)) return "Overdue";
@@ -1388,7 +1396,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
           )}
           {myTasksSource.length === 0 && (
             <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>
-              {myTasksScope === "mine" ? "Nothing assigned to you right now." : "No tasks to show."}
+              {myTasksScope === "mine" ? "Nothing needs your action right now." : "No tasks to show."}
             </div>
           )}
         </div>
