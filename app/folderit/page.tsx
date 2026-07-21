@@ -5,7 +5,6 @@ import AuthWrapper from "../lib/AuthWrapper";
 import { authFetch } from "../lib/supabase";
 import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader } from "../lib/SharedUI";
 import { useRequireCapability } from "../lib/useRouteGuard";
-import { useUserCtx } from "../lib/useUserCtx";
 import { useMobile } from "../lib/useMobile";
 
 const { NAVY, SLATE, HAIRLINE } = COLOURS;
@@ -310,9 +309,6 @@ function GlobalSearchBox() {
 
 function BrowseView() {
   const setPreview = useContext(PreviewContext);
-  const { ctx: browseCtx } = useUserCtx();
-  const browseRole = browseCtx?.role ?? null;
-  const canSearch = browseRole === "Admin" || browseRole === "CEO" || browseRole === "Manager" || browseRole === "Executive" || browseCtx?.email === "khuram1901@gmail.com";
   const [accounts, setAccounts] = useState<BrowseAccount[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<BrowseAccount | null>(null);
   // Left panel: folder tree (top-level folders from /access, lazily expanded)
@@ -413,8 +409,7 @@ function BrowseView() {
     };
     return (
       <div>
-        {canSearch && <GlobalSearchBox />}
-        <div style={{ marginBottom: "20px", marginTop: canSearch ? "20px" : "0" }}>
+        <div style={{ marginBottom: "20px" }}>
           <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY, letterSpacing: "-0.02em" }}>
             Document Cabinets
           </div>
@@ -1101,6 +1096,10 @@ function FolderitDashboard() {
     return <main style={{ padding: isMobile ? "12px 14px" : "20px 24px", maxWidth: "100%", overflowX: "hidden", color: SLATE }}>Loading…</main>;
   }
 
+  // Everyone except Members gets the global search bar — Khuram: "CEO has
+  // access to view pages and documents, plus managers but not members."
+  const canSearch = ctx.role !== "Member" || (ctx.email || "").toLowerCase() === "khuram1901@gmail.com";
+
   const TABS: { key: typeof pageTab; label: string }[] = [
     { key: "overview", label: "Overview" },
     { key: "browse",   label: "Browse Files" },
@@ -1115,6 +1114,16 @@ function FolderitDashboard() {
         <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px" }}>
           Read-only view of your Folderit cabinets. To file or move documents, open Folderit directly.
         </div>
+
+        {/* Global document search — visible on every tab, for every role
+            except Member (the search API blocks Members server-side too).
+            Results are scoped to the cabinets the user's matrix ticks
+            allow, so Sania only ever finds UTPL documents, etc. */}
+        {canSearch && (
+          <div style={{ marginBottom: "16px" }}>
+            <GlobalSearchBox />
+          </div>
+        )}
 
         {/* Tab bar */}
         <div style={{ display: "flex", gap: "0", borderBottom: `2px solid ${COLOURS.BORDER}`, marginBottom: "20px" }}>
