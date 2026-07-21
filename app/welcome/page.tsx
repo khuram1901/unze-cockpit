@@ -200,7 +200,7 @@ function PurposeBanner() {
       }} />
       <p style={{ fontSize: 12.5, color: SLATE, lineHeight: 1.45, margin: 0 }}>
         <strong style={{ color: NAVY, fontWeight: 600 }}>Our purpose: </strong>
-        To manufacture world-class energy meters and premium footwear — building a Pakistan that leads in quality, precision, and global trade.
+        Through service and sustainable business growth, we create opportunities that enhance the lifestyle of our employees, customers, and the community we operate in.
       </p>
     </div>
   );
@@ -749,7 +749,7 @@ function Hero({ data, tick, weather, fx, email }: HeroProps) {
           </div>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.42)", fontStyle: "italic", lineHeight: 1.5, margin: 0, maxWidth: 520 }}>
             <strong style={{ color: "rgba(255,255,255,0.65)", fontStyle: "normal", fontWeight: 500 }}>Unze Group</strong>
-            {" "}— Engineering precision. Global style. Pakistani heart.
+            {" "}— Service, growth, and opportunity for all.
           </p>
         </div>
         {/* Right: clocks + weather + fx (CEO) */}
