@@ -338,15 +338,15 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   }, [email, allMembers.length]);
 
   useEffect(() => {
-    if (isOpen) { loadConversations(); loadMembers(); }
-  }, [isOpen, loadConversations, loadMembers]);
+    if (isOpen) { loadConversations(); }
+  }, [isOpen, loadConversations]);
 
   // Focus search when panel opens
   useEffect(() => {
     if (isOpen && !activeConv) setTimeout(() => searchRef.current?.focus(), 120);
   }, [isOpen, activeConv]);
 
-  // Realtime: refresh conversation list on any new message
+  // Realtime + polling when panel is open — keeps conversation list live
   useEffect(() => {
     if (!isOpen || !email) return;
     const ch = supabase
@@ -354,7 +354,8 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" },
         () => loadConversations())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const poll = setInterval(loadConversations, 15_000);
+    return () => { supabase.removeChannel(ch); clearInterval(poll); };
   }, [isOpen, email, loadConversations]);
 
   // ── Load messages ───────────────────────────────────────────────
@@ -496,23 +497,37 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  // ── Filtered data for the list ──────────────────────────────────
+  // ── Filtered + sorted data for the list ────────────────────────
 
   const q = search.toLowerCase().trim();
 
-  const filteredConvs = q
-    ? conversations.filter((c) => convDisplayName(c).toLowerCase().includes(q))
-    : conversations;
+  // Sort: unread conversations first, then by most recent message
+  const sortedConvs = [...conversations].sort((a, b) => {
+    const aUnread = (a.unread_count ?? 0) > 0 ? 1 : 0;
+    const bUnread = (b.unread_count ?? 0) > 0 ? 1 : 0;
+    if (bUnread !== aUnread) return bUnread - aUnread;
+    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  });
 
-  // Members who DON'T have an existing conversation (or match the search)
+  const filteredConvs = q
+    ? sortedConvs.filter((c) => convDisplayName(c).toLowerCase().includes(q))
+    : sortedConvs;
+
+  // Members only appear when the user is actively searching
+  // (lazy-load them on first search so default view is clean)
   const existingEmails = new Set(
     conversations.flatMap((c) => c.participants?.map((p) => p.email) ?? [])
   );
-  const filteredMembers = allMembers.filter((m) => {
-    const matchesSearch = q ? (m.display_name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)) : true;
-    const noConversation = !existingEmails.has(m.email);
-    return matchesSearch && (noConversation || q);
-  });
+  const filteredMembers = q
+    ? allMembers.filter((m) =>
+        (m.display_name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+      )
+    : [];
+
+  // Trigger member load the first time the user types
+  useEffect(() => {
+    if (q && allMembers.length === 0) loadMembers();
+  }, [q, allMembers.length, loadMembers]);
 
   if (!email) return null;
 
@@ -608,6 +623,20 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
           }}>
             {activeConv ? convDisplayName(activeConv) : view === "archived" ? "Archived chats" : "Messages"}
           </span>
+          {/* New chat pencil — only on main list */}
+          {!activeConv && view === "main" && (
+            <button
+              onClick={() => { setTimeout(() => { searchRef.current?.focus(); searchRef.current?.select(); }, 50); }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: SLATE, padding: 4, display: "flex" }}
+              aria-label="New chat"
+              title="Start a new chat"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path d="M12 20H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          )}
           <button
             onClick={onClose}
             style={{ background: "none", border: "none", cursor: "pointer", color: SLATE, padding: 4, display: "flex" }}
@@ -675,91 +704,93 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                 <div style={{ padding: 24, textAlign: "center", color: SLATE, fontSize: 13 }}>Loading…</div>
               ) : (
                 <>
-                  {/* Recent conversations */}
-                  {filteredConvs.length > 0 && (
-                    <>
-                      {(q || filteredMembers.length > 0) && (
-                        <div style={{ padding: "8px 14px 4px", fontSize: 10, fontWeight: 600, color: INK_400, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                          Recent
+                  {/* Conversations — unread first, then most recent */}
+                  {filteredConvs.map((conv) => (
+                    <SwipeRow
+                      key={conv.conversation_id}
+                      leftBg={COLOURS.GREEN}
+                      leftLabel="📁 Archive"
+                      rightBg={COLOURS.RED}
+                      rightLabel="🗑 Delete"
+                      onSwipeLeft={() => conversationAction(conv.conversation_id, "archive")}
+                      onSwipeRight={() => conversationAction(conv.conversation_id, "delete")}
+                      borderColor={BORDER}
+                    >
+                      <button
+                        onClick={() => { setSearch(""); setActiveConv(conv); }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          width: "100%", padding: "10px 14px",
+                          background: conv.unread_count > 0 ? "#F0F7FF" : "none",
+                          border: "none", cursor: "pointer", textAlign: "left",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = conv.unread_count > 0 ? "#F0F7FF" : "none")}
+                      >
+                        {/* Avatar with unread dot */}
+                        <div style={{ position: "relative", flexShrink: 0 }}>
+                          <div style={{
+                            width: 40, height: 40, borderRadius: "50%",
+                            background: avatarBg(conv.conversation_id),
+                            color: "#fff", fontSize: 14, fontWeight: 600,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>
+                            {initials(convDisplayName(conv))}
+                          </div>
+                          {conv.unread_count > 0 && (
+                            <span style={{
+                              position: "absolute", bottom: 0, right: 0,
+                              width: 12, height: 12, borderRadius: "50%",
+                              background: BLUE, border: "2px solid #fff",
+                            }} />
+                          )}
                         </div>
-                      )}
-                      {filteredConvs.map((conv) => (
-                        <SwipeRow
-                          key={conv.conversation_id}
-                          leftBg={COLOURS.GREEN}
-                          leftLabel={conv.is_archived ? "↩ Unarchive" : "📁 Archive"}
-                          rightBg={COLOURS.RED}
-                          rightLabel="🗑 Delete"
-                          onSwipeLeft={() => conversationAction(conv.conversation_id, conv.is_archived ? "unarchive" : "archive")}
-                          onSwipeRight={() => conversationAction(conv.conversation_id, "delete")}
-                          borderColor={BORDER}
-                        >
-                          <button
-                            onClick={() => { setSearch(""); setActiveConv(conv); }}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 10,
-                              width: "100%", padding: "9px 14px",
-                              background: "none", border: "none",
-                              cursor: "pointer", textAlign: "left",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
-                            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                          >
-                            <div style={{
-                              width: 38, height: 38, borderRadius: "50%",
-                              background: avatarBg(conv.conversation_id),
-                              color: "#fff", fontSize: 13, fontWeight: 600,
-                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                              opacity: conv.is_archived ? 0.5 : 1,
+                        <div style={{ flex: 1, overflow: "hidden" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 4 }}>
+                            <span style={{
+                              fontSize: 13, fontWeight: conv.unread_count > 0 ? 700 : 500,
+                              color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                             }}>
-                              {initials(convDisplayName(conv))}
-                            </div>
-                            <div style={{ flex: 1, overflow: "hidden" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 4 }}>
-                                <span style={{ fontSize: 13, fontWeight: conv.unread_count > 0 ? 600 : 500, color: conv.is_archived ? SLATE : NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {convDisplayName(conv)}
-                                  {conv.is_archived && <span style={{ fontSize: 10, color: INK_400, marginLeft: 6, fontWeight: 400 }}>Archived</span>}
-                                </span>
-                                <span style={{ fontSize: 10, color: INK_400, flexShrink: 0 }}>
-                                  {timeLabel(conv.last_message_at)}
-                                </span>
-                              </div>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginTop: 1 }}>
-                                <span style={{
-                                  fontSize: 11, color: conv.unread_count > 0 ? INK_700 : SLATE,
-                                  fontWeight: conv.unread_count > 0 ? 500 : 400,
-                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                }}>
-                                  {conv.last_message
-                                    ? (conv.is_group && conv.last_message_sender
-                                        ? `${conv.last_message_sender.split(" ")[0]}: ${conv.last_message}`
-                                        : conv.last_message)
-                                    : "No messages yet"}
-                                </span>
-                                {conv.unread_count > 0 && (
-                                  <span style={{
-                                    minWidth: 18, height: 18, borderRadius: 999,
-                                    background: BLUE, color: "#fff",
-                                    fontSize: 10, fontWeight: 600,
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    padding: "0 4px", flexShrink: 0,
-                                  }}>
-                                    {conv.unread_count > 99 ? "99+" : conv.unread_count}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        </SwipeRow>
-                      ))}
-                    </>
-                  )}
+                              {convDisplayName(conv)}
+                            </span>
+                            <span style={{ fontSize: 10, color: conv.unread_count > 0 ? BLUE : INK_400, flexShrink: 0, fontWeight: conv.unread_count > 0 ? 600 : 400 }}>
+                              {timeLabel(conv.last_message_at)}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginTop: 2 }}>
+                            <span style={{
+                              fontSize: 12, color: conv.unread_count > 0 ? NAVY : SLATE,
+                              fontWeight: conv.unread_count > 0 ? 500 : 400,
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            }}>
+                              {conv.last_message
+                                ? (conv.is_group && conv.last_message_sender
+                                    ? `${conv.last_message_sender.split(" ")[0]}: ${conv.last_message}`
+                                    : conv.last_message)
+                                : "No messages yet"}
+                            </span>
+                            {conv.unread_count > 0 && (
+                              <span style={{
+                                minWidth: 18, height: 18, borderRadius: 999,
+                                background: BLUE, color: "#fff",
+                                fontSize: 10, fontWeight: 700,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                padding: "0 4px", flexShrink: 0,
+                              }}>
+                                {conv.unread_count > 99 ? "99+" : conv.unread_count}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    </SwipeRow>
+                  ))}
 
-                  {/* People to start a new chat with */}
-                  {filteredMembers.length > 0 && (
+                  {/* People results — only shown when searching */}
+                  {q && filteredMembers.length > 0 && (
                     <>
                       <div style={{ padding: "8px 14px 4px", fontSize: 10, fontWeight: 600, color: INK_400, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                        {q ? "People" : "Start a chat"}
+                        New conversation
                       </div>
                       {filteredMembers.map((m) => (
                         <button
@@ -795,15 +826,15 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                   )}
 
                   {/* Empty state */}
-                  {filteredConvs.length === 0 && filteredMembers.length === 0 && !loadingConvs && (
-                    <div style={{ padding: 32, textAlign: "center" }}>
+                  {filteredConvs.length === 0 && !loadingConvs && (
+                    <div style={{ padding: 40, textAlign: "center" }}>
                       <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
                       <div style={{ fontSize: 13, color: SLATE }}>
-                        {q ? "No results found" : "No conversations yet"}
+                        {q ? "No results for "" + q + """ : "No conversations yet"}
                       </div>
-                      {!q && <div style={{ fontSize: 12, color: INK_400, marginTop: 4 }}>
-                        Search for someone above to get started.
-                      </div>}
+                      <div style={{ fontSize: 12, color: INK_400, marginTop: 6 }}>
+                        {q ? "Try a different name" : "Tap ✏️ above or search for someone to start chatting"}
+                      </div>
                     </div>
                   )}
                 </>
