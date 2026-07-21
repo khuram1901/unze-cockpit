@@ -64,6 +64,10 @@ export const PERM_COLUMNS = [
   { key: "can_manage_tax_notices", label: "Notices", group: "Tax Mgmt", tip: "Add, edit, delete and manage tax notices" },
   { key: "can_manage_tax_schedule", label: "Schedule", group: "Tax Mgmt", tip: "Update the tax accounts schedule and return filings" },
 
+  // ── Admin Operations ─────────────────────────────────────────
+  { key: "can_access_admin_ops", label: "Ops", group: "Admin Ops", tip: "Access the Admin Operations page — EOBI, Social Security, compliance, fleet, solar, utilities" },
+  { key: "can_access_admin_entry", label: "Entry", group: "Admin Ops", tip: "Daily Entry page — log fuel, solar, utility readings and maintenance on the road (restricted mode: no sidebar)" },
+
   // ── Production ───────────────────────────────────────────────
   { key: "can_access_daily_entry", label: "Entry", group: "Prod.", tip: "Log daily production, dispatch, breakage" },
   { key: "can_view_stock", label: "Stock", group: "Prod.", tip: "View stock levels and inventory" },
@@ -170,6 +174,8 @@ export function roleDefault(col: ColDef, m: MatrixMember): boolean | string | nu
     case "can_view_dept_tax_accounts": return !exec;
     case "can_view_stock": return admin || dept === "Unze Trading Ops";
     case "can_manage_stock": return admin || (manager && dept === "Unze Trading Ops");
+    case "can_access_admin_ops": return admin || (manager && dept === "Admin");
+    case "can_access_admin_entry": return false; // always explicit — never on by default
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
     case "can_edit_operations_targets": return admin || exec || lc(m.email) === OPS_HOD_EMAIL;
     case "can_view_investments": return admin || exec;
