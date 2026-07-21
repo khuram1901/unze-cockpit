@@ -666,7 +666,7 @@ function PortfolioCard({ holdings, portfolioTotal }: { holdings: Holding[]; port
           <div>
             <div style={{ fontSize: 11, color: INK_400 }}>Portfolio value</div>
             <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 20, color: NAVY, letterSpacing: "-0.03em" }}>
-              ₨ {(portfolioTotal / 1000).toFixed(0)}K
+              ₨ {portfolioTotal.toLocaleString()}
             </div>
           </div>
           <Link href="/investments" style={{ fontSize: 11.5, color: BLUE, fontWeight: 500, textDecoration: "none" }}>Full breakdown →</Link>
@@ -1214,7 +1214,6 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal }: {
         {showPortfolio && <PortfolioCard holdings={holdings} portfolioTotal={portfolioTotal} />}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
-          <ClockWeatherCard tick={tick} weather={weather} />
           <QuickLinksCard links={data.quickLinks} />
         </div>
       </div>

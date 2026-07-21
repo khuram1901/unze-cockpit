@@ -350,17 +350,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // see the full list since they review tasks across the whole team.
   if (department === "Audit" && !isPrivileged && tasks.length === 0) {
     return (
-      <div style={{ marginTop: "12px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
-          <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            General Tasks
-          </span>
-          <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
-        </div>
-        <p style={{ color: COLOURS.SLATE, fontSize: "13px", margin: 0 }}>
-          No general tasks assigned to you right now.
-        </p>
-      </div>
+      <p style={{ color: COLOURS.SLATE, fontSize: "13px", margin: 0 }}>
+        No general tasks assigned to you right now.
+      </p>
     );
   }
 

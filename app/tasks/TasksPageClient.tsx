@@ -90,14 +90,41 @@ export default function TasksPageClient() {
         </Modal>
       )}
 
-      {/* Audit dept members: show their project stage tasks above the task list */}
-      {ctx?.department === "Audit" && <AuditTasksPanel />}
+      {ctx?.department === "Audit" ? (
+        /* ── Audit members: two-column layout ─────────────────────────────
+           Left  (wider) : audit project stage tasks
+           Right (narrower): general tasks assigned to this person         */
+        <div style={{ display: "flex", gap: "24px", alignItems: "flex-start", flexWrap: "wrap" }}>
+          {/* Left column — Audit Projects */}
+          <div style={{ flex: "3 1 320px", minWidth: 0 }}>
+            <AuditTasksPanel />
+          </div>
 
-      <TasksList
-        currentRole={role} canSeeAll={seeAll} canReview={review}
-        canDelete={canDelete} canImport={impExp}
-        department={ctx?.department ?? null}
-      />
+          {/* Right column — General Tasks */}
+          <div style={{ flex: "2 1 260px", minWidth: 0 }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px",
+            }}>
+              <span style={{
+                fontSize: "12px", fontWeight: 700, color: COLOURS.SLATE,
+                textTransform: "uppercase", letterSpacing: "0.06em",
+              }}>General Tasks</span>
+              <div style={{ flex: 1, height: "1px", backgroundColor: COLOURS.HAIRLINE }} />
+            </div>
+            <TasksList
+              currentRole={role} canSeeAll={seeAll} canReview={review}
+              canDelete={canDelete} canImport={impExp}
+              department={ctx?.department ?? null}
+            />
+          </div>
+        </div>
+      ) : (
+        <TasksList
+          currentRole={role} canSeeAll={seeAll} canReview={review}
+          canDelete={canDelete} canImport={impExp}
+          department={ctx?.department ?? null}
+        />
+      )}
     </>
   );
 }
