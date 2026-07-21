@@ -7,7 +7,7 @@ import { COLOURS, RADII, SHADOWS, cardStyle, PageHeader, SectionTitle } from "..
 import { COMPANIES, ALM_COMPANY_ID, DIR_COMPANY_ID, SMI_COMPANY_ID, UZL_COMPANY_ID } from "../lib/constants"; // DIR_COMPANY_ID used in exclusion filter below
 import { useUserCtx } from "../lib/useUserCtx";
 import { useMobile } from "../lib/useMobile";
-import { isAdminTier, canViewFolderitHr } from "../lib/permissions";
+import { isAdminTier, canViewFolderitHr, hasAnyFolderitCompanyGrant, folderitGrantedShortCodes } from "../lib/permissions";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell, LabelList } from "recharts";
 
 // Baranh and Haute Dolci share the same Folderit account (Restaurants) —
@@ -724,9 +724,11 @@ type CompanyBreakdownRow = {
 
 function AdminView({
   hrCategories, hrInboxCount, hasHrAccess, approvalCount, approvalItems, companyBreakdown,
+  displayCompanies = FOLDERIT_DISPLAY_COMPANIES,
 }: {
   hrCategories: HrCategory[]; hrInboxCount: number; hasHrAccess: boolean;
   approvalCount: number; approvalItems: DetailItem[]; companyBreakdown: CompanyBreakdownRow[];
+  displayCompanies?: { id: string; shortCode: string; name: string }[];
 }) {
   const rows = companyBreakdown;
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
@@ -767,7 +769,7 @@ function AdminView({
 
       <SectionTitle title="By Company" />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "12px", marginBottom: "16px" }}>
-        {FOLDERIT_DISPLAY_COMPANIES.map((company) => {
+        {displayCompanies.map((company) => {
           const row = rows.find((r) => r.group_key === company.id);
           const inboxCount = row?.inbox_count ?? 0;
           const inboxOldestDays = row?.inbox_oldest_days ?? null;
@@ -808,7 +810,7 @@ function AdminView({
         <div style={{ ...cardStyle, overflow: "hidden", marginBottom: "16px", padding: 0 }}>
           <div style={{ padding: "13px 16px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: CARD_ALT }}>
             <span style={{ fontSize: "15px", fontWeight: 600, color: NAVY }}>
-              {FOLDERIT_DISPLAY_COMPANIES.find((c) => c.id === expandedCompany)?.name}
+              {displayCompanies.find((c) => c.id === expandedCompany)?.name}
             </span>
             <span onClick={() => setExpandedCompany(null)} style={{ cursor: "pointer", fontSize: "12px", color: SLATE }}>Close ✕</span>
           </div>
@@ -836,7 +838,7 @@ function AdminView({
         // as well please" — the y-axis label is now the same name shown
         // on that company's card (e.g. "Family Documents", not "DIR"),
         // not just its short code.
-        const chartData = FOLDERIT_DISPLAY_COMPANIES.map((company) => {
+        const chartData = displayCompanies.map((company) => {
           const row = rows.find((r) => r.group_key === company.id);
           const days = row?.inbox_oldest_days ?? 0;
           const colour = COMPANY_BADGE_STYLES[company.shortCode]?.text ?? SLATE;
@@ -1899,11 +1901,28 @@ function FolderitDashboard() {
   const hasHrAccess = canViewFolderitHr(ctx);
   const hrInboxCount = summary?.hr_inbox_count ?? 0;
 
-  const TABS: { key: typeof pageTab; label: string }[] = [
-    { key: "overview", label: "Overview" },
-    { key: "browse",   label: "Browse Files" },
-    { key: "health",   label: "Filing Health" },
-  ];
+  // For non-admin users with explicit company grants — show a scoped
+  // inbox view (admin-like, but filtered to just their allowed companies).
+  const hasCompanyGrants = !isAdmin && hasAnyFolderitCompanyGrant(ctx);
+  const grantedCodes = hasCompanyGrants ? new Set(folderitGrantedShortCodes(ctx)) : new Set<string>();
+  const grantedDisplayCompanies = hasCompanyGrants
+    ? FOLDERIT_DISPLAY_COMPANIES.filter((c) => grantedCodes.has(c.shortCode))
+    : [];
+
+  // Admin sees health dashboard tabs (Overview / Browse / Filing Health).
+  // Non-admin PA users with company grants see an inbox summary instead of
+  // the health dashboard — the health RPC is admin-gated so it returns empty
+  // for them. Regular members see only their personal approvals + own inbox.
+  const TABS: { key: typeof pageTab; label: string }[] = isAdmin
+    ? [
+        { key: "overview", label: "Overview" },
+        { key: "browse",   label: "Browse Files" },
+        { key: "health",   label: "Filing Health" },
+      ]
+    : [
+        { key: "overview", label: "Inbox" },
+        { key: "browse",   label: "Browse Files" },
+      ];
 
   return (
     <PreviewContext.Provider value={setPreview}>
@@ -1919,7 +1938,7 @@ function FolderitDashboard() {
           {TABS.map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => setPageTab(key)}
+              onClick={() => setPageTab(key as typeof pageTab)}
               style={{
                 background: "none", border: "none", cursor: "pointer",
                 padding: "8px 18px", fontSize: "13px", fontWeight: 500,
@@ -1934,16 +1953,44 @@ function FolderitDashboard() {
         </div>
 
         {pageTab === "overview" && (
-          <OverviewTab
-            isAdmin={isAdmin}
-            onGoToHealth={(nav) => {
-              setHealthNav(nav ?? {});
-              setPageTab("health");
-            }}
-          />
+          <>
+            {isAdmin ? (
+              /* Admin: health dashboard */
+              <OverviewTab
+                isAdmin={isAdmin}
+                onGoToHealth={(nav) => {
+                  setHealthNav(nav ?? {});
+                  setPageTab("health");
+                }}
+              />
+            ) : hasCompanyGrants ? (
+              /* PA with company grants: scoped company inbox cards */
+              <AdminView
+                hrCategories={hrCategories}
+                hrInboxCount={hrInboxCount}
+                hasHrAccess={hasHrAccess}
+                approvalCount={summary?.pending_approval_count ?? 0}
+                approvalItems={approvalItems}
+                companyBreakdown={companyBreakdown}
+                displayCompanies={grantedDisplayCompanies}
+              />
+            ) : (
+              /* Regular member: personal approvals + own company inbox */
+              <MemberView
+                hrCategories={hrCategories}
+                hrInboxCount={hrInboxCount}
+                hasHrAccess={hasHrAccess}
+                companyName={ctx.company}
+                approvalCount={summary?.pending_approval_count ?? 0}
+                approvalItems={approvalItems}
+                inboxCount={summary?.company_inbox_count ?? 0}
+                inboxItems={memberInboxItems}
+              />
+            )}
+          </>
         )}
         {pageTab === "browse"   && <BrowseView />}
-        {pageTab === "health"   && (
+        {pageTab === "health"   && isAdmin && (
           <FilingHealthTab
             key={`${healthNav.company_uuid ?? ""}-${healthNav.issue_type ?? ""}`}
             initialCompany={healthNav.company_uuid}

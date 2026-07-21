@@ -466,6 +466,35 @@ export function canViewFolderitHr(u: UserCtx): boolean {
   return isAdminTier(u);
 }
 
+// Per-company Folderit cabinet access.
+// Each entry maps a permission key → display short code.
+// RST is a merged display of Baranh + Haute Dolci (two DB companies shown
+// as one card) — a single RST grant unlocks both underlying cabinets.
+const FOLDERIT_COMPANY_PERMS: [string, string][] = [
+  ["folderit_can_view_utpl", "UTPL"],
+  ["folderit_can_view_ifpl", "IFPL"],
+  ["folderit_can_view_rst",  "RST"],
+  ["folderit_can_view_smi",  "SMI"],
+  ["folderit_can_view_uzl",  "UZL"],
+  ["folderit_can_view_dir",  "DIR"],
+];
+
+// Returns the set of Folderit company short codes this user can access.
+// Admins always get everything; others only get what's explicitly ticked.
+export function folderitGrantedShortCodes(u: UserCtx): string[] {
+  if (isAdminTier(u)) return FOLDERIT_COMPANY_PERMS.map(([, sc]) => sc);
+  return FOLDERIT_COMPANY_PERMS
+    .filter(([key]) => ov(u, key) === true)
+    .map(([, sc]) => sc);
+}
+
+// True if the user has been explicitly granted at least one company cabinet.
+// Used by the Folderit page to decide whether to show the company-cards view.
+export function hasAnyFolderitCompanyGrant(u: UserCtx): boolean {
+  if (isAdminTier(u)) return true;
+  return FOLDERIT_COMPANY_PERMS.some(([key]) => ov(u, key) === true);
+}
+
 // ── Task ownership ──────────────────────────────────────────────
 // Kamran (CEO2_EMAIL) added 16 Jul 2026 — his tasks get the same
 // protection Khuram's and the PA's already did; a pre-existing gap since

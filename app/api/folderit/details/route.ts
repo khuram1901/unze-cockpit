@@ -1,8 +1,22 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
-import { canViewFolderitHr } from "../../../lib/permissions";
+import { canViewFolderitHr, isAdminTier, folderitGrantedShortCodes } from "../../../lib/permissions";
 import { loadFolderitUserCtx } from "../_shared";
+import {
+  UTPL_COMPANY_ID, IFPL_COMPANY_ID,
+  BRNH_COMPANY_ID, HD_COMPANY_ID,
+  SMI_COMPANY_ID, UZL_COMPANY_ID, DIR_COMPANY_ID,
+} from "../../../lib/constants";
+
+const SC_TO_UUIDS: Record<string, string[]> = {
+  UTPL: [UTPL_COMPANY_ID],
+  IFPL: [IFPL_COMPANY_ID],
+  RST:  [BRNH_COMPANY_ID, HD_COMPANY_ID],
+  SMI:  [SMI_COMPANY_ID],
+  UZL:  [UZL_COMPANY_ID],
+  DIR:  [DIR_COMPANY_ID],
+};
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -29,16 +43,33 @@ export async function GET(request: NextRequest) {
     .eq("email", email)
     .maybeSingle();
 
-  const isAdmin =
-    email === "khuram1901@gmail.com" ||
-    member?.role === "Admin" ||
-    member?.role === "CEO";
+  // Build user context for permission checks (already loaded above for HR).
+  // Re-use or build fresh if the HR branch didn't run.
+  const ctx = await loadFolderitUserCtx(db, email);
+  const admin = isAdminTier(ctx);
 
-  // Admins can drill into any one company via ?company=<uuid> (used by the
-  // CEO all-companies view when a row is expanded). Non-admins can never
-  // override their own scope, regardless of what's in the query string.
+  // Admins can drill into any company via ?company=<uuid>.
+  // Users with explicit Folderit company grants can also drill into their
+  // allowed companies (the client passes the company UUID in ?company=).
+  // Everyone else is scoped only to their own member company_id.
   const requestedCompany = request.nextUrl.searchParams.get("company");
-  const companyUuid = isAdmin ? (requestedCompany || null) : member?.company_id ?? null;
+
+  let companyUuid: string | null;
+  if (admin) {
+    companyUuid = requestedCompany || null;
+  } else if (requestedCompany) {
+    // Check the requester actually has a grant for this company.
+    const grantedCodes = folderitGrantedShortCodes(ctx);
+    const allowedUuids = new Set(grantedCodes.flatMap((sc) => SC_TO_UUIDS[sc] ?? []));
+    if (!allowedUuids.has(requestedCompany)) {
+      return Response.json({ error: "Forbidden" }, { status: 403 });
+    }
+    companyUuid = requestedCompany;
+  } else {
+    companyUuid = member?.company_id ?? null;
+  }
+
+  const isAdmin = admin; // keep existing variable name below
   // Approvals are always personal — pass the caller's own email
   // unconditionally, even for Admin/CEO, so nobody's "pending approval"
   // list ever includes someone else's outstanding approvals.

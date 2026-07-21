@@ -83,7 +83,13 @@ export const PERM_COLUMNS = [
   { key: "can_import_export", label: "I/O", group: "Admin", tip: "Import/export member data via CSV" },
 
   // ── Folderit ─────────────────────────────────────────────────
-  { key: "can_view_folderit_hr", label: "HR", group: "Folderit", tip: "View and open HR documents (Policies & SOPs, etc.) on the Folderit page — off by default for everyone except Admin/CEO" },
+  { key: "can_view_folderit_hr",   label: "HR",   group: "Folderit", tip: "View and open HR documents (Policies & SOPs, etc.) on the Folderit page — off by default for everyone except Admin/CEO" },
+  { key: "folderit_can_view_utpl", label: "UTPL", group: "Folderit", tip: "View Unze Trading's Folderit inbox and document cabinet" },
+  { key: "folderit_can_view_ifpl", label: "IFPL", group: "Folderit", tip: "View Imperial Footwear's Folderit inbox and document cabinet" },
+  { key: "folderit_can_view_rst",  label: "RST",  group: "Folderit", tip: "View Restaurant (Baranh + Haute Dolci) Folderit cabinet" },
+  { key: "folderit_can_view_smi",  label: "SMI",  group: "Folderit", tip: "View S&M Investments Folderit cabinet" },
+  { key: "folderit_can_view_uzl",  label: "UZL",  group: "Folderit", tip: "View Unze London Folderit cabinet" },
+  { key: "folderit_can_view_dir",  label: "DIR",  group: "Folderit", tip: "View Directors (Family Documents) Folderit cabinet" },
 ] as const;
 
 export type ColDef = (typeof PERM_COLUMNS)[number];
@@ -170,6 +176,12 @@ export function roleDefault(col: ColDef, m: MatrixMember): boolean | string | nu
     case "can_edit_investments": return admin;
     case "can_refresh_investment_prices": return admin;
     case "can_view_folderit_hr": return admin;
+    case "folderit_can_view_utpl": return admin;
+    case "folderit_can_view_ifpl": return admin;
+    case "folderit_can_view_rst":  return admin;
+    case "folderit_can_view_smi":  return admin;
+    case "folderit_can_view_uzl":  return admin;
+    case "folderit_can_view_dir":  return admin;
     default: return false;
   }
 }
