@@ -48,7 +48,7 @@ type WelcomeData = {
   machineIssueCount?:  number;
 };
 type Weather = { temp: number; apparent: number; humidity: number; code: number; city: string };
-type FxRates  = { USD: number; GBP: number; CNY: number };
+type FxRates  = { USD: number; GBP: number; CNY: number; AED?: number };
 type Holding  = { ticker: string; company_name: string; quantity: number; buy_price: number; current_price?: number };
 
 /* ─── WMO weather codes ──────────────────────────────────────── */
@@ -730,7 +730,7 @@ function Hero({ data, tick, weather, fx, email }: HeroProps) {
             fontWeight: 800, fontSize: "clamp(22px,4vw,32px)", color: "#fff",
             letterSpacing: "-0.025em", lineHeight: 1.1, margin: "0 0 10px",
           }}>
-            {data.firstName}
+            {data.name || data.firstName}
           </h1>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
             <span style={{
@@ -1001,6 +1001,223 @@ function KamranHero({ data, tick, weather, fx }: {
   );
 }
 
+/* ─── Khuram Hero — bespoke admin/founder header ────────────── */
+// Navy + nature photo, 4 timezone clocks, PKR FX for GBP/USD/CNY/AED
+const KHURAM_NATURE_URL =
+  "https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=1800&q=80";
+
+function KhuramHero({ data, tick, weather, fx }: {
+  data: WelcomeData; tick: number; weather: Weather | null; fx: FxRates | null;
+}) {
+  void tick;
+  const fullName = data.name || data.firstName;
+  const initials = fullName.slice(0, 2).toUpperCase();
+  return (
+    <div style={{ position: "relative", overflow: "hidden" }}>
+      {/* Nature photo layer */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={KHURAM_NATURE_URL}
+        alt=""
+        aria-hidden
+        style={{
+          position: "absolute", inset: 0, width: "100%", height: "100%",
+          objectFit: "cover", objectPosition: "center 40%",
+          opacity: 0.48,
+        }}
+      />
+      {/* Navy gradient overlay */}
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "linear-gradient(135deg, rgba(10,17,24,0.82) 0%, rgba(15,23,32,0.72) 50%, rgba(19,40,64,0.68) 100%)",
+      }} />
+      {/* Blue-green accent top bar */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0, height: 3, zIndex: 3,
+        background: "linear-gradient(90deg, #3B4CCA 0%, #7B8EF2 40%, #0F7B5F 100%)",
+      }} />
+
+      {/* Content */}
+      <div style={{ position: "relative", zIndex: 2, padding: "44px 44px 40px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 28 }}>
+          {/* Avatar */}
+          <AvatarRing photoUrl={data.photoUrl} initials={initials} role={data.role} size={108} />
+
+          {/* Name + badges */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", fontWeight: 500, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>
+              {greeting()}
+            </div>
+            <h1 style={{
+              fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
+              fontWeight: 800, fontSize: "clamp(26px,4vw,38px)", color: "#fff",
+              letterSpacing: "-0.03em", lineHeight: 1.05, margin: "0 0 12px",
+              textShadow: "0 2px 12px rgba(0,0,0,0.4)",
+            }}>
+              {fullName}
+            </h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+              <span style={{
+                display: "inline-flex", alignItems: "center",
+                padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                background: "rgba(59,76,202,0.28)", color: "#B4BFFF",
+                border: "1px solid rgba(59,76,202,0.4)",
+              }}>
+                CEO &amp; Founder
+              </span>
+              <span style={{
+                display: "inline-flex", alignItems: "center",
+                padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                background: "rgba(255,255,255,0.09)", color: "rgba(255,255,255,0.6)",
+                border: "1px solid rgba(255,255,255,0.12)",
+              }}>
+                Unze Group
+              </span>
+            </div>
+            <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.4)", fontStyle: "italic", lineHeight: 1.5, margin: 0, maxWidth: 480 }}>
+              <strong style={{ color: "rgba(255,255,255,0.65)", fontStyle: "normal", fontWeight: 500 }}>Our purpose</strong>
+              {" "}— Service, growth, and opportunity for all.
+            </p>
+          </div>
+
+          {/* Right column: Clocks + weather + FX */}
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-end" }}>
+            {/* 4-city clocks: Pacific / Eastern / GMT / Shanghai */}
+            <div style={{
+              display: "flex", gap: 0, alignItems: "stretch",
+              background: "rgba(0,0,0,0.35)", border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 12, overflow: "hidden", backdropFilter: "blur(8px)",
+            }}>
+              {[
+                { city: "Pacific",  zone: "America/Los_Angeles", flag: "🌊" },
+                { city: "Eastern",  zone: "America/New_York",    flag: "🗽" },
+                { city: "GMT",      zone: "Europe/London",       flag: "🇬🇧" },
+                { city: "Shanghai", zone: "Asia/Shanghai",       flag: "🇨🇳" },
+              ].map((c, i) => (
+                <div key={c.city} style={{
+                  padding: "13px 16px", textAlign: "center",
+                  borderRight: i < 3 ? "1px solid rgba(255,255,255,0.08)" : undefined,
+                  minWidth: 80,
+                }}>
+                  <div style={{ fontSize: 13, marginBottom: 2 }}>{c.flag}</div>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255,255,255,0.38)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>{c.city}</div>
+                  <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 18, color: "#fff", letterSpacing: "-0.02em" }}>{tz(c.zone)}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Weather chip */}
+            {weather && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 10, padding: "9px 16px", alignSelf: "stretch",
+                justifyContent: "center", backdropFilter: "blur(8px)",
+              }}>
+                <span style={{ fontSize: 22 }}>{wmo(weather.code)[1]}</span>
+                <div>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: "#fff", fontFamily: "var(--font-display,'Inter Tight',sans-serif)", letterSpacing: "-0.02em" }}>{weather.temp}°C</div>
+                  <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.42)" }}>{wmo(weather.code)[0]} · Lahore</div>
+                </div>
+                <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>Feels {weather.apparent}°C</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.28)" }}>{weather.humidity}% humid</div>
+                </div>
+              </div>
+            )}
+
+            {/* PKR FX strip — GBP, USD, CNY, AED */}
+            {fx && (
+              <div style={{
+                display: "flex", gap: 0,
+                background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 10, overflow: "hidden", alignSelf: "stretch",
+                backdropFilter: "blur(8px)",
+              }}>
+                {([
+                  { key: "GBP", symbol: "£" },
+                  { key: "USD", symbol: "$" },
+                  { key: "CNY", symbol: "¥" },
+                  { key: "AED", symbol: "د.إ" },
+                ] as { key: keyof FxRates; symbol: string }[]).map(({ key, symbol }, i) => {
+                  const val = fx[key];
+                  return (
+                    <div key={key} style={{
+                      flex: 1, padding: "9px 10px", textAlign: "center",
+                      borderRight: i < 3 ? "1px solid rgba(255,255,255,0.08)" : undefined,
+                    }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>{key}/PKR</div>
+                      <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 14, color: "#fff" }}>
+                        <span style={{ fontSize: 9, opacity: 0.5 }}>{symbol}</span>{val !== undefined ? Number(val).toFixed(0) : "—"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Layout: Khuram ─────────────────────────────────────────── */
+function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal }: {
+  data: WelcomeData; tick: number; weather: Weather | null;
+  fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null;
+}) {
+  const showPortfolio = holdings.length > 0 || portfolioTotal !== null;
+  const cols = showPortfolio ? "1fr 1fr 1fr 300px" : "1fr 1fr 300px";
+  return (
+    <>
+      <KhuramHero data={data} tick={tick} weather={weather} fx={fx} />
+      <CeoStatStrip data={data} />
+      <PurposeBanner />
+      <TaskBanner myOverdue={data.myOverdueCount} myToday={data.myTodayCount} myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount} />
+      <div style={{ display: "grid", gridTemplateColumns: cols, gap: 20, padding: "24px 40px 40px" }}>
+        <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal CEO assignments" />
+        <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
+          <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}` }}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, margin: 0 }}>Group Task Health</h3>
+            <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>All teams · live snapshot</p>
+          </div>
+          <div style={{ padding: "12px 20px" }}>
+            {[
+              { label: "Group overdue tasks", value: data.groupOverdueCount ?? 0, color: RED,  soft: DANGER_SOFT  },
+              { label: "Machine issues open", value: data.machineIssueCount ?? 0, color: AMBER, soft: WARNING_SOFT },
+              { label: "My tasks overdue",    value: data.myOverdueCount, color: data.myOverdueCount > 0 ? RED : GREEN, soft: data.myOverdueCount > 0 ? DANGER_SOFT : SUCCESS_SOFT },
+              { label: "My tasks due today",  value: data.myTodayCount,  color: AMBER, soft: WARNING_SOFT },
+            ].map(row => (
+              <div key={row.label} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "12px 0", borderBottom: `1px solid ${HAIRLINE}`,
+              }}>
+                <span style={{ fontSize: 13, color: INK_700 }}>{row.label}</span>
+                <span style={{
+                  fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
+                  fontWeight: 800, fontSize: 18, color: row.color,
+                  background: row.soft, padding: "2px 12px", borderRadius: 8,
+                }}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+            <div style={{ paddingTop: 14, textAlign: "center" }}>
+              <Link href="/tasks" style={{ fontSize: 12, color: BLUE, fontWeight: 600, textDecoration: "none" }}>View all group tasks →</Link>
+            </div>
+          </div>
+        </div>
+        {showPortfolio && <PortfolioCard holdings={holdings} portfolioTotal={portfolioTotal} />}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <QuoteCard />
+          <QuickLinksCard links={data.quickLinks} />
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ─── Layout: CEO / Admin / Executive ───────────────────────── */
 /* ─── Kamran layout — CEO with own /home exec dashboard ─────── */
 function KamranLayout({ data, tick, weather, fx }: {
@@ -1190,13 +1407,16 @@ function WelcomePageInner() {
   }
 
   const isKamran  = email === "kamran@unze.co.uk";
+  const isKhuram  = email === "khuram1901@gmail.com";
   const isPriv    = data.role === "CEO" || data.role === "Admin" || data.role === "Executive";
   const isManager = data.role === "Manager";
   const hasTeamOverdue = isManager && (data.teamOverdueTasks ?? []).length > 0;
 
   return (
     <div style={{ background: CANVAS, minHeight: "100vh" }}>
-      {isKamran
+      {isKhuram
+        ? <KhuramLayout  data={data} tick={tick} weather={weather} fx={fx} holdings={holdings} portfolioTotal={portfolioTotal} />
+        : isKamran
         ? <KamranLayout  data={data} tick={tick} weather={weather} fx={fx} />
         : isPriv
         ? <CeoLayout     data={data} tick={tick} weather={weather} fx={fx} holdings={holdings} portfolioTotal={portfolioTotal} email={email} />
