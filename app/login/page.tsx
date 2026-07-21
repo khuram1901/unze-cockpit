@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, Suspense } from "react";
 import { supabase, loadMyPermissions } from "../lib/supabase";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { COLOURS, RADII } from "../lib/SharedUI";
