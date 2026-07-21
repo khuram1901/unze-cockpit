@@ -104,6 +104,18 @@ function LoginPageInner() {
       return;
     }
 
+    // "Keep me signed in" — Supabase always writes the session to localStorage
+    // after a successful sign-in. If the user did NOT tick the checkbox, we
+    // remove it from localStorage immediately so the session only lives in
+    // memory for this browser session (clears when all tabs are closed).
+    if (!keepSignedIn) {
+      try {
+        const projectRef = supabaseUrl.split("//")[1]?.split(".")[0] ?? "";
+        const lsKey = `sb-${projectRef}-auth-token`;
+        localStorage.removeItem(lsKey);
+      } catch { /* non-critical — some browsers block localStorage access */ }
+    }
+
     const { data: member } = await supabase
       .from("members")
       .select("role, department")
