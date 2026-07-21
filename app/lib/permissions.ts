@@ -241,9 +241,13 @@ export function canSeeAllTasks(u: UserCtx) {
 }
 
 export function canCreateAssignments(u: UserCtx) {
+  // Access Matrix is the single source of truth for task creation.
+  // If the member has an explicit override (true or false), honour it.
+  // Otherwise default to true — every authenticated user can create tasks
+  // unless Khuram has explicitly revoked it via the Access Matrix.
   const o = ov(u, "can_create_tasks");
   if (o !== null) return o;
-  return isPrivileged(u) || (u.role === "Manager" && u.department === "Unze Trading Ops");
+  return true;
 }
 
 export function canReviewTasks(u: UserCtx) {

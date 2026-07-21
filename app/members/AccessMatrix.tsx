@@ -145,7 +145,7 @@ export function roleDefault(col: ColDef, m: MatrixMember): boolean | string | nu
     case "can_view_receivables": return admin || (manager && (dept === "Finance" || dept === "Unze Trading Ops"));
     case "can_edit_receivables": return admin || dept === "Unze Trading Ops";
     case "can_see_all_tasks": return admin || exec;
-    case "can_create_tasks": return admin || exec || manager;
+    case "can_create_tasks": return true; // default ON for all roles — revoke via matrix
     case "can_review_tasks": return admin || exec;
     case "can_manage_recurring_tasks": return admin || exec;
     case "can_manage_calendar": return admin || exec;

@@ -514,7 +514,8 @@ export default function MembersManager() {
         can_view_receivables: false,
         can_edit_receivables: false,
         can_see_all_tasks: false,
-        can_create_tasks: false,
+        // can_create_tasks intentionally omitted — defaults to NULL → true
+        // (matrix is the single source of truth; revoke explicitly if needed)
         can_review_tasks: false,
         can_manage_recurring_tasks: false,
         can_manage_calendar: false,
@@ -957,7 +958,8 @@ export default function MembersManager() {
                           can_view_executive_dashboard: false, can_view_operations_dashboard: false,
                           can_view_pa_dashboard: false, can_view_finance: false, can_edit_finance: false,
                           can_view_receivables: false, can_edit_receivables: false,
-                          can_see_all_tasks: false, can_create_tasks: false, can_review_tasks: false,
+                          can_see_all_tasks: false, can_review_tasks: false,
+                          // can_create_tasks omitted — defaults to NULL → true
                           can_manage_recurring_tasks: false, can_manage_calendar: false,
                           can_see_all_minutes: false, can_view_dept_hr: false, can_view_dept_tax: false,
                           can_view_dept_audit: false, can_view_dept_admin: false, can_view_dept_ops: false,
