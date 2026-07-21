@@ -49,7 +49,10 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
       );
       // Start at ZOOM_PADDING × the minimum so there is room to drag
       const initialZoom = mz * ZOOM_PADDING;
-      setMinZoom(initialZoom);
+      // FIX: minZoom = mz (bare minimum to cover the circle), NOT initialZoom.
+      // Previously minZoom was set to initialZoom, meaning the slider minimum
+      // equalled the starting value and users could only zoom IN, never out.
+      setMinZoom(mz);
       setZoom(initialZoom);
       zoomRef.current = initialZoom;
 

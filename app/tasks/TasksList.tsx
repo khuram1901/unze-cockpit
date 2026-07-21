@@ -342,6 +342,18 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   if (loading) return <SkeletonRows count={5} height="48px" />;
   if (errorMsg) return <ErrorBanner message={errorMsg} onRetry={loadTasks} />;
 
+  // Audit members with no general tasks assigned: suppress the full KPI +
+  // filter UI (which would be empty and confusing) and show a quiet note.
+  // Privileged users (canSeeAll = true, e.g. Audit Manager Shahid) still
+  // see the full list since they review tasks across the whole team.
+  if (department === "Audit" && !isPrivileged && tasks.length === 0) {
+    return (
+      <p style={{ color: COLOURS.SLATE, fontSize: "14px", margin: "4px 0 0 0" }}>
+        No general tasks assigned to you right now.
+      </p>
+    );
+  }
+
   // All the dropdown filters below are simple property filters over the
   // already-fetched rows — not aggregation, so this stays plain JS per
   // house rule 0 (that rule is about sums/counts, not filtering a list).
