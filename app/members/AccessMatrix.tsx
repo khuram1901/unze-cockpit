@@ -236,6 +236,7 @@ export default function AccessMatrix({ members, isMobile }: { members: MatrixMem
 
   useEffect(() => {
     if (open && !loaded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadPerms();
       supabase.auth.getUser().then(({ data }) => setMyEmail(data.user?.email || ""));
     }

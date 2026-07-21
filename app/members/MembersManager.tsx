@@ -494,6 +494,61 @@ export default function MembersManager() {
     }).select("id").single();
     setSaving(false);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
+
+    // ── Zero-access default ──────────────────────────────────────────
+    // Every new member gets a member_permissions row with ALL toggles set
+    // to false. Without this, the permission functions fall through to
+    // role-based defaults (e.g. department === "Finance" → can_view_finance)
+    // which grants unintended access. Khuram or Sundas must explicitly
+    // grant each permission via the Access Matrix after creation.
+    // Admin and CEO roles are excluded — they rely on role-based defaults
+    // that cannot safely be overridden to false here.
+    if (role !== "Admin" && role !== "CEO" && inserted?.id) {
+      await supabase.from("member_permissions").insert({
+        member_id: inserted.id,
+        can_view_executive_dashboard: false,
+        can_view_operations_dashboard: false,
+        can_view_pa_dashboard: false,
+        can_view_finance: false,
+        can_edit_finance: false,
+        can_view_receivables: false,
+        can_edit_receivables: false,
+        can_see_all_tasks: false,
+        can_create_tasks: false,
+        can_review_tasks: false,
+        can_manage_recurring_tasks: false,
+        can_manage_calendar: false,
+        can_see_all_minutes: false,
+        can_view_dept_hr: false,
+        can_view_dept_tax: false,
+        can_view_dept_audit: false,
+        can_view_dept_admin: false,
+        can_view_dept_ops: false,
+        can_view_dept_it: false,
+        can_view_members: false,
+        can_add_members: false,
+        can_view_audit_log: false,
+        can_import_export: false,
+        can_access_daily_entry: false,
+        can_view_investments: false,
+        can_view_stock: false,
+        can_manage_stock: false,
+        can_view_guarantees: false,
+        can_view_ifpl_pnl: false,
+        can_access_admin_ops: false,
+        can_access_admin_entry: false,
+        can_manage_meetings: false,
+        can_edit_operations_targets: false,
+        can_manage_locations: false,
+        folderit_can_view_utpl: false,
+        folderit_can_view_ifpl: false,
+        folderit_can_view_rst: false,
+        folderit_can_view_smi: false,
+        folderit_can_view_uzl: false,
+        folderit_can_view_dir: false,
+      });
+    }
+
     logAction("Created", "members", `Added ${firstName} ${lastName} (${email}) as ${role}`);
     // Point any existing members Khuram ticked at this new person's id,
     // now that we actually have it — the same reports-to relationship as
@@ -885,7 +940,7 @@ export default function MembersManager() {
                     }
                     let count = 0;
                     for (const row of validRows) {
-                      await supabase.from("members").insert({
+                      const { data: csvInserted } = await supabase.from("members").insert({
                         first_name: row["First Name"].trim(),
                         last_name: row["Last Name"].trim(),
                         name: `${row["First Name"].trim()} ${row["Last Name"].trim()}`,
@@ -894,7 +949,30 @@ export default function MembersManager() {
                         department: row["Department"]?.trim() || null,
                         business_unit: row["Business Unit"]?.trim() || null,
                         company: row["Company"]?.trim() || null,
-                      });
+                      }).select("id, role").single();
+                      // Zero-access default — same rule as manual addMember
+                      if (csvInserted?.id && csvInserted.role !== "Admin" && csvInserted.role !== "CEO") {
+                        await supabase.from("member_permissions").insert({
+                          member_id: csvInserted.id,
+                          can_view_executive_dashboard: false, can_view_operations_dashboard: false,
+                          can_view_pa_dashboard: false, can_view_finance: false, can_edit_finance: false,
+                          can_view_receivables: false, can_edit_receivables: false,
+                          can_see_all_tasks: false, can_create_tasks: false, can_review_tasks: false,
+                          can_manage_recurring_tasks: false, can_manage_calendar: false,
+                          can_see_all_minutes: false, can_view_dept_hr: false, can_view_dept_tax: false,
+                          can_view_dept_audit: false, can_view_dept_admin: false, can_view_dept_ops: false,
+                          can_view_dept_it: false, can_view_members: false, can_add_members: false,
+                          can_view_audit_log: false, can_import_export: false, can_access_daily_entry: false,
+                          can_view_investments: false, can_view_stock: false, can_manage_stock: false,
+                          can_view_guarantees: false, can_view_ifpl_pnl: false,
+                          can_access_admin_ops: false, can_access_admin_entry: false,
+                          can_manage_meetings: false, can_edit_operations_targets: false,
+                          can_manage_locations: false,
+                          folderit_can_view_utpl: false, folderit_can_view_ifpl: false,
+                          folderit_can_view_rst: false, folderit_can_view_smi: false,
+                          folderit_can_view_uzl: false, folderit_can_view_dir: false,
+                        });
+                      }
                       count++;
                     }
                     toast.show(`Successfully imported ${count} member${count !== 1 ? "s" : ""}.`, "success");

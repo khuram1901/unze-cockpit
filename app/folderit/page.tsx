@@ -1079,7 +1079,7 @@ function GlobalSearchBox() {
           borderRadius: RADII.CARD, boxShadow: SHADOWS.DROPDOWN ?? "0 4px 16px rgba(0,0,0,0.12)",
           padding: "16px 12px", fontSize: "13px", color: COLOURS.SLATE, textAlign: "center",
         }}>
-          No documents found for "{query}"
+          No documents found for &ldquo;{query}&rdquo;
         </div>
       )}
     </div>
@@ -1678,6 +1678,7 @@ function FilingHealthTab({ initialCompany, initialType }: { initialCompany?: str
       .finally(() => setLoading(false));
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
   useEffect(() => { fetchIssues(initialType ?? "", initialCompany ?? ""); }, []);
 
   function handleFilter(type: string) {
