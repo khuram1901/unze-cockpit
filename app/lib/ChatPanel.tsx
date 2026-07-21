@@ -830,7 +830,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                     <div style={{ padding: 40, textAlign: "center" }}>
                       <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
                       <div style={{ fontSize: 13, color: SLATE }}>
-                        {q ? "No results for "" + q + """ : "No conversations yet"}
+                        {q ? `No results for “${q}”` : "No conversations yet"}
                       </div>
                       <div style={{ fontSize: 12, color: INK_400, marginTop: 6 }}>
                         {q ? "Try a different name" : "Tap ✏️ above or search for someone to start chatting"}
