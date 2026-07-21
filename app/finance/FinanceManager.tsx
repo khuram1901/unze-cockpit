@@ -781,7 +781,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
           {dailyEntryTab === "manual" && (
             <>
-              <p style={{ fontSize: "13px", color: SLATE, marginBottom: "12px" }}>Enter today's figures from the accountant's statement.</p>
+              <p style={{ fontSize: "13px", color: SLATE, marginBottom: "12px" }}>Enter today&apos;s figures from the accountant&apos;s statement.</p>
               <form onSubmit={saveDailyPosition}>
                 <label style={labelStyle}>Date
                   <DateInputWithCalendar value={dpDate} onChange={(e) => setDpDate(e.target.value)} style={inputStyle} required />

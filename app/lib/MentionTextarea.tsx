@@ -313,7 +313,7 @@ export default function MentionTextarea({
 
           {filteredMembers.length === 0 && mentionQuery && (
             <div style={{ padding: "10px 12px", fontSize: "13px", color: COLOURS.SLATE, fontStyle: "italic" }}>
-              No members found for "{mentionQuery}"
+              No members found for &ldquo;{mentionQuery}&rdquo;
             </div>
           )}
         </div>
