@@ -127,6 +127,12 @@ export async function POST(req: Request) {
       p_member_id_2: other.id,
     });
     if (existingId) {
+      // Restore the creator's participant row if they previously deleted it
+      await db
+        .from("chat_participants")
+        .update({ is_deleted: false, is_archived: false })
+        .eq("conversation_id", existingId)
+        .eq("member_id", creatorRow.id);
       return Response.json({ conversation_id: existingId, existing: true });
     }
   }
