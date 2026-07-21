@@ -12,6 +12,7 @@ import Modal from "../lib/Modal";
 import NewTaskForm from "./NewTaskForm";
 import QuickAddTask from "./QuickAddTask";
 import TasksList from "./TasksList";
+import AuditTasksPanel from "./AuditTasksPanel";
 
 export default function TasksPageClient() {
   const { ctx, loading } = useUserCtx();
@@ -88,6 +89,9 @@ export default function TasksPageClient() {
           <NewTaskForm onCreated={() => setShowFull(false)} />
         </Modal>
       )}
+
+      {/* Audit dept members: show their project stage tasks above the task list */}
+      {ctx?.department === "Audit" && <AuditTasksPanel />}
 
       <TasksList
         currentRole={role} canSeeAll={seeAll} canReview={review}
