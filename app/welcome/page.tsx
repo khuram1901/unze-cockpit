@@ -165,26 +165,29 @@ function AvatarRing({ photoUrl, initials, role, size = 88 }: { photoUrl: string 
       }} />
       {/* Mask */}
       <div style={{ position: "absolute", inset: 3, borderRadius: "50%", background: "#162232" }} />
-      {/* Photo or initials */}
-      {photoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={photoUrl} alt={initials} style={{
-          position: "absolute", inset: gap, borderRadius: "50%",
-          width: size, height: size, objectFit: "cover",
-          border: "2px solid rgba(255,255,255,0.15)", zIndex: 1,
-        }} />
-      ) : (
-        <div style={{
-          position: "absolute", inset: gap, borderRadius: "50%", zIndex: 1,
-          background: avatarGrad(role),
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
-          fontWeight: 800, fontSize: size * 0.31, color: "#fff",
-          border: "2px solid rgba(255,255,255,0.15)",
-        }}>
-          {initials}
-        </div>
-      )}
+      {/* Photo or initials — clip to circle via overflow:hidden on a positioned wrapper */}
+      <div style={{
+        position: "absolute", inset: gap, borderRadius: "50%",
+        overflow: "hidden", zIndex: 1,
+        border: "2px solid rgba(255,255,255,0.15)",
+      }}>
+        {photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photoUrl} alt={initials} style={{
+            width: "100%", height: "100%", objectFit: "cover", display: "block",
+          }} />
+        ) : (
+          <div style={{
+            width: "100%", height: "100%",
+            background: avatarGrad(role),
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
+            fontWeight: 800, fontSize: size * 0.31, color: "#fff",
+          }}>
+            {initials}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1407,7 +1410,7 @@ function WelcomePageInner() {
   }
 
   const isKamran  = email === "kamran@unze.co.uk";
-  const isKhuram  = email === "khuram1901@gmail.com";
+  const isKhuram  = email === "khuram1901@gmail.com" || email === "k.saleem@unzegroup.com";
   const isPriv    = data.role === "CEO" || data.role === "Admin" || data.role === "Executive";
   const isManager = data.role === "Manager";
   const hasTeamOverdue = isManager && (data.teamOverdueTasks ?? []).length > 0;
