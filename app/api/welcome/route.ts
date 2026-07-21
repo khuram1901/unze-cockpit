@@ -39,6 +39,23 @@ const DEPT_PAGES: Record<string, { href: string; icon: string }> = {
 };
 
 function computeQuickLinks(ctx: UserCtx): QuickLink[] {
+  // ── Kamran-specific quick links ───────────────────────────────
+  // Customised set: no PA Dashboard, no Investments.
+  // Imperial P&L + Imperial Footwear + HR instead.
+  if (ctx.email?.toLowerCase() === "kamran@unze.co.uk") {
+    return [
+      { href: "/home",                 title: "Dashboard",          icon: "📊", color: "navy"   },
+      { href: "/tasks",                title: "Tasks",              icon: "🎯", color: "blue"   },
+      { href: "/finance/imperial-pnl", title: "Imperial P&L",       icon: "👟", color: "green"  },
+      { href: "/finance/imperial",     title: "Imperial Footwear",  icon: "👞", color: "amber"  },
+      { href: "/department/hr",        title: "HR",                 icon: "🧑‍💼", color: "purple" },
+      { href: "/meetings",             title: "Meetings",           icon: "💬", color: "purple" },
+      { href: "/my-minutes",           title: "My Minutes",         icon: "🗒️", color: "green"  },
+      { href: "/folderit",             title: "Folder-it",          icon: "📁", color: "amber"  },
+      { href: "/profile",              title: "Profile",            icon: "👤", color: "slate"  },
+    ];
+  }
+
   const links: QuickLink[] = [];
 
   // Executive dashboard shortcut (CEO/Admin)
@@ -167,6 +184,7 @@ export async function GET(request: NextRequest) {
 
   const base = {
     firstName,
+    name:             member?.name ?? firstName,
     role,
     department,
     photoUrl,

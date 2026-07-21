@@ -26,6 +26,7 @@ type TaskItem    = { id: string; description: string; due_date: string; priority
 type TeamMember  = { name: string; email: string; overdueCount: number; todayCount: number };
 type WelcomeData = {
   firstName:          string;
+  name?:              string;
   role:               string | null;
   department:         string | null;
   photoUrl:           string | null;
@@ -134,6 +135,7 @@ function roleBadgeStyle(role: string | null): CSSProperties {
 }
 function roleLabel(role: string | null, email?: string) {
   if (email === "khuram1901@gmail.com" || email === "k.saleem@unzegroup.com") return "CEO & Founder";
+  if (email === "kamran@unze.co.uk") return "Group CEO · IFPL";
   if (role === "CEO")       return "CEO";
   if (role === "Admin")     return "Admin";
   if (role === "Executive") return "Executive";
@@ -859,60 +861,186 @@ function HodLayout({ data, tick, weather, email }: { data: WelcomeData; tick: nu
   );
 }
 
+/* ─── Kamran Hero — bespoke executive header ─────────────────── */
+// Full name, large avatar, Lahore / London / Guangzhou clocks,
+// weather chip, PKR FX strip. No shared Hero component is used here.
+function KamranHero({ data, tick, weather, fx }: {
+  data: WelcomeData; tick: number; weather: Weather | null; fx: FxRates | null;
+}) {
+  void tick;
+  const fullName = data.name || data.firstName;
+  const initials = (fullName || "KS").slice(0, 2).toUpperCase();
+  return (
+    <div style={{
+      background: "linear-gradient(135deg, #0a1118 0%, #0f1f30 50%, #132840 100%)",
+      position: "relative", overflow: "hidden", padding: "44px 44px 40px",
+    }}>
+      {/* Decorative glows */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        background: `
+          radial-gradient(ellipse 700px 350px at 90% -30%, rgba(59,76,202,0.16) 0%, transparent 65%),
+          radial-gradient(ellipse 500px 400px at -5% 130%, rgba(15,123,95,0.10) 0%, transparent 55%),
+          radial-gradient(ellipse 300px 300px at 50% 110%, rgba(180,121,31,0.07) 0%, transparent 60%)
+        `,
+      }} />
+      {/* Gold accent top bar */}
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0, height: 3,
+        background: "linear-gradient(90deg, #B4791F 0%, #e8a83c 40%, #0F7B5F 100%)",
+      }} />
+
+      <div style={{ position: "relative", zIndex: 1 }}>
+        {/* Top row: Avatar + Name + Clocks */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 28 }}>
+          {/* Large Avatar */}
+          <AvatarRing photoUrl={data.photoUrl} initials={initials} role={data.role} size={108} />
+
+          {/* Name + badges */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontWeight: 500, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 6 }}>
+              {greeting()}
+            </div>
+            <h1 style={{
+              fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
+              fontWeight: 800, fontSize: "clamp(26px,4vw,38px)", color: "#fff",
+              letterSpacing: "-0.03em", lineHeight: 1.05, margin: "0 0 12px",
+            }}>
+              {fullName}
+            </h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+              <span style={{
+                display: "inline-flex", alignItems: "center",
+                padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                background: "rgba(180,121,31,0.22)", color: "#e8c47a",
+                border: "1px solid rgba(180,121,31,0.35)",
+              }}>
+                Group CEO · IFPL
+              </span>
+              <span style={{
+                display: "inline-flex", alignItems: "center",
+                padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+                background: "rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.55)",
+                border: "1px solid rgba(255,255,255,0.10)",
+              }}>
+                Imperial Footwear Pakistan
+              </span>
+            </div>
+            <p style={{ fontSize: 12.5, color: "rgba(255,255,255,0.38)", fontStyle: "italic", lineHeight: 1.5, margin: 0, maxWidth: 480 }}>
+              <strong style={{ color: "rgba(255,255,255,0.6)", fontStyle: "normal", fontWeight: 500 }}>Unze Group</strong>
+              {" "}— Service, growth, and opportunity for all.
+            </p>
+          </div>
+
+          {/* Right column: Clocks + weather + FX */}
+          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-end" }}>
+            {/* 3-city clocks */}
+            <div style={{
+              display: "flex", gap: 0, alignItems: "stretch",
+              background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)",
+              borderRadius: 12, overflow: "hidden",
+            }}>
+              {[
+                { city: "Lahore",    zone: "Asia/Karachi",  flag: "🇵🇰" },
+                { city: "London",    zone: "Europe/London", flag: "🇬🇧" },
+                { city: "Guangzhou", zone: "Asia/Shanghai", flag: "🇨🇳" },
+              ].map((c, i) => (
+                <div key={c.city} style={{
+                  padding: "14px 18px", textAlign: "center",
+                  borderRight: i < 2 ? "1px solid rgba(255,255,255,0.08)" : undefined,
+                  minWidth: 90,
+                }}>
+                  <div style={{ fontSize: 14, marginBottom: 3 }}>{c.flag}</div>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255,255,255,0.32)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>{c.city}</div>
+                  <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 20, color: "#fff", letterSpacing: "-0.02em" }}>{tz(c.zone)}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Weather chip */}
+            {weather && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)",
+                borderRadius: 10, padding: "10px 16px", alignSelf: "stretch", justifyContent: "center",
+              }}>
+                <span style={{ fontSize: 22 }}>{wmo(weather.code)[1]}</span>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", fontFamily: "var(--font-display,'Inter Tight',sans-serif)", letterSpacing: "-0.02em" }}>{weather.temp}°C</div>
+                  <div style={{ fontSize: 10.5, color: "rgba(255,255,255,0.38)" }}>{wmo(weather.code)[0]} · Lahore</div>
+                </div>
+                <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>Feels {weather.apparent}°C</div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.28)" }}>{weather.humidity}% humid</div>
+                </div>
+              </div>
+            )}
+
+            {/* PKR FX strip */}
+            {fx && (
+              <div style={{
+                display: "flex", gap: 0,
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 10, overflow: "hidden", alignSelf: "stretch",
+              }}>
+                {(["USD","GBP","CNY"] as const).map((k, i) => (
+                  <div key={k} style={{
+                    flex: 1, padding: "10px 12px", textAlign: "center",
+                    borderRight: i < 2 ? "1px solid rgba(255,255,255,0.08)" : undefined,
+                  }}>
+                    <div style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255,255,255,0.32)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{k}/PKR</div>
+                    <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 15, color: "#fff" }}>&#x20a8;{fx[k].toFixed(0)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Layout: CEO / Admin / Executive ───────────────────────── */
 /* ─── Kamran layout — CEO with own /home exec dashboard ─────── */
-// Kamran (kamran@unze.co.uk) already has a dedicated executive operations
-// dashboard at /home. His welcome page must NOT duplicate that content
-// (Group Task Health, Portfolio, machine issues etc.) — those live there.
-// Instead: personal tasks + FX + clocks/weather + quote + exec dashboard link.
 function KamranLayout({ data, tick, weather, fx }: {
   data: WelcomeData; tick: number; weather: Weather | null; fx: FxRates | null;
 }) {
   return (
     <>
-      <Hero data={data} tick={tick} weather={weather} fx={fx} email="kamran@unze.co.uk" />
+      <KamranHero data={data} tick={tick} weather={weather} fx={fx} />
       <PurposeBanner />
       <TaskBanner
         myOverdue={data.myOverdueCount} myToday={data.myTodayCount}
         myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
       />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, padding: "24px 40px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 356px", gap: 20, padding: "24px 44px 44px" }}>
         <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal assignments" />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <QuoteCard />
+          <QuickLinksCard links={data.quickLinks} />
           {/* Executive Dashboard shortcut */}
           <div style={{
-            background: NAVY, borderRadius: RADII.CARD, padding: "20px 24px",
-            display: "flex", flexDirection: "column", gap: 10,
+            background: `linear-gradient(135deg, ${NAVY} 0%, #162232 100%)`,
+            borderRadius: RADII.CARD, padding: "20px 22px",
+            display: "flex", flexDirection: "column", gap: 8,
+            border: "1px solid rgba(255,255,255,0.06)",
           }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.5)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Executive</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "white" }}>Your Operations Dashboard</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.5 }}>
-              Production, dispatch, cash, receivables and team KPIs — all in one view.
+            <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.38)", letterSpacing: "0.12em", textTransform: "uppercase" }}>Imperial Footwear</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "white", lineHeight: 1.25 }}>Executive Operations Dashboard</div>
+            <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.4)", lineHeight: 1.55 }}>
+              Production, dispatch, cash flow, receivables and team KPIs.
             </div>
             <Link href="/home" style={{
-              display: "inline-block", marginTop: 4,
-              padding: "8px 18px", background: "rgba(255,255,255,0.12)",
-              border: "1px solid rgba(255,255,255,0.2)", borderRadius: RADII.PILL,
-              color: "white", fontSize: 13, fontWeight: 600, textDecoration: "none", textAlign: "center",
+              display: "block", marginTop: 6,
+              padding: "9px 0", textAlign: "center",
+              background: "rgba(180,121,31,0.25)",
+              border: "1px solid rgba(180,121,31,0.4)", borderRadius: RADII.PILL,
+              color: "#e8c47a", fontSize: 13, fontWeight: 700, textDecoration: "none",
             }}>
-              Open Dashboard →
+              Open Dashboard &#8594;
             </Link>
           </div>
-          {/* FX if available */}
-          {fx && (
-            <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, padding: "14px 18px" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: SLATE, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>PKR Rates</div>
-              {(["USD","GBP","CNY"] as const).map(k => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${HAIRLINE}` }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: INK_700 }}>{k}</span>
-                  <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "monospace", color: NAVY }}>₨ {fx[k].toFixed(0)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <QuoteCard />
-          <ClockWeatherCard tick={tick} weather={weather} />
-          <QuickLinksCard links={data.quickLinks} />
         </div>
       </div>
     </>
