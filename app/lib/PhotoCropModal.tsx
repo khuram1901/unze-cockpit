@@ -2,13 +2,15 @@
 import { useState, useRef, useEffect } from "react";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const CONTAINER = 280;          // outer drag area (px)
-const CROP_OFF  = 10;           // padding from container edge to crop circle
-const CROP_DISP = 260;          // crop circle display diameter
+const CONTAINER = 280;           // outer drag area (px)
+const CROP_OFF  = 10;            // gap between container edge and crop circle
+const CROP_DISP = 260;           // crop circle display diameter
 const CROP_R    = CROP_DISP / 2; // 130px
-const OUT_PX    = 300;          // output canvas size
+const OUT_PX    = 300;           // output canvas size
+// Start 30 % larger than the min-cover zoom so the user always has room to
+// drag in both directions on the first open.
+const ZOOM_PADDING = 1.3;
 
-// ── Types ────────────────────────────────────────────────────────────────────
 interface Props {
   file:     File;
   maxKb:    number;
@@ -16,107 +18,128 @@ interface Props {
   onCancel: () => void;
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
 export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props) {
   const [imgEl,   setImgEl]   = useState<HTMLImageElement | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [offset,  setOffset]  = useState({ x: 0, y: 0 });
-  const [zoom,    setZoom]    = useState(1);
+  const [zoom,    setZoom]    = useState(ZOOM_PADDING);
+  const [minZoom, setMinZoom] = useState(ZOOM_PADDING);
   const [error,   setError]   = useState<string | null>(null);
+
   const dragging  = useRef(false);
   const dragStart = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
-  const zoomRef   = useRef(1);
+  // Keep a ref so clampOffset can always read the latest zoom without stale closures
+  const zoomRef = useRef(ZOOM_PADDING);
 
-  // Load image from file
+  // ── Load image from file ──────────────────────────────────────────────────
   useEffect(() => {
     const url = URL.createObjectURL(file);
     setBlobUrl(url);
-    const img  = new Image();
+    const img = new Image();
     img.onload = () => {
       setImgEl(img);
+
+      // Base scale: shorter dimension fills the crop circle exactly (zoom = 1)
       const base = CROP_DISP / Math.min(img.naturalWidth, img.naturalHeight);
-      const dw   = img.naturalWidth  * base;
-      const dh   = img.naturalHeight * base;
+
+      // Minimum zoom needed so BOTH dimensions cover the crop circle
+      const mz = Math.max(
+        CROP_DISP / (img.naturalWidth  * base),
+        CROP_DISP / (img.naturalHeight * base),
+      );
+      // Start at ZOOM_PADDING × the minimum so there is room to drag
+      const initialZoom = mz * ZOOM_PADDING;
+      setMinZoom(initialZoom);
+      setZoom(initialZoom);
+      zoomRef.current = initialZoom;
+
+      // Centre image inside the container
+      const dw = img.naturalWidth  * base * initialZoom;
+      const dh = img.naturalHeight * base * initialZoom;
       setOffset({ x: (CONTAINER - dw) / 2, y: (CONTAINER - dh) / 2 });
-      setZoom(1);
-      zoomRef.current = 1;
     };
     img.src = url;
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  // Compute display size at a given zoom
-  function getDisplaySize(z: number) {
-    if (!imgEl) return { dw: CROP_DISP, dh: CROP_DISP };
+  // ── Display size helpers ──────────────────────────────────────────────────
+  // Only dw is computed; dh follows the natural aspect ratio to avoid distortion.
+  function getDisplayW(z: number) {
+    if (!imgEl) return CROP_DISP;
     const base = CROP_DISP / Math.min(imgEl.naturalWidth, imgEl.naturalHeight);
-    return { dw: imgEl.naturalWidth * base * z, dh: imgEl.naturalHeight * base * z };
+    return imgEl.naturalWidth * base * z;
+  }
+  function getDisplayH(dw: number) {
+    if (!imgEl) return CROP_DISP;
+    return dw * (imgEl.naturalHeight / imgEl.naturalWidth);
   }
 
-  // Clamp offset so the image always covers the crop circle
+  // ── Clamp offset so the crop circle is always fully covered ──────────────
   function clampOffset(ox: number, oy: number, z?: number) {
-    const { dw, dh } = getDisplaySize(z ?? zoomRef.current);
-    const edge = CROP_OFF + CROP_DISP; // 270
+    const dw = getDisplayW(z ?? zoomRef.current);
+    const dh = getDisplayH(dw);
+    const cropRight  = CROP_OFF + CROP_DISP; // 270
+    const cropBottom = CROP_OFF + CROP_DISP; // 270
     return {
-      x: Math.min(CROP_OFF, Math.max(edge - dw, ox)),
-      y: Math.min(CROP_OFF, Math.max(edge - dh, oy)),
+      x: Math.min(CROP_OFF, Math.max(cropRight  - dw, ox)),
+      y: Math.min(CROP_OFF, Math.max(cropBottom - dh, oy)),
     };
   }
 
-  // ── Mouse drag ──────────────────────────────────────────────────────────────
+  // ── Mouse drag ───────────────────────────────────────────────────────────
   function onMouseDown(e: React.MouseEvent) {
     e.preventDefault();
     dragging.current = true;
     dragStart.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
   }
-
   function onMouseMove(e: React.MouseEvent) {
     if (!dragging.current) return;
     const { x, y, ox, oy } = dragStart.current;
     setOffset(clampOffset(ox + e.clientX - x, oy + e.clientY - y));
   }
+  function onPointerUp() { dragging.current = false; }
 
-  function onMouseUp() { dragging.current = false; }
-
-  // ── Touch drag ──────────────────────────────────────────────────────────────
+  // ── Touch drag ───────────────────────────────────────────────────────────
   function onTouchStart(e: React.TouchEvent) {
     const t = e.touches[0];
     dragStart.current = { x: t.clientX, y: t.clientY, ox: offset.x, oy: offset.y };
   }
-
   function onTouchMove(e: React.TouchEvent) {
     const t = e.touches[0];
     const { x, y, ox, oy } = dragStart.current;
     setOffset(clampOffset(ox + t.clientX - x, oy + t.clientY - y));
   }
 
-  // ── Zoom ────────────────────────────────────────────────────────────────────
+  // ── Zoom ─────────────────────────────────────────────────────────────────
   function handleZoom(z: number) {
     zoomRef.current = z;
     setZoom(z);
+    // Re-clamp after zoom changes image size
     setOffset(prev => clampOffset(prev.x, prev.y, z));
   }
 
-  // ── Apply crop ──────────────────────────────────────────────────────────────
+  // ── Apply crop ───────────────────────────────────────────────────────────
   function apply() {
     if (!imgEl) return;
     setError(null);
-    const { dw, dh } = getDisplaySize(zoom);
 
-    const canvas      = document.createElement("canvas");
-    canvas.width      = OUT_PX;
-    canvas.height     = OUT_PX;
-    const ctx         = canvas.getContext("2d")!;
-    ctx.fillStyle     = "#ffffff";
+    const dw = getDisplayW(zoom);
+    const dh = getDisplayH(dw);
+
+    const canvas  = document.createElement("canvas");
+    canvas.width  = OUT_PX;
+    canvas.height = OUT_PX;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, OUT_PX, OUT_PX);
 
-    // Map the crop circle area back to source image coordinates
-    const cropX = (CROP_OFF  - offset.x) / dw * imgEl.naturalWidth;
-    const cropY = (CROP_OFF  - offset.y) / dh * imgEl.naturalHeight;
+    // Map the crop circle's bounding box back to source image coordinates
+    const cropX = (CROP_OFF - offset.x) / dw * imgEl.naturalWidth;
+    const cropY = (CROP_OFF - offset.y) / dh * imgEl.naturalHeight;
     const cropW = CROP_DISP / dw * imgEl.naturalWidth;
     const cropH = CROP_DISP / dh * imgEl.naturalHeight;
     ctx.drawImage(imgEl, cropX, cropY, cropW, cropH, 0, 0, OUT_PX, OUT_PX);
 
-    // Compress to JPEG, stepping down quality until under maxKb
     let quality = 0.9;
     const tryBlob = () => {
       canvas.toBlob((blob) => {
@@ -136,24 +159,25 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
     tryBlob();
   }
 
-  const { dw, dh } = getDisplaySize(zoom);
+  const dw = getDisplayW(zoom);
+  const dh = getDisplayH(dw);
 
   return (
     <div style={{
-      position:  "fixed", inset: 0, zIndex: 9999,
+      position:   "fixed", inset: 0, zIndex: 9999,
       background: "rgba(0,0,0,0.72)",
-      display:   "flex", alignItems: "center", justifyContent: "center",
-      padding:   "16px",
+      display:    "flex", alignItems: "center", justifyContent: "center",
+      padding:    "16px",
     }}>
       <div style={{
-        background:   "#ffffff",
-        borderRadius: "16px",
-        padding:      "24px",
-        width:        "320px",
-        display:      "flex",
-        flexDirection:"column",
-        gap:          "16px",
-        boxShadow:    "0 24px 64px rgba(0,0,0,0.45)",
+        background:    "#ffffff",
+        borderRadius:  "16px",
+        padding:       "24px",
+        width:         "320px",
+        display:       "flex",
+        flexDirection: "column",
+        gap:           "16px",
+        boxShadow:     "0 24px 64px rgba(0,0,0,0.45)",
       }}>
         {/* Header */}
         <div>
@@ -161,11 +185,11 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
             Position your photo
           </div>
           <div style={{ fontSize: "12px", color: "#64748B" }}>
-            Drag to reposition · use the slider to zoom in
+            Drag to reposition · use the slider to zoom
           </div>
         </div>
 
-        {/* Drag area */}
+        {/* ── Drag area ────────────────────────────────────────────────── */}
         <div
           style={{
             width:        CONTAINER,
@@ -181,13 +205,13 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
           }}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onMouseLeave={onMouseUp}
+          onMouseUp={onPointerUp}
+          onMouseLeave={onPointerUp}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
-          onTouchEnd={onMouseUp}
+          onTouchEnd={onPointerUp}
         >
-          {/* Image */}
+          {/* Image — only width set; height follows natural aspect ratio */}
           {blobUrl && imgEl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -201,38 +225,41 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
                 width:         dw,
                 height:        dh,
                 pointerEvents: "none",
+                display:       "block",
               }}
             />
           )}
 
-          {/* Dark mask with circular cutout via radial-gradient */}
+          {/* Dark overlay with circular cutout */}
           <div style={{
             position:      "absolute",
             inset:         0,
             pointerEvents: "none",
-            background:    `radial-gradient(circle at ${CONTAINER / 2}px ${CONTAINER / 2}px, transparent ${CROP_R}px, rgba(0,0,0,0.55) ${CROP_R}px)`,
+            background:    `radial-gradient(circle at ${CONTAINER / 2}px ${CONTAINER / 2}px, transparent ${CROP_R}px, rgba(0,0,0,0.58) ${CROP_R}px)`,
           }} />
 
-          {/* Circle border ring */}
+          {/* Circle guide ring */}
           <div style={{
-            position:      "absolute",
-            left:          CROP_OFF,
-            top:           CROP_OFF,
-            width:         CROP_DISP,
-            height:        CROP_DISP,
-            borderRadius:  "50%",
-            border:        "2px solid rgba(255,255,255,0.75)",
-            pointerEvents: "none",
-            boxSizing:     "border-box",
+            position:     "absolute",
+            left:         CROP_OFF,
+            top:          CROP_OFF,
+            width:        CROP_DISP,
+            height:       CROP_DISP,
+            borderRadius: "50%",
+            border:       "2px solid rgba(255,255,255,0.8)",
+            pointerEvents:"none",
+            boxSizing:    "border-box",
           }} />
         </div>
 
         {/* Zoom slider */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "14px" }}>🔍</span>
+          <span style={{ fontSize: "13px", color: "#64748B", flexShrink: 0 }}>Zoom</span>
           <input
             type="range"
-            min={1} max={3} step={0.01}
+            min={minZoom}
+            max={minZoom * 3}
+            step={0.01}
             value={zoom}
             onChange={(e) => handleZoom(parseFloat(e.target.value))}
             style={{ flex: 1, accentColor: "#0F7B5F" }}

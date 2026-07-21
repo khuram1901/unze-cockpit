@@ -37,6 +37,7 @@ export default function AuthWrapper({
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
   const [member, setMember] = useState<Member | null>(null);
+  const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null);
   const [userCtx, setUserCtx] = useState<UserCtx | null>(null);
   const [notifCount, setNotifCount] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -66,11 +67,12 @@ export default function AuthWrapper({
       setEmail(user.email ?? null);
       const { data: memberData } = await supabase
         .from("members")
-        .select("id, name, first_name, last_name, role, department, company")
+        .select("id, name, first_name, last_name, role, department, company, photo_url")
         .eq("email", user.email)
         .single();
       if (memberData) {
         setMember(memberData);
+        setUserPhotoUrl(memberData.photo_url ?? null);
         let overrides: PermOverrides | null = null;
         const permData = await loadMyPermissions(session.access_token);
         if (permData) overrides = permData as PermOverrides;
@@ -94,6 +96,16 @@ export default function AuthWrapper({
 
     return () => { subscription.unsubscribe(); };
   }, [router]);
+
+  // Listen for photo uploads so the sidebar updates instantly without a reload
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handler = (e: any) => {
+      if (e.detail?.url) setUserPhotoUrl(e.detail.url);
+    };
+    window.addEventListener("unze:photo-updated", handler);
+    return () => window.removeEventListener("unze:photo-updated", handler);
+  }, []);
 
   // Register service worker + auto-subscribe to push on login.
   // Shows the browser "Allow notifications?" prompt automatically.
@@ -179,6 +191,8 @@ export default function AuthWrapper({
   useEffect(() => {
     if (!loading && email && member) {
       loadNotifications();
+
+      // Realtime — fires instantly when DB changes
       const channel = supabase
         .channel("notif-bell")
         .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => loadNotifications())
@@ -187,7 +201,16 @@ export default function AuthWrapper({
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages" }, () => loadNotifications())
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "chat_participants" }, () => loadNotifications())
         .subscribe();
-      return () => { supabase.removeChannel(channel); };
+
+      // Polling fallback — Realtime on RLS-protected tables can silently drop
+      // events if the auth token isn't forwarded. 15 s poll ensures the bell
+      // is never stale by more than one check interval.
+      const poll = setInterval(loadNotifications, 15_000);
+
+      return () => {
+        supabase.removeChannel(channel);
+        clearInterval(poll);
+      };
     }
   }, [loading, email, member]);
 
@@ -286,6 +309,7 @@ export default function AuthWrapper({
         userEmail={email || ""}
         userRole={displayRoleLabel}
         roleColor={roleColor}
+        userPhotoUrl={userPhotoUrl}
         notifCount={notifCount}
         notifItems={notifItems}
         searchOpen={searchOpen}

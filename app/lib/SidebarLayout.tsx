@@ -167,6 +167,7 @@ type SidebarContentProps = {
   initials: string;
   userName: string;
   userRole: string;
+  userPhotoUrl?: string | null;
   onSignOut: () => void;
 };
 
@@ -184,6 +185,7 @@ function SidebarContent({
   initials,
   userName,
   userRole,
+  userPhotoUrl,
   onSignOut,
 }: SidebarContentProps) {
   const sideItemStyle = (active: boolean): React.CSSProperties => ({
@@ -339,11 +341,15 @@ function SidebarContent({
         }}>
           <div style={{
             width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
-            background: "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
+            background: userPhotoUrl ? "none" : "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
             color: "#fff", display: "grid", placeItems: "center",
             fontSize: "12px", fontWeight: 600,
+            overflow: "hidden", position: "relative",
           }}>
-            {initials}
+            {userPhotoUrl
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={userPhotoUrl} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
+              : initials}
           </div>
           {!collapsed && (
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -398,6 +404,7 @@ type SidebarLayoutProps = {
   userEmail: string;
   userRole: string;
   roleColor: string;
+  userPhotoUrl?: string | null;
   notifCount: number;
   notifItems: { label: string; count: number; href: string; action?: () => void }[];
   searchOpen: boolean;
@@ -433,6 +440,7 @@ export default function SidebarLayout({
   setNotifOpen,
   notifRef,
   onSignOut,
+  userPhotoUrl,
 }: SidebarLayoutProps) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
@@ -532,6 +540,7 @@ export default function SidebarLayout({
             initials={initials}
             userName={userName}
             userRole={userRole}
+            userPhotoUrl={userPhotoUrl}
             onSignOut={onSignOut}
           />
         </aside>

@@ -156,7 +156,11 @@ function PhotoUpload({
       const res = await authFetch("/api/members/photo", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) { setError(json.error || "Upload failed."); }
-      else { setPreview(null); setBlob(null); onSaved(json.photoUrl); }
+      else {
+        setPreview(null); setBlob(null); onSaved(json.photoUrl);
+        // If admin uploaded their OWN photo, notify sidebar to refresh
+        window.dispatchEvent(new CustomEvent("unze:photo-updated", { detail: { url: json.photoUrl, memberId: member.id } }));
+      }
     } catch { setError("Network error."); }
     finally { setSaving(false); }
   }

@@ -322,6 +322,8 @@ export default function ProfilePage() {
         setPhotoPreview(null);
         setPhotoBlob(null);
         logAction("Updated", "members", "Uploaded profile photo");
+        // Notify sidebar and other components to refresh the user's avatar
+        window.dispatchEvent(new CustomEvent("unze:photo-updated", { detail: { url: json.photoUrl } }));
       }
     } catch { setPhotoError("Network error."); }
     finally { setPhotoSaving(false); }
