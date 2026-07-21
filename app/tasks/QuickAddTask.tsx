@@ -157,6 +157,31 @@ export default function QuickAddTask({
     load();
   }, []);
 
+  // ── Voice: apply parsed transcript to form fields ───────────────────────
+  const applyTranscript = useCallback((transcript: string, currentMembers: Member[]) => {
+    if (!transcript.trim()) return;
+    const parsed = parseVoiceTask(transcript);
+
+    if (parsed.description) setDescription(parsed.description);
+    if (parsed.dueDate)     setDueDate(parsed.dueDate);
+
+    if (parsed.assigneeName) {
+      const match = matchMemberByName(parsed.assigneeName, currentMembers);
+      if (match) {
+        setSelected(match);
+        setSearch("");
+        setShowDrop(false);
+      } else {
+        setSearch(parsed.assigneeName);
+        setShowDrop(true);
+      }
+    }
+
+    setVoicePhase("parsed");
+    // No auto-submit — show the filled form so the user can review and
+    // confirm before saving. They tap "Confirm task" when ready.
+  }, []);
+
   // ── Apply prefillText from ?text= URL param (Siri dictation shortcut) ──
   // Runs once, after members have loaded. Parses the text the same way
   // voice input does — fills description, assignee, and due date, then
@@ -213,31 +238,6 @@ export default function QuickAddTask({
 
   const shortcutLabel = shortcuts.find((s) => s.value === dueDate)?.label;
   const canSubmit     = !!description.trim() && !!selected && !!dueDate && !!autoCompany;
-
-  // ── Voice: apply parsed transcript to form fields ───────────────────────
-  const applyTranscript = useCallback((transcript: string, currentMembers: Member[]) => {
-    if (!transcript.trim()) return;
-    const parsed = parseVoiceTask(transcript);
-
-    if (parsed.description) setDescription(parsed.description);
-    if (parsed.dueDate)     setDueDate(parsed.dueDate);
-
-    if (parsed.assigneeName) {
-      const match = matchMemberByName(parsed.assigneeName, currentMembers);
-      if (match) {
-        setSelected(match);
-        setSearch("");
-        setShowDrop(false);
-      } else {
-        setSearch(parsed.assigneeName);
-        setShowDrop(true);
-      }
-    }
-
-    setVoicePhase("parsed");
-    // No auto-submit — show the filled form so the user can review and
-    // confirm before saving. They tap "Confirm task" when ready.
-  }, []);
 
   // ── Voice: start listening ───────────────────────────────────────────────
   function startListening() {
