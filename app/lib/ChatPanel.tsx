@@ -7,7 +7,7 @@ import { formatDateTimeUK } from "./dateUtils";
 
 // ── Types ─────────────────────────────────────────────────────────
 
-type Participant = { member_id: string; name: string; email: string };
+type Participant = { member_id: string; name: string; email: string; photo_url?: string | null };
 
 type Conversation = {
   conversation_id: string;
@@ -41,6 +41,11 @@ type MemberOption = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────
+
+function convPhoto(conv: Conversation): string | null {
+  if (conv.is_group) return null;
+  return conv.participants?.[0]?.photo_url ?? null;
+}
 
 function convDisplayName(conv: Conversation): string {
   if (conv.is_group && conv.name) return conv.name;
@@ -121,7 +126,7 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
   const startXRef = useRef(0);
   const currentXRef = useRef(0); // tracked continuously so pointercancel has reliable data
   const activeRef = useRef(false);
-  const draggedRef = useRef(false);
+  const swipedRef = useRef(false); // only true when a swipe action actually fired — used to block the post-swipe click
   const THRESHOLD = 80;
 
   const reset = () => {
@@ -164,7 +169,7 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
     startXRef.current = e.clientX;
     currentXRef.current = e.clientX;
     activeRef.current = true;
-    draggedRef.current = false;
+    swipedRef.current = false;
     if (rowRef.current) rowRef.current.style.transition = "none";
   };
 
@@ -172,11 +177,11 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
     if (!activeRef.current) return;
     currentXRef.current = e.clientX;
     const delta = e.clientX - startXRef.current;
-    if (Math.abs(delta) > 8) draggedRef.current = true;
 
     // Auto-fire as soon as threshold is crossed — don't wait for release
     if (delta > THRESHOLD) {
       activeRef.current = false;
+      swipedRef.current = true;
       if (rowRef.current) { rowRef.current.style.transition = "transform 0.15s ease"; rowRef.current.style.transform = "translateX(110%)"; }
       if (rightRevealRef.current) rightRevealRef.current.style.width = "100%";
       setTimeout(onSwipeRight, 150);
@@ -184,6 +189,7 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
     }
     if (delta < -THRESHOLD) {
       activeRef.current = false;
+      swipedRef.current = true;
       if (rowRef.current) { rowRef.current.style.transition = "transform 0.15s ease"; rowRef.current.style.transform = "translateX(-110%)"; }
       if (leftRevealRef.current) leftRevealRef.current.style.width = "100%";
       setTimeout(onSwipeLeft, 150);
@@ -223,7 +229,10 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
         onPointerMove={handlePointerMove}
         onPointerUp={commit}
         onPointerCancel={commit}
-        onClickCapture={(e) => { if (draggedRef.current) { e.stopPropagation(); e.preventDefault(); } }}
+        onClickCapture={(e) => {
+          // Only block the click if a swipe action actually fired — not just any movement
+          if (swipedRef.current) { e.stopPropagation(); e.preventDefault(); swipedRef.current = false; }
+        }}
       >
         {children}
       </div>
@@ -729,14 +738,19 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                       >
                         {/* Avatar with unread dot */}
                         <div style={{ position: "relative", flexShrink: 0 }}>
-                          <div style={{
-                            width: 40, height: 40, borderRadius: "50%",
-                            background: avatarBg(conv.conversation_id),
-                            color: "#fff", fontSize: 14, fontWeight: 600,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                          }}>
-                            {initials(convDisplayName(conv))}
-                          </div>
+                          {convPhoto(conv) ? (
+                            <img src={convPhoto(conv)!} alt={convDisplayName(conv)}
+                              style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+                          ) : (
+                            <div style={{
+                              width: 40, height: 40, borderRadius: "50%",
+                              background: avatarBg(conv.conversation_id),
+                              color: "#fff", fontSize: 14, fontWeight: 600,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}>
+                              {initials(convDisplayName(conv))}
+                            </div>
+                          )}
                           {conv.unread_count > 0 && (
                             <span style={{
                               position: "absolute", bottom: 0, right: 0,
