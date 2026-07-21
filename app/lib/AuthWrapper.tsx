@@ -95,11 +95,53 @@ export default function AuthWrapper({
     return () => { subscription.unsubscribe(); };
   }, [router]);
 
-  // Register service worker for push notifications
+  // Register service worker + auto-subscribe to push on login.
+  // Shows the browser "Allow notifications?" prompt automatically.
+  // If granted, saves the subscription silently. User can disable from Profile.
   useEffect(() => {
-    if (!loading && email && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if (loading || !email || !("serviceWorker" in navigator)) return;
+
+    async function setupPush() {
+      if (!("Notification" in window)) return;
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) return;
+
+      try {
+        const reg = await navigator.serviceWorker.register("/sw.js");
+
+        // Request permission if not yet decided
+        let permission = Notification.permission;
+        if (permission === "default") {
+          permission = await Notification.requestPermission();
+        }
+        if (permission !== "granted") return;
+
+        // Get or create subscription
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: vapidKey,
+          });
+        }
+
+        // Save to DB (fire and forget — failures are silent)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        fetch("/api/notifications/push-subscribe", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ email, subscription: sub.toJSON() }),
+        }).catch(() => {});
+      } catch {
+        // Push not supported or blocked — fail silently
+      }
     }
+
+    setupPush();
   }, [loading, email]);
 
   // Load notification counts — always scoped to the logged-in user's own tasks
@@ -267,6 +309,7 @@ export default function AuthWrapper({
         isOpen={chatOpen}
         onToggle={() => setChatOpen((o) => !o)}
         onClose={() => setChatOpen(false)}
+        unreadCount={notifItems.find((i) => i.label === "Unread messages")?.count ?? 0}
       />
       {userCtx && canCreateAssignments(userCtx) && (
         <FloatingTaskButton />

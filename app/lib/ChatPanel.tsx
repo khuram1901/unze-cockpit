@@ -240,9 +240,10 @@ type Props = {
   isOpen: boolean;
   onToggle: () => void;
   onClose: () => void;
+  unreadCount?: number; // authoritative count from bell, works even when panel is closed
 };
 
-export default function ChatPanel({ email, memberId, memberName, isOpen, onToggle, onClose }: Props) {
+export default function ChatPanel({ email, memberId, memberName, isOpen, onToggle, onClose, unreadCount = 0 }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [allMembers, setAllMembers] = useState<MemberOption[]>([]);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
@@ -537,7 +538,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
           <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="white"/>
         </svg>
-        {totalUnread > 0 && (
+        {(unreadCount > 0 || totalUnread > 0) && (
           <span style={{
             position: "absolute", top: 0, right: 0,
             minWidth: 18, height: 18, borderRadius: 999,
@@ -546,7 +547,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: "0 4px", border: "2px solid #fff",
           }}>
-            {totalUnread > 99 ? "99+" : totalUnread}
+            {(() => { const n = unreadCount > 0 ? unreadCount : totalUnread; return n > 99 ? "99+" : n; })()}
           </span>
         )}
       </button>
