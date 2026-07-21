@@ -17,15 +17,17 @@ export async function GET() {
     const usdPkr = rates.PKR ?? 0;
     const gbpPkr = usdPkr / (rates.GBP ?? 1);
     const cnyPkr = usdPkr / (rates.CNY ?? 1);
+    const aedPkr = usdPkr / (rates.AED ?? 1);
 
     return NextResponse.json({
       USD: Math.round(usdPkr * 100) / 100,
       GBP: Math.round(gbpPkr * 100) / 100,
       CNY: Math.round(cnyPkr * 100) / 100,
+      AED: Math.round(aedPkr * 100) / 100,
       updatedAt: data.time_last_update_utc ?? null,
     });
   } catch {
     // Sensible fallbacks if API is unavailable
-    return NextResponse.json({ USD: 278, GBP: 356, CNY: 38, updatedAt: null });
+    return NextResponse.json({ USD: 278, GBP: 356, CNY: 38, AED: 76, updatedAt: null });
   }
 }

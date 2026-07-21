@@ -404,6 +404,143 @@ function buildPerformanceRows(tasks: Task[], groupBy: "department" | "person"): 
   });
 }
 
+/* ───────────────────────── Exec Hero Banner ───────────────────────── */
+
+type ExecFxRates = { USD?: number; GBP?: number; CNY?: number; AED?: number };
+
+function ExecHeroBanner({
+  userName, role, tick, execFx, dateStr,
+}: {
+  userName: string;
+  role: string | null;
+  tick: Date;
+  execFx: ExecFxRates | null;
+  dateStr: string;
+}) {
+  function greet() {
+    const h = new Date().getHours();
+    if (h < 12) return "Good morning";
+    if (h < 17) return "Good afternoon";
+    return "Good evening";
+  }
+  function clockFor(tz: string) {
+    return tick.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit" });
+  }
+  function dateFor(tz: string) {
+    return tick.toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" });
+  }
+
+  const CLOCKS = [
+    { label: "Pacific",  tz: "America/Los_Angeles", flag: "🌊" },
+    { label: "Eastern",  tz: "America/New_York",    flag: "🗽" },
+    { label: "GMT",      tz: "Europe/London",        flag: "🇬🇧" },
+    { label: "Shanghai", tz: "Asia/Shanghai",        flag: "🇨🇳" },
+  ];
+
+  const FX_STRIPS: { label: string; flag: string; value: number | undefined }[] = [
+    { label: "GBP", flag: "🇬🇧", value: execFx?.GBP },
+    { label: "USD", flag: "🇺🇸", value: execFx?.USD },
+    { label: "CNY", flag: "🇨🇳", value: execFx?.CNY },
+    { label: "AED", flag: "🇦🇪", value: execFx?.AED },
+  ];
+
+  return (
+    <div style={{ position: "relative", borderRadius: "16px", overflow: "hidden", marginBottom: "28px" }}>
+      {/* Nature photo layer — forest/mountain landscape blended at ~50% */}
+      <div style={{
+        position: "absolute", inset: 0,
+        backgroundImage: "url('https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1920&q=80')",
+        backgroundSize: "cover",
+        backgroundPosition: "center 40%",
+        opacity: 0.48,
+      }} />
+      {/* Navy gradient overlay — ensures text is readable while photo is visible */}
+      <div style={{
+        position: "absolute", inset: 0,
+        background: "linear-gradient(135deg, rgba(15,23,32,0.90) 0%, rgba(15,23,32,0.55) 55%, rgba(15,23,32,0.78) 100%)",
+      }} />
+      {/* Content */}
+      <div style={{ position: "relative", zIndex: 1, padding: "32px 40px 28px" }}>
+        {/* Top row: greeting + timezone clocks */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "24px" }}>
+          {/* Left: greeting + role */}
+          <div>
+            <div style={{
+              fontSize: "38px", fontWeight: 700, color: "#ffffff",
+              lineHeight: 1.15, letterSpacing: "-0.02em",
+              fontFamily: "var(--font-display,'Inter Tight',sans-serif)",
+            }}>
+              {greet()}, {userName}.
+            </div>
+            <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap", alignItems: "center" }}>
+              {role && (
+                <span style={{
+                  fontSize: "11px", fontWeight: 600, padding: "3px 12px", borderRadius: "999px",
+                  background: "rgba(180,121,31,0.18)", color: "#e8a83c",
+                  border: "1px solid rgba(180,121,31,0.35)", letterSpacing: "0.07em", textTransform: "uppercase",
+                }}>
+                  {role}
+                </span>
+              )}
+              <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)" }}>{dateStr}</span>
+            </div>
+          </div>
+
+          {/* Right: timezone clocks */}
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            {CLOCKS.map(c => (
+              <div key={c.label} style={{
+                textAlign: "center",
+                background: "rgba(255,255,255,0.07)",
+                backdropFilter: "blur(12px)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: "12px",
+                padding: "10px 14px",
+                minWidth: "82px",
+              }}>
+                <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.52)", fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "4px" }}>
+                  {c.flag} {c.label}
+                </div>
+                <div style={{ fontSize: "20px", fontWeight: 700, color: "#ffffff", fontFamily: "var(--font-mono,'JetBrains Mono',monospace)", letterSpacing: "0.02em" }}>
+                  {clockFor(c.tz)}
+                </div>
+                <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.42)", marginTop: "3px" }}>
+                  {dateFor(c.tz)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* FX strip — PKR per unit of each currency */}
+        <div style={{ display: "flex", gap: "10px", marginTop: "20px", flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.42)", fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase" }}>
+            1 → PKR
+          </span>
+          {FX_STRIPS.map(f => (
+            <div key={f.label} style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              background: "rgba(255,255,255,0.07)",
+              backdropFilter: "blur(8px)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: "8px",
+              padding: "5px 14px",
+            }}>
+              <span style={{ fontSize: "14px" }}>{f.flag}</span>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.6)" }}>{f.label}</span>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "#ffffff", fontFamily: "var(--font-mono,'JetBrains Mono',monospace)" }}>
+                {f.value != null
+                  ? f.value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+                  : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ───────────────────────── Main Page ───────────────────────── */
 
 export default function HomePage() {
@@ -438,6 +575,8 @@ export default function HomePage() {
   const [assignedByMe, setAssignedByMe] = useState<TaskRow[]>([]);
   const [myCompletedMonth, setMyCompletedMonth] = useState(0);
   const [userName, setUserName] = useState("");
+  const [execFx, setExecFx] = useState<ExecFxRates | null>(null);
+  const [tick, setTick] = useState(() => new Date());
 
   const [briefing, setBriefing] = useState<{ cashTotal: number | null; prodPct: number | null; stuckBills: number; cashDate: string | null }>({ cashTotal: null, prodPct: null, stuckBills: 0, cashDate: null });
   const [sparklines, setSparklines] = useState<{ dueByDay: number[]; completedByDay: number[] }>({ dueByDay: [], completedByDay: [] });
@@ -1351,6 +1490,19 @@ export default function HomePage() {
     loadGuaranteeAlerts();
   }, []);
 
+  // Clock tick — updates every second for live timezone clocks in ExecHeroBanner
+  useEffect(() => {
+    const id = setInterval(() => setTick(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Exec FX rates — PKR per unit of GBP, USD, CNY, AED
+  useEffect(() => {
+    authFetch("/api/fx/multi")
+      .then(r => { if (r.ok) r.json().then((d) => setExecFx(d as ExecFxRates)); })
+      .catch(() => {});
+  }, []);
+
   /* ── Member-view data loader (non-CEO logins) ── */
   useEffect(() => {
     if (ctxLoading) return;
@@ -1701,32 +1853,42 @@ export default function HomePage() {
       <main style={{ padding: isMobile ? "16px 20px" : "32px 40px", maxWidth: "100%", minWidth: 0, backgroundColor: CANVAS, fontFamily: "var(--font-sans, Inter, sans-serif)" }}>
 
         {!allLoading && userName && (
-          <div style={{ marginBottom: "28px" }}>
-            <div style={{
-              fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
-              fontSize: isMobile ? "28px" : "44px",
-              fontWeight: 600,
-              color: NAVY,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.1,
-              marginBottom: "8px",
-            }}>
-              {greetByTime()}, {userName.split(" ")[0]}.
+          isExec ? (
+            <ExecHeroBanner
+              userName={userName}
+              role={ctx?.role ? displayRole(ctx.role, ctx.email) : null}
+              tick={tick}
+              execFx={execFx}
+              dateStr={dateStr}
+            />
+          ) : (
+            <div style={{ marginBottom: "28px" }}>
+              <div style={{
+                fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
+                fontSize: isMobile ? "28px" : "44px",
+                fontWeight: 600,
+                color: NAVY,
+                letterSpacing: "-0.02em",
+                lineHeight: 1.1,
+                marginBottom: "8px",
+              }}>
+                {greetByTime()}, {userName}.
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "13px", color: SLATE }}>{dateStr}</span>
+                {ctx?.role && (
+                  <span style={{
+                    fontSize: "11px", fontWeight: 500, padding: "2px 8px",
+                    borderRadius: "999px",
+                    backgroundColor: COLOURS.HAIRLINE, color: SLATE,
+                    letterSpacing: "0.06em", textTransform: "uppercase",
+                  }}>
+                    {displayRole(ctx.role, ctx.email)}
+                  </span>
+                )}
+              </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "13px", color: SLATE }}>{dateStr}</span>
-              {ctx?.role && (
-                <span style={{
-                  fontSize: "11px", fontWeight: 500, padding: "2px 8px",
-                  borderRadius: "999px",
-                  backgroundColor: COLOURS.HAIRLINE, color: SLATE,
-                  letterSpacing: "0.06em", textTransform: "uppercase",
-                }}>
-                  {displayRole(ctx.role, ctx.email)}
-                </span>
-              )}
-            </div>
-          </div>
+          )
         )}
 
         {allLoading ? (
