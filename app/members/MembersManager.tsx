@@ -167,22 +167,23 @@ function PhotoUpload({
     } catch { /* ignore — use defaults */ }
 
     // ── Canvas crop ─────────────────────────────────────────────────────
+    // Save as a plain square JPEG — no canvas circle clip.
+    // JPEG has no alpha channel, so a canvas circle clip produces black
+    // corners which bleed through the CSS circle. Let CSS handle the circle.
     const canvas  = document.createElement("canvas");
     canvas.width  = PHOTO_SIZE;
     canvas.height = PHOTO_SIZE;
     const ctx = canvas.getContext("2d")!;
 
-    // Clip to circle
-    ctx.beginPath();
-    ctx.arc(PHOTO_SIZE / 2, PHOTO_SIZE / 2, PHOTO_SIZE / 2, 0, Math.PI * 2);
-    ctx.clip();
+    // White background so JPEG corners are clean
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, PHOTO_SIZE, PHOTO_SIZE);
 
-    // Draw the cropped region scaled to fill the circle
-    const scale = PHOTO_SIZE / (cropR * 2);
-    const sx    = cropX - cropR;
-    const sy    = cropY - cropR;
-    const sw    = cropR * 2;
-    const sh    = cropR * 2;
+    // Draw the face-centred square crop scaled to fill the canvas
+    const sx = cropX - cropR;
+    const sy = cropY - cropR;
+    const sw = cropR * 2;
+    const sh = cropR * 2;
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
 
     URL.revokeObjectURL(url);
@@ -244,10 +245,12 @@ function PhotoUpload({
         width: "64px", height: "64px", borderRadius: "50%", flexShrink: 0,
         border: `2px solid ${COLOURS.HAIRLINE}`,
         overflow: "hidden", backgroundColor: COLOURS.CARD_ALT,
+        position: "relative",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         {currentSrc ? (
-          <img src={currentSrc} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={currentSrc} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
         ) : (
           <span style={{ fontSize: "20px", fontWeight: 700, color: COLOURS.SLATE }}>
             {initials}
