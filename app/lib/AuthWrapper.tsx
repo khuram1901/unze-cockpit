@@ -5,7 +5,8 @@ import { supabase, loadMyPermissions } from "./supabase";
 import { useRouter, usePathname } from "next/navigation";
 import SidebarLayout from "./SidebarLayout";
 import ChatPanel from "./ChatPanel";
-import { canSeeAllTasks, isSecondaryCEO, myIdentityEmails, type UserCtx, type PermOverrides } from "./permissions";
+import FloatingTaskButton from "./FloatingTaskButton";
+import { canSeeAllTasks, canCreateAssignments, isSecondaryCEO, myIdentityEmails, type UserCtx, type PermOverrides } from "./permissions";
 import { COLOURS } from "./SharedUI";
 
 type Member = {
@@ -267,6 +268,9 @@ export default function AuthWrapper({
         onToggle={() => setChatOpen((o) => !o)}
         onClose={() => setChatOpen(false)}
       />
+      {userCtx && canCreateAssignments(userCtx) && (
+        <FloatingTaskButton />
+      )}
     </>
   );
 }
