@@ -770,10 +770,13 @@ export default function HomePage() {
     if (user?.email) {
       const { data: memberData } = await supabase
         .from("members")
-        .select("id, role, first_name, name, department, company")
+        .select("id, role, first_name, last_name, name, department, company")
         .eq("email", user.email)
         .maybeSingle();
       if (memberData) {
+        // Populate full name for ExecHeroBanner (member-view loader skips exec users)
+        const fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim() || memberData.name || user.email;
+        setUserName(fullName);
         let overrides: PermOverrides | null = null;
         const p = await loadMyPermissions();
         if (p) overrides = p as PermOverrides;
