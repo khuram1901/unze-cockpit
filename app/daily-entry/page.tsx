@@ -979,13 +979,25 @@ export default function DailyEntryPage() {
                         {busy ? "…" : "▶ Start"}
                       </button>
                     )}
-                    {(task.status === "In Progress" || task.status === "Waiting Reply" || task.status === "Not Started") && (
-                      <button disabled={busy} onClick={() => updateTaskStatus(task, "Submitted")}
-                        style={{ ...primaryButtonStyle, fontSize: "12px", padding: "7px 14px",
-                          backgroundColor: COLOURS.GREEN, opacity: busy ? 0.6 : 1 }}>
-                        {busy ? "…" : "✓ Submit for Review"}
-                      </button>
-                    )}
+                    {/* Self-created tasks (requires_manager_signoff === false) bypass the
+                        Submitted cycle — the member can close them directly. Everything
+                        else still needs to go through Submit → HOD review. */}
+                    {task.requires_manager_signoff === false
+                      ? (task.status !== "Completed" && task.status !== "Cancelled" && (
+                          <button disabled={busy} onClick={() => updateTaskStatus(task, "Completed")}
+                            style={{ ...primaryButtonStyle, fontSize: "12px", padding: "7px 14px",
+                              backgroundColor: COLOURS.GREEN, opacity: busy ? 0.6 : 1 }}>
+                            {busy ? "…" : "✓ Complete"}
+                          </button>
+                        ))
+                      : ((task.status === "In Progress" || task.status === "Waiting Reply" || task.status === "Not Started") && (
+                          <button disabled={busy} onClick={() => updateTaskStatus(task, "Submitted")}
+                            style={{ ...primaryButtonStyle, fontSize: "12px", padding: "7px 14px",
+                              backgroundColor: COLOURS.GREEN, opacity: busy ? 0.6 : 1 }}>
+                            {busy ? "…" : "✓ Submit for Review"}
+                          </button>
+                        ))
+                    }
                     {(task.status === "Not Started" || task.status === "In Progress") && (
                       <button disabled={busy} onClick={() => updateTaskStatus(task, "Waiting Reply")}
                         style={{ fontSize: "12px", padding: "7px 14px", borderRadius: RADII.SM,

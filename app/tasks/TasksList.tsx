@@ -1194,7 +1194,15 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
               {(() => {
                 const eligibleCount = Array.from(selectedIds).filter((id) => {
                   const t = tasks.find((x) => x.id === id);
-                  return !!t && t.status === "Submitted"
+                  if (!t) return false;
+                  // Self-created tasks (requires_manager_signoff === false) can be
+                  // completed from any open status — no Submitted step needed.
+                  // All other tasks still need to be Submitted first.
+                  const selfCreated = t.requires_manager_signoff === false;
+                  const statusOk = selfCreated
+                    ? (t.status !== "Completed" && t.status !== "Cancelled")
+                    : t.status === "Submitted";
+                  return statusOk
                     && !(t.task_subtasks || []).some((s) => !s.is_complete)
                     && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, t.assigned_to_email);
                 }).length;
@@ -1202,7 +1210,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                   <button
                     onClick={applyBulkComplete}
                     disabled={eligibleCount === 0 || bulkApplying}
-                    title={eligibleCount === 0 ? "None of your selected tasks are Submitted and yours to close" : undefined}
+                    title={eligibleCount === 0 ? "None of your selected tasks are ready for you to close (Submitted tasks or your own self-created tasks)" : undefined}
                     style={{
                       ...smallActionBtn, borderRadius: RADII.PILL,
                       backgroundColor: eligibleCount === 0 ? smallActionBtn.backgroundColor : COLOURS.GREEN,
