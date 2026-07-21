@@ -17,6 +17,7 @@ type Member = {
   role: string;
   department: string | null;
   company: string | null;
+  photo_url?: string | null;
 };
 
 const { SLATE } = COLOURS;
@@ -97,11 +98,21 @@ export default function AuthWrapper({
     return () => { subscription.unsubscribe(); };
   }, [router]);
 
-  // Listen for photo uploads so the sidebar updates instantly without a reload
+  // Listen for photo uploads so the sidebar updates instantly without a reload.
+  // Only update if it's the current user's own photo (memberId absent = self-upload from Profile).
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handler = (e: any) => {
-      if (e.detail?.url) setUserPhotoUrl(e.detail.url);
+      const { url, memberId: uploadedFor } = e.detail ?? {};
+      if (!url) return;
+      // Profile page fires without memberId → always our own photo
+      // MembersManager fires with memberId → only update if it matches our row
+      setMember((prev) => {
+        if (!uploadedFor || uploadedFor === prev?.id) {
+          setUserPhotoUrl(url);
+        }
+        return prev; // don't mutate member itself
+      });
     };
     window.addEventListener("unze:photo-updated", handler);
     return () => window.removeEventListener("unze:photo-updated", handler);

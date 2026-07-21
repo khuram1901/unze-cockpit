@@ -38,6 +38,7 @@ type MemberOption = {
   display_name: string;
   role: string;
   department: string | null;
+  photo_url?: string | null;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -331,7 +332,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     if (allMembers.length > 0 || !email) return;
     const { data } = await supabase
       .from("members")
-      .select("id, email, name, first_name, last_name, role, department")
+      .select("id, email, name, first_name, last_name, role, department, photo_url")
       .eq("is_active", true)
       .neq("email", email)
       .order("first_name");
@@ -342,6 +343,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
         display_name: `${m.first_name ?? ""} ${m.last_name ?? ""}`.trim() || m.name || m.email,
         role: m.role,
         department: m.department,
+        photo_url: m.photo_url ?? null,
       })));
     }
   }, [email, allMembers.length]);
@@ -616,15 +618,20 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
             </button>
           )}
           {activeConv && (
-            <div style={{
-              width: 30, height: 30, borderRadius: "50%",
-              background: avatarBg(activeConv.conversation_id),
-              color: "#fff", fontSize: 11, fontWeight: 600,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              {initials(convDisplayName(activeConv))}
-            </div>
+            convPhoto(activeConv) ? (
+              <img src={convPhoto(activeConv)!} alt={convDisplayName(activeConv)}
+                style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+            ) : (
+              <div style={{
+                width: 30, height: 30, borderRadius: "50%",
+                background: avatarBg(activeConv.conversation_id),
+                color: "#fff", fontSize: 11, fontWeight: 600,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+              }}>
+                {initials(convDisplayName(activeConv))}
+              </div>
+            )
           )}
           <span style={{
             fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 600,
@@ -822,14 +829,19 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                           onMouseEnter={(e) => { if (!openingDm) e.currentTarget.style.background = CANVAS; }}
                           onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
                         >
-                          <div style={{
-                            width: 38, height: 38, borderRadius: "50%",
-                            background: avatarBg(m.id),
-                            color: "#fff", fontSize: 13, fontWeight: 600,
-                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                          }}>
-                            {openingDm === m.email ? "…" : initials(m.display_name)}
-                          </div>
+                          {m.photo_url && openingDm !== m.email ? (
+                            <img src={m.photo_url} alt={m.display_name}
+                              style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                          ) : (
+                            <div style={{
+                              width: 38, height: 38, borderRadius: "50%",
+                              background: avatarBg(m.id),
+                              color: "#fff", fontSize: 13, fontWeight: 600,
+                              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                            }}>
+                              {openingDm === m.email ? "…" : initials(m.display_name)}
+                            </div>
+                          )}
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 500, color: NAVY }}>{m.display_name}</div>
                             <div style={{ fontSize: 11, color: SLATE }}>{m.role}{m.department ? ` · ${m.department}` : ""}</div>
@@ -891,15 +903,20 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                       onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
                     >
-                      <div style={{
-                        width: 38, height: 38, borderRadius: "50%",
-                        background: avatarBg(conv.conversation_id),
-                        color: "#fff", fontSize: 13, fontWeight: 600,
-                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                        opacity: 0.6,
-                      }}>
-                        {initials(convDisplayName(conv))}
-                      </div>
+                      {convPhoto(conv) ? (
+                        <img src={convPhoto(conv)!} alt={convDisplayName(conv)}
+                          style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", flexShrink: 0, opacity: 0.6 }} />
+                      ) : (
+                        <div style={{
+                          width: 38, height: 38, borderRadius: "50%",
+                          background: avatarBg(conv.conversation_id),
+                          color: "#fff", fontSize: 13, fontWeight: 600,
+                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                          opacity: 0.6,
+                        }}>
+                          {initials(convDisplayName(conv))}
+                        </div>
+                      )}
                       <div style={{ flex: 1, overflow: "hidden" }}>
                         <div style={{ fontSize: 13, fontWeight: 500, color: SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {convDisplayName(conv)}
@@ -982,17 +999,24 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                       )}
                       <div style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", alignItems: "flex-end", gap: 6 }}>
                         {/* Other person avatar (only on last in group) */}
-                        {!isMe && (
-                          <div style={{
-                            width: 26, height: 26, borderRadius: "50%",
-                            background: isLastInGroup ? avatarBg(msg.sender_email) : "transparent",
-                            color: "#fff", fontSize: 9, fontWeight: 600,
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                          }}>
-                            {isLastInGroup ? initials(msg.sender_name) : ""}
-                          </div>
-                        )}
+                        {!isMe && (() => {
+                          const senderPhoto = activeConv.participants?.find(p => p.email === msg.sender_email)?.photo_url;
+                          if (!isLastInGroup) return <div style={{ width: 26, height: 26, flexShrink: 0 }} />;
+                          return senderPhoto ? (
+                            <img src={senderPhoto} alt={msg.sender_name}
+                              style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                          ) : (
+                            <div style={{
+                              width: 26, height: 26, borderRadius: "50%",
+                              background: avatarBg(msg.sender_email),
+                              color: "#fff", fontSize: 9, fontWeight: 600,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              flexShrink: 0,
+                            }}>
+                              {initials(msg.sender_name)}
+                            </div>
+                          );
+                        })()}
 
                         <div style={{ maxWidth: "72%", display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
                           <div style={{

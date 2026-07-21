@@ -211,7 +211,7 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
           onTouchMove={onTouchMove}
           onTouchEnd={onPointerUp}
         >
-          {/* Image — only width set; height follows natural aspect ratio */}
+          {/* Image — only width is set; browser computes height from natural aspect ratio */}
           {blobUrl && imgEl && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -223,7 +223,6 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
                 left:          offset.x,
                 top:           offset.y,
                 width:         dw,
-                height:        dh,
                 pointerEvents: "none",
                 display:       "block",
               }}

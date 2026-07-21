@@ -575,6 +575,7 @@ export default function SidebarLayout({
               initials={initials}
               userName={userName}
               userRole={userRole}
+              userPhotoUrl={userPhotoUrl}
               onSignOut={onSignOut}
             />
           </aside>
