@@ -651,25 +651,43 @@ function FxStrip({ fx }: { fx: FxRates | null }) {
 }
 
 /* ─── Portfolio card (CEO) ───────────────────────────────────── */
-function PortfolioCard({ holdings, portfolioTotal }: { holdings: Holding[]; portfolioTotal: number | null }) {
+function PortfolioCard({ holdings, portfolioTotal, pensionGbp, gbpPkr }: {
+  holdings: Holding[]; portfolioTotal: number | null;
+  pensionGbp: number | null; gbpPkr: number | null;
+}) {
+  const pensionPkr = pensionGbp != null && gbpPkr != null ? pensionGbp * gbpPkr : null;
+  const grandTotal = portfolioTotal != null && pensionPkr != null
+    ? portfolioTotal + pensionPkr
+    : (portfolioTotal ?? pensionPkr);
   return (
     <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
       <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <h3 style={{ fontSize: 13, fontWeight: 700, color: NAVY, letterSpacing: "-0.01em", margin: 0 }}>Portfolio</h3>
-          <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>PSX investments · live</p>
+          <p style={{ fontSize: 11, color: INK_400, marginTop: 2, marginBottom: 0 }}>PSX + Aviva pension · live</p>
         </div>
         <Link href="/investments" style={{ fontSize: 12, color: BLUE, fontWeight: 500, textDecoration: "none" }}>View →</Link>
       </div>
-      {portfolioTotal !== null && (
-        <div style={{ padding: "14px 20px", borderBottom: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <div>
-            <div style={{ fontSize: 11, color: INK_400 }}>Portfolio value</div>
-            <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 20, color: NAVY, letterSpacing: "-0.03em" }}>
-              ₨ {portfolioTotal.toLocaleString()}
-            </div>
+      {grandTotal !== null && (
+        <div style={{ padding: "14px 20px", borderBottom: `1px solid ${HAIRLINE}` }}>
+          <div style={{ fontSize: 11, color: INK_400, marginBottom: 4 }}>Total portfolio value</div>
+          <div style={{ fontFamily: "var(--font-display,'Inter Tight',sans-serif)", fontWeight: 800, fontSize: 22, color: NAVY, letterSpacing: "-0.03em", marginBottom: 8 }}>
+            ₨ {Math.round(grandTotal).toLocaleString()}
           </div>
-          <Link href="/investments" style={{ fontSize: 11.5, color: BLUE, fontWeight: 500, textDecoration: "none" }}>Full breakdown →</Link>
+          <div style={{ display: "flex", gap: 16 }}>
+            {portfolioTotal != null && (
+              <div>
+                <div style={{ fontSize: 10, color: INK_400, textTransform: "uppercase", letterSpacing: "0.06em" }}>PSX</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: INK_700 }}>₨ {Math.round(portfolioTotal).toLocaleString()}</div>
+              </div>
+            )}
+            {pensionGbp != null && (
+              <div>
+                <div style={{ fontSize: 10, color: INK_400, textTransform: "uppercase", letterSpacing: "0.06em" }}>Aviva</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: INK_700 }}>£{Math.round(pensionGbp).toLocaleString()}{pensionPkr != null ? ` · ₨ ${Math.round(pensionPkr).toLocaleString()}` : ""}</div>
+              </div>
+            )}
+          </div>
         </div>
       )}
       <div style={{ padding: "4px 20px 12px" }}>
@@ -1166,9 +1184,9 @@ function KhuramHero({ data, tick, weather, fx }: {
 }
 
 /* ─── Layout: Khuram ─────────────────────────────────────────── */
-function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal }: {
+function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal, pensionGbp }: {
   data: WelcomeData; tick: number; weather: Weather | null;
-  fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null;
+  fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null; pensionGbp: number | null;
 }) {
   const showPortfolio = holdings.length > 0 || portfolioTotal !== null;
   const cols = showPortfolio ? "1fr 1fr 420px 300px" : "1fr 1fr 300px";
@@ -1211,7 +1229,7 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal }: {
             </div>
           </div>
         </div>
-        {showPortfolio && <PortfolioCard holdings={holdings} portfolioTotal={portfolioTotal} />}
+        {showPortfolio && <PortfolioCard holdings={holdings} portfolioTotal={portfolioTotal} pensionGbp={pensionGbp} gbpPkr={fx?.GBP ?? null} />}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
           <QuickLinksCard links={data.quickLinks} />
@@ -1333,6 +1351,7 @@ function WelcomePageInner() {
   const [fx,             setFx]             = useState<FxRates | null>(null);
   const [holdings,       setHoldings]       = useState<Holding[]>([]);
   const [portfolioTotal, setPortfolioTotal] = useState<number | null>(null);
+  const [pensionGbp,     setPensionGbp]     = useState<number | null>(null);
   const [tick,           setTick]           = useState(0);
   const [email,          setEmail]          = useState<string | undefined>(undefined);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1381,13 +1400,30 @@ function WelcomePageInner() {
 
     // Investments — only for users who see CeoLayout (not Kamran — his /home has this)
     if (email !== "kamran@unze.co.uk") {
-      supabase.from("holdings").select("ticker, company_name, quantity, buy_price").order("ticker").then(({ data: h }) => {
-        if (h && h.length > 0) {
-          setHoldings(h as Holding[]);
-          const total = (h as Holding[]).reduce((s, x) => s + x.quantity * x.buy_price, 0);
-          setPortfolioTotal(total);
-        }
+      // Use the portfolio summary RPC so total reflects CURRENT market prices, not cost basis
+      const today = new Date().toISOString().slice(0, 10);
+      supabase.rpc("get_portfolio_summary_full", { p_as_of: today, p_alert_pct: -3, p_div_days: 7 }).then(({ data: summary }) => {
+        const totals = (summary as any)?.totals;
+        if (totals?.total_value != null) setPortfolioTotal(totals.total_value);
+        // Also fetch holdings list for the card rows
+        supabase.from("holdings").select("ticker, company_name, quantity, buy_price, current_price:price_history(price)").order("ticker").then(({ data: h }) => {
+          if (h && h.length > 0) setHoldings(h as unknown as Holding[]);
+        });
+      }).catch(() => {
+        // Fallback: plain holdings with cost basis
+        supabase.from("holdings").select("ticker, company_name, quantity, buy_price").order("ticker").then(({ data: h }) => {
+          if (h && h.length > 0) {
+            setHoldings(h as Holding[]);
+            const total = (h as Holding[]).reduce((s, x) => s + x.quantity * x.buy_price, 0);
+            setPortfolioTotal(total);
+          }
+        });
       });
+      // Fetch Aviva/pension total
+      supabase.rpc("get_pension_summary").then(({ data: ps }) => {
+        const row = (ps as any)?.[0] ?? null;
+        if (row?.total_value_gbp != null) setPensionGbp(parseFloat(row.total_value_gbp));
+      }).catch(() => {});
     }
   }, [data, email]);
 
@@ -1418,7 +1454,7 @@ function WelcomePageInner() {
   return (
     <div style={{ background: CANVAS, minHeight: "100vh" }}>
       {isKhuram
-        ? <KhuramLayout  data={data} tick={tick} weather={weather} fx={fx} holdings={holdings} portfolioTotal={portfolioTotal} />
+        ? <KhuramLayout  data={data} tick={tick} weather={weather} fx={fx} holdings={holdings} portfolioTotal={portfolioTotal} pensionGbp={pensionGbp} />
         : isKamran
         ? <KamranLayout  data={data} tick={tick} weather={weather} fx={fx} />
         : isPriv

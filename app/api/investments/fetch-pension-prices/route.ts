@@ -69,7 +69,13 @@ export async function GET(request: NextRequest) {
     try {
       const url = `https://lt.morningstar.com/api/rest.svc/timeseries_price/9vehuxllxs?id=${msId}&currencyId=GBP&idtype=Morningstar&frequency=daily&startDate=${yesterday}&outputType=COMPACTJSON`;
       const res = await fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; UnzeDashboard/1.0)" },
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+          "Referer": "https://www.morningstar.co.uk/",
+          "Origin": "https://www.morningstar.co.uk",
+          "Accept": "application/json, text/plain, */*",
+          "Accept-Language": "en-GB,en;q=0.9",
+        },
         signal: AbortSignal.timeout(15_000),
       });
 
@@ -131,7 +137,13 @@ export async function GET(request: NextRequest) {
     try {
       const url = `https://lt.morningstar.com/api/rest.svc/timeseries_price/9vehuxllxs?id=${cf.morningstar_id}&currencyId=GBP&idtype=Morningstar&frequency=daily&startDate=${yesterday}&outputType=COMPACTJSON`;
       const res = await fetch(url, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; UnzeDashboard/1.0)" },
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+          "Referer": "https://www.morningstar.co.uk/",
+          "Origin": "https://www.morningstar.co.uk",
+          "Accept": "application/json, text/plain, */*",
+          "Accept-Language": "en-GB,en;q=0.9",
+        },
         signal: AbortSignal.timeout(15_000),
       });
       if (res.ok) {
