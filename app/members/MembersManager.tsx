@@ -1175,9 +1175,11 @@ export default function MembersManager() {
                         fontSize: "11px", fontWeight: 600,
                         fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
                         overflow: "hidden",
+                        position: "relative",
                       }}>
                         {m.photo_url
-                          ? <img src={m.photo_url} alt={initials} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={m.photo_url} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
                           : initials}
                       </div>
                       <div style={{ minWidth: 0 }}>

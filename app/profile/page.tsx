@@ -430,7 +430,8 @@ export default function ProfilePage() {
                   border: `2px solid ${COLOURS.HAIRLINE}`,
                 }}>
                 {currentPhotoSrc
-                  ? <img src={currentPhotoSrc} alt={initials} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={currentPhotoSrc} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block", borderRadius: "50%" }} />
                   : initials}
                 {/* hover overlay */}
                 <div style={{
@@ -543,9 +544,11 @@ export default function ProfilePage() {
                   color: "#fff", fontSize: "24px", fontWeight: 600,
                   border: `2px solid ${COLOURS.HAIRLINE}`,
                   overflow: "hidden",
+                  position: "relative",
                 }}>
                   {currentPhotoSrc
-                    ? <img src={currentPhotoSrc} alt={initials} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={currentPhotoSrc} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block", borderRadius: "50%" }} />
                     : initials}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
