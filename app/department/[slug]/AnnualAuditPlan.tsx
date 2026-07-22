@@ -46,7 +46,7 @@ const FREQ_BADGE: Record<string, { bg: string; text: string }> = {
 };
 const FREQUENCIES = ["Monthly", "Quarterly", "Semi-annually", "Annually"];
 
-type Viewer = { is_manager: boolean; team_id: string | null; member_id: string | null };
+type Viewer = { is_manager: boolean; team_id: string | null; member_id: string | null; member_company_ids: string[] };
 
 type Team = {
   id: string; code: string; name: string; sort_order: number;
@@ -552,7 +552,12 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
       {!isManager && selectedTeam && (
         <div style={{ backgroundColor: "#EEF1FC", borderRadius: RADII.SM, padding: "10px 14px", marginBottom: "14px", fontSize: "13px", color: COLOURS.BLUE }}>
           Your team: <strong>{selectedTeam.name}</strong>
-          {selectedTeam.code !== "PREAUDIT" && <> · {selectedTeam.company_ids.map(shortCode).join(" + ")} · {selectedTeam.done} of {selectedTeam.total} projects done</>}
+          {(viewer?.member_company_ids?.length ?? 0) > 0 && (
+            <> · {(viewer!.member_company_ids).map(shortCode).join(" + ")}</>
+          )}
+          {selectedTeam.code !== "PREAUDIT" && selectedTeam.total > 0 && (
+            <> · {selectedTeam.done} of {selectedTeam.total} projects done</>
+          )}
         </div>
       )}
       {!isManager && !selectedTeam && (
