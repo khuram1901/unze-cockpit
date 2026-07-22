@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII } from "../lib/SharedUI";
 import { canCompleteSubmittedTask, canReopenCompletedTask } from "../lib/permissions";
-import { routeSubmittedTask } from "../lib/taskRouting";
+import { routeSubmittedTask, routeWaitingReplyTask, returnFromWaitingReply } from "../lib/taskRouting";
 import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
@@ -38,6 +38,14 @@ type Task = {
   // assignee, for themselves — see migration 143. They can close it
   // directly, no Submitted step or manager sign-off required.
   requires_manager_signoff?: boolean | null;
+  // Waiting Reply routing fields (migration 189)
+  waiting_reply_note?: string | null;
+  waiting_reply_to_email?: string | null;
+  waiting_reply_to_name?: string | null;
+  waiting_reply_by_email?: string | null;
+  waiting_reply_by_name?: string | null;
+  manager_reply_text?: string | null;
+  manager_reply_at?: string | null;
 };
 
 type Subtask = {
@@ -102,6 +110,14 @@ export default function TaskStatus({
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
+  // Waiting Reply form — shown when user selects "Waiting Reply" from dropdown
+  const [pendingWaitingReply, setPendingWaitingReply] = useState(false);
+  const [waitingNote, setWaitingNote] = useState("");
+  const [waitingToEmail, setWaitingToEmail] = useState("");
+  // Reply & Return — for the person who receives the waiting-reply task
+  const [managerReply, setManagerReply] = useState(task.manager_reply_text || "");
+  const [savingManagerReply, setSavingManagerReply] = useState(false);
+
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState("");
   const [dueDateHistory, setDueDateHistory] = useState<DueDateHistoryRow[]>([]);
@@ -130,12 +146,12 @@ export default function TaskStatus({
   const locked = status === "Completed" && !canReopen;
 
   useEffect(() => {
-    if (canEditDate) {
-      supabase.from("members").select("id, name, email, department, business_unit, phone_e164").order("name").then(({ data }) => {
-        if (data) setMemberNames(data.map((m) => ({ id: m.id, name: m.name || "", email: m.email, department: m.department, business_unit: m.business_unit, phone_e164: m.phone_e164 || null })));
-      });
-    }
-  }, [canEditDate]);
+    // Load members for the reassignment picker (canEditDate) AND for the
+    // Waiting Reply "tag someone" picker (available to everyone).
+    supabase.from("members").select("id, name, email, department, business_unit, phone_e164").eq("is_active", true).order("name").then(({ data }) => {
+      if (data) setMemberNames(data.map((m) => ({ id: m.id, name: m.name || "", email: m.email, department: m.department, business_unit: m.business_unit, phone_e164: m.phone_e164 || null })));
+    });
+  }, []);
 
   async function loadSubtasks() {
     const { data } = await supabase
@@ -179,6 +195,76 @@ export default function TaskStatus({
       submitted_by_name: null,
       submitted_by_email: null,
     };
+  }
+
+  // ── Waiting Reply: set ─────────────────────────────────────────────────
+  // Called from the inline form when the user confirms "Set Waiting Reply".
+  // Routes the task to the tagged person (or reporting-line manager) and
+  // stores the question note so they have context.
+  async function submitWaitingReply() {
+    setSaving(true);
+    const route = await routeWaitingReplyTask(
+      task.id,
+      task.assigned_to,
+      task.assigned_to_email,
+      waitingToEmail || null,
+    );
+
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        status: "Waiting Reply",
+        waiting_reply_note: waitingNote.trim() || null,
+        waiting_reply_to_email: (route.assigned_to_email as string) ?? null,
+        waiting_reply_to_name: (route.assigned_to as string) ?? null,
+        updated_at: new Date().toISOString(),
+        ...route,
+      })
+      .eq("id", task.id);
+
+    setSaving(false);
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
+
+    logAction("Updated", "tasks", `Waiting Reply set — routed to ${route.assigned_to || "manager"}: ${task.id}`, task.id);
+    setPendingWaitingReply(false);
+    setWaitingNote("");
+    setWaitingToEmail("");
+    setStatus("Waiting Reply");
+    setSavedMessage("Saved ✓");
+    onChanged();
+    setTimeout(() => setSavedMessage(""), 2000);
+  }
+
+  // ── Waiting Reply: reply & return ──────────────────────────────────────
+  // Called by the reply-to person. Saves their reply text and routes the
+  // task back to the person who was waiting, reverting to "In Progress".
+  async function submitManagerReply() {
+    if (!managerReply.trim()) {
+      toast.show("Please write a reply before returning the task.", "error");
+      return;
+    }
+    setSavingManagerReply(true);
+
+    const route = await returnFromWaitingReply(task.id, task.waiting_reply_by_email);
+
+    const { error } = await supabase
+      .from("tasks")
+      .update({
+        status: "In Progress",
+        manager_reply_text: managerReply.trim(),
+        manager_reply_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...route,
+      })
+      .eq("id", task.id);
+
+    setSavingManagerReply(false);
+    if (error) { toast.show("Error: " + error.message, "error"); return; }
+
+    logAction("Updated", "tasks", `Reply & Return to ${task.waiting_reply_by_name || task.waiting_reply_by_email}: ${task.id}`, task.id);
+    setStatus("In Progress");
+    onChanged();
+    if (onClose) setTimeout(() => onClose(), 400);
   }
 
   async function saveStatus(newStatus: string) {
@@ -451,7 +537,15 @@ export default function TaskStatus({
             <select
               style={controlStyle}
               value={status}
-              onChange={(e) => saveStatus(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === "Waiting Reply" && status !== "Waiting Reply") {
+                  // Show inline form — don't route yet
+                  setPendingWaitingReply(true);
+                } else {
+                  saveStatus(next);
+                }
+              }}
               disabled={saving}
             >
               {/* "Completed" is never a free jump from this dropdown — the only
@@ -529,7 +623,7 @@ export default function TaskStatus({
               </button>
 
               <button
-                onClick={() => saveStatus("Waiting Reply")}
+                onClick={() => saveStatus("In Progress")}
                 disabled={saving}
                 style={{
                   backgroundColor: COLOURS.CARD,
@@ -570,6 +664,171 @@ export default function TaskStatus({
           <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "10px", marginBottom: 0 }}>
             Move this to <strong>Submitted</strong> above when the work is done — it will be routed to the manager for sign-off.
           </p>
+        )}
+
+        {/* ── Waiting Reply: inline form ────────────────────────────────────
+            Shown when the user chooses "Waiting Reply" from the dropdown.
+            They describe what they need and optionally tag the person they
+            need the reply from. On confirm, routeWaitingReplyTask() handles
+            routing and the form closes. */}
+        {pendingWaitingReply && (
+          <div style={{
+            marginTop: "12px",
+            padding: "12px 14px",
+            background: "#FFFBF0",
+            border: `1px solid ${COLOURS.AMBER}`,
+            borderRadius: RADII.SM,
+          }}>
+            <div style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.AMBER, marginBottom: "8px" }}>
+              Set Waiting Reply
+            </div>
+            <label style={{ fontSize: "12px", color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>
+              What do you need? (optional note for the person you&apos;re asking)
+            </label>
+            <textarea
+              value={waitingNote}
+              onChange={(e) => setWaitingNote(e.target.value)}
+              placeholder="e.g. Please confirm the invoice total before I can proceed."
+              rows={3}
+              style={{
+                width: "100%", boxSizing: "border-box",
+                padding: "7px 9px",
+                border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: RADII.SM,
+                fontSize: "13px", color: COLOURS.NAVY,
+                resize: "vertical", marginBottom: "10px",
+              }}
+            />
+            <label style={{ fontSize: "12px", color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>
+              Who do you need the reply from? (leave blank to route to your manager)
+            </label>
+            <select
+              value={waitingToEmail}
+              onChange={(e) => setWaitingToEmail(e.target.value)}
+              style={{ ...controlStyle, width: "100%", boxSizing: "border-box", marginBottom: "10px" }}
+            >
+              <option value="">— Automatically route to my manager —</option>
+              {memberNames.map((m) => (
+                <option key={m.id} value={m.email || ""}>{m.name}{m.department ? ` (${m.department})` : ""}</option>
+              ))}
+            </select>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                onClick={submitWaitingReply}
+                disabled={saving}
+                style={{
+                  backgroundColor: COLOURS.AMBER, color: "white",
+                  border: "none", borderRadius: RADII.SM,
+                  padding: "7px 16px", fontSize: "13px",
+                  cursor: "pointer", fontWeight: 700,
+                  opacity: saving ? 0.7 : 1,
+                }}
+              >
+                {saving ? "Routing…" : "Set Waiting Reply"}
+              </button>
+              <button
+                onClick={() => setPendingWaitingReply(false)}
+                disabled={saving}
+                style={{
+                  backgroundColor: "transparent", color: COLOURS.SLATE,
+                  border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
+                  padding: "7px 14px", fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Reply & Return panel ──────────────────────────────────────────
+            Shown when this task is currently in "Waiting Reply" status and
+            the viewer is the person it was routed to (i.e. they are the
+            current assignee). They write their reply and click Reply &
+            Return, which routes the task back to who was waiting. */}
+        {status === "Waiting Reply" && !pendingWaitingReply && task.waiting_reply_by_email && myEmail?.toLowerCase() === task.assigned_to_email?.toLowerCase() && (
+          <div style={{
+            marginTop: "12px",
+            padding: "12px 14px",
+            background: "#F0F7FF",
+            border: `1px solid #93C5FD`,
+            borderRadius: RADII.SM,
+          }}>
+            <div style={{ fontSize: "12.5px", fontWeight: 600, color: "#1D4ED8", marginBottom: "6px" }}>
+              Reply Requested by {task.waiting_reply_by_name || task.waiting_reply_by_email}
+            </div>
+            {task.waiting_reply_note && (
+              <div style={{
+                fontSize: "13px", color: COLOURS.NAVY,
+                marginBottom: "10px", fontStyle: "italic",
+                borderLeft: "3px solid #93C5FD", paddingLeft: "10px",
+              }}>
+                &quot;{task.waiting_reply_note}&quot;
+              </div>
+            )}
+            <label style={{ fontSize: "12px", color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>
+              Your reply
+            </label>
+            <textarea
+              value={managerReply}
+              onChange={(e) => setManagerReply(e.target.value)}
+              placeholder="Write your response here…"
+              rows={3}
+              style={{
+                width: "100%", boxSizing: "border-box",
+                padding: "7px 9px",
+                border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: RADII.SM,
+                fontSize: "13px", color: COLOURS.NAVY,
+                resize: "vertical", marginBottom: "10px",
+              }}
+            />
+            <button
+              onClick={submitManagerReply}
+              disabled={savingManagerReply || !managerReply.trim()}
+              style={{
+                backgroundColor: "#1D4ED8", color: "white",
+                border: "none", borderRadius: RADII.SM,
+                padding: "7px 16px", fontSize: "13px",
+                cursor: savingManagerReply || !managerReply.trim() ? "not-allowed" : "pointer",
+                fontWeight: 700,
+                opacity: savingManagerReply || !managerReply.trim() ? 0.6 : 1,
+              }}
+            >
+              {savingManagerReply ? "Returning…" : `Reply & Return to ${task.waiting_reply_by_name || "sender"}`}
+            </button>
+            <p style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "6px", marginBottom: 0 }}>
+              This will send the task back to {task.waiting_reply_by_name || task.waiting_reply_by_email} and set it to In Progress.
+            </p>
+          </div>
+        )}
+
+        {/* If the viewer is the one WAITING (they set the Waiting Reply) —
+            show context so they know who has it and for what reason */}
+        {status === "Waiting Reply" && !pendingWaitingReply && task.waiting_reply_by_email && myEmail?.toLowerCase() === task.waiting_reply_by_email?.toLowerCase() && (
+          <div style={{
+            marginTop: "12px",
+            padding: "10px 14px",
+            background: COLOURS.TRACK,
+            border: `1px solid ${COLOURS.HAIRLINE}`,
+            borderRadius: RADII.SM,
+          }}>
+            <div style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.SLATE, marginBottom: "4px" }}>
+              Waiting for reply from {task.waiting_reply_to_name || task.assigned_to || "your manager"}
+            </div>
+            {task.waiting_reply_note && (
+              <div style={{ fontSize: "12.5px", color: COLOURS.NAVY, fontStyle: "italic" }}>
+                You asked: &quot;{task.waiting_reply_note}&quot;
+              </div>
+            )}
+            {task.manager_reply_text && (
+              <div style={{ marginTop: "8px", padding: "8px 10px", background: COLOURS.CARD, borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "3px" }}>Reply received:</div>
+                <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{task.manager_reply_text}</div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Stage — optional free-text pipeline label, separate from status */}

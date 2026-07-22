@@ -113,6 +113,16 @@ type Task = {
   recovery_date: string | null;
   impact_on_monthly_target: string | null;
   time_spent_minutes: number | null;
+  requires_manager_signoff?: boolean | null;
+  submitted_by_name?: string | null;
+  submitted_by_email?: string | null;
+  waiting_reply_note?: string | null;
+  waiting_reply_to_email?: string | null;
+  waiting_reply_to_name?: string | null;
+  waiting_reply_by_email?: string | null;
+  waiting_reply_by_name?: string | null;
+  manager_reply_text?: string | null;
+  manager_reply_at?: string | null;
 };
 
 type StockLetter = {
@@ -294,7 +304,7 @@ export default function DashboardView() {
     const isPriv = canSeeAllTasks(userCtx);
 
     const ENTRY_COLS = "plant_id, entry_date, qty_31, qty_36, qty_45, qty_meter";
-    const TASK_COLS = "id, task_type, description, project, priority, due_date, assigned_date, assigned_to, assigned_to_email, assigned_by, status, stuck_reason, notes, reply_required, reply_text, reply_by, reply_at, corrective_action, recovery_date, impact_on_monthly_target, time_spent_minutes";
+    const TASK_COLS = "id, task_type, description, project, priority, due_date, assigned_date, assigned_to, assigned_to_email, assigned_by, status, stuck_reason, notes, reply_required, reply_text, reply_by, reply_at, corrective_action, recovery_date, impact_on_monthly_target, time_spent_minutes, requires_manager_signoff, submitted_by_name, submitted_by_email, waiting_reply_note, waiting_reply_to_email, waiting_reply_to_name, waiting_reply_by_email, waiting_reply_by_name, manager_reply_text, manager_reply_at";
 
     const [
       plantKpisRes, prodTargetsRes, dispTargetsRes, machineRes, tasksRes, trendProdRes,

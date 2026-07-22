@@ -70,3 +70,125 @@ export async function routeSubmittedTask(
     submitted_by_email: assignedToEmail,
   };
 }
+
+// ── Waiting Reply routing ─────────────────────────────────────────────────
+//
+// When someone sets a task to "Waiting Reply" they can tag a specific person
+// whose reply they need. If they don't tag anyone, the task routes to their
+// reporting-line manager (same chain-walk logic as routeSubmittedTask).
+//
+// The current assignee's details are captured in waiting_reply_by_email/name
+// so the reply-to person can hand the task straight back.
+//
+// explicitReplyToEmail — the person the asker explicitly tagged (optional).
+//   When supplied, skip the manager chain walk and go directly to them.
+//
+type MemberRow = {
+  id: string; name: string; email: string | null;
+  department: string | null; business_unit: string | null;
+  is_active: boolean | null; manager_id: string | null;
+};
+
+async function findActiveManager(startMemberId: string): Promise<MemberRow | null> {
+  let nextId: string | null = startMemberId;
+  const seen = new Set<string>();
+  for (let hop = 0; hop < 10 && nextId && !seen.has(nextId); hop++) {
+    seen.add(nextId);
+    const { data } = await supabase
+      .from("members")
+      .select("id, name, email, department, business_unit, is_active, manager_id")
+      .eq("id", nextId)
+      .maybeSingle();
+    if (!data?.email) break;
+    if (data.is_active !== false) return data as MemberRow;
+    nextId = data.manager_id;
+  }
+  return null;
+}
+
+export async function routeWaitingReplyTask(
+  taskId: string,
+  currentAssignedTo: string | null | undefined,
+  currentAssignedToEmail: string | null | undefined,
+  explicitReplyToEmail: string | null | undefined,
+): Promise<Record<string, unknown>> {
+  if (!currentAssignedToEmail) return {};
+
+  let target: MemberRow | null = null;
+
+  if (explicitReplyToEmail) {
+    // Route to the explicitly tagged person
+    const { data } = await supabase
+      .from("members")
+      .select("id, name, email, department, business_unit, is_active, manager_id")
+      .ilike("email", explicitReplyToEmail)
+      .maybeSingle();
+    if (data?.email && data.is_active !== false) target = data as MemberRow;
+  }
+
+  if (!target) {
+    // No explicit person (or they're inactive) — walk up the reporting line
+    const { data: me } = await supabase
+      .from("members")
+      .select("manager_id, role")
+      .ilike("email", currentAssignedToEmail)
+      .maybeSingle();
+    if (!me?.manager_id) return {}; // top of chain — no one to route to
+    target = await findActiveManager(me.manager_id);
+  }
+
+  if (!target?.email) return {};
+
+  await supabase.from("task_assignees").delete().eq("task_id", taskId);
+  await supabase.from("task_assignees").insert({
+    task_id: taskId, member_id: target.id,
+    member_name: target.name, member_email: target.email,
+  });
+
+  return {
+    assigned_to: target.name,
+    assigned_to_email: target.email,
+    assigned_to_department: target.department,
+    assigned_to_business_unit: target.business_unit,
+    // Capture who was waiting so the reply-to person can hand it back
+    waiting_reply_by_email: currentAssignedToEmail,
+    waiting_reply_by_name: currentAssignedTo,
+  };
+}
+
+// Called when the reply-to person clicks "Reply & Return".
+// Routes the task back to the person who set "Waiting Reply".
+export async function returnFromWaitingReply(
+  taskId: string,
+  waitingReplyByEmail: string | null | undefined,
+): Promise<Record<string, unknown>> {
+  if (!waitingReplyByEmail) return {};
+
+  const { data: original } = await supabase
+    .from("members")
+    .select("id, name, email, department, business_unit")
+    .ilike("email", waitingReplyByEmail)
+    .maybeSingle();
+
+  if (!original?.email) return {};
+
+  await supabase.from("task_assignees").delete().eq("task_id", taskId);
+  await supabase.from("task_assignees").insert({
+    task_id: taskId, member_id: original.id,
+    member_name: original.name, member_email: original.email,
+  });
+
+  return {
+    assigned_to: original.name,
+    assigned_to_email: original.email,
+    assigned_to_department: original.department,
+    assigned_to_business_unit: original.business_unit,
+    // Clear all waiting-reply routing fields
+    waiting_reply_by_email: null,
+    waiting_reply_by_name: null,
+    waiting_reply_note: null,
+    waiting_reply_to_email: null,
+    waiting_reply_to_name: null,
+    manager_reply_at: new Date().toISOString(),
+  };
+}

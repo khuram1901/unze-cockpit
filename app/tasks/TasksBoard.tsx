@@ -39,6 +39,16 @@ type Task = {
   // Khuram (17/07/2026): false = self-created task, closable directly by
   // the assignee — no Submitted step, no manager sign-off. Migration 143.
   requires_manager_signoff?: boolean | null;
+  submitted_by_name?: string | null;
+  submitted_by_email?: string | null;
+  // Waiting Reply routing fields (migration 189)
+  waiting_reply_note?: string | null;
+  waiting_reply_to_email?: string | null;
+  waiting_reply_to_name?: string | null;
+  waiting_reply_by_email?: string | null;
+  waiting_reply_by_name?: string | null;
+  manager_reply_text?: string | null;
+  manager_reply_at?: string | null;
   task_subtasks?: { id: string; is_complete: boolean }[];
   task_comments?: { id: string }[];
 };

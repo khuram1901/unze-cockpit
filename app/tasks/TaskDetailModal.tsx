@@ -42,6 +42,16 @@ type Task = {
   time_spent_minutes: number | null;
   whatsapp_auto_remind: boolean;
   company_id: string | null;
+  requires_manager_signoff?: boolean | null;
+  submitted_by_name?: string | null;
+  submitted_by_email?: string | null;
+  waiting_reply_note?: string | null;
+  waiting_reply_to_email?: string | null;
+  waiting_reply_to_name?: string | null;
+  waiting_reply_by_email?: string | null;
+  waiting_reply_by_name?: string | null;
+  manager_reply_text?: string | null;
+  manager_reply_at?: string | null;
 };
 
 export default function TaskDetailModal({
