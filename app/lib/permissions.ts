@@ -390,6 +390,10 @@ export function canViewDepartment(u: UserCtx, departmentName: string): boolean {
     if (departmentName === "Tax" && u.department === "Finance") return true;
     return false;
   }
+  // Members can view their own department page.
+  // The data inside (RPCs, RLS) is already scoped to what they can see,
+  // so the page-level gate just needs to let them in.
+  if (u.role === "Member" && u.department === departmentName) return true;
   return false;
 }
 
