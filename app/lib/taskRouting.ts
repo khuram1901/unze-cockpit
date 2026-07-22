@@ -98,9 +98,9 @@ async function findActiveManager(startMemberId: string): Promise<MemberRow | nul
       .from("members")
       .select("id, name, email, department, business_unit, is_active, manager_id")
       .eq("id", nextId)
-      .maybeSingle();
+      .maybeSingle() as { data: MemberRow | null; error: unknown };
     if (!data?.email) break;
-    if (data.is_active !== false) return data as MemberRow;
+    if (data.is_active !== false) return data;
     nextId = data.manager_id;
   }
   return null;
