@@ -357,7 +357,7 @@ function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; show
             onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
             <div style={{ ...iconBoxStyle, background: "rgba(15,23,32,0.07)" }}>📅</div>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: INK_700, textAlign: "center", lineHeight: 1.2 }}>Book Meeting</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: INK_700, textAlign: "center", lineHeight: 1.2 }}>Meet Khuram Saleem</span>
           </a>
         )}
       </div>
