@@ -49,7 +49,6 @@ function computeQuickLinks(ctx: UserCtx): QuickLink[] {
       { href: "/finance/imperial-pnl", title: "Imperial P&L",       icon: "👟", color: "green"  },
       { href: "/finance/imperial",     title: "Imperial Footwear",  icon: "👞", color: "amber"  },
       { href: "/department/hr",        title: "HR",                 icon: "🧑‍💼", color: "purple" },
-      { href: "/meetings",             title: "Meetings",           icon: "💬", color: "purple" },
       { href: "/my-minutes",           title: "My Minutes",         icon: "🗒️", color: "green"  },
       { href: "/folderit",             title: "Folder-it",          icon: "📁", color: "amber"  },
       { href: "/profile",              title: "Profile",            icon: "👤", color: "slate"  },
@@ -74,10 +73,6 @@ function computeQuickLinks(ctx: UserCtx): QuickLink[] {
     const dl = DEPT_PAGES[ctx.department];
     if (dl) links.push({ href: dl.href, title: ctx.department, icon: dl.icon, color: "amber" });
   }
-
-  // Meetings (all minutes view)
-  if (canSeeAllMinutes(ctx))
-    links.push({ href: "/meetings", title: "Meetings", icon: "💬", color: "purple" });
 
   // My Minutes — everyone
   links.push({ href: "/my-minutes", title: "My Minutes", icon: "🗒️", color: "green" });
