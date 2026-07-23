@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, authFetch, loadMyPermissions } from "../lib/supabase";
@@ -547,6 +547,35 @@ export default function HomePage() {
   const router = useRouter();
   const isMobile = useMobile();
   const { ctx, loading: ctxLoading } = useUserCtx();
+
+  // ── Google Calendar booking widget (non-exec staff only) ──────────────────
+  // Loaded once on mount; targets the div below in the JSX.
+  const bookingRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = bookingRef.current;
+    if (!el) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://calendar.google.com/calendar/scheduling-button-script.css";
+    document.head.appendChild(link);
+    const script = document.createElement("script");
+    script.src = "https://calendar.google.com/calendar/scheduling-button-script.js";
+    script.async = true;
+    script.onload = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).calendar?.schedulingButton?.load({
+        url: "https://calendar.google.com/calendar/appointments/AcZssZ3ZRAJ8EB0F6G2IKoq5a79UPUxRhGeD47X593o=?gv=true",
+        color: "#0F1720",
+        label: "Book time with Khuram",
+        target: el,
+      });
+    };
+    document.head.appendChild(script);
+    return () => {
+      if (document.head.contains(link)) document.head.removeChild(link);
+      if (document.head.contains(script)) document.head.removeChild(script);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [loading, setLoading] = useState(true);
   const isExec = !!ctx && canViewExecutiveDashboard(ctx);
 
@@ -2090,6 +2119,23 @@ export default function HomePage() {
                 </div>
               </div>
             )}
+
+            {/* ── Book time with Khuram ── */}
+            <div style={{
+              backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+              borderRadius: "8px", padding: "16px 20px", marginBottom: "14px",
+              display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap",
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: NAVY, marginBottom: "3px" }}>
+                  Book time with Khuram
+                </div>
+                <div style={{ fontSize: "12px", color: SLATE }}>
+                  View the CEO&apos;s availability and schedule a meeting directly on his calendar
+                </div>
+              </div>
+              <div ref={bookingRef} />
+            </div>
 
             {/* ── KPI Cards ── */}
             <div style={{
