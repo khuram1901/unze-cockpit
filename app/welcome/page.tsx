@@ -321,36 +321,17 @@ function QuoteCard() {
 }
 
 /* ─── Quick Links card ───────────────────────────────────────── */
+const BOOKING_URL = "https://calendar.google.com/calendar/appointments/AcZssZ3ZRAJ8EB0F6G2IKoq5a79UPUxRhGeD47X593o=?gv=true";
+
 function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; showBookingButton?: boolean }) {
-  const bookingRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!showBookingButton) return;
-    const el = bookingRef.current;
-    if (!el) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://calendar.google.com/calendar/scheduling-button-script.css";
-    document.head.appendChild(link);
-    const script = document.createElement("script");
-    script.src = "https://calendar.google.com/calendar/scheduling-button-script.js";
-    script.async = true;
-    script.onload = () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (window as any).calendar?.schedulingButton?.load({
-        url: "https://calendar.google.com/calendar/appointments/AcZssZ3ZRAJ8EB0F6G2IKoq5a79UPUxRhGeD47X593o=?gv=true",
-        color: "#0F1720",
-        label: "Book time with Khuram",
-        target: el,
-      });
-    };
-    document.head.appendChild(script);
-    return () => {
-      if (document.head.contains(link)) document.head.removeChild(link);
-      if (document.head.contains(script)) document.head.removeChild(script);
-    };
-  }, [showBookingButton]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  const linkItemStyle: CSSProperties = {
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+    padding: "11px 6px", borderRadius: 10, textDecoration: "none", transition: "background .15s",
+  };
+  const iconBoxStyle: CSSProperties = {
+    width: 38, height: 38, borderRadius: 10,
+    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
+  };
   return (
     <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
       <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}` }}>
@@ -358,27 +339,28 @@ function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; show
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, padding: "14px 16px" }}>
         {links.map((l) => (
-          <Link key={l.href} href={l.href} style={{
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-            padding: "11px 6px", borderRadius: 10, textDecoration: "none", transition: "background .15s",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          <Link key={l.href} href={l.href} style={linkItemStyle}
+            onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
           >
-            <div style={{
-              width: 38, height: 38, borderRadius: 10,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 16, ...iconBg(l.color),
-            }}>{l.icon}</div>
+            <div style={{ ...iconBoxStyle, ...iconBg(l.color) }}>{l.icon}</div>
             <span style={{ fontSize: 10.5, fontWeight: 600, color: INK_700, textAlign: "center", lineHeight: 1.2 }}>{l.title}</span>
           </Link>
         ))}
+        {showBookingButton && (
+          <a
+            href={BOOKING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={linkItemStyle}
+            onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <div style={{ ...iconBoxStyle, background: "rgba(15,23,32,0.07)" }}>📅</div>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: INK_700, textAlign: "center", lineHeight: 1.2 }}>Book Meeting</span>
+          </a>
+        )}
       </div>
-      {showBookingButton && (
-        <div style={{ padding: "10px 16px 14px", borderTop: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "center" }}>
-          <div ref={bookingRef} />
-        </div>
-      )}
     </div>
   );
 }
