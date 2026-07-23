@@ -321,7 +321,7 @@ function QuoteCard() {
 }
 
 /* ─── Quick Links card ───────────────────────────────────────── */
-const BOOKING_URL = "https://calendar.google.com/calendar/appointments/AcZssZ3ZRAJ8EB0F6G2IKoq5a79UPUxRhGeD47X593o=?gv=true";
+const BOOKING_URL = "https://calendar.app.google/gR4deTjvGZaHZGyZ6";
 
 function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; showBookingButton?: boolean }) {
   const linkItemStyle: CSSProperties = {
