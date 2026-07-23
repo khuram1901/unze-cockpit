@@ -321,7 +321,36 @@ function QuoteCard() {
 }
 
 /* ─── Quick Links card ───────────────────────────────────────── */
-function QuickLinksCard({ links }: { links: QuickLink[] }) {
+function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; showBookingButton?: boolean }) {
+  const bookingRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showBookingButton) return;
+    const el = bookingRef.current;
+    if (!el) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://calendar.google.com/calendar/scheduling-button-script.css";
+    document.head.appendChild(link);
+    const script = document.createElement("script");
+    script.src = "https://calendar.google.com/calendar/scheduling-button-script.js";
+    script.async = true;
+    script.onload = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).calendar?.schedulingButton?.load({
+        url: "https://calendar.google.com/calendar/appointments/AcZssZ3ZRAJ8EB0F6G2IKoq5a79UPUxRhGeD47X593o=?gv=true",
+        color: "#0F1720",
+        label: "Book time with Khuram",
+        target: el,
+      });
+    };
+    document.head.appendChild(script);
+    return () => {
+      if (document.head.contains(link)) document.head.removeChild(link);
+      if (document.head.contains(script)) document.head.removeChild(script);
+    };
+  }, [showBookingButton]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
       <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}` }}>
@@ -345,6 +374,11 @@ function QuickLinksCard({ links }: { links: QuickLink[] }) {
           </Link>
         ))}
       </div>
+      {showBookingButton && (
+        <div style={{ padding: "10px 16px 14px", borderTop: `1px solid ${HAIRLINE}`, display: "flex", justifyContent: "center" }}>
+          <div ref={bookingRef} />
+        </div>
+      )}
     </div>
   );
 }
@@ -832,7 +866,7 @@ function MemberLayout({ data, tick, weather, email }: { data: WelcomeData; tick:
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
           <ClockWeatherCard tick={tick} weather={weather} />
-          <QuickLinksCard links={data.quickLinks} />
+          <QuickLinksCard links={data.quickLinks} showBookingButton />
         </div>
       </div>
     </>
@@ -856,7 +890,7 @@ function ManagerLayout({ data, tick, weather, email }: { data: WelcomeData; tick
         {hasTeam && <TeamStatusCard data={data} />}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
-          <QuickLinksCard links={data.quickLinks} />
+          <QuickLinksCard links={data.quickLinks} showBookingButton />
         </div>
       </div>
     </>
@@ -880,7 +914,7 @@ function HodLayout({ data, tick, weather, email }: { data: WelcomeData; tick: nu
         <MyTasksCard tasks={data.myTasks} />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
-          <QuickLinksCard links={data.quickLinks} />
+          <QuickLinksCard links={data.quickLinks} showBookingButton />
         </div>
       </div>
     </>
@@ -1322,6 +1356,7 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal, pensi
 
 /* ─── Layout: CEO / Admin / Executive ───────────────────────── */
 /* ─── Kamran layout — CEO with own /home exec dashboard ─────── */
+// Note: showBookingButton omitted above (KhuramLayout) — it's his own calendar
 function KamranLayout({ data, tick, weather, fx }: {
   data: WelcomeData; tick: number; weather: Weather | null; fx: FxRates | null;
 }) {
@@ -1337,7 +1372,7 @@ function KamranLayout({ data, tick, weather, fx }: {
         <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal assignments" />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
-          <QuickLinksCard links={data.quickLinks} />
+          <QuickLinksCard links={data.quickLinks} showBookingButton />
           {/* Executive Dashboard shortcut */}
           <div style={{
             background: `linear-gradient(135deg, ${NAVY} 0%, #162232 100%)`,
@@ -1418,7 +1453,7 @@ function CeoLayout({ data, tick, weather, fx, holdings, portfolioTotal, email }:
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
           <ClockWeatherCard tick={tick} weather={weather} />
-          <QuickLinksCard links={data.quickLinks} />
+          <QuickLinksCard links={data.quickLinks} showBookingButton />
         </div>
       </div>
     </>
