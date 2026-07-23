@@ -321,8 +321,7 @@ function QuoteCard() {
 }
 
 /* ─── Quick Links card ───────────────────────────────────────── */
-const BOOKING_URL    = "https://calendar.app.google/gR4deTjvGZaHZGyZ6";
-const BOOKING_URL_15 = "https://calendar.app.google/GXurbfos1KP2pG2x8";
+const BOOKING_URL = "https://calendar.app.google/gR4deTjvGZaHZGyZ6";
 
 function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; showBookingButton?: boolean }) {
   const linkItemStyle: CSSProperties = {
@@ -348,7 +347,7 @@ function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; show
             <span style={{ fontSize: 10.5, fontWeight: 600, color: INK_700, textAlign: "center", lineHeight: 1.2 }}>{l.title}</span>
           </Link>
         ))}
-        {showBookingButton && (<>
+        {showBookingButton && (
           <a
             href={BOOKING_URL}
             target="_blank"
@@ -360,18 +359,7 @@ function QuickLinksCard({ links, showBookingButton }: { links: QuickLink[]; show
             <div style={{ ...iconBoxStyle, background: "rgba(15,23,32,0.07)" }}>📅</div>
             <span style={{ fontSize: 10.5, fontWeight: 600, color: INK_700, textAlign: "center", lineHeight: 1.2 }}>Meet Khuram Saleem</span>
           </a>
-          <a
-            href={BOOKING_URL_15}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={linkItemStyle}
-            onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            <div style={{ ...iconBoxStyle, background: "rgba(15,23,32,0.07)" }}>⏱️</div>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: INK_700, textAlign: "center", lineHeight: 1.2 }}>15 Mins Meetup</span>
-          </a>
-        </>)}
+        )}
       </div>
     </div>
   );
