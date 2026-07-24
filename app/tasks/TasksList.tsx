@@ -706,6 +706,26 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     myTasksGroups.get(g)!.push(t);
   }
 
+  // ── "Delegated by me" (Khuram, 24/07/2026) — the Mine view only showed
+  // tasks needing HIS action, which hid the 20 tasks he'd handed out via
+  // meetings or directly. Shown as a separate section at the bottom of
+  // Mine: his own action items stay on top, but everything he's delegated
+  // is always visible with its current status. Excludes tasks already in
+  // myTasksSource (Submitted back to him / awaiting his reply) so nothing
+  // appears twice.
+  const delegatedByMe = myTasksScope === "mine"
+    ? allOpen.filter((t) => {
+        const byMe = !!(t.assigned_by_email && myIdentities.includes(t.assigned_by_email.toLowerCase()));
+        if (!byMe) return false;
+        const toMe = !!(t.assigned_to_email && myIdentities.includes(t.assigned_to_email.toLowerCase()));
+        if (toMe || myCoAssignedTaskIds.has(t.id)) return false;
+        // Already surfaced above as an action item
+        if (t.status === "Submitted") return false;
+        if (t.status === "Waiting Reply" && t.reply_required) return false;
+        return true;
+      })
+    : [];
+
   // ── Tree view grouping — Department → Person → Tasks. This is the old
   // Department view's grouping brought back as the "Tree" icon view, per
   // Khuram — a real two-level hierarchy now (both levels collapsible),
@@ -1428,8 +1448,28 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             })
           )}
           {myTasksSource.length === 0 && (
-            <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE }}>
+            <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: COLOURS.SLATE, marginBottom: "16px" }}>
               {myTasksScope === "mine" ? "Nothing needs your action right now." : "No tasks to show."}
+            </div>
+          )}
+
+          {/* ═══ DELEGATED BY ME — tasks I allocated (meetings or direct)
+              that others are still working on. Not action items, so they
+              sit below my own groups — but always visible. ═══ */}
+          {!listFilteredTasks && delegatedByMe.length > 0 && (
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.SLATE, display: "inline-block" }} />
+                <span style={{ fontSize: "12.5px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: COLOURS.NAVY }}>Delegated by me</span>
+                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontWeight: 600 }}>{delegatedByMe.length}</span>
+                <span style={{ fontSize: "11.5px", color: COLOURS.SLATE }}>— with your team, watching only</span>
+              </div>
+              <div style={{ ...cardStyle, overflow: "hidden" }}>
+                {delegatedByMe
+                  .slice()
+                  .sort((a, b) => daysOverdue(b) - daysOverdue(a) || (a.due_date || "9").localeCompare(b.due_date || "9"))
+                  .map((t) => <TaskRow key={t.id} task={t} selectable />)}
+              </div>
             </div>
           )}
         </div>
