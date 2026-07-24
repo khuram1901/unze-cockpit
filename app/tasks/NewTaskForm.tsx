@@ -5,6 +5,7 @@ import { supabase, authFetch } from "../lib/supabase";
 import { useRouter } from "next/navigation";
 import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
+import { filterAssignableMembers } from "../lib/permissions";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import MentionTextarea, { MentionMember } from "../lib/MentionTextarea";
 
@@ -168,7 +169,10 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
           .order("name", { ascending: true }),
       ]);
 
-      if (membersRes.data) setMembers(membersRes.data);
+      // CEO assignment lock (Khuram, 24/07/2026): the CEOs never appear
+      // as assignable unless the viewer is a CEO account or the PA.
+      // Server-side twin lives in createTaskCore.
+      if (membersRes.data) setMembers(filterAssignableMembers(membersRes.data, currentEmail));
       if (ownersRes.data) setDepartmentOwners(ownersRes.data);
       if (companiesRes.data) setCompanies(companiesRes.data);
     }

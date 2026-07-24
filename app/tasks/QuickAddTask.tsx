@@ -24,6 +24,7 @@ import {
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { logAction } from "../lib/audit-log";
 import { parseVoiceTask, matchMemberByName } from "../lib/parseVoiceTask";
+import { filterAssignableMembers } from "../lib/permissions";
 import { useRouter } from "next/navigation";
 
 type Member = {
@@ -147,11 +148,15 @@ export default function QuickAddTask({
   // ── Load members + companies ────────────────────────────────────────────
   useEffect(() => {
     async function load() {
-      const [mRes, cRes] = await Promise.all([
+      const [userRes, mRes, cRes] = await Promise.all([
+        supabase.auth.getUser(),
         supabase.from("members").select("id, name, email, department, business_unit, task_default_company_id").eq("is_active", true).order("name", { ascending: true }),
         supabase.from("companies").select("id, name, short_code").in("short_code", TASK_COMPANY_CODES).order("name", { ascending: true }),
       ]);
-      if (mRes.data) setMembers(mRes.data);
+      // CEO assignment lock (Khuram, 24/07/2026): CEOs aren't assignable
+      // unless the viewer is a CEO account or the PA. Server-side twin in
+      // createTaskCore.
+      if (mRes.data) setMembers(filterAssignableMembers(mRes.data, userRes.data.user?.email));
       if (cRes.data) setCompanies(cRes.data);
     }
     load();

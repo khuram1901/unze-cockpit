@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
 import { COLOURS, RADII, useConfirm, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
-import { canDeleteTask, canEditTask, canReopenCompletedTask, isTaskProtected } from "../lib/permissions";
+import { canDeleteTask, canEditTask, canReopenCompletedTask, isTaskProtected, filterAssignableMembers } from "../lib/permissions";
 import TaskStatus from "./TaskStatus";
 
 type Comment = {
@@ -146,14 +146,17 @@ export default function TaskDetailPanel({
       ]);
       setCompanies(companiesRes.data || []);
       setDeptOwners(deptRes.data || []);
-      const memberList = membersRes.data || [];
+      // CEO assignment lock (Khuram, 24/07/2026): CEOs aren't assignable
+      // via the owner picker unless the viewer is a CEO account or the
+      // PA. Server-side twin in createTaskCore.
+      const memberList = filterAssignableMembers(membersRes.data || [], myEmail);
       setMembers(memberList);
       const ids = (assigneesRes.data || [])
         .map((a) => a.member_id || memberList.find((m) => m.email === a.member_email)?.id)
         .filter((id): id is string => !!id);
       setEditOwnerIds(Array.from(new Set(ids)));
     })();
-  }, [taskEditable, task.id]);
+  }, [taskEditable, task.id, myEmail]);
 
   async function updateTaskField(fields: Record<string, unknown>) {
     const { error } = await supabase.from("tasks").update(fields).eq("id", task.id);

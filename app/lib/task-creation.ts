@@ -82,6 +82,32 @@ export async function createTaskCore(input: CreateTaskInput): Promise<CreateTask
   if (!input.assignedTo) {
     return { ok: false, error: "An assignee is required." };
   }
+  // Khuram (24/07/2026): "we need to ensure every task has the correct
+  // company, department, owner, tasks due date before its allowed to be
+  // added." Company and owner are checked above; due date now hard-
+  // required here too so no path (form, quick-add, minutes, import) can
+  // create an undated task. Department derives from the owner's member
+  // record at every call site.
+  if (!input.dueDate) {
+    return { ok: false, error: "A due date is required for every task." };
+  }
+  // CEO assignment lock (Khuram, 24/07/2026): "no one is assigning task
+  // to me or Kamran as we are the ceo, they can ask us questions
+  // comments" — questions go via Waiting Reply. Only the CEOs' own
+  // accounts and the PA (who manages the CEO's list) may assign a task
+  // to a CEO account. System actors (cash escalation, recurring cron)
+  // are trusted server-side callers and stay allowed.
+  const CEO_LOCKED = ["khuram1901@gmail.com", "k.saleem@unzegroup.com", "kamran@unze.co.uk"];
+  const ALLOWED_TO_ASSIGN_CEO = [...CEO_LOCKED, "pa.ceo@unze.co.uk"];
+  if (input.actor.kind === "user" && !ALLOWED_TO_ASSIGN_CEO.includes(input.actor.email.toLowerCase())) {
+    const targets = [
+      input.assignedToEmail,
+      ...(input.additionalAssignees || []).map((a) => a.email),
+    ].filter((e): e is string => !!e).map((e) => e.toLowerCase());
+    if (targets.some((e) => CEO_LOCKED.includes(e))) {
+      return { ok: false, error: "Tasks can't be assigned to the CEO. If you need their input, set your task to Waiting Reply and tag them instead." };
+    }
+  }
   // A task can only reach Completed by going through Submitted -> HOD
   // "Mark Complete" (see supabase/114/115/117). That gate only runs on
   // UPDATE, so without this check anyone creating a task could just hand

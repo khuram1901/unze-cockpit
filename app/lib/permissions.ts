@@ -110,6 +110,30 @@ export function myIdentityEmails(email: string | null | undefined): string[] {
   return [e];
 }
 
+// ── CEO assignment lock ──────────────────────────────────────────────
+// Khuram (24/07/2026): "no one is assigning task to me or Kamran as we
+// are the ceo, they can ask us questions comments" — questions go
+// through the Waiting Reply flow (which CAN be tagged to a CEO); actual
+// task assignment to a CEO account is locked. Only the CEOs themselves
+// (either of Khuram's two accounts, or Kamran) and the PA — who manages
+// the CEO's task list on his behalf — may still pick them as assignee.
+// Enforced server-side in createTaskCore AND filtered out of every
+// assignee picker client-side (filterAssignableMembers below).
+export const CEO_ASSIGN_LOCKED_EMAILS = [ADMIN_EMAIL, CEO_EMAIL, CEO2_EMAIL];
+
+export function canAssignToCeos(viewerEmail: string | null | undefined): boolean {
+  const e = lc(viewerEmail);
+  return !!e && [ADMIN_EMAIL, CEO_EMAIL, CEO2_EMAIL, PA_EMAIL].includes(e);
+}
+
+export function filterAssignableMembers<T extends { email?: string | null }>(
+  members: T[],
+  viewerEmail: string | null | undefined,
+): T[] {
+  if (canAssignToCeos(viewerEmail)) return members;
+  return members.filter((m) => !CEO_ASSIGN_LOCKED_EMAILS.includes(lc(m.email) || ""));
+}
+
 export function isAdminTier(u: UserCtx) {
   return isMainAdmin(u) || u.role === "Admin" || isCEO(u);
 }

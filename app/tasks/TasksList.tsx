@@ -8,7 +8,7 @@ import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
-import { canCompleteSubmittedTask, canReopenCompletedTask, myIdentityEmails } from "../lib/permissions";
+import { canCompleteSubmittedTask, canReopenCompletedTask, myIdentityEmails, filterAssignableMembers } from "../lib/permissions";
 import { routeSubmittedTask } from "../lib/taskRouting";
 import TeamStats from "./TeamStats";
 import TaskDetailModal from "./TaskDetailModal";
@@ -1234,7 +1234,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
 
               <select value={bulkOwnerId} onChange={(e) => setBulkOwnerId(e.target.value)} style={{ ...filterSelectStyle, flex: "1 1 140px" }}>
                 <option value="">Change owner…</option>
-                {bulkMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                {/* CEO assignment lock (24/07/2026) — CEOs only pickable
+                    by a CEO account or the PA; server twin in createTaskCore */}
+                {filterAssignableMembers(bulkMembers, myEmail).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
               <button onClick={applyBulkOwner} disabled={!bulkOwnerId || bulkApplying} style={{ ...smallActionBtn, borderRadius: RADII.PILL, opacity: !bulkOwnerId || bulkApplying ? 0.5 : 1, cursor: !bulkOwnerId || bulkApplying ? "not-allowed" : "pointer" }}>Apply</button>
 
