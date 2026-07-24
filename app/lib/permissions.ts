@@ -446,12 +446,12 @@ export function canEditOperationsTargets(u: UserCtx) {
 
 // ── Tax Accounts Schedule ────────────────────────────────────────
 export function canViewTaxAccounts(u: UserCtx): boolean {
-  // Same override-before-PA ordering bug as canViewFinance, fixed the
-  // same way on 15 Jul 2026 — isPA() checked first, unconditionally.
   if (isPA(u)) return false;
   const o = ov(u, "can_view_dept_tax_accounts");
   if (o !== null) return o;
-  return true; // all other authenticated users can view by default
+  // Default: Admin/CEO and Tax/Finance departments only.
+  // Everyone else needs an explicit grant via the Access Matrix.
+  return isAdminTier(u) || u.department === "Tax" || u.department === "Finance";
 }
 
 export function canManageTaxSchedule(u: UserCtx): boolean {
