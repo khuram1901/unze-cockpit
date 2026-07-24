@@ -550,10 +550,11 @@ export default function TaskStatus({
             >
               {/* "Completed" is never a free jump from this dropdown — the only
                   door to Completed is the HOD's "Mark Complete" button further
-                  down, and only once the task is Submitted. Still listed here
-                  if the task already IS Completed, so the control renders its
-                  real value instead of falling back to a blank/mismatched one. */}
-              {STATUSES.filter((s) => s !== "Completed" || status === "Completed").map((s) => (
+                  down, and only once the task is Submitted. "Cancelled" removed
+                  as a choice entirely per Khuram (24/07/2026). Both still
+                  listed if the task already HAS that status, so the control
+                  renders its real value instead of a blank/mismatched one. */}
+              {STATUSES.filter((s) => (s !== "Completed" && s !== "Cancelled") || s === status).map((s) => (
                 <option key={s}>{s}</option>
               ))}
             </select>

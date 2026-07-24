@@ -74,7 +74,9 @@ type CompanyLite = { id: string; name: string; short_code: string | null };
 // HOD check, so it can't be allowed to touch Completed at all now that
 // only the assignee's HOD (or Executive, for Khuram/Kamran's queue) can
 // close a task — see canCompleteSubmittedTask in lib/permissions.ts.
-const STATUS_OPTIONS = ["Not Started", "In Progress", "Waiting Reply", "Stuck", "Submitted", "Cancelled"];
+// "Cancelled" removed per Khuram (24/07/2026) — no longer a selectable
+// status anywhere; the 4 historical Cancelled tasks keep their status.
+const STATUS_OPTIONS = ["Not Started", "In Progress", "Waiting Reply", "Stuck", "Submitted"];
 
 const COMPANY_BADGE_COLOURS: Record<string, { color: string; background: string }> = {
   UTPL: { color: COLOURS.BLUE, background: COLOURS.INFO_SOFT },
@@ -177,7 +179,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // visible again now. filtersOpen is kept (always true) rather than
   // ripped out everywhere it's referenced, to keep this change small.
   const [filtersOpen] = useState(true);
-  const [stageFilter, setStageFilter] = useState<string>("all");
+  // stageFilter removed per Khuram (24/07/2026) — stage values are
+  // free-text progress notes, useless as a filter. The Workload
+  // scoreboard (Team view) is the way to see who/which dept is delaying.
   const [dueFilter, setDueFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [subtaskFilter, setSubtaskFilter] = useState<string>("all");
@@ -306,7 +310,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     setPriorityFilter("all");
     setOwnerFilter("all");
     setPeriodFilter("all");
-    setStageFilter("all");
     setDueFilter("all");
     setSourceFilter("all");
     setSubtaskFilter("all");
@@ -392,7 +395,10 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     if (companyFilter !== "all") {
       if (companyFilter === "group" ? !!t.company_id : t.company_id !== companyFilter) return false;
     }
-    if (departmentFilter !== "all" && (t.assigned_to_department || t.project || "Unassigned") !== departmentFilter) return false;
+    // Department match uses assigned_to_department ONLY — the old
+    // `|| t.project` fallback leaked meeting titles into the department
+    // filter as fake departments (Khuram, 24/07/2026).
+    if (departmentFilter !== "all" && (t.assigned_to_department || "Unassigned") !== departmentFilter) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (ownerFilter !== "all" && normName(t.assigned_to) !== ownerFilter) return false;
@@ -402,7 +408,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       if (periodFilter === "month" && !(t.due_date >= periodMonthStart && t.due_date < periodMonthEnd)) return false;
       if (periodFilter === "quarter" && !(t.due_date >= periodQuarterStart && t.due_date < periodQuarterEnd)) return false;
     }
-    if (stageFilter !== "all" && (t.stage || "") !== stageFilter) return false;
     if (dueFilter !== "all") {
       const isOd = t.status !== "Completed" && t.status !== "Cancelled" && !!t.due_date && t.due_date < todayStr;
       if (dueFilter === "overdue" && !isOd) return false;
@@ -426,23 +431,19 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     return true;
   });
 
-  // Dropdown option lists always come from the full, unfiltered task set so
-  // picking one filter never hides the options for another.
-  // Merge the canonical department list (department_owners — includes
-  // departments with zero tasks so far, like the 7 Khuram just added)
-  // with whatever's actually on existing tasks, so nothing is missing
-  // from the filter either way.
-  const departmentOptions = Array.from(new Set([
-    ...allDepartments,
-    ...tasks.map((t) => t.assigned_to_department || t.project || "Unassigned"),
-  ])).sort();
+  // Dropdown option lists: departments come from the CANONICAL list only
+  // (department_owners) plus "Unassigned". The old merge with
+  // task-derived values (assigned_to_department || project) leaked
+  // meeting titles and stray labels in as fake departments — Khuram:
+  // "our departments are getting bigger and bigger... we need to stop
+  // this addition" (24/07/2026). Only Khuram edits department_owners.
+  const departmentOptions = [...Array.from(new Set(allDepartments)).sort(), "Unassigned"];
   const ownerOptions = Array.from(new Set(tasks.map((t) => normName(t.assigned_to)).filter((n) => !!n))).sort();
-  const stageOptions = Array.from(new Set(tasks.map((t) => t.stage).filter((s): s is string => !!s))).sort();
   // Counts every filter, including Company (left out of the old boolean
   // check by oversight) — drives the badge on the single "Filters" button.
   const activeFilterCount = [
     companyFilter !== "all", departmentFilter !== "all", priorityFilter !== "all", statusFilter !== "all",
-    ownerFilter !== "all", periodFilter !== "all", stageFilter !== "all", dueFilter !== "all",
+    ownerFilter !== "all", periodFilter !== "all", dueFilter !== "all",
     sourceFilter !== "all", subtaskFilter !== "all", searchQuery.trim() !== "",
   ].filter(Boolean).length;
   const filtersActive = activeFilterCount > 0;
@@ -1373,7 +1374,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <option>Stuck</option>
             <option>Submitted</option>
             <option>Completed</option>
-            <option>Cancelled</option>
           </select>
           <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">All owners</option>
@@ -1384,10 +1384,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             <option value="week">Due this week</option>
             <option value="month">Due this month</option>
             <option value="quarter">Due this quarter</option>
-          </select>
-          <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
-            <option value="all">All stages</option>
-            {stageOptions.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <select value={dueFilter} onChange={(e) => setDueFilter(e.target.value)} style={{ ...filterSelectStyle, width: "100%" }}>
             <option value="all">Any due date</option>
@@ -1657,7 +1653,6 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
             setDueFilter(d.due ?? "all");
             setPriorityFilter("all");
             setPeriodFilter("all");
-            setStageFilter("all");
             setSourceFilter("all");
             setSubtaskFilter("all");
             setSearchQuery("");
