@@ -1167,7 +1167,9 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
           <div style={{ display: "flex", gap: "4px" }}>
-            {(["team", "recurring"] as const).map((v) => (
+            {/* Team (Workload scoreboard) is privileged-only — it shows
+                every department's outstanding counts (Khuram, 24/07/2026). */}
+            {(isPrivileged ? (["team", "recurring"] as const) : (["recurring"] as const)).map((v) => (
               <button key={v} onClick={() => setTimeView(v)} style={{
                 backgroundColor: timeView === v ? COLOURS.NAVY : COLOURS.CARD,
                 color: timeView === v ? "white" : COLOURS.NAVY,
@@ -1640,8 +1642,31 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
         />
       )}
 
-      {/* ═══ TEAM VIEW ═══ */}
-      {timeView === "team" && <TeamStats />}
+      {/* ═══ TEAM VIEW — Workload scoreboard. Clicking a count drills
+          into the List view with the matching filters applied, so a
+          number is never a dead end (Khuram, 24/07/2026). ═══ */}
+      {timeView === "team" && isPrivileged && (
+        <TeamStats
+          onDrill={(d) => {
+            // Reset every list filter first so the drill shows exactly
+            // what was clicked, not what was left over from last time.
+            setCompanyFilter("all");
+            setDepartmentFilter(d.department ?? "all");
+            setOwnerFilter(d.owner ?? "all");
+            setStatusFilter(d.status ?? "all");
+            setDueFilter(d.due ?? "all");
+            setPriorityFilter("all");
+            setPeriodFilter("all");
+            setStageFilter("all");
+            setSourceFilter("all");
+            setSubtaskFilter("all");
+            setSearchQuery("");
+            setFilter("all");
+            setMyTasksScope("everyone");
+            setTimeView("list");
+          }}
+        />
+      )}
 
       {/* ═══ RECURRING VIEW ═══ */}
       {timeView === "recurring" && <RecurringTasksPanel isPrivileged={isPrivileged} />}
