@@ -18,11 +18,11 @@ async function checkCanManage(auth: { email: string }, supabase: ReturnType<type
 }
 
 // GET — single case with full update log
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
-  const { id } = await params;
+  const { id } = await context.params;
   const supabase = createServiceClient();
   const { data: caseData, error: caseErr } = await supabase
     .from("legal_cases")
@@ -44,11 +44,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 // PATCH — update case fields (admin/manager: FIR number, warrant, status, resolution)
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
-  const { id } = await params;
+  const { id } = await context.params;
   const supabase = createServiceClient();
   if (!(await checkCanManage(auth, supabase))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
