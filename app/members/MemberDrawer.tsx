@@ -430,6 +430,18 @@ export default function MemberDrawer({
   const toast = useToast();
   const [drawerTab, setDrawerTab] = useState<DrawerTab>("access");
 
+  /* ── Collapsible sections (Access tab) ───────────────────────────── */
+  // All sections start collapsed so you see the full overview at a glance.
+  // "Finance" and "Access Packs" are open by default — most common first stop.
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set(["Finance", "Packs"]));
+  function toggleSection(title: string) {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      next.has(title) ? next.delete(title) : next.add(title);
+      return next;
+    });
+  }
+
   /* ── Permission state ─────────────────────────────────────────────── */
   const [perms, setPerms] = useState<PermRow>({});
   const [pending, setPending] = useState<PermRow>({});
@@ -635,44 +647,57 @@ export default function MemberDrawer({
             {/* ── Access Packs ─────────────────────────────────────── */}
             {!isAdminRole && (
               <div style={sectionBox}>
-                <div style={sectionHead}>
+                <button
+                  onClick={() => toggleSection("Packs")}
+                  style={{ ...sectionHead, width: "100%", cursor: "pointer", background: openSections.has("Packs") ? COLOURS.CARD_ALT : COLOURS.CARD }}
+                >
                   <span style={{ fontSize: 13, fontWeight: 600, color: COLOURS.NAVY }}>⚡ Quick Access Packs</span>
-                  <span style={{ fontSize: 11, color: COLOURS.SLATE }}>Apply a preset, then adjust below and save</span>
-                </div>
-                <div style={{ padding: "10px 14px", display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {ACCESS_PACKS.map((pack) => (
-                    <button
-                      key={pack.id}
-                      onClick={() => applyPack(pack)}
-                      disabled={isProtected}
-                      title={pack.description}
-                      style={{
-                        fontSize: 12, fontWeight: 600, padding: "6px 14px",
-                        borderRadius: RADII.PILL, cursor: isProtected ? "not-allowed" : "pointer",
-                        border: `1px solid ${COLOURS.NAVY}`,
-                        background: "transparent", color: COLOURS.NAVY,
-                      }}
-                    >
-                      {pack.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ padding: "0 14px 10px", fontSize: 11, color: COLOURS.SLATE, fontStyle: "italic" }}>
-                  Packs are a starting point — you can still toggle individual permissions below before saving.
-                </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, color: COLOURS.SLATE }}>Apply a preset</span>
+                    <span style={{ fontSize: 11, color: COLOURS.SLATE, transform: openSections.has("Packs") ? "rotate(180deg)" : "rotate(0)", transition: "transform .2s", display: "inline-block" }}>▼</span>
+                  </div>
+                </button>
+                {openSections.has("Packs") && (
+                  <>
+                    <div style={{ padding: "10px 14px", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {ACCESS_PACKS.map((pack) => (
+                        <button
+                          key={pack.id}
+                          onClick={() => applyPack(pack)}
+                          disabled={isProtected}
+                          title={pack.description}
+                          style={{
+                            fontSize: 12, fontWeight: 600, padding: "6px 14px",
+                            borderRadius: RADII.PILL, cursor: isProtected ? "not-allowed" : "pointer",
+                            border: `1px solid ${COLOURS.NAVY}`,
+                            background: "transparent", color: COLOURS.NAVY,
+                          }}
+                        >
+                          {pack.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ padding: "0 14px 10px", fontSize: 11, color: COLOURS.SLATE, fontStyle: "italic" }}>
+                      Packs are a starting point — you can still toggle individual permissions below before saving.
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
             {/* ── Finance section ───────────────────────────────────── */}
             {!isAdminRole && (
               <div style={sectionBox}>
-                <div style={sectionHead}>
+                <button onClick={() => toggleSection("Finance")} style={{ ...sectionHead, width: "100%", cursor: "pointer", background: openSections.has("Finance") ? COLOURS.CARD_ALT : COLOURS.CARD }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: COLOURS.NAVY }}>💰 Finance</span>
-                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: RADII.PILL, background: getFinanceScope() !== "none" ? COLOURS.SUCCESS_SOFT : COLOURS.CARD_ALT, color: getFinanceScope() !== "none" ? COLOURS.GREEN : COLOURS.SLATE, fontWeight: 600 }}>
-                    {getFinanceScope() === "none" ? "No access" : getFinanceScope() === "both" ? "UTPL + IFPL" : getFinanceScope()}
-                  </span>
-                </div>
-                <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: RADII.PILL, background: getFinanceScope() !== "none" ? COLOURS.SUCCESS_SOFT : COLOURS.CARD_ALT, color: getFinanceScope() !== "none" ? COLOURS.GREEN : COLOURS.SLATE, fontWeight: 600 }}>
+                      {getFinanceScope() === "none" ? "No access" : getFinanceScope() === "both" ? "UTPL + IFPL" : getFinanceScope()}
+                    </span>
+                    <span style={{ fontSize: 11, color: COLOURS.SLATE, transform: openSections.has("Finance") ? "rotate(180deg)" : "rotate(0)", transition: "transform .2s", display: "inline-block" }}>▼</span>
+                  </div>
+                </button>
+                {openSections.has("Finance") && <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
                   {/* Company scope */}
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: COLOURS.SLATE, marginBottom: 6 }}>Company scope</div>
@@ -726,32 +751,38 @@ export default function MemberDrawer({
                       ))}
                     </div>
                   )}
-                </div>
+                </div>}
               </div>
             )}
 
             {/* ── Permission sections ───────────────────────────────── */}
             {!isAdminRole && PERM_SECTIONS.map((section) => {
               const count = onCount(section.items);
+              const isOpen = openSections.has(section.title);
               return (
                 <div key={section.title} style={sectionBox}>
-                  <div style={sectionHead}>
+                  <button onClick={() => toggleSection(section.title)} style={{ ...sectionHead, width: "100%", cursor: "pointer", background: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: COLOURS.NAVY }}>{section.icon} {section.title}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: RADII.PILL, background: count > 0 ? COLOURS.SUCCESS_SOFT : COLOURS.CARD_ALT, color: count > 0 ? COLOURS.GREEN : COLOURS.SLATE, fontWeight: 600 }}>
                       {count > 0 ? `${count} on` : "None"}
                     </span>
-                  </div>
-                  <div style={{ padding: "8px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-                    {section.items.map(({ key, label: itemLabel, description }) => (
-                      <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                        <div>
-                          <div style={{ fontSize: 12.5, color: COLOURS.NAVY }}>{itemLabel}</div>
-                          {description && <div style={{ fontSize: 11, color: COLOURS.SLATE }}>{description}</div>}
+                    <span style={{ fontSize: 11, color: COLOURS.SLATE, transform: isOpen ? "rotate(180deg)" : "rotate(0)", transition: "transform .2s", display: "inline-block" }}>▼</span>
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div style={{ padding: "8px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+                      {section.items.map(({ key, label: itemLabel, description }) => (
+                        <div key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                          <div>
+                            <div style={{ fontSize: 12.5, color: COLOURS.NAVY }}>{itemLabel}</div>
+                            {description && <div style={{ fontSize: 11, color: COLOURS.SLATE }}>{description}</div>}
+                          </div>
+                          <Toggle on={ep[key] === true} onChange={(v) => toggle(key, v)} disabled={isProtected} />
                         </div>
-                        <Toggle on={ep[key] === true} onChange={(v) => toggle(key, v)} disabled={isProtected} />
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
