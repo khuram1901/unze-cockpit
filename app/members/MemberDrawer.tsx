@@ -927,7 +927,13 @@ export default function MemberDrawer({
                       })()}
 
                       {/* Non-per-company widgets — each page collapsible */}
-                      {PLAIN_WIDGET_PAGES.map((page) => {
+                      {PLAIN_WIDGET_PAGES.filter((page) => {
+                        // HR Dashboard Tabs only make sense for HR members
+                        if (page === "HR Dashboard Tabs") {
+                          return member.department === "HR" || member.department === "Human Resources";
+                        }
+                        return true;
+                      }).map((page) => {
                         const pageWidgets = PLAIN_WIDGETS.filter((w) => w.page === page);
                         const isPageOpen = openWidgetPages.has(page);
                         const overrideHere = pageWidgets.filter((w) => w.key in widgetOverrides).length;
