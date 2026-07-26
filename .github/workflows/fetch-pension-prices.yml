@@ -21,8 +21,19 @@ jobs:
           const today   = new Date().toISOString().slice(0, 10);
           const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
 
+          // Morningstar COMPACTJSON returns [[timestamp_ms, price], ...] — a flat array of pairs.
+          // Earlier code expected TimeSeries.Security[0].HistoryDetail (object format) which was wrong.
           function parsePrice(json) {
             try {
+              // COMPACTJSON array format: [[ts, price], [ts, price], ...]
+              if (Array.isArray(json)) {
+                if (!json.length) return null;
+                const last = json[json.length - 1];
+                const val = parseFloat(last?.[1] ?? "");
+                if (isNaN(val) || val <= 0) return null;
+                return val > 10 ? val / 100 : val; // pence -> pounds if needed
+              }
+              // Legacy object format fallback
               const history = json?.TimeSeries?.Security?.[0]?.HistoryDetail;
               if (!Array.isArray(history) || !history.length) return null;
               const val = parseFloat(history[history.length - 1]?.Value ?? "");
@@ -48,7 +59,7 @@ jobs:
                   signal: AbortSignal.timeout(15000),
                 });
                 const text = await res.text();
-                console.log(`  [${label}] token ${token}: HTTP ${res.status}, body: ${text.slice(0, 120)}`);
+                console.log(`  [${label}] token ${token}: HTTP ${res.status}, body: ${text.slice(0, 80)}`);
                 if (!res.ok) continue;
                 let json;
                 try { json = JSON.parse(text); } catch { continue; }
@@ -85,8 +96,12 @@ jobs:
             }
           }
 
+          // Use ?on_conflict=isin,price_date so PostgREST knows which columns to use
+          // for the duplicate resolution — without it, resolution=merge-duplicates has
+          // no conflict key and the insert fails with a 23505 unique violation.
           async function upsert(isin, price, source) {
-            const res = await fetch(`${SUPABASE_URL}/rest/v1/pension_fund_prices`, {
+            const url = `${SUPABASE_URL}/rest/v1/pension_fund_prices?on_conflict=isin,price_date`;
+            const res = await fetch(url, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -97,7 +112,8 @@ jobs:
               body: JSON.stringify({ isin, price_date: today, price_gbp: price, source }),
             });
             if (!res.ok) {
-              console.error(`  upsert failed: ${await res.text()}`);
+              const err = await res.text();
+              console.error(`  upsert failed: ${err}`);
               process.exitCode = 1;
             } else {
               console.log(`  stored £${price.toFixed(4)} for ${isin} (${source})`);
@@ -105,12 +121,14 @@ jobs:
           }
 
           (async () => {
+            // Fund 1: GB00BVRZG281 — try Morningstar first, fall back to Yahoo
             console.log(`\nGB00BVRZG281 (Multi-Asset Plus IV 9):`);
             let r1 = await fetchMorningstar("F00000VBU2", "BVRZG281");
             if (!r1) r1 = await fetchYahoo("0P00015CT0.L", "BVRZG281");
             if (r1) await upsert("GB00BVRZG281", r1.price, r1.source);
             else console.log("  all sources failed");
 
+            // Fund 2: GB00BRDCMX84 — Morningstar returns prices via Azure IPs
             console.log(`\nGB00BRDCMX84 (Universal 2035 Retirement S14):`);
             let r2 = await fetchMorningstar("VAUSA0P5GL", "BRDCMX84");
             if (!r2) console.log("  all sources failed -- DB retains last known price");
