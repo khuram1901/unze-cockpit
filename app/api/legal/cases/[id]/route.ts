@@ -18,15 +18,16 @@ async function checkCanManage(auth: { email: string }, supabase: ReturnType<type
 }
 
 // GET — single case with full update log
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
+  const { id } = await params;
   const supabase = createServiceClient();
   const { data: caseData, error: caseErr } = await supabase
     .from("legal_cases")
     .select("*")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
   if (caseErr) return Response.json({ error: caseErr.message }, { status: 500 });
   if (!caseData) return Response.json({ error: "Not found" }, { status: 404 });
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const { data: updates, error: updErr } = await supabase
     .from("legal_case_updates")
     .select("*")
-    .eq("case_id", params.id)
+    .eq("case_id", id)
     .order("update_date", { ascending: false })
     .order("created_at", { ascending: false });
   if (updErr) return Response.json({ error: updErr.message }, { status: 500 });
@@ -43,10 +44,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PATCH — update case fields (admin/manager: FIR number, warrant, status, resolution)
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
+  const { id } = await params;
   const supabase = createServiceClient();
   if (!(await checkCanManage(auth, supabase))) {
     return Response.json({ error: "Not authorised" }, { status: 403 });
@@ -68,7 +70,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const { data, error } = await supabase
     .from("legal_cases")
     .update(patch)
-    .eq("id", params.id)
+    .eq("id", id)
     .select()
     .single();
 
