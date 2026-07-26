@@ -205,6 +205,11 @@ export default function InvestmentsPage() {
   const [pensionMovement, setPensionMovement] = useState<PensionMovementRow[]>([]);
   const [gbpPkrRate, setGbpPkrRate] = useState<number>(0);
   const [pensionLoading, setPensionLoading] = useState(true);
+  const [pensionRefreshing, setPensionRefreshing] = useState(false);
+  const [pensionRefreshResult, setPensionRefreshResult] = useState<string | null>(null);
+  // Manual pension price entry
+  const [manualPensionModal, setManualPensionModal] = useState<string | null>(null); // isin
+  const [manualPensionPrice, setManualPensionPrice] = useState("");
 
   // PSX movement state
   const [psxMovement, setPsxMovement] = useState<PsxMovementRow[]>([]);
@@ -320,6 +325,48 @@ export default function InvestmentsPage() {
     } catch { /* non-fatal — pension section is additive */ }
     setPensionLoading(false);
   }, []);
+
+  async function handleRefreshPensionPrices() {
+    if (!canRefresh) return;
+    setPensionRefreshing(true);
+    setPensionRefreshResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/investments/fetch-pension-prices", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setPensionRefreshResult(`Error: ${json.error ?? "Unknown error"}`);
+      } else {
+        const updated = json.funds?.length ?? 0;
+        const skipped = json.skipped?.length ?? 0;
+        setPensionRefreshResult(
+          updated > 0
+            ? `Updated ${updated} fund price${updated !== 1 ? "s" : ""} from Morningstar.${skipped > 0 ? ` ${skipped} fund(s) could not be fetched — DB retains last known price.` : ""}`
+            : `Could not fetch live prices (Morningstar API unavailable). DB retains last known prices. Enter prices manually below.`
+        );
+        await loadPensionData();
+      }
+    } catch {
+      setPensionRefreshResult("Network error — please try again.");
+    }
+    setPensionRefreshing(false);
+  }
+
+  async function handleManualPensionPrice(isin: string) {
+    if (!canEdit) return;
+    const price = parseFloat(manualPensionPrice);
+    if (isNaN(price) || price <= 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    await supabase.from("pension_fund_prices").upsert(
+      { isin, price_date: today, price_gbp: price, source: "manual" },
+      { onConflict: "isin,price_date" }
+    );
+    setManualPensionModal(null);
+    setManualPensionPrice("");
+    await loadPensionData();
+  }
 
   useEffect(() => {
     if (checking) return;
@@ -1217,8 +1264,24 @@ export default function InvestmentsPage() {
               </span>
             )}
           </div>
-          <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px" }}>
-            2 funds · Prices auto-updated daily · GBP
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "12px" }}>
+            <span style={{ fontSize: "13px", color: SLATE }}>
+              2 funds · Prices updated from Morningstar (weekdays) · GBP
+            </span>
+            {canRefresh && (
+              <button
+                onClick={handleRefreshPensionPrices}
+                disabled={pensionRefreshing}
+                style={{ ...btnStyle, fontSize: "13px", padding: "5px 12px", backgroundColor: BLUE }}
+              >
+                {pensionRefreshing ? "Fetching…" : "↻ Refresh Prices"}
+              </button>
+            )}
+            {pensionRefreshResult && (
+              <span style={{ fontSize: "13px", color: pensionRefreshResult.startsWith("Error") || pensionRefreshResult.includes("could not") || pensionRefreshResult.includes("unavailable") ? RED : GREEN }}>
+                {pensionRefreshResult}
+              </span>
+            )}
           </div>
 
           {pensionLoading ? (
@@ -1292,9 +1355,41 @@ export default function InvestmentsPage() {
                       padding: "16px",
                       backgroundColor: "var(--bg-card, #fff)",
                     }}>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, marginBottom: "6px", lineHeight: 1.4 }}>
-                        {fund.fund_name}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "6px" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY, lineHeight: 1.4 }}>
+                          {fund.fund_name}
+                        </div>
+                        {canEdit && (
+                          <button
+                            onClick={() => { setManualPensionModal(fund.isin); setManualPensionPrice(String(fund.price_gbp)); }}
+                            style={{ ...miniBtn, fontSize: "12px", color: BLUE, whiteSpace: "nowrap", flexShrink: 0 }}
+                            title="Enter price manually (from Aviva app)"
+                          >
+                            £ Edit
+                          </button>
+                        )}
                       </div>
+                      {/* Manual price entry modal */}
+                      {canEdit && manualPensionModal === fund.isin && (
+                        <div style={{
+                          display: "flex", gap: "6px", alignItems: "center",
+                          marginBottom: "10px", padding: "8px 10px",
+                          backgroundColor: "#EEF2FF", borderRadius: "8px",
+                          border: `1px solid #C7D2FE`,
+                        }}>
+                          <span style={{ fontSize: "12px", fontWeight: 600, color: NAVY }}>Unit price £</span>
+                          <input
+                            type="number" step="0.0001" min="0"
+                            placeholder="e.g. 2.4500"
+                            value={manualPensionPrice}
+                            onChange={(e) => setManualPensionPrice(e.target.value)}
+                            style={{ ...inputStyle, width: "110px", padding: "4px 8px", fontSize: "13px" }}
+                            autoFocus
+                          />
+                          <button onClick={() => handleManualPensionPrice(fund.isin)} style={{ ...btnStyle, padding: "4px 12px", fontSize: "13px" }}>Save</button>
+                          <button onClick={() => { setManualPensionModal(null); setManualPensionPrice(""); }} style={{ ...btnStyle, backgroundColor: SLATE, padding: "4px 10px", fontSize: "13px" }}>✕</button>
+                        </div>
+                      )}
                       <span style={{
                         display: "inline-block",
                         fontSize: "11px", fontWeight: 600,
@@ -1464,7 +1559,7 @@ export default function InvestmentsPage() {
               {/* Last updated */}
               {pensionLatestDate && (
                 <div style={{ fontSize: "13px", color: SLATE, textAlign: "right" }}>
-                  Prices last updated: {formatDateUK(pensionLatestDate)} · Auto-refreshed daily at 11pm UK time
+                  Prices last updated: {formatDateUK(pensionLatestDate)} · Auto-fetched weekday mornings from Morningstar
                 </div>
               )}
             </>
