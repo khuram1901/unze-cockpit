@@ -459,6 +459,14 @@ export default function MemberDrawer({
   /* ── Widget override state ────────────────────────────────────────── */
   const [widgetOverrides, setWidgetOverrides] = useState<Record<string, boolean>>({});
   const [savingWidget, setSavingWidget] = useState<string | null>(null);
+  const [openWidgetPages, setOpenWidgetPages] = useState<Set<string>>(new Set());
+  function toggleWidgetPage(page: string) {
+    setOpenWidgetPages((prev) => {
+      const next = new Set(prev);
+      next.has(page) ? next.delete(page) : next.add(page);
+      return next;
+    });
+  }
 
   /* ── Security tab state ───────────────────────────────────────────── */
   const [settingPw, setSettingPw] = useState(false);
@@ -856,101 +864,116 @@ export default function MemberDrawer({
                         Default = role-based. Show/Hide = forced on or off for this person only, regardless of role.
                       </div>
 
-                      {/* Per-company finance widgets */}
-                      <div>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: COLOURS.NAVY, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Finance Panels (per company)</div>
-                        {FINANCE_COMPANIES.map((company) => (
-                          <div key={company.id} style={{ marginBottom: 12 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: COLOURS.SLATE, marginBottom: 6 }}>{company.name}</div>
-                            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: 6, overflow: "hidden" }}>
-                              {PER_COMPANY_WIDGETS.map((w, i, arr) => {
-                                const widgetKey = `${w.key}.${company.id}`;
-                                const current: "default" | "show" | "hide" =
-                                  widgetOverrides[widgetKey] === true ? "show" :
-                                  widgetOverrides[widgetKey] === false ? "hide" : "default";
-                                return (
-                                  <div key={w.key} style={{
-                                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                                    padding: "8px 12px",
-                                    borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none",
-                                    opacity: savingWidget === widgetKey ? 0.5 : 1,
-                                  }}>
-                                    <div style={{ minWidth: 0, paddingRight: 8 }}>
-                                      <div style={{ fontSize: 12.5, color: COLOURS.NAVY }}>{w.label}</div>
-                                      {w.tip && <div style={{ fontSize: 11, color: COLOURS.SLATE }}>{w.tip}</div>}
-                                    </div>
-                                    <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                                      {(["default", "show", "hide"] as const).map((opt) => (
-                                        <button
-                                          key={opt}
-                                          onClick={() => setWidget(widgetKey, opt)}
-                                          disabled={!!savingWidget}
-                                          style={{
-                                            fontSize: 10.5, fontWeight: 600, padding: "4px 8px", borderRadius: 5,
-                                            border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-                                            background: current === opt ? COLOURS.NAVY : "transparent",
-                                            color: current === opt ? "#fff" : COLOURS.SLATE,
-                                            cursor: savingWidget ? "default" : "pointer",
-                                            textTransform: "capitalize",
-                                          }}
-                                        >
-                                          {opt}
-                                        </button>
-                                      ))}
+                      {/* Per-company finance widgets — collapsible */}
+                      {(() => {
+                        const pageKey = "__finance_panels__";
+                        const isPageOpen = openWidgetPages.has(pageKey);
+                        const overrideHere = PER_COMPANY_WIDGETS.flatMap((w) =>
+                          FINANCE_COMPANIES.map((c) => `${w.key}.${c.id}`)
+                        ).filter((k) => k in widgetOverrides).length;
+                        return (
+                          <div style={sectionBox}>
+                            <button onClick={() => toggleWidgetPage(pageKey)} style={{ ...sectionHead, width: "100%", cursor: "pointer", background: isPageOpen ? COLOURS.CARD_ALT : COLOURS.CARD }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: COLOURS.NAVY }}>Finance Panels (per company)</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                {overrideHere > 0 && (
+                                  <span style={{ fontSize: 10.5, padding: "1px 7px", borderRadius: RADII.PILL, background: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, fontWeight: 600 }}>
+                                    {overrideHere} override{overrideHere !== 1 ? "s" : ""}
+                                  </span>
+                                )}
+                                <span style={{ fontSize: 11, color: COLOURS.SLATE, transform: isPageOpen ? "rotate(180deg)" : "rotate(0)", transition: "transform .2s", display: "inline-block" }}>▼</span>
+                              </div>
+                            </button>
+                            {isPageOpen && (
+                              <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 12 }}>
+                                {FINANCE_COMPANIES.map((company) => (
+                                  <div key={company.id}>
+                                    <div style={{ fontSize: 11.5, fontWeight: 600, color: COLOURS.SLATE, marginBottom: 6 }}>{company.name}</div>
+                                    <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: 6, overflow: "hidden" }}>
+                                      {PER_COMPANY_WIDGETS.map((w, i, arr) => {
+                                        const widgetKey = `${w.key}.${company.id}`;
+                                        const current: "default" | "show" | "hide" =
+                                          widgetOverrides[widgetKey] === true ? "show" :
+                                          widgetOverrides[widgetKey] === false ? "hide" : "default";
+                                        return (
+                                          <div key={w.key} style={{
+                                            display: "flex", justifyContent: "space-between", alignItems: "center",
+                                            padding: "8px 12px",
+                                            borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none",
+                                            opacity: savingWidget === widgetKey ? 0.5 : 1,
+                                          }}>
+                                            <div style={{ minWidth: 0, paddingRight: 8 }}>
+                                              <div style={{ fontSize: 12.5, color: COLOURS.NAVY }}>{w.label}</div>
+                                              {w.tip && <div style={{ fontSize: 11, color: COLOURS.SLATE }}>{w.tip}</div>}
+                                            </div>
+                                            <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                                              {(["default", "show", "hide"] as const).map((opt) => (
+                                                <button key={opt} onClick={() => setWidget(widgetKey, opt)} disabled={!!savingWidget}
+                                                  style={{ fontSize: 10.5, fontWeight: 600, padding: "4px 8px", borderRadius: 5, textTransform: "capitalize", cursor: savingWidget ? "default" : "pointer", border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.HAIRLINE}`, background: current === opt ? COLOURS.NAVY : "transparent", color: current === opt ? "#fff" : COLOURS.SLATE }}>
+                                                  {opt}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   </div>
-                                );
-                              })}
-                            </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
 
-                      {/* Non-per-company widgets grouped by page */}
+                      {/* Non-per-company widgets — each page collapsible */}
                       {PLAIN_WIDGET_PAGES.map((page) => {
                         const pageWidgets = PLAIN_WIDGETS.filter((w) => w.page === page);
+                        const isPageOpen = openWidgetPages.has(page);
+                        const overrideHere = pageWidgets.filter((w) => w.key in widgetOverrides).length;
                         return (
-                          <div key={page}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: COLOURS.NAVY, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{page}</div>
-                            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: 6, overflow: "hidden" }}>
-                              {pageWidgets.map((w, i, arr) => {
-                                const current: "default" | "show" | "hide" =
-                                  widgetOverrides[w.key] === true ? "show" :
-                                  widgetOverrides[w.key] === false ? "hide" : "default";
-                                return (
-                                  <div key={w.key} style={{
-                                    display: "flex", justifyContent: "space-between", alignItems: "center",
-                                    padding: "8px 12px",
-                                    borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none",
-                                    opacity: savingWidget === w.key ? 0.5 : 1,
-                                  }}>
-                                    <div style={{ minWidth: 0, paddingRight: 8 }}>
-                                      <div style={{ fontSize: 12.5, color: COLOURS.NAVY }}>{w.label}</div>
-                                      {w.tip && <div style={{ fontSize: 11, color: COLOURS.SLATE }}>{w.tip}</div>}
+                          <div key={page} style={sectionBox}>
+                            <button onClick={() => toggleWidgetPage(page)} style={{ ...sectionHead, width: "100%", cursor: "pointer", background: isPageOpen ? COLOURS.CARD_ALT : COLOURS.CARD }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: COLOURS.NAVY }}>{page}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                {overrideHere > 0 && (
+                                  <span style={{ fontSize: 10.5, padding: "1px 7px", borderRadius: RADII.PILL, background: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN, fontWeight: 600 }}>
+                                    {overrideHere} override{overrideHere !== 1 ? "s" : ""}
+                                  </span>
+                                )}
+                                <span style={{ fontSize: 11, color: COLOURS.SLATE, transform: isPageOpen ? "rotate(180deg)" : "rotate(0)", transition: "transform .2s", display: "inline-block" }}>▼</span>
+                              </div>
+                            </button>
+                            {isPageOpen && (
+                              <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "0 0 6px 6px", overflow: "hidden" }}>
+                                {pageWidgets.map((w, i, arr) => {
+                                  const current: "default" | "show" | "hide" =
+                                    widgetOverrides[w.key] === true ? "show" :
+                                    widgetOverrides[w.key] === false ? "hide" : "default";
+                                  return (
+                                    <div key={w.key} style={{
+                                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                                      padding: "8px 12px",
+                                      borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none",
+                                      opacity: savingWidget === w.key ? 0.5 : 1,
+                                    }}>
+                                      <div style={{ minWidth: 0, paddingRight: 8 }}>
+                                        <div style={{ fontSize: 12.5, color: COLOURS.NAVY }}>{w.label}</div>
+                                        {w.tip && <div style={{ fontSize: 11, color: COLOURS.SLATE }}>{w.tip}</div>}
+                                      </div>
+                                      <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                                        {(["default", "show", "hide"] as const).map((opt) => (
+                                          <button key={opt} onClick={() => setWidget(w.key, opt)} disabled={!!savingWidget}
+                                            style={{ fontSize: 10.5, fontWeight: 600, padding: "4px 8px", borderRadius: 5, textTransform: "capitalize", cursor: savingWidget ? "default" : "pointer", border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.HAIRLINE}`, background: current === opt ? COLOURS.NAVY : "transparent", color: current === opt ? "#fff" : COLOURS.SLATE }}>
+                                            {opt}
+                                          </button>
+                                        ))}
+                                      </div>
                                     </div>
-                                    <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
-                                      {(["default", "show", "hide"] as const).map((opt) => (
-                                        <button
-                                          key={opt}
-                                          onClick={() => setWidget(w.key, opt)}
-                                          disabled={!!savingWidget}
-                                          style={{
-                                            fontSize: 10.5, fontWeight: 600, padding: "4px 8px", borderRadius: 5,
-                                            border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
-                                            background: current === opt ? COLOURS.NAVY : "transparent",
-                                            color: current === opt ? "#fff" : COLOURS.SLATE,
-                                            cursor: savingWidget ? "default" : "pointer",
-                                            textTransform: "capitalize",
-                                          }}
-                                        >
-                                          {opt}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
