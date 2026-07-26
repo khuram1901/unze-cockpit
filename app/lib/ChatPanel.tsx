@@ -98,7 +98,7 @@ function Ticks({ read }: { read: boolean }) {
     <svg width="16" height="10" viewBox="0 0 16 10" fill="none" style={{ display: "inline-block", verticalAlign: "middle" }}>
       {/* First tick */}
       <path d="M1 5L4 8L9 2" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      {/* Second tick (offset right — only shown when read) */}
+      {/* Second tick (offset right - only shown when read) */}
       {read && <path d="M5 5L8 8L13 2" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>}
       {!read && <path d="M5 5L8 8L13 2" stroke="#CBD5E1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>}
     </svg>
@@ -122,12 +122,12 @@ type SwipeRowProps = {
 
 function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipeRight, borderColor, children }: SwipeRowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
-  const rightRevealRef = useRef<HTMLDivElement>(null); // delete — grows from left on swipe-right
-  const leftRevealRef = useRef<HTMLDivElement>(null);  // archive — grows from right on swipe-left
+  const rightRevealRef = useRef<HTMLDivElement>(null); // delete - grows from left on swipe-right
+  const leftRevealRef = useRef<HTMLDivElement>(null);  // archive - grows from right on swipe-left
   const startXRef = useRef(0);
   const currentXRef = useRef(0); // tracked continuously so pointercancel has reliable data
   const activeRef = useRef(false);
-  const swipedRef = useRef(false); // only true when a swipe action actually fired — used to block the post-swipe click
+  const swipedRef = useRef(false); // only true when a swipe action actually fired - used to block the post-swipe click
   const THRESHOLD = 80;
 
   const reset = () => {
@@ -166,7 +166,7 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Do NOT call setPointerCapture — it routes pointerup to this div and the
+    // Do NOT call setPointerCapture - it routes pointerup to this div and the
     // subsequent click event never reaches the inner button's onClick handler.
     startXRef.current = e.clientX;
     currentXRef.current = e.clientX;
@@ -180,7 +180,7 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
     currentXRef.current = e.clientX;
     const delta = e.clientX - startXRef.current;
 
-    // Auto-fire as soon as threshold is crossed — don't wait for release
+    // Auto-fire as soon as threshold is crossed - don't wait for release
     if (delta > THRESHOLD) {
       activeRef.current = false;
       swipedRef.current = true;
@@ -203,7 +203,7 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
 
   return (
     // Handlers go on the outer wrapper (not rowRef) so clicks on the inner
-    // button bubble up naturally — no pointer capture needed.
+    // button bubble up naturally - no pointer capture needed.
     <div
       style={{ position: "relative", overflow: "hidden", borderBottom: `1px solid ${borderColor}` }}
       onPointerDown={handlePointerDown}
@@ -231,7 +231,7 @@ function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipe
       }}>
         {leftLabel}
       </div>
-      {/* Sliding row — no pointer events here, handled by outer wrapper */}
+      {/* Sliding row - no pointer events here, handled by outer wrapper */}
       <div
         ref={rowRef}
         style={{ position: "relative", zIndex: 1, touchAction: "pan-y", willChange: "transform" }}
@@ -277,6 +277,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   const searchRef = useRef<HTMLInputElement>(null);
   const msgChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const readChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const panelOpenedRef = useRef(false); // prevents double auto-open within a single open session
 
   const { NAVY, CARD, BORDER, SLATE, INK_400, INK_700, BLUE, CANVAS, INK_300, SUCCESS_SOFT, GREEN } = COLOURS;
   const totalUnread = conversations.reduce((s, c) => s + (c.unread_count ?? 0), 0);
@@ -284,7 +285,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   // ── Load conversations ──────────────────────────────────────────
 
   const loadConversations = useCallback(async () => {
-    if (!memberId) return;
+    if (!memberId) return null;
     setLoadingConvs(true);
     const { data } = await supabase.rpc("get_my_conversations", {
       p_member_id: memberId,
@@ -292,6 +293,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     });
     if (data) setConversations(data as Conversation[]);
     setLoadingConvs(false);
+    return (data ?? null) as Conversation[] | null;
   }, [memberId]);
 
   const loadArchivedConversations = useCallback(async () => {
@@ -349,8 +351,25 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     }
   }, [email, allMembers.length]);
 
+  // Load conversations and auto-open the most recent unread one when the panel opens
   useEffect(() => {
-    if (isOpen) { loadConversations(); }
+    if (isOpen && !panelOpenedRef.current) {
+      panelOpenedRef.current = true;
+      loadConversations().then((convs) => {
+        if (!convs) return;
+        // Auto-open the most recent unread conversation (only if not already in one)
+        setActiveConv((current) => {
+          if (current) return current; // already viewing a conversation - don't override
+          const unread = [...convs]
+            .filter((c) => (c.unread_count ?? 0) > 0 && c.last_message !== null)
+            .sort((a, b) =>
+              new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
+            );
+          return unread.length > 0 ? unread[0] : null;
+        });
+      });
+    }
+    if (!isOpen) panelOpenedRef.current = false;
   }, [isOpen, loadConversations]);
 
   // Focus search when panel opens
@@ -358,7 +377,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     if (isOpen && !activeConv) setTimeout(() => searchRef.current?.focus(), 120);
   }, [isOpen, activeConv]);
 
-  // Realtime + polling when panel is open — keeps conversation list live
+  // Realtime + polling when panel is open - keeps conversation list live
   useEffect(() => {
     if (!isOpen || !email) return;
     const ch = supabase
@@ -465,7 +484,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     const data = await res.json();
     if (!res.ok) { setOpeningDm(null); return; }
 
-    // Build a local Conversation object immediately — don't wait for RPC
+    // Build a local Conversation object immediately - don't wait for RPC
     const convObj: Conversation = {
       conversation_id: data.conversation_id,
       name: null,
@@ -512,8 +531,11 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   // ── Filtered + sorted data for the list ────────────────────────
 
   const q = search.toLowerCase().trim();
+  // @ mode: typing "@" switches to new-conversation member search
+  const isAtMode = search.trimStart().startsWith("@");
+  const atQuery = isAtMode ? search.replace(/^@\s*/, "").toLowerCase().trim() : "";
 
-  // Sort: unread conversations first, then by most recent message
+  // Sort: unread first, then most recent
   const sortedConvs = [...conversations].sort((a, b) => {
     const aUnread = (a.unread_count ?? 0) > 0 ? 1 : 0;
     const bUnread = (b.unread_count ?? 0) > 0 ? 1 : 0;
@@ -521,25 +543,29 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
   });
 
-  const filteredConvs = q
-    ? sortedConvs.filter((c) => convDisplayName(c).toLowerCase().includes(q))
-    : sortedConvs;
+  // Only show conversations that have at least one message (active chats only).
+  // In @ mode, hide conversations entirely so the member list has full focus.
+  const filteredConvs = isAtMode
+    ? []
+    : sortedConvs.filter((c) => {
+        if (c.last_message === null) return false; // never show empty chats
+        if (q) return convDisplayName(c).toLowerCase().includes(q);
+        return true;
+      });
 
-  // Members only appear when the user is actively searching
-  // (lazy-load them on first search so default view is clean)
-  const existingEmails = new Set(
-    conversations.flatMap((c) => c.participants?.map((p) => p.email) ?? [])
-  );
-  const filteredMembers = q
+  // Members shown only in @ mode - lazy-loaded on first @
+  const filteredMembers = isAtMode
     ? allMembers.filter((m) =>
-        (m.display_name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+        !atQuery ||
+        m.display_name.toLowerCase().includes(atQuery) ||
+        m.email.toLowerCase().includes(atQuery)
       )
     : [];
 
-  // Trigger member load the first time the user types
+  // Lazy-load members the first time @ is typed
   useEffect(() => {
-    if (q && allMembers.length === 0) loadMembers();
-  }, [q, allMembers.length, loadMembers]);
+    if (isAtMode && allMembers.length === 0) loadMembers();
+  }, [isAtMode, allMembers.length, loadMembers]);
 
   if (!email) return null;
 
@@ -640,7 +666,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
           }}>
             {activeConv ? convDisplayName(activeConv) : view === "archived" ? "Archived chats" : "Messages"}
           </span>
-          {/* New chat pencil — only on main list */}
+          {/* New chat pencil - only on main list */}
           {!activeConv && view === "main" && (
             <button
               onClick={() => { setTimeout(() => { searchRef.current?.focus(); searchRef.current?.select(); }, 50); }}
@@ -680,7 +706,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                   ref={searchRef}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search or find someone…"
+                  placeholder="Search chats, or type @ to find someone…"
                   style={{
                     width: "100%", padding: "7px 10px 7px 28px",
                     border: `1px solid ${BORDER}`, borderRadius: RADII.PILL,
@@ -691,7 +717,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
               </div>
             </div>
 
-            {/* Archived chats — pinned above the scroll, always visible */}
+            {/* Archived chats - pinned above the scroll, always visible */}
             <button
               onClick={() => { setView("archived"); loadArchivedConversations(); }}
               style={{
@@ -721,7 +747,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                 <div style={{ padding: 24, textAlign: "center", color: SLATE, fontSize: 13 }}>Loading…</div>
               ) : (
                 <>
-                  {/* Conversations — unread first, then most recent */}
+                  {/* Conversations - unread first, then most recent */}
                   {filteredConvs.map((conv) => (
                     <SwipeRow
                       key={conv.conversation_id}
@@ -808,11 +834,11 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                     </SwipeRow>
                   ))}
 
-                  {/* People results — only shown when searching */}
-                  {q && filteredMembers.length > 0 && (
+                  {/* People results - only shown in @ mode */}
+                  {isAtMode && filteredMembers.length > 0 && (
                     <>
                       <div style={{ padding: "8px 14px 4px", fontSize: 10, fontWeight: 600, color: INK_400, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                        New conversation
+                        Start conversation with…
                       </div>
                       {filteredMembers.map((m) => (
                         <button
@@ -852,15 +878,29 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                     </>
                   )}
 
-                  {/* Empty state */}
-                  {filteredConvs.length === 0 && !loadingConvs && (
+                  {/* @ mode hint when no name typed yet */}
+                  {isAtMode && filteredMembers.length === 0 && !atQuery && (
+                    <div style={{ padding: 32, textAlign: "center" }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>🔍</div>
+                      <div style={{ fontSize: 13, color: SLATE }}>Type a name to find someone</div>
+                      <div style={{ fontSize: 12, color: INK_400, marginTop: 4 }}>e.g. @Kamran</div>
+                    </div>
+                  )}
+                  {/* @ mode - no match */}
+                  {isAtMode && atQuery && filteredMembers.length === 0 && (
+                    <div style={{ padding: 32, textAlign: "center" }}>
+                      <div style={{ fontSize: 13, color: SLATE }}>{`No member matching "${atQuery}"`}</div>
+                    </div>
+                  )}
+                  {/* Normal empty state */}
+                  {!isAtMode && filteredConvs.length === 0 && !loadingConvs && (
                     <div style={{ padding: 40, textAlign: "center" }}>
                       <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
                       <div style={{ fontSize: 13, color: SLATE }}>
-                        {q ? `No results for “${q}”` : "No conversations yet"}
+                        {q ? `No results for "${q}"` : "No conversations yet"}
                       </div>
                       <div style={{ fontSize: 12, color: INK_400, marginTop: 6 }}>
-                        {q ? "Try a different name" : "Tap ✏️ above or search for someone to start chatting"}
+                        {q ? "Try a different name" : "Type @ followed by a name to start a new chat"}
                       </div>
                     </div>
                   )}
