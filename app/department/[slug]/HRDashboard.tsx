@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { COLOURS, RADII, PageHeader } from "../../lib/SharedUI";
 import { useMobile } from "../../lib/useMobile";
+import { useUserCtx } from "../../lib/useUserCtx";
+import { widgetVisible } from "../../lib/permissions";
 import HRRecruitment from "./hr/HRRecruitment";
 import HROnboarding from "./hr/HROnboarding";
 import HROffboarding from "./hr/HROffboarding";
@@ -15,21 +17,21 @@ import HRInsights from "./hr/HRInsights";
 import HRLegal from "./hr/HRLegal";
 
 // ─── Tab definitions ────────────────────────────────────────────────────────
-const HR_TABS = [
-  { key: "workforce",    label: "Workforce" },
-  { key: "insights",     label: "HR Insights" },
-  { key: "recruitment",  label: "Recruitment" },
-  { key: "onboarding",   label: "Onboarding" },
-  { key: "offboarding",  label: "Off-boarding" },
-  { key: "payroll",      label: "Payroll" },
-  { key: "eobi",         label: "EOBI & Social Security" },
-  { key: "od",           label: "OD Interventions" },
-  { key: "td",           label: "T&D Calendar" },
-  { key: "tasks",        label: "HR Tasks" },
-  { key: "legal",        label: "Legal Cases" },
+const ALL_HR_TABS = [
+  { key: "workforce",   label: "Workforce",              widgetKey: "hr_tabs.workforce" },
+  { key: "insights",    label: "HR Insights",            widgetKey: "hr_tabs.insights" },
+  { key: "recruitment", label: "Recruitment",            widgetKey: "hr_tabs.recruitment" },
+  { key: "onboarding",  label: "Onboarding",             widgetKey: "hr_tabs.onboarding" },
+  { key: "offboarding", label: "Off-boarding",           widgetKey: "hr_tabs.offboarding" },
+  { key: "payroll",     label: "Payroll",                widgetKey: "hr_tabs.payroll" },
+  { key: "eobi",        label: "EOBI & Social Security", widgetKey: "hr_tabs.eobi" },
+  { key: "od",          label: "OD Interventions",       widgetKey: "hr_tabs.od" },
+  { key: "td",          label: "T&D Calendar",           widgetKey: "hr_tabs.td" },
+  { key: "tasks",       label: "HR Tasks",               widgetKey: "hr_tabs.tasks" },
+  { key: "legal",       label: "Legal Cases",            widgetKey: "hr_tabs.legal" },
 ] as const;
 
-type HRTab = (typeof HR_TABS)[number]["key"];
+type HRTab = (typeof ALL_HR_TABS)[number]["key"];
 
 // ─── Placeholder for tabs not yet built ─────────────────────────────────────
 function ComingSoon({ label }: { label: string }) {
@@ -53,7 +55,18 @@ function ComingSoon({ label }: { label: string }) {
 // ─── Main dashboard ─────────────────────────────────────────────────────────
 export default function HRDashboard() {
   const isMobile = useMobile();
+  const { ctx } = useUserCtx();
   const [activeTab, setActiveTab] = useState<HRTab>("workforce");
+
+  // Filter tabs based on per-member widget visibility settings (default: show all)
+  const HR_TABS = ALL_HR_TABS.filter((t) =>
+    !ctx || widgetVisible(ctx, t.widgetKey, true)
+  );
+
+  // If the active tab was hidden, fall back to the first visible tab
+  const safeTab = (HR_TABS.some((t) => t.key === activeTab)
+    ? activeTab
+    : HR_TABS[0]?.key ?? "workforce") as HRTab;
 
   const tabBarStyle: React.CSSProperties = {
     display: "flex",
@@ -69,10 +82,10 @@ export default function HRDashboard() {
     padding: isMobile ? "8px 12px" : "9px 16px",
     fontSize: "13px",
     fontWeight: 500,
-    color: activeTab === key ? COLOURS.NAVY : COLOURS.SLATE,
+    color: safeTab === key ? COLOURS.NAVY : COLOURS.SLATE,
     background: "none",
     border: "none",
-    borderBottom: activeTab === key ? `2px solid ${COLOURS.NAVY}` : "2px solid transparent",
+    borderBottom: safeTab === key ? `2px solid ${COLOURS.NAVY}` : "2px solid transparent",
     cursor: "pointer",
     whiteSpace: "nowrap",
     marginBottom: "-1px",
@@ -93,17 +106,17 @@ export default function HRDashboard() {
       </div>
 
       {/* Tab content */}
-      {activeTab === "workforce"    && <HRWorkforce />}
-      {activeTab === "insights"     && <HRInsights />}
-      {activeTab === "recruitment"  && <HRRecruitment />}
-      {activeTab === "onboarding"   && <HROnboarding />}
-      {activeTab === "offboarding"  && <HROffboarding />}
-      {activeTab === "payroll"      && <HRPayroll />}
-      {activeTab === "eobi"         && <HREobi />}
-      {activeTab === "od"           && <ComingSoon label="OD Interventions" />}
-      {activeTab === "td"           && <HRTraining />}
-      {activeTab === "tasks"        && <HRTasks />}
-      {activeTab === "legal"        && <HRLegal />}
+      {safeTab === "workforce"    && <HRWorkforce />}
+      {safeTab === "insights"     && <HRInsights />}
+      {safeTab === "recruitment"  && <HRRecruitment />}
+      {safeTab === "onboarding"   && <HROnboarding />}
+      {safeTab === "offboarding"  && <HROffboarding />}
+      {safeTab === "payroll"      && <HRPayroll />}
+      {safeTab === "eobi"         && <HREobi />}
+      {safeTab === "od"           && <ComingSoon label="OD Interventions" />}
+      {safeTab === "td"           && <HRTraining />}
+      {safeTab === "tasks"        && <HRTasks />}
+      {safeTab === "legal"        && <HRLegal />}
     </main>
   );
 }

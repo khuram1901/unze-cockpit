@@ -77,6 +77,20 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "dept_hr.kpi_charts", label: "KPI cards + chart", page: "HR" },
   { key: "dept_hr.records_table", label: "Positions (table)", page: "HR" },
 
+  // ── HR Dashboard tabs (app/department/[slug]/HRDashboard.tsx) ────────
+  // Default = visible. Set to Hide to remove the tab for this person.
+  { key: "hr_tabs.workforce",   label: "Workforce tab",              page: "HR Dashboard Tabs", tip: "Headcount, active employees, and workforce overview" },
+  { key: "hr_tabs.insights",    label: "HR Insights tab",            page: "HR Dashboard Tabs", tip: "Turnover, tenure, and HR analytics" },
+  { key: "hr_tabs.recruitment", label: "Recruitment tab",            page: "HR Dashboard Tabs", tip: "Open vacancies and candidate pipeline" },
+  { key: "hr_tabs.onboarding",  label: "Onboarding tab",             page: "HR Dashboard Tabs", tip: "New starters and onboarding checklists" },
+  { key: "hr_tabs.offboarding", label: "Off-boarding tab",           page: "HR Dashboard Tabs", tip: "Leavers and exit process tracking" },
+  { key: "hr_tabs.payroll",     label: "Payroll tab",                page: "HR Dashboard Tabs", tip: "Monthly payroll entries and summary" },
+  { key: "hr_tabs.eobi",        label: "EOBI & Social Security tab", page: "HR Dashboard Tabs", tip: "EOBI and SS registration and compliance view" },
+  { key: "hr_tabs.od",          label: "OD Interventions tab",       page: "HR Dashboard Tabs", tip: "Organisational development interventions" },
+  { key: "hr_tabs.td",          label: "T&D Calendar tab",           page: "HR Dashboard Tabs", tip: "Training and development calendar" },
+  { key: "hr_tabs.tasks",       label: "HR Tasks tab",               page: "HR Dashboard Tabs", tip: "HR-specific task management" },
+  { key: "hr_tabs.legal",       label: "Legal Cases tab",            page: "HR Dashboard Tabs", tip: "Legal cases initiated and tracked by HR" },
+
   { key: "dept_tax.attention_banner", label: "Alert banner", page: "Tax Notices", tip: "Overdue/urgent items dropdown at the top" },
   { key: "dept_tax.kpi_charts", label: "KPI cards + charts", page: "Tax Notices" },
   { key: "dept_tax.records_table", label: "Notices by Company (table)", page: "Tax Notices" },
