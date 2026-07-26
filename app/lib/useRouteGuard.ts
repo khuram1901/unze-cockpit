@@ -44,19 +44,34 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   banking: canAccessBanking,
 };
 
+// ── In-memory cache ────────────────────────────────────────────────────────
+// UserCtx (role + permissions) is fetched once and reused for the whole
+// browser session. Navigating between pages costs zero extra round trips.
+// Cache is keyed by email and expires after 5 minutes so a permission change
+// made by an admin takes effect within one natural refresh cycle.
+let _ctxCache: { email: string; ctx: UserCtx; ts: number } | null = null;
+const CTX_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export function invalidateUserCtxCache() { _ctxCache = null; }
+
 async function loadUserCtx(email: string): Promise<UserCtx> {
-  const { data: m } = await supabase
-    .from("members").select("id, role, department, company").eq("email", email).maybeSingle();
-  let overrides: PermOverrides | null = null;
-  const permData = await loadMyPermissions();
-  if (permData) overrides = permData as PermOverrides;
-  return {
+  if (_ctxCache && _ctxCache.email === email && Date.now() - _ctxCache.ts < CTX_TTL_MS) {
+    return _ctxCache.ctx;
+  }
+  // Parallelise the two independent DB calls
+  const [{ data: m }, permData] = await Promise.all([
+    supabase.from("members").select("id, role, department, company").eq("email", email).maybeSingle(),
+    loadMyPermissions(),
+  ]);
+  const ctx: UserCtx = {
     email,
     role: m?.role ?? null,
     department: m?.department ?? null,
     company: m?.company ?? null,
-    overrides,
+    overrides: (permData as PermOverrides | null) ?? null,
   };
+  _ctxCache = { email, ctx, ts: Date.now() };
+  return ctx;
 }
 
 export function useRequireCapability(cap: Capability): { checking: boolean; ctx: UserCtx | null } {
@@ -67,10 +82,12 @@ export function useRequireCapability(cap: Capability): { checking: boolean; ctx:
   useEffect(() => {
     let active = true;
     async function check() {
-      const { data: { user } } = await supabase.auth.getUser();
+      // getSession() reads from localStorage — no network call.
+      // getUser() hits the Supabase Auth server on every navigation — slow.
+      const { data: { session } } = await supabase.auth.getSession();
       if (!active) return;
-      if (!user?.email) { router.replace("/login"); return; }
-      const loaded = await loadUserCtx(user.email);
+      if (!session?.user?.email) { router.replace("/login"); return; }
+      const loaded = await loadUserCtx(session.user.email);
       if (!active) return;
       if (!CHECKS[cap](loaded)) {
         router.replace("/welcome");
@@ -97,10 +114,10 @@ export function useRequireDepartment(departmentName: string): { checking: boolea
   useEffect(() => {
     let active = true;
     async function check() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!active) return;
-      if (!user?.email) { router.replace("/login"); return; }
-      const ctx = await loadUserCtx(user.email);
+      if (!session?.user?.email) { router.replace("/login"); return; }
+      const ctx = await loadUserCtx(session.user.email);
       if (!active) return;
       if (departmentName === "Tax" &&
           (ctx.email || "").toLowerCase() === "shakeel@unze.co.uk") {
