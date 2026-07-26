@@ -1463,29 +1463,32 @@ function WelcomePageInner() {
 
   // Main data load
   const load = useCallback(async () => {
-    const { data: { user } } = await (await import("../lib/supabase")).supabase.auth.getUser();
-    setEmail(user?.email ?? undefined);
+    // getSession() reads from localStorage — no network round-trip.
+    // getUser() hits the Supabase Auth server on every page load — slow.
+    const { data: { session } } = await supabase.auth.getSession();
+    setEmail(session?.user?.email ?? undefined);
 
-    const res = await authFetch("/api/welcome");
-    if (res.ok) setData(await res.json());
-
-    // Weather (Lahore: 31.5497°N, 74.3436°E)
-    try {
-      const wRes = await fetch(
+    // Fire API and weather in parallel — they're independent
+    const [res] = await Promise.all([
+      authFetch("/api/welcome"),
+      // Weather (Lahore: 31.5497°N, 74.3436°E)
+      fetch(
         "https://api.open-meteo.com/v1/forecast?latitude=31.5497&longitude=74.3436&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code&timezone=Asia/Karachi",
         { cache: "no-store" }
-      );
-      if (wRes.ok) {
-        const w = await wRes.json();
-        setWeather({
-          temp:     Math.round(w.current.temperature_2m),
-          apparent: Math.round(w.current.apparent_temperature),
-          humidity: Math.round(w.current.relative_humidity_2m),
-          code:     w.current.weather_code,
-          city:     "Lahore",
-        });
-      }
-    } catch { /* weather is optional */ }
+      ).then(async (wRes) => {
+        if (wRes.ok) {
+          const w = await wRes.json();
+          setWeather({
+            temp:     Math.round(w.current.temperature_2m),
+            apparent: Math.round(w.current.apparent_temperature),
+            humidity: Math.round(w.current.relative_humidity_2m),
+            code:     w.current.weather_code,
+            city:     "Lahore",
+          });
+        }
+      }).catch(() => { /* weather is optional */ }),
+    ]);
+    if (res.ok) setData(await res.json());
   }, []);
 
   // FX + investments load (CEO/Admin/Exec only, after data.role and email are known)
