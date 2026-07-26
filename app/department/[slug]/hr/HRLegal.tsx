@@ -7,7 +7,8 @@ import DateInput from "../../../lib/DateInput";
 import {
   COLOURS, RADII, SkeletonRows, useToast, primaryButtonStyle, inputStyle,
 } from "../../../lib/SharedUI";
-import type { LegalCase } from "../../../admin/LegalCases";
+import type { LegalCase, CaseDetail } from "../../../admin/LegalCases";
+import { CaseProgress } from "../../../admin/LegalCases";
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -81,6 +82,11 @@ export default function HRLegal() {
 
   const [filterStatus, setFilterStatus] = useState<"open" | "closed" | "all">("open");
 
+  const [selectedCase, setSelectedCase] = useState<CaseDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [editFields, setEditFields] = useState<Partial<LegalCase>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const { show: showToast, element: toastElement } = useToast();
 
   // ── Load ─────────────────────────────────────────────────────────
@@ -140,6 +146,51 @@ export default function HRLegal() {
       loadCases();
     } else {
       showToast(json.error || "Failed to create case", "error");
+    }
+  }
+
+  // ── Open case detail ──────────────────────────────────────────────
+
+  async function openCase(id: string) {
+    setLoadingDetail(true);
+    setSelectedCase(null);
+    const res = await authFetch(`/api/legal/cases/${id}`);
+    const json = await res.json();
+    if (json.data) {
+      setSelectedCase(json.data);
+      setEditFields({
+        police_station: json.data.police_station ?? "",
+        fir_number: json.data.fir_number ?? "",
+        fir_date: json.data.fir_date ?? "",
+        warrant_number: json.data.warrant_number ?? "",
+        warrant_date: json.data.warrant_date ?? "",
+        court_case_number: json.data.court_case_number ?? "",
+        status: json.data.status,
+        amount_involved_pkr: json.data.amount_involved_pkr ?? undefined,
+        amount_recovered_pkr: json.data.amount_recovered_pkr ?? undefined,
+        resolution_type: json.data.resolution_type ?? "",
+        resolution_notes: json.data.resolution_notes ?? "",
+      });
+    }
+    setLoadingDetail(false);
+  }
+
+  async function saveEdit() {
+    if (!selectedCase) return;
+    setSavingEdit(true);
+    const res = await authFetch(`/api/legal/cases/${selectedCase.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editFields),
+    });
+    const json = await res.json();
+    setSavingEdit(false);
+    if (json.data) {
+      showToast("Case updated", "success");
+      setSelectedCase({ ...selectedCase, ...json.data });
+      loadCases();
+    } else {
+      showToast(json.error || "Failed to save", "error");
     }
   }
 
@@ -220,7 +271,9 @@ export default function HRLegal() {
             </thead>
             <tbody>
               {visible.map((c) => (
-                <tr key={c.id}>
+                <tr key={c.id} onClick={() => openCase(c.id)} style={{ cursor: "pointer" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "")}>
                   <td style={{ ...tdStyle, fontWeight: 700, whiteSpace: "nowrap" }}>{c.case_number}</td>
                   <td style={{ ...tdStyle, color: COLOURS.SLATE }}>
                     <div style={{ fontSize: "10px", color: COLOURS.SLATE, fontWeight: 600 }}>{c.entity}</div>
@@ -351,6 +404,140 @@ export default function HRLegal() {
                 {saving ? "Initiating…" : "Initiate Case"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Case detail side panel */}
+      {(loadingDetail || selectedCase) && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 9990, backgroundColor: "rgba(15,23,42,0.35)", display: "flex", justifyContent: "flex-end" }}
+          onClick={() => setSelectedCase(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "min(560px, 100vw)", height: "100%", backgroundColor: "white", overflowY: "auto", boxShadow: "-4px 0 32px rgba(15,23,42,0.12)", display: "flex", flexDirection: "column" }}
+          >
+            {loadingDetail && <div style={{ padding: "24px" }}><SkeletonRows count={8} height="32px" /></div>}
+
+            {!loadingDetail && selectedCase && (
+              <>
+                {/* Header */}
+                <div style={{ padding: "20px 24px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFD" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+                    <div>
+                      <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "4px" }}>{selectedCase.case_number}</div>
+                      <div style={{ fontSize: "17px", fontWeight: 700, color: COLOURS.NAVY }}>{selectedCase.subject_name}</div>
+                      {selectedCase.subject_role && <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "1px" }}>{selectedCase.subject_role}</div>}
+                      <div style={{ marginTop: "8px" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", backgroundColor: "#F1F5F9", color: COLOURS.SLATE }}>{selectedCase.status}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => setSelectedCase(null)} style={{ border: "none", backgroundColor: "transparent", cursor: "pointer", fontSize: "20px", color: COLOURS.SLATE, padding: "0 4px", lineHeight: 1 }}>×</button>
+                  </div>
+                  <div style={{ display: "flex", gap: "16px", marginTop: "12px", flexWrap: "wrap" }}>
+                    {[
+                      { l: "Location", v: selectedCase.location_name },
+                      { l: "Offence", v: selectedCase.offence_type },
+                      { l: "Initiated", v: formatDateUK(selectedCase.created_at.slice(0, 10)) },
+                    ].map(({ l, v }) => (
+                      <div key={l}>
+                        <div style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em" }}>{l}</div>
+                        <div style={{ fontSize: "12px", color: COLOURS.NAVY, marginTop: "1px" }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Progress tracker */}
+                <CaseProgress c={selectedCase} />
+
+                {/* Editable fields */}
+                <div style={{ padding: "16px 24px", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "12px" }}>Edit Case Details</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Status</label>
+                      <select value={editFields.status ?? selectedCase.status} onChange={(e) => setEditFields({ ...editFields, status: e.target.value })}
+                        style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                        {["HR Documents Issued","Police Report Filed","FIR Registered","Warrant Issued","Under Investigation","Court Proceedings","Resolved","Closed"].map((s) => <option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Police Station</label>
+                      <input value={editFields.police_station ?? ""} onChange={(e) => setEditFields({ ...editFields, police_station: e.target.value })} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} placeholder="Optional" />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>FIR Number</label>
+                      <input value={editFields.fir_number ?? ""} onChange={(e) => setEditFields({ ...editFields, fir_number: e.target.value })} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} placeholder="Optional" />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>FIR Date</label>
+                      <DateInput value={editFields.fir_date ?? ""} onChange={(e) => setEditFields({ ...editFields, fir_date: e.target.value })} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Warrant Number</label>
+                      <input value={editFields.warrant_number ?? ""} onChange={(e) => setEditFields({ ...editFields, warrant_number: e.target.value })} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} placeholder="Optional" />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Warrant Date</label>
+                      <DateInput value={editFields.warrant_date ?? ""} onChange={(e) => setEditFields({ ...editFields, warrant_date: e.target.value })} />
+                    </div>
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Court Case Number</label>
+                      <input value={editFields.court_case_number ?? ""} onChange={(e) => setEditFields({ ...editFields, court_case_number: e.target.value })} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} placeholder="Optional" />
+                    </div>
+                    {(editFields.status === "Resolved" || editFields.status === "Closed") && (
+                      <>
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Amount Recovered (PKR)</label>
+                          <input type="number" value={editFields.amount_recovered_pkr ?? ""} onChange={(e) => setEditFields({ ...editFields, amount_recovered_pkr: e.target.value ? Number(e.target.value) : undefined })} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} placeholder="Optional" />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Resolution Type</label>
+                          <select value={editFields.resolution_type ?? ""} onChange={(e) => setEditFields({ ...editFields, resolution_type: e.target.value })} style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                            <option value="">— Select —</option>
+                            {["Recovered","Convicted","Acquitted","Settled","Dropped"].map((r) => <option key={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div style={{ gridColumn: "1 / -1" }}>
+                          <label style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "3px" }}>Resolution Notes</label>
+                          <textarea value={editFields.resolution_notes ?? ""} onChange={(e) => setEditFields({ ...editFields, resolution_notes: e.target.value })} rows={2} style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical" as const }} />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
+                    <button onClick={saveEdit} disabled={savingEdit} style={{ ...primaryButtonStyle, opacity: savingEdit ? 0.6 : 1 }}>
+                      {savingEdit ? "Saving…" : "Save Changes"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Activity log */}
+                <div style={{ padding: "16px 24px", flex: 1 }}>
+                  <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "14px" }}>
+                    Activity Log ({selectedCase.updates.length})
+                  </div>
+                  {selectedCase.updates.length === 0 && <p style={{ fontSize: "13px", color: COLOURS.SLATE }}>No follow-ups logged yet.</p>}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {selectedCase.updates.map((u) => (
+                      <div key={u.id} style={{ borderLeft: `3px solid ${COLOURS.HAIRLINE}`, paddingLeft: "14px", position: "relative" }}>
+                        <div style={{ position: "absolute", left: "-6px", top: "4px", width: "9px", height: "9px", borderRadius: "50%", backgroundColor: COLOURS.NAVY }} />
+                        <div style={{ display: "flex", alignItems: "baseline", gap: "8px", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{u.update_type}</span>
+                          <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>{formatDateUK(u.update_date)}</span>
+                        </div>
+                        <p style={{ fontSize: "13px", color: COLOURS.NAVY, margin: "4px 0 0" }}>{u.description}</p>
+                        {u.fir_number && <p style={{ fontSize: "11px", color: COLOURS.SLATE, margin: "2px 0 0" }}>FIR: {u.fir_number}</p>}
+                        {u.next_action && <p style={{ fontSize: "11px", color: COLOURS.AMBER, margin: "4px 0 0", fontWeight: 600 }}>Next: {u.next_action}{u.next_action_date ? ` — by ${formatDateUK(u.next_action_date)}` : ""}</p>}
+                        <p style={{ fontSize: "10px", color: COLOURS.SLATE, margin: "4px 0 0" }}>Logged by {u.entered_by}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

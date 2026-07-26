@@ -7,9 +7,10 @@ const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 async function checkCanManage(auth: { email: string }, supabase: ReturnType<typeof createServiceClient>) {
   if (ADMIN_EMAILS.includes(auth.email.toLowerCase())) return true;
   const { data: member } = await supabase
-    .from("members").select("id, role").eq("email", auth.email).single();
+    .from("members").select("id, role, department").eq("email", auth.email).single();
   if (!member) return false;
   if (member.role === "Admin" || member.role === "CEO") return true;
+  if (member.department === "HR") return true;
   const { data: perm } = await supabase
     .from("member_permissions")
     .select("can_access_admin_ops")
@@ -62,9 +63,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     "amount_recovered_pkr", "resolution_type", "resolution_notes",
     "description", "amount_involved_pkr",
   ];
+  const DATE_FIELDS = ["fir_date", "warrant_date", "incident_date"];
   const patch: Record<string, unknown> = {};
   for (const key of allowed) {
-    if (key in body) patch[key] = body[key];
+    if (key in body) {
+      const v = body[key];
+      // Empty strings must become null for DATE and NUMERIC columns
+      patch[key] = (v === "" || v === null) ? null : v;
+      if (DATE_FIELDS.includes(key) && typeof v === "string" && v.trim() === "") patch[key] = null;
+    }
   }
 
   const { data, error } = await supabase

@@ -35,7 +35,7 @@ export type LegalCase = {
   updated_at: string;
 };
 
-type CaseUpdate = {
+export type CaseUpdate = {
   id: string;
   update_type: string;
   update_date: string;
@@ -50,7 +50,7 @@ type CaseUpdate = {
   created_at: string;
 };
 
-type CaseDetail = LegalCase & { updates: CaseUpdate[] };
+export type CaseDetail = LegalCase & { updates: CaseUpdate[] };
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -124,7 +124,7 @@ function daysBetween(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
 }
 
-function CaseProgress({ c }: { c: CaseDetail }) {
+export function CaseProgress({ c }: { c: CaseDetail }) {
   const isClosed = c.status === "Closed";
   const currentIdx = isClosed ? PIPELINE.length : PIPELINE.indexOf(c.status);
 
