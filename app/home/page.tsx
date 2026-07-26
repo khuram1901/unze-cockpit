@@ -1554,11 +1554,16 @@ export default function HomePage() {
       const email = user?.email || "";
       let fullName = email;
 
-      const { data: memberData } = await supabase.from("members").select("first_name, last_name, name, role, department, company").eq("email", email).maybeSingle();
+      const { data: memberData } = await supabase.from("members").select("id, first_name, last_name, name, role, department, company").eq("email", email).maybeSingle();
       if (memberData) {
         fullName = `${memberData.first_name || ""} ${memberData.last_name || ""}`.trim() || memberData.name || email;
         setUserName(fullName);
       }
+
+      // Fetch per-member permissions (needed for Admin Ops manager check, e.g. Akhlaq)
+      const { data: memberPerms } = memberData?.id
+        ? await supabase.from("member_permissions").select("can_access_admin_ops").eq("member_id", memberData.id).maybeSingle()
+        : { data: null };
 
       const [
         tasksRes, machinesRes, meetingsRes,
@@ -1847,10 +1852,10 @@ export default function HomePage() {
           .catch(() => {});
       }
 
-      // Legal case summary — shown to CEO, Admin, Admin Ops managers, and HR managers
+      // Legal case summary — shown to CEO, Admin, Admin Ops managers (e.g. Akhlaq), and HR managers (e.g. Zuhair)
       const showLegal =
         userRole === "Admin" || userRole === "CEO" ||
-        (userRole === "Manager" && (userDept === "HR" || (memberData as { can_access_admin_ops?: boolean } | null)?.can_access_admin_ops));
+        (userRole === "Manager" && (userDept === "HR" || userDept === "Human Resources" || memberPerms?.can_access_admin_ops === true));
       if (showLegal) {
         authFetch("/api/legal/cases")
           .then((r) => r.json())
@@ -1994,6 +1999,7 @@ export default function HomePage() {
             isMobile={isMobile}
             quickTaskAction={quickTaskAction}
             quickMachineResolve={quickMachineResolve}
+            legalSummary={legalSummary}
           />
         ) : (
           <>
@@ -2597,7 +2603,7 @@ function ExecutiveDashboardBody({
   companyFinance, receivableRows, recAgingTotals, recAgingByCustomer, showFinance, setShowFinance,
   expandedCard, setExpandedCard, bannerOpen, setBannerOpen, deptHealth, investmentData, pensionSummary, folderitSummary, folderitCompanyBreakdown, dailyOpsData,
   facilitySynopsis, guaranteeAlerts, taxOverdueCount, taxTier2Alerts, taxScheduleEntries, taxReturnFilings, taxSummaryYear,
-  taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve,
+  taxScheduleEntries2, taxReturnFilings2, taxSummaryYear2, taxSignoffs, taxSignoffs2, isMobile, quickTaskAction, quickMachineResolve, legalSummary,
 }: {
   ctx: UserCtx | null;
   lastUpdated: Date | null;
@@ -2639,6 +2645,7 @@ function ExecutiveDashboardBody({
   taxSignoffs2: Map<string, boolean>;
   quickTaskAction: (taskId: string, newStatus: string) => Promise<void>;
   quickMachineResolve: (issueId: string) => Promise<void>;
+  legalSummary: { active: number; byStatus: { status: string; count: number }[] } | null;
 }) {
   const userName = ctx?.email ? ctx.email.split("@")[0] : "";
   // Widget-level visibility (see app/lib/widgetRegistry.ts) — falls back to
@@ -2911,6 +2918,50 @@ function ExecutiveDashboardBody({
           )}
         </div>
       </div>
+
+      {/* ── Legal Cases Summary ── */}
+      {legalSummary !== null && (
+        <div style={{
+          backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+          borderRadius: "8px", overflow: "hidden", marginBottom: "16px",
+        }}>
+          <div style={{
+            padding: "12px 18px", borderBottom: legalSummary.active > 0 ? "1px solid var(--border-color)" : undefined,
+            display: "flex", alignItems: "center", gap: "8px",
+          }}>
+            <span style={{ fontSize: "15px" }}>⚖️</span>
+            <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Legal Cases</span>
+            <span style={{
+              fontSize: "12px", fontWeight: 600, padding: "2px 8px", borderRadius: "8px", color: "white",
+              backgroundColor: legalSummary.active === 0 ? COLOURS.GREEN : legalSummary.byStatus.some((s) => s.status === "Warrant Issued" || s.status === "Court Proceedings") ? COLOURS.RED : COLOURS.AMBER,
+            }}>
+              {legalSummary.active === 0 ? "No active cases" : `${legalSummary.active} active`}
+            </span>
+            <a href="/admin?tab=legal" style={{ marginLeft: "auto", fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, textDecoration: "none" }}>
+              View all →
+            </a>
+          </div>
+          {legalSummary.active > 0 && (
+            <div style={{ padding: "10px 18px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+              {legalSummary.byStatus.map(({ status, count }) => {
+                const isLate = status === "Warrant Issued" || status === "Court Proceedings";
+                const colour = isLate ? COLOURS.RED : COLOURS.AMBER;
+                return (
+                  <div key={status} style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "4px 10px", borderRadius: "6px",
+                    backgroundColor: isLate ? COLOURS.DANGER_SOFT : COLOURS.WARNING_SOFT,
+                    fontSize: "13px",
+                  }}>
+                    <span style={{ fontWeight: 600, color: colour }}>{count}</span>
+                    <span style={{ color: "var(--text-secondary)" }}>{status}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── SECTION 1: NEEDS YOUR ATTENTION (expanded detail) ── */}
       {hasAttention && bannerOpen ? (
