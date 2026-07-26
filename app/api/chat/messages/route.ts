@@ -166,6 +166,13 @@ export async function POST(req: Request) {
     return Response.json({ error: "Failed to send message" }, { status: 500 });
   }
 
+  // Stamp sender's last_read_at so their own message isn't counted as unread
+  await db
+    .from("chat_participants")
+    .update({ last_read_at: new Date().toISOString() })
+    .eq("conversation_id", conversation_id)
+    .eq("member_id", member.id);
+
   // Fire-and-forget: push + email to other participants who haven't read recently
   notifyOtherParticipants(db, conversation_id, member.id, senderName, auth.email, content.trim()).catch(console.error);
 
