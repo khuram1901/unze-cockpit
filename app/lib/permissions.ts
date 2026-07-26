@@ -629,6 +629,14 @@ export function isDailyEntryOnly(u: UserCtx): boolean {
   );
 }
 
+// ── Banking page (EOBI/Social Security payment entry) ───────────────
+// CEO / Admin tier by default; also granted explicitly via Access Matrix.
+export function canAccessBanking(u: UserCtx): boolean {
+  const o = ov(u, "can_access_banking");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+
 // ── Widget-level visibility ───────────────────────────────────────
 // One level below page-level access: canViewExecutiveDashboard() etc.
 // decide whether someone can reach a page at all; this decides which

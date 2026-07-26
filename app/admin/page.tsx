@@ -1162,15 +1162,14 @@ export default function AdminDataPage() {
                   : entry.status === "missing" ? "Overdue" : "Due 15";
                 const tooltip = entry.date_paid
                   ? `Paid ${formatDateUK(entry.date_paid)}${entry.challan_number ? ` · Challan ${entry.challan_number}` : ""}${entry.amount_pkr ? ` · PKR ${Number(entry.amount_pkr).toLocaleString()}` : ""}`
-                  : entry.status === "missing" ? "Not paid — click to record" : "";
+                  : entry.status === "missing" ? "Not paid — record in Banking page" : "";
                 return (
                   <div
                     key={entry.month}
                     title={tooltip}
-                    onClick={() => entry.status === "missing" && setAddingPayment({ entity: row.entity, payment_type: payType, month: entry.month })}
                     style={{
                       display: "flex", flexDirection: "column", alignItems: "center",
-                      gap: "3px", cursor: entry.status === "missing" ? "pointer" : "default",
+                      gap: "3px", cursor: "default",
                       minWidth: "38px",
                     }}
                   >
@@ -1214,12 +1213,9 @@ export default function AdminDataPage() {
                 {badge.text}
               </span>
             )}
-            <button
-              onClick={() => setAddingPayment({ entity: "IFPL", payment_type: payType, month: new Date().getMonth() + 1 })}
-              style={{ fontSize: "12px", fontWeight: 600, padding: "5px 12px", borderRadius: "20px", border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "white", color: COLOURS.NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
-            >
-              + Record Payment
-            </button>
+            <span style={{ fontSize: "11px", color: COLOURS.SLATE, fontStyle: "italic", whiteSpace: "nowrap" }}>
+              View only — enter payments in Banking
+            </span>
           </div>
           {rows.length === 0
             ? <p style={{ fontSize: "13px", color: COLOURS.SLATE }}>No data for {paymentYear}.</p>
@@ -1245,7 +1241,7 @@ export default function AdminDataPage() {
             </div>
           ))}
           <span style={{ fontSize: "12px", color: COLOURS.SLATE, marginLeft: "auto" }}>
-            Click a red ✗ to record a payment.
+            Payments are entered in the Banking page.
           </span>
         </div>
 

@@ -67,6 +67,7 @@ export const PERM_COLUMNS = [
   // ── Admin Operations ─────────────────────────────────────────
   { key: "can_access_admin_ops", label: "Ops", group: "Admin Ops", tip: "Access the Admin Operations page — EOBI, Social Security, compliance, fleet, solar, utilities" },
   { key: "can_access_admin_entry", label: "Entry", group: "Admin Ops", tip: "Daily Entry page — log fuel, solar, utility readings and maintenance on the road (restricted mode: no sidebar)" },
+  { key: "can_access_banking", label: "Banking", group: "Admin Ops", tip: "Banking page — enter and manage EOBI & Social Security payments for all entities" },
 
   // ── Production ───────────────────────────────────────────────
   { key: "can_access_daily_entry", label: "Entry", group: "Prod.", tip: "Log daily production, dispatch, breakage" },
@@ -176,6 +177,7 @@ export function roleDefault(col: ColDef, m: MatrixMember): boolean | string | nu
     case "can_manage_stock": return admin || (manager && dept === "Unze Trading Ops");
     case "can_access_admin_ops": return admin || (manager && dept === "Admin");
     case "can_access_admin_entry": return false; // always explicit — never on by default
+    case "can_access_banking": return admin; // CEO/Admin only by default
     case "can_access_daily_entry": return admin || dept === "Unze Trading Ops";
     case "can_edit_operations_targets": return admin || exec || lc(m.email) === OPS_HOD_EMAIL;
     case "can_view_investments": return admin || exec;

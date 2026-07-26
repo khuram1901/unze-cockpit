@@ -16,7 +16,7 @@ import {
   canManageRecurringTasks, canManageCalendarRequests, canSeeAllMinutes,
   canViewDepartment, canManageMembers, canAddMembers,
   canViewAuditLog, canImportExport,
-  canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry,
+  canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry, canAccessBanking,
   canViewPADashboard, canViewInvestments,
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
   canViewIfplPnl,
@@ -58,6 +58,7 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_view_guarantees: canViewGuarantees,
   can_view_dept_tax_accounts: canViewTaxAccounts,
   can_view_ifpl_pnl: canViewIfplPnl,
+  can_access_banking: canAccessBanking,
 };
 
 function isCardVisible(card: PageCard, ctx: UserCtx): boolean {

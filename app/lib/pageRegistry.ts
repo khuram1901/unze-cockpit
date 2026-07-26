@@ -56,6 +56,7 @@ export const PAGE_REGISTRY: PageCard[] = [
   // ── Departments ──
   { permKey: "can_view_dept_admin", title: "Admin", subtitle: "Administration dashboard", href: "/department/admin", icon: "🏛️", group: "Departments" },
   { permKey: "can_access_admin_ops", title: "Admin Operations", subtitle: "Registrations, compliance, payments, fleet, solar", href: "/admin", icon: "⚙️", group: "Departments" },
+  { permKey: "can_access_banking", title: "Banking", subtitle: "EOBI & Social Security payment tracker — Unze, Imperial, Restaurants", href: "/banking", icon: "🏦", group: "Departments" },
   { permKey: "can_view_dept_audit", title: "Audit", subtitle: "Internal audit tracking", href: "/department/audit", icon: "🔎", group: "Departments", badgeKey: "audit" },
   { permKey: "can_view_dept_hr", title: "HR", subtitle: "Human resources dashboard", href: "/department/hr", icon: "🧑‍💼", group: "Departments" },
   { permKey: "can_view_dept_it", title: "IT", subtitle: "IT department dashboard", href: "/department/it", icon: "🖥️", group: "Departments" },

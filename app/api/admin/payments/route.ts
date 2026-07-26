@@ -8,8 +8,10 @@ async function checkCanManage(auth: { email: string }, supabase: ReturnType<type
   if (ADMIN_EMAILS.includes(auth.email.toLowerCase())) return true;
   const { data: member } = await supabase.from("members").select("id").eq("email", auth.email).single();
   if (!member) return false;
-  const { data: perm } = await supabase.from("member_permissions").select("can_access_admin_ops").eq("member_id", member.id).single();
-  return perm?.can_access_admin_ops === true;
+  const { data: perm } = await supabase.from("member_permissions")
+    .select("can_access_admin_ops, can_access_banking")
+    .eq("member_id", member.id).single();
+  return perm?.can_access_admin_ops === true || perm?.can_access_banking === true;
 }
 
 // GET — payment calendar for a year: ?year=2026

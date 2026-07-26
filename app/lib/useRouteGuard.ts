@@ -7,7 +7,7 @@ import {
   canViewFinance, canViewReceivables, canViewExecutiveDashboard, canViewDepartment,
   canViewOperations, canSeeAllMinutes, canSeeAllTasks, canManageRecurringTasks,
   canManageMembers, canViewAuditLog, canImportExport,
-  canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry,
+  canAccessDailyEntry, canAccessAdminOps, canAccessAdminEntry, canAccessBanking,
   canViewPADashboard, canViewInvestments,
   canViewStock, canViewGuarantees, canViewIfplPnl, canAccessFolderit,
   isPrivileged, isAdminTier, isMainAdmin,
@@ -18,7 +18,7 @@ type Capability = "finance" | "receivables" | "executive" | "operations"
   | "minutes" | "meetings_admin" | "recurring_tasks" | "members"
   | "audit_log" | "import_export" | "daily_entry"
   | "pa_dashboard" | "investments" | "system_backups" | "stock" | "guarantees"
-  | "ifpl_pnl" | "admin_ops" | "admin_entry" | "folderit";
+  | "ifpl_pnl" | "admin_ops" | "admin_entry" | "folderit" | "banking";
 
 const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   finance: canViewFinance,
@@ -41,6 +41,7 @@ const CHECKS: Record<Capability, (u: UserCtx) => boolean> = {
   stock: canViewStock,
   ifpl_pnl: canViewIfplPnl,
   folderit: canAccessFolderit,
+  banking: canAccessBanking,
 };
 
 async function loadUserCtx(email: string): Promise<UserCtx> {
