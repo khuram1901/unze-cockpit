@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
 import { COLOURS, RADII, SHADOWS } from "./SharedUI";
 import { formatDateTimeUK } from "./dateUtils";
+import DateInput from "./DateInput";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -350,6 +351,14 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   const [archivedConvs, setArchivedConvs] = useState<Conversation[]>([]);
   const [loadingArchived, setLoadingArchived] = useState(false);
 
+  // @task form state
+  const [showTaskForm, setShowTaskForm] = useState(false);
+  const [taskDesc, setTaskDesc] = useState("");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskPriority, setTaskPriority] = useState("Medium");
+  const [taskAssigneeEmail, setTaskAssigneeEmail] = useState("");
+  const [submittingTask, setSubmittingTask] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -496,6 +505,11 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   }, []);
 
   useEffect(() => {
+    // Reset task form whenever conversation changes
+    setShowTaskForm(false);
+    setTaskDesc("");
+    setTaskDueDate("");
+    setTaskPriority("Medium");
     if (!activeConv) return;
     loadMessages(activeConv.conversation_id);
     setConversations((prev) =>
@@ -607,6 +621,66 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  };
+
+  // ── @task trigger ────────────────────────────────────────────────
+
+  const openTaskForm = useCallback(() => {
+    if (!activeConv) return;
+    // Default assignee = first participant (other person in a 1:1)
+    const firstParticipant = activeConv.participants?.[0];
+    setTaskAssigneeEmail(firstParticipant?.email ?? "");
+    setTaskDesc("");
+    setTaskDueDate("");
+    setTaskPriority("Medium");
+    setShowTaskForm(true);
+    setNewMessage(""); // clear the @task trigger text
+  }, [activeConv]);
+
+  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setNewMessage(val);
+    // Detect @task trigger (anywhere in text, case-insensitive)
+    if (val.toLowerCase().trimEnd() === "@task") {
+      openTaskForm();
+    }
+  };
+
+  const submitTask = async () => {
+    if (!activeConv || !taskDesc.trim() || !taskAssigneeEmail || submittingTask) return;
+    setSubmittingTask(true);
+
+    // Find the assignee's display name from participants
+    const assignee = activeConv.participants?.find((p) => p.email === taskAssigneeEmail);
+    const assigneeName = assignee?.name ?? taskAssigneeEmail;
+
+    const res = await authedFetch("/api/tasks/create", {
+      method: "POST",
+      body: JSON.stringify({
+        description: taskDesc.trim(),
+        assignedToEmail: taskAssigneeEmail,
+        assignedTo: assigneeName,
+        dueDate: taskDueDate || null,
+        priority: taskPriority,
+        sourceType: "chat",
+        sourceRecordId: activeConv.conversation_id,
+        sourceLabel: `Chat with ${convDisplayName(activeConv)}`,
+      }),
+    });
+
+    if (res.ok) {
+      // Send a confirmation message into the chat
+      const duePart = taskDueDate ? ` · Due ${taskDueDate.split("-").reverse().join("/")}` : "";
+      await authedFetch("/api/chat/messages", {
+        method: "POST",
+        body: JSON.stringify({
+          conversation_id: activeConv.conversation_id,
+          content: `📋 Task assigned to ${assigneeName}: "${taskDesc.trim()}"${duePart}`,
+        }),
+      });
+      setShowTaskForm(false);
+    }
+    setSubmittingTask(false);
   };
 
   // ── Filtered + sorted data for the list ────────────────────────
@@ -1051,6 +1125,136 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
               <div ref={messagesEndRef} />
             </div>
 
+            {/* @task inline form */}
+            {showTaskForm && (
+              <div style={{
+                margin: "0 10px 6px",
+                border: `1px solid ${BORDER}`,
+                borderRadius: RADII.CARD,
+                background: CANVAS,
+                padding: "12px 14px",
+                flexShrink: 0,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: NAVY, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>📋</span> Create Task
+                  </span>
+                  <button
+                    onClick={() => setShowTaskForm(false)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: SLATE, fontSize: 16, padding: 0, lineHeight: 1 }}
+                    aria-label="Dismiss"
+                  >✕</button>
+                </div>
+
+                {/* Assignee — for group chats show a selector */}
+                {activeConv && activeConv.is_group && (activeConv.participants?.length ?? 0) > 1 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: SLATE, display: "block", marginBottom: 3 }}>Assign to</label>
+                    <select
+                      value={taskAssigneeEmail}
+                      onChange={(e) => setTaskAssigneeEmail(e.target.value)}
+                      style={{
+                        width: "100%", padding: "6px 8px",
+                        border: `1px solid ${BORDER}`, borderRadius: RADII.SM,
+                        fontSize: 12, color: NAVY, background: "#fff", outline: "none",
+                      }}
+                    >
+                      <option value="">— Select person —</option>
+                      {activeConv.participants?.map((p) => (
+                        <option key={p.email} value={p.email}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Assignee read-only label for 1:1 */}
+                {activeConv && !activeConv.is_group && (
+                  <div style={{ marginBottom: 8 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: SLATE, display: "block", marginBottom: 3 }}>Assign to</label>
+                    <div style={{
+                      padding: "6px 8px", fontSize: 12, color: NAVY,
+                      background: "#F1F5F9", borderRadius: RADII.SM,
+                      border: `1px solid ${BORDER}`,
+                    }}>
+                      {activeConv.participants?.[0]?.name ?? taskAssigneeEmail}
+                    </div>
+                  </div>
+                )}
+
+                {/* Task description */}
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: SLATE, display: "block", marginBottom: 3 }}>Task description *</label>
+                  <input
+                    autoFocus
+                    value={taskDesc}
+                    onChange={(e) => setTaskDesc(e.target.value)}
+                    placeholder="What needs to be done?"
+                    maxLength={250}
+                    style={{
+                      width: "100%", padding: "6px 8px",
+                      border: `1px solid ${BORDER}`, borderRadius: RADII.SM,
+                      fontSize: 12, color: NAVY, background: "#fff",
+                      outline: "none", boxSizing: "border-box",
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitTask(); } }}
+                  />
+                </div>
+
+                {/* Due date + priority row */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: SLATE, display: "block", marginBottom: 3 }}>Due date</label>
+                    <DateInput
+                      value={taskDueDate}
+                      onChange={(e) => setTaskDueDate(e.target.value)}
+                      placeholder="DD/MM/YYYY"
+                      style={{ fontSize: 12, padding: "6px 8px" }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600, color: SLATE, display: "block", marginBottom: 3 }}>Priority</label>
+                    <select
+                      value={taskPriority}
+                      onChange={(e) => setTaskPriority(e.target.value)}
+                      style={{
+                        width: "100%", padding: "6px 8px",
+                        border: `1px solid ${BORDER}`, borderRadius: RADII.SM,
+                        fontSize: 12, color: NAVY, background: "#fff", outline: "none",
+                      }}
+                    >
+                      <option>Low</option>
+                      <option>Medium</option>
+                      <option>High</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                  <button
+                    onClick={() => setShowTaskForm(false)}
+                    style={{
+                      padding: "6px 14px", borderRadius: RADII.PILL,
+                      border: `1px solid ${BORDER}`, background: "none",
+                      fontSize: 12, color: SLATE, cursor: "pointer",
+                    }}
+                  >Cancel</button>
+                  <button
+                    onClick={submitTask}
+                    disabled={!taskDesc.trim() || !taskAssigneeEmail || submittingTask}
+                    style={{
+                      padding: "6px 14px", borderRadius: RADII.PILL,
+                      border: "none", background: NAVY,
+                      fontSize: 12, color: "#fff", fontWeight: 600,
+                      cursor: !taskDesc.trim() || !taskAssigneeEmail || submittingTask ? "not-allowed" : "pointer",
+                      opacity: !taskDesc.trim() || !taskAssigneeEmail || submittingTask ? 0.5 : 1,
+                    }}
+                  >{submittingTask ? "Creating…" : "Create Task"}</button>
+                </div>
+              </div>
+            )}
+
+            {/* @task hint shown in input placeholder when not showing form */}
             {/* Input */}
             <div style={{
               padding: "8px 10px",
@@ -1060,9 +1264,9 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
               <textarea
                 ref={inputRef}
                 value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
+                onChange={handleMessageChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Message…"
+                placeholder="Message… or type @task to assign a task"
                 rows={1}
                 maxLength={2000}
                 style={{
