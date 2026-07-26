@@ -6,10 +6,11 @@ import { supabase, authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
-import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
+import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, useConfirm, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
-import { canCompleteSubmittedTask, canReopenCompletedTask, myIdentityEmails, filterAssignableMembers } from "../lib/permissions";
+import { canCompleteSubmittedTask, canReopenCompletedTask, canDeleteTask, myIdentityEmails, filterAssignableMembers } from "../lib/permissions";
 import { routeSubmittedTask } from "../lib/taskRouting";
+import { logAction } from "../lib/audit-log";
 import TeamStats from "./TeamStats";
 import TaskDetailModal from "./TaskDetailModal";
 import MiniSubtaskToggle from "./MiniSubtaskToggle";
@@ -145,6 +146,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   const filterFromUrl = searchParams.get("filter");
   const scopeFromUrl = searchParams.get("scope");
   const toast = useToast();
+  const dlg = useConfirm();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -606,6 +608,42 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // button — see canCompleteSubmittedTask in lib/permissions.ts) before
   // sending the update, then reports what it skipped and why rather than
   // failing silently.
+  // Bulk delete (Khuram, 24/07/2026: "i just selected the tasks... i dont
+  // any option to delete it") — same per-task rule as the single Delete
+  // button in TaskDetailPanel: canDeleteTask(). Admin-tier and the PA can
+  // delete anything; others can't touch tasks created by the protected
+  // accounts (CEO/PA-created). One confirm, one DELETE statement.
+  async function applyBulkDelete() {
+    if (selectedIds.size === 0) return;
+    const eligible: string[] = [];
+    let blocked = 0;
+    for (const id of Array.from(selectedIds)) {
+      const t = tasks.find((x) => x.id === id);
+      if (!t) continue;
+      if (canDeleteTask({ email: myEmail, role: currentRole }, t.assigned_by_email)) eligible.push(id);
+      else blocked++;
+    }
+    if (eligible.length === 0) {
+      toast.show("You don't have permission to delete any of the selected tasks.", "error");
+      return;
+    }
+    const blockedNote = blocked > 0 ? ` (${blocked} protected task${blocked !== 1 ? "s" : ""} will be skipped)` : "";
+    if (!await dlg.confirm(`Permanently delete ${eligible.length} task${eligible.length !== 1 ? "s" : ""}?${blockedNote} This cannot be undone.`, true)) return;
+
+    setBulkApplying(true);
+    const { error } = await supabase.from("tasks").delete().in("id", eligible);
+    setBulkApplying(false);
+
+    if (error) {
+      toast.show("Error deleting tasks: " + error.message, "error");
+      return;
+    }
+    logAction("Deleted", "tasks", `Bulk delete: ${eligible.length} task(s)`, eligible[0]);
+    toast.show(`Deleted ${eligible.length} task${eligible.length !== 1 ? "s" : ""}${blocked > 0 ? ` — skipped ${blocked} protected` : ""}.`, "success");
+    setSelectedIds(new Set());
+    refreshAll();
+  }
+
   async function applyBulkComplete() {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
@@ -941,6 +979,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   return (
     <div style={{ paddingBottom: isMobile ? 160 : 0 }}>
       {toast.element}
+      {dlg.element}
 
       <TaskDetailModal
         task={tasks.find((t) => t.id === expandedTaskId) || null}
@@ -1268,6 +1307,31 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                     }}
                   >
                     Mark Complete{eligibleCount > 0 ? ` (${eligibleCount})` : ""}
+                  </button>
+                );
+              })()}
+
+              {(() => {
+                // Bulk Delete — mirrors the per-task rule from TaskDetailPanel
+                const deletableCount = Array.from(selectedIds).filter((id) => {
+                  const t = tasks.find((x) => x.id === id);
+                  return !!t && canDeleteTask({ email: myEmail, role: currentRole }, t.assigned_by_email);
+                }).length;
+                return (
+                  <button
+                    onClick={applyBulkDelete}
+                    disabled={deletableCount === 0 || bulkApplying}
+                    title={deletableCount === 0 ? "You don't have permission to delete the selected tasks" : "Permanently delete the selected tasks"}
+                    style={{
+                      ...smallActionBtn, borderRadius: RADII.PILL,
+                      backgroundColor: COLOURS.CARD,
+                      color: COLOURS.RED,
+                      border: `1px solid ${COLOURS.RED}`,
+                      opacity: deletableCount === 0 || bulkApplying ? 0.5 : 1,
+                      cursor: deletableCount === 0 || bulkApplying ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    Delete{deletableCount > 0 ? ` (${deletableCount})` : ""}
                   </button>
                 );
               })()}
