@@ -649,6 +649,7 @@ export default function HomePage() {
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [bannerOpen, setBannerOpen] = useState(false);
   const [actioningTask, setActioningTask] = useState<string | null>(null);
+  const [legalSummary, setLegalSummary] = useState<{ active: number; byStatus: { status: string; count: number }[] } | null>(null);
 
   async function quickTaskAction(taskId: string, newStatus: string) {
     setActioningTask(taskId);
@@ -1828,6 +1829,28 @@ export default function HomePage() {
           .catch(() => {});
       }
 
+      // Legal case summary — shown to CEO, Admin, Admin Ops managers, and HR managers
+      const showLegal =
+        userRole === "Admin" || userRole === "CEO" ||
+        (userRole === "Manager" && (userDept === "HR" || (memberData as { can_access_admin_ops?: boolean } | null)?.can_access_admin_ops));
+      if (showLegal) {
+        authFetch("/api/legal/cases")
+          .then((r) => r.json())
+          .then((d) => {
+            const cases: { status: string }[] = d.data || [];
+            const active = cases.filter((c) => c.status !== "Resolved" && c.status !== "Closed");
+            const counts = active.reduce<Record<string, number>>((acc, c) => {
+              acc[c.status] = (acc[c.status] || 0) + 1;
+              return acc;
+            }, {});
+            setLegalSummary({
+              active: active.length,
+              byStatus: Object.entries(counts).map(([status, count]) => ({ status, count })),
+            });
+          })
+          .catch(() => {});
+      }
+
       setLoading(false);
     }
 
@@ -1997,6 +2020,50 @@ export default function HomePage() {
                     <span><strong>{briefing.stuckBills}</strong> receivable bill{briefing.stuckBills > 1 ? "s" : ""} stuck at Stage 2/3. </span>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* ── Legal Cases Summary ── */}
+            {legalSummary !== null && (
+              <div style={{
+                backgroundColor: "var(--bg-card)", border: "1px solid var(--border-color)",
+                borderRadius: "8px", overflow: "hidden", marginBottom: "16px",
+              }}>
+                <div style={{
+                  padding: "12px 18px", borderBottom: legalSummary.active > 0 ? "1px solid var(--border-color)" : undefined,
+                  display: "flex", alignItems: "center", gap: "8px",
+                }}>
+                  <span style={{ fontSize: "15px" }}>⚖️</span>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>Legal Cases</span>
+                  <span style={{
+                    fontSize: "12px", fontWeight: 600, padding: "2px 8px", borderRadius: "8px",
+                    color: "white",
+                    backgroundColor: legalSummary.active === 0 ? COLOURS.GREEN : legalSummary.byStatus.some((s) => s.status === "Warrant Issued" || s.status === "Court Proceedings") ? COLOURS.RED : COLOURS.AMBER,
+                  }}>
+                    {legalSummary.active === 0 ? "No active cases" : `${legalSummary.active} active`}
+                  </span>
+                  <a href="/admin?tab=legal" style={{ marginLeft: "auto", fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, textDecoration: "none" }}>
+                    View all →
+                  </a>
+                </div>
+                {legalSummary.active > 0 && (
+                  <div style={{ padding: "10px 18px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {legalSummary.byStatus.map(({ status, count }) => {
+                      const isLate = status === "Warrant Issued" || status === "Court Proceedings";
+                      const colour = isLate ? COLOURS.RED : COLOURS.AMBER;
+                      return (
+                        <div key={status} style={{
+                          display: "flex", alignItems: "center", gap: "6px",
+                          padding: "4px 10px", borderRadius: "6px",
+                          backgroundColor: `${colour}15`, border: `1px solid ${colour}40`,
+                        }}>
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: colour }}>{count}</span>
+                          <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{status}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

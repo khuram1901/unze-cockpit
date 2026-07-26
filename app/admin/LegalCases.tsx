@@ -108,6 +108,146 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ── Progress tracker ────────────────────────────────────────────────────
+
+const PIPELINE = [
+  "HR Documents Issued",
+  "Police Report Filed",
+  "FIR Registered",
+  "Warrant Issued",
+  "Under Investigation",
+  "Court Proceedings",
+  "Resolved",
+];
+
+function daysBetween(a: string, b: string) {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+}
+
+function CaseProgress({ c }: { c: CaseDetail }) {
+  const isClosed = c.status === "Closed";
+  const currentIdx = isClosed ? PIPELINE.length : PIPELINE.indexOf(c.status);
+
+  // Build a map: status → date it was first entered
+  const enteredAt: Record<string, string> = { [PIPELINE[0]]: c.created_at };
+  // Walk updates oldest-first
+  const sortedUpdates = [...c.updates].sort(
+    (a, b) => new Date(a.update_date).getTime() - new Date(b.update_date).getTime()
+  );
+  sortedUpdates.forEach((u) => {
+    if (u.status_after && !enteredAt[u.status_after]) {
+      enteredAt[u.status_after] = u.update_date;
+    }
+  });
+
+  const now = new Date().toISOString();
+  const daysSinceLastUpdate = sortedUpdates.length > 0
+    ? daysBetween(sortedUpdates[sortedUpdates.length - 1].update_date, now)
+    : daysBetween(c.created_at, now);
+  const stalled = daysSinceLastUpdate > 7 && !["Resolved", "Closed"].includes(c.status);
+
+  // Next action from most recent update that has one
+  const nextAction = [...sortedUpdates].reverse().find((u) => u.next_action);
+
+  return (
+    <div style={{ padding: "16px 24px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "#FAFBFD" }}>
+      <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "14px" }}>
+        Case Progress
+      </div>
+
+      {/* Stage stepper */}
+      <div style={{ position: "relative" }}>
+        {/* Connector line */}
+        <div style={{
+          position: "absolute", left: "10px", top: "10px",
+          bottom: "10px", width: "2px", backgroundColor: COLOURS.HAIRLINE, zIndex: 0,
+        }} />
+
+        {PIPELINE.map((stage, idx) => {
+          const done = idx < currentIdx;
+          const active = idx === currentIdx && !isClosed;
+          const pending = idx > currentIdx;
+          const enteredDate = enteredAt[stage];
+          const leftDate = enteredAt[PIPELINE[idx + 1]] ?? (done ? now : null);
+          const daysSpent = enteredDate && leftDate ? daysBetween(enteredDate, leftDate) : null;
+
+          const dotColor = done ? COLOURS.GREEN : active ? COLOURS.NAVY : COLOURS.HAIRLINE;
+          const dotBorder = active ? `2px solid ${COLOURS.NAVY}` : "none";
+
+          return (
+            <div key={stage} style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "10px", position: "relative", zIndex: 1 }}>
+              {/* Dot */}
+              <div style={{
+                width: "20px", height: "20px", borderRadius: "50%", flexShrink: 0,
+                backgroundColor: done ? COLOURS.GREEN : active ? "white" : "#EEF0F3",
+                border: done ? "none" : dotBorder || `2px solid ${COLOURS.HAIRLINE}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginTop: "1px",
+              }}>
+                {done && <span style={{ fontSize: "10px", color: "white", fontWeight: 700 }}>✓</span>}
+                {active && <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: COLOURS.NAVY }} />}
+              </div>
+
+              {/* Label + meta */}
+              <div style={{ flex: 1, paddingBottom: "4px" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{
+                    fontSize: "13px", fontWeight: active ? 700 : done ? 600 : 400,
+                    color: pending ? COLOURS.SLATE : COLOURS.NAVY,
+                  }}>{stage}</span>
+                  {daysSpent !== null && !active && (
+                    <span style={{ fontSize: "11px", color: COLOURS.SLATE }}>
+                      {daysSpent === 0 ? "same day" : `${daysSpent}d`}
+                    </span>
+                  )}
+                  {active && daysSpent === null && enteredDate && (
+                    <span style={{ fontSize: "11px", color: stalled ? COLOURS.RED : COLOURS.AMBER, fontWeight: 600 }}>
+                      {daysBetween(enteredDate, now)}d here
+                      {stalled ? " · stalled" : ""}
+                    </span>
+                  )}
+                </div>
+                {enteredDate && (
+                  <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "1px" }}>
+                    {done ? `${formatDateUK(enteredDate)} → ${leftDate ? formatDateUK(leftDate) : ""}` : formatDateUK(enteredDate)}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Closed state at end */}
+        {isClosed && (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", position: "relative", zIndex: 1 }}>
+            <div style={{ width: "20px", height: "20px", borderRadius: "50%", flexShrink: 0, backgroundColor: COLOURS.SLATE, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontSize: "10px", color: "white", fontWeight: 700 }}>✓</span>
+            </div>
+            <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.SLATE, paddingTop: "2px" }}>Closed</span>
+          </div>
+        )}
+      </div>
+
+      {/* Stall / next-action banner */}
+      {stalled && (
+        <div style={{ marginTop: "12px", padding: "8px 12px", borderRadius: "6px", backgroundColor: "#FEF2F2", border: `1px solid ${COLOURS.RED}30` }}>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.RED }}>⚠ No update for {daysSinceLastUpdate} days</span>
+          <p style={{ fontSize: "12px", color: COLOURS.RED, margin: "2px 0 0", opacity: 0.85 }}>This case may need chasing — last activity was {daysSinceLastUpdate} days ago.</p>
+        </div>
+      )}
+      {nextAction && (
+        <div style={{ marginTop: stalled ? "8px" : "12px", padding: "8px 12px", borderRadius: "6px", backgroundColor: "#FFFBEB", border: `1px solid ${COLOURS.AMBER}40` }}>
+          <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.AMBER, textTransform: "uppercase", letterSpacing: "0.04em" }}>Next action</span>
+          <p style={{ fontSize: "12px", color: COLOURS.NAVY, margin: "2px 0 0", fontWeight: 600 }}>{nextAction.next_action}</p>
+          {nextAction.next_action_date && (
+            <p style={{ fontSize: "11px", color: COLOURS.SLATE, margin: "2px 0 0" }}>Due: {formatDateUK(nextAction.next_action_date)}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────
 
 export default function LegalCases() {
@@ -373,6 +513,9 @@ export default function LegalCases() {
                     ))}
                   </div>
                 </div>
+
+                {/* Progress tracker */}
+                <CaseProgress c={selectedCase} />
 
                 {/* Editable case fields */}
                 <div style={{ padding: "16px 24px", borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
