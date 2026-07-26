@@ -345,6 +345,7 @@ export default function AuthWrapper({
         onToggle={() => setChatOpen((o) => !o)}
         onClose={() => setChatOpen(false)}
         unreadCount={notifItems.find((i) => i.label === "Unread messages")?.count ?? 0}
+        onMessagesRead={() => setTimeout(loadNotifications, 1500)}
       />
       {userCtx && canCreateAssignments(userCtx) && (
         <FloatingTaskButton />

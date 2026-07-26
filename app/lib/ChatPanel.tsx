@@ -331,9 +331,10 @@ type Props = {
   onToggle: () => void;
   onClose: () => void;
   unreadCount?: number; // authoritative count from bell, works even when panel is closed
+  onMessagesRead?: () => void; // called after marking messages read — lets parent refresh bell count
 };
 
-export default function ChatPanel({ email, memberId, memberName, isOpen, onToggle, onClose, unreadCount = 0 }: Props) {
+export default function ChatPanel({ email, memberId, memberName, isOpen, onToggle, onClose, unreadCount = 0, onMessagesRead }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [allMembers, setAllMembers] = useState<MemberOption[]>([]);
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
@@ -501,6 +502,8 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     } else {
       setMessages(msgs);
       setHasMore(msgs.length === 50);
+      // Notify parent to refresh bell count now that we've stamped last_read_at
+      if (msgs.length > 0) onMessagesRead?.();
     }
     if (!before) setLoadingMsgs(false); else setLoadingMore(false);
   }, []);
@@ -719,19 +722,24 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
         return true;
       });
 
-  // Members shown only in @ mode - lazy-loaded on first @
+  // Members shown in @ mode (everyone) or normal search mode (matching only)
   const filteredMembers = isAtMode
     ? allMembers.filter((m) =>
         !atQuery ||
         m.display_name.toLowerCase().includes(atQuery) ||
         m.email.toLowerCase().includes(atQuery)
       )
+    : q
+    ? allMembers.filter((m) =>
+        m.display_name.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q)
+      )
     : [];
 
-  // Lazy-load members the first time @ is typed
+  // Lazy-load members when @ is typed or when searching by name
   useEffect(() => {
-    if (isAtMode && allMembers.length === 0) loadMembers();
-  }, [isAtMode, allMembers.length, loadMembers]);
+    if ((isAtMode || q) && allMembers.length === 0) loadMembers();
+  }, [isAtMode, q, allMembers.length, loadMembers]);
 
   if (!email) return null;
 
@@ -924,11 +932,11 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                     />
                   ))}
 
-                  {/* People results - only shown in @ mode */}
-                  {isAtMode && filteredMembers.length > 0 && (
+                  {/* People results - shown in @ mode or when searching by name */}
+                  {filteredMembers.length > 0 && (
                     <>
                       <div style={{ padding: "8px 14px 4px", fontSize: 10, fontWeight: 600, color: INK_400, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                        Start conversation with…
+                        {filteredConvs.length > 0 ? "People" : "Start conversation with…"}
                       </div>
                       {filteredMembers.map((m) => (
                         <button
@@ -982,15 +990,19 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                       <div style={{ fontSize: 13, color: SLATE }}>{`No member matching "${atQuery}"`}</div>
                     </div>
                   )}
-                  {/* Normal empty state */}
-                  {!isAtMode && filteredConvs.length === 0 && !loadingConvs && (
+                  {/* Normal search - no match in convs or members */}
+                  {!isAtMode && q && filteredConvs.length === 0 && filteredMembers.length === 0 && !loadingConvs && (
+                    <div style={{ padding: 32, textAlign: "center" }}>
+                      <div style={{ fontSize: 13, color: SLATE }}>{`No results for "${q}"`}</div>
+                    </div>
+                  )}
+                  {/* Empty state — no search query, no conversations */}
+                  {!isAtMode && !q && filteredConvs.length === 0 && !loadingConvs && (
                     <div style={{ padding: 40, textAlign: "center" }}>
                       <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
-                      <div style={{ fontSize: 13, color: SLATE }}>
-                        {q ? `No results for "${q}"` : "No conversations yet"}
-                      </div>
+                      <div style={{ fontSize: 13, color: SLATE }}>No conversations yet</div>
                       <div style={{ fontSize: 12, color: INK_400, marginTop: 6 }}>
-                        {q ? "Try a different name" : "Type @ followed by a name to start a new chat"}
+                        Type a name or @ to find someone to chat with
                       </div>
                     </div>
                   )}
