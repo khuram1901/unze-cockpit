@@ -440,10 +440,13 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     }
   }, [email, allMembers.length]);
 
-  // Load conversations whenever the panel opens (or memberId changes while open)
+  // Load conversations and members whenever the panel opens
   useEffect(() => {
-    if (isOpen) loadConversations();
-  }, [isOpen, loadConversations]);
+    if (isOpen) {
+      loadConversations();
+      loadMembers();
+    }
+  }, [isOpen, loadConversations, loadMembers]);
 
   // Auto-open the most recent unread conversation once per panel open session.
   // Runs after conversations load (reacts to state, not the fetch directly).
@@ -736,7 +739,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
       )
     : [];
 
-  // Lazy-load members when @ is typed or when searching by name
+  // Fallback: load members if not yet loaded and user types @ or a search query
   useEffect(() => {
     if ((isAtMode || q) && allMembers.length === 0) loadMembers();
   }, [isAtMode, q, allMembers.length, loadMembers]);
