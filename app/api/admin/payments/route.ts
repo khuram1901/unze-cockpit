@@ -2,6 +2,16 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 
+const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
+
+async function checkCanManage(auth: { email: string }, supabase: ReturnType<typeof createServiceClient>) {
+  if (ADMIN_EMAILS.includes(auth.email.toLowerCase())) return true;
+  const { data: member } = await supabase.from("members").select("id").eq("email", auth.email).single();
+  if (!member) return false;
+  const { data: perm } = await supabase.from("member_permissions").select("can_access_admin_ops").eq("member_id", member.id).single();
+  return perm?.can_access_admin_ops === true;
+}
+
 // GET — payment calendar for a year: ?year=2026
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -21,14 +31,17 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
 
+  const supabase = createServiceClient();
+  if (!(await checkCanManage(auth, supabase))) {
+    return Response.json({ error: "Not authorised" }, { status: 403 });
+  }
+
   const body = await request.json();
   const { entity, payment_type, month, amount_pkr, date_paid, challan_number, notes } = body;
 
   if (!entity || !payment_type || !month || !date_paid) {
     return Response.json({ error: "entity, payment_type, month, and date_paid are required" }, { status: 400 });
   }
-
-  const supabase = createServiceClient();
   const { error } = await supabase
     .from("admin_eobi_payments")
     .upsert(

@@ -122,7 +122,7 @@ function MonthCell({ entry }: { entry: MonthEntry }) {
   return (
     <td title={
       entry.date_paid
-        ? `Paid ${entry.date_paid.split("-").reverse().join("/")}${entry.challan_number ? ` · Challan ${entry.challan_number}` : ""}${entry.amount_pkr ? ` · PKR ${Number(entry.amount_pkr).toLocaleString()}` : ""}`
+        ? `Paid ${formatDateUK(entry.date_paid)}${entry.challan_number ? ` · Challan ${entry.challan_number}` : ""}${entry.amount_pkr ? ` · PKR ${Number(entry.amount_pkr).toLocaleString()}` : ""}`
         : entry.status === "missing" ? "Not paid" : ""
     } style={{
       textAlign: "center", padding: "6px 4px",
@@ -208,7 +208,6 @@ export default function AdminDataPage() {
   const [restaurantLicences, setRestaurantLicences] = useState<RestaurantLicence[]>([]);
   const [loadingLicences, setLoadingLicences] = useState(false);
   const [docSearch, setDocSearch] = useState("");
-  const [docTypeFilterUI, setDocTypeFilterUI] = useState("");
   const [docStatusFilterUI, setDocStatusFilterUI] = useState("");
   const [ntnPage, setNtnPage] = useState(0);
   const [editingNtn, setEditingNtn] = useState<{
@@ -1159,10 +1158,10 @@ export default function AdminDataPage() {
                 const cfg = circleCfg[entry.status] || circleCfg.future;
                 // DD short: "08/05" → show day only, or "Due 15th" / "Overdue"
                 const detail = entry.date_paid
-                  ? entry.date_paid.split("-").reverse().join("/").slice(0, 5)
+                  ? formatDateUK(entry.date_paid).slice(0, 5)
                   : entry.status === "missing" ? "Overdue" : "Due 15";
                 const tooltip = entry.date_paid
-                  ? `Paid ${entry.date_paid.split("-").reverse().join("/")}${entry.challan_number ? ` · Challan ${entry.challan_number}` : ""}${entry.amount_pkr ? ` · PKR ${Number(entry.amount_pkr).toLocaleString()}` : ""}`
+                  ? `Paid ${formatDateUK(entry.date_paid)}${entry.challan_number ? ` · Challan ${entry.challan_number}` : ""}${entry.amount_pkr ? ` · PKR ${Number(entry.amount_pkr).toLocaleString()}` : ""}`
                   : entry.status === "missing" ? "Not paid — click to record" : "";
                 return (
                   <div
