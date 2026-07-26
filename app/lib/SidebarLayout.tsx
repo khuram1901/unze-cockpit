@@ -171,6 +171,8 @@ type SidebarContentProps = {
   userRole: string;
   userPhotoUrl?: string | null;
   onSignOut: () => void;
+  openGroups: Set<string>;
+  toggleGroup: (group: string) => void;
 };
 
 // ── SidebarContent (module-level — must NOT be defined inside SidebarLayout) ──
@@ -189,6 +191,8 @@ function SidebarContent({
   userRole,
   userPhotoUrl,
   onSignOut,
+  openGroups,
+  toggleGroup,
 }: SidebarContentProps) {
   const sideItemStyle = (active: boolean): React.CSSProperties => ({
     display: "flex", alignItems: "center",
@@ -249,8 +253,9 @@ function SidebarContent({
       <nav style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: collapsed ? "8px 6px" : "8px 12px" }}>
         {/* Daily-entry-only users: no navigation links at all */}
         {!entryOnly && <>
-        {/* OVERVIEW group — always-visible Executive Dashboard + Overview items */}
+        {/* OVERVIEW group — always pinned, never collapsible */}
         <div style={{ marginBottom: "4px" }}>
+          {collapsed && <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />}
           {!collapsed && (
             <div style={{
               fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
@@ -258,12 +263,9 @@ function SidebarContent({
               padding: "16px 10px 6px",
             }}>Overview</div>
           )}
-          {collapsed && <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />}
-          {/* Executive Dashboard — always first */}
           {alwaysItems.map((item) => (
             <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
           ))}
-          {/* Overview-group permission-gated items (PA Dashboard) */}
           {visibleCards
             .filter((c) => c.group === "Overview")
             .sort((a, b) => a.title.localeCompare(b.title))
@@ -272,30 +274,58 @@ function SidebarContent({
             ))}
         </div>
 
-        {/* Permission-gated groups */}
+        {/* Permission-gated groups — collapsible when sidebar is expanded */}
         {SIDEBAR_GROUPS.filter((g) => g !== "Overview").map((groupName) => {
           const groupCards = visibleCards
             .filter((c) => c.group === groupName)
             .sort((a, b) => a.title.trim().toLowerCase().localeCompare(b.title.trim().toLowerCase()));
           if (groupCards.length === 0) return null;
+          const isOpen = openGroups.has(groupName);
+          const hasActive = groupCards.some((c) => isActive(c.href));
+
+          if (collapsed) {
+            // Icon-only mode: groups don't apply, show all icons with a divider
+            return (
+              <div key={groupName} style={{ marginBottom: "4px" }}>
+                <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />
+                {groupCards.map((card) => (
+                  <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
+                ))}
+              </div>
+            );
+          }
+
           return (
             <div key={groupName} style={{ marginBottom: "4px" }}>
-              {!collapsed && (
-                <div style={{
-                  fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
+              {/* Collapsible group header */}
+              <button
+                onClick={() => toggleGroup(groupName)}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "100%", padding: "16px 10px 6px 10px",
+                  background: "none", border: "none", cursor: "pointer",
+                  color: hasActive ? "var(--text-sidebar-active)" : "var(--text-muted)",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget.querySelector(".grp-label") as HTMLElement).style.color = "var(--text-sidebar)"; }}
+                onMouseLeave={(e) => { (e.currentTarget.querySelector(".grp-label") as HTMLElement).style.color = hasActive ? "var(--text-sidebar-active)" : "var(--text-muted)"; }}
+              >
+                <span className="grp-label" style={{
+                  fontSize: "10.5px", fontWeight: hasActive ? 700 : 500,
                   textTransform: "uppercase", letterSpacing: "0.12em",
-                  padding: "16px 10px 6px",
+                  transition: "color 0.15s",
+                  color: hasActive ? "var(--text-sidebar-active)" : "var(--text-muted)",
                 }}>
                   {groupName}
-                </div>
-              )}
-              {collapsed && (
-                <div style={{
-                  width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)",
-                  margin: "10px auto 6px",
-                }} />
-              )}
-              {groupCards.map((card) => (
+                </span>
+                <span style={{
+                  fontSize: "9px", color: "var(--text-muted)", marginLeft: "4px",
+                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.2s ease",
+                  display: "inline-block",
+                }}>▼</span>
+              </button>
+              {/* Items — shown only when open */}
+              {isOpen && groupCards.map((card) => (
                 <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
               ))}
             </div>
@@ -451,6 +481,41 @@ export default function SidebarLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
+  // ── Collapsible sidebar groups ────────────────────────────────────
+  // Default: only Overview pinned open. User's choices saved to localStorage.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(["Overview"]));
+
+  // Restore saved state on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("sidebar_open_groups");
+      if (saved) setOpenGroups(new Set(JSON.parse(saved)));
+    } catch {}
+  }, []);
+
+  function toggleGroup(groupName: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      next.has(groupName) ? next.delete(groupName) : next.add(groupName);
+      try { localStorage.setItem("sidebar_open_groups", JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }
+
+  // Auto-expand the group containing the current page
+  useEffect(() => {
+    const currentCard = PAGE_REGISTRY.find((c) => c.href === pathname);
+    if (currentCard?.group) {
+      setOpenGroups((prev) => {
+        if (prev.has(currentCard.group)) return prev;
+        const next = new Set(prev);
+        next.add(currentCard.group);
+        try { localStorage.setItem("sidebar_open_groups", JSON.stringify([...next])); } catch {}
+        return next;
+      });
+    }
+  }, [pathname]);
+
   useEffect(() => {
     function check() {
       const w = window.innerWidth;
@@ -544,6 +609,8 @@ export default function SidebarLayout({
             userRole={userRole}
             userPhotoUrl={userPhotoUrl}
             onSignOut={onSignOut}
+            openGroups={openGroups}
+            toggleGroup={toggleGroup}
           />
         </aside>
       )}
@@ -579,6 +646,8 @@ export default function SidebarLayout({
               userRole={userRole}
               userPhotoUrl={userPhotoUrl}
               onSignOut={onSignOut}
+              openGroups={openGroups}
+              toggleGroup={toggleGroup}
             />
           </aside>
         </>
