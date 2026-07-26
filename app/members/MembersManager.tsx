@@ -10,10 +10,10 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import AccessMatrix from "./AccessMatrix";
 import AccessControlPanel from "./AccessControlPanel";
 import WidgetVisibilityPanel from "./WidgetVisibilityPanel";
-import PhotoCropModal from "../lib/PhotoCropModal";
+import MemberDrawer from "./MemberDrawer";
 import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, isMainAdmin, canAddMembers, canImportExport, PROTECTED_EMAILS, type UserCtx, type PermOverrides } from "../lib/permissions";
 
-type Member = {
+export type Member = {
   id: string;
   first_name: string | null;
   last_name: string | null;
@@ -33,7 +33,7 @@ type Member = {
   photo_url: string | null;
 };
 
-type Plant = { id: string; name: string };
+export type Plant = { id: string; name: string };
 type DepartmentOwner = {
   id: string;
   department_name: string;
@@ -113,160 +113,6 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
 });
 
 type ActiveTab = "people" | "matrix" | "ownership" | "offboard" | "orgchart";
-
-/* ─── Photo upload + face-crop component ───────────────────────────────── */
-const PHOTO_MAX_KB = 150;  // max KB after compression
-
-function PhotoUpload({
-  member,
-  onSaved,
-  onRemoved,
-}: {
-  member: Member;
-  onSaved: (url: string) => void;
-  onRemoved: () => void;
-}) {
-  const [preview,  setPreview]  = useState<string | null>(null);
-  const [blob,     setBlob]     = useState<Blob | null>(null);
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState<string | null>(null);
-  const [cropFile, setCropFile] = useState<File | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function handleFile(file: File) {
-    setError(null);
-    if (!file.type.startsWith("image/")) { setError("Please select an image file."); return; }
-    setCropFile(file);
-  }
-
-  function onCropDone(croppedBlob: Blob, preview: string) {
-    setBlob(croppedBlob);
-    setPreview(preview);
-    setCropFile(null);
-  }
-
-  async function save() {
-    if (!blob) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const fd = new FormData();
-      fd.append("memberId", member.id);
-      fd.append("photo", new File([blob], "photo.jpg", { type: "image/jpeg" }));
-      const res = await authFetch("/api/members/photo", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) { setError(json.error || "Upload failed."); }
-      else {
-        setPreview(null); setBlob(null); onSaved(json.photoUrl);
-        // If admin uploaded their OWN photo, notify sidebar to refresh
-        window.dispatchEvent(new CustomEvent("unze:photo-updated", { detail: { url: json.photoUrl, memberId: member.id } }));
-      }
-    } catch { setError("Network error."); }
-    finally { setSaving(false); }
-  }
-
-  async function remove() {
-    if (!member.photo_url) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await authFetch("/api/members/photo", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ memberId: member.id }) });
-      if (res.ok) { onRemoved(); setPreview(null); setBlob(null); }
-      else { const j = await res.json(); setError(j.error || "Remove failed."); }
-    } catch { setError("Network error."); }
-    finally { setSaving(false); }
-  }
-
-  const currentSrc = preview || member.photo_url || null;
-  const initials   = getInitials(member.first_name, member.last_name, member.name);
-
-  return (
-    <>
-    {cropFile && (
-      <PhotoCropModal
-        file={cropFile}
-        maxKb={PHOTO_MAX_KB}
-        onDone={onCropDone}
-        onCancel={() => setCropFile(null)}
-      />
-    )}
-    <div style={{ display: "flex", alignItems: "center", gap: "14px", padding: "10px 0", marginBottom: "6px" }}>
-      {/* Circle preview */}
-      <div style={{
-        width: "64px", height: "64px", borderRadius: "50%", flexShrink: 0,
-        border: `2px solid ${COLOURS.HAIRLINE}`,
-        overflow: "hidden", backgroundColor: COLOURS.CARD_ALT,
-        position: "relative",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        {currentSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={currentSrc} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
-        ) : (
-          <span style={{ fontSize: "20px", fontWeight: 700, color: COLOURS.SLATE }}>
-            {initials}
-          </span>
-        )}
-      </div>
-
-      {/* Controls */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "5px", flex: 1 }}>
-        <div style={{ fontSize: "11px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Profile Photo
-        </div>
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => inputRef.current?.click()}
-            disabled={saving}
-            style={{ ...smallBtn(COLOURS.BLUE), fontSize: "12px", padding: "3px 10px" }}
-          >
-            {member.photo_url || preview ? "Change" : "Upload photo"}
-          </button>
-          {preview && blob && (
-            <button
-              onClick={save}
-              disabled={saving}
-              style={{ ...smallBtn(COLOURS.GREEN, true), fontSize: "12px", padding: "3px 10px" }}
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-          )}
-          {preview && (
-            <button
-              onClick={() => { setPreview(null); setBlob(null); }}
-              disabled={saving}
-              style={{ ...smallBtn(COLOURS.SLATE), fontSize: "12px", padding: "3px 10px" }}
-            >
-              Cancel
-            </button>
-          )}
-          {member.photo_url && !preview && (
-            <button
-              onClick={remove}
-              disabled={saving}
-              style={{ ...smallBtn(COLOURS.RED), fontSize: "12px", padding: "3px 10px" }}
-            >
-              {saving ? "Removing…" : "Remove"}
-            </button>
-          )}
-        </div>
-        {error && <div style={{ fontSize: "11px", color: COLOURS.RED }}>{error}</div>}
-        <div style={{ fontSize: "10px", color: COLOURS.INK_400 }}>
-          Any size · auto-cropped to face · max {PHOTO_MAX_KB} KB after compression
-        </div>
-      </div>
-
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
-      />
-    </div>
-    </>
-  );
-}
 
 // Renders one person plus everyone under them as a proper branching tree —
 // node, a stem down, a horizontal bar across siblings, then a stem down to
@@ -356,11 +202,7 @@ export default function MembersManager() {
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [resettingPw, setResettingPw] = useState("");
-  const [settingPwFor, setSettingPwFor] = useState<string | null>(null);
-  const [newPw, setNewPw] = useState("");
-  const [savingPw, setSavingPw] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(0);
 
@@ -523,25 +365,21 @@ export default function MembersManager() {
   }
 
   async function sendPwReset(em: string, nm: string) {
-    setResettingPw(em);
     try {
       await fetch("/api/auth/reset-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em }) });
       toast.show(`Password reset email sent to ${nm}.`, "success");
       logAction("Updated", "members", `Sent password reset to ${nm} (${em})`);
     } catch { toast.show("Failed to send reset email.", "error"); }
-    setResettingPw("");
   }
 
-  async function setPwDirectly(em: string, nm: string) {
-    if (newPw.length < 6) { toast.show("Password must be at least 6 characters.", "error"); return; }
-    setSavingPw(true);
+  async function setPwDirectly(em: string, nm: string, pw: string) {
+    if (pw.length < 6) { toast.show("Password must be at least 6 characters.", "error"); return; }
     try {
-      const res = await authFetch("/api/auth/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, password: newPw }) });
+      const res = await authFetch("/api/auth/set-password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: em, password: pw }) });
       const d = await res.json();
       if (!res.ok) { toast.show("Error: " + (d.error || "Failed"), "error"); }
-      else { toast.show(`Password set for ${nm}.`, "success"); logAction("Updated", "members", `Set password for ${nm}`); setSettingPwFor(null); setNewPw(""); }
+      else { toast.show(`Password set for ${nm}.`, "success"); logAction("Updated", "members", `Set password for ${nm}`); }
     } catch { toast.show("Failed to set password.", "error"); }
-    setSavingPw(false);
   }
 
   async function updateMember(id: string, updates: Partial<Member>) {
@@ -1080,295 +918,139 @@ export default function MembersManager() {
             </form>
           )}
 
-          {/* ── Members table ─────────────────────────── */}
-          <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-            {/* Header */}
-            <div style={{
-              ...tableHeaderStyle,
-              display: "grid" as const,
-              gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
-              gap: "8px",
-              padding: "8px 12px",
-              borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
-            }}>
-              <div>Name</div>
-              {!isMobile && <div>Dept / BU</div>}
-              {!isMobile && <div>Company</div>}
-              <div>Role</div>
-            </div>
-
-            {/* Rows */}
-            {paginatedMembers.map((m, idx) => {
-              const dn = fullName(m.first_name, m.last_name, m.name);
-              const isEditing = editingId === m.id;
-              const memberPlants = assignments[m.id] || new Set<string>();
-              const showsDept = roleHasDeptAndBU(m.role);
-              const avatarGradient = AVATAR_GRADIENTS[(page * PAGE_SIZE + idx) % 5];
-              const initials = getInitials(m.first_name, m.last_name, m.name);
-
-              return (
-                <div key={m.id} style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}` }}>
-                  {/* ── Row ──────────────────────────────── */}
-                  <div
-                    onClick={() => isAdmin ? setEditingId(isEditing ? null : m.id) : undefined}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1.2fr 1.2fr 0.8fr",
-                      gap: "8px", padding: "10px 12px", alignItems: "center",
-                      cursor: isAdmin ? "pointer" : "default",
-                      backgroundColor: isEditing ? COLOURS.CARD_ALT : COLOURS.CARD,
-                    }}
-                  >
-                    {/* Name + avatar + email */}
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
-                      <div style={{
-                        width: "32px", height: "32px", borderRadius: "50%",
-                        background: m.photo_url ? "none" : avatarGradient,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        flexShrink: 0,
-                        color: "#fff",
-                        fontSize: "11px", fontWeight: 600,
-                        fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
-                        overflow: "hidden",
-                        position: "relative",
-                      }}>
-                        {m.photo_url
-                          // eslint-disable-next-line @next/next/no-img-element
-                          ? <img src={m.photo_url} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
-                          : initials}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: "13.5px", fontWeight: 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: "6px" }}>
-                          {dn}
-                          {m.is_hod && <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.AMBER }}>HOD</span>}
-                        </div>
-                        <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>{m.email || "—"}</div>
-                      </div>
-                    </div>
-
-                    {/* Dept / BU (desktop) */}
-                    {!isMobile && (
-                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {showsDept ? (m.department || "—") : "All"}
-                        {showsDept && m.business_unit && <span style={{ color: COLOURS.INK_400 }}> · {m.business_unit}</span>}
-                      </div>
-                    )}
-
-                    {/* Company */}
-                    {!isMobile && (
-                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {m.company || <span style={{ color: COLOURS.INK_400 }}>—</span>}
-                      </div>
-                    )}
-
-                    {/* Role badge */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: isMobile ? "flex-end" : "flex-start" }}>
-                      <span style={{
-                        fontSize: "11px", fontWeight: 600, padding: "3px 9px", borderRadius: RADII.PILL,
-                        width: "fit-content",
-                        ...roleChip(m.role),
-                      }}>{m.role}</span>
-                      {m.is_active === false && (
-                        <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.SLATE, backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "2px 8px", width: "fit-content" }}>Inactive</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* ── Mobile sub-row ────────────────────── */}
-                  {isMobile && !isEditing && (
-                    <div style={{ padding: "0 12px 8px", paddingLeft: "54px", fontSize: "12px", color: COLOURS.SLATE }}>
-                      {m.company || "No company"} · {showsDept ? `${m.department || "—"}` : "All depts"}
-                    </div>
-                  )}
-
-                  {/* ── Edit panel ──────────────────────────────────── */}
-                  {isAdmin && isEditing && (
-                    <div style={{ padding: "8px 12px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: COLOURS.CARD_ALT }}>
-                      {/* ── Photo upload ── */}
-                      <PhotoUpload
-                        member={m}
-                        onSaved={(url) => setMembers((prev) => prev.map((x) => x.id === m.id ? { ...x, photo_url: url } : x))}
-                        onRemoved={() => setMembers((prev) => prev.map((x) => x.id === m.id ? { ...x, photo_url: null } : x))}
-                      />
-                      <div style={{ borderBottom: `1px solid ${COLOURS.HAIRLINE}`, marginBottom: "8px" }} />
-                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(120px, 1fr))", gap: "6px", marginBottom: "6px", alignItems: "end" }}>
-                        <div><label style={lblC}>First Name</label><input style={inpC} defaultValue={m.first_name || ""} onBlur={(e) => { if (e.target.value !== (m.first_name || "")) updateMember(m.id, { first_name: e.target.value }); }} /></div>
-                        <div><label style={lblC}>Last Name</label><input style={inpC} defaultValue={m.last_name || ""} onBlur={(e) => { if (e.target.value !== (m.last_name || "")) updateMember(m.id, { last_name: e.target.value }); }} /></div>
-                        <div><label style={lblC}>Email</label><input style={inpC} defaultValue={m.email || ""} onBlur={(e) => { if (e.target.value.trim() !== (m.email || "")) updateMember(m.id, { email: e.target.value }); }} /></div>
-                        <div><label style={lblC}>Role</label><select style={inpC} value={m.role} onChange={(e) => updateMember(m.id, { role: e.target.value })} disabled={!canEditMember(me, { email: m.email, role: m.role })}>{Array.from(new Set([m.role, ...myAssignableRoles])).map((r) => <option key={r}>{r}</option>)}</select></div>
-                        <div><label style={lblC}>Department</label><select style={inpC} value={m.department || ""} onChange={(e) => updateMember(m.id, { department: e.target.value || null })}><option value="">—</option>{DEPARTMENTS.map((d) => <option key={d}>{d}</option>)}</select></div>
-                        <div><label style={lblC}>Business Unit</label><select style={inpC} value={m.business_unit || ""} onChange={(e) => updateMember(m.id, { business_unit: e.target.value || null })} disabled={!m.department}><option value="">—</option>{businessUnitsFor(m.department).map((b) => <option key={b}>{b}</option>)}</select></div>
-                        <div><label style={lblC}>Company</label><select style={inpC} value={m.company || ""} onChange={(e) => updateMember(m.id, { company: e.target.value || null })}><option value="">—</option>{MEMBER_COMPANIES.map((c) => <option key={c}>{c}</option>)}</select></div>
-                        <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }}>
-                          <input type="checkbox" checked={m.is_hod || false} onChange={(e) => updateMember(m.id, { is_hod: e.target.checked })} /> HOD
-                        </label>
-                        <div><label style={lblC}>Position title</label><input style={inpC} defaultValue={m.position_title || ""} onBlur={(e) => { if (e.target.value !== (m.position_title || "")) updateMember(m.id, { position_title: e.target.value || null }); }} placeholder="e.g. CEO, Director" /></div>
-                        <label style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "11px", color: m.is_active === false ? COLOURS.RED : COLOURS.NAVY, cursor: "pointer", paddingBottom: "4px" }} title="Use Offboard instead if they still have tasks, reports, or ownership to hand over — this just flips the flag directly.">
-                          <input type="checkbox" checked={m.is_active !== false} onChange={(e) => updateMember(m.id, { is_active: e.target.checked })} /> Active
-                        </label>
-                      </div>
-
-                      {/* Reports to — editable dropdown so a manager can be
-                          assigned or changed directly from the edit panel. */}
-                      {m.role !== "Admin" && m.role !== "CEO" && (
-                        <div style={{ marginBottom: "8px" }}>
-                          <label style={lblC}>Reports to (manager)</label>
-                          <select
-                            style={inpC}
-                            value={m.manager_id || ""}
-                            onChange={(e) => updateMember(m.id, { manager_id: e.target.value || null })}
-                          >
-                            <option value="">— No manager —</option>
-                            {members
-                              .filter((x) => x.id !== m.id && x.is_active !== false)
-                              .sort((a, b) => fullName(a.first_name, a.last_name, a.name).localeCompare(fullName(b.first_name, b.last_name, b.name)))
-                              .map((x) => (
-                                <option key={x.id} value={x.id}>
-                                  {fullName(x.first_name, x.last_name, x.name)} ({x.role})
-                                </option>
-                              ))}
-                          </select>
-                        </div>
-                      )}
-
-                      {/* Team members — only shown for HODs/Directors (and Admin/Exec,
-                          who sit at the top of the chain and can have direct reports
-                          too). Tick whoever should report to this person; unticking
-                          clears their manager_id.
-                          One person can only report to one HOD, so anyone already
-                          assigned to someone else is hidden here entirely, not just
-                          shown unticked — the only way to move them is to untick them
-                          under their current manager first. */}
-                      {(m.is_hod || m.role === "Admin" || m.role === "CEO" || m.role === "Executive") && (() => {
-                        const pickable = members.filter((x) => x.id !== m.id && x.is_active !== false && (!x.manager_id || x.manager_id === m.id));
-                        const elsewhereCount = members.filter((x) => x.id !== m.id && x.is_active !== false && x.manager_id && x.manager_id !== m.id).length;
-                        return (
-                          <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM, padding: "8px 10px", marginBottom: "6px", backgroundColor: COLOURS.CARD }}>
-                            <div style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.SLATE, marginBottom: "6px", textTransform: "uppercase" as const, letterSpacing: "0.04em" }}>
-                              Team members reporting to {dn}
-                            </div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                              {pickable.map((x) => {
-                                const xn = fullName(x.first_name, x.last_name, x.name);
-                                const checked = x.manager_id === m.id;
-                                return (
-                                  <label key={x.id} style={{ display: "flex", alignItems: "center", gap: "3px", fontSize: "12px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer" }}>
-                                    <input type="checkbox" checked={checked} onChange={(e) => toggleTeamMember(m.id, x.id, e.target.checked)} style={{ width: "13px", height: "13px" }} />
-                                    {xn}
-                                  </label>
-                                );
-                              })}
-                              {pickable.length === 0 && <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>Nobody left to assign.</span>}
-                            </div>
-                            {elsewhereCount > 0 && (
-                              <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: "6px" }}>
-                                {elsewhereCount} other{elsewhereCount !== 1 ? "s" : ""} already assigned to a different manager — not shown here.
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Plants + Notifications */}
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", marginBottom: "6px", fontSize: "14px" }}>
-                        {showsDept && plants.length > 0 && (
-                          <>
-                            <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Plants:</span>
-                            {plants.map((p) => {
-                              const on = memberPlants.has(p.id);
-                              const key = `${m.id}-${p.id}`;
-                              return (
-                                <label key={p.id} style={{ display: "flex", alignItems: "center", gap: "2px", color: COLOURS.NAVY, cursor: savingAssignment === key ? "wait" : "pointer", opacity: savingAssignment === key ? 0.5 : 1 }}>
-                                  <input type="checkbox" checked={on} disabled={savingAssignment === key} onChange={() => togglePlant(m.id, p.id, on)} style={{ width: "13px", height: "13px" }} />
-                                  {p.name}
-                                </label>
-                              );
-                            })}
-                            <span style={{ color: COLOURS.HAIRLINE }}>|</span>
-                          </>
-                        )}
-                        <span style={{ fontWeight: 600, color: COLOURS.SLATE }}>Notify:</span>
-                        <label style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
-                          <input type="checkbox" checked={m.notify_email} onChange={(e) => updateMember(m.id, { notify_email: e.target.checked })} style={{ width: "13px", height: "13px" }} /> Email
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", gap: "2px", cursor: "pointer" }}>
-                          <input type="checkbox" checked={m.notify_whatsapp || false} onChange={(e) => updateMember(m.id, { notify_whatsapp: e.target.checked })} style={{ width: "13px", height: "13px" }} /> WA
-                        </label>
-                        {m.notify_whatsapp && (
-                          <input placeholder="+92..." defaultValue={m.phone_e164 || ""} onBlur={(e) => { if (e.target.value !== (m.phone_e164 || "")) updateMember(m.id, { phone_e164: e.target.value || null }); }}
-                            style={{ ...inpC, width: "110px" }} />
-                        )}
-                        {canChangePasswordFor(me, { email: m.email, role: m.role }) && (
-                          <>
-                            <span style={{ color: COLOURS.HAIRLINE }}>|</span>
-                            <button onClick={() => sendPwReset(m.email || "", dn)} disabled={!m.email || resettingPw === m.email}
-                              style={{ ...smallBtn(COLOURS.BLUE), fontSize: "11px", padding: "3px 8px", opacity: resettingPw === m.email ? 0.5 : 1 }}>
-                              {resettingPw === m.email ? "..." : "Reset PW"}
-                            </button>
-                            <button onClick={() => { setSettingPwFor(settingPwFor === m.id ? null : m.id); setNewPw(""); }}
-                              style={{ ...smallBtn(COLOURS.PURPLE), fontSize: "11px", padding: "3px 8px" }}>Set PW</button>
-                          </>
-                        )}
-                        {canDeleteMember(me, { email: m.email, role: m.role }) && (
-                          <button onClick={() => deleteMember(m.id, dn)} style={{ ...smallBtn(COLOURS.RED), fontSize: "11px", padding: "3px 8px" }}>Remove</button>
-                        )}
-                      </div>
-
-                      {/* Set password inline */}
-                      {settingPwFor === m.id && (
-                        <div style={{ display: "flex", gap: "6px", alignItems: "center", marginTop: "8px", flexWrap: "wrap" }}>
-                          <input type="text" placeholder="Min 6 characters" value={newPw} onChange={(e) => setNewPw(e.target.value)}
-                            style={{ ...inp, flex: "1 1 150px", maxWidth: "200px" }} />
-                          <button onClick={() => setPwDirectly(m.email || "", dn)} disabled={savingPw || newPw.length < 6}
-                            style={{ ...smallBtn(COLOURS.PURPLE, true), opacity: savingPw || newPw.length < 6 ? 0.5 : 1 }}>
-                            {savingPw ? "Saving..." : "Save"}
+          {/* ── Two-column: member list + drawer ──────── */}
+          {(() => {
+            const selectedMember = members.find((m) => m.id === selectedMemberId) || null;
+            // Mobile: show list OR drawer (not both)
+            const showList  = !isMobile || !selectedMemberId;
+            const showDrawer = !isMobile || !!selectedMemberId;
+            return (
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "260px 1fr",
+                border: `1px solid ${COLOURS.HAIRLINE}`,
+                borderRadius: RADII.CARD,
+                overflow: "hidden",
+                minHeight: 480,
+                background: COLOURS.CARD,
+              }}>
+                {/* ── Left: compact member list ──────── */}
+                {showList && (
+                  <div style={{
+                    borderRight: isMobile ? "none" : `1px solid ${COLOURS.HAIRLINE}`,
+                    overflowY: "auto",
+                  }}>
+                    {/* List header */}
+                    <div style={{
+                      padding: "10px 14px", borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      background: COLOURS.CARD_ALT,
+                    }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        {filtered.length} member{filtered.length !== 1 ? "s" : ""}
+                      </span>
+                      {totalPages > 1 && (
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+                            style={{ fontSize: 12, padding: "2px 7px", borderRadius: 4, border: `1px solid ${COLOURS.HAIRLINE}`, background: "transparent", cursor: page === 0 ? "not-allowed" : "pointer", opacity: page === 0 ? 0.4 : 1, color: COLOURS.NAVY }}>
+                            ‹
                           </button>
-                          <button onClick={() => { setSettingPwFor(null); setNewPw(""); }} style={smallBtn(COLOURS.SLATE)}>Cancel</button>
+                          <span style={{ fontSize: 11, color: COLOURS.SLATE, padding: "2px 4px" }}>{page + 1}/{totalPages}</span>
+                          <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                            style={{ fontSize: 12, padding: "2px 7px", borderRadius: 4, border: `1px solid ${COLOURS.HAIRLINE}`, background: "transparent", cursor: page >= totalPages - 1 ? "not-allowed" : "pointer", opacity: page >= totalPages - 1 ? 0.4 : 1, color: COLOURS.NAVY }}>
+                            ›
+                          </button>
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
 
-            {filtered.length === 0 && (
-              <div style={{ padding: "20px 12px", textAlign: "center", color: COLOURS.SLATE, fontSize: "13px" }}>No members found.</div>
-            )}
-          </div>
+                    {/* Member rows */}
+                    {paginatedMembers.map((m, idx) => {
+                      const dn = fullName(m.first_name, m.last_name, m.name);
+                      const isSelected = selectedMemberId === m.id;
+                      const initials = getInitials(m.first_name, m.last_name, m.name);
+                      const avatarGradient = AVATAR_GRADIENTS[(page * PAGE_SIZE + idx) % 5];
+                      return (
+                        <div
+                          key={m.id}
+                          onClick={() => isAdmin ? setSelectedMemberId(m.id) : undefined}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 10,
+                            padding: "10px 14px",
+                            borderBottom: `1px solid ${COLOURS.HAIRLINE}`,
+                            borderLeft: isSelected ? `3px solid ${COLOURS.NAVY}` : "3px solid transparent",
+                            cursor: isAdmin ? "pointer" : "default",
+                            background: isSelected ? COLOURS.CARD_ALT : COLOURS.CARD,
+                          }}
+                        >
+                          {/* Avatar */}
+                          <div style={{
+                            width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                            background: m.photo_url ? "none" : avatarGradient,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            color: "#fff", fontSize: 11, fontWeight: 600,
+                            overflow: "hidden", position: "relative",
+                          }}>
+                            {m.photo_url
+                              // eslint-disable-next-line @next/next/no-img-element
+                              ? <img src={m.photo_url} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+                              : initials}
+                          </div>
+                          {/* Name + role */}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: COLOURS.NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5 }}>
+                              {dn}
+                              {m.is_hod && <span style={{ fontSize: 10, fontWeight: 700, color: COLOURS.AMBER }}>HOD</span>}
+                            </div>
+                            <div style={{ fontSize: 11, color: COLOURS.SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {m.role}{m.department ? ` · ${m.department}` : ""}
+                            </div>
+                          </div>
+                          {/* Status dot */}
+                          <div style={{ width: 7, height: 7, borderRadius: "50%", flexShrink: 0, background: m.is_active !== false ? COLOURS.GREEN : COLOURS.HAIRLINE }} />
+                        </div>
+                      );
+                    })}
 
-          {/* ── Pagination ────────────────────────────── */}
-          {filtered.length > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", flexWrap: "wrap", gap: "8px" }}>
-              <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
-                Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length} member{filtered.length !== 1 ? "s" : ""}
+                    {filtered.length === 0 && (
+                      <div style={{ padding: "20px 14px", textAlign: "center", color: COLOURS.SLATE, fontSize: 13 }}>No members found.</div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Right: drawer ──────────────────── */}
+                {showDrawer && (
+                  <div style={{ overflowY: "auto" }}>
+                    {selectedMember ? (
+                      <MemberDrawer
+                        member={selectedMember}
+                        me={me}
+                        members={members}
+                        plants={plants}
+                        assignments={assignments}
+                        savingAssignment={savingAssignment}
+                        myAssignableRoles={myAssignableRoles}
+                        onClose={isMobile ? () => setSelectedMemberId(null) : undefined}
+                        onUpdate={updateMember}
+                        onTogglePlant={togglePlant}
+                        onToggleTeam={toggleTeamMember}
+                        onDelete={deleteMember}
+                        onSendPwReset={sendPwReset}
+                        onSetPw={setPwDirectly}
+                        onPhotoSaved={(memberId, url) => setMembers((prev) => prev.map((x) => x.id === memberId ? { ...x, photo_url: url } : x))}
+                        onPhotoRemoved={(memberId) => setMembers((prev) => prev.map((x) => x.id === memberId ? { ...x, photo_url: null } : x))}
+                      />
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 8, color: COLOURS.SLATE }}>
+                        <div style={{ fontSize: 24 }}>👤</div>
+                        <div style={{ fontSize: 13 }}>Select a member to view details</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                  style={{
-                    ...smallBtn(COLOURS.NAVY), padding: "6px 14px", fontSize: "12px",
-                    opacity: page === 0 ? 0.4 : 1,
-                    cursor: page === 0 ? "not-allowed" : "pointer",
-                  }}
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                  style={{
-                    ...smallBtn(COLOURS.NAVY), padding: "6px 14px", fontSize: "12px",
-                    opacity: page >= totalPages - 1 ? 0.4 : 1,
-                    cursor: page >= totalPages - 1 ? "not-allowed" : "pointer",
-                  }}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </>
       )}
 
