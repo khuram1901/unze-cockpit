@@ -16,7 +16,7 @@ type Vehicle  = { id: string; name: string; plate_number: string; odometer_unit:
 type Branch   = { id: string; name: string; system_kw: number | null };
 type Location = { id: string; name: string; entity: string; default_disco: string | null };
 
-type FormType = "fuel" | "solar" | "utility" | "maintenance" | "tasks";
+type FormType = "fuel" | "solar" | "utility" | "maintenance" | "tasks" | "legal";
 
 type MyTask = {
   id: string;
@@ -132,6 +132,23 @@ export default function DailyEntryPage() {
   // ── My tasks ───────────────────────────────────────────────────────
   const [myTasks,       setMyTasks]       = useState<MyTask[]>([]);
   const [loadingTasks,  setLoadingTasks]  = useState(false);
+
+  // ── Legal follow-up state ────────────────────────────────────────
+  type OpenCase = { id: string; case_number: string; location_name: string; subject_name: string; offence_type: string; status: string; };
+  const [openCases,       setOpenCases]       = useState<OpenCase[]>([]);
+  const [loadingCases,    setLoadingCases]    = useState(false);
+  const [selectedCaseId,  setSelectedCaseId]  = useState("");
+  const [legalForm, setLegalForm] = useState({
+    update_type: "Police Station Visit",
+    update_date: "",
+    description: "",
+    status_after: "",
+    fir_number: "",
+    warrant_number: "",
+    next_action: "",
+    next_action_date: "",
+  });
+  const [savingLegal, setSavingLegal] = useState(false);
   const [updatingTask,  setUpdatingTask]  = useState<string | null>(null);
 
   // ── Computed fuel values ───────────────────────────────────────────
@@ -232,6 +249,51 @@ export default function DailyEntryPage() {
     if (activeForm !== "tasks" || checking) return;
     loadMyTasks();
   }, [activeForm, checking]);
+
+  useEffect(() => {
+    if (activeForm !== "legal" || checking) return;
+    loadOpenCases();
+  }, [activeForm, checking]);
+
+  async function loadOpenCases() {
+    setLoadingCases(true);
+    const res = await authFetch("/api/legal/cases?status_filter=open");
+    const json = await res.json();
+    // Filter out resolved/closed on client side
+    const closed = ["Resolved", "Closed"];
+    setOpenCases((json.data || []).filter((c: { status: string }) => !closed.includes(c.status)));
+    setLoadingCases(false);
+  }
+
+  async function submitLegalUpdate() {
+    if (!selectedCaseId || !legalForm.description) return;
+    setSavingLegal(true);
+    const res = await authFetch("/api/legal/updates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        case_id: selectedCaseId,
+        update_type: legalForm.update_type,
+        update_date: legalForm.update_date || new Date().toISOString().slice(0, 10),
+        description: legalForm.description,
+        status_after: legalForm.status_after || null,
+        fir_number: legalForm.fir_number || null,
+        warrant_number: legalForm.warrant_number || null,
+        next_action: legalForm.next_action || null,
+        next_action_date: legalForm.next_action_date || null,
+      }),
+    });
+    const json = await res.json();
+    setSavingLegal(false);
+    if (json.data) {
+      showToast("Follow-up logged", "success");
+      setLegalForm({ update_type: "Police Station Visit", update_date: "", description: "", status_after: "", fir_number: "", warrant_number: "", next_action: "", next_action_date: "" });
+      setSelectedCaseId("");
+      loadOpenCases();
+    } else {
+      showToast(json.error || "Failed to save", "error");
+    }
+  }
 
   async function loadMyTasks() {
     setLoadingTasks(true);
@@ -405,6 +467,7 @@ export default function DailyEntryPage() {
     { id: "utility",     label: "Utilities",    emoji: "🔌" },
     { id: "maintenance", label: "Maintenance",  emoji: "🔧" },
     { id: "tasks",       label: "My Tasks",     emoji: "✅" },
+    { id: "legal",       label: "Legal",        emoji: "⚖️" },
   ];
 
   const btnSt = (id: FormType): React.CSSProperties => ({
@@ -1010,6 +1073,139 @@ export default function DailyEntryPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {activeForm === "legal" && (
+          <div>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "14px" }}>⚖️ Legal Follow-up</h2>
+
+            {loadingCases && (
+              <div style={{ color: COLOURS.SLATE, fontSize: "13px", textAlign: "center", padding: "32px 0" }}>Loading cases…</div>
+            )}
+
+            {!loadingCases && openCases.length === 0 && (
+              <div style={{ ...sectionCard, textAlign: "center", padding: "32px 20px" }}>
+                <div style={{ fontSize: "28px", marginBottom: "8px" }}>✅</div>
+                <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY }}>No open cases</div>
+                <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>All legal cases are resolved or closed.</div>
+              </div>
+            )}
+
+            {!loadingCases && openCases.length > 0 && (
+              <div>
+                {/* Case selector */}
+                <div style={sectionCard}>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "6px" }}>Select Case *</label>
+                  <select
+                    value={selectedCaseId}
+                    onChange={(e) => setSelectedCaseId(e.target.value)}
+                    style={{ ...inputStyle, width: "100%", boxSizing: "border-box", marginBottom: "4px" }}
+                  >
+                    <option value="">— Choose a case —</option>
+                    {openCases.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.case_number} · {c.subject_name} · {c.location_name} ({c.status})
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedCaseId && (() => {
+                    const c = openCases.find((x) => x.id === selectedCaseId);
+                    if (!c) return null;
+                    return (
+                      <div style={{ marginTop: "8px", padding: "10px 12px", backgroundColor: "#F8FAFC", borderRadius: "8px", border: `1px solid ${COLOURS.HAIRLINE}` }}>
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{c.subject_name} — {c.offence_type}</div>
+                        <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px" }}>{c.location_name} · Current status: <strong>{c.status}</strong></div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {selectedCaseId && (
+                  <div style={{ ...sectionCard, marginTop: "12px" }}>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.NAVY, marginBottom: "12px" }}>Log Follow-up Action</div>
+
+                    {/* Update type + date */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                      <div>
+                        <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Action Type *</label>
+                        <select value={legalForm.update_type} onChange={(e) => setLegalForm({ ...legalForm, update_type: e.target.value })}
+                          style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                          {["Police Station Visit","Court Hearing","Authority Meeting","Document Submitted","FIR Registration","Warrant Execution","Status Update","Other"].map((t) => (
+                            <option key={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Date</label>
+                        <DateInput value={legalForm.update_date} onChange={(e) => setLegalForm({ ...legalForm, update_date: e.target.value })} />
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div style={{ marginBottom: "10px" }}>
+                      <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>What happened? *</label>
+                      <textarea
+                        value={legalForm.description}
+                        onChange={(e) => setLegalForm({ ...legalForm, description: e.target.value })}
+                        rows={3} placeholder="Describe what was done, who was met, what was discussed…"
+                        style={{ ...inputStyle, width: "100%", boxSizing: "border-box", resize: "vertical" as const }}
+                      />
+                    </div>
+
+                    {/* Status advance */}
+                    <div style={{ marginBottom: "10px" }}>
+                      <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Advance Status (optional)</label>
+                      <select value={legalForm.status_after} onChange={(e) => setLegalForm({ ...legalForm, status_after: e.target.value })}
+                        style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
+                        <option value="">— No change —</option>
+                        {["Police Report Filed","FIR Registered","Warrant Issued","Under Investigation","Court Proceedings","Resolved","Closed"].map((s) => (
+                          <option key={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Reference numbers if relevant */}
+                    {(legalForm.update_type === "FIR Registration" || legalForm.status_after === "FIR Registered") && (
+                      <div style={{ marginBottom: "10px" }}>
+                        <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>FIR Number</label>
+                        <input value={legalForm.fir_number} onChange={(e) => setLegalForm({ ...legalForm, fir_number: e.target.value })}
+                          placeholder="Enter FIR number" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                      </div>
+                    )}
+                    {(legalForm.update_type === "Warrant Execution" || legalForm.status_after === "Warrant Issued") && (
+                      <div style={{ marginBottom: "10px" }}>
+                        <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Warrant Number</label>
+                        <input value={legalForm.warrant_number} onChange={(e) => setLegalForm({ ...legalForm, warrant_number: e.target.value })}
+                          placeholder="Enter warrant number" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                      </div>
+                    )}
+
+                    {/* Next action */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
+                      <div>
+                        <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Next Action</label>
+                        <input value={legalForm.next_action} onChange={(e) => setLegalForm({ ...legalForm, next_action: e.target.value })}
+                          placeholder="e.g. Follow up with DPO" style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>By Date</label>
+                        <DateInput value={legalForm.next_action_date} onChange={(e) => setLegalForm({ ...legalForm, next_action_date: e.target.value })} />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={submitLegalUpdate}
+                      disabled={savingLegal || !legalForm.description}
+                      style={{ ...primaryButtonStyle, width: "100%", opacity: (savingLegal || !legalForm.description) ? 0.6 : 1 }}
+                    >
+                      {savingLegal ? "Saving…" : "Log Follow-up"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

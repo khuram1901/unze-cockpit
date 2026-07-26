@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import LegalCases from "./LegalCases";
 import { widgetVisible, isAdminTier } from "../lib/permissions";
 import { useUserCtx } from "../lib/useUserCtx";
 import { authFetch, supabase } from "../lib/supabase";
@@ -76,7 +77,7 @@ type UtilityLocation = {
   months: { month: number; total_bill: number | null; meters_read: number }[] | null;
 };
 
-type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations";
+type TabId = "registrations" | "payments" | "compliance" | "documents" | "operations" | "legal";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ export default function AdminDataPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab") as TabId | null;
-    if (t && (["registrations","payments","compliance","documents","operations"] as string[]).includes(t)) {
+    if (t && (["registrations","payments","compliance","documents","operations","legal"] as string[]).includes(t)) {
       setActiveTab(t);
     }
   }, []);
@@ -679,6 +680,7 @@ export default function AdminDataPage() {
     { id: "compliance",    label: "Compliance",    widgetKey: "admin_ops.compliance" },
     { id: "documents",     label: "Documents",     widgetKey: "admin_ops.documents" },
     { id: "operations",    label: "Operations",    widgetKey: "admin_ops.operations" },
+    { id: "legal",         label: "Legal",         widgetKey: "admin_ops.legal" },
   ];
   // Only show tabs that are widget-visible for this user.
   const TABS = ALL_TABS.filter((t) => wv(t.widgetKey));
@@ -2820,6 +2822,8 @@ export default function AdminDataPage() {
         )}
 
         {/* ── OPERATIONS ── */}
+        {safeActiveTab === "legal" && <LegalCases />}
+
         {safeActiveTab === "operations" && (
           <div>
             {/* Month nav */}
