@@ -105,138 +105,216 @@ function Ticks({ read }: { read: boolean }) {
   );
 }
 
-// ── Swipe-to-action row wrapper ───────────────────────────────────
-// Swipe right → reveals rightBg (delete). Swipe left → reveals leftBg (archive).
-// Works with both touch and mouse drag. Blocks the click event after a real drag.
+// ── Conversation list item with hover action buttons ─────────────
+// Hovering reveals Archive (green) and Delete (red) buttons on the right.
+// This replaces the swipe gesture which was unreliable on desktop.
 
-type SwipeRowProps = {
-  leftBg: string;
-  leftLabel: string;
-  rightBg: string;
-  rightLabel: string;
-  onSwipeLeft: () => void;
-  onSwipeRight: () => void;
-  borderColor: string;
-  children: React.ReactNode;
-};
-
-function SwipeRow({ leftBg, leftLabel, rightBg, rightLabel, onSwipeLeft, onSwipeRight, borderColor, children }: SwipeRowProps) {
-  const rowRef = useRef<HTMLDivElement>(null);
-  const rightRevealRef = useRef<HTMLDivElement>(null); // delete - grows from left on swipe-right
-  const leftRevealRef = useRef<HTMLDivElement>(null);  // archive - grows from right on swipe-left
-  const startXRef = useRef(0);
-  const currentXRef = useRef(0); // tracked continuously so pointercancel has reliable data
-  const activeRef = useRef(false);
-  const swipedRef = useRef(false); // only true when a swipe action actually fired - used to block the post-swipe click
-  const THRESHOLD = 80;
-
-  const reset = () => {
-    if (rowRef.current) { rowRef.current.style.transition = "transform 0.2s ease"; rowRef.current.style.transform = "translateX(0)"; }
-    if (rightRevealRef.current) rightRevealRef.current.style.width = "0";
-    if (leftRevealRef.current) leftRevealRef.current.style.width = "0";
-  };
-
-  const applyDelta = (delta: number) => {
-    const clamped = Math.max(-120, Math.min(120, delta));
-    if (rowRef.current) rowRef.current.style.transform = `translateX(${clamped}px)`;
-    if (delta > 0) {
-      if (rightRevealRef.current) rightRevealRef.current.style.width = `${Math.min(delta, 120)}px`;
-      if (leftRevealRef.current) leftRevealRef.current.style.width = "0";
-    } else {
-      if (leftRevealRef.current) leftRevealRef.current.style.width = `${Math.min(-delta, 120)}px`;
-      if (rightRevealRef.current) rightRevealRef.current.style.width = "0";
-    }
-  };
-
-  // commit uses currentXRef so it works even when called from pointercancel
-  // (which may fire with clientX=0 when the browser steals a scroll gesture)
-  const commit = () => {
-    if (!activeRef.current) return;
-    activeRef.current = false;
-    const delta = currentXRef.current - startXRef.current;
-    if (delta > THRESHOLD) {
-      if (rowRef.current) { rowRef.current.style.transition = "transform 0.18s ease"; rowRef.current.style.transform = "translateX(110%)"; }
-      setTimeout(onSwipeRight, 180);
-    } else if (delta < -THRESHOLD) {
-      if (rowRef.current) { rowRef.current.style.transition = "transform 0.18s ease"; rowRef.current.style.transform = "translateX(-110%)"; }
-      setTimeout(onSwipeLeft, 180);
-    } else {
-      reset();
-    }
-  };
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    // Do NOT call setPointerCapture - it routes pointerup to this div and the
-    // subsequent click event never reaches the inner button's onClick handler.
-    startXRef.current = e.clientX;
-    currentXRef.current = e.clientX;
-    activeRef.current = true;
-    swipedRef.current = false;
-    if (rowRef.current) rowRef.current.style.transition = "none";
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!activeRef.current) return;
-    currentXRef.current = e.clientX;
-    const delta = e.clientX - startXRef.current;
-
-    // Auto-fire as soon as threshold is crossed - don't wait for release
-    if (delta > THRESHOLD) {
-      activeRef.current = false;
-      swipedRef.current = true;
-      if (rowRef.current) { rowRef.current.style.transition = "transform 0.15s ease"; rowRef.current.style.transform = "translateX(110%)"; }
-      if (rightRevealRef.current) rightRevealRef.current.style.width = "100%";
-      setTimeout(onSwipeRight, 150);
-      return;
-    }
-    if (delta < -THRESHOLD) {
-      activeRef.current = false;
-      swipedRef.current = true;
-      if (rowRef.current) { rowRef.current.style.transition = "transform 0.15s ease"; rowRef.current.style.transform = "translateX(-110%)"; }
-      if (leftRevealRef.current) leftRevealRef.current.style.width = "100%";
-      setTimeout(onSwipeLeft, 150);
-      return;
-    }
-
-    applyDelta(delta);
-  };
+function ConvListItem({
+  conv, onOpen, onArchive, onDelete,
+}: {
+  conv: Conversation;
+  onOpen: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const { BORDER, NAVY, SLATE, CANVAS, INK_400, BLUE } = COLOURS;
+  const name = convDisplayName(conv);
+  const photo = convPhoto(conv);
 
   return (
-    // Handlers go on the outer wrapper (not rowRef) so clicks on the inner
-    // button bubble up naturally - no pointer capture needed.
     <div
-      style={{ position: "relative", overflow: "hidden", borderBottom: `1px solid ${borderColor}` }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={commit}
-      onPointerCancel={commit}
+      style={{ position: "relative", borderBottom: `1px solid ${BORDER}` }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      {/* Delete: anchored left, grows on swipe-right */}
-      <div ref={rightRevealRef} style={{
-        position: "absolute", left: 0, top: 0, bottom: 0, width: 0,
-        background: rightBg, overflow: "hidden",
-        display: "flex", alignItems: "center",
-        paddingLeft: 16, color: "#fff", fontSize: 12, fontWeight: 600,
-        pointerEvents: "none", whiteSpace: "nowrap",
-      }}>
-        {rightLabel}
-      </div>
-      {/* Archive: anchored right, grows on swipe-left */}
-      <div ref={leftRevealRef} style={{
-        position: "absolute", right: 0, top: 0, bottom: 0, width: 0,
-        background: leftBg, overflow: "hidden",
-        display: "flex", alignItems: "center", justifyContent: "flex-end",
-        paddingRight: 16, color: "#fff", fontSize: 12, fontWeight: 600,
-        pointerEvents: "none", whiteSpace: "nowrap",
-      }}>
-        {leftLabel}
-      </div>
-      {/* Sliding row - no pointer events here, handled by outer wrapper */}
-      <div
-        ref={rowRef}
-        style={{ position: "relative", zIndex: 1, touchAction: "pan-y", willChange: "transform" }}
+      <button
+        onClick={onOpen}
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          width: "100%", padding: "10px 14px",
+          paddingRight: hovered ? 82 : 14,
+          background: conv.unread_count > 0 ? "#EEF4FF" : "none",
+          border: "none", cursor: "pointer", textAlign: "left",
+          transition: "padding-right 0.1s ease, background 0.1s ease",
+        }}
       >
-        {children}
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          {photo ? (
+            <img src={photo} alt={name}
+              style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
+          ) : (
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: avatarBg(conv.conversation_id),
+              color: "#fff", fontSize: 14, fontWeight: 600,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {initials(name)}
+            </div>
+          )}
+          {conv.unread_count > 0 && (
+            <span style={{
+              position: "absolute", bottom: 0, right: 0,
+              width: 12, height: 12, borderRadius: "50%",
+              background: BLUE, border: "2px solid #fff",
+            }} />
+          )}
+        </div>
+        <div style={{ flex: 1, overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 4 }}>
+            <span style={{
+              fontSize: 13, fontWeight: conv.unread_count > 0 ? 700 : 500,
+              color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {name}
+            </span>
+            <span style={{ fontSize: 10, color: conv.unread_count > 0 ? BLUE : INK_400, flexShrink: 0, fontWeight: conv.unread_count > 0 ? 600 : 400 }}>
+              {timeLabel(conv.last_message_at)}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginTop: 2 }}>
+            <span style={{
+              fontSize: 12, color: conv.unread_count > 0 ? NAVY : SLATE,
+              fontWeight: conv.unread_count > 0 ? 500 : 400,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {conv.last_message
+                ? (conv.is_group && conv.last_message_sender
+                    ? `${conv.last_message_sender.split(" ")[0]}: ${conv.last_message}`
+                    : conv.last_message)
+                : "No messages yet"}
+            </span>
+            {conv.unread_count > 0 && (
+              <span style={{
+                minWidth: 18, height: 18, borderRadius: 999,
+                background: BLUE, color: "#fff",
+                fontSize: 10, fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: "0 4px", flexShrink: 0,
+              }}>
+                {conv.unread_count > 99 ? "99+" : conv.unread_count}
+              </span>
+            )}
+          </div>
+        </div>
+      </button>
+
+      {/* Action buttons revealed on hover */}
+      <div style={{
+        position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+        display: "flex", gap: 4, zIndex: 2,
+        opacity: hovered ? 1 : 0,
+        transition: "opacity 0.15s ease",
+        pointerEvents: hovered ? "auto" : "none",
+      }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onArchive(); }}
+          title="Archive"
+          style={{
+            width: 30, height: 30, borderRadius: 6,
+            background: COLOURS.GREEN, border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 13,
+          }}
+        >📁</button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          title="Delete"
+          style={{
+            width: 30, height: 30, borderRadius: 6,
+            background: COLOURS.RED, border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 13,
+          }}
+        >🗑</button>
+      </div>
+    </div>
+  );
+}
+
+function ArchivedConvListItem({
+  conv, onOpen, onUnarchive, onDelete,
+}: {
+  conv: Conversation;
+  onOpen: () => void;
+  onUnarchive: () => void;
+  onDelete: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const { BORDER, SLATE, CANVAS, INK_400 } = COLOURS;
+  const name = convDisplayName(conv);
+  const photo = convPhoto(conv);
+
+  return (
+    <div
+      style={{ position: "relative", borderBottom: `1px solid ${BORDER}` }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        onClick={onOpen}
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          width: "100%", padding: "9px 14px",
+          paddingRight: hovered ? 82 : 14,
+          background: hovered ? CANVAS : "none",
+          border: "none", cursor: "pointer", textAlign: "left",
+          transition: "padding-right 0.1s ease, background 0.1s ease",
+        }}
+      >
+        {photo ? (
+          <img src={photo} alt={name}
+            style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", flexShrink: 0, opacity: 0.6 }} />
+        ) : (
+          <div style={{
+            width: 38, height: 38, borderRadius: "50%",
+            background: avatarBg(conv.conversation_id),
+            color: "#fff", fontSize: 13, fontWeight: 600,
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            opacity: 0.6,
+          }}>
+            {initials(name)}
+          </div>
+        )}
+        <div style={{ flex: 1, overflow: "hidden" }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {name}
+          </div>
+          <div style={{ fontSize: 11, color: INK_400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
+            {conv.last_message || "No messages"}
+            {conv.last_message_at && <span style={{ marginLeft: 6 }}>· {timeLabel(conv.last_message_at)}</span>}
+          </div>
+        </div>
+      </button>
+
+      <div style={{
+        position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+        display: "flex", gap: 4, zIndex: 2,
+        opacity: hovered ? 1 : 0,
+        transition: "opacity 0.15s ease",
+        pointerEvents: hovered ? "auto" : "none",
+      }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onUnarchive(); }}
+          title="Unarchive"
+          style={{
+            width: 30, height: 30, borderRadius: 6,
+            background: COLOURS.GREEN, border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 14,
+          }}
+        >↩</button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          title="Delete"
+          style={{
+            width: 30, height: 30, borderRadius: 6,
+            background: COLOURS.RED, border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 13,
+          }}
+        >🗑</button>
       </div>
     </div>
   );
@@ -749,89 +827,13 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                 <>
                   {/* Conversations - unread first, then most recent */}
                   {filteredConvs.map((conv) => (
-                    <SwipeRow
+                    <ConvListItem
                       key={conv.conversation_id}
-                      leftBg={COLOURS.GREEN}
-                      leftLabel="📁 Archive"
-                      rightBg={COLOURS.RED}
-                      rightLabel="🗑 Delete"
-                      onSwipeLeft={() => conversationAction(conv.conversation_id, "archive")}
-                      onSwipeRight={() => conversationAction(conv.conversation_id, "delete")}
-                      borderColor={BORDER}
-                    >
-                      <button
-                        onClick={() => { setSearch(""); setActiveConv(conv); }}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 10,
-                          width: "100%", padding: "10px 14px",
-                          background: conv.unread_count > 0 ? "#F0F7FF" : "none",
-                          border: "none", cursor: "pointer", textAlign: "left",
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = conv.unread_count > 0 ? "#F0F7FF" : "none")}
-                      >
-                        {/* Avatar with unread dot */}
-                        <div style={{ position: "relative", flexShrink: 0 }}>
-                          {convPhoto(conv) ? (
-                            <img src={convPhoto(conv)!} alt={convDisplayName(conv)}
-                              style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }} />
-                          ) : (
-                            <div style={{
-                              width: 40, height: 40, borderRadius: "50%",
-                              background: avatarBg(conv.conversation_id),
-                              color: "#fff", fontSize: 14, fontWeight: 600,
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>
-                              {initials(convDisplayName(conv))}
-                            </div>
-                          )}
-                          {conv.unread_count > 0 && (
-                            <span style={{
-                              position: "absolute", bottom: 0, right: 0,
-                              width: 12, height: 12, borderRadius: "50%",
-                              background: BLUE, border: "2px solid #fff",
-                            }} />
-                          )}
-                        </div>
-                        <div style={{ flex: 1, overflow: "hidden" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 4 }}>
-                            <span style={{
-                              fontSize: 13, fontWeight: conv.unread_count > 0 ? 700 : 500,
-                              color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            }}>
-                              {convDisplayName(conv)}
-                            </span>
-                            <span style={{ fontSize: 10, color: conv.unread_count > 0 ? BLUE : INK_400, flexShrink: 0, fontWeight: conv.unread_count > 0 ? 600 : 400 }}>
-                              {timeLabel(conv.last_message_at)}
-                            </span>
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginTop: 2 }}>
-                            <span style={{
-                              fontSize: 12, color: conv.unread_count > 0 ? NAVY : SLATE,
-                              fontWeight: conv.unread_count > 0 ? 500 : 400,
-                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            }}>
-                              {conv.last_message
-                                ? (conv.is_group && conv.last_message_sender
-                                    ? `${conv.last_message_sender.split(" ")[0]}: ${conv.last_message}`
-                                    : conv.last_message)
-                                : "No messages yet"}
-                            </span>
-                            {conv.unread_count > 0 && (
-                              <span style={{
-                                minWidth: 18, height: 18, borderRadius: 999,
-                                background: BLUE, color: "#fff",
-                                fontSize: 10, fontWeight: 700,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                padding: "0 4px", flexShrink: 0,
-                              }}>
-                                {conv.unread_count > 99 ? "99+" : conv.unread_count}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    </SwipeRow>
+                      conv={conv}
+                      onOpen={() => { setSearch(""); setActiveConv(conv); }}
+                      onArchive={() => conversationAction(conv.conversation_id, "archive")}
+                      onDelete={() => conversationAction(conv.conversation_id, "delete")}
+                    />
                   ))}
 
                   {/* People results - only shown in @ mode */}
@@ -923,53 +925,13 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                 </div>
               ) : (
                 archivedConvs.map((conv) => (
-                  <SwipeRow
+                  <ArchivedConvListItem
                     key={conv.conversation_id}
-                    leftBg={COLOURS.GREEN}
-                    leftLabel="↩ Unarchive"
-                    rightBg={COLOURS.RED}
-                    rightLabel="🗑 Delete"
-                    onSwipeLeft={() => conversationAction(conv.conversation_id, "unarchive")}
-                    onSwipeRight={() => conversationAction(conv.conversation_id, "delete")}
-                    borderColor={BORDER}
-                  >
-                    <button
-                      onClick={() => { setActiveConv(conv); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 10,
-                        width: "100%", padding: "9px 14px",
-                        background: "none", border: "none",
-                        cursor: "pointer", textAlign: "left",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = CANVAS)}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-                    >
-                      {convPhoto(conv) ? (
-                        <img src={convPhoto(conv)!} alt={convDisplayName(conv)}
-                          style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", flexShrink: 0, opacity: 0.6 }} />
-                      ) : (
-                        <div style={{
-                          width: 38, height: 38, borderRadius: "50%",
-                          background: avatarBg(conv.conversation_id),
-                          color: "#fff", fontSize: 13, fontWeight: 600,
-                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                          opacity: 0.6,
-                        }}>
-                          {initials(convDisplayName(conv))}
-                        </div>
-                      )}
-                      <div style={{ flex: 1, overflow: "hidden" }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: SLATE, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {convDisplayName(conv)}
-                        </div>
-                        <div style={{ fontSize: 11, color: INK_400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 1 }}>
-                          {conv.last_message || "No messages"}
-                          {conv.last_message_at && <span style={{ marginLeft: 6 }}>· {timeLabel(conv.last_message_at)}</span>}
-                        </div>
-                      </div>
-                      <span style={{ fontSize: 11, color: COLOURS.GREEN, fontWeight: 500, flexShrink: 0 }}>Swipe ←</span>
-                    </button>
-                  </SwipeRow>
+                    conv={conv}
+                    onOpen={() => setActiveConv(conv)}
+                    onUnarchive={() => conversationAction(conv.conversation_id, "unarchive")}
+                    onDelete={() => conversationAction(conv.conversation_id, "delete")}
+                  />
                 ))
               )}
             </div>
