@@ -7,7 +7,7 @@ import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import {
-  COLOURS, RADII, PageHeader, SectionTitle, SkeletonRows,
+  COLOURS, RADII, PageHeader, SkeletonRows,
   useToast, primaryButtonStyle, inputStyle,
 } from "../lib/SharedUI";
 
@@ -36,22 +36,57 @@ const ENTITY_DISPLAY: Record<string, string> = {
   UTPL: "UTPL — Unze Trading",
 };
 
-type BankingTab = "unze" | "imperial" | "restaurants";
-
-const TABS: { id: BankingTab; label: string; entities: string[] }[] = [
-  { id: "unze",        label: "Unze",       entities: ["UTPL"] },
-  { id: "imperial",    label: "Imperial",   entities: ["IFPL"] },
-  { id: "restaurants", label: "Restaurants",entities: ["Baranh", "HD"] },
+// ── Feature tabs (top level — more will be added later) ──────────────
+type FeatureTab = "eobi_ss";
+const FEATURE_TABS: { id: FeatureTab; label: string }[] = [
+  { id: "eobi_ss", label: "EOBI & Social Security" },
 ];
+
+// ── Company sub-tabs ─────────────────────────────────────────────────
+type CompanyTab = "unze" | "imperial" | "restaurants";
+const COMPANY_TABS: { id: CompanyTab; label: string; entities: string[] }[] = [
+  { id: "unze",        label: "Unze",        entities: ["UTPL"] },
+  { id: "imperial",    label: "Imperial",    entities: ["IFPL"] },
+  { id: "restaurants", label: "Restaurants", entities: ["Baranh", "HD"] },
+];
+
+// ── Fiscal year helpers ───────────────────────────────────────────────
+// Pakistan fiscal year: July → June. "2025-26" means Jul 2025–Jun 2026.
+function getCurrentFiscalYear(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1; // 1-based
+  // If month is July (7) or later, FY has started with y
+  return m >= 7 ? `${y}-${String(y + 1).slice(2)}` : `${y - 1}-${String(y).slice(2)}`;
+}
+
+function fiscalYearToCalendar(fy: string): number {
+  // "2025-26" → 2025 (start year, which is what the payments RPC uses)
+  return parseInt(fy.split("-")[0], 10);
+}
+
+function buildAvailableYears(): string[] {
+  const current = getCurrentFiscalYear();
+  const startYear = fiscalYearToCalendar(current);
+  // Show 3 past years + current
+  const years: string[] = [];
+  for (let y = startYear - 3; y <= startYear; y++) {
+    years.push(`${y}-${String(y + 1).slice(2)}`);
+  }
+  return years;
+}
 
 // ── Component ──────────────────────────────────────────────────────────
 
 export default function BankingPage() {
   const { checking } = useRequireCapability("banking");
 
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
-  const [activeTab, setActiveTab] = useState<BankingTab>("unze");
+  const availableYears = buildAvailableYears();
+  const currentFY = getCurrentFiscalYear();
+  const [selectedYear, setSelectedYear] = useState(currentFY);
+
+  const [featureTab, setFeatureTab] = useState<FeatureTab>("eobi_ss");
+  const [companyTab, setCompanyTab] = useState<CompanyTab>("unze");
 
   const [paymentRows, setPaymentRows] = useState<PaymentRow[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
@@ -70,7 +105,8 @@ export default function BankingPage() {
 
   async function loadPayments() {
     setLoadingPayments(true);
-    const res = await authFetch(`/api/admin/payments?year=${year}`);
+    const calYear = fiscalYearToCalendar(selectedYear);
+    const res = await authFetch(`/api/admin/payments?year=${calYear}`);
     const json = await res.json();
     setPaymentRows(json.data || []);
     setLoadingPayments(false);
@@ -79,20 +115,21 @@ export default function BankingPage() {
   useEffect(() => {
     if (!checking) loadPayments();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checking, year]);
+  }, [checking, selectedYear]);
 
   // ── Save payment ──────────────────────────────────────────────────
 
   async function savePayment() {
     if (!addingPayment) return;
     setSavingPayment(true);
+    const calYear = fiscalYearToCalendar(selectedYear);
     const res = await authFetch("/api/admin/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         entity: addingPayment.entity,
         payment_type: addingPayment.payment_type,
-        month: `${year}-${String(addingPayment.month).padStart(2, "0")}-01`,
+        month: `${calYear}-${String(addingPayment.month).padStart(2, "0")}-01`,
         amount_pkr: paymentForm.amount_pkr ? parseFloat(paymentForm.amount_pkr) : null,
         date_paid: paymentForm.date_paid,
         challan_number: paymentForm.challan_number || null,
@@ -182,7 +219,7 @@ export default function BankingPage() {
               const tooltip = entry.date_paid
                 ? `Paid ${formatDateUK(entry.date_paid)}${entry.challan_number ? ` · Challan ${entry.challan_number}` : ""}${entry.amount_pkr ? ` · PKR ${Number(entry.amount_pkr).toLocaleString()}` : ""}`
                 : entry.status === "missing" ? "Not paid — click to record" : "";
-              const clickable = entry.status === "missing" || entry.status === "on_time" || entry.status === "late";
+              const clickable = entry.status !== "future";
               return (
                 <div
                   key={entry.month}
@@ -202,7 +239,6 @@ export default function BankingPage() {
                     backgroundColor: cfg.bg, color: cfg.color,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: "12px", fontWeight: 700,
-                    transition: "opacity 0.1s",
                   }}>{cfg.symbol}</div>
                   <div style={{ fontSize: "9px", color: COLOURS.SLATE, textAlign: "center", lineHeight: 1.2 }}>
                     {detail}
@@ -248,18 +284,18 @@ export default function BankingPage() {
           </button>
         </div>
         {rows.length === 0
-          ? <p style={{ fontSize: "13px", color: COLOURS.SLATE }}>No data for {year}.</p>
+          ? <p style={{ fontSize: "13px", color: COLOURS.SLATE }}>No data for {selectedYear}.</p>
           : rows.map((r) => renderEntityBlock(r, payType))
         }
       </div>
     );
   }
 
-  function renderTabContent() {
-    const tab = TABS.find((t) => t.id === activeTab)!;
-    const { entities } = tab;
-
+  function renderEobiSS() {
     if (loadingPayments) return <SkeletonRows count={6} height="64px" />;
+
+    const tab = COMPANY_TABS.find((t) => t.id === companyTab)!;
+    const { entities } = tab;
 
     const eobiRows = entities
       .map((e) => paymentRows.find((r) => r.entity === e && r.payment_type === "EOBI"))
@@ -270,6 +306,31 @@ export default function BankingPage() {
 
     return (
       <div>
+        {/* Company sub-tabs */}
+        <div style={{
+          display: "flex", gap: "4px", marginBottom: "20px",
+          borderBottom: `2px solid ${COLOURS.HAIRLINE}`,
+        }}>
+          {COMPANY_TABS.map((ct) => {
+            const active = companyTab === ct.id;
+            return (
+              <button
+                key={ct.id}
+                onClick={() => setCompanyTab(ct.id)}
+                style={{
+                  padding: "8px 18px", fontSize: "13px", fontWeight: active ? 700 : 500,
+                  color: active ? COLOURS.NAVY : COLOURS.SLATE,
+                  backgroundColor: "transparent", border: "none",
+                  borderBottom: active ? `2px solid ${COLOURS.NAVY}` : "2px solid transparent",
+                  marginBottom: "-2px", cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                {ct.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Legend */}
         <div style={{
           display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "20px",
@@ -308,10 +369,15 @@ export default function BankingPage() {
     </AuthWrapper>
   );
 
-  // ── Year options ──────────────────────────────────────────────────
+  // ── Pill styles ───────────────────────────────────────────────────
 
-  const yearOptions: number[] = [];
-  for (let y = currentYear; y >= currentYear - 3; y--) yearOptions.push(y);
+  const yearPill = (active: boolean): React.CSSProperties => ({
+    padding: "5px 14px", borderRadius: RADII.PILL, fontSize: "13px", fontWeight: 600,
+    cursor: "pointer", border: `1px solid ${active ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+    backgroundColor: active ? COLOURS.NAVY : "white",
+    color: active ? "white" : COLOURS.SLATE,
+    transition: "background 0.15s",
+  });
 
   // ── Render ────────────────────────────────────────────────────────
 
@@ -320,54 +386,53 @@ export default function BankingPage() {
       <main style={{ padding: "14px 18px", maxWidth: "860px", margin: "0 auto" }}>
         <PageHeader />
 
-        {/* Title row */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "20px" }}>
+        {/* Title + year pills */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "24px" }}>
           <div>
-            <SectionTitle title="Banking" />
+            <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY, letterSpacing: "-0.01em" }}>
+              Banking
+            </div>
             <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px" }}>
-              EOBI &amp; Social Security payment tracker — single source of truth
+              Payment tracking and compliance
             </p>
           </div>
-          {/* Year selector */}
-          <select
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            style={{ ...inputStyle, fontSize: "13px", padding: "6px 10px", borderRadius: RADII.PILL, cursor: "pointer" }}
-          >
-            {yearOptions.map((y) => (
-              <option key={y} value={y}>{y}</option>
+          {/* Year pill selector */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", paddingTop: "4px" }}>
+            {availableYears.map((y) => (
+              <button key={y} style={yearPill(y === selectedYear)} onClick={() => setSelectedYear(y)}>
+                {y}
+              </button>
             ))}
-          </select>
+          </div>
         </div>
 
-        {/* Tabs */}
+        {/* Feature tabs (top-level) */}
         <div style={{
-          display: "flex", gap: "4px", marginBottom: "20px",
-          borderBottom: `2px solid ${COLOURS.HAIRLINE}`, paddingBottom: "0",
+          display: "flex", gap: "0", marginBottom: "24px",
+          borderBottom: `2px solid ${COLOURS.HAIRLINE}`,
         }}>
-          {TABS.map((tab) => {
-            const active = activeTab === tab.id;
+          {FEATURE_TABS.map((ft) => {
+            const active = featureTab === ft.id;
             return (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                key={ft.id}
+                onClick={() => setFeatureTab(ft.id)}
                 style={{
-                  padding: "8px 18px", fontSize: "13px", fontWeight: active ? 700 : 500,
+                  padding: "10px 20px", fontSize: "14px", fontWeight: active ? 700 : 500,
                   color: active ? COLOURS.NAVY : COLOURS.SLATE,
                   backgroundColor: "transparent", border: "none",
                   borderBottom: active ? `2px solid ${COLOURS.NAVY}` : "2px solid transparent",
                   marginBottom: "-2px", cursor: "pointer", whiteSpace: "nowrap",
-                  transition: "color 0.15s",
                 }}
               >
-                {tab.label}
+                {ft.label}
               </button>
             );
           })}
         </div>
 
-        {/* Tab content */}
-        {renderTabContent()}
+        {/* Feature tab content */}
+        {featureTab === "eobi_ss" && renderEobiSS()}
 
         {/* Record Payment modal */}
         {addingPayment && (
@@ -401,7 +466,7 @@ export default function BankingPage() {
                     onChange={(e) => setAddingPayment({ ...addingPayment, entity: e.target.value })}
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
                   >
-                    {TABS.find((t) => t.id === activeTab)!.entities.map((e) => (
+                    {COMPANY_TABS.find((t) => t.id === companyTab)!.entities.map((e) => (
                       <option key={e} value={e}>{ENTITY_DISPLAY[e] || e}</option>
                     ))}
                   </select>
