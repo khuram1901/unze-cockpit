@@ -306,11 +306,13 @@ export default function BankingPage() {
 
     return (
       <div>
-        {/* Company sub-tabs */}
+        {/* Company sub-tabs + year pills on the same row */}
         <div style={{
-          display: "flex", gap: "4px", marginBottom: "20px",
-          borderBottom: `2px solid ${COLOURS.HAIRLINE}`,
+          display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+          flexWrap: "wrap", gap: "8px", marginBottom: "20px",
+          borderBottom: `2px solid ${COLOURS.HAIRLINE}`, paddingBottom: "0",
         }}>
+          <div style={{ display: "flex", gap: "4px" }}>
           {COMPANY_TABS.map((ct) => {
             const active = companyTab === ct.id;
             return (
@@ -329,6 +331,15 @@ export default function BankingPage() {
               </button>
             );
           })}
+          </div>
+          {/* Year pills — right side, aligned with sub-tabs */}
+          <div style={{ display: "flex", gap: "5px", flexWrap: "wrap", paddingBottom: "8px" }}>
+            {availableYears.map((y) => (
+              <button key={y} style={yearPill(y === selectedYear)} onClick={() => setSelectedYear(y)}>
+                {y}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Legend */}
@@ -386,24 +397,14 @@ export default function BankingPage() {
       <main style={{ padding: "14px 18px", maxWidth: "860px", margin: "0 auto" }}>
         <PageHeader />
 
-        {/* Title + year pills */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "24px" }}>
-          <div>
-            <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY, letterSpacing: "-0.01em" }}>
-              Banking
-            </div>
-            <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px" }}>
-              Payment tracking and compliance
-            </p>
+        {/* Title */}
+        <div style={{ marginBottom: "24px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 700, color: COLOURS.NAVY, letterSpacing: "-0.01em" }}>
+            Banking
           </div>
-          {/* Year pill selector */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", paddingTop: "4px" }}>
-            {availableYears.map((y) => (
-              <button key={y} style={yearPill(y === selectedYear)} onClick={() => setSelectedYear(y)}>
-                {y}
-              </button>
-            ))}
-          </div>
+          <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginTop: "2px" }}>
+            Payment tracking and compliance
+          </p>
         </div>
 
         {/* Feature tabs (top-level) */}
