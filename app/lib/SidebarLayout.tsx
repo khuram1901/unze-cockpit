@@ -194,6 +194,19 @@ function SidebarContent({
   openGroups,
   toggleGroup,
 }: SidebarContentProps) {
+  // ── Hover-to-open logic ───────────────────────────────────────────
+  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function onGroupEnter(name: string) {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setHoveredGroup(name);
+  }
+  function onGroupLeave() {
+    // Small delay so moving the mouse between the header and items doesn't flicker
+    hoverTimer.current = setTimeout(() => setHoveredGroup(null), 180);
+  }
+
   const sideItemStyle = (active: boolean): React.CSSProperties => ({
     display: "flex", alignItems: "center",
     gap: "10px",
@@ -295,39 +308,55 @@ function SidebarContent({
             );
           }
 
+          const isHovered = hoveredGroup === groupName;
+          const isPinned = openGroups.has(groupName);
+          const isVisible = isPinned || isHovered;
+
           return (
-            <div key={groupName} style={{ marginBottom: "4px" }}>
-              {/* Collapsible group header */}
+            <div
+              key={groupName}
+              style={{ marginBottom: "4px" }}
+              onMouseEnter={() => onGroupEnter(groupName)}
+              onMouseLeave={onGroupLeave}
+            >
+              {/* Group header — click to pin, hover to peek */}
               <button
                 onClick={() => toggleGroup(groupName)}
+                title={isPinned ? `Collapse ${groupName}` : `Pin ${groupName} open`}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   width: "100%", padding: "16px 10px 6px 10px",
                   background: "none", border: "none", cursor: "pointer",
-                  color: hasActive ? "var(--text-sidebar-active)" : "var(--text-muted)",
                 }}
-                onMouseEnter={(e) => { (e.currentTarget.querySelector(".grp-label") as HTMLElement).style.color = "var(--text-sidebar)"; }}
-                onMouseLeave={(e) => { (e.currentTarget.querySelector(".grp-label") as HTMLElement).style.color = hasActive ? "var(--text-sidebar-active)" : "var(--text-muted)"; }}
               >
-                <span className="grp-label" style={{
+                <span style={{
                   fontSize: "10.5px", fontWeight: hasActive ? 700 : 500,
                   textTransform: "uppercase", letterSpacing: "0.12em",
+                  color: hasActive || isHovered ? "var(--text-sidebar)" : "var(--text-muted)",
                   transition: "color 0.15s",
-                  color: hasActive ? "var(--text-sidebar-active)" : "var(--text-muted)",
                 }}>
                   {groupName}
                 </span>
                 <span style={{
                   fontSize: "9px", color: "var(--text-muted)", marginLeft: "4px",
-                  transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transform: isVisible ? "rotate(180deg)" : "rotate(0deg)",
                   transition: "transform 0.2s ease",
                   display: "inline-block",
                 }}>▼</span>
               </button>
-              {/* Items — shown only when open */}
-              {isOpen && groupCards.map((card) => (
-                <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
-              ))}
+              {/* Animated items container */}
+              <div style={{
+                overflow: "hidden",
+                maxHeight: isVisible ? "600px" : "0px",
+                opacity: isVisible ? 1 : 0,
+                transition: isVisible
+                  ? "max-height 0.22s ease, opacity 0.15s ease"
+                  : "max-height 0.18s ease, opacity 0.12s ease",
+              }}>
+                {groupCards.map((card) => (
+                  <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
+                ))}
+              </div>
             </div>
           );
         })}
