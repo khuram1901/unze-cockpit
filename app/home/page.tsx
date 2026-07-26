@@ -1453,6 +1453,24 @@ export default function HomePage() {
       // sessionStorage full — skip cache
     }
 
+    // Legal case summary — always shown to exec/admin users
+    try {
+      const legalRes = await authFetch("/api/legal/cases");
+      if (legalRes.ok) {
+        const legalJson = await legalRes.json();
+        const cases: { status: string }[] = legalJson.data || [];
+        const active = cases.filter((c) => c.status !== "Resolved" && c.status !== "Closed");
+        const counts = active.reduce<Record<string, number>>((acc, c) => {
+          acc[c.status] = (acc[c.status] || 0) + 1;
+          return acc;
+        }, {});
+        setLegalSummary({
+          active: active.length,
+          byStatus: Object.entries(counts).map(([status, count]) => ({ status, count })),
+        });
+      }
+    } catch { /* non-fatal */ }
+
     setLastUpdated(new Date());
     setExecLoading(false);
   }
