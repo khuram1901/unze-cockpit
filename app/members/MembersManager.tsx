@@ -7,9 +7,6 @@ import { logAction } from "../lib/audit-log";
 import { COLOURS, RADII, SHADOWS, cardStyle, tableHeaderStyle, PageHeader, SectionTitle, inputStyle, labelStyle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
-import AccessMatrix from "./AccessMatrix";
-import AccessControlPanel from "./AccessControlPanel";
-import WidgetVisibilityPanel from "./WidgetVisibilityPanel";
 import MemberDrawer from "./MemberDrawer";
 import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, isMainAdmin, canAddMembers, canImportExport, PROTECTED_EMAILS, type UserCtx, type PermOverrides } from "../lib/permissions";
 
@@ -112,7 +109,7 @@ const smallBtn = (c: string, solid?: boolean): React.CSSProperties => ({
   borderRadius: "5px", padding: "4px 10px", fontSize: "15px", fontWeight: 600, cursor: "pointer",
 });
 
-type ActiveTab = "people" | "matrix" | "ownership" | "offboard" | "orgchart";
+type ActiveTab = "people" | "ownership" | "offboard" | "orgchart";
 
 // Renders one person plus everyone under them as a proper branching tree —
 // node, a stem down, a horizontal bar across siblings, then a stem down to
@@ -586,12 +583,10 @@ export default function MembersManager() {
 
   function handleTabChange(tab: ActiveTab) {
     setActiveTab(tab);
-    if (tab === "matrix") window.scrollTo(0, 0);
   }
 
   const tabs: { key: ActiveTab; label: string; count?: number }[] = [
     { key: "people",    label: "People",        count: members.length },
-    { key: "matrix",    label: "Access matrix", count: members.length },
     { key: "ownership", label: "Dept. ownership" },
     { key: "offboard",  label: "Offboard" },
     { key: "orgchart",  label: "Org chart" },
@@ -1051,17 +1046,6 @@ export default function MembersManager() {
               </div>
             );
           })()}
-        </>
-      )}
-
-      {/* ══════════════════════════════════════════════
-          TAB: ACCESS MATRIX
-      ══════════════════════════════════════════════ */}
-      {activeTab === "matrix" && isAdmin && (
-        <>
-          <AccessControlPanel members={members} isMobile={isMobile} />
-          <WidgetVisibilityPanel members={members} isMobile={isMobile} />
-          <AccessMatrix members={members} isMobile={isMobile} />
         </>
       )}
 
