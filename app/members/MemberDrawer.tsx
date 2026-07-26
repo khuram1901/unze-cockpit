@@ -33,6 +33,8 @@ import {
 } from "../lib/permissions";
 import { logAction } from "../lib/audit-log";
 import PhotoCropModal from "../lib/PhotoCropModal";
+import { WIDGET_REGISTRY } from "../lib/widgetRegistry";
+import { FINANCE_COMPANIES } from "../lib/constants";
 
 /* ── Types ────────────────────────────────────────────────────────────── */
 
@@ -212,6 +214,12 @@ const PERM_SECTIONS: PermSection[] = [
     ],
   },
 ];
+
+/* ── Widget registry helpers ──────────────────────────────────────────── */
+
+const PER_COMPANY_WIDGETS = WIDGET_REGISTRY.filter((w) => w.perCompany);
+const PLAIN_WIDGETS = WIDGET_REGISTRY.filter((w) => !w.perCompany);
+const PLAIN_WIDGET_PAGES = [...new Set(PLAIN_WIDGETS.map((w) => w.page))];
 
 /* ── Department / BU helpers ──────────────────────────────────────────── */
 
@@ -448,6 +456,10 @@ export default function MemberDrawer({
   const [loadingPerms, setLoadingPerms] = useState(false);
   const [savingPerms, setSavingPerms] = useState(false);
 
+  /* ── Widget override state ────────────────────────────────────────── */
+  const [widgetOverrides, setWidgetOverrides] = useState<Record<string, boolean>>({});
+  const [savingWidget, setSavingWidget] = useState<string | null>(null);
+
   /* ── Security tab state ───────────────────────────────────────────── */
   const [settingPw, setSettingPw] = useState(false);
   const [newPw, setNewPw] = useState("");
@@ -463,13 +475,24 @@ export default function MemberDrawer({
     setLoadingPerms(false);
   }, []);
 
+  const loadWidgets = useCallback(async (memberId: string) => {
+    const { data } = await supabase
+      .from("member_widget_overrides")
+      .select("widget_key, visible")
+      .eq("member_id", memberId);
+    const map: Record<string, boolean> = {};
+    for (const r of data || []) map[r.widget_key] = r.visible;
+    setWidgetOverrides(map);
+  }, []);
+
   useEffect(() => {
     loadPerms(member.id);
+    loadWidgets(member.id);
     // Reset tabs and security state when member changes
     setDrawerTab("access");
     setSettingPw(false);
     setNewPw("");
-  }, [member.id, loadPerms]);
+  }, [member.id, loadPerms, loadWidgets]);
 
   /* ── Effective perms (saved + pending) ───────────────────────────── */
   const ep: PermRow = { ...perms, ...pending };
@@ -522,6 +545,31 @@ export default function MemberDrawer({
       logAction("Updated", "member_permissions", `Updated permissions for ${fullName(member)}`, member.id);
     }
     setSavingPerms(false);
+  }
+
+  /* ── Widget override save ─────────────────────────────────────────── */
+  async function setWidget(widgetKey: string, value: "default" | "show" | "hide") {
+    setSavingWidget(widgetKey);
+    if (value === "default") {
+      const { error } = await supabase
+        .from("member_widget_overrides")
+        .delete()
+        .eq("member_id", member.id)
+        .eq("widget_key", widgetKey);
+      if (error) { toast.show("Error: " + error.message, "error"); setSavingWidget(null); return; }
+      setWidgetOverrides((prev) => { const next = { ...prev }; delete next[widgetKey]; return next; });
+    } else {
+      const visible = value === "show";
+      const { error } = await supabase
+        .from("member_widget_overrides")
+        .upsert(
+          { member_id: member.id, widget_key: widgetKey, visible, updated_at: new Date().toISOString() },
+          { onConflict: "member_id,widget_key" }
+        );
+      if (error) { toast.show("Error: " + error.message, "error"); setSavingWidget(null); return; }
+      setWidgetOverrides((prev) => ({ ...prev, [widgetKey]: visible }));
+    }
+    setSavingWidget(null);
   }
 
   /* ── Security helpers ─────────────────────────────────────────────── */
@@ -786,6 +834,131 @@ export default function MemberDrawer({
                 </div>
               );
             })}
+
+            {/* ── Widget visibility section ─────────────────────── */}
+            {!isAdminRole && (() => {
+              const overrideCount = Object.keys(widgetOverrides).length;
+              const isOpen = openSections.has("Widgets");
+              return (
+                <div style={sectionBox}>
+                  <button onClick={() => toggleSection("Widgets")} style={{ ...sectionHead, width: "100%", cursor: "pointer", background: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: COLOURS.NAVY }}>🎛️ Widget Visibility</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: RADII.PILL, background: overrideCount > 0 ? COLOURS.SUCCESS_SOFT : COLOURS.CARD_ALT, color: overrideCount > 0 ? COLOURS.GREEN : COLOURS.SLATE, fontWeight: 600 }}>
+                        {overrideCount > 0 ? `${overrideCount} override${overrideCount !== 1 ? "s" : ""}` : "All default"}
+                      </span>
+                      <span style={{ fontSize: 11, color: COLOURS.SLATE, transform: isOpen ? "rotate(180deg)" : "rotate(0)", transition: "transform .2s", display: "inline-block" }}>▼</span>
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 16 }}>
+                      <div style={{ fontSize: 11, color: COLOURS.SLATE, fontStyle: "italic" }}>
+                        Default = role-based. Show/Hide = forced on or off for this person only, regardless of role.
+                      </div>
+
+                      {/* Per-company finance widgets */}
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: COLOURS.NAVY, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>Finance Panels (per company)</div>
+                        {FINANCE_COMPANIES.map((company) => (
+                          <div key={company.id} style={{ marginBottom: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: COLOURS.SLATE, marginBottom: 6 }}>{company.name}</div>
+                            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: 6, overflow: "hidden" }}>
+                              {PER_COMPANY_WIDGETS.map((w, i, arr) => {
+                                const widgetKey = `${w.key}.${company.id}`;
+                                const current: "default" | "show" | "hide" =
+                                  widgetOverrides[widgetKey] === true ? "show" :
+                                  widgetOverrides[widgetKey] === false ? "hide" : "default";
+                                return (
+                                  <div key={w.key} style={{
+                                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                                    padding: "8px 12px",
+                                    borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none",
+                                    opacity: savingWidget === widgetKey ? 0.5 : 1,
+                                  }}>
+                                    <div style={{ minWidth: 0, paddingRight: 8 }}>
+                                      <div style={{ fontSize: 12.5, color: COLOURS.NAVY }}>{w.label}</div>
+                                      {w.tip && <div style={{ fontSize: 11, color: COLOURS.SLATE }}>{w.tip}</div>}
+                                    </div>
+                                    <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                                      {(["default", "show", "hide"] as const).map((opt) => (
+                                        <button
+                                          key={opt}
+                                          onClick={() => setWidget(widgetKey, opt)}
+                                          disabled={!!savingWidget}
+                                          style={{
+                                            fontSize: 10.5, fontWeight: 600, padding: "4px 8px", borderRadius: 5,
+                                            border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                                            background: current === opt ? COLOURS.NAVY : "transparent",
+                                            color: current === opt ? "#fff" : COLOURS.SLATE,
+                                            cursor: savingWidget ? "default" : "pointer",
+                                            textTransform: "capitalize",
+                                          }}
+                                        >
+                                          {opt}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Non-per-company widgets grouped by page */}
+                      {PLAIN_WIDGET_PAGES.map((page) => {
+                        const pageWidgets = PLAIN_WIDGETS.filter((w) => w.page === page);
+                        return (
+                          <div key={page}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: COLOURS.NAVY, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{page}</div>
+                            <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: 6, overflow: "hidden" }}>
+                              {pageWidgets.map((w, i, arr) => {
+                                const current: "default" | "show" | "hide" =
+                                  widgetOverrides[w.key] === true ? "show" :
+                                  widgetOverrides[w.key] === false ? "hide" : "default";
+                                return (
+                                  <div key={w.key} style={{
+                                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                                    padding: "8px 12px",
+                                    borderBottom: i < arr.length - 1 ? `1px solid ${COLOURS.HAIRLINE}` : "none",
+                                    opacity: savingWidget === w.key ? 0.5 : 1,
+                                  }}>
+                                    <div style={{ minWidth: 0, paddingRight: 8 }}>
+                                      <div style={{ fontSize: 12.5, color: COLOURS.NAVY }}>{w.label}</div>
+                                      {w.tip && <div style={{ fontSize: 11, color: COLOURS.SLATE }}>{w.tip}</div>}
+                                    </div>
+                                    <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                                      {(["default", "show", "hide"] as const).map((opt) => (
+                                        <button
+                                          key={opt}
+                                          onClick={() => setWidget(w.key, opt)}
+                                          disabled={!!savingWidget}
+                                          style={{
+                                            fontSize: 10.5, fontWeight: 600, padding: "4px 8px", borderRadius: 5,
+                                            border: `1px solid ${current === opt ? COLOURS.NAVY : COLOURS.HAIRLINE}`,
+                                            background: current === opt ? COLOURS.NAVY : "transparent",
+                                            color: current === opt ? "#fff" : COLOURS.SLATE,
+                                            cursor: savingWidget ? "default" : "pointer",
+                                            textTransform: "capitalize",
+                                          }}
+                                        >
+                                          {opt}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Loading state */}
             {loadingPerms && (
