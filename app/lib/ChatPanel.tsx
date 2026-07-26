@@ -358,6 +358,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   const [taskPriority, setTaskPriority] = useState("Medium");
   const [taskAssigneeEmail, setTaskAssigneeEmail] = useState("");
   const [submittingTask, setSubmittingTask] = useState(false);
+  const [taskError, setTaskError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -633,6 +634,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     setTaskDesc("");
     setTaskDueDate("");
     setTaskPriority("Medium");
+    setTaskError(null);
     setShowTaskForm(true);
     setNewMessage(""); // clear the @task trigger text
   }, [activeConv]);
@@ -649,38 +651,47 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
   const submitTask = async () => {
     if (!activeConv || !taskDesc.trim() || !taskAssigneeEmail || submittingTask) return;
     setSubmittingTask(true);
+    setTaskError(null);
 
-    // Find the assignee's display name from participants
-    const assignee = activeConv.participants?.find((p) => p.email === taskAssigneeEmail);
-    const assigneeName = assignee?.name ?? taskAssigneeEmail;
+    try {
+      // Find the assignee's display name from participants
+      const assignee = activeConv.participants?.find((p) => p.email === taskAssigneeEmail);
+      const assigneeName = assignee?.name ?? taskAssigneeEmail;
 
-    const res = await authedFetch("/api/tasks/create", {
-      method: "POST",
-      body: JSON.stringify({
-        description: taskDesc.trim(),
-        assignedToEmail: taskAssigneeEmail,
-        assignedTo: assigneeName,
-        dueDate: taskDueDate || null,
-        priority: taskPriority,
-        sourceType: "chat",
-        sourceRecordId: activeConv.conversation_id,
-        sourceLabel: `Chat with ${convDisplayName(activeConv)}`,
-      }),
-    });
-
-    if (res.ok) {
-      // Send a confirmation message into the chat
-      const duePart = taskDueDate ? ` · Due ${taskDueDate.split("-").reverse().join("/")}` : "";
-      await authedFetch("/api/chat/messages", {
+      const res = await authedFetch("/api/tasks/create", {
         method: "POST",
         body: JSON.stringify({
-          conversation_id: activeConv.conversation_id,
-          content: `📋 Task assigned to ${assigneeName}: "${taskDesc.trim()}"${duePart}`,
+          description: taskDesc.trim(),
+          assignedToEmail: taskAssigneeEmail,
+          assignedTo: assigneeName,
+          dueDate: taskDueDate || null,
+          priority: taskPriority,
+          sourceType: "chat",
+          sourceRecordId: activeConv.conversation_id,
+          sourceLabel: `Chat with ${convDisplayName(activeConv)}`,
         }),
       });
-      setShowTaskForm(false);
+
+      if (res.ok) {
+        // Send a confirmation message into the chat
+        const duePart = taskDueDate ? ` · Due ${taskDueDate.split("-").reverse().join("/")}` : "";
+        await authedFetch("/api/chat/messages", {
+          method: "POST",
+          body: JSON.stringify({
+            conversation_id: activeConv.conversation_id,
+            content: `📋 Task assigned to ${assigneeName}: "${taskDesc.trim()}"${duePart}`,
+          }),
+        });
+        setShowTaskForm(false);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setTaskError(errData.error ?? "Failed to create task. Please try again.");
+      }
+    } catch {
+      setTaskError("Network error. Please try again.");
+    } finally {
+      setSubmittingTask(false);
     }
-    setSubmittingTask(false);
   };
 
   // ── Filtered + sorted data for the list ────────────────────────
@@ -1228,6 +1239,17 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                     </select>
                   </div>
                 </div>
+
+                {/* Error */}
+                {taskError && (
+                  <div style={{
+                    marginBottom: 8, padding: "6px 10px",
+                    background: "#FEF2F2", border: "1px solid #FECACA",
+                    borderRadius: RADII.SM, fontSize: 11, color: COLOURS.RED,
+                  }}>
+                    {taskError}
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

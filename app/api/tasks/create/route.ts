@@ -41,6 +41,18 @@ export async function POST(request: NextRequest) {
       .eq("email", auth.email)
       .maybeSingle();
 
+    // Auto-resolve companyId from assignee when caller doesn't provide one.
+    // This lets routes like the chat @task form omit it without failing.
+    let resolvedCompanyId = companyId;
+    if (!resolvedCompanyId && assignedToEmail) {
+      const { data: assigneeMember } = await supabase
+        .from("members")
+        .select("company_id")
+        .eq("email", assignedToEmail)
+        .maybeSingle();
+      resolvedCompanyId = assigneeMember?.company_id ?? null;
+    }
+
     // Server-side capability check, matching canCreateAssignments() —
     // the same rule that already gates the "+ New Task" button on every
     // page. This route uses the service-role client (bypasses RLS) so it
@@ -79,7 +91,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await createTaskCore({
-      description, companyId, assignedTo, assignedToEmail, assignedToMemberId, additionalAssignees,
+      description, companyId: resolvedCompanyId, assignedTo, assignedToEmail, assignedToMemberId, additionalAssignees,
       assignedToDepartment, assignedToBusinessUnit, dueDate, priority, status, project, stage, notes,
       taskType, replyRequired, explanationRequired, exceptionType, meetingId,
       sourceType, sourceRecordId, sourceLabel, notificationStyle, actor,
