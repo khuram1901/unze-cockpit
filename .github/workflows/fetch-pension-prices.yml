@@ -16,10 +16,6 @@ jobs:
         run: |
           node - << 'EOF'
           const MS_TOKENS = ["klr5zyak8x", "9vehuxllxs", "bzxpplv0mi"];
-          const FUNDS = [
-            { isin: "GB00BVRZG281", msId: "F00000VBU2" },
-            { isin: "GB00BRDCMX84", msId: "VAUSA0P5GL" },
-          ];
           const SUPABASE_URL = process.env.SUPABASE_URL;
           const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
           const today   = new Date().toISOString().slice(0, 10);
@@ -35,7 +31,7 @@ jobs:
             } catch { return null; }
           }
 
-          async function fetchMorningstar(msId) {
+          async function fetchMorningstar(msId, label) {
             for (const token of MS_TOKENS) {
               const url = `https://lt.morningstar.com/api/rest.svc/timeseries_price/${token}` +
                 `?id=${msId}&currencyId=GBP&idtype=Morningstar&frequency=daily` +
@@ -51,16 +47,42 @@ jobs:
                   },
                   signal: AbortSignal.timeout(15000),
                 });
-                if (!res.ok) { console.log(`  token ${token}: HTTP ${res.status}`); continue; }
-                const json = await res.json();
+                const text = await res.text();
+                console.log(`  [${label}] token ${token}: HTTP ${res.status}, body: ${text.slice(0, 120)}`);
+                if (!res.ok) continue;
+                let json;
+                try { json = JSON.parse(text); } catch { continue; }
                 const price = parsePrice(json);
-                if (price !== null) return { price, token };
-                console.log(`  token ${token}: no price in response`);
+                if (price !== null) return { price, source: `morningstar:${token}` };
               } catch (e) {
-                console.log(`  token ${token}: ${e.message}`);
+                console.log(`  [${label}] token ${token}: ${e.message}`);
               }
             }
             return null;
+          }
+
+          async function fetchYahoo(ticker, label) {
+            try {
+              const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=5d`;
+              const res = await fetch(url, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                  "Accept": "application/json",
+                },
+                signal: AbortSignal.timeout(10000),
+              });
+              if (!res.ok) { console.log(`  [${label}] Yahoo HTTP ${res.status}`); return null; }
+              const data = await res.json();
+              const meta = data?.chart?.result?.[0]?.meta;
+              const price = meta?.regularMarketPrice;
+              if (typeof price !== "number" || price <= 0) return null;
+              const gbpPrice = (meta?.currency === "GBp" || price > 10) ? price / 100 : price;
+              console.log(`  [${label}] Yahoo ${ticker}: £${gbpPrice}`);
+              return { price: gbpPrice, source: `yahoo:${ticker}` };
+            } catch (e) {
+              console.log(`  [${label}] Yahoo error: ${e.message}`);
+              return null;
+            }
           }
 
           async function upsert(isin, price, source) {
@@ -75,8 +97,7 @@ jobs:
               body: JSON.stringify({ isin, price_date: today, price_gbp: price, source }),
             });
             if (!res.ok) {
-              const err = await res.text();
-              console.error(`  upsert failed: ${err}`);
+              console.error(`  upsert failed: ${await res.text()}`);
               process.exitCode = 1;
             } else {
               console.log(`  stored £${price.toFixed(4)} for ${isin} (${source})`);
@@ -84,16 +105,18 @@ jobs:
           }
 
           (async () => {
-            for (const { isin, msId } of FUNDS) {
-              console.log(`Fetching ${isin} (Morningstar: ${msId})...`);
-              const result = await fetchMorningstar(msId);
-              if (result) {
-                await upsert(isin, result.price, `morningstar:${result.token}`);
-              } else {
-                console.log(`  all tokens failed, DB retains last price`);
-              }
-            }
-            console.log("Done.");
+            console.log(`\nGB00BVRZG281 (Multi-Asset Plus IV 9):`);
+            let r1 = await fetchMorningstar("F00000VBU2", "BVRZG281");
+            if (!r1) r1 = await fetchYahoo("0P00015CT0.L", "BVRZG281");
+            if (r1) await upsert("GB00BVRZG281", r1.price, r1.source);
+            else console.log("  all sources failed");
+
+            console.log(`\nGB00BRDCMX84 (Universal 2035 Retirement S14):`);
+            let r2 = await fetchMorningstar("VAUSA0P5GL", "BRDCMX84");
+            if (!r2) console.log("  all sources failed -- DB retains last known price");
+            else await upsert("GB00BRDCMX84", r2.price, r2.source);
+
+            console.log("\nDone.");
           })();
           EOF
         env:
