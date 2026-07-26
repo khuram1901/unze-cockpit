@@ -7,13 +7,14 @@ async function checkCanUpdate(auth: { email: string }, supabase: ReturnType<type
   const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
   if (ADMIN_EMAILS.includes(auth.email.toLowerCase())) return true;
   const { data: member } = await supabase
-    .from("members").select("id, role").eq("email", auth.email).single();
+    .from("members").select("id, role, department").eq("email", auth.email).maybeSingle();
   if (!member) return false;
   if (member.role === "Admin" || member.role === "CEO") return true;
+  if (member.department === "HR" || member.department === "Human Resources") return true;
   const { data: perm } = await supabase
     .from("member_permissions")
     .select("can_access_admin_ops, can_access_admin_entry")
-    .eq("member_id", member.id).single();
+    .eq("member_id", member.id).maybeSingle();
   return perm?.can_access_admin_ops === true || perm?.can_access_admin_entry === true;
 }
 

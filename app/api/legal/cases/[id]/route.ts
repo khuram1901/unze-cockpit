@@ -7,15 +7,21 @@ const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
 async function checkCanManage(auth: { email: string }, supabase: ReturnType<typeof createServiceClient>) {
   if (ADMIN_EMAILS.includes(auth.email.toLowerCase())) return true;
   const { data: member } = await supabase
-    .from("members").select("id, role, department").eq("email", auth.email).single();
+    .from("members").select("id, role, department").eq("email", auth.email).maybeSingle();
   if (!member) return false;
   if (member.role === "Admin" || member.role === "CEO") return true;
-  if (member.department === "HR") return true;
+  // HR department can always edit legal cases
+  if (member.department === "HR" || member.department === "Human Resources") return true;
   const { data: perm } = await supabase
     .from("member_permissions")
     .select("can_access_admin_ops")
-    .eq("member_id", member.id).single();
+    .eq("member_id", member.id).maybeSingle();
   return perm?.can_access_admin_ops === true;
+}
+
+async function checkCanDelete(auth: { email: string }, supabase: ReturnType<typeof createServiceClient>) {
+  // Delete is restricted to admin, CEO, and HR — same as manage
+  return checkCanManage(auth, supabase);
 }
 
 // GET — single case with full update log
@@ -83,4 +89,20 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ data });
+}
+
+// DELETE — remove a case entirely (admin, CEO, HR only)
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  const { id } = await context.params;
+  const supabase = createServiceClient();
+  if (!(await checkCanDelete(auth, supabase))) {
+    return Response.json({ error: "Not authorised" }, { status: 403 });
+  }
+
+  const { error } = await supabase.from("legal_cases").delete().eq("id", id);
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({ success: true });
 }

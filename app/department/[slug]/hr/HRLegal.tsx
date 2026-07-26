@@ -86,6 +86,7 @@ export default function HRLegal() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [editFields, setEditFields] = useState<Partial<LegalCase>>({});
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingCase, setDeletingCase] = useState(false);
 
   const { show: showToast, element: toastElement } = useToast();
 
@@ -173,6 +174,22 @@ export default function HRLegal() {
       });
     }
     setLoadingDetail(false);
+  }
+
+  async function deleteCase() {
+    if (!selectedCase) return;
+    if (!confirm(`Delete case ${selectedCase.case_number}? This cannot be undone.`)) return;
+    setDeletingCase(true);
+    const res = await authFetch(`/api/legal/cases/${selectedCase.id}`, { method: "DELETE" });
+    const json = await res.json();
+    setDeletingCase(false);
+    if (json.success) {
+      showToast("Case deleted", "success");
+      setSelectedCase(null);
+      loadCases();
+    } else {
+      showToast(json.error || "Failed to delete", "error");
+    }
   }
 
   async function saveEdit() {
@@ -433,7 +450,13 @@ export default function HRLegal() {
                         <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", backgroundColor: "#F1F5F9", color: COLOURS.SLATE }}>{selectedCase.status}</span>
                       </div>
                     </div>
-                    <button onClick={() => setSelectedCase(null)} style={{ border: "none", backgroundColor: "transparent", cursor: "pointer", fontSize: "20px", color: COLOURS.SLATE, padding: "0 4px", lineHeight: 1 }}>×</button>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <button onClick={deleteCase} disabled={deletingCase}
+                        style={{ border: `1px solid ${COLOURS.RED}40`, backgroundColor: "#FEF2F2", color: COLOURS.RED, cursor: "pointer", fontSize: "12px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", opacity: deletingCase ? 0.6 : 1 }}>
+                        {deletingCase ? "Deleting…" : "Delete"}
+                      </button>
+                      <button onClick={() => setSelectedCase(null)} style={{ border: "none", backgroundColor: "transparent", cursor: "pointer", fontSize: "20px", color: COLOURS.SLATE, padding: "0 4px", lineHeight: 1 }}>×</button>
+                    </div>
                   </div>
                   <div style={{ display: "flex", gap: "16px", marginTop: "12px", flexWrap: "wrap" }}>
                     {[
