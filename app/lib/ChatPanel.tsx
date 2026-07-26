@@ -429,26 +429,29 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
     }
   }, [email, allMembers.length]);
 
-  // Load conversations and auto-open the most recent unread one when the panel opens
+  // Load conversations whenever the panel opens (or memberId changes while open)
   useEffect(() => {
-    if (isOpen && !panelOpenedRef.current) {
-      panelOpenedRef.current = true;
-      loadConversations().then((convs) => {
-        if (!convs) return;
-        // Auto-open the most recent unread conversation (only if not already in one)
-        setActiveConv((current) => {
-          if (current) return current; // already viewing a conversation - don't override
-          const unread = [...convs]
-            .filter((c) => (c.unread_count ?? 0) > 0 && c.last_message !== null)
-            .sort((a, b) =>
-              new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
-            );
-          return unread.length > 0 ? unread[0] : null;
-        });
-      });
-    }
-    if (!isOpen) panelOpenedRef.current = false;
+    if (isOpen) loadConversations();
   }, [isOpen, loadConversations]);
+
+  // Auto-open the most recent unread conversation once per panel open session.
+  // Runs after conversations load (reacts to state, not the fetch directly).
+  useEffect(() => {
+    if (!isOpen || activeConv || conversations.length === 0) return;
+    if (panelOpenedRef.current) return; // already ran this session
+    panelOpenedRef.current = true;
+    const unread = [...conversations]
+      .filter((c) => (c.unread_count ?? 0) > 0 && c.last_message !== null)
+      .sort((a, b) =>
+        new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
+      );
+    if (unread.length > 0) setActiveConv(unread[0]);
+  }, [isOpen, conversations, activeConv]);
+
+  // Reset auto-open flag when panel closes
+  useEffect(() => {
+    if (!isOpen) panelOpenedRef.current = false;
+  }, [isOpen]);
 
   // Focus search when panel opens
   useEffect(() => {
