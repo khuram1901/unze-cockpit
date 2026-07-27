@@ -1,10 +1,10 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 20/07/2026 (in-app chat with Supabase Realtime; quick-add task panel; @mention assignment in task notes; backup changed to Google Drive upload; Accounts & Tax Rule 0 RPC; authFetch centralised in lib/supabase.ts; isDailyEntryOnly tightened; can_manage_locations moved server-side; audit daily log scoped to assigned member).
+> **This is the source of truth.** Read before touching any code. Last updated: 27/07/2026 (Banking page — EOBI & Social Security payment tracking; Legal Case Tracking system — Admin Ops Legal tab, HR Legal tab, Daily Entry follow-up, home page summary card; Members page redesign — MemberDrawer slide-over replaces inline expand, Access Matrix tab removed; sidebar collapsible nav groups with localStorage persistence and hover-to-peek animation; HR Dashboard per-member tab visibility controls via MemberDrawer; performance — UserCtx cached, getSession() replaces getUser() everywhere; migrations 196–197).
+>
+> Previous update: 20/07/2026 (in-app chat with Supabase Realtime; quick-add task panel; @mention assignment in task notes; backup changed to Google Drive upload; Accounts & Tax Rule 0 RPC; authFetch centralised in lib/supabase.ts; isDailyEntryOnly tightened; can_manage_locations moved server-side; audit daily log scoped to assigned member).
 >
 > Previous update: 19/07/2026 (session 2 — mobile responsiveness overhaul across all pages; Admin Operations tab-level widget gating added; manager assignment dropdown added to Members edit panel; JS aggregation audit completed; TypeScript clean).
->
-> Previous update: 14/07/2026 (Tasks page rebuild, Phases 3–5: migrations 098–105 — company tag, stage, locked assigned/original-due dates, subtasks with DB-enforced completion gating, due-date history, Stuck status (red), Kanban board, Recurring tab, Team tab, monthly/quarterly RPCs, attention banner, My Tasks tab, real filters, task-detail modal, mini-checklist, comments, WhatsApp auto-remind toggle, calendar picker, meeting chip — see "Tasks page redesign" section for the full history including the mockup-reconciliation pass after Khuram flagged the live page didn't match what was designed).
 >
 > **British English throughout.** All dates in DD/MM/YYYY.
 
@@ -114,6 +114,16 @@ app/
 │   └── MonthlyTargets.tsx            Monthly targets edit form. Restyled (2026-07-05):
 │                                     COLOURS tokens, pill buttons, TRACK progress bars.
 │
+├── banking/
+│   └── page.tsx                      Banking page — EOBI & Social Security payment tracking.
+│                                     Top-level feature tab: "EOBI & Social Security" (more tabs planned).
+│                                     Company sub-tabs: Unze (UTPL), Imperial (IFPL), Restaurants (Baranh + HD).
+│                                     Pakistan fiscal year (Jul–Jun) year pills. Per-entity × per-month grid:
+│                                     amount PKR, date paid, challan number, on-time/late/missing/future status.
+│                                     Gated by `canAccessBanking()` (migration 196 adds `can_access_banking`
+│                                     in member_permissions; initially granted to Khuram + Kamran).
+│                                     Added to Finance group in sidebar and page registry.
+│
 ├── finance/
 │   ├── page.tsx                      Finance index — company picker, dept budgets, bulk upload
 │   │                                 Restyled to Genspark design system (2026-07-06):
@@ -180,17 +190,28 @@ app/
 ├── members/
 │   ├── page.tsx                      Members page shell
 │   ├── MembersManager.tsx            Member list, invite, edit role/dept, delete.
+│   │                                 Redesigned (27/07/2026): People tab is now a two-column card grid;
+│   │                                 clicking a member opens the MemberDrawer slide-over instead of
+│   │                                 an inline expand row. Access Matrix tab removed — drawer is now
+│   │                                 the single source of truth for all per-member settings.
 │   │                                 Add-member form: manager dropdown (required for non-Admin/CEO) +
 │   │                                 optional "this person will manage" multi-select (backfills manager_id
-│   │                                 on existing members). Edit panel (expanded row): editable "Reports to
-│   │                                 (manager)" dropdown for non-Admin/CEO — saves immediately via
-│   │                                 updateMember(). Team-member checkbox list shows who reports TO
-│   │                                 this person (gated to HOD / Admin / CEO / Executive).
-│   └── AccessControlPanel.tsx        Widget-level access matrix — horizontal grid: one row per member,
+│   │                                 on existing members).
+│   ├── MemberDrawer.tsx              Slide-over panel for editing a single member. Three tabs:
+│   │                                 Profile (name, role, dept, manager, HOD flag, active), Access
+│   │                                 (per-permission toggles with collapsible groups, Widget Visibility
+│   │                                 section for per-page widget controls), and widget page group
+│   │                                 collapse state persisted locally. HR department members get HR
+│   │                                 Dashboard Tabs visibility controls in their drawer (27/07/2026).
+│   ├── AccessControlPanel.tsx        Widget-level access matrix — horizontal grid: one row per member,
 │   │                                 one column per widget key grouped by page. WIDGET_GROUP_TO_PAGE
 │   │                                 maps group labels to page names. Includes "Admin Operations" →
-│   │                                 5 tab-level widget keys (registrations, payments, compliance,
-│   │                                 documents, operations).
+│   │                                 6 tab-level widget keys (registrations, payments, compliance,
+│   │                                 documents, operations, legal). Now also includes Widget Visibility
+│   │                                 panel per member (moved into MemberDrawer as the primary UX).
+│   └── WidgetVisibilityPanel.tsx     Panel for per-member widget visibility overrides — embedded
+│                                     inside MemberDrawer's Access tab. Widget page groups are
+│                                     collapsible (state resets on drawer close).
 │
 ├── department/[slug]/
 │   ├── page.tsx                      Department page router — dispatches to correct dashboard
@@ -212,7 +233,14 @@ app/
 │                                     tabs via PillTabs. company_id column on audit records.
 │                                     CompanyBadge component: UTPL=blue (#EEF1FC/BLUE), IFPL=green
 │                                     (SUCCESS_SOFT/GREEN). 6 entity types including Directors.
-│   ├── HRDashboard.tsx               HR dept — recruitment, evaluations, strategy goals
+│   ├── HRDashboard.tsx               HR dept — recruitment, evaluations, strategy goals.
+│   │                                 Per-member tab visibility: each HR department member can have
+│   │                                 individual dashboard tabs shown/hidden via MemberDrawer's Widget
+│   │                                 Visibility section (27/07/2026). Uses widgetRegistry.ts for
+│   │                                 HR tab widget keys.
+│   ├── hr/
+│   │   └── HRLegal.tsx               HR Legal tab — view, add, and track legal cases from the
+│   │                                 HR department side. Uses the shared LegalCases component.
 │   ├── TaxationDashboard.tsx         Tax Notices — legal notices (notice_type='tax').
 │   │                                 Enhanced: is_active (Active/Inactive toggle), notice_status
 │   │                                 ('Order'/'Notice'/'Show Cause'), legal_stage
@@ -223,18 +251,27 @@ app/
 │
 ├── exceptions/page.tsx               Exception management — surfaced alerts and rule violations
 ├── audit-log/page.tsx                System audit log — all user actions (timestamped)
-├── admin/page.tsx                    Admin Operations — EOBI registrations, payment tracking,
-│                                     compliance (licences/certificates), documents (NTN certs),
-│                                     operations (fleet fuel, vehicle maintenance, solar production).
-│                                     Five tabs, each gated by a widget key (admin_ops.registrations /
-│                                     .payments / .compliance / .documents / .operations) so individual
-│                                     tabs can be hidden per member via the Access Matrix.
-│                                     safeActiveTab pattern used: if the current tab is hidden for this
-│                                     member, auto-jump to the first visible tab.
-│                                     All colours via COLOURS tokens; RADII.CARD, RADII.PILL, RADII.SM
-│                                     used throughout; no raw hex. Mobile responsive (2-col grids on mobile).
-│                                     `can_manage_locations` check is now server-side — derived from
-│                                     ctx.overrides; hardcoded email list removed (20/07/2026).
+├── admin/
+│   ├── page.tsx                      Admin Operations — EOBI registrations, payment tracking,
+│   │                                 compliance (licences/certificates), documents (NTN certs),
+│   │                                 operations (fleet fuel, vehicle maintenance, solar production),
+│   │                                 **Legal Cases** (27/07/2026 — 6th tab, see LegalCases.tsx).
+│   │                                 Six tabs, each gated by a widget key (admin_ops.registrations /
+│   │                                 .payments / .compliance / .documents / .operations / .legal) so
+│   │                                 individual tabs can be hidden per member via the Access Matrix.
+│   │                                 safeActiveTab pattern used: if the current tab is hidden for this
+│   │                                 member, auto-jump to the first visible tab.
+│   │                                 All colours via COLOURS tokens; RADII.CARD, RADII.PILL, RADII.SM
+│   │                                 used throughout; no raw hex. Mobile responsive (2-col grids on mobile).
+│   │                                 `can_manage_locations` check is now server-side — derived from
+│   │                                 ctx.overrides; hardcoded email list removed (20/07/2026).
+│   └── LegalCases.tsx                Legal case management component — shared by Admin Ops "Legal" tab
+│                                     and HR "Legal" tab. Case list with status pipeline tracker
+│                                     (HR Documents Issued → Police Report Filed → FIR Registered →
+│                                     Warrant Issued → Under Investigation → Court Proceedings →
+│                                     Resolved/Closed), case detail slide-over, follow-up log.
+│                                     Full CRUD (CEO/Admin/HR Manager write; all authorised read).
+│                                     Home page summary card shows open case count for CEO/Admin/HR.
 │
 ├── monthly-operations-targets/page.tsx  Monthly production/dispatch targets per plant.
 │                                     Full Genspark restyle: all var(--*) and raw hex replaced
@@ -284,6 +321,15 @@ app/
     │                                 render time via .sort().
     │                                 Active item: 3px COLOURS.BLUE left accent bar (expanded);
     │                                 3px transparent (collapsed) — no layout shift on toggle.
+    │                                 **Collapsible nav groups (27/07/2026):** each sidebar group
+    │                                 can be collapsed/expanded; state persisted in localStorage
+    │                                 so it survives navigation. Hover-to-peek: hovering a collapsed
+    │                                 group briefly reveals its items with smooth open/close animation.
+    ├── widgetRegistry.ts             Widget registry — maps widget keys to display metadata (label,
+    │                                 description, group). Used by MemberDrawer Widget Visibility
+    │                                 section and HR Dashboard tab visibility controls.
+    │                                 Keys follow `page.widget_name` convention
+    │                                 (e.g. `home.cash_flow_waterfall`, `hr_dash.recruitment_tab`).
     ├── ThemeProvider.tsx             Dark/light mode context
     ├── SharedUI.tsx                  Design tokens (COLOURS, RADII, SHADOWS) + shared components
     ├── constants.ts                  COMPANIES array — 6 entities: UTPL, IFPL, BRNH (Baranh),
@@ -355,6 +401,14 @@ api/
 │   └── tax-alerts/route.ts           GET (cron Bearer CRON_SECRET) + POST (fire-and-forget,
 │                                     Supabase session auth) — calls computeAndStoreTaxAlerts().
 │                                     Runs twice daily: 00:00 UTC and 06:00 UTC.
+├── legal/
+│   ├── cases/route.ts                GET/POST — list all legal cases (CEO/Admin/HR Manager);
+│   │                                 create new case. GET returns cases with latest status update.
+│   ├── cases/[id]/route.ts           GET/PATCH/DELETE — single case detail, edit, and delete.
+│   │                                 Awaits params (Next.js 16 async params). Validates non-empty
+│   │                                 date strings before PATCH to avoid DB errors.
+│   └── updates/route.ts              GET/POST — case follow-up log entries (per case_id).
+│
 ├── finance/
 │   ├── bulk-upload/route.ts          POST — upload multiple PDF cash flow files (admin only)
 │   ├── upload-pdfs/route.ts          POST — manual drag-and-drop PDF upload
@@ -617,7 +671,7 @@ All major pages have been made mobile-safe (iPhone + Android). Approach:
 
 ## 4. Complete Database Schema
 
-> Source of truth: `supabase/` migration files 001–183. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run. Recent migrations (20/07/2026): 153 (audit visibility — daily log scoped to assigned member), 179 (tax_accounts_signoffs table), 180 (last_email_sent_at on tax_deadline_alerts), 181 (get_tax_dashboard_summary RPC), 182 (tax_notices gmail_source field), 183 (chat tables — chat_conversations, chat_participants, chat_messages with Realtime).
+> Source of truth: `supabase/` migration files 001–197. All migrations are applied **manually** via the Supabase SQL Editor — never auto-run. Recent migrations (27/07/2026): 196 (`can_access_banking` column in member_permissions, granted to Khuram + Kamran), 197 (`legal_cases` and `legal_case_updates` tables with auto-incrementing `case_number` sequence, `legal_case_seq`). Previous migrations (20/07/2026): 153 (audit visibility — daily log scoped to assigned member), 179 (tax_accounts_signoffs table), 180 (last_email_sent_at on tax_deadline_alerts), 181 (get_tax_dashboard_summary RPC), 182 (tax_notices gmail_source field), 183 (chat tables — chat_conversations, chat_participants, chat_messages with Realtime).
 
 ### Core tables
 
@@ -701,6 +755,7 @@ Per-member boolean overrides for every permission key. NULL = use role default.
 | can_view_dept_tax_accounts | boolean | Added migration 070 — NULL defaults to true (all users can view) |
 | can_manage_tax_schedule | boolean | Added migration 070 — NULL defaults to false (manage explicitly granted) |
 | can_manage_tax_notices | boolean | Added migration 069 — NULL defaults to false |
+| can_access_banking | boolean | Added migration 196 — NULL defaults to false. Gates /banking page |
 | created_at | timestamptz | |
 | updated_at | timestamptz | |
 
@@ -1330,6 +1385,46 @@ Existing table for tax notices and legal notices. New columns added:
 
 **New permission:** `can_manage_tax_notices` in member_permissions — defaults to NULL (false). Granted to Khuram, Shakeel, Avess/Awais. Gated by `canManageTaxNotices()` in permissions.ts.
 
+#### `legal_cases` — migration 197
+Criminal/misconduct case tracking for Unze Group locations (stock shortage, theft, fraud, etc.).
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | gen_random_uuid() |
+| case_number | text UNIQUE | Auto-generated from `legal_case_seq` sequence (e.g. LC-0001) |
+| entity | text NOT NULL | UTPL / IFPL / Baranh / HD |
+| location_id | uuid FK → admin_locations | nullable |
+| location_name | text NOT NULL | |
+| subject_name | text NOT NULL | Accused person |
+| subject_role | text | Store Manager / Staff / Supervisor … |
+| subject_employee_id | text | nullable |
+| offence_type | text NOT NULL | Stock Shortage / Theft / Fraud / Harassment / Misconduct / Property Damage / Other |
+| description | text | nullable |
+| incident_date | date | nullable |
+| amount_involved_pkr | numeric | nullable |
+| status | text NOT NULL DEFAULT 'HR Documents Issued' | Pipeline: HR Documents Issued → Police Report Filed → FIR Registered → Warrant Issued → Under Investigation → Court Proceedings → Resolved / Closed |
+| police_station | text | nullable |
+| fir_number / fir_date | text / date | nullable |
+| warrant_number / warrant_date | text / date | nullable |
+| court_case_number | text | nullable |
+| amount_recovered_pkr | numeric | nullable |
+| resolution_type | text | Recovered / Convicted / Acquitted / Settled / Dropped |
+| resolution_notes | text | nullable |
+| initiated_by | text NOT NULL | HR person email |
+| created_at / updated_at | timestamptz | |
+
+#### `legal_case_updates` — migration 197
+Running follow-up log for each legal case (one entry per action taken).
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | gen_random_uuid() |
+| case_id | uuid FK → legal_cases ON DELETE CASCADE | |
+| update_type | text NOT NULL | e.g. 'Status Change', 'Court Hearing', 'Police Visit', 'Note' |
+| notes | text NOT NULL | |
+| status_after | text | What status the case moved to after this update |
+| next_action_date | date | nullable — when the next follow-up is due |
+| recorded_by | text NOT NULL | member email |
+| created_at | timestamptz | |
+
 ---
 
 ### Postgres RPC Functions (performance layer)
@@ -1525,6 +1620,7 @@ Calendar/meeting request tracking.
 | `canViewTaxAccounts` | All authenticated users (NOT PA). Defaults true when NULL | can_view_dept_tax_accounts |
 | `canManageTaxSchedule` | Admin/CEO only. Defaults false when NULL | can_manage_tax_schedule |
 | `canManageTaxNotices` | Admin/CEO + explicitly granted (Shakeel, Avess/Awais). Defaults false | can_manage_tax_notices |
+| `canAccessBanking` | Admin/CEO + explicitly granted. Defaults false. Initially Khuram + Kamran | can_access_banking |
 | `canEditOperationsTargets` | Privileged + Ops HoD (nadeem.khan@unze.co.uk) | — |
 
 ### Finance Company Scoping
@@ -1564,6 +1660,8 @@ Calendar/meeting request tracking.
 
 Items within each group are sorted A–Z case-insensitively at render time.
 
+**Collapsible groups (27/07/2026):** each nav group header is clickable to collapse/expand. State saved in localStorage, so it persists across navigation. Hovering a collapsed group "peeks" it open with a smooth animation — the group auto-closes when the cursor leaves.
+
 ### Overview (always visible)
 - Executive Dashboard (`/home`) — or `/pa` for PA users
 
@@ -1583,6 +1681,7 @@ Items within each group are sorted A–Z case-insensitively at render time.
 
 ### Finance (A–Z)
 - Bank Facilities (`/finance/guarantees`)
+- Banking (`/banking`) — EOBI & Social Security payment tracking (gated: `can_access_banking`)
 - Documents (`/folderit`) — Folderit DMS status (inbox + approvals)
 - Imperial Footwear (`/finance/imperial`)
 - Investments (`/investments`)
@@ -1679,6 +1778,16 @@ Kanban pipeline — drag-and-drop bills through collection stages. Inline edit/d
 #### `/investments`
 PSX portfolio. Holdings table, P&L, dividend tracking (confirmed + unconfirmed), Today's Change card, price history chart. Historical date picker.
 
+#### `/banking` — NEW (27/07/2026)
+- **File:** `app/banking/page.tsx`
+- **Access:** `canAccessBanking()` — initially Khuram + Kamran only (migration 196)
+- **What it does:** EOBI & Social Security payment tracking for UTPL, IFPL, Baranh, and HD.
+  - Pakistan fiscal year (Jul–Jun) year pills: 4 years shown (3 past + current).
+  - Company sub-tabs: Unze (UTPL), Imperial (IFPL), Restaurants (Baranh + HD).
+  - Per-entity × per-month grid: amount PKR, date paid, challan number, status (on_time / late / missing / future).
+  - Inline editing: click any cell to enter or update a payment record.
+  - More feature tabs planned (e.g. other statutory payments).
+
 #### `/opening-balances`
 Set starting cash balances per company.
 
@@ -1711,11 +1820,13 @@ Past Meetings tab + Decision Log tab. AI extraction via Claude. Meeting Action T
 Personal meeting minutes. Copy protection for non-privileged users.
 
 #### `/members`
-Members list, invite, edit, delete. Two tabs: Members (list) and Access Control.
+Members list, invite, edit, delete. **Redesigned 27/07/2026** — single People tab (Access Matrix tab removed; all per-member settings now live in MemberDrawer).
 
-**Members tab** (`MembersManager.tsx`): Expandable edit panel per member (click any row). Edit panel has inline fields for first/last name, email, role, department, business unit, company, HOD flag, position title, active flag, and — new 19/07/2026 — an editable **"Reports to (manager)"** dropdown (for non-Admin/CEO members) that saves immediately via `updateMember()`. Below that: team-members checkbox list (who reports TO this person, shown for HODs/Admin/CEO/Executive). Add-member form: manager dropdown is **required** for non-Admin/CEO (skipped for admin-level roles). The form also has an optional "this person will manage" multi-select to backfill `manager_id` on existing members in one go.
+**People tab** (`MembersManager.tsx`): Two-column card grid. Clicking a member card opens the `MemberDrawer` slide-over panel instead of an inline row expand. Add-member form: manager dropdown is **required** for non-Admin/CEO (skipped for admin-level roles). The form also has an optional "this person will manage" multi-select to backfill `manager_id` on existing members in one go.
 
-**Access Control tab** (`AccessControlPanel.tsx`): Horizontal matrix — one row per member, one column per widget key. WIDGET_GROUP_TO_PAGE maps group labels to page names. Includes "Admin Operations" group with 5 tab-level widget keys. Per-member permission override grid (38 boolean columns): Dashboards, Finance, Recv., Tasks, Depts, Tax Mgmt, Prod., Members, Admin. `finance_company_scope` select (UTPL/IFPL/both) appears only when `can_view_finance` is on. Protected members show locked (border-only) cells. Each override highlights in blue.
+**MemberDrawer** (`MemberDrawer.tsx`): Slide-over with three tabs — Profile (name, role, dept, manager, HOD flag, active/inactive), Access (permission toggles in collapsible groups), and Widget Visibility (per-page widget controls; widget page groups are collapsible; HR department members see HR Dashboard Tabs visibility controls). All Access tab sections are collapsible and default to closed.
+
+**Access Control grid** (`AccessControlPanel.tsx`): Still accessible as a full-page matrix view for bulk review. Per-member permission overrides (39 boolean columns including `can_access_banking`). `finance_company_scope` select (UTPL/IFPL/both) appears only when `can_view_finance` is on. Protected members show locked cells.
 
 #### `/folderit`
 - **File:** `app/folderit/page.tsx`
@@ -1734,7 +1845,7 @@ System activity trail.
 Exception management.
 
 #### `/admin`
-Source document archive, backups, restore, wipe. khuram1901@gmail.com ONLY.
+Admin Operations — six tabs (27/07/2026; was five tabs): Registrations, Payments, Compliance, Documents, Operations, **Legal Cases**. Tab 6 (Legal Cases) uses `LegalCases.tsx` — the same shared component as the HR Legal tab. khuram1901@gmail.com ONLY for the top-level admin page; Legal Cases tab is also visible to HR Managers.
 
 #### `/monthly-operations-targets`
 Monthly production/dispatch targets per plant.
@@ -1953,6 +2064,9 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 33. **Exceptions standalone page (`/exceptions`) removed (19/07/2026).** Fully redundant — the bell's "Needs explanation" filter and the Tasks page `exception` filter cover it. `can_view_exceptions` column dropped from `member_permissions` (migration 150).
 34. **`authFetch` is the canonical authenticated fetch for all client-side API calls (20/07/2026).** Exported from `app/lib/supabase.ts`. Never write a local copy of `authedFetch` in a page or component — always import `authFetch` from `lib/supabase`. The 15 previous copies were removed in the refactor commit.
 35. **Backup uploads to Google Drive, not Gmail (20/07/2026).** `/api/backup` saves to the 'Unze Cockpit Backups' Drive folder using the k.saleem Google token. The backups list page links to the Drive folder and per-file Drive URLs. Email delivery of backup files is removed.
+36. **MemberDrawer is the single source of truth for per-member settings (27/07/2026).** The Access Matrix tab on the Members page has been removed. All per-member permission overrides and widget visibility controls are now exclusively in the MemberDrawer slide-over. Do not re-introduce a separate Access Matrix tab without a deliberate decision.
+37. **Legal case tracking lives in `LegalCases.tsx`, shared by Admin Ops and HR (27/07/2026).** One component, two entry points. Do not duplicate the component for each location — always import from `app/admin/LegalCases.tsx`.
+38. **`canAccessBanking()` gates the Banking page (27/07/2026).** This is a capability-based override (defaults false); not a role. Use `useRequireCapability("banking")` or check `canAccessBanking(ctx)` — same pattern as investments, guarantees, etc.
 
 ---
 
@@ -1983,7 +2097,7 @@ npm install
 
 ### Step 2: Restore the database
 1. Log in to Supabase dashboard → create a new project
-2. Run all SQL migration files in order (001 through 183) via the Supabase SQL Editor. Pension tables (`pension_funds`, `pension_fund_prices`) and the original `get_pension_summary` RPC were applied directly without a numbered migration file and must also be run.
+2. Run all SQL migration files in order (001 through 197) via the Supabase SQL Editor. Pension tables (`pension_funds`, `pension_fund_prices`) and the original `get_pension_summary` RPC were applied directly without a numbered migration file and must also be run.
 3. Restore data from the most recent backup (available in Supabase Storage, or via the `/admin` page backup list which links to Google Drive for recent backups)
 
 ### Step 3: Configure environment

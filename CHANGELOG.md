@@ -4,6 +4,41 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-27 — Monday blueprint refresh (scheduled)
+
+**Files changed in BLUEPRINT.md:**
+- Header date updated: 20/07/2026 → 27/07/2026; front-matter summary updated
+- `app/banking/page.tsx` — new page added (Banking / EOBI & Social Security)
+- `app/admin/` — converted to sub-directory entry; `LegalCases.tsx` added
+- `app/members/MemberDrawer.tsx` — new file added
+- `app/members/MembersManager.tsx` — updated to reflect two-column redesign + MemberDrawer
+- `app/members/WidgetVisibilityPanel.tsx` — new file noted
+- `app/members/AccessControlPanel.tsx` — updated; "Admin Operations" now has 6 widget keys (legal added)
+- `app/department/[slug]/HRDashboard.tsx` — noted per-member tab visibility
+- `app/department/[slug]/hr/HRLegal.tsx` — new HR Legal sub-route
+- `app/api/legal/` — new section (cases, cases/[id], updates routes)
+- `app/lib/SidebarLayout.tsx` — noted collapsible groups with localStorage + hover-to-peek
+- `app/lib/widgetRegistry.ts` — new file noted
+- Database schema — migration count updated 001–183 → 001–197; migrations 196–197 documented
+- `member_permissions` table — `can_access_banking` column added
+- `legal_cases` / `legal_case_updates` tables — full schema documented
+- Permission functions — `canAccessBanking` added
+- Sidebar structure — Banking added to Finance group; collapsible groups note added
+- Section 7 (Pages) — `/banking` page added; `/members` redesign documented; `/admin` updated
+- Recovery instructions — migration count updated (001 through 197)
+- Decisions Locked In — #36 (MemberDrawer single source), #37 (LegalCases shared), #38 (canAccessBanking)
+
+**Behaviour changes found (commits since 20/07/2026):**
+- **Banking page** (`feat: add Banking page`): new `/banking` route for EOBI & Social Security payment tracking. Pakistan fiscal-year grid (Jul–Jun). Company sub-tabs: Unze, Imperial, Restaurants. Per-entity × per-month payment status (on_time / late / missing / future). Migration 196 adds `can_access_banking` in `member_permissions`; initially granted to Khuram + Kamran.
+- **Legal case tracking system** (`feat: legal case tracking system`): new `legal_cases` and `legal_case_updates` tables (migration 197, sequence `legal_case_seq`). Shared `LegalCases.tsx` component used by Admin Ops "Legal" tab and HR "Legal" tab. Status pipeline: HR Documents Issued → Police Report Filed → FIR Registered → Warrant Issued → Under Investigation → Court Proceedings → Resolved / Closed. Home page summary card shows open case count for CEO/Admin/HR. Full CRUD with delete (confirmed with `maybySingle()` fix).
+- **Members page redesign** (`feat: redesign People tab with two-column layout + MemberDrawer`): two-column card grid replaces flat list; new `MemberDrawer.tsx` slide-over panel holds Profile, Access, and Widget Visibility tabs. Access Matrix tab removed from Members page — drawer is now single source of truth. All Access tab sections collapsible (default closed). Widget page groups collapsible inside Widget Visibility section.
+- **HR Dashboard tab visibility** (`feat: HR Dashboard tab visibility`): per-member widget controls in MemberDrawer for HR department members. Controlled via `widgetRegistry.ts`. HR Dashboard Tabs section only visible in drawer for HR department members (not all members).
+- **Sidebar collapsible nav groups** (`Sidebar: collapsible nav groups with localStorage persistence` + `hover-to-peek`): groups can be toggled open/closed; state saved in localStorage. Hover-to-peek shows items on cursor entry, auto-closes on leave — smooth CSS animation.
+- **Performance improvements**: `useUserCtx` now caches the full `UserCtx` to eliminate per-navigation round trips; `getSession()` replaces `getUser()` in `useRouteGuard.ts`; welcome page does parallel API + weather fetch instead of sequential.
+- **Legal summary card on home page** (`feat: legal case progress tracker + home page summary card`): visible to exec (Khuram, Kamran), HR Manager (Zuhair), Admin Ops Manager (Akhlaq). Loaded in exec/admin loader path (not member-only).
+
+---
+
 ## 2026-07-20 — Monday blueprint refresh (scheduled)
 
 **Files changed in BLUEPRINT.md:**
