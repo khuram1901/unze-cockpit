@@ -60,3 +60,25 @@ export function getCompanyById(id: string): CompanyConfig | undefined {
 export function getCompanyByName(name: string): CompanyConfig | undefined {
   return COMPANIES.find((c) => c.name === name || c.name.startsWith(name));
 }
+
+// ── Department Budget lookup tables ───────────────────────────────────────────
+// Single source of truth for both finance/page.tsx and FinanceManager.tsx.
+// Previously defined separately in each file with different variable names,
+// which meant a department added to one wouldn't appear in the other.
+export const COMPANY_DEPARTMENTS: Record<string, string[]> = {
+  [UTPL_COMPANY_ID]: ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit", "Unze Trading Ops"],
+  [IFPL_COMPANY_ID]: ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"],
+};
+
+export const COMPANY_CATEGORIES: Record<string, string[]> = {
+  [UTPL_COMPANY_ID]: ["Salaries", "Rent/Utilities", "Admin", "Welfare", "Freight", "Travel"],
+  [IFPL_COMPANY_ID]: ["Salaries", "Rent/Utilities", "Admin", "Marketing", "Freight", "Travel"],
+};
+
+export function deptsForCompany(companyId: string): string[] {
+  return COMPANY_DEPARTMENTS[companyId] ?? ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
+}
+
+export function catsForCompany(companyId: string): string[] {
+  return COMPANY_CATEGORIES[companyId] ?? ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
+}

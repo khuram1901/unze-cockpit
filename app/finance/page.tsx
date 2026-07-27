@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
-import { COMPANIES, getCompanyByName } from "../lib/constants";
+import { COMPANIES, getCompanyByName, deptsForCompany, catsForCompany, COMPANY_DEPARTMENTS, COMPANY_CATEGORIES } from "../lib/constants";
 import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
@@ -26,25 +26,8 @@ type Budget = {
 };
 type BudgetSummary = { department: string; budgeted_total: number; actual_total: number };
 
-const COMPANY_DEPARTMENTS: Record<string, string[]> = {
-  "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit", "Unze Trading Ops"],
-  "77921705-8a15-4406-847a-b234f84b5ec3": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"],
-};
-
-function deptsForCompany(companyId: string): string[] {
-  return COMPANY_DEPARTMENTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
-}
-
-const COMPANY_CATEGORIES: Record<string, string[]> = {
-  "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Salaries", "Rent/Utilities", "Admin", "Welfare", "Freight", "Travel"],
-  "77921705-8a15-4406-847a-b234f84b5ec3": ["Salaries", "Rent/Utilities", "Admin", "Marketing", "Freight", "Travel"],
-};
-
-function catsForCompany(companyId: string): string[] {
-  return COMPANY_CATEGORIES[companyId] || ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
-}
-
-const ALL_CATEGORIES = [...new Set(Object.values(COMPANY_CATEGORIES).flat())];
+// deptsForCompany and catsForCompany imported from constants.ts
+// (previously duplicated here and in FinanceManager.tsx — now one source of truth)
 
 function downloadBudgetTemplate() {
   const wb = XLSX.utils.book_new();
@@ -117,6 +100,48 @@ function companyShortName(companyId: string): string {
   return c?.shortCode || "?";
 }
 
+/* ─── Controlled inline actual-amount editor ─────────────────── */
+// Replaces the uncontrolled defaultValue pattern: this component owns
+// its own state so it re-syncs when the parent reloads budgets, and
+// shows a ✓ tick after a successful save so users know their edit landed.
+function BudgetActualInput({ id, initial, onSave }: {
+  id: string; initial: number; onSave: (id: string, val: number) => Promise<void>;
+}) {
+  const [val, setVal] = useState(String(initial));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  // Re-sync when parent reloads budget data (e.g. another row was saved)
+  useEffect(() => { setVal(String(initial)); }, [initial]);
+
+  async function handleBlur() {
+    const num = Number(val);
+    if (num === initial || saving) return;
+    setSaving(true);
+    try {
+      await onSave(id, num);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch { /* error already shown via toast in onSave */ }
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+      <input
+        type="number"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={handleBlur}
+        style={{ width: "80px", padding: "3px 6px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12px" }}
+        title="Update actual — changes save on blur"
+      />
+      <span style={{ fontSize: "11px", width: 14, color: saving ? COLOURS.SLATE : COLOURS.GREEN }}>
+        {saving ? "…" : saved ? "✓" : ""}
+      </span>
+    </div>
+  );
+}
+
 export default function FinancePage() {
   const router = useRouter();
   const isMobile = useMobile();
@@ -133,7 +158,12 @@ export default function FinancePage() {
   const [showBudgets, setShowBudgets] = useState(false);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [budgetSummary, setBudgetSummary] = useState<BudgetSummary[]>([]);
-  const [budgetMonth, setBudgetMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [budgetLoading, setBudgetLoading] = useState(false);
+  // Use local date (not UTC) so midnight in Lahore (UTC+5) shows the correct month
+  const [budgetMonth, setBudgetMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [budgetCompany, setBudgetCompany] = useState(COMPANIES[0]?.id || "");
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [bdDept, setBdDept] = useState("");
@@ -146,13 +176,15 @@ export default function FinancePage() {
 
   useEffect(() => {
     async function checkAndRedirect() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) { setLoading(false); return; }
+      // getSession() reads from localStorage — no network round-trip
+      const { data: { session } } = await supabase.auth.getSession();
+      const userEmail = session?.user?.email;
+      if (!userEmail) { setLoading(false); return; }
 
       const { data: member } = await supabase
         .from("members")
         .select("id, role, department, company")
-        .eq("email", user.email)
+        .eq("email", userEmail)
         .single();
 
       if (!member) { setLoading(false); return; }
@@ -160,7 +192,7 @@ export default function FinancePage() {
       let overrides: PermOverrides | null = null;
       const p = await loadMyPermissions();
       if (p) overrides = p as PermOverrides;
-      const ctx: UserCtx = { email: user.email, role: member.role, department: member.department, company: member.company, overrides };
+      const ctx: UserCtx = { email: userEmail, role: member.role, department: member.department, company: member.company, overrides };
       setIsAdmin(isAdminTier(ctx));
       setCanEdit(canEditFinance(ctx));
 
@@ -186,12 +218,14 @@ export default function FinancePage() {
   async function loadBudgets(cId?: string, month?: string) {
     const c = cId || budgetCompany;
     const m = month || budgetMonth;
+    setBudgetLoading(true);
     const [{ data }, { data: summaryData }] = await Promise.all([
       supabase.from("department_budgets").select("id, company_id, department, budget_month, category, budgeted_amount, actual_amount, notes").eq("company_id", c).eq("budget_month", m).order("department"),
       supabase.rpc("get_department_budget_summary", { p_company_id: c, p_month: m }),
     ]);
     setBudgets(data || []);
     setBudgetSummary(summaryData || []);
+    setBudgetLoading(false);
   }
 
   async function handleBulkUpload(e: React.FormEvent) {
@@ -234,14 +268,16 @@ export default function FinancePage() {
     loadBudgets();
   }
 
-  async function updateBudgetActual(id: string, value: number) {
-    await supabase.from("department_budgets").update({ actual_amount: value }).eq("id", id);
+  async function updateBudgetActual(id: string, value: number): Promise<void> {
+    const { error } = await supabase.from("department_budgets").update({ actual_amount: value }).eq("id", id);
+    if (error) { toast.show("Failed to save actual: " + error.message, "error"); throw error; }
     loadBudgets();
   }
 
   async function deleteBudgetEntry(id: string) {
     if (!await dlg.confirm("Delete this budget entry?", true)) return;
-    await supabase.from("department_budgets").delete().eq("id", id);
+    const { error } = await supabase.from("department_budgets").delete().eq("id", id);
+    if (error) { toast.show("Failed to delete: " + error.message, "error"); return; }
     loadBudgets();
   }
 
@@ -399,12 +435,15 @@ export default function FinancePage() {
 
                         if (validRows.length === 0) { toast.show("No valid data rows found in the file.", "error"); return; }
 
-                        for (const r of validRows) {
-                          await supabase.from("department_budgets").upsert({
+                        // Single batch upsert — avoids N round-trips and partial-import on error
+                        const { error: importErr } = await supabase.from("department_budgets").upsert(
+                          validRows.map(r => ({
                             company_id: r.company, department: r.dept, budget_month: budgetMonth, category: r.cat,
                             budgeted_amount: r.budgeted, actual_amount: r.actual, notes: r.notes || null,
-                          }, { onConflict: "company_id,department,budget_month,category" });
-                        }
+                          })),
+                          { onConflict: "company_id,department,budget_month,category" }
+                        );
+                        if (importErr) { toast.show("Import failed: " + importErr.message, "error"); return; }
                         setBdMsg(`Imported ${validRows.length} budget entries.`);
                         setTimeout(() => setBdMsg(""), 4000);
                         loadBudgets();
@@ -481,7 +520,8 @@ export default function FinancePage() {
                   )}
 
                   {/* Budget entries by department */}
-                  {Array.from(budgetGroups.entries()).map(([deptName, items]) => {
+                  {budgetLoading && <SkeletonRows count={3} height="44px" />}
+                  {!budgetLoading && Array.from(budgetGroups.entries()).map(([deptName, items]) => {
                     const deptTotals = budgetSummary.find((r) => r.department === deptName);
                     const dB = deptTotals?.budgeted_total ?? 0;
                     const dA = deptTotals?.actual_total ?? 0;
@@ -503,8 +543,7 @@ export default function FinancePage() {
                             </div>
                             <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", flexShrink: 0, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>
                               <span style={{ color: COLOURS.SLATE }}>PKR {b.budgeted_amount.toLocaleString()}</span>
-                              <input type="number" defaultValue={b.actual_amount} onBlur={(e) => { const v = Number(e.target.value); if (v !== b.actual_amount) updateBudgetActual(b.id, v); }}
-                                style={{ width: "80px", padding: "3px 6px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12px" }} title="Update actual" />
+                              <BudgetActualInput id={b.id} initial={b.actual_amount} onSave={updateBudgetActual} />
                               {canEdit && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: COLOURS.RED, fontSize: "14px", cursor: "pointer" }} title="Delete">×</button>}
                             </div>
                           </div>
@@ -513,8 +552,8 @@ export default function FinancePage() {
                     );
                   })}
 
-                  {budgets.length === 0 && (
-                    <div style={{ padding: "14px", color: COLOURS.SLATE, textAlign: "center", fontSize: "13px" }}>No budget entries for {companyShortName(budgetCompany)} — {budgetMonth}.</div>
+                  {!budgetLoading && budgets.length === 0 && (
+                    <div style={{ padding: "14px", color: COLOURS.SLATE, textAlign: "center", fontSize: "13px" }}>No budget entries for {companyShortName(budgetCompany)} · {budgetMonth}.</div>
                   )}
                 </div>
               )}

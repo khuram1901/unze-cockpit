@@ -12,7 +12,7 @@ import * as XLSX from "xlsx";
 import { ResponsiveContainer, LineChart, Line, BarChart, Bar, ComposedChart, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ReferenceLine, LabelList } from "recharts";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 import { canEditFinance, isAdminTier, widgetVisible, type UserCtx, type PermOverrides } from "../lib/permissions";
-import { UTPL_COMPANY_ID } from "../lib/constants";
+import { UTPL_COMPANY_ID, deptsForCompany, catsForCompany } from "../lib/constants";
 import { useUserCtx } from "../lib/useUserCtx";
 
 type OpeningBalance = {
@@ -45,15 +45,8 @@ type PdcWeek = { week_number: number; week_start: string; week_end: string; pdc_
 type DeptBudget = { id: string; department: string; budget_month: string; category: string; budgeted_amount: number; actual_amount: number; notes: string | null };
 type DeptBudgetSummary = { department: string; budgeted_total: number; actual_total: number };
 
-const COMPANY_DEPTS: Record<string, string[]> = {
-  "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit", "Unze Trading Ops"],
-  "77921705-8a15-4406-847a-b234f84b5ec3": ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"],
-};
-
-const COMPANY_CATS: Record<string, string[]> = {
-  "15884c2d-48a4-4d43-be90-0ef6e130790c": ["Salaries", "Rent/Utilities", "Admin", "Welfare", "Freight", "Travel"],
-  "77921705-8a15-4406-847a-b234f84b5ec3": ["Salaries", "Rent/Utilities", "Admin", "Marketing", "Freight", "Travel"],
-};
+// deptsForCompany and catsForCompany imported from constants.ts
+// (previously duplicated here and in finance/page.tsx — now one source of truth)
 
 const { NAVY, SLATE, BORDER, GREEN, RED, BLUE, AMBER, HAIRLINE, CARD, CARD_ALT, TRACK, DANGER_SOFT, WARNING_SOFT } = COLOURS;
 const MONO = "var(--font-mono, 'JetBrains Mono', monospace)";
@@ -61,6 +54,44 @@ const DISPLAY = "var(--font-display, 'Inter Tight', sans-serif)";
 
 function fmt(n: number) {
   return n.toLocaleString();
+}
+
+/* ─── Controlled inline actual-amount editor ─────────────────── */
+function BudgetActualInput({ id, initial, onSave }: {
+  id: string; initial: number; onSave: (id: string, val: number) => Promise<void>;
+}) {
+  const [val, setVal] = useState(String(initial));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setVal(String(initial)); }, [initial]);
+
+  async function handleBlur() {
+    const num = Number(val);
+    if (num === initial || saving) return;
+    setSaving(true);
+    try {
+      await onSave(id, num);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch { /* error shown via toast in onSave */ }
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+      <input
+        type="number"
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={handleBlur}
+        style={{ width: "70px", padding: "2px 5px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12px", fontFamily: MONO }}
+        title="Update actual — changes save on blur"
+      />
+      <span style={{ fontSize: "11px", width: 14, color: saving ? COLOURS.SLATE : COLOURS.GREEN }}>
+        {saving ? "…" : saved ? "✓" : ""}
+      </span>
+    </div>
+  );
 }
 
 export default function FinanceManager({ companyId, companyName }: { companyId: string; companyName: string }) {
@@ -346,14 +377,16 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     loadBudgets();
   }
 
-  async function updateBudgetActual(id: string, value: number) {
-    await supabase.from("department_budgets").update({ actual_amount: value }).eq("id", id);
+  async function updateBudgetActual(id: string, value: number): Promise<void> {
+    const { error } = await supabase.from("department_budgets").update({ actual_amount: value }).eq("id", id);
+    if (error) { toast.show("Failed to save actual: " + error.message, "error"); throw error; }
     loadBudgets();
   }
 
   async function deleteBudgetEntry(id: string) {
     if (!await dlg.confirm("Delete this budget entry?", true)) return;
-    await supabase.from("department_budgets").delete().eq("id", id);
+    const { error } = await supabase.from("department_budgets").delete().eq("id", id);
+    if (error) { toast.show("Failed to delete: " + error.message, "error"); return; }
     loadBudgets();
   }
 
@@ -880,8 +913,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
         <SectionTitle title="Department Budgets" style={{ margin: "0 0 12px" }} />
         {(() => {
-          const validDepts = COMPANY_DEPTS[companyId] || ["Finance", "HR", "Admin", "IT", "Tax", "Legal", "Sales", "Audit"];
-          const validCats = COMPANY_CATS[companyId] || ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
+          const validDepts = deptsForCompany(companyId);
+          const validCats = catsForCompany(companyId);
           // Totals come from get_department_budget_summary() (DB-side
           // sums); reducing this small, already-aggregated ~8-row summary
           // for the grand total is the same accepted pattern used for the
@@ -918,12 +951,15 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                   }
                   if (errors.length > 0) { toast.show(`Upload rejected: ${errors.slice(0, 5).join("; ")}${errors.length > 5 ? ` ...and ${errors.length - 5} more` : ""}`, "error"); return; }
                   if (valid.length === 0) { toast.show("No valid rows.", "error"); return; }
-                  for (const r of valid) {
-                    await supabase.from("department_budgets").upsert({
+                  // Single batch upsert — avoids N round-trips and partial-import on error
+                  const { error: importErr } = await supabase.from("department_budgets").upsert(
+                    valid.map(r => ({
                       company_id: companyId, department: r.dept, budget_month: budgetMonth, category: r.cat,
                       budgeted_amount: r.budgeted, actual_amount: r.actual, notes: r.notes || null,
-                    }, { onConflict: "company_id,department,budget_month,category" });
-                  }
+                    })),
+                    { onConflict: "company_id,department,budget_month,category" }
+                  );
+                  if (importErr) { toast.show("Import failed: " + importErr.message, "error"); return; }
                   setMsg(`Imported ${valid.length} entries.`); loadBudgets();
                 }}
                 templateHeaders={["Department", "Category", "Budgeted", "Actual", "Notes"]}
@@ -984,8 +1020,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                       <span style={{ fontSize: "12px", fontWeight: 500, color: NAVY }}>{b.category}</span>
                       <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", flexShrink: 0 }}>
                         <span style={{ color: SLATE, fontFamily: MONO }}>PKR {b.budgeted_amount.toLocaleString()}</span>
-                        <input type="number" defaultValue={b.actual_amount} onBlur={(e) => { const v = Number(e.target.value); if (v !== b.actual_amount) updateBudgetActual(b.id, v); }}
-                          style={{ width: "70px", padding: "2px 5px", border: `1px solid ${HAIRLINE}`, borderRadius: "6px", fontSize: "12px", fontFamily: MONO }} />
+                        <BudgetActualInput id={b.id} initial={b.actual_amount} onSave={updateBudgetActual} />
                         {canEditAll && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: RED, fontSize: "14px", cursor: "pointer", lineHeight: 1 }}>×</button>}
                       </div>
                     </div>
