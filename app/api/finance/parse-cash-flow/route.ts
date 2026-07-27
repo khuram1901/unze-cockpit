@@ -33,7 +33,7 @@ async function saveCashSheetData(
   companyId: string,
   positionDate: string,
   uploadedBy: string,
-  source: "manual_upload" | "email_auto"
+  source: "manual_upload" | "email"
 ): Promise<void> {
   const csCompany = companyId === IFPL_COMPANY_ID ? "IFPL" : "UTPL";
 

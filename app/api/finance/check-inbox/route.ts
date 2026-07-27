@@ -422,7 +422,7 @@ async function saveCashSheetData(
         sheet_date: positionDate,
         opening_balance_pkr: cashFlow.openingBalanceTotal,
         closing_balance_pkr: cashFlow.closingBalanceUnzeTrading,
-        source: "email_auto",
+        source: "email",
         uploaded_by: "gmail-auto",
       },
       { onConflict: "company,sheet_date" }
