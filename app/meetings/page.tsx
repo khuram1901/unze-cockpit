@@ -36,7 +36,8 @@ type ExtractedMinutes = {
   risks: string[];
   opportunities: string[];
   action_items: {
-    description: string;
+    title: string;       // short task title, ≤80 chars
+    notes?: string;      // full detail / context
     owner_name: string;
     due_date?: string;
     priority: string;
@@ -282,7 +283,7 @@ export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [memberNames, setMemberNames] = useState<string[]>([]);
   const [memberEmails, setMemberEmails] = useState<{ name: string; email: string }[]>([]);
-  const [memberDetails, setMemberDetails] = useState<{ name: string; role: string; department: string | null }[]>([]);
+  const [memberDetails, setMemberDetails] = useState<{ name: string; role: string; department: string | null; company_id: string | null }[]>([]);
   const [companies, setCompanies] = useState<{ id: string; name: string; short_code: string | null }[]>([]);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
@@ -320,7 +321,7 @@ export default function MeetingsPage() {
 
     const { data: members } = await supabase
       .from("members")
-      .select("first_name, last_name, name, email, role, department");
+      .select("first_name, last_name, name, email, role, department, company_id");
     if (members) {
       // Derive current user's role from the members list — avoids a separate
       // RLS-restricted query and uses data we already have.
@@ -339,6 +340,7 @@ export default function MeetingsPage() {
         name: `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || "",
         role: m.role || "Member",
         department: m.department || null,
+        company_id: m.company_id || null,
       })).filter((m) => m.name));
     }
 
@@ -392,13 +394,34 @@ export default function MeetingsPage() {
       const res = await authFetch("/api/meetings/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, memberNames, memberDetails, preFormatted: sourceType === "claude" || sourceType === "other_ai" }),
+        body: JSON.stringify({
+          transcript,
+          memberNames,
+          memberDetails,
+          preFormatted: sourceType === "claude" || sourceType === "other_ai",
+          meetingDateRef: new Date().toISOString().slice(0, 10),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setMessage("Error: " + (data.error || "Extraction failed"));
       } else {
-        setExtracted(data.extracted);
+        // Enrich action items: exact-match owner name + auto-fill company_id
+        const enriched = { ...data.extracted };
+        enriched.action_items = (enriched.action_items || []).map((item: ExtractedMinutes["action_items"][0]) => {
+          const matched = memberDetails.find(
+            (m) => m.name.toLowerCase().trim() === (item.owner_name || "").toLowerCase().trim()
+          ) || memberDetails.find(
+            (m) => m.name.toLowerCase().includes((item.owner_name || "").toLowerCase().trim())
+              || (item.owner_name || "").toLowerCase().includes(m.name.toLowerCase().trim())
+          );
+          return {
+            ...item,
+            owner_name: matched ? matched.name : item.owner_name,
+            company_id: item.company_id || matched?.company_id || "",
+          };
+        });
+        setExtracted(enriched);
         setStep("review");
       }
     } catch {
@@ -501,10 +524,10 @@ export default function MeetingsPage() {
     if (!extracted) return;
 
     const missingDue = extracted.action_items.filter((a) => !a.due_date);
-    const missingDesc = extracted.action_items.filter((a) => !a.description.trim());
+    const missingTitle = extracted.action_items.filter((a) => !a.title?.trim());
     const missingOwner = extracted.action_items.filter((a) => !a.owner_name);
     const missingCompany = extracted.action_items.filter((a) => !a.company_id);
-    if (missingDesc.length > 0) { setMessage(`Error: ${missingDesc.length} action item(s) missing a description.`); return; }
+    if (missingTitle.length > 0) { setMessage(`Error: ${missingTitle.length} action item(s) missing a title.`); return; }
     if (missingOwner.length > 0) { setMessage(`Error: ${missingOwner.length} action item(s) missing an owner.`); return; }
     if (missingDue.length > 0) { setMessage(`Error: ${missingDue.length} action item(s) missing a due date. Every task must have a deadline.`); return; }
     if (missingCompany.length > 0) { setMessage(`Error: ${missingCompany.length} action item(s) missing a company.`); return; }
@@ -540,10 +563,10 @@ export default function MeetingsPage() {
     if (!extracted) return;
 
     const missingDue = extracted.action_items.filter((a) => !a.due_date);
-    const missingDesc = extracted.action_items.filter((a) => !a.description.trim());
+    const missingTitle = extracted.action_items.filter((a) => !a.title?.trim());
     const missingOwner = extracted.action_items.filter((a) => !a.owner_name);
     const missingCompany = extracted.action_items.filter((a) => !a.company_id);
-    if (missingDesc.length > 0) { setMessage(`Error: ${missingDesc.length} action item(s) missing a description.`); return; }
+    if (missingTitle.length > 0) { setMessage(`Error: ${missingTitle.length} action item(s) missing a title.`); return; }
     if (missingOwner.length > 0) { setMessage(`Error: ${missingOwner.length} action item(s) missing an owner.`); return; }
     if (missingDue.length > 0) { setMessage(`Error: ${missingDue.length} action item(s) missing a due date.`); return; }
     if (missingCompany.length > 0) { setMessage(`Error: ${missingCompany.length} action item(s) missing a company.`); return; }
@@ -603,7 +626,8 @@ export default function MeetingsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          description: item.description.slice(0, TASK_DESCRIPTION_LIMIT),
+          description: (item.title || "").slice(0, TASK_DESCRIPTION_LIMIT),
+          notes: item.notes || "",
           companyId: item.company_id,
           assignedTo: item.owner_name,
           assignedToEmail: memberMatch?.email || null,
@@ -1193,7 +1217,7 @@ export default function MeetingsPage() {
             setExtracted({ ...extracted, action_items: extracted.action_items.filter((_, i) => i !== index) });
           };
           const addActionItem = () => {
-            setExtracted({ ...extracted, action_items: [...extracted.action_items, { description: "", owner_name: "", priority: "Medium", due_date: "", department: "", company_id: "" }] });
+            setExtracted({ ...extracted, action_items: [...extracted.action_items, { title: "", notes: "", owner_name: "", priority: "Medium", due_date: "", department: "", company_id: "" }] });
           };
           const smallField: React.CSSProperties = { ...inputStyle, fontSize: "12px", padding: "6px 8px" };
 
@@ -1301,11 +1325,20 @@ export default function MeetingsPage() {
 
             {extracted.action_items.map((item, i) => (
               <div key={i} style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, padding: "12px", marginBottom: "8px", backgroundColor: COLOURS.CARD_ALT }}>
-                <div style={{ marginBottom: "8px" }}>
-                  <input value={item.description} onChange={(e) => updateActionItem(i, { description: e.target.value.slice(0, TASK_DESCRIPTION_LIMIT) })}
+                <div style={{ marginBottom: "6px" }}>
+                  <label style={{ ...labelStyle, fontSize: "12px", color: !item.title?.trim() ? COLOURS.RED : undefined }}>Task title * (short)</label>
+                  <input value={item.title || ""} onChange={(e) => updateActionItem(i, { title: e.target.value.slice(0, TASK_DESCRIPTION_LIMIT) })}
                     maxLength={TASK_DESCRIPTION_LIMIT}
-                    placeholder="Task description *" required style={{ ...inputStyle, fontWeight: 600, borderColor: !item.description.trim() ? COLOURS.RED : undefined }} />
-                  <span style={{ fontSize: "10.5px", color: item.description.length > TASK_DESCRIPTION_LIMIT - 20 ? COLOURS.AMBER : COLOURS.SLATE }}>{item.description.length}/{TASK_DESCRIPTION_LIMIT}</span>
+                    placeholder="One clear action, e.g. Inspect tile delivery *" required
+                    style={{ ...inputStyle, fontWeight: 600, borderColor: !item.title?.trim() ? COLOURS.RED : undefined }} />
+                  <span style={{ fontSize: "10.5px", color: (item.title || "").length > TASK_DESCRIPTION_LIMIT - 20 ? COLOURS.AMBER : COLOURS.SLATE }}>{(item.title || "").length}/{TASK_DESCRIPTION_LIMIT}</span>
+                </div>
+                <div style={{ marginBottom: "8px" }}>
+                  <label style={{ ...labelStyle, fontSize: "12px" }}>Details / context (optional)</label>
+                  <textarea value={item.notes || ""} onChange={(e) => updateActionItem(i, { notes: e.target.value })}
+                    placeholder="Full detail, background, or context for this task…"
+                    rows={2}
+                    style={{ ...inputStyle, resize: "vertical", fontSize: "12px", color: COLOURS.SLATE }} />
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr 1fr auto", gap: "8px", alignItems: "end" }}>
                   <div>
