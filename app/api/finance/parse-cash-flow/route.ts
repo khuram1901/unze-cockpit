@@ -25,6 +25,60 @@ async function savePdcBuckets(
   }
 }
 
+// Writes individual payment/receipt lines to cash_sheet_uploads + cash_sheet_transactions
+// and links the daily_cash_position row back to the sheet (requires migration 200).
+async function saveCashSheetData(
+  supabase: ReturnType<typeof createServiceClient>,
+  cashFlow: Awaited<ReturnType<typeof parseCashFlowPDF>>[number],
+  companyId: string,
+  positionDate: string,
+  uploadedBy: string,
+  source: "manual_upload" | "email_auto"
+): Promise<void> {
+  const csCompany = companyId === IFPL_COMPANY_ID ? "IFPL" : "UTPL";
+
+  const { data: csSheet } = await supabase
+    .from("cash_sheet_uploads")
+    .upsert(
+      {
+        company: csCompany,
+        sheet_date: positionDate,
+        opening_balance_pkr: cashFlow.openingBalanceTotal,
+        closing_balance_pkr: cashFlow.closingBalanceUnzeTrading,
+        source,
+        uploaded_by: uploadedBy,
+      },
+      { onConflict: "company,sheet_date" }
+    )
+    .select("id")
+    .single();
+
+  if (!csSheet?.id) return;
+
+  // Replace all transactions for this sheet (idempotent re-upload)
+  await supabase.from("cash_sheet_transactions").delete().eq("sheet_id", csSheet.id);
+
+  const txnRows = cashFlow.transactions.map((t, sortIdx) => ({
+    sheet_id: csSheet.id,
+    company: csCompany,
+    sheet_date: positionDate,
+    txn_type: t.txn_type,
+    description: t.description,
+    amount_pkr: t.amount,
+    sort_order: sortIdx,
+  }));
+  if (txnRows.length > 0) {
+    await supabase.from("cash_sheet_transactions").insert(txnRows);
+  }
+
+  // Link daily_cash_position → cash_sheet_uploads (requires migration 200_cash_sheet_id_fk)
+  await supabase
+    .from("daily_cash_position")
+    .update({ cash_sheet_id: csSheet.id })
+    .eq("company_id", companyId)
+    .eq("position_date", positionDate);
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
@@ -145,6 +199,9 @@ export async function POST(request: NextRequest) {
       }
 
       await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
+
+      // ── Write to cash_sheet tables (new source of truth) ─────────────────
+      await saveCashSheetData(supabase, cashFlow, companyId, positionDate, uploadedBy, "manual_upload");
 
       const { error: bankError } = await supabase.from("bank_position_snapshots").upsert(
         {

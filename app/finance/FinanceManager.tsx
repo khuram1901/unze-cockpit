@@ -38,6 +38,7 @@ type DailyPosition = {
   closing_balance: number;
   post_dated_total: number;
   closing_after_post_dated: number;
+  cash_sheet_id?: string | null;
 };
 
 type PdcWeek = { week_number: number; week_start: string; week_end: string; pdc_due: number; effective_balance: number };
@@ -123,6 +124,11 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
   // Which edit modal is open: null, 'opening', or 'plan'
   const [openModal, setOpenModal] = useState<null | "opening" | "plan">(null);
+
+  // Cash sheet drilldown detail modal
+  const [csDetailId, setCsDetailId] = useState<string | null>(null);
+  const [csDetail, setCsDetail] = useState<{ date: string; opening: number; closing: number; receipts: {description: string; amount_pkr: number}[]; payments: {description: string; amount_pkr: number}[] } | null>(null);
+  const [csDetailLoading, setCsDetailLoading] = useState(false);
 
   // Opening balance form
   const [obDate, setObDate] = useState(todayISO());
@@ -313,7 +319,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         .maybeSingle(),
       supabase
         .from("daily_cash_position")
-        .select("id, position_date, opening_balance, total_receipts, total_payments, closing_balance, post_dated_total, closing_after_post_dated")
+        .select("id, position_date, opening_balance, total_receipts, total_payments, closing_balance, post_dated_total, closing_after_post_dated, cash_sheet_id")
         .eq("company_id", companyId)
         // Rolling last 30 calendar days (today minus 30 through today), not a
         // row-count limit — a row-count limit drifts further back than 30
@@ -1135,8 +1141,35 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                   const mismatch = prevDay && isConsecutive
                     && Math.abs(p.opening_balance - prevDay.closing_balance) > 0.01
                     && Math.abs(Math.abs(p.opening_balance) - Math.abs(prevDay.closing_balance)) > 0.01;
+                  const openDetail = () => {
+                    if (!p.cash_sheet_id) return;
+                    setCsDetailId(p.cash_sheet_id);
+                    setCsDetailLoading(true);
+                    setCsDetail(null);
+                    authFetch(`/api/banking/cash-sheets/${p.cash_sheet_id}`)
+                      .then((r) => r.json())
+                      .then((json) => {
+                        if (json.data) {
+                          setCsDetail({
+                            date: json.data.sheet_date,
+                            opening: json.data.opening_balance_pkr ?? 0,
+                            closing: json.data.closing_balance_pkr ?? 0,
+                            receipts: json.data.receipts || [],
+                            payments: json.data.payments || [],
+                          });
+                        }
+                      })
+                      .finally(() => setCsDetailLoading(false));
+                  };
                   return (
-                    <tr key={p.id} style={mismatch ? { backgroundColor: DANGER_SOFT } : undefined}>
+                    <tr
+                      key={p.id}
+                      onClick={p.cash_sheet_id ? openDetail : undefined}
+                      style={{
+                        ...(mismatch ? { backgroundColor: DANGER_SOFT } : {}),
+                        ...(p.cash_sheet_id ? { cursor: "pointer" } : {}),
+                      }}
+                    >
                       <td style={tdBold}>
                         {formatDateUK(p.position_date)}
                         {mismatch && (
@@ -1173,6 +1206,107 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       </div>
 
       </div>
+
+      {/* ── CASH SHEET DETAIL MODAL ── */}
+      {csDetailId && (
+        <div
+          style={{
+            position: "fixed", inset: 0, backgroundColor: "rgba(15,23,32,0.55)",
+            display: "flex", alignItems: "flex-start", justifyContent: "center",
+            zIndex: 1000, overflowY: "auto", padding: "40px 16px",
+          }}
+          onClick={() => { setCsDetailId(null); setCsDetail(null); }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fff", borderRadius: "16px", padding: "28px",
+              width: "100%", maxWidth: "680px", position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => { setCsDetailId(null); setCsDetail(null); }}
+              style={{ position: "absolute", top: "16px", right: "16px", background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "#64748B" }}
+            >×</button>
+            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#0F1720", margin: "0 0 20px" }}>
+              {csDetail ? formatDateUK(csDetail.date) : "Loading…"} — Transaction Detail
+            </h2>
+            {csDetailLoading && (
+              <p style={{ color: "#64748B", fontSize: "14px" }}>Loading transactions…</p>
+            )}
+            {csDetail && !csDetailLoading && (
+              <>
+                {/* Balance summary tiles */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "24px" }}>
+                  {[
+                    { label: "Opening", value: csDetail.opening, color: "#0F1720" },
+                    { label: "Receipts", value: csDetail.receipts.reduce((s, r) => s + r.amount_pkr, 0), color: "#0F7B5F" },
+                    { label: "Payments", value: csDetail.payments.reduce((s, r) => s + r.amount_pkr, 0), color: "#B3261E" },
+                    { label: "Closing", value: csDetail.closing, color: "#0F1720" },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ border: "1px solid #EEF0F3", borderRadius: "10px", padding: "12px", textAlign: "center" }}>
+                      <div style={{ fontSize: "11px", color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>{label}</div>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color }}>{fmt(value)}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Receipts table */}
+                <div style={{ marginBottom: "20px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F7B5F", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Receipts ({csDetail.receipts.length})
+                  </div>
+                  {csDetail.receipts.length === 0 ? (
+                    <p style={{ fontSize: "13px", color: "#64748B" }}>No receipt detail available.</p>
+                  ) : (
+                    <div style={{ border: "1px solid #EEF0F3", borderRadius: "10px", overflow: "hidden" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                        <tbody>
+                          {csDetail.receipts.map((r, i) => (
+                            <tr key={i} style={{ borderBottom: i < csDetail.receipts.length - 1 ? "1px solid #EEF0F3" : "none" }}>
+                              <td style={{ padding: "8px 12px", color: "#0F1720" }}>{r.description}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: "#0F7B5F", whiteSpace: "nowrap" }}>{fmt(r.amount_pkr)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Payments table */}
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#B3261E", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Payments ({csDetail.payments.length})
+                  </div>
+                  {csDetail.payments.length === 0 ? (
+                    <p style={{ fontSize: "13px", color: "#64748B" }}>No payment detail available.</p>
+                  ) : (
+                    <div style={{ border: "1px solid #EEF0F3", borderRadius: "10px", overflow: "hidden" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                        <tbody>
+                          {csDetail.payments.map((p, i) => (
+                            <tr key={i} style={{ borderBottom: i < csDetail.payments.length - 1 ? "1px solid #EEF0F3" : "none" }}>
+                              <td style={{ padding: "8px 12px", color: "#0F1720" }}>{p.description}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: "#B3261E", whiteSpace: "nowrap" }}>{fmt(p.amount_pkr)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {csDetail.receipts.length === 0 && csDetail.payments.length === 0 && (
+                  <p style={{ fontSize: "13px", color: "#64748B", marginTop: "8px" }}>
+                    This day was uploaded without individual transaction lines. Re-upload the PDF to see full detail.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── MODALS ── */}
       {openModal === "opening" && (

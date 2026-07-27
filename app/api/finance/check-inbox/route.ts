@@ -288,6 +288,7 @@ export async function GET(request: NextRequest) {
                   uploaded_by: "gmail-auto",
                 }, { onConflict: "company_id,position_date" });
                 await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
+                await saveCashSheetData(supabase, cashFlow, positionDate);
                 dateSet.add(positionDate);
                 results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (cash flow only)`, date: positionDate, account: targetEmail });
               }
@@ -326,6 +327,7 @@ export async function GET(request: NextRequest) {
                   raw_pdf_filename: pdfAttachments[0].filename, uploaded_by: "gmail-auto",
                 }, { onConflict: "company_id,position_date" });
                 await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
+                await saveCashSheetData(supabase, cashFlow, positionDate);
                 dateSet.add(positionDate);
                 results.push({ messageId: msg.id, status: `saved — ${cashFlow.company} (single PDF)`, date: positionDate, account: targetEmail });
               } else {
@@ -401,6 +403,59 @@ export async function GET(request: NextRequest) {
   }
 }
 
+
+// Writes individual payment/receipt lines to cash_sheet_uploads + cash_sheet_transactions
+// and links the daily_cash_position row back to the sheet (requires migration 200).
+async function saveCashSheetData(
+  supabase: ReturnType<typeof createServiceClient>,
+  cashFlow: Awaited<ReturnType<typeof parseCashFlowPDF>>[number],
+  positionDate: string
+): Promise<void> {
+  const companyId = cashFlow.company === "imperial" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
+  const csCompany = cashFlow.company === "imperial" ? "IFPL" : "UTPL";
+
+  const { data: csSheet } = await supabase
+    .from("cash_sheet_uploads")
+    .upsert(
+      {
+        company: csCompany,
+        sheet_date: positionDate,
+        opening_balance_pkr: cashFlow.openingBalanceTotal,
+        closing_balance_pkr: cashFlow.closingBalanceUnzeTrading,
+        source: "email_auto",
+        uploaded_by: "gmail-auto",
+      },
+      { onConflict: "company,sheet_date" }
+    )
+    .select("id")
+    .single();
+
+  if (!csSheet?.id) return;
+
+  // Replace all transactions for this sheet (idempotent re-upload)
+  await supabase.from("cash_sheet_transactions").delete().eq("sheet_id", csSheet.id);
+
+  const txnRows = cashFlow.transactions.map((t, sortIdx) => ({
+    sheet_id: csSheet.id,
+    company: csCompany,
+    sheet_date: positionDate,
+    txn_type: t.txn_type,
+    description: t.description,
+    amount_pkr: t.amount,
+    sort_order: sortIdx,
+  }));
+  if (txnRows.length > 0) {
+    await supabase.from("cash_sheet_transactions").insert(txnRows);
+  }
+
+  // Link daily_cash_position → cash_sheet_uploads (requires migration 200_cash_sheet_id_fk)
+  await supabase
+    .from("daily_cash_position")
+    .update({ cash_sheet_id: csSheet.id })
+    .eq("company_id", companyId)
+    .eq("position_date", positionDate);
+}
+
 // Replaces that (company, day)'s bucket rows on every save rather than
 // appending — a re-processed day should show that day's PDC schedule
 // exactly, not accumulate duplicates alongside it.
@@ -447,6 +502,7 @@ async function saveToDatabase(
   );
 
   await savePdcBuckets(supabase, companyId, positionDate, cashFlow.pdcBuckets);
+  await saveCashSheetData(supabase, cashFlow, positionDate);
 
   await supabase.from("bank_position_snapshots").upsert(
     {

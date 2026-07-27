@@ -2,6 +2,13 @@ import { extractTextFromPDF } from "./extract-text";
 
 export type PdcBucket = { dueDate: string; amount: number; label: string | null };
 
+export type CashTransaction = {
+  date: string;       // YYYY-MM-DD (the sheet date)
+  description: string;
+  amount: number;
+  txn_type: "payment" | "receipt";
+};
+
 export type CashFlowParsed = {
   openingBalanceTotal: number;
   paymentsTotal: number;
@@ -10,6 +17,7 @@ export type CashFlowParsed = {
   loanPostDatedCHQs: number;
   closingAfterLoanPostDated: number;
   pdcBuckets: PdcBucket[];
+  transactions: CashTransaction[];
   date: string | null;
   company: "unze" | "imperial" | "unknown";
   rawText: string;
@@ -130,6 +138,109 @@ function extractUnzePdcBuckets(text: string): PdcBucket[] {
   return buckets;
 }
 
+// ── Individual transaction extraction ─────────────────────────────────────────
+//
+// Each PDF section (Payments / Receipts) contains rows that start with a
+// DD/MM/YYYY date, followed by a free-text payee/description, followed by
+// the amount. We split on date occurrences and take the last number in each
+// chunk as the amount — the same strategy already proven for PDC buckets.
+// Rows whose description contains "Total" (the section subtotal line) are
+// skipped. Returns an empty array if the block yields nothing useful so
+// callers can fall back to totals-only behaviour.
+
+function extractTransactionsFromBlock(
+  block: string,
+  txn_type: "payment" | "receipt",
+  sheetDate: string | null
+): CashTransaction[] {
+  const transactions: CashTransaction[] = [];
+  const dateMatches = [...block.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
+  const totalIdx = block.search(/\bTotal\b/i);
+
+  for (let i = 0; i < dateMatches.length; i++) {
+    const m = dateMatches[i];
+    const isoDate = `${m[3]}-${m[2]}-${m[1]}`;
+    const chunkStart = m.index! + m[0].length;
+    const nextDateIdx = i + 1 < dateMatches.length ? dateMatches[i + 1].index! : -1;
+    const chunkEnd =
+      nextDateIdx >= 0
+        ? nextDateIdx
+        : totalIdx > chunkStart
+        ? totalIdx
+        : block.length;
+    const chunk = block.slice(chunkStart, Math.max(chunkEnd, chunkStart));
+
+    const numMatches = [...chunk.matchAll(/([\d,]+(?:\.\d+)?)/g)];
+    if (numMatches.length === 0) continue;
+    const numMatch = numMatches[numMatches.length - 1];
+    const amount = parseAmount(numMatch[1] as string);
+    if (amount === 0) continue;
+
+    const rawDesc = chunk.slice(0, numMatch.index).replace(/\s+/g, " ").trim();
+    // Skip the "Total" summary row
+    if (/\bTotal\b/i.test(rawDesc)) continue;
+    const description = rawDesc || "(no description)";
+
+    transactions.push({
+      date: sheetDate ?? isoDate,
+      description,
+      amount,
+      txn_type,
+    });
+  }
+
+  return transactions;
+}
+
+function extractUnzeTransactions(text: string, sheetDate: string | null): CashTransaction[] {
+  const paymentsStart = text.indexOf("Payments");
+  const receiptsStart = text.indexOf("Receipts");
+  const closingStart = text.indexOf("Closing Balance Unze Trading");
+
+  const transactions: CashTransaction[] = [];
+
+  if (paymentsStart >= 0 && receiptsStart > paymentsStart) {
+    const payBlock = text.slice(paymentsStart + "Payments".length, receiptsStart);
+    transactions.push(...extractTransactionsFromBlock(payBlock, "payment", sheetDate));
+  }
+
+  if (receiptsStart >= 0) {
+    const end = closingStart > receiptsStart ? closingStart : text.length;
+    const recBlock = text.slice(receiptsStart + "Receipts".length, end);
+    transactions.push(...extractTransactionsFromBlock(recBlock, "receipt", sheetDate));
+  }
+
+  return transactions;
+}
+
+function extractImperialTransactions(text: string, sheetDate: string | null): CashTransaction[] {
+  const paymentsIdx = text.search(/Date\s*Payments/i);
+  const receiptsIdx = text.search(/Date\s*Receipts/i);
+  const pdcIdx = text.search(/Date\s*Post\s*Dated\s*CHQs/i);
+  const closingIdx = text.search(/Closing Balance\s*[\n\r(]/i);
+
+  const transactions: CashTransaction[] = [];
+
+  if (paymentsIdx >= 0 && receiptsIdx > paymentsIdx) {
+    const payBlock = text.slice(paymentsIdx, receiptsIdx);
+    transactions.push(...extractTransactionsFromBlock(payBlock, "payment", sheetDate));
+  }
+
+  if (receiptsIdx >= 0) {
+    // End of receipts block: PDC section if present, else closing balance, else end of text
+    const recEnd =
+      pdcIdx > receiptsIdx
+        ? pdcIdx
+        : closingIdx > receiptsIdx
+        ? closingIdx
+        : text.length;
+    const recBlock = text.slice(receiptsIdx, recEnd);
+    transactions.push(...extractTransactionsFromBlock(recBlock, "receipt", sheetDate));
+  }
+
+  return transactions;
+}
+
 function findTotalInSection(text: string, startLabel: string, endLabel: string): number {
   const startIdx = text.indexOf(startLabel);
   const endIdx = text.indexOf(endLabel);
@@ -180,6 +291,7 @@ function parseUnzeTrading(text: string, date: string | null): CashFlowParsed {
     loanPostDatedCHQs: loanTotal,
     closingAfterLoanPostDated: findAmount(text, "Closing Balance After Loan & Post Dated CHQ's Unze Trading"),
     pdcBuckets: extractUnzePdcBuckets(text),
+    transactions: extractUnzeTransactions(text, date),
     date,
     company: "unze",
     rawText: text,
@@ -229,7 +341,7 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
   // ── PDC total ──
   // Format: "Total PDC's Balance  62,057,051"
   let pdcTotal = 0;
-  const pdcMatch = text.match(/Total\s+PDC[''’]s\s+Balance\s+\(?([,\d]+(?:\.\d+)?)\)?/i);
+  const pdcMatch = text.match(/Total\s+PDC[''']s\s+Balance\s+\(?([,\d]+(?:\.\d+)?)\)?/i);
   if (pdcMatch) {
     const chunk = text.slice(text.search(/Total\s+PDC/i), text.search(/Total\s+PDC/i) + 60);
     pdcTotal = chunk.includes("(") ? -parseAmount(pdcMatch[1]) : parseAmount(pdcMatch[1]);
@@ -257,6 +369,7 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     loanPostDatedCHQs: pdcTotal,
     closingAfterLoanPostDated: closingAfterPDC,
     pdcBuckets: extractImperialPdcBuckets(text),
+    transactions: extractImperialTransactions(text, date),
     date,
     company: "imperial",
     rawText: text,
