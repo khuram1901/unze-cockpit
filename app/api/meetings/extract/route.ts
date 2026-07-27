@@ -15,7 +15,7 @@ const ACTION_ITEM_SCHEMA_RAW = {
     priority:    { type: "string" as const, enum: ["Low", "Medium", "High", "Urgent"] },
     department:  { type: "string" as const },
   },
-  required: ["title", "owner_name", "priority"] as const,
+  required: ["title", "owner_name", "priority", "due_date"] as const,
   additionalProperties: false as const,
 };
 
@@ -29,7 +29,7 @@ const ACTION_ITEM_SCHEMA_PREFORMATTED = {
     priority:    { type: "string" as const, enum: ["Low", "Medium", "High", "Urgent"] },
     department:  { type: "string" as const },
   },
-  required: ["title", "owner_name", "priority"] as const,
+  required: ["title", "owner_name", "priority", "due_date"] as const,
   additionalProperties: false as const,
 };
 

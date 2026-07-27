@@ -104,8 +104,21 @@ function taskDotColour(status: string) {
   return COLOURS.AMBER;
 }
 
+type MeetingEditDraft = {
+  title: string;
+  meeting_date: string;
+  company: string;
+  department: string;
+  attendees: string[];
+  executive_summary: string;
+  decisions: string[];
+  risks: string[];
+  opportunities: string[];
+};
+
 function MeetingCard({
   m, mTasks, completedTasks, openTaskCount, isOpen, setExpandedId, downloadMinutesPDF, isMobile,
+  onEditSaved, onDelete,
 }: {
   m: Meeting;
   mTasks: MeetingTask[];
@@ -116,16 +129,82 @@ function MeetingCard({
   downloadMinutesPDF: (m: Meeting, tasks: MeetingTask[]) => void;
   isMobile: boolean;
   showDept: boolean;
+  onEditSaved: (updated: Meeting) => void;
+  onDelete: (id: string) => void;
 }) {
   const pct = mTasks.length ? Math.round((completedTasks / mTasks.length) * 100) : 0;
   const barColour = pct === 100 ? COLOURS.GREEN : pct > 0 ? COLOURS.AMBER : COLOURS.BORDER;
+  const dlg = useConfirm();
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<MeetingEditDraft | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editMsg, setEditMsg] = useState("");
+
+  function startEdit() {
+    setDraft({
+      title: m.title,
+      meeting_date: m.meeting_date,
+      company: m.company || "Executive Office",
+      department: m.department || "Executive Office",
+      attendees: m.attendees || [],
+      executive_summary: m.executive_summary || "",
+      decisions: m.decisions || [],
+      risks: m.risks || [],
+      opportunities: m.opportunities || [],
+    });
+    setIsEditing(true);
+    setEditMsg("");
+  }
+
+  async function handleSave() {
+    if (!draft) return;
+    setSaving(true);
+    setEditMsg("");
+    try {
+      const res = await authFetch(`/api/meetings/${m.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditMsg("Error: " + (data.error || "Save failed"));
+      } else {
+        onEditSaved({ ...m, ...draft });
+        setIsEditing(false);
+        setDraft(null);
+      }
+    } catch {
+      setEditMsg("Error: Network error");
+    }
+    setSaving(false);
+  }
+
+  async function handleDelete() {
+    if (!await dlg.confirm(`Delete "${m.title}"? This cannot be undone. Tasks linked to this meeting will remain but will no longer be associated with it.`)) return;
+    try {
+      const res = await authFetch(`/api/meetings/${m.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        setEditMsg("Error: " + (data.error || "Delete failed"));
+        return;
+      }
+      onDelete(m.id);
+    } catch {
+      setEditMsg("Error: Network error");
+    }
+  }
+
+  const sf: React.CSSProperties = { ...inputStyle, fontSize: "12px", padding: "6px 8px" };
 
   return (
     <div id={`meeting-row-${m.id}`} style={{ borderBottom: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD }}>
+      {dlg.element}
       {/* Compact meeting row */}
-      <div onClick={() => setExpandedId(isOpen ? null : m.id)} style={{
+      <div onClick={() => !isEditing && setExpandedId(isOpen ? null : m.id)} style={{
         display: "flex", alignItems: "center", gap: "10px",
-        padding: "8px 14px", cursor: "pointer",
+        padding: "8px 14px", cursor: isEditing ? "default" : "pointer",
         backgroundColor: isOpen ? COLOURS.CARD_ALT : COLOURS.CARD,
       }}>
         <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)", fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px" }}>{formatDateUK(m.meeting_date)}</span>
@@ -149,97 +228,190 @@ function MeetingCard({
       {/* Expanded meeting panel */}
       {isOpen && (
         <div style={{ borderTop: `1px solid ${COLOURS.BORDER}`, backgroundColor: COLOURS.CARD_ALT }}>
-          {/* Summary + meta strip */}
-          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: m.executive_summary ? "8px" : "0" }}>
-              {m.attendees && m.attendees.length > 0 && (
-                <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", flex: 1 }}>
-                  {m.attendees.map((a, i) => (
-                    <span key={i} style={{ fontSize: "11px", padding: "2px 8px", backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.PILL, color: COLOURS.SLATE }}>{a}</span>
-                  ))}
-                </div>
-              )}
-              <button onClick={() => downloadMinutesPDF(m, mTasks)} style={{ ...primaryButtonStyle, padding: "4px 10px", fontSize: "11px", flexShrink: 0 }}>PDF</button>
-            </div>
-            {m.executive_summary && (
-              <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{m.executive_summary}</div>
-            )}
-          </div>
 
-          {/* Decisions / Risks / Opps — compact inline lists */}
-          {((m.decisions?.length ?? 0) > 0 || (m.risks?.length ?? 0) > 0 || (m.opportunities?.length ?? 0) > 0) && (
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "0", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
-              {m.decisions && m.decisions.length > 0 && (
-                <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
-                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.GREEN, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Decisions ({m.decisions.length})</div>
-                  {m.decisions.map((d, i) => (
-                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
-                      <span style={{ color: COLOURS.GREEN, flexShrink: 0 }}>•</span>{d}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {m.risks && m.risks.length > 0 && (
-                <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
-                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.RED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Risks ({m.risks.length})</div>
-                  {m.risks.map((r, i) => (
-                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
-                      <span style={{ color: COLOURS.RED, flexShrink: 0 }}>•</span>{r}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {m.opportunities && m.opportunities.length > 0 && (
-                <div style={{ padding: "10px 14px" }}>
-                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.BLUE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Opportunities ({m.opportunities.length})</div>
-                  {m.opportunities.map((o, i) => (
-                    <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
-                      <span style={{ color: COLOURS.BLUE, flexShrink: 0 }}>•</span>{o}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          {/* ── Edit mode ── */}
+          {isEditing && draft ? (
+            <div style={{ padding: "14px 14px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+              <div style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "12px" }}>Edit Meeting Record</div>
 
-          {/* Action Items — compact task rows */}
-          <div>
-            <div style={{ padding: "8px 14px", fontSize: "10px", fontWeight: 600, color: COLOURS.AMBER, textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
-              Action Items ({mTasks.length})
-            </div>
-            {mTasks.length > 0 ? mTasks.map((t) => (
-              <a key={t.id} href={`/tasks?task=${t.id}`} style={{
-                display: "flex", alignItems: "center", gap: "10px",
-                padding: "7px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`,
-                textDecoration: "none", backgroundColor: COLOURS.CARD,
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD_ALT; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD; }}>
-                <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: taskDotColour(t.status), flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: "12px", color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</span>
-                <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>{t.assigned_to || "—"}</span>
-                <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px", textAlign: "right" }}>{t.due_date ? formatDateUK(t.due_date) : "—"}</span>
-                <StatusBadge status={t.status} />
-                <span style={{ fontSize: "11px", color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>Open →</span>
-              </a>
-            )) : (
-              <div style={{ padding: "10px 14px", fontSize: "12px", color: COLOURS.SLATE }}>No action items recorded.</div>
-            )}
-          </div>
+              {editMsg && (
+                <div style={{ fontSize: "12px", color: COLOURS.RED, marginBottom: "8px" }}>{editMsg}</div>
+              )}
 
-          {/* Mind map */}
-          {m.mind_map_url && (
-            <div style={{ borderTop: `1px solid ${COLOURS.BORDER}`, padding: "12px 14px" }}>
-              <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px" }}>Mind Map</div>
-              <a href={m.mind_map_url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block" }}>
-                <img
-                  src={m.mind_map_url}
-                  alt="Meeting mind map"
-                  style={{ maxWidth: "100%", maxHeight: "320px", objectFit: "contain", borderRadius: RADII.XS, border: `1px solid ${COLOURS.BORDER}`, cursor: "pointer" }}
-                />
-              </a>
-              <p style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "4px" }}>Click image to open full size</p>
+              <div style={{ marginBottom: "10px" }}>
+                <label style={labelStyle}>Title</label>
+                <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} style={sf} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                <div>
+                  <label style={labelStyle}>Date</label>
+                  <DateInputWithCalendar value={draft.meeting_date} onChange={(e) => setDraft({ ...draft, meeting_date: e.target.value })} style={sf} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Company</label>
+                  <select value={draft.company} onChange={(e) => setDraft({ ...draft, company: e.target.value })} style={sf}>
+                    {["Executive Office", "Unze Trading", "Imperial Footwear", "Haute Dolci", "Barahn", "K&K Jhang"].map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Department</label>
+                  <select value={draft.department} onChange={(e) => setDraft({ ...draft, department: e.target.value })} style={sf}>
+                    {["Executive Office", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
+                      <option key={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Attendees (comma-separated)</label>
+                  <input value={draft.attendees.join(", ")} onChange={(e) => setDraft({ ...draft, attendees: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} style={sf} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "10px" }}>
+                <label style={labelStyle}>Executive Summary</label>
+                <textarea value={draft.executive_summary} onChange={(e) => setDraft({ ...draft, executive_summary: e.target.value })}
+                  style={{ ...sf, height: "80px", resize: "vertical" }} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+                {(["decisions", "risks", "opportunities"] as const).map((field) => {
+                  const colours: Record<string, string> = { decisions: COLOURS.GREEN, risks: COLOURS.RED, opportunities: COLOURS.BLUE };
+                  return (
+                    <div key={field}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <label style={labelStyle}>{field.charAt(0).toUpperCase() + field.slice(1)} ({draft[field].length})</label>
+                        <button onClick={() => setDraft({ ...draft, [field]: [...draft[field], ""] })}
+                          style={{ fontSize: "11px", color: colours[field], background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>+ Add</button>
+                      </div>
+                      {draft[field].map((v, i) => (
+                        <div key={i} style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+                          <input value={v} onChange={(e) => {
+                            const arr = [...draft[field]]; arr[i] = e.target.value;
+                            setDraft({ ...draft, [field]: arr });
+                          }} style={{ ...sf, flex: 1 }} />
+                          <button onClick={() => setDraft({ ...draft, [field]: draft[field].filter((_, j) => j !== i) })}
+                            style={{ fontSize: "12px", color: COLOURS.RED, background: "none", border: "none", cursor: "pointer" }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button onClick={handleSave} disabled={saving}
+                  style={{ ...primaryButtonStyle, backgroundColor: COLOURS.GREEN, opacity: saving ? 0.5 : 1, padding: "6px 16px", fontSize: "12px" }}>
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
+                <button onClick={() => { setIsEditing(false); setDraft(null); setEditMsg(""); }}
+                  style={{ ...primaryButtonStyle, backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, padding: "6px 16px", fontSize: "12px" }}>
+                  Cancel
+                </button>
+              </div>
             </div>
+          ) : (
+            <>
+              {/* Summary + meta strip */}
+              <div style={{ padding: "12px 14px", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: m.executive_summary ? "8px" : "0" }}>
+                  {m.attendees && m.attendees.length > 0 && (
+                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap", flex: 1 }}>
+                      {m.attendees.map((a, i) => (
+                        <span key={i} style={{ fontSize: "11px", padding: "2px 8px", backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.PILL, color: COLOURS.SLATE }}>{a}</span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                    <button onClick={() => downloadMinutesPDF(m, mTasks)} style={{ ...primaryButtonStyle, padding: "4px 10px", fontSize: "11px" }}>PDF</button>
+                    <button onClick={(e) => { e.stopPropagation(); startEdit(); }} style={{ ...primaryButtonStyle, padding: "4px 10px", fontSize: "11px", backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}` }}>Edit</button>
+                    <button onClick={(e) => { e.stopPropagation(); handleDelete(); }} style={{ ...primaryButtonStyle, padding: "4px 10px", fontSize: "11px", backgroundColor: COLOURS.CARD, color: COLOURS.RED, border: `1px solid ${COLOURS.RED}` }}>Delete</button>
+                  </div>
+                </div>
+                {editMsg && <div style={{ fontSize: "12px", color: COLOURS.RED, marginTop: "6px" }}>{editMsg}</div>}
+                {m.executive_summary && (
+                  <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{m.executive_summary}</div>
+                )}
+              </div>
+
+              {/* Decisions / Risks / Opps — compact inline lists */}
+              {((m.decisions?.length ?? 0) > 0 || (m.risks?.length ?? 0) > 0 || (m.opportunities?.length ?? 0) > 0) && (
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "0", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                  {m.decisions && m.decisions.length > 0 && (
+                    <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
+                      <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.GREEN, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Decisions ({m.decisions.length})</div>
+                      {m.decisions.map((d, i) => (
+                        <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
+                          <span style={{ color: COLOURS.GREEN, flexShrink: 0 }}>•</span>{d}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {m.risks && m.risks.length > 0 && (
+                    <div style={{ borderRight: isMobile ? "none" : `1px solid ${COLOURS.BORDER}`, padding: "10px 14px" }}>
+                      <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.RED, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Risks ({m.risks.length})</div>
+                      {m.risks.map((r, i) => (
+                        <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
+                          <span style={{ color: COLOURS.RED, flexShrink: 0 }}>•</span>{r}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {m.opportunities && m.opportunities.length > 0 && (
+                    <div style={{ padding: "10px 14px" }}>
+                      <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.BLUE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "6px" }}>Opportunities ({m.opportunities.length})</div>
+                      {m.opportunities.map((o, i) => (
+                        <div key={i} style={{ display: "flex", gap: "6px", fontSize: "11.5px", color: COLOURS.INK_700, lineHeight: 1.5, paddingBottom: "4px" }}>
+                          <span style={{ color: COLOURS.BLUE, flexShrink: 0 }}>•</span>{o}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action Items — compact task rows */}
+              <div>
+                <div style={{ padding: "8px 14px", fontSize: "10px", fontWeight: 600, color: COLOURS.AMBER, textTransform: "uppercase", letterSpacing: "0.07em", borderBottom: `1px solid ${COLOURS.BORDER}` }}>
+                  Action Items ({mTasks.length})
+                </div>
+                {mTasks.length > 0 ? mTasks.map((t) => (
+                  <a key={t.id} href={`/tasks?task=${t.id}`} style={{
+                    display: "flex", alignItems: "center", gap: "10px",
+                    padding: "7px 14px", borderBottom: `1px solid ${COLOURS.BORDER}`,
+                    textDecoration: "none", backgroundColor: COLOURS.CARD,
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD_ALT; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.backgroundColor = COLOURS.CARD; }}>
+                    <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: taskDotColour(t.status), flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: "12px", color: COLOURS.NAVY, minWidth: 0 }}>{t.description}</span>
+                    <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0 }}>{t.assigned_to || "—"}</span>
+                    <span style={{ fontSize: "11px", color: COLOURS.SLATE, flexShrink: 0, minWidth: "74px", textAlign: "right" }}>{t.due_date ? formatDateUK(t.due_date) : "—"}</span>
+                    <StatusBadge status={t.status} />
+                    <span style={{ fontSize: "11px", color: COLOURS.BLUE, fontWeight: 600, flexShrink: 0 }}>Open →</span>
+                  </a>
+                )) : (
+                  <div style={{ padding: "10px 14px", fontSize: "12px", color: COLOURS.SLATE }}>No action items recorded.</div>
+                )}
+              </div>
+
+              {/* Mind map */}
+              {m.mind_map_url && (
+                <div style={{ borderTop: `1px solid ${COLOURS.BORDER}`, padding: "12px 14px" }}>
+                  <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px" }}>Mind Map</div>
+                  <a href={m.mind_map_url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block" }}>
+                    <img
+                      src={m.mind_map_url}
+                      alt="Meeting mind map"
+                      style={{ maxWidth: "100%", maxHeight: "320px", objectFit: "contain", borderRadius: RADII.XS, border: `1px solid ${COLOURS.BORDER}`, cursor: "pointer" }}
+                    />
+                  </a>
+                  <p style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "4px" }}>Click image to open full size</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1704,7 +1876,7 @@ export default function MeetingsPage() {
                       const mTasks = getTasksForMeeting(m.id);
                       const completedTasks = mTasks.filter((t) => t.status === "Completed").length;
                       const openTaskCount = mTasks.filter((t) => t.status !== "Completed" && t.status !== "Cancelled").length;
-                      return <MeetingCard key={m.id} m={m} mTasks={mTasks} completedTasks={completedTasks} openTaskCount={openTaskCount} isOpen={isOpen} setExpandedId={setExpandedId} downloadMinutesPDF={downloadMinutesPDF} isMobile={isMobile} showDept={selectedDept === "All"} />;
+                      return <MeetingCard key={m.id} m={m} mTasks={mTasks} completedTasks={completedTasks} openTaskCount={openTaskCount} isOpen={isOpen} setExpandedId={setExpandedId} downloadMinutesPDF={downloadMinutesPDF} isMobile={isMobile} showDept={selectedDept === "All"} onEditSaved={(updated) => setMeetings((prev) => prev.map((x) => x.id === updated.id ? updated : x))} onDelete={(id) => { setMeetings((prev) => prev.filter((x) => x.id !== id)); setExpandedId(null); }} />;
                     })}
                   </div>
                 )}
