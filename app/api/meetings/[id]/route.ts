@@ -21,7 +21,7 @@ async function checkAdmin(auth: { email: string }) {
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
@@ -30,7 +30,7 @@ export async function PATCH(
     return Response.json({ error: "Only Admin/CEO can edit meetings" }, { status: 403 });
   }
 
-  const { id } = params;
+  const { id } = await context.params;
   if (!id) return Response.json({ error: "Meeting id required" }, { status: 400 });
 
   let body: Record<string, unknown>;
@@ -71,7 +71,7 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
@@ -80,7 +80,7 @@ export async function DELETE(
     return Response.json({ error: "Only Admin/CEO can delete meetings" }, { status: 403 });
   }
 
-  const { id } = params;
+  const { id } = await context.params;
   if (!id) return Response.json({ error: "Meeting id required" }, { status: 400 });
 
   const supabase = createServiceClient();
