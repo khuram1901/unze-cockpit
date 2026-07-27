@@ -543,11 +543,7 @@ export default function CashSheetTab() {
                     <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "2px", display: "flex", gap: "12px" }}>
                       {txnCount > 0 ? (
                         <>
-                          <span style={{ color: COLOURS.GREEN }}>{sheets[0].cash_sheet_transactions.filter((t) => {
-                            // count receipts for THIS sheet
-                            const s = sheets.find((s) => s.id === sheet.id);
-                            return s?.cash_sheet_transactions.filter(t => t.txn_type === "receipt").length;
-                          }).length > 0 ? "" : ""}
+                          <span style={{ color: COLOURS.GREEN }}>
                             ↑ {(sheet.cash_sheet_transactions || []).filter((t) => t.txn_type === "receipt").length} receipts
                           </span>
                           <span style={{ color: COLOURS.RED }}>

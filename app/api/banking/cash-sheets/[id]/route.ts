@@ -25,15 +25,15 @@ async function checkBankingAccess(
 }
 
 // ── GET /api/banking/cash-sheets/[id] ─────────────────────────────────────────
-// Returns full sheet detail with all transactions sorted (receipts then payments).
-// If the sheet has a pdf_storage_path, a 1-hour signed URL is also included.
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
+
+  const { id } = await context.params;
 
   const supabase = createServiceClient();
   if (!(await checkBankingAccess(auth.email, supabase))) {
@@ -43,7 +43,7 @@ export async function GET(
   const { data, error } = await supabase
     .from("cash_sheet_uploads")
     .select("*, cash_sheet_transactions(*)")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -80,14 +80,15 @@ export async function GET(
 }
 
 // ── PATCH /api/banking/cash-sheets/[id] ──────────────────────────────────────
-// Update sheet metadata (balances, notes, pdf path).
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
+
+  const { id } = await context.params;
 
   const supabase = createServiceClient();
   if (!(await checkBankingAccess(auth.email, supabase))) {
@@ -105,21 +106,22 @@ export async function PATCH(
       ...(notes !== undefined && { notes }),
       ...(pdf_storage_path !== undefined && { pdf_storage_path }),
     })
-    .eq("id", params.id);
+    .eq("id", id);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ ok: true });
 }
 
 // ── DELETE /api/banking/cash-sheets/[id] ─────────────────────────────────────
-// Deletes a sheet and all its transactions (CASCADE). Also removes PDF from storage.
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth(request);
   if (auth instanceof Response) return auth;
+
+  const { id } = await context.params;
 
   const supabase = createServiceClient();
   if (!(await checkBankingAccess(auth.email, supabase))) {
@@ -130,13 +132,13 @@ export async function DELETE(
   const { data: sheet } = await supabase
     .from("cash_sheet_uploads")
     .select("pdf_storage_path")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   const { error } = await supabase
     .from("cash_sheet_uploads")
     .delete()
-    .eq("id", params.id);
+    .eq("id", id);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
