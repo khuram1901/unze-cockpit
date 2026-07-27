@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { transcript, memberNames, memberDetails } = body;
+    const { transcript, memberNames, memberDetails, preFormatted } = body;
 
     if (!transcript || typeof transcript !== "string") {
       return Response.json({ error: "transcript is required" }, { status: 400 });
@@ -55,6 +55,40 @@ export async function POST(request: NextRequest) {
     } else if (memberNames && memberNames.length > 0) {
       memberContext = `\n\nKnown team members: ${memberNames.join(", ")}`;
     }
+
+    // Two extraction modes:
+    //
+    // preFormatted = true  (Claude / ChatGPT / Letterly output)
+    //   The minutes are already professionally written. Extract the
+    //   structured fields but copy the executive_summary, decisions, risks,
+    //   and opportunities verbatim — do NOT rewrite or improve the language.
+    //
+    // preFormatted = false (default — raw transcription)
+    //   Full extraction + rewrite, same as the original behaviour.
+    const extractionPrompt = preFormatted
+      ? `Extract structured meeting data from the following pre-formatted meeting minutes.
+
+RULES:
+- These minutes are already professionally written. Preserve the executive_summary, decisions, risks, and opportunities VERBATIM — copy them exactly as written, do not paraphrase or improve.
+- Use DD/MM/YYYY for dates.
+- Identify which company: Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or "Executive Office" if cross-company.
+- Identify which department: Unze Trading Ops, Finance, HR, Audit, Taxation, Admin, or "Executive Office" if cross-department.
+- For action items: extract exactly as stated. Match owner names to the team member list. Do not invent tasks or change task descriptions.${memberContext}
+
+--- PRE-FORMATTED MINUTES ---
+${transcript}`
+      : `Extract structured meeting minutes from the following transcript or raw minutes.
+
+RULES:
+- Use DD/MM/YYYY for dates.
+- Identify which company this meeting relates to: Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or "Executive Office" if cross-company.
+- Identify which department: Unze Trading Ops, Finance, HR, Audit, Taxation, Admin, or "Executive Office" if cross-department.
+- For action items: assign tasks ONLY to Managers or Executives from the team list — NEVER to the meeting chair/owner (the person who called/led the meeting). The chair delegates; they don't take tasks unless explicitly stated.
+- Match owner names exactly to the team member list when possible.
+- If a task mentions a department but no specific person, assign it to the Manager or Head of Department for that area from the team list.${memberContext}
+
+--- TRANSCRIPT ---
+${transcript}`;
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -68,18 +102,7 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Extract structured meeting minutes from the following transcript or raw minutes.
-
-RULES:
-- Use DD/MM/YYYY for dates.
-- Identify which company this meeting relates to: Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or "Executive Office" if cross-company.
-- Identify which department: Unze Trading Ops, Finance, HR, Audit, Taxation, Admin, or "Executive Office" if cross-department.
-- For action items: assign tasks ONLY to Managers or Executives from the team list — NEVER to the meeting chair/owner (the person who called/led the meeting). The chair delegates; they don't take tasks unless explicitly stated.
-- Match owner names exactly to the team member list when possible.
-- If a task mentions a department but no specific person, assign it to the Manager or Head of Department for that area from the team list.${memberContext}
-
---- TRANSCRIPT ---
-${transcript}`,
+          content: extractionPrompt,
         },
       ],
     });

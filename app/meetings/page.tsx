@@ -68,6 +68,10 @@ type PendingMinute = {
   raw_text: string;
   status: string;
   created_at: string;
+  source_type: string | null;
+  extracted_data: ExtractedMinutes | null;
+  pa_approved_by: string | null;
+  pa_approved_at: string | null;
 };
 
 type MeetingTask = {
@@ -281,6 +285,9 @@ export default function MeetingsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [allTasks, setAllTasks] = useState<MeetingTask[]>([]);
   const [activePendingId, setActivePendingId] = useState<string | null>(null);
+  const [sourceType, setSourceType] = useState<"claude" | "other_ai" | "raw">("raw");
+  const [paApprovedMinutes, setPaApprovedMinutes] = useState<PendingMinute[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>("All");
 
   const [view, setView] = useState<"meetings" | "decisions">("meetings");
@@ -293,6 +300,15 @@ export default function MeetingsPage() {
   async function loadData() {
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUserEmail(user?.email || null);
+
+    if (user?.email) {
+      const { data: memberRow } = await supabase
+        .from("members")
+        .select("role")
+        .eq("email", user.email)
+        .maybeSingle();
+      setCurrentUserRole(memberRow?.role || null);
+    }
 
     const { data: members } = await supabase
       .from("members")
@@ -329,10 +345,18 @@ export default function MeetingsPage() {
 
     const { data: pendingData } = await supabase
       .from("pending_minutes")
-      .select("id, gmail_message_id, subject, from_address, email_date, raw_text, status, created_at")
+      .select("id, gmail_message_id, subject, from_address, email_date, raw_text, status, source_type, extracted_data, pa_approved_by, pa_approved_at, created_at")
       .eq("status", "pending")
       .order("created_at", { ascending: false });
     setPendingMinutes(pendingData || []);
+
+    // CEO approval queue — pa_approved items (visible to CEO/Admin only)
+    const { data: paApprovedData } = await supabase
+      .from("pending_minutes")
+      .select("id, gmail_message_id, subject, from_address, email_date, raw_text, status, source_type, extracted_data, pa_approved_by, pa_approved_at, created_at")
+      .eq("status", "pa_approved")
+      .order("created_at", { ascending: false });
+    setPaApprovedMinutes(paApprovedData || []);
 
     const { data: taskData } = await supabase
       .from("tasks")
@@ -355,7 +379,7 @@ export default function MeetingsPage() {
       const res = await authFetch("/api/meetings/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, memberNames, memberDetails }),
+        body: JSON.stringify({ transcript, memberNames, memberDetails, preFormatted: sourceType === "claude" || sourceType === "other_ai" }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -460,17 +484,56 @@ export default function MeetingsPage() {
     setPendingMinutes((prev) => prev.filter((p) => p.id !== pendingId));
   }
 
-  async function handleApprove() {
+  async function handlePASubmitForCEO() {
     if (!extracted) return;
 
     const missingDue = extracted.action_items.filter((a) => !a.due_date);
     const missingDesc = extracted.action_items.filter((a) => !a.description.trim());
     const missingOwner = extracted.action_items.filter((a) => !a.owner_name);
     const missingCompany = extracted.action_items.filter((a) => !a.company_id);
-    if (missingDesc.length > 0) { setMessage(`Error: ${missingDesc.length} action item${missingDesc.length > 1 ? "s" : ""} missing a description.`); return; }
-    if (missingOwner.length > 0) { setMessage(`Error: ${missingOwner.length} action item${missingOwner.length > 1 ? "s" : ""} missing an owner.`); return; }
-    if (missingDue.length > 0) { setMessage(`Error: ${missingDue.length} action item${missingDue.length > 1 ? "s" : ""} missing a due date. Every task must have a deadline.`); return; }
-    if (missingCompany.length > 0) { setMessage(`Error: ${missingCompany.length} action item${missingCompany.length > 1 ? "s" : ""} missing a company.`); return; }
+    if (missingDesc.length > 0) { setMessage(`Error: ${missingDesc.length} action item(s) missing a description.`); return; }
+    if (missingOwner.length > 0) { setMessage(`Error: ${missingOwner.length} action item(s) missing an owner.`); return; }
+    if (missingDue.length > 0) { setMessage(`Error: ${missingDue.length} action item(s) missing a due date. Every task must have a deadline.`); return; }
+    if (missingCompany.length > 0) { setMessage(`Error: ${missingCompany.length} action item(s) missing a company.`); return; }
+
+    setSaving(true);
+
+    // Save the extracted data so the CEO can review without re-running AI.
+    const updates: Record<string, unknown> = {
+      status: "pa_approved",
+      pa_approved_by: currentUserEmail,
+      pa_approved_at: new Date().toISOString(),
+      extracted_data: extracted,
+      source_type: sourceType,
+    };
+
+    if (activePendingId) {
+      await supabase.from("pending_minutes").update(updates).eq("id", activePendingId);
+    }
+
+    logAction("Updated", "meetings", `Minutes submitted for CEO approval: ${extracted.meeting_title}`);
+    setMessage("Submitted for CEO approval. The minutes will appear in the CEO's review queue.");
+    setSaving(false);
+    setShowMinutesFlow(false);
+    setStep("input");
+    setExtracted(null);
+    setActivePendingId(null);
+    setTranscript("");
+    setPendingMinutes((prev) => prev.filter((p) => p.id !== activePendingId));
+    loadData(); // refresh the pa_approved queue
+  }
+
+  async function handleCEOApprove() {
+    if (!extracted) return;
+
+    const missingDue = extracted.action_items.filter((a) => !a.due_date);
+    const missingDesc = extracted.action_items.filter((a) => !a.description.trim());
+    const missingOwner = extracted.action_items.filter((a) => !a.owner_name);
+    const missingCompany = extracted.action_items.filter((a) => !a.company_id);
+    if (missingDesc.length > 0) { setMessage(`Error: ${missingDesc.length} action item(s) missing a description.`); return; }
+    if (missingOwner.length > 0) { setMessage(`Error: ${missingOwner.length} action item(s) missing an owner.`); return; }
+    if (missingDue.length > 0) { setMessage(`Error: ${missingDue.length} action item(s) missing a due date.`); return; }
+    if (missingCompany.length > 0) { setMessage(`Error: ${missingCompany.length} action item(s) missing a company.`); return; }
 
     setSaving(true);
 
@@ -503,15 +566,9 @@ export default function MeetingsPage() {
       return;
     }
 
-    // Routes through the shared task-creation gate (see
-    // TASK_NOTIFICATION_AUDIT.md) instead of inserting directly — fixes
-    // "assigned by" to the real person approving the minutes instead of
-    // the hardcoded "Meeting Minutes" label, and enforces the same
-    // company/character-limit rules as every other creation path.
     let tasksCreated = 0;
     for (const item of extracted.action_items) {
       const memberMatch = bestMatch(item.owner_name, memberEmails);
-
       const res = await authFetch("/api/tasks/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -530,12 +587,8 @@ export default function MeetingsPage() {
         }),
       });
       const result = await res.json().catch(() => ({}));
-
       if (res.ok && !result?.error && result?.taskId) {
-        await supabase.from("meeting_tasks").insert({
-          meeting_id: meeting.id,
-          task_id: result.taskId,
-        });
+        await supabase.from("meeting_tasks").insert({ meeting_id: meeting.id, task_id: result.taskId });
         tasksCreated++;
       }
     }
@@ -544,23 +597,20 @@ export default function MeetingsPage() {
       const match = bestMatch(attendee, memberEmails);
       if (match?.email) {
         await supabase.from("meeting_attendees").upsert({
-          meeting_id: meeting.id,
-          member_email: match.email,
-          member_name: match.name,
+          meeting_id: meeting.id, member_email: match.email, member_name: match.name,
         }, { onConflict: "meeting_id,member_email" });
       }
     }
 
     if (activePendingId) {
-      await supabase
-        .from("pending_minutes")
-        .update({ status: "approved", meeting_id: meeting.id, reviewed_at: new Date().toISOString() })
+      await supabase.from("pending_minutes")
+        .update({ status: "approved", meeting_id: meeting.id, reviewed_by: currentUserEmail, reviewed_at: new Date().toISOString() })
         .eq("id", activePendingId);
       setActivePendingId(null);
     }
 
     logAction("Created", "meetings", `${extracted.meeting_title} - ${tasksCreated} tasks created`, meeting.id);
-    setMessage(`Approved: meeting saved and ${tasksCreated} task${tasksCreated !== 1 ? "s" : ""} created. Company attendees will see these minutes in the app.`);
+    setMessage(`Approved & distributed: meeting saved and ${tasksCreated} task${tasksCreated !== 1 ? "s" : ""} created. Attendees will see these minutes in the app.`);
     setSaving(false);
 
     const externalOnly = new Set<string>();
@@ -568,9 +618,13 @@ export default function MeetingsPage() {
       externalEmails.split(",").map((e) => e.trim()).filter((e) => e.includes("@")).forEach((e) => externalOnly.add(e));
     }
     setSelectedRecipients(externalOnly);
-
     setStep("approved");
+    setPaApprovedMinutes((prev) => prev.filter((p) => p.id !== activePendingId));
     loadData();
+  }
+
+  async function handleApprove() {
+    return handlePASubmitForCEO();
   }
 
   async function handleSendMinutes() {
@@ -720,6 +774,8 @@ export default function MeetingsPage() {
     if (lowerSearch && !d.text.toLowerCase().includes(lowerSearch) && !d.meetingTitle.toLowerCase().includes(lowerSearch)) return false;
     return true;
   });
+
+  const isCEOReviewMode = paApprovedMinutes.some((p) => p.id === activePendingId);
 
   if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions...</p></main></AuthWrapper>;
 
@@ -875,10 +931,87 @@ export default function MeetingsPage() {
           </div>
         )}
 
+        {/* CEO Approval Queue — visible to Admin/CEO only */}
+        {paApprovedMinutes.length > 0 && !showMinutesFlow && (
+          <div style={{ marginBottom: "16px" }}>
+            <SectionTitle title={`Awaiting Your Approval (${paApprovedMinutes.length})`} />
+            <div style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "8px" }}>
+              The PA has reviewed these minutes. Review and approve to create tasks and notify the team.
+            </div>
+            {paApprovedMinutes.map((p) => (
+              <div key={p.id} style={{
+                ...cardStyle,
+                backgroundColor: "#EEF4FF",
+                border: `1px solid #C7D9FF`,
+                padding: "12px 14px", marginBottom: "8px",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: "14px", color: COLOURS.NAVY }}>
+                      {p.extracted_data?.meeting_title || p.subject || "Untitled Minutes"}
+                    </div>
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                      {p.pa_approved_by ? `Reviewed by PA · ` : ""}{p.pa_approved_at ? formatDateUK(p.pa_approved_at.slice(0, 10)) : ""}
+                      {p.source_type && ` · Source: ${p.source_type === "claude" ? "Claude" : p.source_type === "other_ai" ? "ChatGPT/Other AI" : "Raw transcription"}`}
+                    </div>
+                    {p.extracted_data && (
+                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                        {p.extracted_data.action_items.length} task{p.extracted_data.action_items.length !== 1 ? "s" : ""} · {p.extracted_data.attendees.length} attendee{p.extracted_data.attendees.length !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                    <button onClick={() => {
+                      // Load the extracted data for CEO to review
+                      if (p.extracted_data) {
+                        setExtracted(p.extracted_data);
+                        setTranscript(p.raw_text);
+                        setActivePendingId(p.id);
+                        setStep("review");
+                        setShowMinutesFlow(true);
+                        setMessage("");
+                      }
+                    }} style={{ ...primaryButtonStyle, padding: "6px 14px", backgroundColor: COLOURS.GREEN }}>
+                      Review & Approve
+                    </button>
+                    <button onClick={() => handleDismissPending(p.id)} style={{
+                      ...primaryButtonStyle, padding: "6px 14px",
+                      backgroundColor: COLOURS.CARD, color: COLOURS.SLATE, border: `1px solid ${COLOURS.BORDER}`,
+                    }}>Dismiss</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Step 1: Input */}
         {showMinutesFlow && step === "input" && (
           <div style={{ ...cardStyle, padding: "16px", marginBottom: "16px" }}>
             <SectionTitle title="Step 1: Add Minutes" />
+
+            {/* Source type selector */}
+            <div style={{ marginBottom: "16px" }}>
+              <label style={labelStyle}>Minutes Source</label>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+                {([
+                  { key: "claude" as const, label: "Claude", desc: "Extract fields only, preserve summary verbatim" },
+                  { key: "other_ai" as const, label: "ChatGPT / Letterly", desc: "Pre-formatted AI output, preserve as written" },
+                  { key: "raw" as const, label: "Raw Transcription", desc: "Full AI rewrite and extraction" },
+                ] as { key: "claude" | "other_ai" | "raw"; label: string; desc: string }[]).map((opt) => (
+                  <button key={opt.key} onClick={() => setSourceType(opt.key)} style={{
+                    padding: "8px 14px", fontSize: "12px", fontWeight: sourceType === opt.key ? 600 : 400,
+                    color: sourceType === opt.key ? COLOURS.CARD : COLOURS.SLATE,
+                    backgroundColor: sourceType === opt.key ? COLOURS.NAVY : COLOURS.CARD,
+                    border: `1px solid ${sourceType === opt.key ? COLOURS.NAVY : COLOURS.BORDER}`,
+                    borderRadius: RADII.CARD, cursor: "pointer", textAlign: "left" as const,
+                  }}>
+                    <div>{opt.label}</div>
+                    <div style={{ fontSize: "10px", opacity: 0.75, marginTop: "2px" }}>{opt.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div style={{ display: "inline-flex", backgroundColor: COLOURS.CARD_ALT, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.PILL, padding: "3px", gap: "2px", marginBottom: "16px" }}>
               {([
@@ -1031,9 +1164,11 @@ export default function MeetingsPage() {
 
           return (
           <div style={{ ...cardStyle, padding: "16px", marginBottom: "16px" }}>
-            <SectionTitle title="Step 2: Review & Approve" />
+            <SectionTitle title={isCEOReviewMode ? "Step 2: Review & Approve" : "Step 2: Review & Submit"} />
             <p style={{ fontSize: "13px", color: COLOURS.SLATE, marginBottom: "12px" }}>
-              Review and edit everything below. Change task owners, descriptions, priorities — then approve.
+              {isCEOReviewMode
+                ? "The PA has reviewed these minutes. You can still edit anything. When ready, approve to create tasks and notify the team."
+                : "Review and edit everything below. When satisfied, submit for CEO approval — no tasks will be created until the CEO approves."}
             </p>
 
             <div style={{ marginBottom: "12px" }}>
@@ -1201,10 +1336,17 @@ export default function MeetingsPage() {
                 style={{ ...primaryButtonStyle, backgroundColor: COLOURS.CARD, color: COLOURS.NAVY, border: `1px solid ${COLOURS.BORDER}`, flex: 1 }}>
                 Back
               </button>
-              <button onClick={handleApprove} disabled={saving}
-                style={{ ...primaryButtonStyle, flex: 2, backgroundColor: COLOURS.GREEN, opacity: saving ? 0.5 : 1 }}>
-                {saving ? "Saving..." : "Approve & Create Tasks"}
-              </button>
+              {isCEOReviewMode ? (
+                <button onClick={handleCEOApprove} disabled={saving}
+                  style={{ ...primaryButtonStyle, flex: 2, backgroundColor: COLOURS.GREEN, opacity: saving ? 0.5 : 1 }}>
+                  {saving ? "Approving..." : "Approve & Distribute"}
+                </button>
+              ) : (
+                <button onClick={handlePASubmitForCEO} disabled={saving}
+                  style={{ ...primaryButtonStyle, flex: 2, backgroundColor: COLOURS.AMBER, opacity: saving ? 0.5 : 1 }}>
+                  {saving ? "Submitting..." : "Submit for CEO Approval →"}
+                </button>
+              )}
             </div>
           </div>
           );
