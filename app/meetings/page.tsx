@@ -775,7 +775,11 @@ export default function MeetingsPage() {
     return true;
   });
 
-  const isCEOReviewMode = paApprovedMinutes.some((p) => p.id === activePendingId);
+  // CEO/Admin reviewing from the pa_approved queue, OR creating minutes
+  // themselves directly — either way they should go straight to Approve &
+  // Distribute without the Submit-for-CEO detour.
+  const isAdminOrCEO = currentUserRole === "Admin" || currentUserRole === "CEO";
+  const isCEOReviewMode = isAdminOrCEO || paApprovedMinutes.some((p) => p.id === activePendingId);
 
   if (checking) return <AuthWrapper><main style={{ padding: "14px 18px" }}><p style={{ color: COLOURS.SLATE }}>Checking permissions...</p></main></AuthWrapper>;
 
@@ -996,7 +1000,7 @@ export default function MeetingsPage() {
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
                 {([
                   { key: "claude" as const, label: "Claude", desc: "Extract fields only, preserve summary verbatim" },
-                  { key: "other_ai" as const, label: "ChatGPT / Letterly", desc: "Pre-formatted AI output, preserve as written" },
+                  { key: "other_ai" as const, label: "Other AI (Plaud, ChatGPT, Letterly…)", desc: "Pre-formatted AI output, preserve as written" },
                   { key: "raw" as const, label: "Raw Transcription", desc: "Full AI rewrite and extraction" },
                 ] as { key: "claude" | "other_ai" | "raw"; label: string; desc: string }[]).map((opt) => (
                   <button key={opt.key} onClick={() => setSourceType(opt.key)} style={{
