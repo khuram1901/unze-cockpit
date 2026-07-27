@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII } from "../lib/SharedUI";
-import { canCompleteSubmittedTask, canReopenCompletedTask } from "../lib/permissions";
+import { canCompleteSubmittedTask, canReopenCompletedTask, isPrivileged } from "../lib/permissions";
 import { routeSubmittedTask, routeWaitingReplyTask, returnFromWaitingReply } from "../lib/taskRouting";
 import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
@@ -46,6 +46,9 @@ type Task = {
   waiting_reply_by_name?: string | null;
   manager_reply_text?: string | null;
   manager_reply_at?: string | null;
+  // Present when the task was created from meeting minutes.
+  // Only Admin/CEO/Executive (PA) may mark these Completed.
+  meeting_id?: string | null;
 };
 
 type Subtask = {
@@ -123,16 +126,32 @@ export default function TaskStatus({
   const [dueDateHistory, setDueDateHistory] = useState<DueDateHistoryRow[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  // Meeting-linked tasks (created from minutes of meeting) can ONLY be
+  // marked Completed by Admin/CEO/Executive (the PA acts on behalf of CEO).
+  // Regular managers who receive the task via Submit routing should NOT be
+  // able to close it — they can only progress the status and submit it.
+  const isMeetingTask = !!task.meeting_id;
+  const privileged = isPrivileged({ email: myEmail, role: currentRole });
+
   // Who may close a Submitted task — see canCompleteSubmittedTask in
   // lib/permissions.ts for the full rule (owner completes their own once
   // routed to them; Khuram, Kamran, and the Executive are a blanket
   // override on top of that, not limited to tasks routed to them).
-  const canComplete = status === "Submitted" && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email);
+  // For meeting tasks, override: ONLY Admin/CEO/Executive regardless of routing.
+  const canComplete = status === "Submitted" && (
+    isMeetingTask
+      ? privileged
+      : canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email)
+  );
   // Self-created task (Khuram, 17/07/2026): the assignee (or an admin/
   // Kamran/Executive) can close it directly from any open status — no
   // Submitted step, no manager sign-off. See migration 143.
   const isSelfCreated = task.requires_manager_signoff === false;
-  const canCompleteDirect = isSelfCreated && canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email);
+  const canCompleteDirect = isSelfCreated && (
+    isMeetingTask
+      ? privileged
+      : canCompleteSubmittedTask({ email: myEmail, role: currentRole }, task.assigned_to_email)
+  );
   const canEditDate = canEditDateProp ?? (currentRole === "Admin" || currentRole === "CEO" || currentRole === "Executive");
 
   // Khuram: "once the task is completed then it should be greyed out...
@@ -663,7 +682,16 @@ export default function TaskStatus({
             entirely — see the direct Mark Complete button above instead. */}
         {!isSelfCreated && status !== "Completed" && status !== "Cancelled" && status !== "Submitted" && (
           <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "10px", marginBottom: 0 }}>
-            Move this to <strong>Submitted</strong> above when the work is done — it will be routed to the manager for sign-off.
+            {isMeetingTask
+              ? <>Move this to <strong>Submitted</strong> when the work is done — only the meeting organiser (CEO/Admin) can mark it complete.</>
+              : <>Move this to <strong>Submitted</strong> above when the work is done — it will be routed to the manager for sign-off.</>
+            }
+          </p>
+        )}
+        {/* Meeting task: submitted and waiting for CEO/Admin/PA to close it */}
+        {isMeetingTask && !isSelfCreated && status === "Submitted" && !canComplete && (
+          <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "10px", marginBottom: 0 }}>
+            Submitted — waiting for the meeting organiser (CEO/Admin) to mark complete.
           </p>
         )}
 
