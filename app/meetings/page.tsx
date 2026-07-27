@@ -301,19 +301,15 @@ export default function MeetingsPage() {
     const { data: { user } } = await supabase.auth.getUser();
     setCurrentUserEmail(user?.email || null);
 
-    if (user?.email) {
-      const { data: memberRow } = await supabase
-        .from("members")
-        .select("role")
-        .eq("email", user.email)
-        .maybeSingle();
-      setCurrentUserRole(memberRow?.role || null);
-    }
-
     const { data: members } = await supabase
       .from("members")
       .select("first_name, last_name, name, email, role, department");
     if (members) {
+      // Derive current user's role from the members list — avoids a separate
+      // RLS-restricted query and uses data we already have.
+      const me = members.find((m) => m.email === user?.email);
+      setCurrentUserRole(me?.role || null);
+
       setMemberNames(members.map((m) => {
         const full = `${m.first_name || ""} ${m.last_name || ""}`.trim();
         return full || m.name || "";
