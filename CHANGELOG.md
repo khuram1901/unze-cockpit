@@ -145,6 +145,14 @@ The audit page is now organised around the audit manager's "Audit activities" Ex
 
 ---
 
+## 2026-07-18 (late) — Cash flow forecast template upgraded to Khuram's proposed structure + parser flow-type bug fixed
+
+Khuram supplied an existing-vs-proposed table for the Unze Trading cash flow forecast. The downloadable template (`public/cash-flow-forecast-unze-trading.xlsx`, 12 months from Jul-26) now matches the proposed layout: inflows gain **Bank Financing**; outflows are restructured into **Pole Project** and **Meter Project** sections (each with Vendor Payments, Salaries and Wages, Rent/retainership/Sales Tax/Utilities, Misc (Imprest etc), Welfare, plus Director Expense on Pole and Warranty Claims 2% on Meter) and a standalone **Bank Financing (Payment)** line; the old Salaries/Admin/Welfare/Depreciation block is gone. The forecast parser learned section headings: a row ending in "Project" prefixes the categories below it ("Pole Project — Vendor Payments"), a blank row or flow marker ends the section — so identical line names in the two sections can't overwrite each other in `monthly_budgets`.
+
+While testing the round trip, found and fixed a **long-standing parser bug**: "CASH OUTFLOW" is in the skip-list and was skipped *before* the code that switches to outflow mode, so every category in a template-format file parsed as an inflow. Marker checks now run first. Round-trip verified: sample file parses with correct inflow/outflow types and prefixed section categories. tsc + eslint clean. (Khuram should re-upload the current live forecast after this deploys if its categories were affected.)
+
+---
+
 ## 2026-07-18 (night) — Data-quality warnings are now clickable on the Imperial page
 
 Khuram flagged that the amber "3 data-quality warnings" chip never said WHAT the warnings were. Now it (and any red "rejected" chip) is a button: clicking expands a panel listing every failed check from each month's latest upload — "should be X, file shows Y (out by Z)", amber for accepted-with-warning, red for rejected months — plus a plain-language note of the known causes (Aug-25: Hakim Mall has 2.0m sales with no COGS/GP entered; Oct-25: a projection GP cell and a hardcoded plan Total Overheads that don't match their own parts). Fix the cells, re-upload, and each item clears automatically. New RPC `ifpl_check_details()` (migration 150, anon-revoked per the 149 pattern), lazy-loaded on first click. tsc + eslint clean.

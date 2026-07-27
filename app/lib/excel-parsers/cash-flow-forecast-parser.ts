@@ -64,19 +64,37 @@ export function parseCashFlowForecast(buffer: Buffer): ParsedForecast {
   const months = monthColumns.map((m) => m.month);
   const rows: ForecastRow[] = [];
   let currentFlowType: "inflow" | "outflow" = "inflow";
+  // Section headings ("Pole Project", "Meter Project") group the outflow
+  // lines below them — added 18/07/2026 when the template gained per-project
+  // sections. The heading becomes a prefix so "Vendor Payments" under Pole
+  // Project and under Meter Project stay separate categories instead of
+  // overwriting each other. A blank row or a new CASH INFLOW/OUTFLOW marker
+  // ends the section (the template has blank rows between sections).
+  let currentSection: string | null = null;
 
   for (let i = headerRowIdx + 1; i < data.length; i++) {
     const row = data[i];
     const label = String(row[0] || "").trim();
 
-    if (!label || SKIP_LABELS.has(label)) continue;
+    if (!label) { currentSection = null; continue; }
 
+    // Flow markers must be handled BEFORE the skip list — "CASH OUTFLOW"
+    // sits in SKIP_LABELS, so the old order skipped the marker row without
+    // ever switching to outflow, and every category parsed as an inflow
+    // (long-standing bug, found 18/07/2026 while adding sections).
     if (label.toUpperCase().includes("CASH OUTFLOW")) {
       currentFlowType = "outflow";
+      currentSection = null;
       continue;
     }
     if (label.toUpperCase().includes("CASH INFLOW")) {
       currentFlowType = "inflow";
+      currentSection = null;
+      continue;
+    }
+    if (SKIP_LABELS.has(label)) continue;
+    if (/project\s*$/i.test(label)) {
+      currentSection = label;
       continue;
     }
 
@@ -91,7 +109,7 @@ export function parseCashFlowForecast(buffer: Buffer): ParsedForecast {
     // Only include if at least one month has a non-zero amount
     if (monthAmounts.some((m) => m.amount !== 0)) {
       rows.push({
-        category: label,
+        category: currentSection ? `${currentSection} — ${label}` : label,
         flowType: currentFlowType,
         months: monthAmounts,
       });
