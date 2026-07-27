@@ -25,8 +25,6 @@ async function checkBankingAccess(
 }
 
 // ── GET /api/banking/cash-sheets?company=IFPL&month=2026-07 ──────────────────
-// Returns all sheets for a company within the given month (or last 60 if no month).
-// Each sheet includes a shallow transaction summary for the list view.
 
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
@@ -41,42 +39,38 @@ export async function GET(request: NextRequest) {
   const company = searchParams.get("company") || "UTPL";
   const month = searchParams.get("month"); // e.g. "2026-07"
 
-  type QueryBuilder = ReturnType<typeof supabase.from> extends { select: unknown }
-    ? ReturnType<typeof supabase.from>
-    : never;
+  const SELECT = `id, company, sheet_date, source, pdf_storage_path,
+    opening_balance_pkr, closing_balance_pkr, notes, uploaded_by, created_at,
+    cash_sheet_transactions ( id, txn_type, amount_pkr )`;
 
-  let query = supabase
-    .from("cash_sheet_uploads")
-    .select(
-      `id, company, sheet_date, source, pdf_storage_path,
-       opening_balance_pkr, closing_balance_pkr, notes, uploaded_by, created_at,
-       cash_sheet_transactions ( id, txn_type, amount_pkr )`
-    )
-    .eq("company", company)
-    .order("sheet_date", { ascending: false }) as unknown as QueryBuilder;
+  let result;
 
   if (month) {
     const [y, m] = month.split("-").map(Number);
     const start = `${y}-${String(m).padStart(2, "0")}-01`;
     const lastDay = new Date(y, m, 0).getDate();
     const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-    query = (query as unknown as ReturnType<typeof supabase.from>)
+    result = await supabase
+      .from("cash_sheet_uploads")
+      .select(SELECT)
+      .eq("company", company)
       .gte("sheet_date", start)
-      .lte("sheet_date", end) as unknown as QueryBuilder;
+      .lte("sheet_date", end)
+      .order("sheet_date", { ascending: false });
   } else {
-    query = (query as unknown as ReturnType<typeof supabase.from>)
-      .limit(60) as unknown as QueryBuilder;
+    result = await supabase
+      .from("cash_sheet_uploads")
+      .select(SELECT)
+      .eq("company", company)
+      .order("sheet_date", { ascending: false })
+      .limit(60);
   }
 
-  const { data, error } = await (query as unknown as ReturnType<typeof supabase.from>);
-  if (error) return Response.json({ error: (error as { message: string }).message }, { status: 500 });
-  return Response.json({ data });
+  if (result.error) return Response.json({ error: result.error.message }, { status: 500 });
+  return Response.json({ data: result.data });
 }
 
 // ── POST /api/banking/cash-sheets ─────────────────────────────────────────────
-// Creates a new sheet header plus any initial transactions in one request.
-// Body: { company, sheet_date, opening_balance_pkr?, closing_balance_pkr?,
-//         notes?, pdf_storage_path?, transactions?: TxnInput[] }
 
 type TxnInput = {
   txn_type: "payment" | "receipt";
@@ -165,8 +159,11 @@ export async function POST(request: NextRequest) {
     }));
     const { error: txnErr } = await supabase.from("cash_sheet_transactions").insert(rows);
     if (txnErr) {
-      // Sheet was created but transactions failed — still return the sheet
-      return Response.json({ ok: true, data: sheet, warning: "Transactions partially saved: " + txnErr.message });
+      return Response.json({
+        ok: true,
+        data: sheet,
+        warning: "Sheet saved but transactions failed: " + txnErr.message,
+      });
     }
   }
 
