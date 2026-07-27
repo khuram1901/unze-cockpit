@@ -22,6 +22,7 @@ type Meeting = {
   department: string | null;
   company: string | null;
   created_at: string;
+  mind_map_url: string | null;
 };
 
 type MeetingTask = {
@@ -116,7 +117,7 @@ function MyMinutesPage() {
     let meetingsData: Meeting[] = [];
 
     if (privUser) {
-      const { data } = await supabase.from("meetings").select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at").order("meeting_date", { ascending: false });
+      const { data } = await supabase.from("meetings").select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at, mind_map_url").order("meeting_date", { ascending: false });
       meetingsData = data || [];
     } else {
       const { data: attendeeLinks } = await supabase
@@ -148,7 +149,7 @@ function MyMinutesPage() {
       if (meetingIds.size > 0) {
         const { data } = await supabase
           .from("meetings")
-          .select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at")
+          .select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at, mind_map_url")
           .in("id", Array.from(meetingIds))
           .order("meeting_date", { ascending: false });
         meetingsData = data || [];
@@ -657,6 +658,21 @@ function MyMinutesPage() {
                               <div style={{ padding: "10px 14px", fontSize: "12px", color: COLOURS.SLATE }}>No action items recorded.</div>
                             )}
                           </div>
+
+                          {/* Mind map */}
+                          {meeting.mind_map_url && (
+                            <div style={{ borderTop: `1px solid ${COLOURS.BORDER}`, padding: "12px 14px" }}>
+                              <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px" }}>Mind Map</div>
+                              <a href={meeting.mind_map_url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block" }}>
+                                <img
+                                  src={meeting.mind_map_url}
+                                  alt="Meeting mind map"
+                                  style={{ maxWidth: "100%", maxHeight: "320px", objectFit: "contain", borderRadius: RADII.XS, border: `1px solid ${COLOURS.BORDER}`, cursor: "pointer" }}
+                                />
+                              </a>
+                              <p style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "4px" }}>Click image to open full size</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

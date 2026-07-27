@@ -57,6 +57,7 @@ type Meeting = {
   department: string | null;
   company: string | null;
   created_at: string;
+  mind_map_url: string | null;
 };
 
 type PendingMinute = {
@@ -224,6 +225,21 @@ function MeetingCard({
               <div style={{ padding: "10px 14px", fontSize: "12px", color: COLOURS.SLATE }}>No action items recorded.</div>
             )}
           </div>
+
+          {/* Mind map */}
+          {m.mind_map_url && (
+            <div style={{ borderTop: `1px solid ${COLOURS.BORDER}`, padding: "12px 14px" }}>
+              <div style={{ fontSize: "10px", fontWeight: 600, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "8px" }}>Mind Map</div>
+              <a href={m.mind_map_url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-block" }}>
+                <img
+                  src={m.mind_map_url}
+                  alt="Meeting mind map"
+                  style={{ maxWidth: "100%", maxHeight: "320px", objectFit: "contain", borderRadius: RADII.XS, border: `1px solid ${COLOURS.BORDER}`, cursor: "pointer" }}
+                />
+              </a>
+              <p style={{ fontSize: "11px", color: COLOURS.SLATE, marginTop: "4px" }}>Click image to open full size</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -289,6 +305,7 @@ export default function MeetingsPage() {
   const [paApprovedMinutes, setPaApprovedMinutes] = useState<PendingMinute[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>("All");
+  const [mindMapFile, setMindMapFile] = useState<File | null>(null);
 
   const [view, setView] = useState<"meetings" | "decisions">("meetings");
   const [decisionSearch, setDecisionSearch] = useState("");
@@ -334,7 +351,7 @@ export default function MeetingsPage() {
 
     const { data: meetingsData } = await supabase
       .from("meetings")
-      .select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at")
+      .select("id, meeting_date, title, executive_summary, decisions, risks, opportunities, attendees, department, company, created_at, mind_map_url")
       .order("meeting_date", { ascending: false })
       .limit(50);
     setMeetings(meetingsData || []);
@@ -538,6 +555,22 @@ export default function MeetingsPage() {
       ? `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`
       : new Date().toISOString().slice(0, 10);
 
+    // Upload mind map image (if provided)
+    let mindMapUrl: string | null = null;
+    if (mindMapFile) {
+      const ext = mindMapFile.name.split(".").pop() || "jpg";
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("meeting-mind-maps")
+        .upload(fileName, mindMapFile, { contentType: mindMapFile.type, upsert: false });
+      if (uploadError) {
+        setMessage("Warning: mind map upload failed — " + uploadError.message + ". Continuing without it.");
+      } else if (uploadData) {
+        const { data: urlData } = supabase.storage.from("meeting-mind-maps").getPublicUrl(uploadData.path);
+        mindMapUrl = urlData?.publicUrl || null;
+      }
+    }
+
     const { data: meeting, error: meetingError } = await supabase
       .from("meetings")
       .insert({
@@ -552,6 +585,7 @@ export default function MeetingsPage() {
         company: extracted.company || "Executive Office",
         raw_transcript: transcript,
         created_by: currentUserEmail,
+        mind_map_url: mindMapUrl,
       })
       .select("id")
       .single();
@@ -706,6 +740,7 @@ export default function MeetingsPage() {
     setMessage("");
     setShowMinutesFlow(false);
     setActivePendingId(null);
+    setMindMapFile(null);
   }
 
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -1321,6 +1356,56 @@ export default function MeetingsPage() {
                 </div>
               </div>
             ))}
+
+            {/* Mind Map upload — shown only to CEO/Admin before approving */}
+            {isCEOReviewMode && (
+              <div style={{ marginTop: "12px" }}>
+                <label style={labelStyle}>Mind Map (optional — JPEG/PNG)</label>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
+                  <label style={{
+                    display: "inline-flex", alignItems: "center", gap: "6px",
+                    padding: "6px 12px", borderRadius: RADII.XS, cursor: "pointer",
+                    border: `1px solid ${COLOURS.BORDER}`, fontSize: "12px", color: COLOURS.NAVY,
+                    backgroundColor: COLOURS.CARD,
+                  }}>
+                    <span>📎</span>
+                    <span>{mindMapFile ? "Change image" : "Attach image"}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] || null;
+                        if (f && f.size > 10 * 1024 * 1024) {
+                          setMessage("Mind map image must be under 10 MB.");
+                          return;
+                        }
+                        setMindMapFile(f);
+                      }}
+                    />
+                  </label>
+                  {mindMapFile && (
+                    <>
+                      <span style={{ fontSize: "12px", color: COLOURS.GREEN }}>✓ {mindMapFile.name}</span>
+                      <button
+                        onClick={() => setMindMapFile(null)}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: COLOURS.RED, padding: 0 }}
+                      >Remove</button>
+                    </>
+                  )}
+                </div>
+                {mindMapFile && (
+                  <img
+                    src={URL.createObjectURL(mindMapFile)}
+                    alt="Mind map preview"
+                    style={{ marginTop: "8px", maxWidth: "100%", maxHeight: "220px", objectFit: "contain", borderRadius: RADII.XS, border: `1px solid ${COLOURS.BORDER}` }}
+                  />
+                )}
+                <p style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                  Attach a mind map or visual summary (JPEG/PNG, max 10 MB). It will appear in the meeting card.
+                </p>
+              </div>
+            )}
 
             <div style={{ marginTop: "12px" }}>
               <label style={labelStyle}>External Attendee Emails (comma-separated, optional)</label>
