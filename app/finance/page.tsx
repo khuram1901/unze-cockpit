@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
+import { formatMonthUK } from "../lib/dateUtils";
 import { COMPANIES, getCompanyByName, deptsForCompany, catsForCompany, COMPANY_DEPARTMENTS, COMPANY_CATEGORIES } from "../lib/constants";
 import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
@@ -506,7 +507,7 @@ export default function FinancePage() {
                     <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
                       <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "8px 14px", backgroundColor: COLOURS.CARD_ALT }}>
                         <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Budgeted</div>
-                        <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.BLUE, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontVariantNumeric: "tabular-nums" }}>PKR {totalBudgeted.toLocaleString()}</div>
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, fontFamily: "var(--font-display, 'Inter Tight', sans-serif)", fontVariantNumeric: "tabular-nums" }}>PKR {totalBudgeted.toLocaleString()}</div>
                       </div>
                       <div style={{ border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", padding: "8px 14px", backgroundColor: COLOURS.CARD_ALT }}>
                         <div style={{ fontSize: "10.5px", fontWeight: 500, color: COLOURS.SLATE, textTransform: "uppercase", letterSpacing: "0.08em" }}>Actual</div>
@@ -543,7 +544,9 @@ export default function FinancePage() {
                             </div>
                             <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", flexShrink: 0, fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>
                               <span style={{ color: COLOURS.SLATE }}>PKR {b.budgeted_amount.toLocaleString()}</span>
-                              <BudgetActualInput id={b.id} initial={b.actual_amount} onSave={updateBudgetActual} />
+                              {canEdit
+                                ? <BudgetActualInput id={b.id} initial={b.actual_amount} onSave={updateBudgetActual} />
+                                : <span style={{ fontFamily: "var(--font-mono, 'JetBrains Mono', monospace)" }}>PKR {b.actual_amount.toLocaleString()}</span>}
                               {canEdit && <button onClick={() => deleteBudgetEntry(b.id)} style={{ background: "transparent", border: "none", color: COLOURS.RED, fontSize: "14px", cursor: "pointer" }} title="Delete">×</button>}
                             </div>
                           </div>
@@ -553,7 +556,7 @@ export default function FinancePage() {
                   })}
 
                   {!budgetLoading && budgets.length === 0 && (
-                    <div style={{ padding: "14px", color: COLOURS.SLATE, textAlign: "center", fontSize: "13px" }}>No budget entries for {companyShortName(budgetCompany)} · {budgetMonth}.</div>
+                    <div style={{ padding: "14px", color: COLOURS.SLATE, textAlign: "center", fontSize: "13px" }}>No budget entries for {companyShortName(budgetCompany)} · {formatMonthUK(budgetMonth)}.</div>
                   )}
                 </div>
               )}
