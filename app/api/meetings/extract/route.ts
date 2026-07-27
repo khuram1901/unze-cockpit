@@ -103,10 +103,16 @@ export async function POST(request: NextRequest) {
       ? `Extract structured meeting data from the following pre-formatted meeting minutes.
 
 RULES:
-- These minutes are ALREADY professionally written. Copy executive_summary, decisions, risks, and opportunities EXACTLY as written — no paraphrasing, no condensing, no rewriting. Verbatim means verbatim.
+- These minutes are ALREADY professionally written. Do NOT paraphrase, condense, or rewrite any content.
 - Use DD/MM/YYYY for meeting_date.
 - Identify company: Unze Trading, Imperial Footwear, Haute Dolci, Barahn, K&K Jhang, or "Executive Office".
 - Identify department: Unze Trading Ops, Finance, HR, Audit, Taxation, Admin, or "Executive Office".
+- Different AI tools use different section names — map them as follows:
+  - "Meeting Notes" or "Discussion" → use for executive_summary and to infer decisions/risks/opportunities
+  - "Next Arrangements" or "Next Steps" → these are the action items
+  - "Decisions", "Key Decisions" → decisions array
+  - "Risks", "Issues" → risks array
+  - "Opportunities" → opportunities array
 - For each action item:
   - title: one short phrase, max 80 characters (e.g. "Inspect tile delivery", "Resolve SNM calendar access").
   - notes: copy the full original action item text verbatim.
@@ -156,8 +162,12 @@ ${transcript}`;
     // way to guarantee verbatim output is to extract the section ourselves
     // and inject it after the AI runs.
     if (preFormatted) {
+      // Try to find the summary/notes section verbatim.
+      // Handles multiple AI output formats:
+      //   - ChatGPT/Claude: "EXECUTIVE SUMMARY", "Summary", "Overview"
+      //   - Plaud: "Meeting Notes" (body) ending at "Next Arrangements"
       const summaryMatch = transcript.match(
-        /(?:executive\s+summary|meeting\s+summary|summary|overview)[^\n]*\n+([\s\S]+?)(?=\n{1,3}(?:decisions?|risks?|opportunities?|action\s+items?|attendees?|key\s+(?:decisions?|points?|takeaways?|actions?)|next\s+steps?)[^\n]*\n)/i
+        /(?:executive\s+summary|meeting\s+(?:summary|notes?)|summary|overview)[^\n]*\n+([\s\S]+?)(?=\n{1,3}(?:decisions?|risks?|opportunities?|action\s+items?|attendees?|key\s+(?:decisions?|points?|takeaways?|actions?)|next\s+(?:steps?|arrangements?)|agenda|appendix)[^\n]*(?:\n|$))/i
       );
       if (summaryMatch && summaryMatch[1].trim()) {
         extracted.executive_summary = summaryMatch[1].trim();
