@@ -10,6 +10,7 @@ import {
   COLOURS, RADII, PageHeader, SkeletonRows,
   useToast, primaryButtonStyle, inputStyle,
 } from "../lib/SharedUI";
+import CashSheetTab from "./CashSheetTab";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -36,10 +37,11 @@ const ENTITY_DISPLAY: Record<string, string> = {
   UTPL: "UTPL — Unze Trading",
 };
 
-// ── Feature tabs (top level — more will be added later) ──────────────
-type FeatureTab = "eobi_ss";
+// ── Feature tabs (top level) ──────────────────────────────────────────
+type FeatureTab = "eobi_ss" | "cash_sheet";
 const FEATURE_TABS: { id: FeatureTab; label: string }[] = [
-  { id: "eobi_ss", label: "EOBI & Social Security" },
+  { id: "eobi_ss",    label: "EOBI & Social Security" },
+  { id: "cash_sheet", label: "Cash Sheet" },
 ];
 
 // ── Company sub-tabs ─────────────────────────────────────────────────
@@ -433,7 +435,8 @@ export default function BankingPage() {
         </div>
 
         {/* Feature tab content */}
-        {featureTab === "eobi_ss" && renderEobiSS()}
+        {featureTab === "eobi_ss"    && renderEobiSS()}
+        {featureTab === "cash_sheet" && <CashSheetTab />}
 
         {/* Record Payment modal */}
         {addingPayment && (
