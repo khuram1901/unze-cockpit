@@ -98,6 +98,57 @@ const DEPT_ACCENT: Record<string, string> = {
 };
 function deptAccent(dept: string) { return DEPT_ACCENT[dept] || COLOURS.SLATE; }
 
+/** Returns the next Mon–Fri after the given ISO date (or today if omitted). */
+function nextWorkingDay(fromIso?: string): string {
+  const d = fromIso ? new Date(fromIso + "T00:00:00") : new Date();
+  d.setDate(d.getDate() + 1);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Extract the HTML for the "Meeting Notes / Executive Summary" section from
+ * mammoth's HTML output, stopping before the next major heading.
+ * Browser-only (uses DOMParser).
+ */
+function extractHtmlSummarySection(html: string): string | null {
+  if (typeof window === "undefined") return null;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const summaryHeading = Array.from(doc.querySelectorAll("h1,h2,h3,h4")).find((el) =>
+    /meeting\s*notes?|executive\s*summary|summary|overview/i.test(el.textContent || "")
+  );
+  if (!summaryHeading) return null;
+  const endKeywords = /next\s*arrangements?|action\s*items?|decisions?|risks?|opportunities?|agenda|attendees?/i;
+  let content = "";
+  let el = summaryHeading.nextElementSibling;
+  while (el) {
+    const tag = el.tagName.toLowerCase();
+    if (["h1", "h2", "h3", "h4"].includes(tag) && endKeywords.test(el.textContent || "")) break;
+    content += el.outerHTML;
+    el = el.nextElementSibling;
+  }
+  return content.trim() || null;
+}
+
+/**
+ * Add inline styles to mammoth HTML elements so the formatted summary
+ * renders correctly inside the app's inline-styled environment.
+ */
+function addInlineStylesToHtml(html: string): string {
+  return html
+    .replace(/<p>/gi, '<p style="margin:4px 0;font-size:12px;color:#475569;line-height:1.6">')
+    .replace(/<strong>/gi, '<strong style="font-weight:700;color:#0F1720">')
+    .replace(/<b>/gi, '<b style="font-weight:700;color:#0F1720">')
+    .replace(/<em>/gi, '<em style="font-style:italic">')
+    .replace(/<i>/gi, '<i style="font-style:italic">')
+    .replace(/<ul>/gi, '<ul style="padding-left:18px;margin:4px 0">')
+    .replace(/<ol>/gi, '<ol style="padding-left:18px;margin:4px 0">')
+    .replace(/<li>/gi, '<li style="font-size:12px;color:#475569;margin-bottom:3px">')
+    .replace(/<h1>/gi, '<h1 style="font-size:11px;font-weight:700;color:#0F1720;text-transform:uppercase;letter-spacing:0.06em;margin:8px 0 4px">')
+    .replace(/<h2>/gi, '<h2 style="font-size:11px;font-weight:700;color:#0F1720;text-transform:uppercase;letter-spacing:0.06em;margin:6px 0 4px">')
+    .replace(/<h3>/gi, '<h3 style="font-size:11px;font-weight:700;color:#0F1720;margin:5px 0 3px">');
+}
+
 function taskDotColour(status: string) {
   if (status === "Completed") return COLOURS.GREEN;
   if (status === "In Progress") return COLOURS.RED;
@@ -332,7 +383,9 @@ function MeetingCard({
                 </div>
                 {editMsg && <div style={{ fontSize: "12px", color: COLOURS.RED, marginTop: "6px" }}>{editMsg}</div>}
                 {m.executive_summary && (
-                  <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{m.executive_summary}</div>
+                  m.executive_summary.trimStart().startsWith("<")
+                    ? <div dangerouslySetInnerHTML={{ __html: m.executive_summary }} />
+                    : <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.6 }}>{m.executive_summary}</div>
                 )}
               </div>
 
@@ -578,8 +631,15 @@ export default function MeetingsPage() {
       if (!res.ok) {
         setMessage("Error: " + (data.error || "Extraction failed"));
       } else {
-        // Enrich action items: exact-match owner name + auto-fill company_id
+        // Enrich action items: exact-match owner name + auto-fill company_id + due date fallback
         const enriched = { ...data.extracted };
+
+        // Convert meeting_date DD/MM/YYYY → YYYY-MM-DD for date math
+        const dateParts = (enriched.meeting_date || "").split("/");
+        const meetingIso = dateParts.length === 3
+          ? `${dateParts[2]}-${dateParts[1].padStart(2, "0")}-${dateParts[0].padStart(2, "0")}`
+          : undefined;
+
         enriched.action_items = (enriched.action_items || []).map((item: ExtractedMinutes["action_items"][0]) => {
           const matched = memberDetails.find(
             (m) => m.name.toLowerCase().trim() === (item.owner_name || "").toLowerCase().trim()
@@ -591,8 +651,20 @@ export default function MeetingsPage() {
             ...item,
             owner_name: matched ? matched.name : item.owner_name,
             company_id: item.company_id || matched?.company_id || "",
+            // Golden rule: if no due date extracted, default to next working day after the meeting
+            due_date: item.due_date || nextWorkingDay(meetingIso),
           };
         });
+
+        // For pre-formatted docs (Plaud, ChatGPT, etc.) with HTML available,
+        // replace the plain-text summary with the formatted HTML from the document
+        if ((sourceType === "claude" || sourceType === "other_ai") && transcriptHtml) {
+          const htmlSection = extractHtmlSummarySection(transcriptHtml);
+          if (htmlSection) {
+            enriched.executive_summary = addInlineStylesToHtml(htmlSection);
+          }
+        }
+
         setExtracted(enriched);
         setStep("review");
       }
@@ -615,6 +687,7 @@ export default function MeetingsPage() {
         setMessage("Error: " + (data.error || "File parsing failed"));
       } else {
         setTranscript(data.text);
+        setTranscriptHtml(data.html || "");
         setInputMethod("paste");
         setMessage(`Extracted text from ${file.name} — review below and click Extract.`);
       }
@@ -632,6 +705,7 @@ export default function MeetingsPage() {
   }
 
   const [dragging, setDragging] = useState(false);
+  const [transcriptHtml, setTranscriptHtml] = useState("");
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -931,6 +1005,7 @@ export default function MeetingsPage() {
   function resetAll() {
     setExtracted(null);
     setTranscript("");
+    setTranscriptHtml("");
     setStep("input");
     setExternalEmails("");
     setMessage("");
@@ -1435,9 +1510,18 @@ export default function MeetingsPage() {
             </div>
 
             <div style={{ marginBottom: "12px" }}>
-              <label style={labelStyle}>Executive Summary</label>
+              <label style={labelStyle}>
+                Executive Summary
+                {extracted.executive_summary.trimStart().startsWith("<") && (
+                  <span style={{ fontWeight: 400, fontSize: "11px", color: COLOURS.GREEN, marginLeft: "6px" }}>· formatted from document</span>
+                )}
+              </label>
               <textarea value={extracted.executive_summary} onChange={(e) => setExtracted({ ...extracted, executive_summary: e.target.value })}
                 style={{ ...inputStyle, height: "80px", resize: "vertical" }} />
+              {extracted.executive_summary.trimStart().startsWith("<") && (
+                <div style={{ border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.XS, padding: "10px 12px", marginTop: "6px", backgroundColor: COLOURS.CARD }}
+                  dangerouslySetInnerHTML={{ __html: extracted.executive_summary }} />
+              )}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: "10px", marginBottom: "12px" }}>

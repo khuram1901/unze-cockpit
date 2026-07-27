@@ -28,8 +28,13 @@ export async function POST(request: NextRequest) {
       const parsed = await pdfParse(buffer);
       text = parsed.text;
     } else if (name.endsWith(".docx")) {
-      const result = await mammoth.extractRawText({ buffer });
-      text = result.value;
+      const [rawResult, htmlResult] = await Promise.all([
+        mammoth.extractRawText({ buffer }),
+        mammoth.convertToHtml({ buffer }),
+      ]);
+      text = rawResult.value;
+      // Return HTML alongside plain text so the client can preserve formatting
+      return Response.json({ success: true, text: text.trim(), html: htmlResult.value || null });
     } else if (name.endsWith(".txt") || name.endsWith(".md")) {
       text = buffer.toString("utf-8");
     } else {
