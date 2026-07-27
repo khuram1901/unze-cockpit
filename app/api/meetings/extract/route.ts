@@ -149,6 +149,21 @@ ${transcript}`;
     }
 
     const extracted = JSON.parse(textBlock.text);
+
+    // For preFormatted minutes, override the executive_summary with the
+    // verbatim text from the source document. Claude in JSON schema mode
+    // always rewrites regardless of prompt instructions — the only reliable
+    // way to guarantee verbatim output is to extract the section ourselves
+    // and inject it after the AI runs.
+    if (preFormatted) {
+      const summaryMatch = transcript.match(
+        /(?:executive\s+summary|meeting\s+summary|summary|overview)[^\n]*\n+([\s\S]+?)(?=\n{1,3}(?:decisions?|risks?|opportunities?|action\s+items?|attendees?|key\s+(?:decisions?|points?|takeaways?|actions?)|next\s+steps?)[^\n]*\n)/i
+      );
+      if (summaryMatch && summaryMatch[1].trim()) {
+        extracted.executive_summary = summaryMatch[1].trim();
+      }
+    }
+
     return Response.json({ success: true, extracted });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

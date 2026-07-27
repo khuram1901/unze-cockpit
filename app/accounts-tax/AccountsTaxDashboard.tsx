@@ -20,6 +20,16 @@ type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 
 const SHAKEEL_EMAIL = "shakeel@unze.co.uk";
 
+// ── Schedule permission constants ──────────────────────────────────
+// Admin: full access to all statuses
+// Auditor: can send back (External Auditors → In Progress) or complete (→ Completed)
+// Team: forward only — Not Started → In Progress → External Auditors, then locked
+
+const ADMIN_EMAILS = ["k.saleem@unzegroup.com", "khuram1901@gmail.com"];
+const EXTERNAL_AUDITOR_EMAIL = "external.auditor@unze.co.uk";
+
+type ScheduleUserType = "admin" | "auditor" | "team";
+
 // ── Constants ──────────────────────────────────────────────────────
 
 const QUARTERLY_ENTITIES = [
@@ -74,10 +84,22 @@ const STATUS_COLOURS: Record<ScheduleStatus, { bg: string; text: string; border:
 
 const STATUS_OPTIONS: ScheduleStatus[] = ["Not Started","In Progress","External Auditors","Completed"];
 
-function getAvailableStatuses(currentStatus: ScheduleStatus, canManage: boolean): ScheduleStatus[] {
-  if (canManage) return STATUS_OPTIONS;
-  if (currentStatus === "Not Started") return STATUS_OPTIONS;
-  return STATUS_OPTIONS.filter((s) => s !== "Not Started");
+function getAvailableStatuses(currentStatus: ScheduleStatus, uType: ScheduleUserType): ScheduleStatus[] {
+  // Admin (Khuram): full access always
+  if (uType === "admin") return STATUS_OPTIONS;
+
+  // External auditor: only acts when status is "External Auditors"
+  // They can send back to In Progress or mark Completed
+  if (uType === "auditor") {
+    if (currentStatus === "External Auditors") return ["External Auditors", "In Progress", "Completed"];
+    return [currentStatus]; // locked — read-only chip shown in UI
+  }
+
+  // Team (everyone else): forward-only, max "External Auditors". Locked once there.
+  if (currentStatus === "Not Started")       return ["Not Started", "In Progress"];
+  if (currentStatus === "In Progress")       return ["In Progress", "External Auditors"];
+  // "External Auditors" or "Completed": team cannot touch — show locked chip
+  return [currentStatus];
 }
 
 // ── Fiscal year helpers ────────────────────────────────────────────
@@ -190,6 +212,8 @@ export default function AccountsTaxDashboard() {
   const [savingSchedule, setSavingSchedule] = useState<Set<string>>(new Set());
   const [savingFiling, setSavingFiling] = useState<Set<string>>(new Set());
 
+  const [scheduleUserType, setScheduleUserType] = useState<ScheduleUserType>("team");
+
   const [userEmail, setUserEmail] = useState("");
 
   const [signoffs, setSignoffs] = useState<Map<string, boolean>>(new Map());
@@ -219,6 +243,16 @@ export default function AccountsTaxDashboard() {
         setUserCtx(ctx);
         if (isPA(ctx)) { router.push("/pa"); return; }
         setCanManage(canManageTaxSchedule(ctx));
+
+        // Determine schedule permission tier
+        const emailLower = (user.email ?? "").toLowerCase();
+        if (ADMIN_EMAILS.map(e => e.toLowerCase()).includes(emailLower)) {
+          setScheduleUserType("admin");
+        } else if (emailLower === EXTERNAL_AUDITOR_EMAIL.toLowerCase()) {
+          setScheduleUserType("auditor");
+        } else {
+          setScheduleUserType("team");
+        }
       }
     }
     init();
@@ -332,6 +366,10 @@ export default function AccountsTaxDashboard() {
 
   async function handleStatusChange(section: string, stepIndex: number, entityKey: string, newStatus: ScheduleStatus) {
     const key = `${selectedYear}:${section}:${stepIndex}:${entityKey}`;
+
+    // Capture current status BEFORE the optimistic update — needed for the audit log
+    const fromStatus: ScheduleStatus = scheduleEntries.get(key) ?? "Not Started";
+
     setScheduleEntries((prev) => new Map(prev).set(key, newStatus));
     setSavingSchedule((prev) => new Set(prev).add(key));
 
@@ -346,6 +384,25 @@ export default function AccountsTaxDashboard() {
       toast.show("Save failed — " + error.message, "error");
       setScheduleEntries((prev) => { const m = new Map(prev); m.delete(key); return m; });
     } else {
+      // ── Audit log (fire-and-forget) ──
+      const allEntities = [...QUARTERLY_ENTITIES, ...ANNUAL_ENTITIES];
+      const entityLabel = allEntities.find(e => e.key === entityKey)?.label ?? entityKey;
+      const steps = section === "Annual" ? ANNUAL_STEPS : QUARTERLY_STEPS;
+      const stepLabel = steps[stepIndex - 1] ?? `Step ${stepIndex}`;
+
+      supabase.from("tax_schedule_audit").insert({
+        tax_year: selectedYear,
+        section,
+        step_index: stepIndex,
+        entity_key: entityKey,
+        entity_label: entityLabel,
+        step_label: stepLabel,
+        from_status: fromStatus,
+        to_status: newStatus,
+        changed_by: userEmail,
+        changed_at: new Date().toISOString(),
+      }).then(() => {/* intentionally ignored */});
+
       triggerAlertRecompute();
     }
   }
@@ -746,17 +803,22 @@ export default function AccountsTaxDashboard() {
                                   const { bg, text, border } = STATUS_COLOURS[status];
                                   const cellKey = `${selectedYear}:${sec.key}:${stepIndex}:${e.key}`;
                                   const saving = savingSchedule.has(cellKey);
-                                  const availableStatuses = getAvailableStatuses(status, canManage);
+                                  const availableStatuses = getAvailableStatuses(status, scheduleUserType);
+                                  const isLocked = availableStatuses.length === 1;
                                   return (
                                     <td key={e.key} style={tableCell(even)}>
-                                      <select
-                                        value={status}
-                                        disabled={saving}
-                                        onChange={(ev) => handleStatusChange(sec.key, stepIndex, e.key, ev.target.value as ScheduleStatus)}
-                                        style={statusSelectStyle(bg, text, border, saving)}
-                                      >
-                                        {availableStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
-                                      </select>
+                                      {isLocked ? (
+                                        <span style={statusChipStyle(bg, text, border)}>{status}</span>
+                                      ) : (
+                                        <select
+                                          value={status}
+                                          disabled={saving}
+                                          onChange={(ev) => handleStatusChange(sec.key, stepIndex, e.key, ev.target.value as ScheduleStatus)}
+                                          style={statusSelectStyle(bg, text, border, saving)}
+                                        >
+                                          {availableStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                      )}
                                     </td>
                                   );
                                 })}
@@ -919,17 +981,22 @@ export default function AccountsTaxDashboard() {
                                   const { bg, text, border } = STATUS_COLOURS[status];
                                   const cellKey = `${selectedYear}:${sectionKey}:${stepIndex}:${e.key}`;
                                   const saving = savingSchedule.has(cellKey);
-                                  const availableStatuses = getAvailableStatuses(status, canManage);
+                                  const availableStatuses = getAvailableStatuses(status, scheduleUserType);
+                                  const isLocked = availableStatuses.length === 1;
                                   return (
                                     <td key={e.key} style={tableCell(even)}>
-                                      <select
-                                        value={status}
-                                        disabled={saving}
-                                        onChange={(ev) => handleStatusChange(sectionKey, stepIndex, e.key, ev.target.value as ScheduleStatus)}
-                                        style={statusSelectStyle(bg, text, border, saving)}
-                                      >
-                                        {availableStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
-                                      </select>
+                                      {isLocked ? (
+                                        <span style={statusChipStyle(bg, text, border)}>{status}</span>
+                                      ) : (
+                                        <select
+                                          value={status}
+                                          disabled={saving}
+                                          onChange={(ev) => handleStatusChange(sectionKey, stepIndex, e.key, ev.target.value as ScheduleStatus)}
+                                          style={statusSelectStyle(bg, text, border, saving)}
+                                        >
+                                          {availableStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+                                        </select>
+                                      )}
                                     </td>
                                   );
                                 })}
