@@ -102,7 +102,7 @@ export default function RestaurantsFinancePage() {
       const json = await res.json();
       setSheets(json.data ?? []);
     } catch (err) {
-      toast.error("Failed to load cash sheets: " + String(err));
+      toast.show("Failed to load cash sheets: " + String(err), "error");
       setSheets([]);
     } finally {
       setLoading(false);
