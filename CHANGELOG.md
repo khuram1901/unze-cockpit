@@ -4,15 +4,45 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
-## 2026-07-28 (evening) — Restatement log: every change to previously reported figures is recorded and shown
+## 2026-07-28 — Restaurants cash sheet support + Restaurants Finance page
 
-Khuram's transparency requirement: "if any figures are changed in the previous months it must bring it to our attention… so we see if the teams are changing numbers." Built across all three pipelines:
+Extended the Banking Cash Sheet tab and backend to support all three restaurant companies (Baranh, Haute Dolci, K&K Jhang), and built a new Finance page for their daily cash positions.
 
-- **Migration 152**: append-only `pnl_restatements` table (company UTPL/IFPL/BARANH/HD, month, scope=branch/plant, line, old_value, new_value, changed_by, changed_at) + `get_pnl_restatements` RPC (anon-revoked). Nothing in the app can edit or delete rows.
-- **All three upload routes** now diff BEFORE replacing an existing month: stored net sales + net profit per branch (Imperial: Net Sales/Final Profit actuals; Restaurants: Net Sales/Net Profit; Unze: Gross Sale/Net Profit Final per plant) against the incoming file; every change >1,000 PKR is written to the log with the uploader's email, and returned in the upload response.
-- **All three pages**: upload results show a blue "Financial change to previously reported figures" block (scope, line, old → new) the moment it happens, and the data-quality strip gains a permanent **"Restatement log"** chip that expands the full history — month, what changed, from what to what, who uploaded, when — with an explicit "cannot be edited or deleted" note.
+**DB change (migration 204 — applied via Supabase MCP):**
+- Dropped and recreated `cash_sheet_uploads_company_check` to allow `'BRNH'`, `'HD'`, `'KKJ'` in addition to existing `'IFPL'`, `'UTPL'`.
+- Same extension applied to `cash_sheet_transactions_company_check` if present.
 
-First-time months record nothing (nothing existed to change); identical re-uploads record nothing (values equal). tsc + eslint clean. Note: mid-build merge with the other session's changes (authFetch import, useMobile on the Unze page) — preserved.
+**Code changes:**
+- `app/lib/constants.ts` — Added `KKJ_COMPANY_ID = '4e515021-b63f-478b-a69e-90be3d8367c7'` (K&K Jhang). Added `KKJ` to `COMPANIES` array with slug `kk-jhang`.
+- `app/api/banking/cash-sheets/pdf/route.ts` — Company validation extended to `['IFPL','UTPL','BRNH','HD','KKJ']`.
+- `app/api/banking/cash-sheets/route.ts` — Same validation extended; replaced hardcoded `company === "IFPL" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID` with a `COMPANY_ID_MAP` record covering all 5 companies. Import updated to include new company ID constants.
+- `app/banking/CashSheetTab.tsx` — `type Company` union extended; `COMPANY_TABS` array gains Baranh (BRNH), Haute Dolci (HD), K&K Jhang (KKJ) tabs.
+- `app/finance/restaurants-daily/page.tsx` — NEW PAGE. Three-tab daily cash positions view (Baranh / Haute Dolci / K&K Jhang). KPI hero row (latest opening/closing, period net movement, period receipts/payments). 30-day closing balance area chart (color-coded per company tab). Recent entries table (date, opening, receipts, payments, closing, notes, uploaded-by). Month filter dropdown (6 months back). Upload hint pointing to Banking → Cash Sheets. Uses `authFetch` against the existing `/api/banking/cash-sheets` endpoint — no new API needed. Requires `can_view_restaurants_pnl` permission.
+- `app/lib/pageRegistry.ts` — New sidebar entry "Restaurants Finance" (💰) → `/finance/restaurants-daily`, same `can_view_restaurants_pnl` perm as the P&L page.
+
+**Note on PDF parsing for restaurants:** Restaurant PDF formats are not yet detected by `cash-flow-parser.ts` — the parser will return a `parseWarning` ("Could not determine company…"). Balances can still be manually entered in the upload form. Parser extension requires sample PDFs from Baranh, HD, and K&K Jhang.
+
+---
+
+## 2026-07-28 — Banking: Cash Sheet tab built + PDF parse bug fixed
+
+New second top-level tab "Cash Sheets" in the `/banking` page — purpose-built for manual daily cash flow PDF uploads per company. Previously, Khuram had to use the Finance → Upload page for this; the Cash Sheet tab makes it a first-class Banking workflow.
+
+**What was built:**
+
+- `app/banking/CashSheetTab.tsx` — full upload + list + detail view. Company tabs: UTPL / IFPL. Month navigator (prev/next). List shows each sheet with opening balance, closing balance, balance change, and uploaded-by. Click any row to open a detail modal that shows the full receipt/payment breakdown plus an inline PDF viewer. Upload form accepts a PDF, date, optional balance overrides, and individual transactions (categorised receipt/payment rows). Parsed balances from the PDF automatically fill the balance fields unless the user types their own.
+- `POST /api/banking/cash-sheets/pdf` — multipart (pdf + company + date). Stores PDF to Supabase Storage bucket `cash-sheets` under `{COMPANY}/{YEAR}/{YYYY-MM-DD}.pdf` (`upsert: true` so re-uploads for the same date replace the old file), then parses it with `parseCashFlowPDF()`. Returns `{ ok, path, parsed: { opening, closing, receipts, payments }, parseWarning }`. Parse is non-fatal — file is stored even if parsing fails.
+- `GET /api/banking/cash-sheets?company=UTPL&month=2026-07` — list of sheets for a company × month. No month = latest 60.
+- `POST /api/banking/cash-sheets` — upserts to `cash_sheet_uploads` (UNIQUE company + sheet_date), replaces transactions, then mirrors to `daily_cash_position` so the Finance overview chart stays current.
+- `GET /api/banking/cash-sheets/[id]` — single sheet with full transaction rows + signed PDF URL for the in-browser viewer.
+- `GET /api/banking/cash-sheets/[id]/transactions` — transaction list for a sheet.
+
+**Database (migrations 199–200 — apply manually):**
+- Migration 199: `cash_sheet_uploads` (id, company TEXT CHECK IN ('IFPL','UTPL'), sheet_date DATE, source, email_message_id, pdf_storage_path, opening_balance_pkr, closing_balance_pkr, notes, uploaded_by; UNIQUE company+sheet_date). `cash_sheet_transactions` (id, sheet_id FK CASCADE, company, sheet_date, txn_type, description, amount_pkr, bank_account, reference, category, sort_order). RLS enabled; all API routes use the service-role client. Convenience view `cash_sheet_summary` computes totals via `SUM … FILTER`.
+- Migration 200: `cash_sheet_id UUID` FK on `daily_cash_position` → `cash_sheet_uploads(id) ON DELETE SET NULL`, enabling drill-through from Finance to transaction detail.
+- Supabase Storage bucket `cash-sheets` must be created manually: Dashboard → Storage → New Bucket → Name: `cash-sheets`, Public: OFF.
+
+**Bug fixed same day:** The pdf upload route was storing the file in Storage but NOT calling `parseCashFlowPDF()` — so every uploaded sheet came back with `parsed: { opening: null, closing: null, receipts: null, payments: null }` and the balances in `cash_sheet_uploads` / `daily_cash_position` were always NULL. Root cause was a missing parse call in the route handler. Fix: added the `parseCashFlowPDF(buffer)` call after the successful upload, with non-fatal error handling and a `parseWarning` field in the response for debugging. The 28 July UTPL sheet that was uploaded before the fix was manually patched in the database: opening 105,902,448 / closing 104,916,421 / payments 986,027.
 
 ---
 

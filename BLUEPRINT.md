@@ -1,6 +1,6 @@
 # Unze Group Dashboard — Living Blueprint
 
-> **This is the source of truth.** Read before touching any code. Last updated: 27/07/2026 (Banking page — EOBI & Social Security payment tracking; Legal Case Tracking system — Admin Ops Legal tab, HR Legal tab, Daily Entry follow-up, home page summary card; Members page redesign — MemberDrawer slide-over replaces inline expand, Access Matrix tab removed; sidebar collapsible nav groups with localStorage persistence and hover-to-peek animation; HR Dashboard per-member tab visibility controls via MemberDrawer; performance — UserCtx cached, getSession() replaces getUser() everywhere; migrations 196–197).
+> **This is the source of truth.** Read before touching any code. Last updated: 28/07/2026 (Restaurants cash sheet support — migration 204 extends cash_sheet_uploads CHECK constraint to BRNH/HD/KKJ; KKJ_COMPANY_ID added to constants; API routes + CashSheetTab extended to all 5 companies; new /finance/restaurants-daily page with 3-company tabs for Baranh/Haute Dolci/K&K Jhang daily cash positions; sidebar entry added).
 >
 > Previous update: 20/07/2026 (in-app chat with Supabase Realtime; quick-add task panel; @mention assignment in task notes; backup changed to Google Drive upload; Accounts & Tax Rule 0 RPC; authFetch centralised in lib/supabase.ts; isDailyEntryOnly tightened; can_manage_locations moved server-side; audit daily log scoped to assigned member).
 >
@@ -115,14 +115,28 @@ app/
 │                                     COLOURS tokens, pill buttons, TRACK progress bars.
 │
 ├── banking/
-│   └── page.tsx                      Banking page — EOBI & Social Security payment tracking.
-│                                     Top-level feature tab: "EOBI & Social Security" (more tabs planned).
-│                                     Company sub-tabs: Unze (UTPL), Imperial (IFPL), Restaurants (Baranh + HD).
-│                                     Pakistan fiscal year (Jul–Jun) year pills. Per-entity × per-month grid:
-│                                     amount PKR, date paid, challan number, on-time/late/missing/future status.
-│                                     Gated by `canAccessBanking()` (migration 196 adds `can_access_banking`
-│                                     in member_permissions; initially granted to Khuram + Kamran).
-│                                     Added to Finance group in sidebar and page registry.
+│   ├── page.tsx                      Banking page — two top-level feature tabs.
+│   │                                 Tab 1: "EOBI & Social Security" — Pakistan fiscal-year grid (Jul–Jun).
+│   │                                 Company sub-tabs: Unze (UTPL), Imperial (IFPL), Restaurants (Baranh + HD).
+│   │                                 Per-entity × per-month: amount PKR, date paid, challan, on-time/late/missing/future.
+│   │                                 Tab 2: "Cash Sheets" — delegates to CashSheetTab.tsx (see below).
+│   │                                 Gated by `canAccessBanking()` (migration 196 adds `can_access_banking`
+│   │                                 in member_permissions; initially granted to Khuram + Kamran).
+│   │                                 Added to Finance group in sidebar and page registry.
+│   └── CashSheetTab.tsx              Manual daily cash flow PDF upload tab — second tab in Banking.
+│                                     Company tabs: UTPL / IFPL / BRNH / HD / KKJ (all 5 companies).
+│                                     Month navigator (prev/next/current).
+│                                     List: each sheet shows opening balance, closing balance, balance change,
+│                                     uploaded-by. Click → detail modal: full receipt+payment transaction
+│                                     breakdown + inline PDF viewer (signed URL from [id] route).
+│                                     Upload form: company, date (DateInput), optional balance overrides,
+│                                     optional individual transactions (categorised receipt/payment rows).
+│                                     Two-step upload: (1) PDF → /api/banking/cash-sheets/pdf → store +
+│                                     parse → returns parsed balances; (2) JSON → /api/banking/cash-sheets
+│                                     → upserts cash_sheet_uploads + daily_cash_position mirror.
+│                                     Parsed balances auto-fill balance fields (user override wins).
+│                                     NOTE: restaurant company PDFs produce parseWarning (parser not yet
+│                                     extended for BRNH/HD/KKJ formats — needs sample PDFs to implement).
 │
 ├── finance/
 │   ├── page.tsx                      Finance index — company picker, dept budgets, bulk upload
@@ -138,6 +152,14 @@ app/
 │   ├── [company]/page.tsx            Dynamic route — passes slug to FinanceManager
 │   ├── guarantees/page.tsx           Bank Facilities — guarantee records by bank, facility utilisation,
 │   │                                 pay orders, bill linking, chase urgency, expiry tracking
+│   ├── restaurants-daily/page.tsx    NEW (28/07/2026) — Daily cash positions for Baranh (BRNH),
+│   │                                 Haute Dolci (HD), and K&K Jhang (KKJ). Three company tabs;
+│   │                                 month selector; KPI hero row (latest opening/closing, period
+│   │                                 net movement, period receipts/payments); 30-day area chart
+│   │                                 (color-coded per company tab); recent entries table; upload hint.
+│   │                                 Data from /api/banking/cash-sheets endpoint (no new API needed).
+│   │                                 Permission: can_view_restaurants_pnl. Sidebar entry: "Restaurants
+│   │                                 Finance" (💰) in Finance group.
 │   └── upload/page.tsx               Manual PDF upload — drag-and-drop cash flow + bank position
 │                                     PDFs, auto-detects company, shows per-file save status
 │
@@ -780,6 +802,7 @@ UNIQUE(member_id). **RLS:** Admin-tier only can read/write.
 | raw_pdf_filename | text | |
 | uploaded_by | text | `gmail-auto` / `drive-auto` / a user's email (manual) |
 | reconciled | boolean | true once the matching `bank_position_snapshots` row for the same date confirms the same closing figure |
+| cash_sheet_id | uuid FK → cash_sheet_uploads | Added migration 200. Links to the Cash Sheet tab upload for this date. NULL for rows ingested via Gmail/Drive (paths 1 & 2). Set by Banking Cash Sheet upload (path 4) and by `/api/finance/parse-cash-flow` (path 3). |
 | created_at | timestamptz | |
 
 **RLS:** `can_see_company_finance(company_id)` — Admin/CEO + scoped Finance managers.
@@ -850,6 +873,47 @@ Raw bank account breakdown from PDF uploads.
 (all bank account columns — see migration files for full list)
 
 **RLS:** Same as daily_cash_position.
+
+#### `cash_sheet_uploads` (migration 199)
+Daily cash flow sheet registry — one row per company per date. Source of truth for the Banking → Cash Sheet tab.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| company | text | CHECK IN ('IFPL', 'UTPL') NOT NULL |
+| sheet_date | date | NOT NULL |
+| source | text | CHECK IN ('manual_upload', 'email') DEFAULT 'manual_upload' |
+| email_message_id | text | Set when ingested from email; NULL for manual uploads |
+| pdf_storage_path | text | Supabase Storage path `{COMPANY}/{YEAR}/{YYYY-MM-DD}.pdf` in bucket `cash-sheets` |
+| opening_balance_pkr | numeric(18,2) | Extracted by parseCashFlowPDF() or entered manually |
+| closing_balance_pkr | numeric(18,2) | Extracted by parseCashFlowPDF() or entered manually |
+| notes | text | |
+| uploaded_by | text | NOT NULL — user email or 'gmail-auto' |
+| created_at | timestamptz | |
+
+UNIQUE (company, sheet_date). **RLS:** Enabled; all API routes use service-role client (bypasses RLS).
+
+Convenience view `cash_sheet_summary` (same migration): joins to `cash_sheet_transactions` and computes `total_receipts_pkr`, `total_payments_pkr`, `transaction_count` via `SUM … FILTER`.
+
+Storage bucket `cash-sheets` is **private** — must be created manually in Supabase Dashboard (Storage → New Bucket → Name: cash-sheets, Public: OFF). Signed URLs served via `/api/banking/cash-sheets/[id]`.
+
+#### `cash_sheet_transactions` (migration 199)
+Individual receipt/payment rows linked to a cash sheet upload.
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| sheet_id | uuid FK → cash_sheet_uploads | ON DELETE CASCADE |
+| company | text | Denormalised for fast queries |
+| sheet_date | date | Denormalised for fast queries |
+| txn_type | text | CHECK IN ('payment', 'receipt') |
+| description | text | NOT NULL |
+| amount_pkr | numeric(18,2) | NOT NULL CHECK > 0 |
+| bank_account | text | |
+| reference | text | |
+| category | text | e.g. "Sales", "Supplier Payment", "EOBI" |
+| sort_order | int | 0-based; preserves PDF order |
+| created_at | timestamptz | |
+
+**RLS:** Enabled; service-role only.
 
 #### `department_budgets`
 | Column | Type | Notes |
@@ -1687,6 +1751,8 @@ Items within each group are sorted A–Z case-insensitively at render time.
 - Investments (`/investments`)
 - Opening Balances (`/opening-balances`)
 - Receivables (`/receivables`)
+- Restaurants Finance (`/finance/restaurants-daily`) — NEW (28/07/2026): daily cash positions for Baranh, Haute Dolci, K&K Jhang. Permission: `can_view_restaurants_pnl`.
+- Restaurants P&L (`/finance/restaurants`) — existing P&L page (Baranh + Haute Dolci). Permission: `can_view_restaurants_pnl`.
 - Unze Trading (`/finance/unze-trading`)
 
 ### My Workspace (was "Tasks & Meetings" — A–Z)
@@ -1944,7 +2010,7 @@ Deadlines (Pakistan fiscal year Jul–Jun):
 ## 9. Data Flows
 
 ### Finance Data Flow
-Three ingestion paths — all end in `daily_cash_position` + `bank_position_snapshots` (+ `pdc_maturity_buckets`, migration 132) + an archived copy of the source PDF in `document_archive`/Storage bucket `source-documents` (`lib/document-archive.ts`) so figures can always be re-derived from the original file:
+Four ingestion paths — paths 1–3 end in `daily_cash_position` + `bank_position_snapshots` (+ `pdc_maturity_buckets`, migration 132) + an archived copy of the source PDF in `document_archive`/Storage bucket `source-documents` (`lib/document-archive.ts`). Path 4 (Banking → Cash Sheet tab) writes to `cash_sheet_uploads` + `daily_cash_position` but NOT to `bank_position_snapshots` (no per-account breakdown) or `document_archive` (PDF stored in the `cash-sheets` bucket instead):
 
 **Path 1 — Gmail direct, via the "Cockpit Cache" Gmail label** (primary in practice)
 1. `/api/finance/check-inbox` cron (every 10 min) searches Gmail (`k.saleem@unzegroup.com`) for the label containing "cockpit", `newer_than:30d`, up to 150 messages (raised from 20 on 15 Jul 2026 — with no pagination, a two-company month of daily emails comfortably exceeds 20, and a low cap meant older messages could never be reached even by re-running it)
@@ -1955,7 +2021,12 @@ Three ingestion paths — all end in `daily_cash_position` + `bank_position_snap
 1. Google Apps Script drops PDFs to Drive `Cockpit Cash Sheets/Drop Here`
 2. `/api/finance/check-drive` cron (every 10 min) parses, saves, then **moves the file to the Processed folder** — meaning once a file has been handled, check-drive can never re-fetch it again for a historical re-ingest (unlike Path 1's Gmail search, which doesn't depend on the message being unread/unmoved). For a clean historical re-ingest, use Path 1.
 
-**Path 3 — Manual upload** via `/finance/upload` (`/api/finance/parse-cash-flow`) — requires both a cash-flow and a bank-position PDF together.
+**Path 3 — Manual upload** via `/finance/upload` (`/api/finance/parse-cash-flow`) — requires both a cash-flow and a bank-position PDF together. Also writes to `cash_sheet_uploads` (migration 199 backfill logic).
+
+**Path 4 — Banking → Cash Sheet tab** (added 28/07/2026) — purpose-built upload flow in the Banking page.
+1. PDF POSTed to `/api/banking/cash-sheets/pdf` → stored to `cash-sheets` bucket (`{COMPANY}/{YEAR}/{YYYY-MM-DD}.pdf`), then parsed by `parseCashFlowPDF()` to extract opening/closing balance and receipt/payment totals. Returns `{ ok, path, parsed, parseWarning }`.
+2. JSON POSTed to `/api/banking/cash-sheets` → upserts `cash_sheet_uploads` (UNIQUE company+sheet_date) → optionally inserts `cash_sheet_transactions` → upserts `daily_cash_position` (UNIQUE company_id+position_date) linking the two via `cash_sheet_id`. No `bank_position_snapshots` row is created.
+Key difference from Path 3: the PDF is the same daily cash-flow sheet, but Path 4 stores it in a separate private bucket with a signed-URL viewer and keeps per-transaction rows; Path 3 stores in `source-documents` and parses PDC buckets + per-account bank snapshots.
 
 ### Production/Stock Data Flow
 Daily entry → `production_entries` + `production_allocations`; dispatch → `dispatch_entries` + `dispatch_records` (dual write); PO auto-close on fulfillment.
@@ -2067,6 +2138,7 @@ Library: `web-push`. VAPID keys. Subscriptions in `push_subscriptions`.
 36. **MemberDrawer is the single source of truth for per-member settings (27/07/2026).** The Access Matrix tab on the Members page has been removed. All per-member permission overrides and widget visibility controls are now exclusively in the MemberDrawer slide-over. Do not re-introduce a separate Access Matrix tab without a deliberate decision.
 37. **Legal case tracking lives in `LegalCases.tsx`, shared by Admin Ops and HR (27/07/2026).** One component, two entry points. Do not duplicate the component for each location — always import from `app/admin/LegalCases.tsx`.
 38. **`canAccessBanking()` gates the Banking page (27/07/2026).** This is a capability-based override (defaults false); not a role. Use `useRequireCapability("banking")` or check `canAccessBanking(ctx)` — same pattern as investments, guarantees, etc.
+39. **Banking Cash Sheet tab is the preferred manual upload path for daily cash positions (28/07/2026).** The Finance → Upload page (`/finance/upload`) still works and is required for per-bank-account snapshots and PDC bucket extraction. The Banking → Cash Sheet tab is for quick daily balance uploads with transaction detail; it does NOT create `bank_position_snapshots` or `pdc_maturity_buckets` rows. Do not remove either path.
 
 ---
 

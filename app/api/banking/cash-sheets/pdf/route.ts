@@ -58,8 +58,9 @@ export async function POST(request: NextRequest) {
   if (!file || !company || !date) {
     return Response.json({ error: "pdf, company, and date fields are required" }, { status: 400 });
   }
-  if (!["IFPL", "UTPL"].includes(company)) {
-    return Response.json({ error: "company must be IFPL or UTPL" }, { status: 400 });
+  const VALID_COMPANIES = ["IFPL", "UTPL", "BRNH", "HD", "KKJ"];
+  if (!VALID_COMPANIES.includes(company)) {
+    return Response.json({ error: `company must be one of: ${VALID_COMPANIES.join(", ")}` }, { status: 400 });
   }
   if (file.type !== "application/pdf" && !file.name.endsWith(".pdf")) {
     return Response.json({ error: "Only PDF files are accepted" }, { status: 400 });

@@ -54,13 +54,16 @@ type DraftTxn = {
   category: string;
 };
 
-type Company = "IFPL" | "UTPL";
+type Company = "IFPL" | "UTPL" | "BRNH" | "HD" | "KKJ";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const COMPANY_TABS: { id: Company; label: string }[] = [
   { id: "UTPL", label: "Unze Trading (UTPL)" },
   { id: "IFPL", label: "Imperial Footwear (IFPL)" },
+  { id: "BRNH", label: "Baranh (BRNH)" },
+  { id: "HD",   label: "Haute Dolci (HD)" },
+  { id: "KKJ",  label: "K&K Jhang (KKJ)" },
 ];
 
 const RECEIPT_CATEGORIES = [
@@ -148,7 +151,6 @@ export default function CashSheetTab() {
   const [draftTxns, setDraftTxns] = useState<DraftTxn[]>([]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { show: showToast, element: toastElement } = useToast();
@@ -186,8 +188,12 @@ export default function CashSheetTab() {
     }
     setSaving(true);
 
-    // 1. Upload PDF if selected
+    // 1. Upload PDF if selected — also parses it server-side to extract balances
     let pdf_storage_path: string | undefined;
+    let parsedOpening: number | undefined;
+    let parsedClosing: number | undefined;
+    let parsedReceipts: number | undefined;
+    let parsedPayments: number | undefined;
     if (uploadFile) {
       const fd = new FormData();
       fd.append("pdf", uploadFile);
@@ -200,6 +206,13 @@ export default function CashSheetTab() {
         setSaving(false); return;
       }
       pdf_storage_path = pdfJson.path;
+      // Use parsed balances as fallback when the user left the fields blank
+      if (pdfJson.parsed) {
+        parsedOpening = pdfJson.parsed.opening ?? undefined;
+        parsedClosing = pdfJson.parsed.closing ?? undefined;
+        parsedReceipts = pdfJson.parsed.receipts ?? undefined;
+        parsedPayments = pdfJson.parsed.payments ?? undefined;
+      }
     }
 
     // 2. Build validated transactions
@@ -215,6 +228,14 @@ export default function CashSheetTab() {
         sort_order: i,
       }));
 
+    // Resolve balances: prefer manually-entered values, fall back to PDF parse
+    const finalOpening = uploadForm.opening_balance_pkr
+      ? parseFloat(uploadForm.opening_balance_pkr)
+      : parsedOpening;
+    const finalClosing = uploadForm.closing_balance_pkr
+      ? parseFloat(uploadForm.closing_balance_pkr)
+      : parsedClosing;
+
     // 3. Create sheet
     const res = await authFetch("/api/banking/cash-sheets", {
       method: "POST",
@@ -222,13 +243,14 @@ export default function CashSheetTab() {
       body: JSON.stringify({
         company,
         sheet_date: uploadForm.sheet_date,
-        opening_balance_pkr: uploadForm.opening_balance_pkr
-          ? parseFloat(uploadForm.opening_balance_pkr) : undefined,
-        closing_balance_pkr: uploadForm.closing_balance_pkr
-          ? parseFloat(uploadForm.closing_balance_pkr) : undefined,
+        opening_balance_pkr: finalOpening,
+        closing_balance_pkr: finalClosing,
         notes: uploadForm.notes || undefined,
         pdf_storage_path,
         transactions,
+        // Pass parsed totals so daily_cash_position can be kept in sync
+        total_receipts: parsedReceipts,
+        total_payments: parsedPayments,
       }),
     });
     const json = await res.json();
@@ -248,7 +270,6 @@ export default function CashSheetTab() {
     setUploadForm({ sheet_date: "", opening_balance_pkr: "", closing_balance_pkr: "", notes: "" });
     setDraftTxns([]);
     setUploadFile(null);
-    setDragOver(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -495,11 +516,7 @@ export default function CashSheetTab() {
       {/* Upload button */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
         <button
-          onClick={() => {
-            const today = new Date().toISOString().slice(0, 10);
-            setUploadForm({ sheet_date: today, opening_balance_pkr: "", closing_balance_pkr: "", notes: "" });
-            setShowUpload(true);
-          }}
+          onClick={() => setShowUpload(true)}
           style={{ ...primaryButtonStyle, display: "flex", alignItems: "center", gap: "6px" }}
         >
           <span style={{ fontSize: "16px" }}>+</span> Upload Cash Sheet
@@ -829,59 +846,18 @@ export default function CashSheetTab() {
               {/* PDF upload */}
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>Cash Sheet PDF (optional)</label>
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragOver(false);
-                    const file = e.dataTransfer.files?.[0];
-                    if (file && file.type === "application/pdf") {
-                      setUploadFile(file);
-                    } else if (file) {
-                      showToast("Please drop a PDF file", "error");
-                    }
-                  }}
-                  onClick={() => fileRef.current?.click()}
-                  style={{
-                    border: `2px dashed ${dragOver ? COLOURS.GREEN : COLOURS.HAIRLINE}`,
-                    borderRadius: "8px",
-                    padding: "16px",
-                    textAlign: "center" as const,
-                    cursor: "pointer",
-                    backgroundColor: dragOver ? "#F0FDF4" : "#FAFBFD",
-                    transition: "all 0.15s",
-                    userSelect: "none" as const,
-                  }}
-                >
-                  {uploadFile ? (
-                    <div style={{ fontSize: "13px", color: COLOURS.GREEN, fontWeight: 600 }}>
-                      ✓ {uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setUploadFile(null); if (fileRef.current) fileRef.current.value = ""; }}
-                        style={{
-                          marginLeft: "8px", background: "none", border: "none",
-                          color: COLOURS.SLATE, cursor: "pointer", fontSize: "14px", lineHeight: 1,
-                        }}
-                      >✕</button>
-                    </div>
-                  ) : (
-                    <div>
-                      <div style={{ fontSize: "22px", marginBottom: "4px" }}>📄</div>
-                      <div style={{ fontSize: "12px", color: COLOURS.SLATE }}>
-                        Drag & drop a PDF here, or <span style={{ color: COLOURS.NAVY, fontWeight: 600 }}>click to browse</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
                 <input
                   ref={fileRef}
                   type="file"
                   accept="application/pdf"
                   onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  style={{ display: "none" }}
+                  style={{ fontSize: "12px", color: COLOURS.SLATE }}
                 />
+                {uploadFile && (
+                  <div style={{ fontSize: "11px", color: COLOURS.GREEN, marginTop: "4px" }}>
+                    ✓ {uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)
+                  </div>
+                )}
               </div>
 
               {/* Notes */}

@@ -2,13 +2,6 @@ import { extractTextFromPDF } from "./extract-text";
 
 export type PdcBucket = { dueDate: string; amount: number; label: string | null };
 
-export type CashTransaction = {
-  date: string;       // YYYY-MM-DD (the sheet date)
-  description: string;
-  amount: number;
-  txn_type: "payment" | "receipt";
-};
-
 export type CashFlowParsed = {
   openingBalanceTotal: number;
   paymentsTotal: number;
@@ -17,9 +10,8 @@ export type CashFlowParsed = {
   loanPostDatedCHQs: number;
   closingAfterLoanPostDated: number;
   pdcBuckets: PdcBucket[];
-  transactions: CashTransaction[];
   date: string | null;
-  company: "unze" | "imperial" | "unknown";
+  company: "unze" | "imperial" | "baranh" | "dolci" | "kkj" | "unknown";
   rawText: string;
 };
 
@@ -138,107 +130,21 @@ function extractUnzePdcBuckets(text: string): PdcBucket[] {
   return buckets;
 }
 
-// ── Individual transaction extraction ─────────────────────────────────────────
-//
-// Each PDF section (Payments / Receipts) contains rows that start with a
-// DD/MM/YYYY date, followed by a free-text payee/description, followed by
-// the amount. We split on date occurrences and take the last number in each
-// chunk as the amount — the same strategy already proven for PDC buckets.
-// Rows whose description contains "Total" (the section subtotal line) are
-// skipped. Returns an empty array if the block yields nothing useful so
-// callers can fall back to totals-only behaviour.
-
-function extractTransactionsFromBlock(
-  block: string,
-  txn_type: "payment" | "receipt",
-  sheetDate: string | null
-): CashTransaction[] {
-  const transactions: CashTransaction[] = [];
-  const dateMatches = [...block.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
-  const totalIdx = block.search(/\bTotal\b/i);
-
-  for (let i = 0; i < dateMatches.length; i++) {
-    const m = dateMatches[i];
-    const isoDate = `${m[3]}-${m[2]}-${m[1]}`;
-    const chunkStart = m.index! + m[0].length;
-    const nextDateIdx = i + 1 < dateMatches.length ? dateMatches[i + 1].index! : -1;
-    const chunkEnd =
-      nextDateIdx >= 0
-        ? nextDateIdx
-        : totalIdx > chunkStart
-        ? totalIdx
-        : block.length;
-    const chunk = block.slice(chunkStart, Math.max(chunkEnd, chunkStart));
-
-    const numMatches = [...chunk.matchAll(/([\d,]+(?:\.\d+)?)/g)];
-    if (numMatches.length === 0) continue;
-    const numMatch = numMatches[numMatches.length - 1];
-    const amount = parseAmount(numMatch[1] as string);
-    if (amount === 0) continue;
-
-    const rawDesc = chunk.slice(0, numMatch.index).replace(/\s+/g, " ").trim();
-    // Skip the "Total" summary row
-    if (/\bTotal\b/i.test(rawDesc)) continue;
-    const description = rawDesc || "(no description)";
-
-    transactions.push({
-      date: sheetDate ?? isoDate,
-      description,
-      amount,
-      txn_type,
-    });
+// Restaurant companies (Baranh / HD) PDC: simple date+amount pairs
+// between the PDC header and the "Total PDC's Balance" line.
+function extractRestaurantPdcBuckets(text: string): PdcBucket[] {
+  const startIdx = text.search(/Post\s*Dated\s*CHQs/i);
+  const totalIdx = text.search(/Total\s+PDC[''']?s?\s+Balance/i);
+  if (startIdx < 0) return [];
+  const end = totalIdx > startIdx ? totalIdx : text.length;
+  const block = text.slice(startIdx, end);
+  const buckets: PdcBucket[] = [];
+  const re = /(\d{2})\/(\d{2})\/(\d{4})\s+(.+?)\s+([\d,]+(?:\.\d+)?)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block))) {
+    buckets.push({ dueDate: `${m[3]}-${m[2]}-${m[1]}`, label: m[4].trim(), amount: parseAmount(m[5]) });
   }
-
-  return transactions;
-}
-
-function extractUnzeTransactions(text: string, sheetDate: string | null): CashTransaction[] {
-  const paymentsStart = text.indexOf("Payments");
-  const receiptsStart = text.indexOf("Receipts");
-  const closingStart = text.indexOf("Closing Balance Unze Trading");
-
-  const transactions: CashTransaction[] = [];
-
-  if (paymentsStart >= 0 && receiptsStart > paymentsStart) {
-    const payBlock = text.slice(paymentsStart + "Payments".length, receiptsStart);
-    transactions.push(...extractTransactionsFromBlock(payBlock, "payment", sheetDate));
-  }
-
-  if (receiptsStart >= 0) {
-    const end = closingStart > receiptsStart ? closingStart : text.length;
-    const recBlock = text.slice(receiptsStart + "Receipts".length, end);
-    transactions.push(...extractTransactionsFromBlock(recBlock, "receipt", sheetDate));
-  }
-
-  return transactions;
-}
-
-function extractImperialTransactions(text: string, sheetDate: string | null): CashTransaction[] {
-  const paymentsIdx = text.search(/Date\s*Payments/i);
-  const receiptsIdx = text.search(/Date\s*Receipts/i);
-  const pdcIdx = text.search(/Date\s*Post\s*Dated\s*CHQs/i);
-  const closingIdx = text.search(/Closing Balance\s*[\n\r(]/i);
-
-  const transactions: CashTransaction[] = [];
-
-  if (paymentsIdx >= 0 && receiptsIdx > paymentsIdx) {
-    const payBlock = text.slice(paymentsIdx, receiptsIdx);
-    transactions.push(...extractTransactionsFromBlock(payBlock, "payment", sheetDate));
-  }
-
-  if (receiptsIdx >= 0) {
-    // End of receipts block: PDC section if present, else closing balance, else end of text
-    const recEnd =
-      pdcIdx > receiptsIdx
-        ? pdcIdx
-        : closingIdx > receiptsIdx
-        ? closingIdx
-        : text.length;
-    const recBlock = text.slice(receiptsIdx, recEnd);
-    transactions.push(...extractTransactionsFromBlock(recBlock, "receipt", sheetDate));
-  }
-
-  return transactions;
+  return buckets;
 }
 
 function findTotalInSection(text: string, startLabel: string, endLabel: string): number {
@@ -250,16 +156,36 @@ function findTotalInSection(text: string, startLabel: string, endLabel: string):
   return totalMatch ? parseAmount(totalMatch[1]) : 0;
 }
 
-function detectCompany(text: string): "unze" | "imperial" | "unknown" {
+// ── Company detection ─────────────────────────────────────────────────────────
+
+function detectCompany(text: string): CashFlowParsed["company"] {
   const lower = text.toLowerCase();
-  // Check Unze first — Unze cash flows sometimes mention "Imperial Footwear" as a payee
-  if (lower.includes("opening balance total")) return "unze";
+
+  // ── Unze Trading — check first; Unze cash flows sometimes mention "Imperial Footwear" as a payee
+  if (lower.includes("opening balance total")) {
+    // Could be Unze, Baranh, or Dolci — distinguish by entity name
+    if (lower.includes("baranh (pvt) ltd") || lower.includes("baranh(pvt)ltd")) return "baranh";
+    if (lower.includes("dolci resturants") || lower.includes("dolci restaurants") || lower.includes("haute dolci")) return "dolci";
+    // Unze identifiers
+    if (lower.includes("closing balance unze trading")) return "unze";
+    if (lower.includes("unze trading pvt")) return "unze";
+    // Fallback: if Opening Balance Total is present but no other identifier, lean toward baranh/dolci style
+    return "baranh";
+  }
   if (lower.includes("closing balance unze trading")) return "unze";
   if (lower.includes("unze trading pvt")) return "unze";
+
+  // ── K&K Jhang ──
+  if (lower.includes("k & k baranh jhang") || lower.includes("k&k baranh jhang") || lower.includes("k & k jhang")) return "kkj";
+
+  // ── Imperial Footwear ──
   if (lower.includes("today opening balance") && lower.includes("today closing balance")) return "imperial";
   if (lower.includes("imperial footwear")) return "imperial";
+
   return "unknown";
 }
+
+// ── Parsers ───────────────────────────────────────────────────────────────────
 
 function parseUnzeTrading(text: string, date: string | null): CashFlowParsed {
   const paymentsTotal = findTotalInSection(text, "Payments", "Receipts");
@@ -291,7 +217,6 @@ function parseUnzeTrading(text: string, date: string | null): CashFlowParsed {
     loanPostDatedCHQs: loanTotal,
     closingAfterLoanPostDated: findAmount(text, "Closing Balance After Loan & Post Dated CHQ's Unze Trading"),
     pdcBuckets: extractUnzePdcBuckets(text),
-    transactions: extractUnzeTransactions(text, date),
     date,
     company: "unze",
     rawText: text,
@@ -369,12 +294,146 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     loanPostDatedCHQs: pdcTotal,
     closingAfterLoanPostDated: closingAfterPDC,
     pdcBuckets: extractImperialPdcBuckets(text),
-    transactions: extractImperialTransactions(text, date),
     date,
     company: "imperial",
     rawText: text,
   };
 }
+
+// Baranh (PVT) Ltd + Dolci Restaurants share the same PDF layout (confirmed
+// via position-based extraction of real PDFs, 28/07/2026):
+//
+//   Opening Balance Total   <amount>        ← top-right
+//   Payments section        amounts on right
+//   Receipts section        amounts on right
+//   Closing Balance Total   <amount>        ← middle-right
+//   Post Dated CHQs section amounts on right
+//   Total PDC's Balance     <pdc_total>
+//   Closing Balance         (<closing_after_pdc>)   ← parens = negative
+//
+// The structure is identical to Unze Trading except:
+//   • "Closing Balance Total" instead of "Closing Balance Unze Trading"
+//   • No "Loan & Post Dated" header before PDC (just "Post Dated CHQs")
+//   • No "Closing Balance After Loan & Post Dated CHQ's…" label
+function parseBaranhStyle(
+  text: string,
+  date: string | null,
+  company: "baranh" | "dolci",
+): CashFlowParsed {
+  const openingBalance = findAmount(text, "Opening Balance Total");
+
+  // Payments section ends where Receipts section begins
+  const paymentsTotal = findTotalInSection(text, "Payments", "Receipts");
+
+  // Receipts section ends where Closing Balance Total appears
+  let receiptsTotal = 0;
+  const receiptsIdx = text.indexOf("Receipts");
+  const closingTotalIdx = text.indexOf("Closing Balance Total");
+  if (receiptsIdx >= 0 && closingTotalIdx >= 0) {
+    const block = text.slice(receiptsIdx, closingTotalIdx);
+    const m = block.match(/Total\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
+    if (m) receiptsTotal = parseAmount(m[1]);
+  }
+
+  // Main closing balance (before PDC)
+  const closingBalance = findAmount(text, "Closing Balance Total");
+
+  // PDC total — "Total PDC's Balance  1,348,420"
+  let pdcTotal = 0;
+  const pdcMatch = text.match(/Total\s+PDC[''']?s?\s+Balance\s+\(?([,\d]+(?:\.\d+)?)\)?/i);
+  if (pdcMatch) {
+    const searchStart = text.search(/Total\s+PDC[''']?s?\s+Balance/i);
+    const chunk = text.slice(searchStart, searchStart + 80);
+    pdcTotal = chunk.includes("(") ? -parseAmount(pdcMatch[1]) : parseAmount(pdcMatch[1]);
+  }
+
+  // Closing balance after PDC — appears as "(2,288,354)" or similar right after
+  // the "Closing Balance" label that follows the PDC section.
+  let closingAfterPDC = pdcTotal !== 0 ? closingBalance - pdcTotal : closingBalance;
+  const pdcSectionIdx = text.search(/Total\s+PDC[''']?s?\s+Balance/i);
+  if (pdcSectionIdx >= 0) {
+    const afterPDC = text.slice(pdcSectionIdx);
+    // Look for "Closing Balance" (NOT "Total") followed by a number or (number)
+    const m = afterPDC.match(/Closing Balance\s*\n?\s*(\(?\s*[\d,]+(?:\.\d+)?\s*\)?)/i);
+    if (m) {
+      const raw = m[1].trim();
+      closingAfterPDC = raw.startsWith("(") ? -parseAmount(raw) : parseAmount(raw);
+    }
+  }
+
+  return {
+    openingBalanceTotal: openingBalance,
+    paymentsTotal,
+    receiptsTotal,
+    closingBalanceUnzeTrading: closingBalance,
+    loanPostDatedCHQs: pdcTotal,
+    closingAfterLoanPostDated: closingAfterPDC,
+    pdcBuckets: extractRestaurantPdcBuckets(text),
+    date,
+    company,
+    rawText: text,
+  };
+}
+
+// K&K Baranh Jhang — simpler format (confirmed via real PDF, 28/07/2026):
+//
+//   Opening Balance     <amount>          ← no "Total" suffix
+//   Payments section    amounts on right  (may be "-" = zero)
+//   Receipts section    amounts on right
+//   Closing Balance     <amount>          ← no PDC section
+//
+// No PDC section. Payments/Receipts totals end in a single "Total" line.
+// When there are no payments the Total shows as "-" (treated as 0).
+function parseKKJ(text: string, date: string | null): CashFlowParsed {
+  // Opening: first number after "Opening Balance" (no "Total" in label)
+  const openingBalance = (() => {
+    const m = text.match(/Opening Balance\s*\n?\s*(-?[\d,]+(?:\.\d+)?)/i);
+    return m ? parseAmount(m[1]) : 0;
+  })();
+
+  // Payments total: extract the "Total" line in the Payments section.
+  // "-" means zero.
+  let paymentsTotal = 0;
+  const paymentsIdx = text.search(/Payments/i);
+  const receiptsIdx = text.search(/Receipts/i);
+  if (paymentsIdx >= 0 && receiptsIdx > paymentsIdx) {
+    const block = text.slice(paymentsIdx, receiptsIdx);
+    const m = block.match(/Total\s*([\d,]+(?:\.\d+)?)/i);
+    if (m) paymentsTotal = parseAmount(m[1]);
+    // "-" means zero — paymentsTotal stays 0
+  }
+
+  // Receipts total: extract "Total" in the Receipts section (before Closing Balance)
+  let receiptsTotal = 0;
+  const closingIdx = text.search(/Closing Balance/i);
+  if (receiptsIdx >= 0) {
+    const end = closingIdx > receiptsIdx ? closingIdx : text.length;
+    const block = text.slice(receiptsIdx, end);
+    const m = block.match(/Total\s*([\d,]+(?:\.\d+)?)/i);
+    if (m) receiptsTotal = parseAmount(m[1]);
+  }
+
+  // Closing balance: number after "Closing Balance" label
+  const closingBalance = (() => {
+    const m = text.match(/Closing Balance\s*\n?\s*(-?[\d,]+(?:\.\d+)?)/i);
+    return m ? parseAmount(m[1]) : openingBalance + receiptsTotal - paymentsTotal;
+  })();
+
+  return {
+    openingBalanceTotal: openingBalance,
+    paymentsTotal,
+    receiptsTotal,
+    closingBalanceUnzeTrading: closingBalance,
+    loanPostDatedCHQs: 0,
+    closingAfterLoanPostDated: closingBalance,
+    pdcBuckets: [],
+    date,
+    company: "kkj",
+    rawText: text,
+  };
+}
+
+// ── Validation ────────────────────────────────────────────────────────────────
 
 function checkNotMostlyZero(result: CashFlowParsed, date: string | null, company: string): void {
   const criticalFields = [result.openingBalanceTotal, result.receiptsTotal, result.paymentsTotal, result.closingBalanceUnzeTrading];
@@ -388,13 +447,15 @@ function checkNotMostlyZero(result: CashFlowParsed, date: string | null, company
 // block starts with its "DD/MM/YYYY" line immediately followed by "Today Opening Balance".
 const IMPERIAL_BLOCK_SPLIT = /(?=\d{2}\/\d{2}\/\d{4}\s*\nToday Opening Balance)/;
 
+// ── Public API ────────────────────────────────────────────────────────────────
+
 export async function parseCashFlowPDF(buffer: Buffer): Promise<CashFlowParsed[]> {
   const text = await extractTextFromPDF(buffer);
   const company = detectCompany(text);
 
   if (company === "unknown") {
     const date = extractDate(text);
-    throw new Error(`Could not determine company (Unze Trading vs Imperial Footwear) from PDF contents — refusing to guess (${date || "no date"})`);
+    throw new Error(`Could not determine company from PDF contents — unrecognised format (${date || "no date"}). Supported: Unze Trading, Imperial Footwear, Baranh (PVT) Ltd, Dolci Restaurants, K&K Baranh Jhang.`);
   }
 
   if (company === "unze") {
@@ -408,18 +469,36 @@ export async function parseCashFlowPDF(buffer: Buffer): Promise<CashFlowParsed[]
     return [result];
   }
 
-  const blocks = text.split(IMPERIAL_BLOCK_SPLIT).filter((b) => /Today Opening Balance/.test(b));
-  if (blocks.length === 0) {
-    const date = extractDate(text);
-    throw new Error(`Could not find any "Today Opening Balance" blocks in this Imperial PDF (${date || "no date"})`);
+  if (company === "imperial") {
+    const blocks = text.split(IMPERIAL_BLOCK_SPLIT).filter((b) => /Today Opening Balance/.test(b));
+    if (blocks.length === 0) {
+      const date = extractDate(text);
+      throw new Error(`Could not find any "Today Opening Balance" blocks in this Imperial PDF (${date || "no date"})`);
+    }
+    const results = blocks.map((block) => {
+      const date = extractDate(block);
+      const result = parseImperial(block, date);
+      checkNotMostlyZero(result, date, company);
+      return result;
+    });
+    return results;
   }
 
-  const results = blocks.map((block) => {
-    const date = extractDate(block);
-    const result = parseImperial(block, date);
+  if (company === "baranh" || company === "dolci") {
+    const date = extractDate(text);
+    const result = parseBaranhStyle(text, date, company);
     checkNotMostlyZero(result, date, company);
-    return result;
-  });
+    return [result];
+  }
 
-  return results;
+  if (company === "kkj") {
+    const date = extractDate(text);
+    const result = parseKKJ(text, date);
+    checkNotMostlyZero(result, date, company);
+    return [result];
+  }
+
+  // TypeScript exhaustiveness guard — never reached
+  const date = extractDate(text);
+  throw new Error(`Unhandled company type: ${company} (${date || "no date"})`);
 }

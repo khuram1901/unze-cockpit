@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID } from "../../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID } from "../../../lib/constants";
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
 
@@ -119,8 +119,9 @@ export async function POST(request: NextRequest) {
   if (!company || !sheet_date) {
     return Response.json({ error: "company and sheet_date are required" }, { status: 400 });
   }
-  if (!["IFPL", "UTPL"].includes(company)) {
-    return Response.json({ error: "company must be IFPL or UTPL" }, { status: 400 });
+  const VALID_COMPANIES = ["IFPL", "UTPL", "BRNH", "HD", "KKJ"];
+  if (!VALID_COMPANIES.includes(company)) {
+    return Response.json({ error: `company must be one of: ${VALID_COMPANIES.join(", ")}` }, { status: 400 });
   }
 
   // 1. Upsert sheet header — upsert so that re-uploads for the same date update
@@ -181,7 +182,14 @@ export async function POST(request: NextRequest) {
     total_payments != null;
 
   if (hasBalance) {
-    const companyId = company === "IFPL" ? IFPL_COMPANY_ID : UTPL_COMPANY_ID;
+    const COMPANY_ID_MAP: Record<string, string> = {
+      UTPL: UTPL_COMPANY_ID,
+      IFPL: IFPL_COMPANY_ID,
+      BRNH: BRNH_COMPANY_ID,
+      HD:   HD_COMPANY_ID,
+      KKJ:  KKJ_COMPANY_ID,
+    };
+    const companyId = COMPANY_ID_MAP[company];
     const { error: dcpErr } = await supabase
       .from("daily_cash_position")
       .upsert(
