@@ -178,9 +178,10 @@ export default function PADashboardPage() {
   function showMsg(text: string) { setMessage(text); setTimeout(() => setMessage(""), 3000); }
 
   async function updateTask(id: string, updates: Record<string, unknown>) {
-    await supabase.from("tasks").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await supabase.from("tasks").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
     logAction("Updated", "tasks", `PA updated ${Object.keys(updates).join(", ")}`, id);
     loadData();
+    return { error };
   }
 
   async function closeTask(id: string) {
@@ -225,17 +226,15 @@ export default function PADashboardPage() {
     for (const id of selectedTasks) {
       const task = tasks.find((t) => t.id === id);
       if (task?.assigned_to) previousAssignees.add(task.assigned_to);
-      await supabase.from("tasks").update({
+      // tasks.update FIRST — only sync task_assignees if it succeeds,
+      // to prevent split-brain (same fix as Civil Defense task, Jul 2026).
+      const { error } = await supabase.from("tasks").update({
         assigned_to: newPerson, assigned_to_email: member?.email || null,
         assigned_to_department: member?.department || null,
         notes: `Reassigned from ${task?.assigned_to || "unassigned"} to ${newPerson} by ${currentUserName || "PA"}`,
         updated_at: new Date().toISOString(),
       }).eq("id", id);
-      // Found during the 15 Jul 2026 audit: this only updated
-      // tasks.assigned_to, leaving task_assignees stale (co-assignee
-      // list out of sync). "Reassign to" replaces the owner list with
-      // just this one person, matching TaskDetailPanel.tsx's pattern.
-      if (member?.id) {
+      if (!error && member?.id) {
         await supabase.from("task_assignees").delete().eq("task_id", id);
         await supabase.from("task_assignees").insert({ task_id: id, member_id: member.id, member_name: newPerson, member_email: member.email });
       }
@@ -403,13 +402,13 @@ export default function PADashboardPage() {
                 const newOwner = e.target.value;
                 const delegationNote = `Reassigned from ${prevOwner} to ${newOwner} by ${currentUserName || "PA"}`;
                 const existingNotes = task.notes || "";
-                await updateTask(task.id, {
+                const { error: reassignError } = await updateTask(task.id, {
                   assigned_to: newOwner, assigned_to_email: m?.email || null, assigned_to_department: m?.department || null,
                   notes: existingNotes ? `${existingNotes}\n[${new Date().toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}] ${delegationNote}` : delegationNote,
                 });
-                // Found during the 15 Jul 2026 audit: only tasks.assigned_to
-                // was updated, leaving task_assignees stale.
-                if (m?.id) {
+                // Only sync task_assignees if tasks.update succeeded —
+                // prevents split-brain (same fix as Civil Defense task, Jul 2026).
+                if (!reassignError && m?.id) {
                   await supabase.from("task_assignees").delete().eq("task_id", task.id);
                   await supabase.from("task_assignees").insert({ task_id: task.id, member_id: m.id, member_name: newOwner, member_email: m.email });
                 }

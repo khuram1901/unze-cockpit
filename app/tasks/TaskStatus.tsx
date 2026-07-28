@@ -246,13 +246,14 @@ export default function TaskStatus({
   // stores the question note so they have context.
   async function submitWaitingReply() {
     setSaving(true);
-    const route = await routeWaitingReplyTask(
+    const { __assignee, ...route } = await routeWaitingReplyTask(
       task.id,
       task.assigned_to,
       task.assigned_to_email,
       waitingToEmail || null,
-    );
+    ) as Record<string, unknown> & { __assignee?: { id: string; name: string; email: string } };
 
+    // tasks.update FIRST — if it fails we abort before touching task_assignees
     const { error } = await supabase
       .from("tasks")
       .update({
@@ -267,6 +268,12 @@ export default function TaskStatus({
 
     setSaving(false);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
+
+    // tasks saved — now sync task_assignees to match
+    if (__assignee?.id) {
+      await supabase.from("task_assignees").delete().eq("task_id", task.id);
+      await supabase.from("task_assignees").insert({ task_id: task.id, member_id: __assignee.id, member_name: __assignee.name, member_email: __assignee.email });
+    }
 
     logAction("Updated", "tasks", `Waiting Reply set — routed to ${route.assigned_to || "manager"}: ${task.id}`, task.id);
     setPendingWaitingReply(false);
@@ -288,8 +295,9 @@ export default function TaskStatus({
     }
     setSavingManagerReply(true);
 
-    const route = await returnFromWaitingReply(task.id, task.waiting_reply_by_email);
+    const { __assignee, ...route } = await returnFromWaitingReply(task.id, task.waiting_reply_by_email) as Record<string, unknown> & { __assignee?: { id: string; name: string; email: string } };
 
+    // tasks.update FIRST — if it fails we abort before touching task_assignees
     const { error } = await supabase
       .from("tasks")
       .update({
@@ -303,6 +311,12 @@ export default function TaskStatus({
 
     setSavingManagerReply(false);
     if (error) { toast.show("Error: " + error.message, "error"); return; }
+
+    // tasks saved — now sync task_assignees to match
+    if (__assignee?.id) {
+      await supabase.from("task_assignees").delete().eq("task_id", task.id);
+      await supabase.from("task_assignees").insert({ task_id: task.id, member_id: __assignee.id, member_name: __assignee.name, member_email: __assignee.email });
+    }
 
     logAction("Updated", "tasks", `Reply & Return to ${task.waiting_reply_by_name || task.waiting_reply_by_email}: ${task.id}`, task.id);
     setStatus("In Progress");

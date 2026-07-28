@@ -59,8 +59,9 @@ export async function routeSubmittedTask(
   }
   if (!mgr?.email) return {};
 
-  await supabase.from("task_assignees").delete().eq("task_id", taskId);
-  await supabase.from("task_assignees").insert({ task_id: taskId, member_id: mgr.id, member_name: mgr.name, member_email: mgr.email });
+  // NOTE: task_assignees is NOT updated here — the DB trigger
+  // tasks_route_submitted handles that atomically (migration 194).
+  // This function is kept for reference / fallback use only.
   return {
     assigned_to: mgr.name,
     assigned_to_email: mgr.email,
@@ -73,6 +74,9 @@ export async function routeSubmittedTask(
     assigned_by_email: assignedToEmail,
     submitted_by_name: assignedTo,
     submitted_by_email: assignedToEmail,
+    // Metadata for callers that need to sync task_assignees themselves
+    // (prefixed __ so it is NOT spread into a tasks.update call directly)
+    __assignee: { id: mgr.id, name: mgr.name, email: mgr.email },
   };
 }
 
@@ -144,12 +148,9 @@ export async function routeWaitingReplyTask(
 
   if (!target?.email) return {};
 
-  await supabase.from("task_assignees").delete().eq("task_id", taskId);
-  await supabase.from("task_assignees").insert({
-    task_id: taskId, member_id: target.id,
-    member_name: target.name, member_email: target.email,
-  });
-
+  // task_assignees is NOT updated here — the caller must do it AFTER
+  // confirming that tasks.update succeeded, to prevent split-brain.
+  // Use __assignee from the return value for that insert.
   return {
     assigned_to: target.name,
     assigned_to_email: target.email,
@@ -162,6 +163,8 @@ export async function routeWaitingReplyTask(
     // Capture who was waiting so the reply-to person can hand it back
     waiting_reply_by_email: currentAssignedToEmail,
     waiting_reply_by_name: currentAssignedTo,
+    // Metadata for callers — NOT a task column, do not spread into tasks.update
+    __assignee: { id: target.id, name: target.name, email: target.email },
   };
 }
 
@@ -181,12 +184,9 @@ export async function returnFromWaitingReply(
 
   if (!original?.email) return {};
 
-  await supabase.from("task_assignees").delete().eq("task_id", taskId);
-  await supabase.from("task_assignees").insert({
-    task_id: taskId, member_id: original.id,
-    member_name: original.name, member_email: original.email,
-  });
-
+  // task_assignees is NOT updated here — the caller must do it AFTER
+  // confirming that tasks.update succeeded, to prevent split-brain.
+  // Use __assignee from the return value for that insert.
   return {
     assigned_to: original.name,
     assigned_to_email: original.email,
@@ -199,5 +199,7 @@ export async function returnFromWaitingReply(
     waiting_reply_to_email: null,
     waiting_reply_to_name: null,
     manager_reply_at: new Date().toISOString(),
+    // Metadata for callers — NOT a task column, do not spread into tasks.update
+    __assignee: { id: original.id, name: original.name, email: original.email },
   };
 }
