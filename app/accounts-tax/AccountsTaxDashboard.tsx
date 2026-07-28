@@ -250,6 +250,18 @@ export default function AccountsTaxDashboard() {
           setScheduleUserType("admin");
         } else if (emailLower === EXTERNAL_AUDITOR_EMAIL.toLowerCase()) {
           setScheduleUserType("auditor");
+          // Auto-switch to the most recent year that has items waiting for the auditor
+          // (avoids auditor landing on current year with nothing to action)
+          const { data: pendingYear } = await supabase
+            .from("tax_schedule_entries")
+            .select("tax_year")
+            .eq("status", "External Auditors")
+            .order("tax_year", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (pendingYear?.tax_year) {
+            setSelectedYear(pendingYear.tax_year);
+          }
         } else {
           setScheduleUserType("team");
         }
