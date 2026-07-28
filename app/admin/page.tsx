@@ -85,10 +85,13 @@ type TabId = "registrations" | "payments" | "compliance" | "documents" | "operat
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTH_FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const ENTITY_DISPLAY: Record<string, string> = {
-  IFPL: "IFPL — Imperial Footwear",
+  UTPL:   "UTPL — Unze Trading",
+  IFPL:   "IFPL — Imperial Footwear",
   Baranh: "Baranh",
-  HD: "Haute Dolci",
-  UTPL: "UTPL — Unze Trading",
+  HD:     "Haute Dolci",
+  ALM:    "Almahar",
+  DIR:    "Directors",
+  UZL:    "Unze London",
 };
 const STATUS_COLOURS: Record<string, { bg: string; color: string }> = {
   Registered: { bg: "#D1FAE5", color: COLOURS.GREEN },
@@ -655,7 +658,7 @@ export default function AdminDataPage() {
 
   // ── Helpers: group data ────────────────────────────────────────────
   function groupedByEntity<T extends { entity: string }>(rows: T[]): Record<string, T[]> {
-    const order = ["IFPL", "Baranh", "HD", "UTPL"];
+    const order = ["UTPL", "IFPL", "Baranh", "HD", "ALM", "DIR", "UZL"];
     const grouped: Record<string, T[]> = {};
     order.forEach((e) => { grouped[e] = []; });
     rows.forEach((r) => {
@@ -861,10 +864,13 @@ export default function AdminDataPage() {
           <select value={regEntityFilter} onChange={(e) => setRegEntityFilter(e.target.value)}
             style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "130px" }}>
             <option value="">All Entities</option>
-            <option value="IFPL">IFPL — Retail</option>
+            <option value="UTPL">UTPL — Unze Trading</option>
+            <option value="IFPL">IFPL — Imperial Footwear</option>
             <option value="Baranh">Baranh</option>
             <option value="HD">Haute Dolci</option>
-            <option value="UTPL">UTPL</option>
+            <option value="ALM">Almahar</option>
+            <option value="DIR">Directors</option>
+            <option value="UZL">Unze London</option>
           </select>
           <select value={regTypeFilter} onChange={(e) => setRegTypeFilter(e.target.value as "" | "EOBI" | "Social Security")}
             style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "6px", fontSize: "12.5px", color: COLOURS.NAVY, backgroundColor: "white", minWidth: "160px" }}>
@@ -920,10 +926,13 @@ export default function AdminDataPage() {
                     <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Entity</label>
                     <select value={newLocation.entity} onChange={(e) => setNewLocation({ ...newLocation, entity: e.target.value })}
                       style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
-                      <option value="IFPL">IFPL</option>
+                      <option value="UTPL">UTPL — Unze Trading</option>
+                      <option value="IFPL">IFPL — Imperial Footwear</option>
                       <option value="Baranh">Baranh</option>
                       <option value="HD">Haute Dolci</option>
-                      <option value="UTPL">UTPL</option>
+                      <option value="ALM">Almahar</option>
+                      <option value="DIR">Directors</option>
+                      <option value="UZL">Unze London</option>
                     </select>
                   </div>
                   <div>
@@ -1092,7 +1101,7 @@ export default function AdminDataPage() {
   function renderPayments() {
     if (loadingPayments) return <SkeletonRows count={8} height="44px" />;
 
-    const ENTITY_ORDER = ["IFPL", "Baranh", "HD", "UTPL"];
+    const ENTITY_ORDER = ["UTPL", "IFPL", "Baranh", "HD", "ALM", "DIR", "UZL"];
     const eobiRows = ENTITY_ORDER
       .map((e) => paymentRows.find((r) => r.entity === e && r.payment_type === "EOBI"))
       .filter(Boolean) as PaymentRow[];
@@ -2019,10 +2028,13 @@ export default function AdminDataPage() {
     if (!manageUtility) return null;
     const mgmtInput: React.CSSProperties = { ...inputStyle, width: "100%", boxSizing: "border-box" as const, fontSize: "13px" };
     const ENTITIES = [
-      { value: "IFPL",   label: "IFPL — Imperial Footwear" },
       { value: "UTPL",   label: "UTPL — Unze Trading" },
+      { value: "IFPL",   label: "IFPL — Imperial Footwear" },
+      { value: "Baranh", label: "Baranh" },
       { value: "HD",     label: "HD — Haute Dolci" },
-      { value: "Baranh", label: "Baranh — Bahrain" },
+      { value: "ALM",    label: "Almahar" },
+      { value: "DIR",    label: "Directors" },
+      { value: "UZL",    label: "Unze London" },
     ];
     const LOC_TYPES = ["retail", "restaurant", "plant", "warehouse", "office"];
     const PROVINCES = ["Punjab", "Sindh", "KPK", "Islamabad", "Balochistan"];
@@ -2920,7 +2932,7 @@ export default function AdminDataPage() {
                   <label style={{ fontSize: "12px", fontWeight: 600, color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>Entity</label>
                   <select value={addingPayment.entity} onChange={(e) => setAddingPayment({ ...addingPayment, entity: e.target.value })}
                     style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}>
-                    {["IFPL", "Baranh", "HD", "UTPL"].map((e) => <option key={e}>{e}</option>)}
+                    {["UTPL", "IFPL", "Baranh", "HD", "ALM", "DIR", "UZL"].map((e) => <option key={e}>{e}</option>)}
                   </select>
                 </div>
                 <div>

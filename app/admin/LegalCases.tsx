@@ -76,7 +76,7 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
   "Closed":               { bg: "#F1F5F9", color: "#475569" },
 };
 
-const ENTITY_ORDER = ["IFPL", "Baranh", "HD", "UTPL"];
+const ENTITY_ORDER = ["UTPL", "IFPL", "Baranh", "HD", "ALM", "DIR", "UZL"];
 const ENTITY_DISPLAY: Record<string, string> = {
   IFPL: "IFPL — Imperial Footwear",
   Baranh: "Baranh",

@@ -94,7 +94,7 @@ const DEPT_ACCENT: Record<string, string> = {
   "Taxation": COLOURS.RED,
   "IT": COLOURS.BLUE,
   "Unze Trading Ops": COLOURS.BLUE,
-  "Executive Office": COLOURS.NAVY,
+  "Unze Group": COLOURS.NAVY,
 };
 function deptAccent(dept: string) { return DEPT_ACCENT[dept] || COLOURS.SLATE; }
 
@@ -196,8 +196,8 @@ function MeetingCard({
     setDraft({
       title: m.title,
       meeting_date: m.meeting_date,
-      company: m.company || "Executive Office",
-      department: m.department || "Executive Office",
+      company: m.company || "Unze Group",
+      department: m.department || "Unze Group",
       attendees: m.attendees || [],
       executive_summary: m.executive_summary || "",
       decisions: m.decisions || [],
@@ -302,7 +302,7 @@ function MeetingCard({
                 <div>
                   <label style={labelStyle}>Company</label>
                   <select value={draft.company} onChange={(e) => setDraft({ ...draft, company: e.target.value })} style={sf}>
-                    {["Executive Office", "Unze Trading", "Imperial Footwear", "Haute Dolci", "Barahn", "K&K Jhang"].map((c) => (
+                    {["Unze Group", "Unze Trading", "Imperial Footwear", "Baranh", "Haute Dolci", "K&K Jhang"].map((c) => (
                       <option key={c}>{c}</option>
                     ))}
                   </select>
@@ -310,7 +310,7 @@ function MeetingCard({
                 <div>
                   <label style={labelStyle}>Department</label>
                   <select value={draft.department} onChange={(e) => setDraft({ ...draft, department: e.target.value })} style={sf}>
-                    {["Executive Office", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
+                    {["Unze Group", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
                       <option key={d}>{d}</option>
                     ))}
                   </select>
@@ -850,8 +850,8 @@ export default function MeetingsPage() {
         risks: extracted.risks,
         opportunities: extracted.opportunities,
         attendees: extracted.attendees,
-        department: extracted.department || "Executive Office",
-        company: extracted.company || "Executive Office",
+        department: extracted.department || "Unze Group",
+        company: extracted.company || "Unze Group",
         raw_transcript: transcript,
         created_by: currentUserEmail,
         mind_map_url: mindMapUrl,
@@ -1025,7 +1025,7 @@ export default function MeetingsPage() {
     for (const task of openTasks) {
       const meeting = meetings.find((m) => m.id === task.meeting_id);
       if (!meeting) continue;
-      const dept = meeting.department || meeting.company || "Executive Office";
+      const dept = meeting.department || meeting.company || "Unze Group";
       const days = Math.floor((today.getTime() - new Date(meeting.meeting_date).getTime()) / 86400000);
       const entry = map.get(dept) || { open: 0, pending: 0, oldestDays: 0 };
       if (task.status === "In Progress") entry.open++;
@@ -1050,13 +1050,13 @@ export default function MeetingsPage() {
 
   // Dept list for tabs
   const deptList = Array.from(
-    new Set(meetings.map((m) => m.department || m.company || "Executive Office"))
+    new Set(meetings.map((m) => m.department || m.company || "Unze Group"))
   ).sort();
 
   // Meetings to display in Past Meetings view — filtered by tab, newest first
   const displayedMeetings = (selectedDept === "All"
     ? meetings
-    : meetings.filter((m) => (m.department || m.company || "Executive Office") === selectedDept)
+    : meetings.filter((m) => (m.department || m.company || "Unze Group") === selectedDept)
   ).slice().sort((a, b) => b.meeting_date.localeCompare(a.meeting_date));
 
   const allDecisions = meetings.flatMap((m) =>
@@ -1064,7 +1064,7 @@ export default function MeetingsPage() {
       text,
       meetingTitle: m.title,
       meetingDate: m.meeting_date,
-      department: m.department || m.company || "Executive Office",
+      department: m.department || m.company || "Unze Group",
       meetingId: m.id,
     }))
   );
@@ -1490,7 +1490,7 @@ export default function MeetingsPage() {
               <div>
                 <label style={labelStyle}>Company</label>
                 <select value={extracted.company} onChange={(e) => setExtracted({ ...extracted, company: e.target.value })} style={inputStyle}>
-                  {["Executive Office", "Unze Trading", "Imperial Footwear", "Haute Dolci", "Barahn", "K&K Jhang"].map((c) => (
+                  {["Unze Group", "Unze Trading", "Imperial Footwear", "Baranh", "Haute Dolci", "K&K Jhang"].map((c) => (
                     <option key={c}>{c}</option>
                   ))}
                 </select>
@@ -1498,7 +1498,7 @@ export default function MeetingsPage() {
               <div>
                 <label style={labelStyle}>Department</label>
                 <select value={extracted.department} onChange={(e) => setExtracted({ ...extracted, department: e.target.value })} style={inputStyle}>
-                  {["Executive Office", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
+                  {["Unze Group", "Unze Trading Ops", "Finance", "HR", "Audit", "Taxation", "Admin"].map((d) => (
                     <option key={d}>{d}</option>
                   ))}
                 </select>
@@ -1915,7 +1915,7 @@ export default function MeetingsPage() {
                 {/* Dept filter tabs */}
                 <div style={{ display: "flex", overflowX: "auto", marginBottom: "10px", border: `1px solid ${COLOURS.BORDER}`, borderRadius: RADII.CARD, overflow: "hidden", backgroundColor: COLOURS.CARD_ALT }}>
                   {["All", ...deptList].map((dept, i) => {
-                    const deptMeetings = dept === "All" ? meetings : meetings.filter((m) => (m.department || m.company || "Executive Office") === dept);
+                    const deptMeetings = dept === "All" ? meetings : meetings.filter((m) => (m.department || m.company || "Unze Group") === dept);
                     const openCount = deptMeetings.reduce((s, m) => {
                       const mt = getTasksForMeeting(m.id).filter((t) => t.status === "In Progress");
                       return s + mt.length;

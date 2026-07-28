@@ -12,16 +12,18 @@ import {
 } from "../../../lib/SharedUI";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+// EOBI/Social Security covers Pakistani entities only (excludes Unze London).
+// Using short codes matching the banking/EOBI records in Supabase.
 
-
-const ENTITIES = ["IFPL", "Baranh", "HD", "UTPL"] as const;
+const ENTITIES = ["UTPL", "IFPL", "Baranh", "HD", "ALM"] as const;
 type Entity = (typeof ENTITIES)[number];
 
 const ENTITY_DISPLAY: Record<string, string> = {
+  UTPL:   "UTPL — Unze Trading",
   IFPL:   "IFPL — Imperial Footwear",
   Baranh: "Baranh",
   HD:     "Haute Dolci",
-  UTPL:   "UTPL — Unze Trading",
+  ALM:    "Almahar",
 };
 
 const PAYMENT_TYPES = ["EOBI", "Social Security"] as const;

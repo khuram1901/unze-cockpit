@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AuthWrapper from "../lib/AuthWrapper";
 import { supabase, loadMyPermissions, authFetch } from "../lib/supabase";
 import { formatMonthUK } from "../lib/dateUtils";
-import { COMPANIES, getCompanyByName, deptsForCompany, catsForCompany, COMPANY_DEPARTMENTS, COMPANY_CATEGORIES } from "../lib/constants";
+import { COMPANIES, BUDGET_COMPANIES, UTPL_COMPANY_ID, IFPL_COMPANY_ID, getCompanyByName, deptsForCompany, catsForCompany, COMPANY_DEPARTMENTS, COMPANY_CATEGORIES } from "../lib/constants";
 import { COLOURS, PageHeader, SectionTitle, useToast, useConfirm, SkeletonRows } from "../lib/SharedUI";
 import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
@@ -51,31 +51,22 @@ function downloadBudgetTemplate() {
     ["═══════════════════════════════"],
     ["COMPANY CODES (copy one per row)"],
     ["═══════════════════════════════"],
-    ["UTPL"],
-    ["IFPL"],
+    ...BUDGET_COMPANIES.map((c) => [c.shortCode]),
     [""],
-    ["UTPL = Unze Trading PVT Limited"],
-    ["IFPL = Imperial Footwear PVT Limited"],
+    ...BUDGET_COMPANIES.map((c) => [`${c.shortCode} = ${c.name}`]),
     [""],
-    ["═══════════════════════════════════"],
-    ["DEPARTMENTS — UTPL (copy one per row)"],
-    ["═══════════════════════════════════"],
-    ...COMPANY_DEPARTMENTS["15884c2d-48a4-4d43-be90-0ef6e130790c"].map((d) => [d]),
-    [""],
-    ["═══════════════════════════════════"],
-    ["DEPARTMENTS — IFPL (copy one per row)"],
-    ["═══════════════════════════════════"],
-    ...COMPANY_DEPARTMENTS["77921705-8a15-4406-847a-b234f84b5ec3"].map((d) => [d]),
-    [""],
-    ["══════════════════════════════════"],
-    ["CATEGORIES — UTPL (copy one per row)"],
-    ["══════════════════════════════════"],
-    ...COMPANY_CATEGORIES["15884c2d-48a4-4d43-be90-0ef6e130790c"].map((c) => [c]),
-    [""],
-    ["══════════════════════════════════"],
-    ["CATEGORIES — IFPL (copy one per row)"],
-    ["══════════════════════════════════"],
-    ...COMPANY_CATEGORIES["77921705-8a15-4406-847a-b234f84b5ec3"].map((c) => [c]),
+    ...BUDGET_COMPANIES.flatMap((c) => [
+      [`═══════════════════════════════════`],
+      [`DEPARTMENTS — ${c.shortCode} (copy one per row)`],
+      [`═══════════════════════════════════`],
+      ...(COMPANY_DEPARTMENTS[c.id] ?? []).map((d) => [d]),
+      [""],
+      [`══════════════════════════════════`],
+      [`CATEGORIES — ${c.shortCode} (copy one per row)`],
+      [`══════════════════════════════════`],
+      ...(COMPANY_CATEGORIES[c.id] ?? []).map((cat) => [cat]),
+      [""],
+    ]),
     [""],
     ["═══════════════"],
     ["HOW TO USE"],
@@ -165,7 +156,7 @@ export default function FinancePage() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
-  const [budgetCompany, setBudgetCompany] = useState(COMPANIES[0]?.id || "");
+  const [budgetCompany, setBudgetCompany] = useState(BUDGET_COMPANIES[0]?.id || "");
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [bdDept, setBdDept] = useState("");
   const [bdCategory, setBdCategory] = useState("");
@@ -394,7 +385,7 @@ export default function FinancePage() {
                   <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "14px", flexWrap: "wrap" }}>
                     <select value={budgetCompany} onChange={(e) => { setBudgetCompany(e.target.value); setBdDept(""); loadBudgets(e.target.value); }}
                       style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", fontSize: "13px" }}>
-                      {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.shortCode}</option>)}
+                      {BUDGET_COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.shortCode} — {c.name}</option>)}
                     </select>
                     <input type="month" value={budgetMonth} onChange={(e) => { setBudgetMonth(e.target.value); loadBudgets(undefined, e.target.value); }}
                       style={{ padding: "6px 10px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "10px", fontSize: "13px" }} />
@@ -411,7 +402,7 @@ export default function FinancePage() {
                       onImport={async (rows) => {
                         const errors: string[] = [];
                         const validRows: { company: string; dept: string; cat: string; budgeted: number; actual: number; notes: string }[] = [];
-                        const validCompanyCodes = COMPANIES.map((c) => c.shortCode);
+                        const validCompanyCodes = BUDGET_COMPANIES.map((c) => c.shortCode);
 
                         for (let i = 0; i < rows.length; i++) {
                           const row = rows[i];
@@ -421,7 +412,7 @@ export default function FinancePage() {
                           const cat = row["Category"]?.trim();
                           if (!cId && !dept && !cat) continue;
                           if (!cId || !validCompanyCodes.includes(cId)) { errors.push(`Row ${line}: Invalid company "${cId || "(empty)"}". Must be ${validCompanyCodes.join(" or ")}`); continue; }
-                          const targetCompany = COMPANIES.find((c) => c.shortCode === cId)!.id;
+                          const targetCompany = BUDGET_COMPANIES.find((c) => c.shortCode === cId)!.id;
                           const targetDepts = deptsForCompany(targetCompany);
                           if (!dept || !targetDepts.includes(dept)) { errors.push(`Row ${line}: Invalid department "${dept || "(empty)"}" for ${cId}. Must be one of: ${targetDepts.join(", ")}`); continue; }
                           const validCats = catsForCompany(targetCompany);
@@ -499,7 +490,7 @@ export default function FinancePage() {
 
                   {/* Company codes reference */}
                   <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "10px" }}>
-                    {COMPANIES.map((c) => <span key={c.id} style={{ marginRight: "12px" }}><strong>{c.shortCode}</strong> = {c.name}</span>)}
+                    {BUDGET_COMPANIES.map((c) => <span key={c.id} style={{ marginRight: "12px" }}><strong>{c.shortCode}</strong> = {c.name}</span>)}
                   </div>
 
                   {/* Summary cards */}

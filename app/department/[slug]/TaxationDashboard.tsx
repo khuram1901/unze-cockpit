@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase, loadMyPermissions } from "../../lib/supabase";
-import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, HD_COMPANY_ID, BRNH_COMPANY_ID, DIR_COMPANY_ID } from "../../lib/constants";
+import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, HD_COMPANY_ID, BRNH_COMPANY_ID, DIR_COMPANY_ID, KKJ_COMPANY_ID, TAX_COMPANY_NAMES } from "../../lib/constants";
 import { formatDateUK } from "../../lib/dateUtils";
 import DateInputWithCalendar from "../../lib/DateInputWithCalendar";
 import { useMobile } from "../../lib/useMobile";
@@ -54,7 +54,8 @@ type EditForm = {
 
 const STATUSES = ["pending", "won", "lost", "settled"];
 const NOTICE_TYPES = ["income tax", "sales tax", "withholding tax", "FBR notice", "provincial tax", "customs", "other"];
-const COMPANIES = ["Unze Trading PVT Limited", "Imperial Footwear PVT Limited", "Haute Dolci", "Barahn PVT Limited", "K&K Jhang", "Directors"];
+// Company names for taxation pages — from constants (single source of truth)
+const COMPANIES = TAX_COMPANY_NAMES;
 
 // Found during the 15 Jul 2026 full-app audit: every notice was written
 // to the database with company_id hardcoded to UTPL regardless of which
@@ -65,12 +66,14 @@ const COMPANIES = ["Unze Trading PVT Limited", "Imperial Footwear PVT Limited", 
 // real company entity in the system yet) — flagged to Khuram; until
 // that's resolved it's left as null ("needs review"), same convention
 // FinanceManager.tsx uses for company_id gaps, rather than guessing.
+// Maps display names used on taxation notices to their company UUID.
+// K&K Jhang now has a UUID (added migration 204, 28/07/2026).
 const COMPANY_ID_BY_NAME: Record<string, string | null> = {
   "Unze Trading PVT Limited":      UTPL_COMPANY_ID,
   "Imperial Footwear PVT Limited": IFPL_COMPANY_ID,
   "Haute Dolci":                   HD_COMPANY_ID,
-  "Barahn PVT Limited":            BRNH_COMPANY_ID,
-  "K&K Jhang":                     null,
+  "Baranh":                        BRNH_COMPANY_ID,
+  "K&K Jhang":                     KKJ_COMPANY_ID,
   "Directors":                     DIR_COMPANY_ID,
 };
 function resolveCompanyId(companyName: string | null | undefined): string | null {

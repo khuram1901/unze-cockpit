@@ -34,7 +34,7 @@ import {
 import { logAction } from "../lib/audit-log";
 import PhotoCropModal from "../lib/PhotoCropModal";
 import { WIDGET_REGISTRY } from "../lib/widgetRegistry";
-import { FINANCE_COMPANIES } from "../lib/constants";
+import { FINANCE_COMPANIES, MEMBER_COMPANY_NAMES } from "../lib/constants";
 
 /* ── Types ────────────────────────────────────────────────────────────── */
 
@@ -237,10 +237,8 @@ const DEPT_BUS: Record<string, string[]> = {
   Sales: ["PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
   "S&M Investment": ["Property"], BINC: ["Nursing College"],
 };
-const MEMBER_COMPANIES = [
-  "Unze Group", "Unze Trading PVT Limited", "Imperial Footwear PVT Limited",
-  "Haute Dolci", "Barahn PVT Limited", "K&K Jhang",
-];
+// Company list for member assignment — imported from constants (single source of truth)
+const MEMBER_COMPANIES = MEMBER_COMPANY_NAMES;
 function busFor(dept: string | null) { return dept ? DEPT_BUS[dept] || ALL_BUS : []; }
 function fullName(m: DrawerMember) {
   return `${m.first_name || ""} ${m.last_name || ""}`.trim() || m.name || m.email || "Unnamed";

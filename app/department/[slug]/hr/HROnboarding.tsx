@@ -14,7 +14,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../../../lib/supabase";
-import { COMPANIES } from "../../../lib/constants";
+import { PKR_HR_COMPANIES } from "../../../lib/constants";
 import { formatDateUK } from "../../../lib/dateUtils";
 import { useMobile } from "../../../lib/useMobile";
 import { COLOURS, RADII, cardStyle, SectionTitle } from "../../../lib/SharedUI";
@@ -805,7 +805,7 @@ function ManageModules({
               Company
               <select style={{ ...inp, marginTop: "4px" }} value={mCompany} onChange={(e) => setMCompany(e.target.value)}>
                 <option value="">All companies</option>
-                {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {PKR_HR_COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </label>
             <button type="submit" disabled={saving} style={{ ...btnPrimary, marginTop: "10px" }}>{saving ? "Saving…" : "Create module"}</button>

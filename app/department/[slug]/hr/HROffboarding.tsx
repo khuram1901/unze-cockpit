@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../../../lib/supabase";
-import { COMPANIES, getCompanyById } from "../../../lib/constants";
+import { PKR_HR_COMPANIES, getCompanyById } from "../../../lib/constants";
 import { formatDateUK } from "../../../lib/dateUtils";
 import DateInputWithCalendar from "../../../lib/DateInputWithCalendar";
 import { useMobile } from "../../../lib/useMobile";
@@ -149,7 +149,7 @@ function AddExitForm({ onSaved }: { onSaved: () => void }) {
           Company
           <select style={{ ...inp, marginTop: "4px" }} value={companyId} onChange={(e) => setCompanyId(e.target.value)} required>
             <option value="">Select</option>
-            {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {PKR_HR_COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
         <label style={lbl}>

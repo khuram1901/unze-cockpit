@@ -17,12 +17,13 @@ const OFFENCE_TYPES = [
   "Misconduct", "Property Damage", "Other",
 ];
 
-const ENTITY_ORDER = ["IFPL", "Baranh", "HD", "UTPL"];
+const ENTITY_ORDER = ["UTPL", "IFPL", "Baranh", "HD", "ALM"];
 const ENTITY_DISPLAY: Record<string, string> = {
-  IFPL: "IFPL — Imperial Footwear",
+  UTPL:   "UTPL — Unze Trading",
+  IFPL:   "IFPL — Imperial Footwear",
   Baranh: "Baranh",
-  HD: "Haute Dolci",
-  UTPL: "UTPL — Unze Trading",
+  HD:     "Haute Dolci",
+  ALM:    "Almahar",
 };
 
 const STATUS_STYLE: Record<string, { bg: string; color: string }> = {

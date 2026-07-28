@@ -11,7 +11,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "../../../lib/supabase";
-import { COMPANIES, getCompanyById } from "../../../lib/constants";
+import { PKR_HR_COMPANIES, getCompanyById } from "../../../lib/constants";
 import { formatDateUK } from "../../../lib/dateUtils";
 import DateInputWithCalendar from "../../../lib/DateInputWithCalendar";
 import { useMobile } from "../../../lib/useMobile";
@@ -432,7 +432,7 @@ function AddRunForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () =
             Company
             <select style={{ ...inp, marginTop: "4px" }} value={companyId} onChange={(e) => setCompanyId(e.target.value)} required>
               <option value="">Select</option>
-              {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {PKR_HR_COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
           <label style={lbl}>
@@ -641,7 +641,7 @@ function ImportTab({ onImported }: { onImported: () => void }) {
                 Company
                 <select style={{ ...inp, marginTop: "4px" }} value={companyId} onChange={(e) => setCompanyId(e.target.value)} required>
                   <option value="">Select</option>
-                  {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {PKR_HR_COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </label>
               <label style={lbl}>
@@ -736,7 +736,7 @@ function ExceptionsTab({ runs }: { runs: RunRow[] }) {
         <button style={pillStyle(filterStatus === "All")}  onClick={() => setFilterStatus("All")}>All</button>
         <select style={{ ...inp, width: "auto", padding: "5px 10px", fontSize: "12px" }} value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)}>
           <option value="">All companies</option>
-          {COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.shortCode}</option>)}
+          {PKR_HR_COMPANIES.map((c) => <option key={c.id} value={c.id}>{c.shortCode}</option>)}
         </select>
         <span style={{ fontSize: "13px", color: COLOURS.SLATE, marginLeft: "4px" }}>
           {filtered.length} result{filtered.length !== 1 ? "s" : ""}

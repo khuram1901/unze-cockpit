@@ -9,6 +9,7 @@ import { downloadCSV } from "../lib/exportUtils";
 import ImportExportButtons from "../lib/ImportExportButtons";
 import MemberDrawer from "./MemberDrawer";
 import { assignableRoles, canChangePasswordFor, canEditMember, canDeleteMember, isAdminTier, isMainAdmin, canAddMembers, canImportExport, PROTECTED_EMAILS, type UserCtx, type PermOverrides } from "../lib/permissions";
+import { MEMBER_COMPANY_NAMES } from "../lib/constants";
 
 export type Member = {
   id: string;
@@ -49,14 +50,8 @@ const ALL_BUSINESS_UNITS = [
   "Meters", "Retail", "Hospitality", "Property", "Nursing College",
 ];
 
-const MEMBER_COMPANIES = [
-  "Unze Group",
-  "Unze Trading PVT Limited",
-  "Imperial Footwear PVT Limited",
-  "Haute Dolci",
-  "Barahn PVT Limited",
-  "K&K Jhang",
-];
+// Company list for member assignment — imported from constants (single source of truth)
+const MEMBER_COMPANIES = MEMBER_COMPANY_NAMES;
 
 const DEPT_BUSINESS_UNITS: Record<string, string[]> = {
   "Unze Trading Ops": ["Head Office", "PESCO Plant", "MEPCO Plant", "FESCO Plant", "Meters"],
