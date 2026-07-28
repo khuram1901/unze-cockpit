@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { findErrorCells, findMonthGaps, findFrozenSeries } from "./workbook-audit";
 
 // Parses Imperial Footwear's (Unze London retail) cumulative P&L workbook —
 // the big "PL-CURRENT.xlsx" file the accounts team maintains. Shape
@@ -155,9 +156,11 @@ export function parseIfplPnl(data: ArrayBuffer | Uint8Array): ParsedIfplMonth[] 
   const monthWise = readMonthWiseNetSales(wb);
 
   const results: ParsedIfplMonth[] = [];
+  const monthSheetNames: string[] = [];
   for (const sheetName of wb.SheetNames) {
     const m = sheetName.trim().match(MONTH_SHEET_RE);
     if (!m) continue;
+    monthSheetNames.push(sheetName);
     const monthNum = MONTH_NUM[m[1].slice(0, 3).toLowerCase()];
     const year = 2000 + parseInt(m[2], 10);
     const month = `${year}-${String(monthNum).padStart(2, "0")}-01`;
@@ -165,6 +168,28 @@ export function parseIfplPnl(data: ArrayBuffer | Uint8Array): ParsedIfplMonth[] 
     if (parsed) results.push(parsed);
   }
   results.sort((a, b) => a.month.localeCompare(b.month));
+
+  // ── Workbook integrity audit (file-level) ─────────────────────────
+  // Broken formula cells in the month sheets, gaps in the month series,
+  // and a frozen company net-sales series — attached to the latest month
+  // as warning checks (never rejecting).
+  if (results.length > 0) {
+    const nsSeries = results.map((r) => r.lines.filter((l) => l.line === "Net Sales").reduce((s, l) => s + l.actual, 0));
+    const audit = [
+      ...findErrorCells(wb, monthSheetNames),
+      ...findMonthGaps(results.map((r) => r.month)),
+      ...findFrozenSeries("company net sales", nsSeries),
+    ];
+    if (audit.length > 0) {
+      const last = results[results.length - 1];
+      last.checks.push(...audit.map((a) => ({ name: a.name, expected: 0, reported: 0, diff: 0, passed: false, blocking: false })));
+      const warnings = last.checks.filter((c) => !c.passed && !c.blocking).length;
+      const passedCount = last.checks.filter((c) => c.passed).length;
+      if (last.accepted) {
+        last.summary = `${passedCount}/${last.checks.length} checks passed (${warnings} data-quality warning${warnings > 1 ? "s" : ""})`;
+      }
+    }
+  }
   return results;
 }
 

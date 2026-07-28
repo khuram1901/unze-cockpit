@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { findErrorCells, findMonthGaps, findFrozenSeries } from "./workbook-audit";
 
 // Parses the restaurant P&L workbooks (Baranh + Haute Dolci) — one file per
 // company, maintained cumulatively by the restaurant accountants. Shape
@@ -264,6 +265,30 @@ export function parseRestaurantPnl(data: ArrayBuffer | Uint8Array, company: Rest
       : `${blockingFailed.length} blocking check${blockingFailed.length > 1 ? "s" : ""} failed`;
 
     results.push({ month, lines, checks, accepted, summary });
+  }
+
+  // ── Workbook integrity audit (file-level) ─────────────────────────
+  // Broken formula cells, month gaps and frozen copy-paste series are
+  // attached to the latest month as warning checks so they show in the
+  // upload results and the clickable data-quality panel.
+  if (results.length > 0) {
+    const audit = [
+      ...findErrorCells(wb, branchSheets.map((b) => b.sheet)),
+      ...findMonthGaps(results.map((r) => r.month)),
+    ];
+    for (const b of branches) {
+      const gs = b.months.map((m) => (b.byMonth.get(m) || []).filter((l) => l.line === "Gross Sales").reduce((s, l) => s + l.amount, 0));
+      audit.push(...findFrozenSeries(`${b.branch} gross sales`, gs));
+    }
+    if (audit.length > 0) {
+      const last = results[results.length - 1];
+      last.checks.push(...audit.map((a) => ({ name: a.name, expected: 0, reported: 0, diff: 0, passed: false, blocking: false })));
+      const warnings = last.checks.filter((c) => !c.passed && !c.blocking).length;
+      const passedCount = last.checks.filter((c) => c.passed).length;
+      if (last.accepted) {
+        last.summary = `${passedCount}/${last.checks.length} checks passed (${warnings} warning${warnings > 1 ? "s" : ""}) · ${branches.length} branches`;
+      }
+    }
   }
   return results;
 }

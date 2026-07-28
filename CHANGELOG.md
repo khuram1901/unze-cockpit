@@ -4,6 +4,31 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-28 (evening) — Restatement log: every change to previously reported figures is recorded and shown
+
+Khuram's transparency requirement: "if any figures are changed in the previous months it must bring it to our attention… so we see if the teams are changing numbers." Built across all three pipelines:
+
+- **Migration 152**: append-only `pnl_restatements` table (company UTPL/IFPL/BARANH/HD, month, scope=branch/plant, line, old_value, new_value, changed_by, changed_at) + `get_pnl_restatements` RPC (anon-revoked). Nothing in the app can edit or delete rows.
+- **All three upload routes** now diff BEFORE replacing an existing month: stored net sales + net profit per branch (Imperial: Net Sales/Final Profit actuals; Restaurants: Net Sales/Net Profit; Unze: Gross Sale/Net Profit Final per plant) against the incoming file; every change >1,000 PKR is written to the log with the uploader's email, and returned in the upload response.
+- **All three pages**: upload results show a blue "Financial change to previously reported figures" block (scope, line, old → new) the moment it happens, and the data-quality strip gains a permanent **"Restatement log"** chip that expands the full history — month, what changed, from what to what, who uploaded, when — with an explicit "cannot be edited or deleted" note.
+
+First-time months record nothing (nothing existed to change); identical re-uploads record nothing (values equal). tsc + eslint clean. Note: mid-build merge with the other session's changes (authFetch import, useMobile on the Unze page) — preserved.
+
+---
+
+## 2026-07-28 (later) — Shared Excel integrity audit across all three P&L pipelines
+
+Khuram: "it checks the excel file always, for formula errors, calculation errors… so when the dashboard is presented I'm confident it's exactly what I'm seeing." New shared module `workbook-audit.ts`, wired into all three parsers (Unze, Imperial, Restaurants), runs on every upload:
+
+- **Broken formula cells** — #REF!, #DIV/0!, #VALUE!, #NAME? etc., reported with sheet + cell range and a plain-language cause; consecutive broken cells in a column collapse into one finding ("DS4:DS15 (12 cells)").
+- **Month gaps** — a missing calendar month inside the series (deleted/forgotten column).
+- **Frozen series** — the same non-zero sales figure repeated 3+ consecutive months (the copy-paste pattern that broke Baranh's Consolidated sheet).
+- Honest limit, documented in the module: the app can't re-run Excel's calc engine; stale cached values are caught by the arithmetic identity checks (totals stop reconciling), which remain in force.
+
+Findings are warning-tier: they NEVER reject a month, they surface in the upload results and the clickable data-quality panels (Imperial/Restaurants persist them as warning checks on the latest month; the single-month Unze route returns them in the response and the upload panel shows them amber). Tested against all three real workbooks — found genuine issues in each: Baranh has ~100 #REF! cells in stray columns of the Gulberg sheet plus scattered #REF!s in Raya; HD and Imperial have #DIV/0!s in ratio rows. Reassuringly, every current finding sits OUTSIDE the cells the dashboards read (stray columns / skipped percentage rows) — the dashboard figures are unaffected, and now the file mess is visible so accounts can tidy it. tsc + eslint clean.
+
+---
+
 ## 2026-07-28 — Restaurants P&L: Baranh + Haute Dolci on one page, same family as Unze/Imperial
 
 Khuram asked for a restaurants P&L "exactly like Imperial and Unze" — one page, tabs per company (K&K Jhang parked on his instruction; the schema takes it as a third tab when ready). Built end-to-end in one pass against the real Apr-26 workbooks:

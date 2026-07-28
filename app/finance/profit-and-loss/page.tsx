@@ -44,6 +44,7 @@ type CostRow = { month: string; bucket: string; amount: number };
 type ValidationRow = { month: string; file_name: string; status: string; checks_passed: number; checks_failed: number; uploaded_at: string };
 type CheckRow = { name: string; expected: number; reported: number; diff: number; passed: boolean };
 type Insight = { title: string; detail: string; severity: "good" | "watch" | "urgent" };
+type RestatedItem = { scope: string; line: string; old_value: number; new_value: number };
 
 const MONTH_LABEL = (m: string) => {
   const d = new Date(m + "T00:00:00Z");
@@ -131,11 +132,13 @@ export default function ProfitAndLossPage() {
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [insightError, setInsightError] = useState("");
+  const [showRestatements, setShowRestatements] = useState(false);
+  const [restatements, setRestatements] = useState<(RestatedItem & { month: string; changed_by: string; changed_at: string })[] | null>(null);
 
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadResults, setUploadResults] = useState<{ fileName: string; accepted: boolean; summary: string; checks: CheckRow[] }[]>([]);
+  const [uploadResults, setUploadResults] = useState<{ fileName: string; accepted: boolean; summary: string; checks: CheckRow[]; auditIssues: string[]; restated: RestatedItem[] }[]>([]);
 
   // The selected window, derived from the preset (or the custom pickers).
   const { monthFrom, monthTo } = useMemo(() => {
@@ -221,7 +224,7 @@ export default function ProfitAndLossPage() {
       const res = await authFetch("/api/pnl/upload-unze", { method: "POST", body: formData });
       const body = await res.json();
       if (body.accepted) anyAccepted = true;
-      setUploadResults((prev) => [...prev, { fileName: file.name, accepted: !!body.accepted, summary: body.summary || body.error || "Unknown error", checks: body.checks || [] }]);
+      setUploadResults((prev) => [...prev, { fileName: file.name, accepted: !!body.accepted, summary: body.summary || body.error || "Unknown error", checks: body.checks || [], auditIssues: body.auditIssues || [], restated: body.restated || [] }]);
     }
     setUploading(false);
     setUploadFiles([]);
@@ -250,6 +253,15 @@ export default function ProfitAndLossPage() {
       setInsightError(err instanceof Error ? err.message : "Failed to generate commentary");
     }
     setGenerating(false);
+  }
+
+  async function toggleRestatements() {
+    const next = !showRestatements;
+    setShowRestatements(next);
+    if (next && restatements === null) {
+      const { data } = await supabase.rpc("get_pnl_restatements", { p_company: "UTPL", p_limit: 100 });
+      setRestatements((data || []) as (RestatedItem & { month: string; changed_by: string; changed_at: string })[]);
+    }
   }
 
   if (checking) return null;
@@ -418,6 +430,19 @@ export default function ProfitAndLossPage() {
                       <div style={{ fontSize: "12px", color: COLOURS.RED, lineHeight: 1.6, marginTop: "4px" }}>
                         {r.checks.filter((c) => !c.passed).map((c, i) => (
                           <div key={i}>· {c.name}: expected {fmtM(c.expected)}, got {fmtM(c.reported)} (diff {fmtM(c.diff)})</div>
+                        ))}
+                      </div>
+                    )}
+                    {r.auditIssues.length > 0 && (
+                      <div style={{ fontSize: "12px", color: COLOURS.AMBER, lineHeight: 1.6, marginTop: "4px" }}>
+                        {r.auditIssues.map((a, i) => <div key={i}>⚠ {a}</div>)}
+                      </div>
+                    )}
+                    {r.restated.length > 0 && (
+                      <div style={{ fontSize: "12px", color: COLOURS.BLUE, lineHeight: 1.6, marginTop: "4px", fontWeight: 600 }}>
+                        <div>Financial change to previously reported figures:</div>
+                        {r.restated.map((c, i) => (
+                          <div key={i}>↺ {c.scope} {c.line}: {fmtM(c.old_value)} → {fmtM(c.new_value)}</div>
                         ))}
                       </div>
                     )}
@@ -755,10 +780,32 @@ export default function ProfitAndLossPage() {
                       ))
                     )}
                     <span style={{ width: "1px", height: "16px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
+                    <button onClick={toggleRestatements} style={{ ...chipBtn(showRestatements), padding: "3px 11px", fontSize: "11px" }}>
+                      Restatement log {showRestatements ? "▲" : "▼"}
+                    </button>
                     <button onClick={() => setShowMarket(!showMarket)} style={{ ...chipBtn(showMarket), padding: "3px 11px", fontSize: "11px" }}>
                       {showMarket ? "Hide market context" : "Market context"}
                     </button>
                   </div>
+                  {showRestatements && (
+                    <div style={{ marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "10px" }}>
+                      {restatements === null && <p style={{ fontSize: "12px", color: COLOURS.SLATE }}>Loading…</p>}
+                      {restatements !== null && restatements.length === 0 && (
+                        <p style={{ fontSize: "12px", color: COLOURS.GREEN }}>No restatements — previously reported figures have never been changed.</p>
+                      )}
+                      {restatements !== null && restatements.length > 0 && (<>
+                        <div style={{ fontSize: "12px", color: COLOURS.INK_700, marginBottom: "8px" }}>
+                          Every change made to previously reported figures — recorded automatically at upload; this log cannot be edited or deleted.
+                        </div>
+                        {restatements.map((r, i) => (
+                          <div key={i} style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7 }}>
+                            ↺ <b>{MONTH_LABEL(r.month)}</b> · {r.scope} {r.line}: {fmtM(r.old_value)} → <b>{fmtM(r.new_value)}</b>
+                            <span style={{ color: COLOURS.INK_400 }}> · by {r.changed_by || "unknown"} on {formatDateUK(r.changed_at.slice(0, 10))}</span>
+                          </div>
+                        ))}
+                      </>)}
+                    </div>
+                  )}
                   {showMarket && (
                     <div style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7, marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "10px" }}>
                       <div style={{ fontWeight: 700, fontSize: "11px", color: COLOURS.GREEN, marginBottom: "3px" }}>DEMAND — TAILWINDS</div>

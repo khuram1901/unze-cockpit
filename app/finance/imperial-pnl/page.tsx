@@ -34,7 +34,8 @@ type LineTotal = { line: string; category: string; projection: number; actual: n
 type ValidationRow = { month: string; file_name: string; status: string; checks_passed: number; checks_failed: number; warnings: number; uploaded_at: string };
 type CheckDetail = { name: string; expected: number; reported: number; diff: number; blocking: boolean };
 type CheckIssue = { month: string; check_name: string; expected: number; reported: number; diff: number; blocking: boolean; status: string };
-type UploadResult = { month: string; accepted: boolean; summary: string; failed?: CheckDetail[]; warnings?: CheckDetail[] };
+type RestatedItem = { scope: string; line: string; old_value: number; new_value: number };
+type UploadResult = { month: string; accepted: boolean; summary: string; failed?: CheckDetail[]; warnings?: CheckDetail[]; restated?: RestatedItem[] };
 type Insight = { title: string; detail: string; severity: "good" | "watch" | "urgent" };
 
 // Net sales by financial year from the workbook's Sales Growth sheet
@@ -104,6 +105,8 @@ export default function ImperialPnlPage() {
   const [insightError, setInsightError] = useState("");
   const [showMarket, setShowMarket] = useState(false);
   const [showIssues, setShowIssues] = useState(false);
+  const [showRestatements, setShowRestatements] = useState(false);
+  const [restatements, setRestatements] = useState<(RestatedItem & { month: string; changed_by: string; changed_at: string })[] | null>(null);
   const [checkIssues, setCheckIssues] = useState<CheckIssue[] | null>(null);
 
   const [showUpload, setShowUpload] = useState(false);
@@ -228,6 +231,15 @@ export default function ImperialPnlPage() {
     if (next && checkIssues === null) {
       const { data } = await supabase.rpc("ifpl_check_details");
       setCheckIssues((data || []) as CheckIssue[]);
+    }
+  }
+
+  async function toggleRestatements() {
+    const next = !showRestatements;
+    setShowRestatements(next);
+    if (next && restatements === null) {
+      const { data } = await supabase.rpc("get_pnl_restatements", { p_company: "IFPL", p_limit: 100 });
+      setRestatements((data || []) as (RestatedItem & { month: string; changed_by: string; changed_at: string })[]);
     }
   }
 
@@ -424,14 +436,22 @@ export default function ImperialPnlPage() {
                 {(r.failed || []).length > 0 && (
                   <div style={{ fontSize: "12px", color: COLOURS.RED, lineHeight: 1.6, marginTop: "4px" }}>
                     {(r.failed || []).map((c, j) => (
-                      <div key={j}>✗ {c.name}: should be {fmtM(c.expected)}, file shows {fmtM(c.reported)} (out by {fmtM(c.diff)})</div>
+                      <div key={j}>✗ {c.name}{c.expected || c.reported ? <>: should be {fmtM(c.expected)}, file shows {fmtM(c.reported)} (out by {fmtM(c.diff)})</> : null}</div>
+                    ))}
+                  </div>
+                )}
+                {(r.restated || []).length > 0 && (
+                  <div style={{ fontSize: "12px", color: COLOURS.BLUE, lineHeight: 1.6, marginTop: "4px", fontWeight: 600 }}>
+                    <div>Financial change to previously reported figures:</div>
+                    {(r.restated || []).map((c, j) => (
+                      <div key={j}>↺ {c.scope} {c.line}: {fmtM(c.old_value)} → {fmtM(c.new_value)}</div>
                     ))}
                   </div>
                 )}
                 {(r.warnings || []).length > 0 && (
                   <div style={{ fontSize: "12px", color: COLOURS.AMBER, lineHeight: 1.6, marginTop: "4px" }}>
                     {(r.warnings || []).map((c, j) => (
-                      <div key={j}>⚠ {c.name}: should be {fmtM(c.expected)}, file shows {fmtM(c.reported)} (out by {fmtM(c.diff)}) — accepted anyway, worth checking</div>
+                      <div key={j}>⚠ {c.name}{c.expected || c.reported ? <>: should be {fmtM(c.expected)}, file shows {fmtM(c.reported)} (out by {fmtM(c.diff)})</> : null} — accepted anyway, worth checking</div>
                     ))}
                   </div>
                 )}
@@ -833,6 +853,9 @@ export default function ImperialPnlPage() {
                   </span>
                 )}
                 <span style={{ width: "1px", height: "16px", background: COLOURS.HAIRLINE, margin: "0 4px" }} />
+                <button onClick={toggleRestatements} style={{ ...chipBtn(showRestatements), padding: "3px 11px", fontSize: "11px" }}>
+                  Restatement log {showRestatements ? "▲" : "▼"}
+                </button>
                 <button onClick={() => setShowMarket(!showMarket)} style={{ ...chipBtn(showMarket), padding: "3px 11px", fontSize: "11px" }}>
                   {showMarket ? "Hide market context" : "Market context"}
                 </button>
@@ -853,7 +876,7 @@ export default function ImperialPnlPage() {
                           <div style={{ fontSize: "12px", fontWeight: 700, color: COLOURS.NAVY }}>{MONTH_LABEL(m)}</div>
                           {checkIssues.filter((c) => c.month === m).map((c, i) => (
                             <div key={i} style={{ fontSize: "12px", color: c.blocking ? COLOURS.RED : COLOURS.AMBER, lineHeight: 1.6, paddingLeft: "10px" }}>
-                              {c.blocking ? "✗" : "⚠"} {c.check_name}: should be {fmtM(c.expected)}, file shows {fmtM(c.reported)} (out by {fmtM(c.diff)})
+                              {c.blocking ? "✗" : "⚠"} {c.check_name}{c.expected || c.reported ? <>: should be {fmtM(c.expected)}, file shows {fmtM(c.reported)} (out by {fmtM(c.diff)})</> : null}
                               {c.blocking ? " — month was rejected" : " — accepted, but worth correcting"}
                             </div>
                           ))}
@@ -864,6 +887,25 @@ export default function ImperialPnlPage() {
                       </div>
                     </>
                   )}
+                </div>
+              )}
+              {showRestatements && (
+                <div style={{ marginTop: "10px", borderTop: `1px solid ${COLOURS.HAIRLINE}`, paddingTop: "10px" }}>
+                  {restatements === null && <p style={{ fontSize: "12px", color: COLOURS.SLATE }}>Loading…</p>}
+                  {restatements !== null && restatements.length === 0 && (
+                    <p style={{ fontSize: "12px", color: COLOURS.GREEN }}>No restatements — previously reported figures have never been changed.</p>
+                  )}
+                  {restatements !== null && restatements.length > 0 && (<>
+                    <div style={{ fontSize: "12px", color: COLOURS.INK_700, marginBottom: "8px" }}>
+                      Every change made to previously reported figures — recorded automatically at upload; this log cannot be edited or deleted.
+                    </div>
+                    {restatements.map((r, i) => (
+                      <div key={i} style={{ fontSize: "12px", color: COLOURS.INK_700, lineHeight: 1.7 }}>
+                        ↺ <b>{MONTH_LABEL(r.month)}</b> · {r.scope} {r.line}: {fmtM(r.old_value)} → <b>{fmtM(r.new_value)}</b>
+                        <span style={{ color: COLOURS.INK_400 }}> · by {r.changed_by || "unknown"} on {formatDateUK(r.changed_at.slice(0, 10))}</span>
+                      </div>
+                    ))}
+                  </>)}
                 </div>
               )}
               {showMarket && (

@@ -65,6 +65,46 @@ export async function POST(request: NextRequest) {
   const checksFailed = parsed.checks.filter((c) => !c.passed);
   const status = parsed.accepted ? "accepted" : "rejected";
 
+  // ── Restatement detection (transparency log) ────────────────────────
+  // If this month already exists, compare the stored gross sale / final
+  // net profit per plant against the incoming file BEFORE overwriting and
+  // record every change permanently in pnl_restatements.
+  const restated: { scope: string; line: string; old_value: number; new_value: number }[] = [];
+  if (parsed.accepted) {
+    const { data: existing } = await supabase
+      .from("pnl_line_items")
+      .select("plant, line, amount")
+      .eq("company_id", UTPL_COMPANY_ID)
+      .eq("month", parsed.month)
+      .in("line", ["Gross Sale", "Net Profit Final"]);
+    if (existing && existing.length > 0) {
+      const oldMap = new Map<string, number>();
+      for (const e of existing) {
+        const k = `${e.plant}|${e.line}`;
+        oldMap.set(k, (oldMap.get(k) || 0) + Number(e.amount));
+      }
+      const newMap = new Map<string, number>();
+      for (const l of parsed.lineItems) {
+        if (l.line !== "Gross Sale" && l.line !== "Net Profit Final") continue;
+        const k = `${l.plant}|${l.line}`;
+        newMap.set(k, (newMap.get(k) || 0) + l.amount);
+      }
+      for (const k of new Set([...oldMap.keys(), ...newMap.keys()])) {
+        const oldV = oldMap.get(k) || 0;
+        const newV = newMap.get(k) || 0;
+        if (Math.abs(newV - oldV) > 1000) {
+          const [scope, line] = k.split("|");
+          restated.push({ scope, line: line === "Net Profit Final" ? "Net Profit" : "Gross Sales", old_value: oldV, new_value: newV });
+        }
+      }
+      if (restated.length > 0) {
+        await supabase.from("pnl_restatements").insert(
+          restated.map((r) => ({ company: "UTPL", month: parsed.month, scope: r.scope, line: r.line, old_value: r.old_value, new_value: r.new_value, changed_by: auth.email })),
+        );
+      }
+    }
+  }
+
   // Reuploading a corrected file for a month that was already accepted
   // replaces it outright — cascades to delete the old line items, ledger
   // lines, allocation %, and validation checks tied to that upload.
@@ -116,6 +156,7 @@ export async function POST(request: NextRequest) {
       accepted: false,
       month: parsed.month,
       checks: parsed.checks,
+      auditIssues: parsed.auditIssues,
       summary: `${checksFailed.length} of ${parsed.checks.length} checks failed.`,
     }, { status: 422 });
   }
@@ -144,8 +185,12 @@ export async function POST(request: NextRequest) {
     accepted: true,
     month: parsed.month,
     checks: parsed.checks,
+    auditIssues: parsed.auditIssues,
+    restated: restated.length > 0 ? restated : undefined,
     lineItems: parsed.lineItems.length,
     ledgerLines: parsed.ledgerLines.length,
-    summary: `All ${parsed.checks.length} checks passed.`,
+    summary: parsed.auditIssues.length > 0
+      ? `All ${parsed.checks.length} checks passed (${parsed.auditIssues.length} Excel audit warning${parsed.auditIssues.length > 1 ? "s" : ""} below).`
+      : `All ${parsed.checks.length} checks passed.`,
   });
 }

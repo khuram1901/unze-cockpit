@@ -61,7 +61,8 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Invalid upload payload — refresh the page and try again." }, { status: 400 });
   }
 
-  const results: { month: string; accepted: boolean; summary: string }[] = [];
+  type Restated = { scope: string; line: string; old_value: number; new_value: number };
+  const results: { month: string; accepted: boolean; summary: string; restated?: Restated[] }[] = [];
   for (const m of months) {
     const checks = m.checks.filter((c) => typeof c?.name === "string");
     const warnings = checks.filter((c) => !c.passed && !c.blocking).length;
@@ -69,7 +70,44 @@ export async function POST(request: NextRequest) {
     const passed = checks.filter((c) => c.passed).length;
     const accepted = failed === 0; // server decides from the checks
 
+    // ── Restatement detection (transparency log) ──────────────────
+    // If this month already exists, compare stored net sales / net profit
+    // per branch against the incoming figures BEFORE overwriting, and
+    // record every change permanently in pnl_restatements.
+    const restated: Restated[] = [];
     if (accepted) {
+      const { data: existing } = await supabase
+        .from("rest_pnl_lines")
+        .select("branch, line, amount")
+        .eq("company", company)
+        .eq("month", m.month)
+        .in("line", ["Net Sales", "Net Profit"]);
+      if (existing && existing.length > 0) {
+        const oldMap = new Map<string, number>();
+        for (const e of existing) {
+          const k = `${e.branch}|${e.line}`;
+          oldMap.set(k, (oldMap.get(k) || 0) + Number(e.amount));
+        }
+        const newMap = new Map<string, number>();
+        for (const l of m.lines) {
+          if (l.line !== "Net Sales" && l.line !== "Net Profit") continue;
+          const k = `${l.branch}|${l.line}`;
+          newMap.set(k, (newMap.get(k) || 0) + fin(l.amount));
+        }
+        for (const k of new Set([...oldMap.keys(), ...newMap.keys()])) {
+          const oldV = oldMap.get(k) || 0;
+          const newV = newMap.get(k) || 0;
+          if (Math.abs(newV - oldV) > 1000) {
+            const [scope, line] = k.split("|");
+            restated.push({ scope, line, old_value: oldV, new_value: newV });
+          }
+        }
+        if (restated.length > 0) {
+          await supabase.from("pnl_restatements").insert(
+            restated.map((r) => ({ company, month: m.month, scope: r.scope, line: r.line, old_value: r.old_value, new_value: r.new_value, changed_by: auth.email })),
+          );
+        }
+      }
       await supabase.from("rest_pnl_uploads").delete().eq("company", company).eq("month", m.month).eq("status", "accepted");
     }
     const { data: upload, error: upErr } = await supabase
@@ -128,7 +166,7 @@ export async function POST(request: NextRequest) {
       }
       if (lineError) continue;
     }
-    results.push({ month: m.month, accepted, summary: String(m.summary || "").slice(0, 300) });
+    results.push({ month: m.month, accepted, summary: String(m.summary || "").slice(0, 300), restated: restated.length > 0 ? restated : undefined });
   }
 
   return Response.json({ results });

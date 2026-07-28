@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { findErrorCells } from "./workbook-audit";
 
 // Parses Unze Trading's monthly "P & L Branchwise Allocated" export.
 // Shape confirmed against a real file (26-05 P & L Branchwise Allocated
@@ -25,6 +26,9 @@ export type ParsedUnzePnl = {
   allocationPct: PnlAllocationPct[];
   checks: PnlCheck[];
   accepted: boolean;
+  // Workbook integrity audit (broken formula cells) — warnings only, never
+  // affects acceptance. Shown in the upload results panel.
+  auditIssues: string[];
 };
 
 // Maps the source file's exact (slightly inconsistent — a typo, uneven
@@ -265,5 +269,6 @@ export function parseUnzePnl(buffer: Buffer, monthOverride?: string): ParsedUnze
 
   const accepted = checks.length > 0 && checks.every((c) => c.passed);
 
-  return { month, lineItems, ledgerLines, allocationPct, checks, accepted };
+  const auditIssues = findErrorCells(wb, [wb.SheetNames[0]]).map((a) => a.name);
+  return { month, lineItems, ledgerLines, allocationPct, checks, accepted, auditIssues };
 }

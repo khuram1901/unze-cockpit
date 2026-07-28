@@ -57,7 +57,8 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Invalid upload payload — refresh the page and try again." }, { status: 400 });
   }
 
-  const results: { month: string; accepted: boolean; summary: string }[] = [];
+  type Restated = { scope: string; line: string; old_value: number; new_value: number };
+  const results: { month: string; accepted: boolean; summary: string; restated?: Restated[] }[] = [];
   for (const m of months) {
     const checks = m.checks.filter((c) => typeof c?.name === "string");
     const warnings = checks.filter((c) => !c.passed && !c.blocking).length;
@@ -67,7 +68,42 @@ export async function POST(request: NextRequest) {
     // with any failed blocking check is never stored, whatever the client says.
     const accepted = failed === 0;
 
+    // ── Restatement detection (transparency log) ──────────────────
+    // Compare stored actual net sales / final profit per branch against the
+    // incoming figures BEFORE overwriting; record every change permanently.
+    const restated: Restated[] = [];
     if (accepted) {
+      const { data: existing } = await supabase
+        .from("ifpl_pnl_lines")
+        .select("branch, line, actual")
+        .eq("month", m.month)
+        .in("line", ["Net Sales", "Final Profit"]);
+      if (existing && existing.length > 0) {
+        const oldMap = new Map<string, number>();
+        for (const e of existing) {
+          const k = `${e.branch}|${e.line}`;
+          oldMap.set(k, (oldMap.get(k) || 0) + Number(e.actual));
+        }
+        const newMap = new Map<string, number>();
+        for (const l of m.lines) {
+          if (l.line !== "Net Sales" && l.line !== "Final Profit") continue;
+          const k = `${l.branch}|${l.line}`;
+          newMap.set(k, (newMap.get(k) || 0) + fin(l.actual));
+        }
+        for (const k of new Set([...oldMap.keys(), ...newMap.keys()])) {
+          const oldV = oldMap.get(k) || 0;
+          const newV = newMap.get(k) || 0;
+          if (Math.abs(newV - oldV) > 1000) {
+            const [scope, line] = k.split("|");
+            restated.push({ scope, line, old_value: oldV, new_value: newV });
+          }
+        }
+        if (restated.length > 0) {
+          await supabase.from("pnl_restatements").insert(
+            restated.map((r) => ({ company: "IFPL", month: m.month, scope: r.scope, line: r.line, old_value: r.old_value, new_value: r.new_value, changed_by: auth.email })),
+          );
+        }
+      }
       await supabase.from("ifpl_pnl_uploads").delete().eq("month", m.month).eq("status", "accepted");
     }
     const { data: upload, error: upErr } = await supabase
@@ -126,7 +162,7 @@ export async function POST(request: NextRequest) {
       }
       if (lineError) continue;
     }
-    results.push({ month: m.month, accepted, summary: String(m.summary || "").slice(0, 300) });
+    results.push({ month: m.month, accepted, summary: String(m.summary || "").slice(0, 300), restated: restated.length > 0 ? restated : undefined });
   }
 
   return Response.json({ results });
