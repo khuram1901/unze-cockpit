@@ -48,6 +48,7 @@ function computeQuickLinks(ctx: UserCtx): QuickLink[] {
       { href: "/tasks",                title: "Tasks",              icon: "🎯", color: "blue"   },
       { href: "/finance/imperial-pnl", title: "Imperial P&L",       icon: "👟", color: "green"  },
       { href: "/finance/imperial",     title: "Imperial Footwear",  icon: "👞", color: "amber"  },
+      { href: "/finance/restaurants", title: "Restaurants P&L", icon: "🍽️", color: "green" },
       { href: "/department/hr",        title: "HR",                 icon: "🧑‍💼", color: "purple" },
       { href: "/my-minutes",           title: "My Minutes",         icon: "🗒️", color: "green"  },
       { href: "/folderit",             title: "Folder-it",          icon: "📁", color: "amber"  },
