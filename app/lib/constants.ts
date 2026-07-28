@@ -95,3 +95,21 @@ export function deptsForCompany(companyId: string): string[] {
 export function catsForCompany(companyId: string): string[] {
   return COMPANY_CATEGORIES[companyId] ?? ["Salaries", "Rent/Utilities", "Admin", "Freight", "Travel"];
 }
+
+// BUDGET_COMPANIES — companies with a department-budget pipeline wired up.
+// Currently the same set as FINANCE_COMPANIES (UTPL + IFPL). Kept as a
+// separate export so finance/page.tsx can import it by its own semantic name.
+export const BUDGET_COMPANIES: CompanyConfig[] = COMPANIES.filter(
+  (c) => c.shortCode === "UTPL" || c.shortCode === "IFPL"
+);
+
+// MEMBER_COMPANY_NAMES — full list of company names available in the Members
+// module. Covers all companies so any new company added to COMPANIES is
+// automatically available in member records.
+export const MEMBER_COMPANY_NAMES: string[] = COMPANIES.map((c) => c.name);
+
+// PKR_HR_COMPANIES — companies on the PKR payroll tracked by the HR module
+// (Payroll, Onboarding, Offboarding). Excludes Unze London which runs on GBP.
+export const PKR_HR_COMPANIES: CompanyConfig[] = COMPANIES.filter(
+  (c) => c.currency === "PKR"
+);
