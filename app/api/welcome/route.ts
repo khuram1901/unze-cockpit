@@ -52,7 +52,6 @@ function computeQuickLinks(ctx: UserCtx): QuickLink[] {
       { href: "/department/hr",        title: "HR",                 icon: "🧑‍💼", color: "purple" },
       { href: "/my-minutes",           title: "My Minutes",         icon: "🗒️", color: "green"  },
       { href: "/folderit",             title: "Folder-it",          icon: "📁", color: "amber"  },
-      { href: "/profile",              title: "Profile",            icon: "👤", color: "slate"  },
     ];
   }
 
