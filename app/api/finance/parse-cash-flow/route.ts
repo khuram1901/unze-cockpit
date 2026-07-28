@@ -37,7 +37,7 @@ async function saveCashSheetData(
 ): Promise<void> {
   const csCompany = companyId === IFPL_COMPANY_ID ? "IFPL" : "UTPL";
 
-  const { data: csSheet } = await supabase
+  const { data: csSheet, error: csErr } = await supabase
     .from("cash_sheet_uploads")
     .upsert(
       {
@@ -53,6 +53,10 @@ async function saveCashSheetData(
     .select("id")
     .single();
 
+  if (csErr) {
+    console.error("saveCashSheetData: upsert failed:", csErr.message);
+    return;
+  }
   if (!csSheet?.id) return;
 
   // Replace all transactions for this sheet (idempotent re-upload)
