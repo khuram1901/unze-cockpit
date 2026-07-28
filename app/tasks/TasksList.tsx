@@ -908,15 +908,27 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>{task.assigned_to || "Unassigned"}</span>
                 {otherAssignees.length > 0 && <span style={{ color: COLOURS.SLATE }}> +{otherAssignees.length}</span>}
               </span>
-              {task.assigned_by && task.assigned_by !== task.assigned_to && task.assigned_by !== "Recurring Template" && (
-                <>
-                  <span>·</span>
-                  <span>
-                    <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>By:</span>{" "}
-                    {task.assigned_by}
-                  </span>
-                </>
-              )}
+              {(() => {
+                // "By:" shows who sent this task to the current owner:
+                // — submitted_by_name if it was routed here via Submitted/
+                //   Waiting Reply (person who submitted it, not the original
+                //   creator which may be "System" or a recurring label)
+                // — otherwise assigned_by, but only if it's a real person
+                //   name (filter out System, Recurring Template, etc.)
+                const SYSTEM_LABELS = ["system", "recurring template", "recurring task"];
+                const byName = task.submitted_by_name
+                  || (task.assigned_by && !SYSTEM_LABELS.includes(task.assigned_by.toLowerCase()) ? task.assigned_by : null);
+                if (!byName || byName === task.assigned_to) return null;
+                return (
+                  <>
+                    <span>·</span>
+                    <span>
+                      <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>By:</span>{" "}
+                      {byName}
+                    </span>
+                  </>
+                );
+              })()}
               <span>·</span>
               {(() => {
                 const badge = companyBadge(task.company_id);

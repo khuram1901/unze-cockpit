@@ -66,6 +66,11 @@ export async function routeSubmittedTask(
     assigned_to_email: mgr.email,
     assigned_to_department: mgr.department,
     assigned_to_business_unit: mgr.business_unit,
+    // When the task lands on the HOD's desk, "By:" should show who submitted
+    // it to them — not the original creator (which can be "System" for
+    // recurring tasks). The original creator is preserved in the audit log.
+    assigned_by: assignedTo,
+    assigned_by_email: assignedToEmail,
     submitted_by_name: assignedTo,
     submitted_by_email: assignedToEmail,
   };
@@ -150,6 +155,10 @@ export async function routeWaitingReplyTask(
     assigned_to_email: target.email,
     assigned_to_department: target.department,
     assigned_to_business_unit: target.business_unit,
+    // When the task arrives with the reply-to person, "By:" shows who sent
+    // it — same logic as routeSubmittedTask above.
+    assigned_by: currentAssignedTo,
+    assigned_by_email: currentAssignedToEmail,
     // Capture who was waiting so the reply-to person can hand it back
     waiting_reply_by_email: currentAssignedToEmail,
     waiting_reply_by_name: currentAssignedTo,
