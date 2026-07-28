@@ -16,13 +16,15 @@ REVOKE EXECUTE ON FUNCTION public.ifpl_check_details()                         F
 -- P&L commentary (migration 145)
 REVOKE EXECUTE ON FUNCTION public.get_pnl_commentary(text, text, date, date)   FROM anon;
 
--- UTPL P&L RPCs (migrations 139 / 140 — same class of issue)
-REVOKE EXECUTE ON FUNCTION public.pnl_kpi_summary(uuid, date, date)            FROM anon;
-REVOKE EXECUTE ON FUNCTION public.pnl_segment_breakdown(uuid, date)            FROM anon;
-REVOKE EXECUTE ON FUNCTION public.pnl_overheads_breakdown(uuid, text, date, date) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.pnl_ytd_summary(uuid, date)                  FROM anon;
-REVOKE EXECUTE ON FUNCTION public.pnl_profit_bridge(uuid, date)                FROM anon;
-REVOKE EXECUTE ON FUNCTION public.pnl_new_account_flags(uuid, date)            FROM anon;
+-- UTPL P&L RPCs (migrations 139 / 140 / 141)
+-- Note: 141 dropped the old (uuid, date) overloads for segment_breakdown and
+-- overheads_breakdown. The live signatures now include the boolean p_allocate_ho param.
+REVOKE EXECUTE ON FUNCTION public.pnl_kpi_summary(uuid, date, date)                       FROM anon;
+REVOKE EXECUTE ON FUNCTION public.pnl_segment_breakdown(uuid, date, boolean)              FROM anon;
+REVOKE EXECUTE ON FUNCTION public.pnl_overheads_breakdown(uuid, text, date, date, boolean) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.pnl_ytd_summary(uuid, date)                             FROM anon;
+REVOKE EXECUTE ON FUNCTION public.pnl_profit_bridge(uuid, date)                           FROM anon;
+REVOKE EXECUTE ON FUNCTION public.pnl_new_account_flags(uuid, date)                       FROM anon;
 
 -- Guarantee summary RPC (migration 060)
 REVOKE EXECUTE ON FUNCTION public.get_guarantee_summary()                      FROM anon;
