@@ -63,6 +63,17 @@ export function getCompanyByName(name: string): CompanyConfig | undefined {
   return COMPANIES.find((c) => c.name === name || c.name.startsWith(name));
 }
 
+// Company names for the Taxation notices dashboard — single source of truth so
+// TaxationDashboard.tsx and any future consumer stay in sync with the IDs above.
+export const TAX_COMPANY_NAMES: string[] = [
+  "Unze Trading PVT Limited",
+  "Imperial Footwear PVT Limited",
+  "Haute Dolci",
+  "Baranh",
+  "K&K Jhang",
+  "Directors",
+];
+
 // ── Department Budget lookup tables ───────────────────────────────────────────
 // Single source of truth for both finance/page.tsx and FinanceManager.tsx.
 // Previously defined separately in each file with different variable names,
