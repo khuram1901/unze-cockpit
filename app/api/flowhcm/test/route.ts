@@ -73,36 +73,48 @@ export async function GET() {
   let attendanceError: string | null = null;
 
   if (sessionToken) {
-    try {
-      // Last 7 days, all employees (empty employeecode = all)
-      const today = new Date();
-      const week  = new Date(Date.now() - 7 * 86400_000);
-      const fmt   = (d: Date) =>
-        `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
+    const today = new Date();
+    const month = new Date(Date.now() - 30 * 86400_000);
+    const fmt   = (d: Date) =>
+      `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
 
-      const attRes = await fetch(`${BASE_URL}/IntegrationSettings/GetEmployeeAttendance`, {
+    // Test 1: Attendance — no group filter, last 30 days
+    try {
+      const r = await fetch(`${BASE_URL}/IntegrationSettings/GetEmployeeAttendance`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "token": sessionToken,
-        },
+        headers: { "Content-Type": "application/json", "token": sessionToken },
         body: JSON.stringify({
-          email:         EMAIL,
-          password:      PASSWORD,
-          employeecode:  "",          // empty = all employees
-          startdate:     fmt(week),
+          email: EMAIL, password: PASSWORD,
+          employeecode:  "",
+          startdate:     fmt(month),
           enddate:       fmt(today),
-          employeegroup: process.env.FLOWHCM_GROUP ?? "",
+          employeegroup: "",           // no filter
         }),
         cache: "no-store",
       });
+      attendanceResult = { endpoint: "GetEmployeeAttendance (no group, 30 days)", status: r.status, body: (await r.text()).slice(0, 2000) };
+    } catch (e) { attendanceError = String(e); }
 
-      const raw = await attRes.text();
-      // Show first 3000 chars so we can see field names without flooding
-      attendanceResult = { status: attRes.status, body: raw.slice(0, 3000) };
-    } catch (e) {
-      attendanceError = e instanceof Error ? e.message : String(e);
-    }
+    // Test 2: Leave — no group filter, last 30 days
+    let leaveResult: unknown = null;
+    let leaveError: string | null = null;
+    try {
+      const r = await fetch(`${BASE_URL}/IntegrationSettings/GetLeaveRequest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "token": sessionToken },
+        body: JSON.stringify({
+          email: EMAIL, password: PASSWORD,
+          employeecode:  "",
+          startdate:     fmt(month),
+          enddate:       fmt(today),
+          employeegroup: "",
+        }),
+        cache: "no-store",
+      });
+      leaveResult = { endpoint: "GetLeaveRequest (no group, 30 days)", status: r.status, body: (await r.text()).slice(0, 2000) };
+    } catch (e) { leaveError = String(e); }
+
+    attendanceResult = { attendance: attendanceResult, leave: leaveResult, leaveError };
   }
 
   return NextResponse.json({
