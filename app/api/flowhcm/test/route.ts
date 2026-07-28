@@ -55,7 +55,12 @@ export async function GET() {
       sessionToken =
         typeof json === "string"
           ? json
-          : (json?.token ?? json?.Token ?? json?.accessToken ?? json?.data ?? null);
+          : (json?.informations?.[0]?.myToken
+              ?? json?.token
+              ?? json?.Token
+              ?? json?.accessToken
+              ?? json?.data
+              ?? null);
     } else {
       loginError = `HTTP ${loginRes.status}: ${raw}`;
     }
