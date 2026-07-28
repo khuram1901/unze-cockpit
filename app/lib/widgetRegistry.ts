@@ -55,6 +55,15 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "imperial_pnl.commentary", label: "CEO commentary (AI)", page: "Imperial P&L" },
   { key: "imperial_pnl.data_strip", label: "Data quality strip", page: "Imperial P&L" },
 
+  // ── Restaurants P&L (app/finance/restaurants/page.tsx) ───────────
+  { key: "restaurants_pnl.attention_banner", label: "Needs-attention banner", page: "Restaurants P&L" },
+  { key: "restaurants_pnl.kpi_cards", label: "KPI cards", page: "Restaurants P&L" },
+  { key: "restaurants_pnl.charts", label: "Charts (sales, profit, margins)", page: "Restaurants P&L" },
+  { key: "restaurants_pnl.branch_league", label: "Branch league", page: "Restaurants P&L" },
+  { key: "restaurants_pnl.expense_watch", label: "Expense watch", page: "Restaurants P&L" },
+  { key: "restaurants_pnl.commentary", label: "CEO commentary (AI)", page: "Restaurants P&L" },
+  { key: "restaurants_pnl.data_strip", label: "Data quality strip", page: "Restaurants P&L" },
+
   // ── Operations Dashboard (app/dashboard/DashboardView.tsx) ───────
   { key: "dashboard.attention_banner", label: "Attention Needed banner", page: "Operations Dashboard", tip: "Machines down / plants not reported / overdue tasks alert" },
   { key: "dashboard.hero_kpi_cards", label: "Good Stock hero + KPI cards", page: "Operations Dashboard", tip: "The dark Good Stock card and the 5 compact KPI tiles beside it" },

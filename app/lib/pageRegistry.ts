@@ -48,6 +48,7 @@ export const PAGE_REGISTRY: PageCard[] = [
   { permKey: "can_view_finance_ifpl", title: "Imperial Footwear", subtitle: "Cash position, forecasts, budgets", href: "/finance/imperial", icon: "👞", group: "Finance", badgeKey: "ifplFinance" },
   { permKey: "can_view_investments", title: "Investments", subtitle: "PSX stock portfolio tracker", href: "/investments", icon: "📈", group: "Finance" },
   { permKey: "can_view_ifpl_pnl", title: "Imperial P&L", subtitle: "Unze London retail — plan vs actual, branch league", href: "/finance/imperial-pnl", icon: "👟", group: "Finance" },
+  { permKey: "can_view_restaurants_pnl", title: "Restaurants P&L", subtitle: "Baranh & Haute Dolci — branches, food cost, trends", href: "/finance/restaurants", icon: "🍽️", group: "Finance" },
   { permKey: "can_view_finance", title: "Unze P&L", subtitle: "Unze Trading — plants, margins, CEO view", href: "/finance/profit-and-loss", icon: "📉", group: "Finance" },
   { permKey: "can_edit_finance", title: "Opening Balances", subtitle: "Set starting balances for companies", href: "/opening-balances", icon: "🏧", group: "Finance" },
   { permKey: "can_view_receivables", title: "Receivables", subtitle: "Track bills through collection stages", href: "/receivables", icon: "💳", group: "Finance", badgeKey: "receivables" },

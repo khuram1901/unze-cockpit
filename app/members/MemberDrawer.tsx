@@ -790,6 +790,7 @@ export default function MemberDrawer({
                         { key: "can_view_receivables", label: "View receivables" },
                         { key: "can_edit_receivables", label: "Edit receivables" },
                         { key: "can_view_ifpl_pnl", label: "Imperial P&L (IFPL)" },
+                        { key: "can_view_restaurants_pnl", label: "Restaurants P&L" },
                         { key: "can_view_guarantees", label: "Bank facilities" },
                         { key: "can_manage_guarantees", label: "Manage guarantees" },
                         { key: "can_view_investments", label: "View investments" },

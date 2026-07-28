@@ -185,6 +185,17 @@ export function canViewIfplPnl(u: UserCtx) {
   return isAdminTier(u);
 }
 
+// ── Restaurants P&L (Baranh + Haute Dolci) ────────────────────────
+// Same model as canViewIfplPnl: PA blocked unconditionally, Admin/CEO
+// roles by default, everyone else via the Access Matrix toggle
+// (member_permissions.can_view_restaurants_pnl, migration 151).
+export function canViewRestaurantsPnl(u: UserCtx) {
+  if (isPA(u)) return false;
+  const o = ov(u, "can_view_restaurants_pnl");
+  if (o !== null) return o;
+  return isAdminTier(u);
+}
+
 // ── Receivables ───────────────────────────────────────────────────
 export function canViewReceivables(u: UserCtx) {
   // Same override-before-PA ordering bug as canViewFinance, fixed the

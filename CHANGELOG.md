@@ -4,6 +4,20 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-28 — Restaurants P&L: Baranh + Haute Dolci on one page, same family as Unze/Imperial
+
+Khuram asked for a restaurants P&L "exactly like Imperial and Unze" — one page, tabs per company (K&K Jhang parked on his instruction; the schema takes it as a third tab when ready). Built end-to-end in one pass against the real Apr-26 workbooks:
+
+- **New page `/finance/restaurants`** — Baranh / Haute Dolci tabs, each with its own upload. Branch chips (few branches, so chips not dropdowns), Month/Quarter/12M/All/Custom presets, attention banner (loss streaks, loss-making branches, food-cost spikes), KPI cards with **food cost % of net sales** as a first-class metric (healthy ≤42% per sector norms), sales+profit combo chart, margin-health chart with a 42% food-cost reference line, branch league with food-cost RAG chips and whole-company total row, expense watch (top admin lines as % of sales) with below-the-line strip, saved AI commentary (restaurant-specific CFO prompt + market context), clickable data-quality panel, sourced market context footer. All sections widget-toggleable.
+- **Parser** (`pnl-restaurant-parser.ts`, runs in the browser): reads the branch sheets (Baranh: Gulberg/Raya/Y-Block/Packages; HD: those + Dolmen) with month columns back to 2021/2022. Handles the files' realities found during testing: o→m typos ("Purcahses", "Prmfit", "Telephmne" — canonicalised), "Discount" vs "Discounts", bank-discount rows labelled "ABL Discount Claim" vs "Add:ABL Discount" (position-based: anything between Net Sales and Total Sales is a bank claim), the brand-new Packages branch with a single month column, HD's legal name "Dolce Restaurants" on sheet titles, **costs stored as negatives** (normalised to positive magnitudes), and a **timezone bug** where SheetJS shifts Pakistan month-start dates to the previous evening (fixed with a 12-hour nudge + UTC getters — the month parsed would otherwise depend on whose computer did the upload). Wrong-company uploads are rejected by title check. 6 checks/month in the two-tier blocking/warning system; the net-sales identity is warning-tier because Apr/May 2023 in the real Baranh file are internally off by 0.5-0.75m.
+- **Verified against the real files: Baranh 55/55 months accepted (2 warnings), HD 37/37 clean.** Apr-26 reconciles to the sheets exactly (Baranh NS 43.25m / NP −9.69m; HD NS 16.61m / NP −17.20m — every HD branch loss-making that month, which the attention banner will surface).
+- **Pipeline**: migration 151 (3 `rest_pnl_*` tables, RLS no policies, 5 company-parameterised RPCs, anon-revoked per the 149 pattern, `can_view_restaurants_pnl` column) applied live; `/api/pnl/upload-restaurants` (JSON, server re-derives acceptance); `/api/pnl/ceo-insights` gains BARANH/HD branches with restaurant market context (food inflation ~8.6%/yr, restaurants CPI ~5-6% late-25, top-10 chains ~28% share); commentary saved per company+branch+period in the existing `pnl_commentary` table.
+- **Access**: `canViewRestaurantsPnl()` (PA blocked, Admin/CEO default), wired through the NEW members UI (MemberDrawer finance toggles — the Access Matrix files were replaced by another session mid-build), sidebar registry ("Restaurants P&L" card), route guard, and widget registry.
+
+tsc clean; eslint 0 errors (13 pre-existing warnings in files this change didn't author). First data load: upload both workbooks through the page after deploy.
+
+---
+
 ## 2026-07-27 — Monday blueprint refresh (scheduled)
 
 **Files changed in BLUEPRINT.md:**
