@@ -318,14 +318,14 @@ function BillPicker({ linkedId, linkedDate, linkedRef, onLink, onManualDate, man
             style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
           />
           {open && (
-            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, backgroundColor: "#fff", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", maxHeight: "200px", overflowY: "auto" }}>
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100, backgroundColor: COLOURS.CARD, border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)", maxHeight: "200px", overflowY: "auto" }}>
               {searching && <div style={{ padding: "10px 12px", fontSize: "12px", color: COLOURS.SLATE }}>Searching…</div>}
               {!searching && results.length === 0 && <div style={{ padding: "10px 12px", fontSize: "12px", color: COLOURS.SLATE }}>No bills found</div>}
               {results.map((b) => (
                 <div key={b.id} onMouseDown={() => select(b)}
-                  style={{ padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid #f1f5f9", fontSize: "13px" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#fff")}
+                  style={{ padding: "8px 12px", cursor: "pointer", borderBottom: `1px solid ${COLOURS.HAIRLINE}`, fontSize: "13px" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = COLOURS.CANVAS)}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = COLOURS.CARD)}
                 >
                   <span style={{ fontWeight: 600 }}>{b.utility}</span>
                   {b.invoice_ref && <span style={{ color: COLOURS.SLATE }}> — {b.invoice_ref}</span>}
@@ -353,13 +353,17 @@ function BillPicker({ linkedId, linkedDate, linkedRef, onLink, onManualDate, man
   );
 }
 
+// Local colour constants for colours used in this file that aren't in the global palette
+const PURPLE_SOFT   = "#f5f3ff"; // soft background for Converted status and convert panel
+const INVALID_BORDER = "#fca5a5"; // red border on required fields that are empty
+
 const GUARANTEE_TYPES = ["Bid Guarantee", "Pay Order", "Performance Guarantee", "Car Finance Drawdown", "Other"];
 const STATUSES = ["Active", "Converted", "Returned", "Released", "Expired"];
 
 function statusBadge(status: string) {
   const map: Record<string, { bg: string; color: string }> = {
     "Active":      { bg: COLOURS.INFO_SOFT,    color: COLOURS.BLUE },
-    "Converted":   { bg: "#f5f3ff",            color: COLOURS.PURPLE },
+    "Converted":   { bg: PURPLE_SOFT,           color: COLOURS.PURPLE },
     "Returned":    { bg: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN },
     "Released":    { bg: COLOURS.SUCCESS_SOFT, color: COLOURS.GREEN },
     "Expired":     { bg: COLOURS.DANGER_SOFT,  color: COLOURS.RED },
@@ -670,7 +674,7 @@ export default function GuaranteesPage() {
 
   // ── Delete facility ──
   async function deleteFacility(f: Facility) {
-    if (!confirm(`Delete "${f.facility_name || f.facility_type}" at ${f.bank_name}? This cannot be undone.`)) return;
+    if (!await confirm(`Delete "${f.facility_name || f.facility_type}" at ${f.bank_name}? This cannot be undone.`)) return;
     const res = await authFetch("/api/finance/guarantee-facilities", { method: "DELETE", body: JSON.stringify({ id: f.id }) });
     const json = await res.json();
     if (json.error) { toast(json.error, "error"); return; }
@@ -783,7 +787,7 @@ export default function GuaranteesPage() {
                 <select value={addForm.facility_id} onChange={(e) => {
                   const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === e.target.value);
                   setAddForm({ ...addForm, facility_id: e.target.value, bank_name: sel ? sel.bank_name : "" });
-                }} style={{ ...inputStyle, width: "100%", borderColor: !addForm.facility_id ? "#fca5a5" : undefined }}>
+                }} style={{ ...inputStyle, width: "100%", borderColor: !addForm.facility_id ? INVALID_BORDER : undefined }}>
                   <option value="">— Select facility —</option>
                   {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
                 </select>
@@ -1005,7 +1009,7 @@ export default function GuaranteesPage() {
                       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "10px" }}>
                         <button onClick={() => startEdit(g)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, border: `1px solid ${COLOURS.HAIRLINE}`, backgroundColor: "var(--bg-card,#fff)", color: COLOURS.SLATE, cursor: "pointer" }}>Edit</button>
                         {canConvert && (
-                          <button onClick={() => startConvert(g)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, border: `1px solid ${COLOURS.PURPLE}`, backgroundColor: "#f5f3ff", color: COLOURS.PURPLE, cursor: "pointer" }}>
+                          <button onClick={() => startConvert(g)} style={{ padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: 700, border: `1px solid ${COLOURS.PURPLE}`, backgroundColor: PURPLE_SOFT, color: COLOURS.PURPLE, cursor: "pointer" }}>
                             Tender Won → Convert
                           </button>
                         )}
@@ -1045,7 +1049,7 @@ export default function GuaranteesPage() {
                           <select value={editForm.facility_id} onChange={(e) => {
                             const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === e.target.value);
                             setEditForm({ ...editForm, facility_id: e.target.value, bank_name: sel ? sel.bank_name : editForm.bank_name });
-                          }} style={{ ...inputStyle, width: "100%", borderColor: !editForm.facility_id ? "#fca5a5" : undefined }}>
+                          }} style={{ ...inputStyle, width: "100%", borderColor: !editForm.facility_id ? INVALID_BORDER : undefined }}>
                             <option value="">— Select facility —</option>
                             {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
                           </select>
@@ -1095,7 +1099,7 @@ export default function GuaranteesPage() {
 
                   {/* ── Convert to Performance Guarantee form — Finance managers only ── */}
                   {canManage && isConverting && convertTarget && (
-                    <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "14px", backgroundColor: "#f5f3ff" }}>
+                    <div style={{ borderTop: `1px solid ${COLOURS.HAIRLINE}`, padding: "14px", backgroundColor: PURPLE_SOFT }}>
                       <div style={{ fontSize: "13px", fontWeight: 700, color: COLOURS.PURPLE, marginBottom: "6px" }}>Convert to Performance Guarantee</div>
                       <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "12px" }}>
                         The original {g.guarantee_type} ({g.guarantee_number}) will be marked <strong>Converted</strong> and a new Performance Guarantee will be created.
@@ -1106,7 +1110,7 @@ export default function GuaranteesPage() {
                           <select value={convertForm.facility_id} onChange={(e) => {
                             const sel = banks.flatMap((b) => b.sub_facilities).find((f) => f.id === e.target.value);
                             setConvertForm({ ...convertForm, facility_id: e.target.value, bank_name: sel ? sel.bank_name : convertForm.bank_name });
-                          }} style={{ ...inputStyle, width: "100%", borderColor: !convertForm.facility_id ? "#fca5a5" : undefined }}>
+                          }} style={{ ...inputStyle, width: "100%", borderColor: !convertForm.facility_id ? INVALID_BORDER : undefined }}>
                             <option value="">— Select facility —</option>
                             {banks.flatMap((b) => b.sub_facilities).map((f) => <option key={f.id} value={f.id}>{f.bank_name} — {f.facility_name || f.facility_type} (free: {pkr(f.available)})</option>)}
                           </select>

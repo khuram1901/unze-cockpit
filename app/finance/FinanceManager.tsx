@@ -1226,26 +1226,26 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           >
             <button
               onClick={() => { setCsDetailId(null); setCsDetail(null); }}
-              style={{ position: "absolute", top: "16px", right: "16px", background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "#64748B" }}
+              style={{ position: "absolute", top: "16px", right: "16px", background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: SLATE }}
             >×</button>
-            <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#0F1720", margin: "0 0 20px" }}>
+            <h2 style={{ fontSize: "18px", fontWeight: 700, color: NAVY, margin: "0 0 20px" }}>
               {csDetail ? formatDateUK(csDetail.date) : "Loading…"} — Transaction Detail
             </h2>
             {csDetailLoading && (
-              <p style={{ color: "#64748B", fontSize: "14px" }}>Loading transactions…</p>
+              <p style={{ color: SLATE, fontSize: "14px" }}>Loading transactions…</p>
             )}
             {csDetail && !csDetailLoading && (
               <>
                 {/* Balance summary tiles */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", marginBottom: "24px" }}>
                   {[
-                    { label: "Opening", value: csDetail.opening, color: "#0F1720" },
-                    { label: "Receipts", value: csDetail.receipts.reduce((s, r) => s + r.amount_pkr, 0), color: "#0F7B5F" },
-                    { label: "Payments", value: csDetail.payments.reduce((s, r) => s + r.amount_pkr, 0), color: "#B3261E" },
-                    { label: "Closing", value: csDetail.closing, color: "#0F1720" },
+                    { label: "Opening", value: csDetail.opening, color: NAVY },
+                    { label: "Receipts", value: csDetail.receipts.reduce((s, r) => s + r.amount_pkr, 0), color: GREEN },
+                    { label: "Payments", value: csDetail.payments.reduce((s, r) => s + r.amount_pkr, 0), color: RED },
+                    { label: "Closing", value: csDetail.closing, color: NAVY },
                   ].map(({ label, value, color }) => (
                     <div key={label} style={{ border: "1px solid #EEF0F3", borderRadius: "10px", padding: "12px", textAlign: "center" }}>
-                      <div style={{ fontSize: "11px", color: "#64748B", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>{label}</div>
+                      <div style={{ fontSize: "11px", color: SLATE, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>{label}</div>
                       <div style={{ fontSize: "15px", fontWeight: 700, color }}>{fmt(value)}</div>
                     </div>
                   ))}
@@ -1253,19 +1253,19 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
                 {/* Receipts table */}
                 <div style={{ marginBottom: "20px" }}>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#0F7B5F", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: GREEN, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     Receipts ({csDetail.receipts.length})
                   </div>
                   {csDetail.receipts.length === 0 ? (
-                    <p style={{ fontSize: "13px", color: "#64748B" }}>No receipt detail available.</p>
+                    <p style={{ fontSize: "13px", color: SLATE }}>No receipt detail available.</p>
                   ) : (
                     <div style={{ border: "1px solid #EEF0F3", borderRadius: "10px", overflow: "hidden" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                         <tbody>
                           {csDetail.receipts.map((r, i) => (
                             <tr key={i} style={{ borderBottom: i < csDetail.receipts.length - 1 ? "1px solid #EEF0F3" : "none" }}>
-                              <td style={{ padding: "8px 12px", color: "#0F1720" }}>{r.description}</td>
-                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: "#0F7B5F", whiteSpace: "nowrap" }}>{fmt(r.amount_pkr)}</td>
+                              <td style={{ padding: "8px 12px", color: NAVY }}>{r.description}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: GREEN, whiteSpace: "nowrap" }}>{fmt(r.amount_pkr)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1276,19 +1276,19 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
 
                 {/* Payments table */}
                 <div>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#B3261E", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: RED, marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     Payments ({csDetail.payments.length})
                   </div>
                   {csDetail.payments.length === 0 ? (
-                    <p style={{ fontSize: "13px", color: "#64748B" }}>No payment detail available.</p>
+                    <p style={{ fontSize: "13px", color: SLATE }}>No payment detail available.</p>
                   ) : (
                     <div style={{ border: "1px solid #EEF0F3", borderRadius: "10px", overflow: "hidden" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                         <tbody>
                           {csDetail.payments.map((p, i) => (
                             <tr key={i} style={{ borderBottom: i < csDetail.payments.length - 1 ? "1px solid #EEF0F3" : "none" }}>
-                              <td style={{ padding: "8px 12px", color: "#0F1720" }}>{p.description}</td>
-                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: "#B3261E", whiteSpace: "nowrap" }}>{fmt(p.amount_pkr)}</td>
+                              <td style={{ padding: "8px 12px", color: NAVY }}>{p.description}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: RED, whiteSpace: "nowrap" }}>{fmt(p.amount_pkr)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1298,7 +1298,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
                 </div>
 
                 {csDetail.receipts.length === 0 && csDetail.payments.length === 0 && (
-                  <p style={{ fontSize: "13px", color: "#64748B", marginTop: "8px" }}>
+                  <p style={{ fontSize: "13px", color: SLATE, marginTop: "8px" }}>
                     This day was uploaded without individual transaction lines. Re-upload the PDF to see full detail.
                   </p>
                 )}
