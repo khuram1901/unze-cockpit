@@ -60,14 +60,14 @@ export type FlwLeaveRequest = {
 
 // Placeholder types for future endpoints (recruitment, payroll, etc.)
 // These will be updated when FlowHCM provides those API collections.
-export type FlwEmployee          = Record<string, unknown>;
-export type FlwPayrollRecord     = Record<string, unknown>;
-export type FlwPerformanceReview = Record<string, unknown>;
-export type FlwTrainingRecord    = Record<string, unknown>;
-export type FlwDisciplinaryAction = Record<string, unknown>;
-export type FlwLoan              = Record<string, unknown>;
-export type FlwJobCandidate      = Record<string, unknown>;
-export type FlwJobRequest        = Record<string, unknown>;
+export type FlwEmployee          = Record<string, any>;
+export type FlwPayrollRecord     = Record<string, any>;
+export type FlwPerformanceReview = Record<string, any>;
+export type FlwTrainingRecord    = Record<string, any>;
+export type FlwDisciplinaryAction = Record<string, any>;
+export type FlwLoan              = Record<string, any>;
+export type FlwJobCandidate      = Record<string, any>;
+export type FlwJobRequest        = Record<string, any>;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
