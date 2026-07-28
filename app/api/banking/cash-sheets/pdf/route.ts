@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
     receipts: number | null;
     payments: number | null;
   } = { opening: null, closing: null, receipts: null, payments: null };
+  let parseWarning: string | null = null;
 
   try {
     const results = await parseCashFlowPDF(buffer);
@@ -107,8 +108,9 @@ export async function POST(request: NextRequest) {
       };
     }
   } catch (parseErr) {
-    console.warn("cash-sheets/pdf: parse warning (non-fatal):", parseErr);
+    parseWarning = parseErr instanceof Error ? parseErr.message : String(parseErr);
+    console.warn("cash-sheets/pdf: parse warning (non-fatal):", parseWarning);
   }
 
-  return Response.json({ ok: true, path: storagePath, parsed });
+  return Response.json({ ok: true, path: storagePath, parsed, parseWarning });
 }
