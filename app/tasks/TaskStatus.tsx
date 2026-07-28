@@ -216,8 +216,9 @@ export default function TaskStatus({
       setSaving(false);
       return;
     }
-    await supabase.from("task_assignees").delete().eq("task_id", task.id);
-    await supabase.from("task_assignees").insert({ task_id: task.id, member_id: original.id, member_name: original.name, member_email: original.email });
+    // Update tasks FIRST — if this fails we abort before touching task_assignees,
+    // preventing the split-brain where task_assignees has Adnan but tasks still
+    // shows Akhlaq (the bug that kept reappearing on the Civil Defense task).
     const { error } = await supabase.from("tasks").update({
       status: "In Progress",
       assigned_to: original.name,
@@ -228,8 +229,11 @@ export default function TaskStatus({
       submitted_by_email: null,
       updated_at: new Date().toISOString(),
     }).eq("id", task.id);
+    if (error) { setSaving(false); toast.show("Error returning task: " + error.message, "error"); return; }
+    // tasks update succeeded — now sync task_assignees to match
+    await supabase.from("task_assignees").delete().eq("task_id", task.id);
+    await supabase.from("task_assignees").insert({ task_id: task.id, member_id: original.id, member_name: original.name, member_email: original.email });
     setSaving(false);
-    if (error) { toast.show("Error returning task: " + error.message, "error"); return; }
     logAction("Updated", "tasks", `Returned to ${original.name}: ${task.id}`, task.id);
     setStatus("In Progress");
     onChanged();
