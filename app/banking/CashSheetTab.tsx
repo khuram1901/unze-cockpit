@@ -160,12 +160,17 @@ export default function CashSheetTab() {
 
   async function loadSheets() {
     setLoading(true);
-    const res = await authFetch(
-      `/api/banking/cash-sheets?company=${company}&month=${selectedMonth}`
-    );
-    const json = await res.json();
-    setSheets(json.data || []);
-    setLoading(false);
+    try {
+      const res = await authFetch(
+        `/api/banking/cash-sheets?company=${company}&month=${selectedMonth}`
+      );
+      const json = await res.json();
+      setSheets(json.data || []);
+    } catch {
+      showToast("Failed to load cash sheets — check your connection and refresh", "error");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -175,10 +180,15 @@ export default function CashSheetTab() {
 
   async function loadDetail(id: string) {
     setLoadingDetail(true);
-    const res = await authFetch(`/api/banking/cash-sheets/${id}`);
-    const json = await res.json();
-    setDetail(json.data || null);
-    setLoadingDetail(false);
+    try {
+      const res = await authFetch(`/api/banking/cash-sheets/${id}`);
+      const json = await res.json();
+      setDetail(json.data || null);
+    } catch {
+      showToast("Failed to load sheet detail", "error");
+    } finally {
+      setLoadingDetail(false);
+    }
   }
 
   // ── Upload submit ───────────────────────────────────────────────────────────
@@ -188,6 +198,7 @@ export default function CashSheetTab() {
       showToast("Please select a date", "error"); return;
     }
     setSaving(true);
+    try {
 
     // 1. Upload PDF if selected — also parses it server-side to extract balances
     let pdf_storage_path: string | undefined;
@@ -204,7 +215,7 @@ export default function CashSheetTab() {
       const pdfJson = await pdfRes.json();
       if (!pdfJson.ok) {
         showToast(pdfJson.error || "PDF upload failed", "error");
-        setSaving(false); return;
+        return;
       }
       pdf_storage_path = pdfJson.path;
       // Use parsed balances as fallback when the user left the fields blank
@@ -254,21 +265,34 @@ export default function CashSheetTab() {
         total_payments: parsedPayments,
       }),
     });
-    const json = await res.json();
-    setSaving(false);
+    let json: { ok?: boolean; error?: string };
+    try {
+      json = await res.json();
+    } catch {
+      json = { ok: false, error: `Server error (${res.status}) — please try again` };
+    }
 
     if (json.ok) {
       showToast("Cash sheet saved", "success");
       closeUpload();
       loadSheets();
     } else {
-      showToast(json.error || "Failed to save", "error");
+      showToast(json.error || `Failed to save (${res.status}) — please try again`, "error");
+    }
+
+    } catch (err) {
+      // Network failure / server unreachable — without this the button was
+      // stuck on "Saving…" forever with no feedback.
+      showToast("Save failed: " + (err instanceof Error ? err.message : String(err)) + " — please try again", "error");
+    } finally {
+      setSaving(false);
     }
   }
 
   function closeUpload() {
     setShowUpload(false);
     setDragOver(false);
+    setSaving(false);
     setUploadForm({ sheet_date: "", opening_balance_pkr: "", closing_balance_pkr: "", notes: "" });
     setDraftTxns([]);
     setUploadFile(null);
@@ -306,6 +330,7 @@ export default function CashSheetTab() {
       showToast("Description and amount are required", "error"); return;
     }
     setSavingTxn(true);
+    try {
     const res = await authFetch("/api/banking/cash-sheets/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -320,7 +345,6 @@ export default function CashSheetTab() {
       }),
     });
     const json = await res.json();
-    setSavingTxn(false);
     if (json.ok) {
       showToast("Transaction added", "success");
       setAddTxn(null);
@@ -329,31 +353,44 @@ export default function CashSheetTab() {
     } else {
       showToast(json.error || "Failed to add", "error");
     }
+    } catch (err) {
+      showToast("Failed to add: " + (err instanceof Error ? err.message : String(err)), "error");
+    } finally {
+      setSavingTxn(false);
+    }
   }
 
   async function deleteTxn(txnId: string) {
     if (!detail) return;
     if (!confirm("Remove this transaction?")) return;
-    const res = await authFetch(`/api/banking/cash-sheets/transactions?id=${txnId}`, { method: "DELETE" });
-    const json = await res.json();
-    if (json.ok) {
-      loadDetail(detail.id);
-      loadSheets();
-    } else {
-      showToast(json.error || "Failed to delete", "error");
+    try {
+      const res = await authFetch(`/api/banking/cash-sheets/transactions?id=${txnId}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.ok) {
+        loadDetail(detail.id);
+        loadSheets();
+      } else {
+        showToast(json.error || "Failed to delete", "error");
+      }
+    } catch (err) {
+      showToast("Failed to delete: " + (err instanceof Error ? err.message : String(err)), "error");
     }
   }
 
   async function deleteSheet(id: string) {
     if (!confirm("Delete this entire cash sheet and all its transactions? This cannot be undone.")) return;
-    const res = await authFetch(`/api/banking/cash-sheets/${id}`, { method: "DELETE" });
-    const json = await res.json();
-    if (json.ok) {
-      showToast("Cash sheet deleted", "success");
-      setDetail(null);
-      loadSheets();
-    } else {
-      showToast(json.error || "Failed to delete", "error");
+    try {
+      const res = await authFetch(`/api/banking/cash-sheets/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.ok) {
+        showToast("Cash sheet deleted", "success");
+        setDetail(null);
+        loadSheets();
+      } else {
+        showToast(json.error || "Failed to delete", "error");
+      }
+    } catch (err) {
+      showToast("Failed to delete: " + (err instanceof Error ? err.message : String(err)), "error");
     }
   }
 

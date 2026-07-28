@@ -114,11 +114,17 @@ async function login(): Promise<string> {
 
   const json = await res.json();
 
-  // FlowHCM may return the token as a plain string, or as { token: "..." } / { Token: "..." }
+  // FlowHCM returns: { informations: [{ myToken: "..." }] }
+  // Fallback to other common shapes just in case
   const token: string =
     typeof json === "string"
       ? json
-      : (json?.token ?? json?.Token ?? json?.accessToken ?? json?.data ?? "");
+      : (json?.informations?.[0]?.myToken
+          ?? json?.token
+          ?? json?.Token
+          ?? json?.accessToken
+          ?? json?.data
+          ?? "");
 
   if (!token) {
     throw new Error(`FlowHCM login succeeded but no token in response: ${JSON.stringify(json)}`);
