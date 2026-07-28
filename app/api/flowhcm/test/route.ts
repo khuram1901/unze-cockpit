@@ -74,8 +74,11 @@ export async function GET() {
 
   if (sessionToken) {
     try {
+      // Last 7 days, all employees (empty employeecode = all)
       const today = new Date();
-      const dateStr = `${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getDate()).padStart(2, "0")}/${today.getFullYear()}`;
+      const week  = new Date(Date.now() - 7 * 86400_000);
+      const fmt   = (d: Date) =>
+        `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()}`;
 
       const attRes = await fetch(`${BASE_URL}/IntegrationSettings/GetEmployeeAttendance`, {
         method: "POST",
@@ -86,16 +89,17 @@ export async function GET() {
         body: JSON.stringify({
           email:         EMAIL,
           password:      PASSWORD,
-          employeecode:  "2",        // single employee to keep response small
-          startdate:     dateStr,
-          enddate:       dateStr,
+          employeecode:  "",          // empty = all employees
+          startdate:     fmt(week),
+          enddate:       fmt(today),
           employeegroup: process.env.FLOWHCM_GROUP ?? "",
         }),
         cache: "no-store",
       });
 
       const raw = await attRes.text();
-      attendanceResult = { status: attRes.status, body: raw.slice(0, 2000) }; // cap at 2 KB
+      // Show first 3000 chars so we can see field names without flooding
+      attendanceResult = { status: attRes.status, body: raw.slice(0, 3000) };
     } catch (e) {
       attendanceError = e instanceof Error ? e.message : String(e);
     }

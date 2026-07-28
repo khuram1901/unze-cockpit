@@ -161,7 +161,13 @@ async function flwPost<T>(
 
   const json = await res.json();
 
-  // API may return a bare array or wrap it: { data: [...] } / { records: [...] }
+  // FlowHCM wraps data in APIResponeData (their typo) as a nested array: [[{...},{...}]]
+  if (Array.isArray(json?.APIResponeData)) {
+    const inner = json.APIResponeData[0];
+    if (Array.isArray(inner)) return inner as T[];
+  }
+
+  // Fallback shapes
   if (Array.isArray(json))          return json as T[];
   if (Array.isArray(json?.data))    return json.data as T[];
   if (Array.isArray(json?.records)) return json.records as T[];
