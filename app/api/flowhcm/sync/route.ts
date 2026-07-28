@@ -23,6 +23,20 @@ import {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+/**
+ * FlowHCM returns dates as MM/DD/YYYY — convert to YYYY-MM-DD for Postgres.
+ * If the string is already YYYY-MM-DD, return it as-is.
+ */
+function parseFlwDate(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  // Already ISO format
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  // MM/DD/YYYY
+  const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[1]}-${m[2]}`;
+  return raw.slice(0, 10);
+}
+
 async function logSync(
   db:      ReturnType<typeof createServiceClient>,
   module:  string,
@@ -87,12 +101,13 @@ async function syncAttendance(db: ReturnType<typeof createServiceClient>) {
   const rows = records.map(r => ({
     employee_code:   r.employeeCode,
     employee_name:   r.employeeName,
-    attendance_date: r.attendanceDate?.slice(0, 10) ?? toDate,
+    // API returns dates as MM/DD/YYYY — parse to YYYY-MM-DD for storage
+    attendance_date: parseFlwDate(r.attendanceDate) ?? toDate,
     status:          r.status,
-    check_in:        r.checkIn,
-    check_out:       r.checkOut,
-    department:      r.department,
-    station:         r.station,
+    check_in:        r.inTime   ?? null,
+    check_out:       r.outTime  ?? null,
+    department:      r.department  ?? null,
+    station:         r.designation ?? null,   // use designation as fallback for station
     synced_at:       new Date().toISOString(),
   }));
 
@@ -122,12 +137,12 @@ async function syncLeave(db: ReturnType<typeof createServiceClient>) {
     employee_code: r.employeeCode,
     employee_name: r.employeeName,
     leave_type:    r.leaveType,
-    from_date:     r.fromDate?.slice(0, 10),
-    to_date:       r.toDate?.slice(0, 10),
+    from_date:     parseFlwDate(r.fromDate) ?? r.fromDate?.slice(0, 10),
+    to_date:       parseFlwDate(r.toDate)   ?? r.toDate?.slice(0, 10),
     days:          r.days,
     status:        r.status,
-    department:    r.department,
-    station:       r.station,
+    department:    r.department ?? null,
+    station:       null,
     synced_at:     new Date().toISOString(),
   }));
 
@@ -386,7 +401,7 @@ export async function POST(request: NextRequest) {
   if (!flowhcm.isConfigured()) {
     return NextResponse.json({
       status:  "not_configured",
-      message: "FLOWHCM_TOKEN env var is not set. Add it in Vercel → Settings → Environment Variables.",
+      message: "FlowHCM env vars missing. Add FLOWHCM_EMAIL, FLOWHCM_PASSWORD, and FLOWHCM_LOGIN_TOKEN in Vercel → Settings → Environment Variables.",
     }, { status: 200 });
   }
 
