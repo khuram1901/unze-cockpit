@@ -2,6 +2,12 @@ import { extractTextFromPDF } from "./extract-text";
 
 export type PdcBucket = { dueDate: string; amount: number; label: string | null };
 
+export type CashFlowTransaction = {
+  txn_type: string;
+  description: string;
+  amount: number;
+};
+
 export type CashFlowParsed = {
   openingBalanceTotal: number;
   paymentsTotal: number;
@@ -10,6 +16,7 @@ export type CashFlowParsed = {
   loanPostDatedCHQs: number;
   closingAfterLoanPostDated: number;
   pdcBuckets: PdcBucket[];
+  transactions: CashFlowTransaction[];
   date: string | null;
   company: "unze" | "imperial" | "baranh" | "dolci" | "kkj" | "unknown";
   rawText: string;
@@ -220,6 +227,7 @@ function parseUnzeTrading(text: string, date: string | null): CashFlowParsed {
     date,
     company: "unze",
     rawText: text,
+    transactions: [],
   };
 }
 
@@ -297,6 +305,7 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     date,
     company: "imperial",
     rawText: text,
+    transactions: [],
   };
 }
 
@@ -372,6 +381,7 @@ function parseBaranhStyle(
     date,
     company,
     rawText: text,
+    transactions: [],
   };
 }
 
@@ -430,6 +440,7 @@ function parseKKJ(text: string, date: string | null): CashFlowParsed {
     date,
     company: "kkj",
     rawText: text,
+    transactions: [],
   };
 }
 
