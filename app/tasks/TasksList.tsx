@@ -904,8 +904,19 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
                 boxed badges — same information, far less visual noise. */}
             <div style={{ fontSize: "12px", color: COLOURS.INK_400, marginTop: "3px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
               <span title={otherAssignees.length > 0 ? `Also: ${otherAssignees.join(", ")}` : undefined}>
-                {task.assigned_to || "Unassigned"}{otherAssignees.length > 0 && ` +${otherAssignees.length}`}
+                <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>To:</span>{" "}
+                <span style={{ fontWeight: 600, color: COLOURS.NAVY }}>{task.assigned_to || "Unassigned"}</span>
+                {otherAssignees.length > 0 && <span style={{ color: COLOURS.SLATE }}> +{otherAssignees.length}</span>}
               </span>
+              {task.assigned_by && task.assigned_by !== task.assigned_to && task.assigned_by !== "Recurring Template" && (
+                <>
+                  <span>·</span>
+                  <span>
+                    <span style={{ fontWeight: 500, color: COLOURS.SLATE }}>By:</span>{" "}
+                    {task.assigned_by}
+                  </span>
+                </>
+              )}
               <span>·</span>
               {(() => {
                 const badge = companyBadge(task.company_id);

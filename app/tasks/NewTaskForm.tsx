@@ -119,6 +119,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
 
   const [subtasks, setSubtasks] = useState<string[]>([]);
   const [subtaskInput, setSubtaskInput] = useState("");
+  const [assigneeSearch, setAssigneeSearch] = useState("");
 
   // Track which members were added via @mention so we can show them as pills
   // below the notes field. Adding via @mention also auto-ticks them in the
@@ -290,6 +291,7 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
     setSubtasks([]);
     setSubtaskInput("");
     setMentionedMemberIds([]);
+    setAssigneeSearch("");
 
     router.refresh();
     onCreated?.();
@@ -417,26 +419,40 @@ export default function NewTaskForm({ onCreated }: { onCreated?: () => void } = 
             />
           </label>
 
-          <label>
+          <div>
             <span style={kickerStyle}>Assigned to — tick everyone this applies to; the first person ticked is the primary owner</span>
+            <input
+              type="text"
+              placeholder="Search by name…"
+              value={assigneeSearch}
+              onChange={(e) => setAssigneeSearch(e.target.value)}
+              style={{ ...inputStyle, marginTop: "6px", marginBottom: "4px" }}
+            />
             <div style={{
-              marginTop: "4px", marginBottom: "12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
+              marginBottom: "12px", border: `1px solid ${COLOURS.HAIRLINE}`, borderRadius: RADII.SM,
               padding: "8px 10px", maxHeight: "160px", overflowY: "auto", display: "flex", flexWrap: "wrap", gap: "8px",
               backgroundColor: COLOURS.CARD,
             }}>
-              {members.map((m) => {
-                const checked = assignedToIds.includes(m.id);
-                const isPrimary = assignedToIds[0] === m.id;
-                return (
-                  <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer", fontWeight: checked ? 600 : 400 }}>
-                    <input type="checkbox" checked={checked} onChange={(e) => toggleAssignee(m.id, e.target.checked)} style={{ width: "14px", height: "14px" }} />
-                    {m.name}{isPrimary && <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.BLUE }}> (primary)</span>}
-                  </label>
-                );
-              })}
-              {members.length === 0 && <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>No members found.</span>}
+              {members
+                .filter((m) => !assigneeSearch.trim() || m.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase()))
+                .map((m) => {
+                  const checked = assignedToIds.includes(m.id);
+                  const isPrimary = assignedToIds[0] === m.id;
+                  return (
+                    <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "13px", color: checked ? COLOURS.NAVY : COLOURS.SLATE, cursor: "pointer", fontWeight: checked ? 600 : 400 }}>
+                      <input type="checkbox" checked={checked} onChange={(e) => toggleAssignee(m.id, e.target.checked)} style={{ width: "14px", height: "14px" }} />
+                      {m.name}{isPrimary && <span style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.BLUE }}> (primary)</span>}
+                    </label>
+                  );
+                })
+              }
+              {members.filter((m) => !assigneeSearch.trim() || m.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase())).length === 0 && (
+                <span style={{ fontSize: "12px", color: COLOURS.SLATE, fontStyle: "italic" }}>
+                  {assigneeSearch.trim() ? `No members match "${assigneeSearch}"` : "No members found."}
+                </span>
+              )}
             </div>
-          </label>
+          </div>
 
           {selectedMembers.length > 0 && (
             <div
