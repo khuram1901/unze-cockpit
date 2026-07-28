@@ -214,7 +214,7 @@ export const flowhcm = {
   // These will be implemented once FlowHCM provides the remaining API collections.
 
   async getEmployees():          Promise<FlwEmployee[]>           { return []; },
-  async getPayroll():            Promise<FlwPayrollRecord[]>      { return []; },
+  async getPayroll(_month?: string): Promise<FlwPayrollRecord[]>   { return []; },
   async getPerformanceReviews(): Promise<FlwPerformanceReview[]>  { return []; },
   async getTrainingRecords():    Promise<FlwTrainingRecord[]>     { return []; },
   async getDisciplinary():       Promise<FlwDisciplinaryAction[]> { return []; },

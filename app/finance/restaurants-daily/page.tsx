@@ -313,7 +313,7 @@ export default function RestaurantsFinancePage() {
                   width={62}
                 />
                 <Tooltip
-                  formatter={(v: number | string | Array<number | string> | undefined) => [pkr(typeof v === "number" ? v : null), "Closing Balance"]}
+                  formatter={(v: any) => [pkr(typeof v === "number" ? v : null), "Closing Balance"]}
                   labelFormatter={(l) => `Date: ${l}`}
                   contentStyle={{ fontSize: "12px", borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}
                 />
@@ -351,7 +351,7 @@ export default function RestaurantsFinancePage() {
 
           {loading ? (
             <div style={{ padding: "16px 18px" }}>
-              <SkeletonRows n={4} />
+              <SkeletonRows count={4} />
             </div>
           ) : sheets.length === 0 ? (
             <div style={{ padding: "32px 18px", textAlign: "center", color: COLOURS.INK_400, fontSize: "13px" }}>
