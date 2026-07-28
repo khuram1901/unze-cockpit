@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { logAction } from "../lib/audit-log";
 import { useToast, COLOURS, RADII } from "../lib/SharedUI";
 import { canCompleteSubmittedTask, canReopenCompletedTask, isPrivileged } from "../lib/permissions";
-import { routeSubmittedTask, routeWaitingReplyTask, returnFromWaitingReply } from "../lib/taskRouting";
+import { routeWaitingReplyTask, returnFromWaitingReply } from "../lib/taskRouting";
 import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
@@ -194,26 +194,46 @@ export default function TaskStatus({
   const openSubtasks = subtasks.filter((s) => !s.is_complete).length;
   const hasSubtasks = subtasks.length > 0;
 
-  // Mirror image: once the manager moves a routed task anywhere other than
-  // Submitted, hand it back to whoever it came from — except Completed/
-  // Cancelled, where it just stays closed under whoever closed it.
-  async function handBackIfLeaving(newStatus: string): Promise<Record<string, unknown>> {
-    if (task.status !== "Submitted" || newStatus === "Submitted" || !task.submitted_by_email) return {};
-    if (newStatus === "Completed" || newStatus === "Cancelled") {
-      return { submitted_by_name: null, submitted_by_email: null };
+  // ── Return to submitter (explicit HOD action) ─────────────────────────
+  // Previously this happened automatically whenever the HOD changed status
+  // from "Submitted" to anything (via handBackIfLeaving + DB trigger Part 2).
+  // That caused a re-submission cycle: HOD sets "In Progress" → task silently
+  // returns to submitter → submitter re-submits → back at HOD as Submitted.
+  //
+  // Now the HOD has an explicit "Return to [name]" button. "In Progress" on
+  // a Submitted task just means "I'm reviewing this" — it no longer moves
+  // the task. Only this function moves it back.
+  async function returnToSubmitter() {
+    if (!task.submitted_by_email) return;
+    setSaving(true);
+    const { data: original } = await supabase
+      .from("members")
+      .select("id, name, email, department, business_unit")
+      .eq("email", task.submitted_by_email)
+      .maybeSingle();
+    if (!original?.email) {
+      toast.show("Could not find original assignee.", "error");
+      setSaving(false);
+      return;
     }
-    const { data: original } = await supabase.from("members").select("id, name, email, department, business_unit").eq("email", task.submitted_by_email).maybeSingle();
-    if (!original?.email) return { submitted_by_name: null, submitted_by_email: null };
     await supabase.from("task_assignees").delete().eq("task_id", task.id);
     await supabase.from("task_assignees").insert({ task_id: task.id, member_id: original.id, member_name: original.name, member_email: original.email });
-    return {
+    const { error } = await supabase.from("tasks").update({
+      status: "In Progress",
       assigned_to: original.name,
       assigned_to_email: original.email,
       assigned_to_department: original.department,
       assigned_to_business_unit: original.business_unit,
       submitted_by_name: null,
       submitted_by_email: null,
-    };
+      updated_at: new Date().toISOString(),
+    }).eq("id", task.id);
+    setSaving(false);
+    if (error) { toast.show("Error returning task: " + error.message, "error"); return; }
+    logAction("Updated", "tasks", `Returned to ${original.name}: ${task.id}`, task.id);
+    setStatus("In Progress");
+    onChanged();
+    if (onClose) setTimeout(() => onClose(), 400);
   }
 
   // ── Waiting Reply: set ─────────────────────────────────────────────────
@@ -295,13 +315,14 @@ export default function TaskStatus({
     setSaving(true);
     setSavedMessage("");
 
-    const extra = newStatus === "Submitted" && task.status !== "Submitted"
-      ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email, task.requires_manager_signoff !== false)
-      : await handBackIfLeaving(newStatus);
-
+    // Routing (submission → HOD, return → submitter) is handled atomically
+    // by the DB trigger tasks_route_submitted. The app no longer pre-routes
+    // via routeSubmittedTask/handBackIfLeaving — that caused a race condition
+    // where app + trigger both modified task_assignees in sequence, leaving
+    // it out of sync (migration 194).
     const { error } = await supabase
       .from("tasks")
-      .update({ status: newStatus, updated_at: new Date().toISOString(), ...extra })
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
       .eq("id", task.id);
 
     setSaving(false);
@@ -311,21 +332,28 @@ export default function TaskStatus({
       return;
     }
 
-    logAction("Updated", "tasks", extra.assigned_to ? `Status → ${newStatus}: ${task.id} (owner → ${extra.assigned_to})` : `Status → ${newStatus}: ${task.id}`, task.id);
+    logAction("Updated", "tasks", `Status → ${newStatus}: ${task.id}`, task.id);
     setStatus(newStatus);
     setSavedMessage("Saved ✓");
     onChanged();
 
-    // Notify the HOD the moment a task lands in their Submitted queue —
-    // fire-and-forget, task save already succeeded so we don't block on this.
-    if (newStatus === "Submitted" && (extra as Record<string, unknown>).assigned_to_email) {
-      const managerEmail = (extra as Record<string, unknown>).assigned_to_email as string;
-      const submittedByName = task.assigned_to || "Unknown";
-      authFetch("/api/tasks/notify-submitted", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId: task.id, managerEmail, submittedByName }),
-      }).catch((e: unknown) => console.error("Submit notification failed (non-blocking)", e));
+    // Notify the HOD after submission — the DB trigger has already routed
+    // the task, so we re-fetch to get the new assigned_to_email.
+    if (newStatus === "Submitted" && task.status !== "Submitted") {
+      setTimeout(async () => {
+        const { data: updated } = await supabase
+          .from("tasks")
+          .select("assigned_to, assigned_to_email")
+          .eq("id", task.id)
+          .maybeSingle();
+        if (updated?.assigned_to_email && updated.assigned_to_email !== task.assigned_to_email) {
+          authFetch("/api/tasks/notify-submitted", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ taskId: task.id, managerEmail: updated.assigned_to_email, submittedByName: task.assigned_to || "Unknown" }),
+          }).catch((e: unknown) => console.error("Submit notification failed (non-blocking)", e));
+        }
+      }, 600);
     }
 
     // Khuram: "when i mark the task is completed then the window should
@@ -433,8 +461,8 @@ export default function TaskStatus({
     setSavedMessage("");
 
     const { data: userData } = await supabase.auth.getUser();
-    const extra = task.status !== "Submitted" ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email, task.requires_manager_signoff !== false) : {};
-
+    // Routing to HOD is handled by the DB trigger (migration 194) —
+    // no routeSubmittedTask call needed here.
     const { error } = await supabase
       .from("tasks")
       .update({
@@ -445,7 +473,6 @@ export default function TaskStatus({
         reply_at: new Date().toISOString(),
         status: "Submitted",
         updated_at: new Date().toISOString(),
-        ...extra,
       })
       .eq("id", task.id);
 
@@ -456,7 +483,7 @@ export default function TaskStatus({
       return;
     }
 
-    logAction("Updated", "tasks", extra.assigned_to ? `Explanation submitted: ${task.id} (routed to ${extra.assigned_to})` : `Explanation submitted: ${task.id}`, task.id);
+    logAction("Updated", "tasks", `Explanation submitted: ${task.id}`, task.id);
     setStatus("Submitted");
     setSavedMessage("Response submitted ✓");
     onChanged();
@@ -642,23 +669,26 @@ export default function TaskStatus({
                 Mark Complete
               </button>
 
-              <button
-                onClick={() => saveStatus("In Progress")}
-                disabled={saving}
-                style={{
-                  backgroundColor: COLOURS.CARD,
-                  color: COLOURS.RED,
-                  border: `1px solid ${COLOURS.RED}`,
-                  borderRadius: RADII.SM,
-                  padding: "7px 16px",
-                  fontSize: "13px",
-                  cursor: "pointer",
-                  fontWeight: 700,
-                  opacity: saving ? 0.7 : 1,
-                }}
-              >
-                Reopen
-              </button>
+              {task.submitted_by_name && (
+                <button
+                  onClick={returnToSubmitter}
+                  disabled={saving}
+                  title={`Return this task to ${task.submitted_by_name} for further work`}
+                  style={{
+                    backgroundColor: COLOURS.CARD,
+                    color: COLOURS.AMBER,
+                    border: `1px solid ${COLOURS.AMBER}`,
+                    borderRadius: RADII.SM,
+                    padding: "7px 16px",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    opacity: saving ? 0.7 : 1,
+                  }}
+                >
+                  ↩ Return to {task.submitted_by_name}
+                </button>
+              )}
             </div>
             {openSubtasks > 0 && (
               <p style={{ fontSize: "12px", color: COLOURS.AMBER, marginTop: "6px", marginBottom: 0 }}>

@@ -9,7 +9,7 @@ import ImportExportButtons from "../lib/ImportExportButtons";
 import { COLOURS, RADII, cardStyle, StatusBadge, PriorityBadge, useToast, useConfirm, ErrorBanner, SkeletonRows, TASK_COMPANY_CODES, TASK_DESCRIPTION_LIMIT } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
 import { canCompleteSubmittedTask, canReopenCompletedTask, canDeleteTask, myIdentityEmails, filterAssignableMembers } from "../lib/permissions";
-import { routeSubmittedTask } from "../lib/taskRouting";
+// routeSubmittedTask removed (migration 194): DB trigger handles routing atomically.
 import { logAction } from "../lib/audit-log";
 import TeamStats from "./TeamStats";
 import TaskDetailModal from "./TaskDetailModal";
@@ -514,26 +514,28 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
     }
     setBulkApplying(true);
 
-    // "Submitted" routes to each task's own HOD individually — the same
-    // rule as the single-task dropdown and the Kanban board — so it can't
-    // be one blanket UPDATE the way the other statuses can.
+    // "Submitted" routes to each task's own HOD via the DB trigger
+    // (tasks_route_submitted, migration 194) — no app-level routing needed.
     if (bulkStatus === "Submitted") {
       let routed = 0, failed = 0;
       for (const id of eligible) {
         const t = tasks.find((x) => x.id === id);
         if (!t || t.status === "Submitted") continue;
-        const extra = await routeSubmittedTask(id, t.assigned_to, t.assigned_to_email, t.requires_manager_signoff !== false);
-        const { error } = await supabase.from("tasks").update({ status: "Submitted", updated_at: new Date().toISOString(), ...extra }).eq("id", id);
+        const { error } = await supabase.from("tasks").update({ status: "Submitted", updated_at: new Date().toISOString() }).eq("id", id);
         if (error) { failed++; continue; }
         routed++;
-        // Notify the HOD who just received this task — fire-and-forget.
-        if ((extra as Record<string, unknown>).assigned_to_email) {
-          authFetch("/api/tasks/notify-submitted", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ taskId: id, managerEmail: (extra as Record<string, unknown>).assigned_to_email, submittedByName: t.assigned_to || "Unknown" }),
-          }).catch((e) => console.error("Submit notification failed (non-blocking)", e));
-        }
+        // Notify the HOD — re-fetch after DB trigger has run to get new assignee.
+        const submittedByName = t.assigned_to || "Unknown";
+        setTimeout(async () => {
+          const { data: updated } = await supabase.from("tasks").select("assigned_to_email").eq("id", id).maybeSingle();
+          if (updated?.assigned_to_email && updated.assigned_to_email !== t.assigned_to_email) {
+            authFetch("/api/tasks/notify-submitted", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ taskId: id, managerEmail: updated.assigned_to_email, submittedByName }),
+            }).catch((e) => console.error("Submit notification failed (non-blocking)", e));
+          }
+        }, 600);
       }
       setBulkApplying(false);
       const parts = [`Submitted ${routed} task(s)`];

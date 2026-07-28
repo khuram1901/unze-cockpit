@@ -8,7 +8,7 @@ import { authFetch, supabase } from "../lib/supabase";
 import DateInput from "../lib/DateInput";
 import { COLOURS, RADII, PageHeader, useToast, primaryButtonStyle, inputStyle } from "../lib/SharedUI";
 import { useMobile } from "../lib/useMobile";
-import { routeSubmittedTask } from "../lib/taskRouting";
+// routeSubmittedTask removed (migration 194): DB trigger handles routing atomically.
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -312,14 +312,10 @@ export default function DailyEntryPage() {
 
   async function updateTaskStatus(task: MyTask, newStatus: string) {
     setUpdatingTask(task.id);
-    // When submitting, route to manager (same flow as the main Tasks page)
-    const extra = newStatus === "Submitted" && task.status !== "Submitted"
-      ? await routeSubmittedTask(task.id, task.assigned_to, task.assigned_to_email, task.requires_manager_signoff !== false)
-      : {};
+    // Routing to HOD on submission handled by DB trigger (migration 194).
     await supabase.from("tasks").update({
       status: newStatus,
       updated_at: new Date().toISOString(),
-      ...extra,
     }).eq("id", task.id);
     // Submitted tasks are now reassigned to the manager — remove from this user's list
     if (newStatus === "Submitted") {

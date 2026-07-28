@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import { COLOURS, RADII, PriorityBadge, StatusBadge, useToast } from "../lib/SharedUI";
 import { canCompleteSubmittedTask, canReopenCompletedTask } from "../lib/permissions";
-import { routeSubmittedTask } from "../lib/taskRouting";
+// routeSubmittedTask removed (migration 194): DB trigger handles routing atomically.
 import TaskDetailModal from "./TaskDetailModal";
 import MiniSubtaskToggle from "./MiniSubtaskToggle";
 
@@ -132,13 +132,8 @@ export default function TasksBoard({
       return;
     }
 
-    // "Submitted" routes to the assignee's HOD — same rule as the
-    // single-task dropdown and the bulk status change in TasksList.tsx.
-    const extra = newStatus === "Submitted" && t && t.status !== "Submitted"
-      ? await routeSubmittedTask(taskId, t.assigned_to, t.assigned_to_email, t.requires_manager_signoff !== false)
-      : {};
-
-    const { error } = await supabase.from("tasks").update({ status: newStatus, updated_at: new Date().toISOString(), ...extra }).eq("id", taskId);
+    // Routing on submission is handled by DB trigger (migration 194).
+    const { error } = await supabase.from("tasks").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", taskId);
     if (error) {
       // Most likely cause: the subtask-completion gate (migration 100) rejected
       // a move to Completed while subtasks are still open — surface that
