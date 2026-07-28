@@ -26,7 +26,7 @@ export const TASK_DESCRIPTION_LIMIT = 150;
 // so every fetch of `companies` for Tasks — New Task form, task-edit
 // form, the Company filter, and Recurring Tasks — stays in sync instead
 // of each screen keeping its own copy of this list.
-export const TASK_COMPANY_CODES = ["UTPL", "IFPL", "BRNH", "HD", "DIR"];
+export const TASK_COMPANY_CODES = ["UXG", "UTPL", "IFPL", "BRNH", "HD", "DIR", "UZL"];
 
 export const COLOURS = {
   // Surfaces
