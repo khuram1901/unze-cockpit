@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { authFetch } from "../lib/supabase";
+import { authFetch, supabase } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import {
@@ -207,19 +207,46 @@ export default function CashSheetTab() {
     let parsedReceipts: number | undefined;
     let parsedPayments: number | undefined;
     if (uploadFile) {
-      const fd = new FormData();
-      fd.append("pdf", uploadFile);
-      fd.append("company", company);
-      fd.append("date", uploadForm.sheet_date);
-      const pdfRes = await authFetch("/api/banking/cash-sheets/pdf", { method: "POST", body: fd });
-      const pdfJson = await pdfRes.json();
-      if (!pdfJson.ok) {
-        showToast(pdfJson.error || "PDF upload failed", "error");
+      if (uploadFile.size > 20 * 1024 * 1024) {
+        showToast("PDF must be under 20 MB", "error");
         return;
       }
-      pdf_storage_path = pdfJson.path;
-      // Use parsed balances as fallback when the user left the fields blank
-      if (pdfJson.parsed) {
+
+      // 1a. Get a signed upload URL — the browser then uploads the PDF
+      //     DIRECTLY to Supabase Storage, bypassing Vercel's ~4.5 MB request
+      //     limit that rejected larger scanned sheets (413 errors).
+      const urlRes = await authFetch("/api/banking/cash-sheets/pdf/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company, date: uploadForm.sheet_date }),
+      });
+      const urlJson = await urlRes.json();
+      if (!urlJson.ok) {
+        showToast(urlJson.error || "Could not prepare PDF upload", "error");
+        return;
+      }
+
+      // 1b. Direct upload to storage
+      const { error: upErr } = await supabase.storage
+        .from("cash-sheets")
+        .uploadToSignedUrl(urlJson.path, urlJson.token, uploadFile, {
+          contentType: "application/pdf",
+        });
+      if (upErr) {
+        showToast("PDF upload failed: " + upErr.message, "error");
+        return;
+      }
+      pdf_storage_path = urlJson.path;
+
+      // 1c. Parse server-side (downloads from storage — no size limit issues)
+      const parseRes = await authFetch("/api/banking/cash-sheets/pdf/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: urlJson.path }),
+      });
+      const pdfJson = await parseRes.json();
+      // Parsing is best-effort — a parse failure never blocks the save
+      if (pdfJson.ok && pdfJson.parsed) {
         parsedOpening = pdfJson.parsed.opening ?? undefined;
         parsedClosing = pdfJson.parsed.closing ?? undefined;
         parsedReceipts = pdfJson.parsed.receipts ?? undefined;
