@@ -52,6 +52,8 @@ export default function ProfilePage() {
   const [message, setMessage] = useState("");
   const [enrolling, setEnrolling] = useState(false);
   const [userRole, setUserRole] = useState("");
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
 
   // Notification preferences
   const [notifPrefs, setNotifPrefs] = useState({
@@ -101,6 +103,13 @@ export default function ProfilePage() {
         setMemberLastName(member.last_name ?? null);
         setPhotoUrl(member.photo_url ?? null);
         setUserRole(member.role || "");
+        // Check Google notification account connection (Admin/CEO only)
+        if (["Admin", "CEO"].includes(member.role || "")) {
+          authFetch("/api/google/status")
+            .then((r) => r.json())
+            .then((d) => { setGoogleConnected(!!d.connected); setGoogleEmail(d.email || null); })
+            .catch(() => {});
+        }
         setNotifPrefs({
           notif_task_assigned: member.notif_task_assigned ?? true,
           notif_task_overdue: member.notif_task_overdue ?? true,
@@ -120,6 +129,19 @@ export default function ProfilePage() {
       } catch {
         setPushEnabled(false);
       }
+    }
+
+
+    // Handle Google OAuth return
+    const params = new URLSearchParams(window.location.search);
+    const googleStatus = params.get("google");
+    if (googleStatus === "connected") {
+      setGoogleConnected(true);
+      setMessage("Google account connected successfully.");
+      window.history.replaceState({}, "", "/profile");
+    } else if (googleStatus === "error" || googleStatus === "denied") {
+      setMessage("Error: Google connection failed. Please try again.");
+      window.history.replaceState({}, "", "/profile");
     }
 
     setLoading(false);
@@ -1007,6 +1029,42 @@ export default function ProfilePage() {
                 </div>
               </>
             )}
+          </>
+        )}
+        {/* ── Google Notification Account (Admin/CEO only) ── */}
+        {["Admin", "CEO"].includes(userRole) && (
+          <>
+            <SectionTitle title="Notification Account" />
+            <div style={{ ...cardStyle, marginBottom: "16px" }}>
+              <div style={settingCardHead}>
+                <div style={settingCardTitle}>Google Account for Outbound Emails</div>
+                <div style={{ fontSize: "11.5px", color: COLOURS.SLATE, marginTop: "2px" }}>
+                  All system notification emails (task assignments, alerts, password resets) are sent from this account.
+                  Use a dedicated Gmail — not your personal one.
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", marginTop: "16px", flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontSize: "13.5px", fontWeight: 600, color: COLOURS.NAVY }}>
+                    {googleConnected
+                      ? <><span style={{ color: COLOURS.GREEN }}>● Connected</span>{googleEmail ? ` — ${googleEmail}` : ""}</>
+                      : <span style={{ color: COLOURS.SLATE }}>● Not connected</span>
+                    }
+                  </div>
+                  {!googleConnected && (
+                    <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "4px" }}>
+                      Connect a dedicated Gmail (e.g. unzegrouppk@gmail.com) to send notification emails from.
+                    </div>
+                  )}
+                </div>
+                <a
+                  href="/api/google/auth?returnTo=/profile"
+                  style={{ ...primaryButtonStyle, textDecoration: "none", display: "inline-block", whiteSpace: "nowrap" }}
+                >
+                  {googleConnected ? "Reconnect Google Account" : "Connect Google Account"}
+                </a>
+              </div>
+            </div>
           </>
         )}
       </main>

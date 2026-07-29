@@ -426,18 +426,9 @@ export default function CalendarPage() {
                   <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "3px" }}>{calendarError}</div>
                 </div>
               </div>
-              {isAdmin && (
-                <a href="/api/google/auth?returnTo=/calendar" style={{
-                  backgroundColor: COLOURS.RED, color: "white", border: "none", borderRadius: RADII.PILL,
-                  padding: "7px 16px", fontSize: "12px", fontWeight: 600, textDecoration: "none",
-                  whiteSpace: "nowrap", flexShrink: 0,
-                }}>
-                  Reconnect Google Calendar
-                </a>
-              )}
             </div>
             <div style={{ fontSize: "11px", color: COLOURS.AMBER, marginTop: "8px", paddingLeft: "26px" }}>
-              Sign in with k.saleem@unzegroup.com to reconnect your calendar.
+              Reconnect Google from your Profile page to restore calendar sync.
             </div>
           </div>
         )}
@@ -455,13 +446,6 @@ export default function CalendarPage() {
               <span style={{ fontWeight: 700 }}>✓</span>
               Showing calendar for <strong>{calendarAccounts.map((a) => a.email).join(", ")}</strong> · {busySlots.length} event{busySlots.length !== 1 ? "s" : ""} this week
             </div>
-            {isAdmin && (
-              <a href="/api/google/auth?returnTo=/calendar" style={{
-                fontSize: "12px", color: COLOURS.GREEN, textDecoration: "underline", whiteSpace: "nowrap", fontWeight: 500,
-              }}>
-                Reconnect Google
-              </a>
-            )}
           </div>
         )}
 

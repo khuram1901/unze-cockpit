@@ -97,7 +97,6 @@ function BudgetActualInput({ id, initial, onSave }: {
 
 export default function FinanceManager({ companyId, companyName }: { companyId: string; companyName: string }) {
   const companySlug = companyId === UTPL_COMPANY_ID ? "unze-trading" : "imperial";
-  const googleReturnTo = `/finance/${companySlug}`;
   const isMobile = useMobile();
   const toast = useToast();
   const dlg = useConfirm();
@@ -150,7 +149,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
   const [dailyEntryTab, setDailyEntryTab] = useState<"upload" | "manual">("upload");
-  const [gmailConnected, setGmailConnected] = useState(false);
 
   // Forecast upload state
   const [forecastFile, setForecastFile] = useState<File | null>(null);
@@ -401,26 +399,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   useEffect(() => {
     loadData();
 
-    // Check Google connection status via server-side route (avoids RLS)
-    authFetch("/api/google/status")
-      .then((r) => r.json())
-      .then((data) => { if (data.connected) setGmailConnected(true); })
-      .catch(() => {});
-
-    // Check URL params for Google OAuth result
-    const params = new URLSearchParams(window.location.search);
-    const googleStatus = params.get("google");
-    if (googleStatus === "connected") {
-      setGmailConnected(true);
-      showMsg("Google connected — Drive and Calendar access is active.");
-      window.history.replaceState({}, "", googleReturnTo);
-    } else if (googleStatus === "error") {
-      showMsg("Error: Failed to connect Google. Please try again.");
-      window.history.replaceState({}, "", googleReturnTo);
-    } else if (googleStatus === "denied") {
-      showMsg("Error: Google access was denied. Please try again and grant all permissions.");
-      window.history.replaceState({}, "", googleReturnTo);
-    }
   }, []);
 
   function showMsg(text: string) {
@@ -730,24 +708,9 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         );
       })()}
 
-      {/* ── ROW: INGESTION + PDF UPLOAD side by side (Admin only) ── */}
+      {/* ── ROW: PDF UPLOAD (Admin only) ── */}
       {userIsAdmin && (
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px" }}>
-        <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div>
-            <SectionTitle title="Automatic Ingestion" style={{ margin: "0 0 12px" }} />
-            <div style={{ fontSize: "14px", fontWeight: 600, color: NAVY, marginBottom: "4px" }}>
-              Gmail: {gmailConnected ? <span style={{ color: GREEN }}>Connected</span> : <span style={{ color: SLATE }}>Not connected</span>}
-            </div>
-            <div style={{ fontSize: "13px", color: SLATE, marginBottom: "16px", lineHeight: 1.5 }}>
-              {gmailConnected ? "Daily statements ingested automatically from your cockpit-cash Gmail label." : "Connect Gmail to auto-ingest daily cash statements. Label: 'cockpit-cash'."}
-            </div>
-          </div>
-          <a href={`/api/google/auth?returnTo=${encodeURIComponent(googleReturnTo)}`} style={{ ...btnStyle, textDecoration: "none", display: "inline-block", textAlign: "center", whiteSpace: "nowrap", alignSelf: "flex-start" }}>
-            {gmailConnected ? "Reconnect Google" : "Connect Google"}
-          </a>
-        </div>
-
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "14px", marginBottom: "14px" }}>
         {/* Add Daily Position — Manual or Upload */}
         <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
           <SectionTitle title="Add Daily Position" style={{ margin: "0 0 12px" }} />
