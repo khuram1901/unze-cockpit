@@ -19,7 +19,7 @@
  *   Individual area toggles: Cash view/edit, P&L Imperial, Receivables, Bank Facilities, Investments
  *
  * Access Packs: one-click presets for common roles — Tasks Only, Ops Staff, Finance Viewer, Audit Team.
- *   Applying a pack patches only the pack's defined keys and marks them pending; the user still hits
+ *   Applying a pack patches only the pack's defined keys and auto-saves immediately; the user can still
  *   "Save permissions" to commit.
  */
 
@@ -31,7 +31,6 @@ import {
   canChangePasswordFor, canEditMember, canDeleteMember,
   type UserCtx,
 } from "../lib/permissions";
-import { logAction } from "../lib/audit-log";
 import PhotoCropModal from "../lib/PhotoCropModal";
 import { WIDGET_REGISTRY } from "../lib/widgetRegistry";
 import { FINANCE_COMPANIES, MEMBER_COMPANY_NAMES } from "../lib/constants";
@@ -450,9 +449,7 @@ export default function MemberDrawer({
 
   /* ── Permission state ─────────────────────────────────────────────── */
   const [perms, setPerms] = useState<PermRow>({});
-  const [pending, setPending] = useState<PermRow>({});
   const [loadingPerms, setLoadingPerms] = useState(false);
-  const [savingPerms, setSavingPerms] = useState(false);
 
   /* ── Widget override state ────────────────────────────────────────── */
   const [widgetOverrides, setWidgetOverrides] = useState<Record<string, boolean>>({});
@@ -475,7 +472,6 @@ export default function MemberDrawer({
   /* ── Load permissions when member changes ─────────────────────────── */
   const loadPerms = useCallback(async (memberId: string) => {
     setLoadingPerms(true);
-    setPending({});
     const { data } = await supabase.from("member_permissions").select("*").eq("member_id", memberId).single();
     setPerms(data || {});
     setLoadingPerms(false);
@@ -500,9 +496,8 @@ export default function MemberDrawer({
     setNewPw("");
   }, [member.id, loadPerms, loadWidgets]);
 
-  /* ── Effective perms (saved + pending) ───────────────────────────── */
-  const ep: PermRow = { ...perms, ...pending };
-  const hasPending = Object.keys(pending).length > 0;
+  /* ── Effective perms ─────────────────────────────────────────────── */
+  const ep: PermRow = perms;
 
   /* ── Finance scope helper ─────────────────────────────────────────── */
   function getFinanceScope(): FinanceScope {
@@ -515,42 +510,35 @@ export default function MemberDrawer({
 
   function setFinanceScope(scope: FinanceScope) {
     if (scope === "none") {
-      setPending((p) => ({ ...p, can_view_finance: false, finance_company_scope: null }));
+      autoSave({ can_view_finance: false, finance_company_scope: null });
     } else {
-      setPending((p) => ({
-        ...p,
-        can_view_finance: true,
-        finance_company_scope: scope,
-      }));
+      autoSave({ can_view_finance: true, finance_company_scope: scope });
     }
   }
 
-  function toggle(key: string, value: boolean) { setPending((p) => ({ ...p, [key]: value })); }
+  function toggle(key: string, value: boolean) { autoSave({ [key]: value }); }
 
   /* ── Apply access pack ───────────────────────────────────────────── */
   function applyPack(pack: AccessPack) {
-    setPending((p) => ({ ...p, ...pack.perms }));
-    toast.show(`"${pack.label}" pack applied — save to commit.`, "info");
+    autoSave(pack.perms, `"${pack.label}" pack applied.`);
   }
 
-  /* ── Save permissions ─────────────────────────────────────────────── */
-  async function savePerms() {
-    if (!hasPending) return;
-    setSavingPerms(true);
-    const merged = { ...perms, ...pending };
-    // Remove member_id from the merge if it exists (it's the upsert key)
-    delete merged.member_id;
+  /* ── Auto-save permissions ────────────────────────────────────────── */
+  async function autoSave(patch: Partial<PermRow>, successMsg?: string) {
+    const prev = perms;
+    const merged = { ...prev, ...patch };
+    setPerms(merged);  // optimistic update
+    const toUpsert = { ...merged };
+    delete toUpsert.member_id;
     const { error } = await supabase
       .from("member_permissions")
-      .upsert({ member_id: member.id, ...merged }, { onConflict: "member_id" });
-    if (error) { toast.show("Error: " + error.message, "error"); }
-    else {
-      setPerms(merged);
-      setPending({});
-      toast.show("Permissions saved.", "success");
-      logAction("Updated", "member_permissions", `Updated permissions for ${fullName(member)}`, member.id);
+      .upsert({ member_id: member.id, ...toUpsert }, { onConflict: "member_id" });
+    if (error) {
+      toast.show("Error saving: " + error.message, "error");
+      setPerms(prev);  // revert on error
+    } else if (successMsg) {
+      toast.show(successMsg, "success");
     }
-    setSavingPerms(false);
   }
 
   /* ── Widget override save ─────────────────────────────────────────── */
@@ -732,7 +720,7 @@ export default function MemberDrawer({
                       ))}
                     </div>
                     <div style={{ padding: "0 14px 10px", fontSize: 11, color: COLOURS.SLATE, fontStyle: "italic" }}>
-                      Packs are a starting point — you can still toggle individual permissions below before saving.
+                      Packs are a starting point — individual permissions can still be toggled below. All changes save automatically.
                     </div>
                   </>
                 )}
@@ -1210,23 +1198,6 @@ export default function MemberDrawer({
         )}
       </div>
 
-      {/* ── Footer: Save / Discard (Access tab only) ───────────────── */}
-      {drawerTab === "access" && !isAdminRole && (
-        <div style={{
-          padding: "10px 16px", borderTop: `1px solid ${COLOURS.HAIRLINE}`,
-          display: "flex", justifyContent: "flex-end", gap: 8,
-          background: COLOURS.CARD,
-        }}>
-          <button onClick={() => setPending({})} disabled={!hasPending}
-            style={{ ...btn(COLOURS.SLATE, false), opacity: hasPending ? 1 : 0.4 }}>
-            Discard
-          </button>
-          <button onClick={savePerms} disabled={!hasPending || savingPerms || isProtected}
-            style={{ ...btn(COLOURS.NAVY, true), opacity: hasPending && !isProtected ? 1 : 0.4 }}>
-            {savingPerms ? "Saving…" : `Save permissions${hasPending ? ` (${Object.keys(pending).length} change${Object.keys(pending).length !== 1 ? "s" : ""})` : ""}`}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
