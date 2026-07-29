@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { authFetch, supabase } from "../lib/supabase";
+import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
 import {
@@ -236,14 +236,17 @@ export default function CashSheetTab() {
         return;
       }
 
-      // 1b. Direct upload to storage
-      const { error: upErr } = await supabase.storage
-        .from("cash-sheets")
-        .uploadToSignedUrl(urlJson.path, urlJson.token, uploadFile, {
-          contentType: "application/pdf",
-        });
-      if (upErr) {
-        showToast("PDF upload failed: " + upErr.message, "error");
+      // 1b. Direct upload to storage via plain fetch — avoids any dependency on
+      //     NEXT_PUBLIC_SUPABASE_URL being correctly set in the browser bundle.
+      //     The signedUrl returned by the server is the complete upload endpoint.
+      const upRes = await fetch(urlJson.signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/pdf", "x-upsert": "true" },
+        body: uploadFile,
+      });
+      if (!upRes.ok) {
+        const upText = await upRes.text().catch(() => upRes.statusText);
+        showToast(`PDF upload failed (${upRes.status}): ${upText.slice(0, 120)}`, "error");
         return;
       }
       pdf_storage_path = urlJson.path;
