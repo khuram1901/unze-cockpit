@@ -133,13 +133,14 @@ async function syncLeave(db: ReturnType<typeof createServiceClient>) {
   const requests = await flowhcm.getLeaveRequests(fromDate, toDate);
 
   const rows = requests.map(r => {
-    // FlowHCM may use different field names for the record ID — try several
+    // FlowHCM may use different field names for the record ID — cast to probe
+    const raw = r as Record<string, unknown>;
     const rawId =
-      r.id          ??
-      r.leaveId     ??
-      r.requestId   ??
-      r.LeaveRequestId ??
-      r.leaveRequestId ??
+      raw.id          ??
+      raw.leaveId     ??
+      raw.requestId   ??
+      raw.LeaveRequestId ??
+      raw.leaveRequestId ??
       null;
 
     // If no ID at all, build a stable composite key
