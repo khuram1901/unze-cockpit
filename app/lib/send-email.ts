@@ -1,7 +1,8 @@
-import { google } from "googleapis";
+import { Resend } from "resend";
 import { createServiceClient } from "./supabase-server";
-import { encrypt, safeDecrypt } from "./crypto";
 import { TRIGGER_TASK_ASSIGNED, TRIGGER_ESCALATION } from "./notification-types";
+
+const FROM_ADDRESS = "Unze Group Dashboard <dashboard@unzegroup.com>";
 
 function buildWhatsAppLink(phone: string, message: string): string {
   const encoded = encodeURIComponent(message);
@@ -50,26 +51,6 @@ function buildEmailHtml({
   </div>
 </body>
 </html>`;
-}
-
-function buildRawEmail(to: string, from: string, subject: string, htmlBody: string): string {
-  const boundary = "boundary_" + Date.now();
-  const raw = [
-    `From: Unze Group Dashboard (No Reply) <${from}>`,
-    `To: ${to}`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    ``,
-    `--${boundary}`,
-    `Content-Type: text/html; charset=utf-8`,
-    ``,
-    htmlBody,
-    ``,
-    `--${boundary}--`,
-  ].join("\r\n");
-
-  return Buffer.from(raw).toString("base64url");
 }
 
 // Khuram used to get every one of these as its own separate email —
@@ -127,48 +108,25 @@ export async function sendNotificationEmail({
   }
 
   try {
-    // Use whichever Google account is connected — pick the most recently updated token
-    const supabaseForTokens = createServiceClient();
-    const { data: notifToken } = await supabaseForTokens
-      .from("google_oauth_tokens")
-      .select("id, user_email, access_token, refresh_token, token_expiry")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (!notifToken) {
-      console.error("No Google account connected. Connect via Finance → Connect Google Account.");
-      return { success: false, error: "No Google account connected" };
+    if (!process.env.RESEND_API_KEY) {
+      console.error("[send-email] RESEND_API_KEY not set — email not sent.");
+      return { success: false, error: "RESEND_API_KEY not configured" };
     }
 
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
-    );
-    oauth2Client.setCredentials({
-      access_token: safeDecrypt(notifToken.access_token),
-      refresh_token: safeDecrypt(notifToken.refresh_token),
-      expiry_date: notifToken.token_expiry ? new Date(notifToken.token_expiry).getTime() : undefined,
-    });
-
-    oauth2Client.on("tokens", async (newTokens) => {
-      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (newTokens.access_token) updates.access_token = encrypt(newTokens.access_token);
-      if (newTokens.expiry_date) updates.token_expiry = new Date(newTokens.expiry_date).toISOString();
-      await supabaseForTokens.from("google_oauth_tokens").update(updates).eq("id", notifToken.id);
-    });
-
-    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-    const fromEmail = notifToken.user_email;
-
+    const resend = new Resend(process.env.RESEND_API_KEY);
     const html = buildEmailHtml({ heading, body, linkUrl, linkLabel, whatsAppPhone, whatsAppMessage });
-    const raw = buildRawEmail(to, fromEmail, subject, html);
 
-    await gmail.users.messages.send({
-      userId: "me",
-      requestBody: { raw },
+    const { error: resendError } = await resend.emails.send({
+      from: FROM_ADDRESS,
+      to,
+      subject,
+      html,
     });
+
+    if (resendError) {
+      console.error("[send-email] Resend error:", resendError);
+      return { success: false, error: resendError.message };
+    }
 
     const supabase = createServiceClient();
     await supabase.from("notification_log").insert({
