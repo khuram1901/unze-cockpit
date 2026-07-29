@@ -222,34 +222,25 @@ export default function CashSheetTab() {
         return;
       }
 
-      // 1a. Get a signed upload URL — the browser then uploads the PDF
-      //     DIRECTLY to Supabase Storage, bypassing Vercel's ~4.5 MB request
-      //     limit that rejected larger scanned sheets (413 errors).
-      const urlRes = await authFetch("/api/banking/cash-sheets/pdf/upload-url", {
+      // 1a–b. Upload PDF through our own API route (server-side to Supabase).
+      //       Direct browser→Supabase uploads fail with CORS errors; routing
+      //       through /api avoids that entirely. The 4.5 MB Vercel body limit
+      //       is not a concern for typical cash sheets.
+      const uploadForm2 = new FormData();
+      uploadForm2.append("file", uploadFile);
+      uploadForm2.append("company", company);
+      uploadForm2.append("date", uploadForm.sheet_date);
+      const upRes = await authFetch("/api/banking/cash-sheets/pdf/upload", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company, date: uploadForm.sheet_date }),
+        body: uploadForm2,
       });
-      const urlJson = await urlRes.json();
-      if (!urlJson.ok) {
-        showToast(urlJson.error || "Could not prepare PDF upload", "error");
+      let upJson: { ok?: boolean; error?: string; path?: string };
+      try { upJson = await upRes.json(); } catch { upJson = { ok: false, error: `Server error (${upRes.status})` }; }
+      if (!upJson.ok) {
+        showToast(upJson.error || "PDF upload failed", "error");
         return;
       }
-
-      // 1b. Direct upload to storage via plain fetch — avoids any dependency on
-      //     NEXT_PUBLIC_SUPABASE_URL being correctly set in the browser bundle.
-      //     The signedUrl returned by the server is the complete upload endpoint.
-      const upRes = await fetch(urlJson.signedUrl, {
-        method: "PUT",
-        headers: { "Content-Type": "application/pdf", "x-upsert": "true" },
-        body: uploadFile,
-      });
-      if (!upRes.ok) {
-        const upText = await upRes.text().catch(() => upRes.statusText);
-        showToast(`PDF upload failed (${upRes.status}): ${upText.slice(0, 120)}`, "error");
-        return;
-      }
-      pdf_storage_path = urlJson.path;
+      pdf_storage_path = upJson.path;
 
       // 1c. Parse server-side (downloads from storage — no size limit issues)
       const parseRes = await authFetch("/api/banking/cash-sheets/pdf/parse", {
