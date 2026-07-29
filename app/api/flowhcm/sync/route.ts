@@ -132,19 +132,35 @@ async function syncLeave(db: ReturnType<typeof createServiceClient>) {
 
   const requests = await flowhcm.getLeaveRequests(fromDate, toDate);
 
-  const rows = requests.map(r => ({
-    flw_id:        r.id,
-    employee_code: r.employeeCode,
-    employee_name: r.employeeName,
-    leave_type:    r.leaveType,
-    from_date:     parseFlwDate(r.fromDate) ?? r.fromDate?.slice(0, 10),
-    to_date:       parseFlwDate(r.toDate)   ?? r.toDate?.slice(0, 10),
-    days:          r.days,
-    status:        r.status,
-    department:    r.department ?? null,
-    station:       null,
-    synced_at:     new Date().toISOString(),
-  }));
+  const rows = requests.map(r => {
+    // FlowHCM may use different field names for the record ID — try several
+    const rawId =
+      r.id          ??
+      r.leaveId     ??
+      r.requestId   ??
+      r.LeaveRequestId ??
+      r.leaveRequestId ??
+      null;
+
+    // If no ID at all, build a stable composite key
+    const flw_id = rawId
+      ? String(rawId)
+      : `${r.employeeCode ?? "?"}_${r.fromDate ?? "?"}_${r.leaveType ?? "?"}`;
+
+    return {
+      flw_id,
+      employee_code: r.employeeCode,
+      employee_name: r.employeeName,
+      leave_type:    r.leaveType,
+      from_date:     parseFlwDate(r.fromDate) ?? r.fromDate?.slice(0, 10),
+      to_date:       parseFlwDate(r.toDate)   ?? r.toDate?.slice(0, 10),
+      days:          r.days,
+      status:        r.status,
+      department:    r.department ?? null,
+      station:       null,
+      synced_at:     new Date().toISOString(),
+    };
+  });
 
   if (rows.length > 0) {
     const { error } = await db

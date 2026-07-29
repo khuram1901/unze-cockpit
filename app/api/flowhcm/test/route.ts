@@ -111,7 +111,15 @@ export async function GET() {
         }),
         cache: "no-store",
       });
-      leaveResult = { endpoint: "GetLeaveRequest (no group, 30 days)", status: r.status, body: (await r.text()).slice(0, 2000) };
+      const leaveRaw = await r.text();
+      // Parse and show first 2 records so we can see the field names
+      let leaveParsed: unknown = null;
+      try {
+        const lj = JSON.parse(leaveRaw);
+        const arr = Array.isArray(lj?.APIResponeData?.[0]) ? lj.APIResponeData[0] : [];
+        leaveParsed = arr.slice(0, 2);
+      } catch { /* ignore */ }
+      leaveResult = { endpoint: "GetLeaveRequest", status: r.status, first2Records: leaveParsed, rawSlice: leaveRaw.slice(0, 1000) };
     } catch (e) { leaveError = String(e); }
 
     attendanceResult = { attendance: attendanceResult, leave: leaveResult, leaveError };
