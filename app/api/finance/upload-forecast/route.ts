@@ -77,12 +77,21 @@ export async function POST(request: NextRequest) {
         flow_type: row.flowType,
         category: row.category,
         budgeted_amount: m.amount,
-        uploaded_by: (formData.get("uploadedBy") as string) || "manual",
+        uploaded_by: auth.email,
       }))
     );
 
     if (upsertRows.length === 0) {
       return Response.json({ error: "No data found in the Excel file." }, { status: 400 });
+    }
+
+    // REPLACE semantics (29/07/2026): an upload IS the forecast for its
+    // months. The old upsert-only behaviour left stale categories from
+    // previous files in place (found live: a bug-era "NET CASH FLOW" row
+    // and dropped categories still counting in the totals). Clearing the
+    // uploaded months first means renamed/removed lines disappear too.
+    for (const month of parsed.months) {
+      await supabase.from("monthly_budgets").delete().eq("company_id", companyId).eq("budget_month", month);
     }
 
     const { error } = await supabase
@@ -114,10 +123,14 @@ export async function POST(request: NextRequest) {
       flow_type: val.flowType,
       category: val.category,
       forecast_amount: val.total,
-      uploaded_by: (formData.get("uploadedBy") as string) || "manual",
+      uploaded_by: auth.email,
     }));
 
     if (quarterRows.length > 0) {
+      // Same replace semantics for the quarters this file touches.
+      for (const quarter of new Set(quarterRows.map((q) => q.forecast_quarter))) {
+        await supabase.from("quarterly_forecasts").delete().eq("company_id", companyId).eq("forecast_quarter", quarter);
+      }
       await supabase
         .from("quarterly_forecasts")
         .upsert(quarterRows, { onConflict: "company_id,forecast_quarter,category" });

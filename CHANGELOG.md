@@ -4,6 +4,12 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-29 (evening) — Forecast checks verified live + stale-row cleanup + replace semantics
+
+Live test on /finance/unze-trading: Sania's Jul-26 file uploaded through the page — "Saved: 12 categories, 12 rows" with all four calculation checks green (total inflow, total outflow, net cash flow, closing balance). Verifying the stored figures then exposed stale rows in `monthly_budgets` from earlier upload attempts: a bug-era "NET CASH FLOW −21.67m" stored as an outflow, zero-amount leftovers, and a 70m "Capital Investment" row not present in the current file — together inflating Jul-26 outflows to 108.4m vs the file's 60.1m. Root cause: upsert-only writes never removed categories dropped from the file. Fixed with **replace semantics**: an upload now clears its months (and touched quarters) first, so the file is the single source of truth; `uploaded_by` now records the real uploader's email instead of "manual". Bug artifacts (NET CASH FLOW row, zero rows) deleted from live data; the 70m Capital Investment row left pending Khuram's confirmation (if intentional it must be added to the forecast file, since the next upload will clear it). tsc + eslint clean.
+
+---
+
 ## 2026-07-29 (later) — Forecast calculation checks + permanent upload record
 
 Khuram: "tests the calculations, to ensure the correct sums are done and then records the figures on the records." The forecast parser now recomputes every summary in the file per month — total inflow = sum of inflow lines, total outflow = sum of outflow lines, net = inflow − outflow, closing = opening + net, and month-chaining (closing → next opening, warning tier) — against the file's own TOTAL/NET/CLOSING rows (captured for validation, never stored as categories). Blank summary rows warn ("fill the formula"); filled ones that disagree with their parts are BLOCKING: the upload is rejected with exact figures and nothing reaches `monthly_budgets`. Every upload attempt is permanently recorded (migration 153: `forecast_uploads` + `forecast_upload_checks`, RLS, anon-revoked `get_forecast_upload_log` RPC) with who uploaded, when, and every check result. The Finance page shows the full ✓/✗/⚠ check list under the upload button. Verified against Sania's real Jul-26 file (all 4 checks pass — her formulas were right) and a deliberately corrupted copy (rejected: "total outflow should be 60.06m, file shows 65.06m"). tsc + eslint clean.
