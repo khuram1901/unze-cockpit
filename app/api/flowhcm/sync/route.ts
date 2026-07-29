@@ -112,10 +112,10 @@ async function syncAttendance(db: ReturnType<typeof createServiceClient>) {
 
   const records = await flowhcm.getAttendance(fromDate, toDate);
 
-  const rows = records.map(r => ({
+  const allRows = records.map(r => ({
     employee_code:   String(r.EmployeeRefNo),
-    employee_name:   null,   // not provided by FlowHCM attendance API
-    attendance_date: r.ActualInDate ?? toDate,   // already YYYY-MM-DD
+    employee_name:   null,
+    attendance_date: r.ActualInDate ?? toDate,
     status:          r.SignIn ? "Present" : "Absent",
     check_in:        r.ActualInTime  ?? null,
     check_out:       r.ActualOutTime ?? null,
@@ -123,6 +123,13 @@ async function syncAttendance(db: ReturnType<typeof createServiceClient>) {
     station:         r.Station ?? null,
     synced_at:       new Date().toISOString(),
   }));
+
+  // Deduplicate on (employee_code, attendance_date) — last record wins
+  const seen = new Map<string, typeof allRows[0]>();
+  for (const row of allRows) {
+    seen.set(`${row.employee_code}__${row.attendance_date}`, row);
+  }
+  const rows = [...seen.values()];
 
   if (rows.length > 0) {
     const { error } = await db
@@ -145,16 +152,14 @@ async function syncLeave(db: ReturnType<typeof createServiceClient>) {
 
   const requests = await flowhcm.getLeaveRequests(fromDate, toDate);
 
-  const rows = requests.map(r => {
-    // No ID field in FlowHCM leave response — use stable composite key
+  const allLeaveRows = requests.map(r => {
     const flw_id = `${r.EmployeeCode ?? "?"}_${r.FromDate ?? "?"}_${r.LeaveType ?? "?"}`;
-
     return {
       flw_id,
       employee_code: r.EmployeeCode,
-      employee_name: null,   // not provided by FlowHCM leave API
+      employee_name: null,
       leave_type:    r.LeaveType,
-      from_date:     parseLeaveDate(r.FromDate),   // "29-June-2026" → "2026-06-29"
+      from_date:     parseLeaveDate(r.FromDate),
       to_date:       parseLeaveDate(r.ToDate),
       days:          r.LeaveDays,
       status:        r.Status,
@@ -163,6 +168,11 @@ async function syncLeave(db: ReturnType<typeof createServiceClient>) {
       synced_at:     new Date().toISOString(),
     };
   });
+
+  // Deduplicate on flw_id — last record wins
+  const leaveMap = new Map<string, typeof allLeaveRows[0]>();
+  for (const row of allLeaveRows) leaveMap.set(row.flw_id, row);
+  const rows = [...leaveMap.values()];
 
   if (rows.length > 0) {
     const { error } = await db
