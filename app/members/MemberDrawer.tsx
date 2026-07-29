@@ -526,7 +526,10 @@ export default function MemberDrawer({
   /* ── Auto-save permissions ────────────────────────────────────────── */
   async function autoSave(patch: Partial<PermRow>, successMsg?: string) {
     const prev = perms;
-    const merged = { ...prev, ...patch };
+    // Cast needed: spreading Partial<PermRow> widens values to include
+    // undefined, which TS rejects against PermRow (build-blocking error
+    // found 29/07/2026 while shipping the forecast parser fix).
+    const merged = { ...prev, ...patch } as PermRow;
     setPerms(merged);  // optimistic update
     const toUpsert = { ...merged };
     delete toUpsert.member_id;
