@@ -16,9 +16,17 @@ Market context (Pakistan, as of July 2026):
   stability (BEST-PAK). Government target: replace all old meters with AMI
   meters by December 2026, via a PPP AMISP covering LESCO, MEPCO, PESCO,
   HAZECO and QESCO.
-- Cost headwinds: steel rebar around PKR 222-232/kg (grade 60); CPI inflation
-  11.0% (June 2026); SBP policy rate 11.5% after an April 2026 hike; energy
-  costs elevated (petrol/diesel roughly 48%/38% above pre-conflict levels).
+- Cost headwinds: steel rebar around PKR 222-232/kg (grade 60); inflation
+  elevated (7-11% range through 2026); SBP policy rate 11.5%; energy costs
+  elevated (petrol/diesel roughly 48%/38% above pre-conflict levels).
+- Competition (confirmed by the CEO: tenders are PRICE-DRIVEN, lowest
+  compliant bidder wins — cost discipline IS the margin): poles — EAP
+  (Engineers Associated Precast, the spun-pole pioneer with a patent) and
+  Rajput Concrete (supplying LESCO/MEPCO/GEPCO/FESCO since 2018) plus
+  regional makers; meters — Pak Elektron (PEL) and MicroTech (MTI, AMR
+  deployed and developing AMI). The AMI spec (15-min reporting, GPRS/RF
+  mesh) raises the technical bar; NEPRA's rollout runs via LESCO/KE/IESCO
+  first. WAPDA/DISCO spun-pole demand is currently rising.
 - The company: Unze Trading (UTPL) manufactures concrete distribution poles
   (31/36/45 ft) for Pakistani DISCOs at plants serving MEPCO, PESCO and
   FIEDMC, and operates a smart meter plant. Sales are lumpy, driven by DISCO
@@ -80,13 +88,14 @@ export async function POST(request: NextRequest) {
         line_totals: lineRes.data || [],
         note: "Amounts are PKR actuals (no budget exists). Costs are stored positive. Food cost % = Total COGS / Net Sales is the key restaurant metric.",
       };
-      businessContext = `The company: ${company === "BARANH" ? "Baranh — a premium Pakistani dining restaurant chain (Lahore: Gulberg, Raya, Y-Block, plus a new Packages branch)" : "Haute Dolci — a premium dessert/casual dining chain (Lahore: Raya, Gulberg, Dolmen, Y-Block, Packages)"}. Part of the Unze Group. Head Office and warehouse costs are allocated to branches below the operating line.
+      businessContext = `The company: ${company === "BARANH" ? "Baranh — a casual/family dining restaurant chain (Lahore: Gulberg, Raya, Y-Block, plus a new Packages branch)" : "Haute Dolci — a casual/family dessert-dining chain FRANCHISED from the UK brand (founder Nizam Mohamed, East London; five Lahore sites: Raya, Gulberg, Dolmen, Y-Block, Packages). Franchise economics matter: brand fees and imported spec costs sit in the P&L regardless of sales"}. Part of the Unze Group. Head Office and warehouse costs are allocated to branches below the operating line.
 
-Market context (Pakistan restaurants, as of July 2026):
-- Food cost inflation averaged ~8.6%/yr through 2025, easing (restaurants & hotels CPI ~5-6% late 2025) but ingredient costs remain the biggest margin lever; CPI 11.0% overall, SBP policy rate 11.5%.
-- Dining out keeps growing but competition is intense — top-10 chains hold ~28% of the market; delivery platforms (Foodpanda) take heavy commissions visible in the P&L.
+Market context (Pakistan restaurants, as of July 2026 — positioning confirmed by the CEO as casual/family dining):
+- Casual/family dining is the widest, most contested segment: every mall food court, mid-range chain and fast-food giant competes for the same family outing. Top-10 chains hold ~28% of the market; delivery platforms (Foodpanda) take heavy commissions visible in the P&L.
+- SINGLE-CITY CONCENTRATION: the whole portfolio is in Lahore — Pakistan's most competitive dining scene, whose mall landscape shifted when Dolmen Mall Lahore (the country's biggest) opened Dec-24. Both brands share the same locations (Gulberg, Raya, Y-Block, Packages), so area-level softness hits both at once.
+- Food cost inflation averaged ~8.6%/yr through 2025, easing lately, but ingredient costs remain the biggest margin lever; inflation 7-11% through 2026, SBP policy rate 11.5%.
 - Typical healthy full-service restaurant food cost is 28-35% of net sales; rent+labour together should stay under ~35%.
-You are briefing the CEO on branch profitability, food cost discipline, expense creep and whether loss-making branches are structural or seasonal.`;
+You are briefing the CEO on branch profitability, food cost discipline, expense creep, franchise-cost burden (HD), and whether loss-making branches are structural or seasonal.`;
     } else if (company === "IFPL") {
       // Imperial Footwear — Unze London retail (plan vs actual).
       const channelFilter = typeof channel === "string" && channel ? channel : "All";
@@ -107,9 +116,11 @@ You are briefing the CEO on branch profitability, food cost discipline, expense 
       businessContext = `The company: Imperial Footwear (brand "Unze London") — Pakistani footwear retailer with ~32 branches across malls and cities plus a large Online PK channel (~24% of sales). Highly seasonal (wedding season Nov-Dec, Eid ~Mar). Head Office and warehouses are cost centres. You are briefing the CEO on plan-vs-actual discipline, branch performance, channel mix and seasonality risk.
 
 Market context (Pakistan retail, as of July 2026):
-- Footwear market growing ~6.5% CAGR; overall retail ~8.2% CAGR. Competitors with strong retail presence: Bata, Service, Stylo, Hush Puppies.
-- E-commerce is the growth engine: Pakistan online sales projected past PKR 1.2 trillion in 2026, 85%+ of orders from mobile, social commerce (Facebook/Instagram/TikTok/WhatsApp) heading toward ~35% of online retail; fashion is the top category on marketplaces. Cash on delivery still dominates (~95%).
-- Cost pressure on physical stores: CPI inflation 11.0% (June 2026), SBP policy rate 11.5%, elevated energy costs — mall rents, wages and electricity squeeze store margins while online scales cheaper.`;
+- Footwear market growing ~6.5% CAGR; overall retail ~8.2% CAGR.
+- Competition on THREE fronts (confirmed by the CEO — the brand straddles all three): premium ladies (Stylo 200+ outlets + Insignia, Metro Shoes 40+, ECS); mid-market volume (Bata, Service/Ndure, Borjan 145+ outlets); and online (marketplaces, social sellers, D2C — fashion is the top online category).
+- E-commerce is the growth engine: Pakistan online sales projected past PKR 1.2 trillion in 2026, 85%+ of orders from mobile, social commerce heading toward ~35% of online retail. Cash on delivery still dominates (~95%).
+- Cities: Lahore mall supply jumped with Dolmen Mall Lahore (country's biggest) opening Dec-24 — more premium space competing for the same footfall; Islamabad tolerates higher price points; retail expansion is heading into second-tier cities (Faisalabad, Multan, Gujranwala, Sialkot); KP stores (Peshawar/Mardan/Swat) have lower rents but smaller baskets; UK stores serve the diaspora and hedge the rupee.
+- Cost pressure on physical stores: inflation elevated (7-11% through 2026), SBP policy rate 11.5%, mall rents/wages/electricity squeezing store margins while online scales cheaper.`;
     } else {
       if (!companyId) return Response.json({ error: "companyId is required" }, { status: 400 });
       const plantFilter = typeof plant === "string" && plant ? plant : "All";

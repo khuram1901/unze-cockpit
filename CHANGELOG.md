@@ -4,6 +4,17 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-29 (night) — Deep market analysis across all three P&L pages
+
+Khuram asked for better market analysis per business, answered clarifying questions (Unze tenders are price-driven lowest-bidder; Imperial competes on all three fronts — premium ladies, mid-market volume, online; both restaurants are casual/family dining and Haute Dolci is a UK franchise; analysis depth = city/region level). Fresh research (29/07/2026, sourced) rebuilt the Market context panels with structured sections and fed the same facts into the AI commentary prompts:
+
+- **Unze**: new COMPETITIVE SET section — named pole rivals (EAP, the spun-pole pioneer/patent holder; Rajput Concrete supplying LESCO/MEPCO/GEPCO/FESCO) and meter rivals (Pak Elektron, MicroTech with AMR deployed/AMI in development); tender dynamic stated plainly (lowest compliant bidder → cost discipline IS the margin); AMI technical bar (15-min GPRS/RF reporting) and NEPRA's LESCO/KE/IESCO-first rollout; rising WAPDA pole demand.
+- **Imperial**: three-front competitive map (Stylo/Insignia/Metro/ECS premium; Bata/Service/Ndure/Borjan mid-market; online marketplaces/social/D2C) + new CITIES & REGIONS section (Lahore mall-supply shock from Dolmen Mall Lahore's Dec-24 opening; Islamabad price tolerance; second-tier city expansion; KP stores' lower rents/smaller baskets; UK diaspora stores as a rupee hedge).
+- **Restaurants**: casual/family positioning made explicit (widest, most contested segment), Haute Dolci's UK franchise economics (fees and spec costs regardless of sales), the shared-locations risk (both brands in the same four areas), and Lahore single-city concentration cut both ways.
+- Inflation wording updated to the honest range (7–11% through 2026, sources differ by month). AI prompts for all three companies now carry the confirmed positioning and named competitors, marked "confirmed by the CEO" where it came from Khuram. tsc + eslint clean.
+
+---
+
 ## 2026-07-29 (evening) — Forecast checks verified live + stale-row cleanup + replace semantics
 
 Live test on /finance/unze-trading: Sania's Jul-26 file uploaded through the page — "Saved: 12 categories, 12 rows" with all four calculation checks green (total inflow, total outflow, net cash flow, closing balance). Verifying the stored figures then exposed stale rows in `monthly_budgets` from earlier upload attempts: a bug-era "NET CASH FLOW −21.67m" stored as an outflow, zero-amount leftovers, and a 70m "Capital Investment" row not present in the current file — together inflating Jul-26 outflows to 108.4m vs the file's 60.1m. Root cause: upsert-only writes never removed categories dropped from the file. Fixed with **replace semantics**: an upload now clears its months (and touched quarters) first, so the file is the single source of truth; `uploaded_by` now records the real uploader's email instead of "manual". Bug artifacts (NET CASH FLOW row, zero rows) deleted from live data; the 70m Capital Investment row left pending Khuram's confirmation (if intentional it must be added to the forecast file, since the next upload will clear it). tsc + eslint clean.
