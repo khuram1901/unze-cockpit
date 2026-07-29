@@ -721,7 +721,7 @@ export default function RestaurantsFinancePage() {
                     )}
 
                     {d.receipts.length === 0 && d.payments.length === 0 && (
-                      <div style={{ fontSize: "12px", color: COLOURS.INK_400, fontStyle: "italic", paddingTop: 8, borderTop: `1px solid ${COURS.HAIRLINE}` }}>
+                      <div style={{ fontSize: "12px", color: COLOURS.INK_400, fontStyle: "italic", paddingTop: 8, borderTop: `1px solid ${COLOURS.HAIRLINE}` }}>
                         No individual transactions recorded. Totals are from PDF parse only.
                         To add line-item detail, use <strong>Banking → Cash Sheets</strong>.
                       </div>
