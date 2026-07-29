@@ -44,6 +44,27 @@ type MemberOption = {
 
 // ── Helpers ───────────────────────────────────────────────────────
 
+// Renders message text with clickable hyperlinks
+function MessageText({ content, isMe }: { content: string; isMe: boolean }) {
+  const URL_RE = /https?:\/\/[^\s<>"]+/g;
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = URL_RE.exec(content)) !== null) {
+    if (match.index > last) parts.push(content.slice(last, match.index));
+    const url = match[0];
+    parts.push(
+      <a key={match.index} href={url} target="_blank" rel="noopener noreferrer"
+        style={{ color: isMe ? "#A5C8FF" : "#1D4ED8", textDecoration: "underline", wordBreak: "break-all" }}>
+        {url}
+      </a>
+    );
+    last = match.index + url.length;
+  }
+  if (last < content.length) parts.push(content.slice(last));
+  return <>{parts}</>;
+}
+
 function convPhoto(conv: Conversation): string | null {
   if (conv.is_group) return null;
   return conv.participants?.[0]?.photo_url ?? null;
@@ -1134,7 +1155,7 @@ export default function ChatPanel({ email, memberId, memberName, isOpen, onToggl
                             wordBreak: "break-word",
                             border: isMe ? "none" : `1px solid ${BORDER}`,
                           }}>
-                            {msg.content}
+                            <MessageText content={msg.content} isMe={isMe} />
                           </div>
                           {/* Ticks on sent messages */}
                           {showTicks && (
