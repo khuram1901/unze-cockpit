@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "./ThemeProvider";
@@ -195,18 +195,6 @@ function SidebarContent({
   openGroups,
   toggleGroup,
 }: SidebarContentProps) {
-  // ── Hover-to-open logic ───────────────────────────────────────────
-  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function onGroupEnter(name: string) {
-    if (hoverTimer.current) clearTimeout(hoverTimer.current);
-    setHoveredGroup(name);
-  }
-  function onGroupLeave() {
-    // Small delay so moving the mouse between the header and items doesn't flicker
-    hoverTimer.current = setTimeout(() => setHoveredGroup(null), 180);
-  }
 
   const sideItemStyle = (active: boolean): React.CSSProperties => ({
     display: "flex", alignItems: "center",
@@ -294,11 +282,11 @@ function SidebarContent({
             .filter((c) => c.group === groupName)
             .sort((a, b) => a.title.trim().toLowerCase().localeCompare(b.title.trim().toLowerCase()));
           if (groupCards.length === 0) return null;
-          const isOpen = openGroups.has(groupName);
+          const isVisible = openGroups.has(groupName);
           const hasActive = groupCards.some((c) => isActive(c.href));
 
           if (collapsed) {
-            // Icon-only mode: groups don't apply, show all icons with a divider
+            // Icon-only mode: show all icons with a divider, no group headers
             return (
               <div key={groupName} style={{ marginBottom: "4px" }}>
                 <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />
@@ -309,21 +297,12 @@ function SidebarContent({
             );
           }
 
-          const isHovered = hoveredGroup === groupName;
-          const isPinned = openGroups.has(groupName);
-          const isVisible = isPinned || isHovered;
-
           return (
-            <div
-              key={groupName}
-              style={{ marginBottom: "4px" }}
-              onMouseEnter={() => onGroupEnter(groupName)}
-              onMouseLeave={onGroupLeave}
-            >
-              {/* Group header — click to pin, hover to peek */}
+            <div key={groupName} style={{ marginBottom: "4px" }}>
+              {/* Group header — click to expand/collapse */}
               <button
                 onClick={() => toggleGroup(groupName)}
-                title={isPinned ? `Collapse ${groupName}` : `Pin ${groupName} open`}
+                title={isVisible ? `Collapse ${groupName}` : `Expand ${groupName}`}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   width: "100%", padding: "16px 10px 6px 10px",
@@ -333,15 +312,15 @@ function SidebarContent({
                 <span style={{
                   fontSize: "10.5px", fontWeight: hasActive ? 700 : 500,
                   textTransform: "uppercase", letterSpacing: "0.12em",
-                  color: hasActive || isHovered ? "var(--text-sidebar)" : "var(--text-muted)",
-                  transition: "color 0.15s",
+                  color: hasActive || isVisible ? "var(--text-sidebar)" : "var(--text-muted)",
                 }}>
                   {groupName}
                 </span>
+                {/* ▼ when open (click to collapse), ▲ when closed (click to expand) */}
                 <span style={{
                   fontSize: "9px", color: "var(--text-muted)", marginLeft: "4px",
-                  transform: isVisible ? "rotate(180deg)" : "rotate(0deg)",
                   display: "inline-block",
+                  transform: isVisible ? "rotate(0deg)" : "rotate(180deg)",
                 }}>▼</span>
               </button>
               {isVisible && groupCards.map((card) => (
