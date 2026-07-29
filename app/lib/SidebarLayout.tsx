@@ -341,7 +341,6 @@ function SidebarContent({
                 <span style={{
                   fontSize: "9px", color: "var(--text-muted)", marginLeft: "4px",
                   transform: isVisible ? "rotate(180deg)" : "rotate(0deg)",
-                  transition: "transform 0.2s ease",
                   display: "inline-block",
                 }}>▼</span>
               </button>
@@ -350,9 +349,6 @@ function SidebarContent({
                 overflow: "hidden",
                 maxHeight: isVisible ? "600px" : "0px",
                 opacity: isVisible ? 1 : 0,
-                transition: isVisible
-                  ? "max-height 0.22s ease, opacity 0.15s ease"
-                  : "max-height 0.18s ease, opacity 0.12s ease",
               }}>
                 {groupCards.map((card) => (
                   <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
@@ -620,7 +616,7 @@ export default function SidebarLayout({
           position: "fixed", top: 0, left: 0, bottom: 0,
           width: `${sidebarW}px`,
           zIndex: 30,
-          transition: "width 0.2s ease",
+          transition: "none",
           overflow: "hidden",
           borderRight: "1px solid var(--sidebar-border)",
         }}>
