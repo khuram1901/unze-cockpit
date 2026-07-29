@@ -246,7 +246,7 @@ export default function CashSheetTab() {
       const parseRes = await authFetch("/api/banking/cash-sheets/pdf/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: urlJson.path }),
+        body: JSON.stringify({ path: upJson.path }),
       });
       const pdfJson = await parseRes.json();
       // Parsing is best-effort — a parse failure never blocks the save
