@@ -171,13 +171,19 @@ export default function TaskDetailPanel({
 
     const selected = nextIds.map((mid) => members.find((m) => m.id === mid)).filter((m): m is MemberLite => !!m);
     const primary = selected[0];
-    const { error } = await supabase.from("tasks").update({
+    const { error, count } = await supabase.from("tasks").update({
       assigned_to: primary.name,
       assigned_to_email: primary.email,
       assigned_to_department: primary.department || editProject || null,
       assigned_to_business_unit: primary.business_unit || null,
-    }).eq("id", task.id);
-    if (error) { alert("Couldn't update owners: " + error.message); return; }
+    }, { count: "exact" }).eq("id", task.id);
+    // count === 0 means RLS silently blocked the update (no error, but no rows changed).
+    // Without this check, task_assignees would be rewritten while tasks stays stale → split-brain.
+    if (error || count === 0) {
+      alert(error ? "Couldn't update owners: " + error.message : "You don't have permission to change the owner of this task.");
+      setEditOwnerIds(editOwnerIds); // revert the local checkbox state
+      return;
+    }
 
     await supabase.from("task_assignees").delete().eq("task_id", task.id);
     const { error: assigneeError } = await supabase.from("task_assignees").insert(
