@@ -131,6 +131,9 @@ export async function POST(request: NextRequest) {
     // Parsed totals from the PDF upload step — used to keep daily_cash_position in sync
     total_receipts,
     total_payments,
+    post_dated_total,
+    closing_after_post_dated,
+    pdc_buckets = [],
   } = body as {
     company: string;
     sheet_date: string;
@@ -141,6 +144,9 @@ export async function POST(request: NextRequest) {
     transactions?: TxnInput[];
     total_receipts?: number;
     total_payments?: number;
+    post_dated_total?: number;
+    closing_after_post_dated?: number;
+    pdc_buckets?: { dueDate: string; amount: number; label: string | null }[];
   };
 
   if (!company || !sheet_date) {
@@ -229,6 +235,8 @@ export async function POST(request: NextRequest) {
           total_receipts: total_receipts ?? 0,
           total_payments: total_payments ?? 0,
           closing_balance: closing_balance_pkr ?? 0,
+          post_dated_total: post_dated_total ?? 0,
+          closing_after_post_dated: closing_after_post_dated ?? closing_balance_pkr ?? 0,
           source: "manual",
           uploaded_by: auth.email,
           cash_sheet_id: sheet.id,
@@ -239,6 +247,25 @@ export async function POST(request: NextRequest) {
     if (dcpErr) {
       console.error("daily_cash_position upsert failed:", dcpErr.message);
       // Non-blocking — sheet is saved, just log the error
+    }
+
+    // Replace the day's PDC maturity buckets (feeds the Finance pages' PDC
+    // outlook) — same replace-not-append rule as the finance ingestion path.
+    if (pdc_buckets.length > 0) {
+      await supabase.from("pdc_maturity_buckets")
+        .delete().eq("company_id", companyId).eq("position_date", sheet_date);
+      const { error: pdcErr } = await supabase.from("pdc_maturity_buckets").insert(
+        pdc_buckets
+          .filter((b) => b && typeof b.amount === "number" && /^\d{4}-\d{2}-\d{2}$/.test(b.dueDate || ""))
+          .map((b) => ({
+            company_id: companyId,
+            position_date: sheet_date,
+            due_date: b.dueDate,
+            amount: b.amount,
+            label: b.label ?? null,
+          }))
+      );
+      if (pdcErr) console.error("pdc_maturity_buckets insert failed:", pdcErr.message);
     }
   }
 

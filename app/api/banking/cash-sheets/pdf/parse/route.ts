@@ -72,7 +72,14 @@ export async function POST(request: NextRequest) {
     closing: number | null;
     receipts: number | null;
     payments: number | null;
-  } = { opening: null, closing: null, receipts: null, payments: null };
+    pdc_total: number | null;
+    closing_after_pdc: number | null;
+    transactions: { txn_type: string; description: string; amount: number }[];
+    pdc_buckets: { dueDate: string; amount: number; label: string | null }[];
+  } = {
+    opening: null, closing: null, receipts: null, payments: null,
+    pdc_total: null, closing_after_pdc: null, transactions: [], pdc_buckets: [],
+  };
   let parseWarning: string | null = null;
 
   try {
@@ -84,6 +91,10 @@ export async function POST(request: NextRequest) {
         closing: r.closingBalanceUnzeTrading,
         receipts: r.receiptsTotal,
         payments: r.paymentsTotal,
+        pdc_total: r.loanPostDatedCHQs || null,
+        closing_after_pdc: r.closingAfterLoanPostDated || null,
+        transactions: r.transactions,
+        pdc_buckets: r.pdcBuckets,
       };
     }
   } catch (parseErr) {

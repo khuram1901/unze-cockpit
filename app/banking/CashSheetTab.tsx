@@ -216,6 +216,10 @@ export default function CashSheetTab() {
     let parsedClosing: number | undefined;
     let parsedReceipts: number | undefined;
     let parsedPayments: number | undefined;
+    let parsedPdcTotal: number | undefined;
+    let parsedClosingAfterPdc: number | undefined;
+    let parsedTxns: { txn_type: string; description: string; amount: number }[] = [];
+    let parsedPdcBuckets: { dueDate: string; amount: number; label: string | null }[] = [];
     if (uploadFile) {
       if (uploadFile.size > 20 * 1024 * 1024) {
         showToast("PDF must be under 20 MB", "error");
@@ -255,11 +259,17 @@ export default function CashSheetTab() {
         parsedClosing = pdfJson.parsed.closing ?? undefined;
         parsedReceipts = pdfJson.parsed.receipts ?? undefined;
         parsedPayments = pdfJson.parsed.payments ?? undefined;
+        parsedPdcTotal = pdfJson.parsed.pdc_total ?? undefined;
+        parsedClosingAfterPdc = pdfJson.parsed.closing_after_pdc ?? undefined;
+        parsedTxns = pdfJson.parsed.transactions ?? [];
+        parsedPdcBuckets = pdfJson.parsed.pdc_buckets ?? [];
       }
     }
 
-    // 2. Build validated transactions
-    const transactions = draftTxns
+    // 2. Build validated transactions — manually entered rows first; if none
+    //    were entered, fall back to the line items parsed from the PDF so the
+    //    full receipts/payments detail is stored automatically.
+    const manualTxns = draftTxns
       .filter((t) => t.description.trim() && parseFloat(t.amount_pkr) > 0)
       .map((t, i) => ({
         txn_type: t.txn_type,
@@ -270,6 +280,16 @@ export default function CashSheetTab() {
         category: t.category || undefined,
         sort_order: i,
       }));
+    const transactions = manualTxns.length > 0
+      ? manualTxns
+      : parsedTxns
+          .filter((t) => (t.txn_type === "payment" || t.txn_type === "receipt") && t.amount > 0 && t.description)
+          .map((t, i) => ({
+            txn_type: t.txn_type as "payment" | "receipt",
+            description: t.description,
+            amount_pkr: t.amount,
+            sort_order: i,
+          }));
 
     // Resolve balances: prefer manually-entered values, fall back to PDF parse
     const finalOpening = uploadForm.opening_balance_pkr
@@ -294,6 +314,11 @@ export default function CashSheetTab() {
         // Pass parsed totals so daily_cash_position can be kept in sync
         total_receipts: parsedReceipts,
         total_payments: parsedPayments,
+        // Loan / PDC section — feeds the Finance pages' Cash-in-Hand vs
+        // PDC-Outstanding split and the PDC outlook chart
+        post_dated_total: parsedPdcTotal,
+        closing_after_post_dated: parsedClosingAfterPdc,
+        pdc_buckets: parsedPdcBuckets,
       }),
     });
     let json: { ok?: boolean; error?: string };

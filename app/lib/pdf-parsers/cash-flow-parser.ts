@@ -154,6 +154,84 @@ function extractRestaurantPdcBuckets(text: string): PdcBucket[] {
   return buckets;
 }
 
+// ── Transaction line-item extraction ─────────────────────────────────────────
+// Extracts every "DD/MM/YYYY  <description>  <amount>" row from a Payments or
+// Receipts section. pdf-parse emits each row as a date line followed by the
+// description with the amount glued to (or wrapping under) it, e.g.:
+//   "28/07/2026\nCash paid against petty cash19,140"
+//   "28/07/2026\nCash paid against 765-Z LESCO Bill Jul-26(https://…)\n165,953"
+// The amount is always the LAST comma-grouped (or plain) number in the row's
+// chunk; everything before it is the description. Rows are validated against
+// the section's own "Total" line — a mismatch is reported via the returned
+// `sumMatchesTotal` flag rather than dropping data (best-effort principle).
+function extractSectionTransactions(
+  sectionText: string,
+  txnType: "payment" | "receipt",
+): { rows: CashFlowTransaction[]; sumMatchesTotal: boolean; sectionTotal: number } {
+  // Cut the section at its Total line so the total is never read as a row amount.
+  const totalMatch = sectionText.match(/(?:^|\n)[#\s]*Total\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
+  const sectionTotal = totalMatch ? parseAmount(totalMatch[1]) : 0;
+  const rowsBlock = totalMatch ? sectionText.slice(0, totalMatch.index!) : sectionText;
+
+  const dateMatches = [...rowsBlock.matchAll(/(\d{2})\/(\d{2})\/(\d{4})/g)];
+  const rows: CashFlowTransaction[] = [];
+
+  for (let i = 0; i < dateMatches.length; i++) {
+    const m = dateMatches[i];
+    const chunkStart = m.index! + m[0].length;
+    const chunkEnd = i + 1 < dateMatches.length ? dateMatches[i + 1].index! : rowsBlock.length;
+    const chunk = rowsBlock.slice(chunkStart, chunkEnd);
+
+    // Amount = last number in the chunk (comma-grouped preferred, plain fallback).
+    const numMatches = [...chunk.matchAll(/(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)/g)];
+    if (numMatches.length === 0) continue;
+    const last = numMatches[numMatches.length - 1];
+    const amount = parseAmount(last[1]);
+    if (amount <= 0) continue;
+
+    const description = chunk
+      .slice(0, last.index)
+      .replace(/\s+/g, " ")
+      .trim()
+      // Trim a dangling "(" or "-" left behind when the amount was glued to the description
+      .replace(/[-(\s]+$/, "")
+      .trim();
+    if (!description) continue;
+
+    rows.push({ txn_type: txnType, description, amount });
+  }
+
+  const sum = rows.reduce((a, r) => a + r.amount, 0);
+  const sumMatchesTotal = sectionTotal > 0 && Math.abs(sum - sectionTotal) < 1;
+  return { rows, sumMatchesTotal, sectionTotal };
+}
+
+// Locates the Payments and Receipts sections of a cash-flow text and extracts
+// their transaction rows. Section headers appear as "DatePaymentsAmount" /
+// "DateReceiptsAmount" (pdf-parse glues the column headers together), and each
+// section ends at its own "Total" line. Works for Unze, Imperial, Baranh/Dolci
+// and KKJ layouts, which all share this table shape.
+function extractAllTransactions(text: string): CashFlowTransaction[] {
+  const out: CashFlowTransaction[] = [];
+
+  const payIdx = text.search(/Date\s*Payments/i);
+  const recIdx = text.search(/Date\s*Receipts/i);
+  const loanIdx = text.search(/Date\s*Loan\s*&\s*Post\s*Dated/i);
+
+  if (payIdx >= 0) {
+    const end = recIdx > payIdx ? recIdx : text.length;
+    const { rows } = extractSectionTransactions(text.slice(payIdx, end), "payment");
+    out.push(...rows);
+  }
+  if (recIdx >= 0) {
+    // Receipts section ends at the Loan/PDC section (Unze) or at the end marker
+    const end = loanIdx > recIdx ? loanIdx : text.length;
+    const { rows } = extractSectionTransactions(text.slice(recIdx, end), "receipt");
+    out.push(...rows);
+  }
+  return out;
+}
+
 function findTotalInSection(text: string, startLabel: string, endLabel: string): number {
   const startIdx = text.indexOf(startLabel);
   const endIdx = text.indexOf(endLabel);
@@ -227,7 +305,7 @@ function parseUnzeTrading(text: string, date: string | null): CashFlowParsed {
     date,
     company: "unze",
     rawText: text,
-    transactions: [],
+    transactions: extractAllTransactions(text),
   };
 }
 
@@ -305,7 +383,7 @@ function parseImperial(text: string, date: string | null): CashFlowParsed {
     date,
     company: "imperial",
     rawText: text,
-    transactions: [],
+    transactions: extractAllTransactions(text),
   };
 }
 
@@ -381,7 +459,7 @@ function parseBaranhStyle(
     date,
     company,
     rawText: text,
-    transactions: [],
+    transactions: extractAllTransactions(text),
   };
 }
 
@@ -440,7 +518,7 @@ function parseKKJ(text: string, date: string | null): CashFlowParsed {
     date,
     company: "kkj",
     rawText: text,
-    transactions: [],
+    transactions: extractAllTransactions(text),
   };
 }
 
