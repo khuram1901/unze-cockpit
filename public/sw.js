@@ -62,6 +62,10 @@ self.addEventListener("notificationclick", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  // Never intercept API calls — a cached API response (or a cache fallback
+  // masking a real network error) causes confusing stale-data bugs.
+  if (new URL(event.request.url).pathname.startsWith("/api/")) return;
+
   // For navigation requests, try network first, fall back to cache
   if (event.request.mode === "navigate") {
     event.respondWith(
