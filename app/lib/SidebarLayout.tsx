@@ -344,16 +344,9 @@ function SidebarContent({
                   display: "inline-block",
                 }}>▼</span>
               </button>
-              {/* Animated items container */}
-              <div style={{
-                overflow: "hidden",
-                maxHeight: isVisible ? "600px" : "0px",
-                opacity: isVisible ? 1 : 0,
-              }}>
-                {groupCards.map((card) => (
-                  <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
-                ))}
-              </div>
+              {isVisible && groupCards.map((card) => (
+                <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
+              ))}
             </div>
           );
         })}
@@ -423,22 +416,6 @@ function SidebarContent({
           )}
         </div>
 
-        {/* Collapse toggle — desktop only */}
-        {!isMobile && (
-          <button
-            onClick={() => setCollapsed((v) => !v)}
-            style={sideItemStyle(false)}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>
-              {collapsed ? "»" : "«"}
-            </span>
-            {!collapsed && <span style={{ color: "var(--text-muted)" }}>Collapse</span>}
-          </button>
-        )}
-
         {/* Sign out */}
         <button
           onClick={onSignOut}
@@ -503,9 +480,10 @@ export default function SidebarLayout({
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
   const [isMobile, setIsMobile] = useState(false);
-  const [isTablet, setIsTablet] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // Hover-to-expand: sidebar is always icon-only (collapsed) at rest.
+  // Hovering over it instantly reveals the full panel overlaying the content.
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
   // ── Collapsible sidebar groups ────────────────────────────────────
   // Default: only Overview pinned open. User's choices saved to localStorage.
@@ -544,11 +522,7 @@ export default function SidebarLayout({
 
   useEffect(() => {
     function check() {
-      const w = window.innerWidth;
-      setIsMobile(w < 768);
-      setIsTablet(w >= 768 && w < 1024);
-      if (w < 768) setCollapsed(false);
-      else if (w < 1024) setCollapsed(true);
+      setIsMobile(window.innerWidth < 768);
     }
     check();
     window.addEventListener("resize", check);
@@ -587,7 +561,9 @@ export default function SidebarLayout({
     alwaysItems.push({ permKey: "_pa", title: "PA Dashboard", subtitle: "", href: "/pa", icon: "⚡", group: "_top" });
   }
 
-  const sidebarW = (isMobile || entryOnly) ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;
+  // Content always reserves space for the icon column only.
+  // The sidebar overlays on top when expanded — content never shifts.
+  const sidebarW = (isMobile || entryOnly) ? 0 : SIDEBAR_COLLAPSED_W;
 
   const initials = userName
     .split(" ")
@@ -612,17 +588,21 @@ export default function SidebarLayout({
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-page)" }}>
       {/* ── Desktop sidebar (hidden for daily-entry-only users) ── */}
       {!isMobile && !entryOnly && (
-        <aside style={{
-          position: "fixed", top: 0, left: 0, bottom: 0,
-          width: `${sidebarW}px`,
-          zIndex: 30,
-          transition: "none",
-          overflow: "hidden",
-          borderRight: "1px solid var(--sidebar-border)",
-        }}>
+        <aside
+          style={{
+            position: "fixed", top: 0, left: 0, bottom: 0,
+            width: `${sidebarExpanded ? SIDEBAR_W : SIDEBAR_COLLAPSED_W}px`,
+            zIndex: 30,
+            overflow: "hidden",
+            borderRight: "1px solid var(--sidebar-border)",
+            boxShadow: sidebarExpanded ? "4px 0 20px rgba(0,0,0,0.12)" : "none",
+          }}
+          onMouseEnter={() => setSidebarExpanded(true)}
+          onMouseLeave={() => setSidebarExpanded(false)}
+        >
           <SidebarContent
-            collapsed={collapsed}
-            setCollapsed={setCollapsed}
+            collapsed={!sidebarExpanded}
+            setCollapsed={() => {}}
             isMobile={isMobile}
             entryOnly={entryOnly}
             alwaysItems={alwaysItems}
@@ -658,8 +638,8 @@ export default function SidebarLayout({
             boxShadow: "4px 0 20px rgba(0,0,0,0.3)",
           }}>
             <SidebarContent
-              collapsed={collapsed}
-              setCollapsed={setCollapsed}
+              collapsed={false}
+              setCollapsed={() => {}}
               isMobile={isMobile}
               entryOnly={entryOnly}
               alwaysItems={alwaysItems}
