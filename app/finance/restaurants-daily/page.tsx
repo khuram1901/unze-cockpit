@@ -79,16 +79,16 @@ const COMPANY_TABS: CompanyTab[] = [
 
 function pkr(n: number | null | undefined): string {
   if (n == null) return "—";
-  return "₨ " + Math.round(n).toLocaleString();
+  return "PKR " + Math.round(n).toLocaleString();
 }
 
 function shortPkr(n: number | null | undefined): string {
   if (n == null) return "—";
   const abs = Math.abs(n);
   const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000) return sign + "₨ " + (Math.round(abs / 100_000) / 10).toLocaleString() + "m";
-  if (abs >= 1_000) return sign + "₨ " + (Math.round(abs / 100) / 10).toLocaleString() + "k";
-  return sign + "₨ " + Math.round(abs).toLocaleString();
+  if (abs >= 1_000_000) return sign + "PKR " + (Math.round(abs / 100_000) / 10).toLocaleString() + "m";
+  if (abs >= 1_000) return sign + "PKR " + (Math.round(abs / 100) / 10).toLocaleString() + "k";
+  return sign + "PKR " + Math.round(abs).toLocaleString();
 }
 
 function getMonthOptions(): { value: string; label: string }[] {
@@ -225,8 +225,10 @@ export default function RestaurantsFinancePage() {
       </div>
       <div style={{
         fontSize: isMobile ? "18px" : "22px",
-        fontWeight: 700,
-        fontFamily: MONO,
+        fontWeight: 600,
+        fontFamily: DISPLAY,
+        fontVariantNumeric: "tabular-nums",
+        letterSpacing: "-0.01em",
         color: positive === true ? COLOURS.GREEN : positive === false ? COLOURS.RED : COLOURS.NAVY,
         lineHeight: 1.1,
       }}>
@@ -471,16 +473,16 @@ export default function RestaurantsFinancePage() {
                           <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: "nowrap" }}>
                             {formatDateUK(s.sheet_date)}
                           </td>
-                          <td style={{ ...tdStyle, textAlign: "right", fontFamily: MONO, fontSize: "12px" }}>
+                          <td style={{ ...tdStyle, textAlign: "right", fontFamily: MONO, fontSize: "13px", fontVariantNumeric: "tabular-nums" }}>
                             {pkr(s.opening_balance_pkr)}
                           </td>
-                          <td style={{ ...tdStyle, textAlign: "right", fontFamily: MONO, fontSize: "12px", color: (receipts ?? 0) > 0 ? COLOURS.GREEN : COLOURS.INK_400 }}>
+                          <td style={{ ...tdStyle, textAlign: "right", fontFamily: MONO, fontSize: "13px", fontVariantNumeric: "tabular-nums", color: (receipts ?? 0) > 0 ? COLOURS.GREEN : COLOURS.INK_400 }}>
                             {receipts != null && receipts > 0 ? pkr(receipts) : "—"}
                           </td>
-                          <td style={{ ...tdStyle, textAlign: "right", fontFamily: MONO, fontSize: "12px", color: (payments ?? 0) > 0 ? COLOURS.RED : COLOURS.INK_400 }}>
+                          <td style={{ ...tdStyle, textAlign: "right", fontFamily: MONO, fontSize: "13px", fontVariantNumeric: "tabular-nums", color: (payments ?? 0) > 0 ? COLOURS.RED : COLOURS.INK_400 }}>
                             {payments != null && payments > 0 ? pkr(payments) : "—"}
                           </td>
-                          <td style={{ ...tdStyle, textAlign: "right", fontFamily: MONO, fontSize: "12px", fontWeight: 600 }}>
+                          <td style={{ ...tdStyle, textAlign: "right", fontFamily: MONO, fontSize: "13px", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
                             <span style={{ color: net >= 0 ? COLOURS.GREEN : COLOURS.RED }}>
                               {pkr(s.closing_balance_pkr)}
                             </span>
@@ -611,7 +613,7 @@ export default function RestaurantsFinancePage() {
                           <div style={{ fontSize: "10px", fontWeight: 700, color: COLOURS.INK_400, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
                             {label}
                           </div>
-                          <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: MONO, color }}>
+                          <div style={{ fontSize: "16px", fontWeight: 600, fontFamily: DISPLAY, fontVariantNumeric: "tabular-nums", color }}>
                             {pkr(typeof value === "number" ? value : value)}
                           </div>
                         </div>
@@ -680,7 +682,7 @@ export default function RestaurantsFinancePage() {
                                     </div>
                                   )}
                                 </div>
-                                <div style={{ fontFamily: MONO, fontSize: "12px", fontWeight: 600, color: COLOURS.GREEN, whiteSpace: "nowrap", marginLeft: 12 }}>
+                                <div style={{ fontFamily: MONO, fontSize: "13px", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: COLOURS.GREEN, whiteSpace: "nowrap", marginLeft: 12 }}>
                                   {pkr(t.amount_pkr)}
                                 </div>
                               </div>
@@ -710,7 +712,7 @@ export default function RestaurantsFinancePage() {
                                     </div>
                                   )}
                                 </div>
-                                <div style={{ fontFamily: MONO, fontSize: "12px", fontWeight: 600, color: COLOURS.RED, whiteSpace: "nowrap", marginLeft: 12 }}>
+                                <div style={{ fontFamily: MONO, fontSize: "13px", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: COLOURS.RED, whiteSpace: "nowrap", marginLeft: 12 }}>
                                   {pkr(t.amount_pkr)}
                                 </div>
                               </div>
