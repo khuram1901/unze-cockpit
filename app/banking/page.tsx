@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import AuthWrapper from "../lib/AuthWrapper";
 import { useRequireCapability } from "../lib/useRouteGuard";
+import { useUserCtx } from "../lib/useUserCtx";
+import { widgetVisible } from "../lib/permissions";
 import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
 import DateInput from "../lib/DateInput";
@@ -102,6 +104,8 @@ export default function BankingPage() {
   const [savingPayment, setSavingPayment] = useState(false);
 
   const { show: showToast, element: toastElement } = useToast();
+  const { ctx: widgetCtx } = useUserCtx();
+  const wv = (key: string) => !widgetCtx || widgetVisible(widgetCtx, key, true);
 
   // ── Data loading ──────────────────────────────────────────────────
 
@@ -414,7 +418,7 @@ export default function BankingPage() {
           display: "flex", gap: "0", marginBottom: "24px",
           borderBottom: `2px solid ${COLOURS.HAIRLINE}`,
         }}>
-          {FEATURE_TABS.map((ft) => {
+          {FEATURE_TABS.filter((ft) => wv(`banking.${ft.id}`)).map((ft) => {
             const active = featureTab === ft.id;
             return (
               <button
@@ -435,8 +439,8 @@ export default function BankingPage() {
         </div>
 
         {/* Feature tab content */}
-        {featureTab === "eobi_ss"    && renderEobiSS()}
-        {featureTab === "cash_sheet" && <CashSheetTab />}
+        {featureTab === "eobi_ss"    && wv("banking.eobi_ss")    && renderEobiSS()}
+        {featureTab === "cash_sheet" && wv("banking.cash_sheet") && <CashSheetTab />}
 
         {/* Record Payment modal */}
         {addingPayment && (

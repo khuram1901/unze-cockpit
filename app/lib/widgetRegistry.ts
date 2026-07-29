@@ -129,6 +129,10 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { key: "admin_ops.documents",     label: "Documents tab",     page: "Admin Operations", tip: "NTN certificates and other location documents" },
   { key: "admin_ops.operations",    label: "Operations tab",    page: "Admin Operations", tip: "Fleet fuel tracking, vehicle maintenance, and solar site production" },
 
+  // ── Banking (app/banking/page.tsx) ───────────────────────────────────
+  { key: "banking.eobi_ss",    label: "EOBI & SS Payments tab",  page: "Banking", tip: "Monthly EOBI and Social Security payment tracking across all entities" },
+  { key: "banking.cash_sheet", label: "Cash Sheets tab",         page: "Banking", tip: "Bank cash sheet uploads, PDF parsing and transaction drill-down" },
+
   // ── Bank Facilities (app/finance/guarantees/page.tsx) ─────────────
   // Ops chases guarantee releases and needs to see the list, but the PKR
   // figures (amounts, cash margin, bank charges, facility limits) are
