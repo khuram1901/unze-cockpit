@@ -138,17 +138,8 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
   const [planRecv, setPlanRecv] = useState("");
   const [planPay, setPlanPay] = useState("");
 
-  // Daily position form (always visible)
-  const [dpDate, setDpDate] = useState(todayISO());
-  const [dpOpening, setDpOpening] = useState("");
-  const [dpReceipts, setDpReceipts] = useState("");
-  const [dpPayments, setDpPayments] = useState("");
-  const [dpClosing, setDpClosing] = useState("");
-  const [dpPostDated, setDpPostDated] = useState("");
-
   const [msg, setMsg] = useState("");
   const [saving, setSaving] = useState(false);
-  const [dailyEntryTab, setDailyEntryTab] = useState<"upload" | "manual">("upload");
 
   // Forecast upload state
   const [forecastFile, setForecastFile] = useState<File | null>(null);
@@ -246,48 +237,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     setMfAmount("");
   }
 
-  // PDF upload state
-  const [dropFiles, setDropFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [uploadResults, setUploadResults] = useState<{ filename: string; status: string; date?: string }[]>([]);
-  const dropInputRef = useRef<HTMLInputElement>(null);
-
-  const onDropFiles = useCallback((incoming: FileList | File[]) => {
-    const pdfs = Array.from(incoming).filter((f) => f.name.toLowerCase().endsWith(".pdf"));
-    if (!pdfs.length) return;
-    setDropFiles((prev) => {
-      const existing = new Set(prev.map((f) => f.name));
-      return [...prev, ...pdfs.filter((f) => !existing.has(f.name))];
-    });
-    setUploadResults([]);
-  }, []);
-
-  async function handlePDFUpload(e: React.FormEvent) {
-    e.preventDefault();
-    if (!dropFiles.length) return;
-    setUploading(true);
-    setUploadResults([]);
-    try {
-      const formData = new FormData();
-      for (const f of dropFiles) formData.append("files", f);
-      const res = await authFetch("/api/finance/upload-pdfs", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok) {
-        showMsg("Error: " + (data.error || "Upload failed"));
-      } else {
-        setUploadResults(data.results || []);
-        const saved = (data.results || []).filter((r: { status: string }) => r.status.startsWith("saved")).length;
-        const errors = (data.results || []).filter((r: { status: string }) => r.status.startsWith("error")).length;
-        showMsg(errors > 0 ? `${saved} saved, ${errors} failed — check results below.` : `${saved} file${saved !== 1 ? "s" : ""} saved successfully.`);
-        setDropFiles([]);
-        loadData();
-      }
-    } catch {
-      showMsg("Error: Network error during upload.");
-    }
-    setUploading(false);
-  }
 
   async function loadData() {
     setLoading(true);
@@ -473,55 +422,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     loadData();
   }
 
-  async function saveDailyPosition(e: React.FormEvent) {
-    e.preventDefault();
-
-    // Validate opening matches previous day's closing (only warn for consecutive days)
-    const prevDay = positions.find((p) => p.position_date < dpDate);
-    if (prevDay) {
-      const diffDays = (new Date(dpDate).getTime() - new Date(prevDay.position_date).getTime()) / (1000 * 60 * 60 * 24);
-      if (diffDays <= 1 && Math.abs(Number(dpOpening) - prevDay.closing_balance) > 0.01 && Math.abs(Math.abs(Number(dpOpening)) - Math.abs(prevDay.closing_balance)) > 0.01) {
-        const proceed = await dlg.confirm(
-          `Warning: Opening balance (${fmt(Number(dpOpening))}) does not match previous day's closing (${fmt(prevDay.closing_balance)} on ${formatDateUK(prevDay.position_date)}). Save anyway?`
-        );
-        if (!proceed) return;
-      }
-    }
-
-    setSaving(true);
-    // Post-dated cheques reduce available cash for both companies — confirmed against every
-    // Imperial row ever ingested from a real bank statement PDF (parseImperial() in
-    // cash-flow-parser.ts derives closingAfterPDC as closing minus the PDC total, never a
-    // sum). A previous version of this formula added post-dated cheques for Imperial only,
-    // which never matched any real Imperial data (fixed 15 Jul 2026).
-    const closingAfterPD = Number(dpClosing) - Number(dpPostDated);
-    const { error } = await supabase.from("daily_cash_position").upsert(
-      {
-        company_id: companyId,
-        position_date: dpDate,
-        opening_balance: Number(dpOpening) || 0,
-        total_receipts: Number(dpReceipts) || 0,
-        total_payments: Number(dpPayments) || 0,
-        closing_balance: Number(dpClosing) || 0,
-        post_dated_total: Number(dpPostDated) || 0,
-        closing_after_post_dated: closingAfterPD,
-      },
-      { onConflict: "company_id,position_date" }
-    );
-    setSaving(false);
-    if (error) {
-      showMsg("Error: " + error.message);
-      return;
-    }
-    logAction("Created", "daily_cash_position", `Position for ${dpDate}: closing ${dpClosing}`);
-    showMsg("✅ Daily position saved.");
-    setDpOpening("");
-    setDpReceipts("");
-    setDpPayments("");
-    setDpClosing("");
-    setDpPostDated("");
-    loadData();
-  }
 
   if (loading) {
     return <p style={{ color: SLATE, fontSize: "15px" }}>Loading finance data…</p>;
@@ -708,112 +608,6 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
         );
       })()}
 
-      {/* ── ROW: PDF UPLOAD (Admin only) ── */}
-      {userIsAdmin && (
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "14px", marginBottom: "14px" }}>
-        {/* Add Daily Position — Manual or Upload */}
-        <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "14px", padding: "24px", backgroundColor: CARD }}>
-          <SectionTitle title="Add Daily Position" style={{ margin: "0 0 12px" }} />
-          <div style={{ display: "flex", gap: "0", marginBottom: "16px", borderBottom: `1px solid ${HAIRLINE}` }}>
-            {([{ key: "upload", label: "Upload PDF" }, { key: "manual", label: "Manual Entry" }] as const).map((tab) => (
-              <button key={tab.key} onClick={() => setDailyEntryTab(tab.key)} style={{
-                padding: "7px 14px", fontSize: "13px", fontWeight: dailyEntryTab === tab.key ? 600 : 400,
-                color: dailyEntryTab === tab.key ? NAVY : SLATE, backgroundColor: "transparent", border: "none",
-                borderBottom: dailyEntryTab === tab.key ? `2px solid ${NAVY}` : "2px solid transparent",
-                cursor: "pointer", marginBottom: "-1px",
-              }}>{tab.label}</button>
-            ))}
-          </div>
-
-          {dailyEntryTab === "upload" && (
-            <>
-              <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => { e.preventDefault(); setDragOver(false); onDropFiles(e.dataTransfer.files); }}
-                onClick={() => dropInputRef.current?.click()}
-                style={{
-                  border: `2px dashed ${dragOver ? NAVY : HAIRLINE}`,
-                  borderRadius: "10px", padding: "20px 16px", textAlign: "center",
-                  backgroundColor: dragOver ? CARD_ALT : CARD_ALT,
-                  cursor: "pointer", transition: "border-color 0.15s", marginBottom: "10px",
-                }}
-              >
-                <div style={{ fontSize: "22px", marginBottom: "4px" }}>📄</div>
-                <div style={{ fontSize: "13px", fontWeight: 600, color: NAVY }}>Drop PDFs here or click to browse</div>
-                <div style={{ fontSize: "12px", color: SLATE, marginTop: "2px" }}>Cash flow + bank position — any number of files</div>
-                <input ref={dropInputRef} type="file" accept=".pdf" multiple style={{ display: "none" }}
-                  onChange={(e) => e.target.files && onDropFiles(e.target.files)} />
-              </div>
-
-              {dropFiles.length > 0 && (
-                <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "10px", marginBottom: "10px", overflow: "hidden" }}>
-                  {dropFiles.map((f, i) => (
-                    <div key={f.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: i < dropFiles.length - 1 ? `1px solid ${HAIRLINE}` : "none", fontSize: "13px", color: NAVY }}>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{f.name}</span>
-                      {!uploading && (
-                        <button onClick={() => setDropFiles((p) => p.filter((x) => x.name !== f.name))}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: SLATE, fontSize: "16px", marginLeft: "8px", lineHeight: 1 }}>×</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {uploadResults.length > 0 && (
-                <div style={{ border: `1px solid ${HAIRLINE}`, borderRadius: "10px", marginBottom: "10px", overflow: "hidden" }}>
-                  {uploadResults.map((r, i) => {
-                    const ok = r.status.startsWith("saved");
-                    return (
-                      <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: i < uploadResults.length - 1 ? `1px solid ${HAIRLINE}` : "none", fontSize: "13px" }}>
-                        <span style={{ color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{r.filename}</span>
-                        <span style={{ color: ok ? GREEN : RED, fontWeight: 600, marginLeft: "8px", whiteSpace: "nowrap" }}>{ok ? "Saved" : "Error"}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <form onSubmit={handlePDFUpload}>
-                <button type="submit" disabled={uploading || dropFiles.length === 0}
-                  style={{ ...btnStyle, fontSize: "13px", padding: "7px 16px", opacity: uploading || dropFiles.length === 0 ? 0.5 : 1 }}>
-                  {uploading ? "Processing..." : `Upload ${dropFiles.length || ""} file${dropFiles.length !== 1 ? "s" : ""}`}
-                </button>
-              </form>
-            </>
-          )}
-
-          {dailyEntryTab === "manual" && (
-            <>
-              <p style={{ fontSize: "13px", color: SLATE, marginBottom: "12px" }}>Enter today&apos;s figures from the accountant&apos;s statement.</p>
-              <form onSubmit={saveDailyPosition}>
-                <label style={labelStyle}>Date
-                  <DateInputWithCalendar value={dpDate} onChange={(e) => setDpDate(e.target.value)} style={inputStyle} required />
-                </label>
-                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "8px" }}>
-                  <label style={labelStyle}>Opening (PKR)
-                    <input type="number" value={dpOpening} onChange={(e) => setDpOpening(e.target.value)} placeholder="0" style={inputStyle} />
-                  </label>
-                  <label style={labelStyle}>Closing (PKR)
-                    <input type="number" value={dpClosing} onChange={(e) => setDpClosing(e.target.value)} placeholder="0" style={inputStyle} />
-                  </label>
-                  <label style={labelStyle}>Receipts (PKR)
-                    <input type="number" min="0" value={dpReceipts} onChange={(e) => setDpReceipts(e.target.value)} placeholder="0" style={inputStyle} />
-                  </label>
-                  <label style={labelStyle}>Payments (PKR)
-                    <input type="number" min="0" value={dpPayments} onChange={(e) => setDpPayments(e.target.value)} placeholder="0" style={inputStyle} />
-                  </label>
-                  <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>Post-dated total (PKR)
-                    <input type="number" min="0" value={dpPostDated} onChange={(e) => setDpPostDated(e.target.value)} placeholder="0" style={inputStyle} />
-                  </label>
-                </div>
-                <button type="submit" disabled={saving} style={btnStyle}>{saving ? "Saving..." : "Save Daily Position"}</button>
-              </form>
-            </>
-          )}
-        </div>
-      </div>
-      )}
 
       {/* ── FORECAST + DEPARTMENT BUDGETS side by side ── */}
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "14px", marginBottom: "14px", alignItems: "start" }}>
