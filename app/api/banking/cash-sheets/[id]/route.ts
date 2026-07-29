@@ -2,14 +2,16 @@ import { NextRequest } from "next/server";
 import { createServiceClient } from "../../../../lib/supabase-server";
 import { requireAuth } from "../../../../lib/api-auth";
 
-// ── Auth helper ───────────────────────────────────────────────────────────────
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+
+const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
+const RESTAURANT_COMPANIES = ["BRNH", "HD", "KKJ"];
 
 async function checkBankingAccess(
   email: string,
   supabase: ReturnType<typeof createServiceClient>,
 ): Promise<boolean> {
-  const ADMIN = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
-  if (ADMIN.includes(email.toLowerCase())) return true;
+  if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members")
     .select("id")
@@ -24,6 +26,29 @@ async function checkBankingAccess(
   return perm?.can_access_banking === true;
 }
 
+// Read-only: banking users + restaurants_pnl users for restaurant companies
+async function checkReadAccess(
+  email: string,
+  supabase: ReturnType<typeof createServiceClient>,
+  company?: string,
+): Promise<boolean> {
+  if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
+  const { data: member } = await supabase
+    .from("members")
+    .select("id")
+    .eq("email", email)
+    .single();
+  if (!member) return false;
+  const { data: perm } = await supabase
+    .from("member_permissions")
+    .select("can_access_banking, can_view_restaurants_pnl")
+    .eq("member_id", member.id)
+    .single();
+  if (perm?.can_access_banking === true) return true;
+  if (perm?.can_view_restaurants_pnl === true && company && RESTAURANT_COMPANIES.includes(company)) return true;
+  return false;
+}
+
 // ── GET /api/banking/cash-sheets/[id] ─────────────────────────────────────────
 
 export async function GET(
@@ -36,10 +61,8 @@ export async function GET(
   const { id } = await context.params;
 
   const supabase = createServiceClient();
-  if (!(await checkBankingAccess(auth.email, supabase))) {
-    return Response.json({ error: "Not authorised" }, { status: 403 });
-  }
 
+  // Fetch sheet first so we can pass company to the auth check
   const { data, error } = await supabase
     .from("cash_sheet_uploads")
     .select("*, cash_sheet_transactions(*)")
@@ -48,6 +71,10 @@ export async function GET(
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   if (!data) return Response.json({ error: "Not found" }, { status: 404 });
+
+  if (!(await checkReadAccess(auth.email, supabase, data.company))) {
+    return Response.json({ error: "Not authorised" }, { status: 403 });
+  }
 
   // Split and sort transactions
   type Txn = { txn_type: string; sort_order: number; created_at: string };

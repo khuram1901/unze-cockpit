@@ -3,14 +3,16 @@ import { createServiceClient } from "../../../lib/supabase-server";
 import { requireAuth } from "../../../lib/api-auth";
 import { UTPL_COMPANY_ID, IFPL_COMPANY_ID, BRNH_COMPANY_ID, HD_COMPANY_ID, KKJ_COMPANY_ID } from "../../../lib/constants";
 
-// ── Auth helper ───────────────────────────────────────────────────────────────
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+
+const ADMIN_EMAILS = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
+const RESTAURANT_COMPANIES = ["BRNH", "HD", "KKJ"];
 
 async function checkBankingAccess(
   email: string,
   supabase: ReturnType<typeof createServiceClient>,
 ): Promise<boolean> {
-  const ADMIN = ["khuram1901@gmail.com", "k.saleem@unzegroup.com"];
-  if (ADMIN.includes(email.toLowerCase())) return true;
+  if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
   const { data: member } = await supabase
     .from("members")
     .select("id")
@@ -25,6 +27,29 @@ async function checkBankingAccess(
   return perm?.can_access_banking === true;
 }
 
+// Read-only access: banking users + restaurant-pnl users (for BRNH/HD/KKJ only)
+async function checkReadAccess(
+  email: string,
+  supabase: ReturnType<typeof createServiceClient>,
+  company?: string,
+): Promise<boolean> {
+  if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
+  const { data: member } = await supabase
+    .from("members")
+    .select("id")
+    .eq("email", email)
+    .single();
+  if (!member) return false;
+  const { data: perm } = await supabase
+    .from("member_permissions")
+    .select("can_access_banking, can_view_restaurants_pnl")
+    .eq("member_id", member.id)
+    .single();
+  if (perm?.can_access_banking === true) return true;
+  if (perm?.can_view_restaurants_pnl === true && company && RESTAURANT_COMPANIES.includes(company)) return true;
+  return false;
+}
+
 // ── GET /api/banking/cash-sheets?company=IFPL&month=2026-07 ──────────────────
 
 export async function GET(request: NextRequest) {
@@ -32,16 +57,18 @@ export async function GET(request: NextRequest) {
   if (auth instanceof Response) return auth;
 
   const supabase = createServiceClient();
-  if (!(await checkBankingAccess(auth.email, supabase))) {
-    return Response.json({ error: "Not authorised" }, { status: 403 });
-  }
 
   const { searchParams } = new URL(request.url);
   const company = searchParams.get("company") || "UTPL";
   const month = searchParams.get("month"); // e.g. "2026-07"
 
+  if (!(await checkReadAccess(auth.email, supabase, company))) {
+    return Response.json({ error: "Not authorised" }, { status: 403 });
+  }
+
   const SELECT = `id, company, sheet_date, source, pdf_storage_path,
-    opening_balance_pkr, closing_balance_pkr, notes, uploaded_by, created_at,
+    opening_balance_pkr, closing_balance_pkr, receipts_pkr, payments_pkr,
+    notes, uploaded_by, created_at,
     cash_sheet_transactions ( id, txn_type, amount_pkr )`;
 
   let result;
@@ -134,6 +161,8 @@ export async function POST(request: NextRequest) {
         sheet_date,
         opening_balance_pkr: opening_balance_pkr ?? null,
         closing_balance_pkr: closing_balance_pkr ?? null,
+        receipts_pkr: total_receipts ?? null,
+        payments_pkr: total_payments ?? null,
         notes: notes || null,
         pdf_storage_path: pdf_storage_path || null,
         uploaded_by: auth.email,

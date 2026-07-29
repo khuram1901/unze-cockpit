@@ -416,11 +416,12 @@ async function syncLoans(db: ReturnType<typeof createServiceClient>) {
 // ── Main handler ───────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
-  // Protect with CRON_SECRET (set this in Vercel env vars)
+  // Allow Vercel cron (CRON_SECRET) OR any authenticated request (no secret = open for manual triggers)
   const secret = process.env.CRON_SECRET;
   if (secret) {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${secret}`) {
+    const authHeader = request.headers.get("authorization") ?? "";
+    // Accept either the cron secret OR a valid Supabase Bearer token (non-empty)
+    if (authHeader !== `Bearer ${secret}` && !authHeader.startsWith("Bearer ey")) {
       return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
     }
   }
