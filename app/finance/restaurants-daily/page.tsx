@@ -694,7 +694,7 @@ export default function RestaurantsFinancePage() {
                               Payments
                             </div>
                             {d.payments.map((t) => (
-                              <div key=t{t.id} style={{
+                              <div key={t.id} style={{
                                 display: "flex",
                                 justifyContent: "space-between",
                                 alignItems: "center",
@@ -704,7 +704,7 @@ export default function RestaurantsFinancePage() {
                               }}>
                                 <div>
                                   <div style={{ color: COLOURS.NAVY, fontWeight: 500 }}>{t.description}</div>
-                                  {t(t.category || t.bank_account || t.reference) && (
+                                  {(t.category || t.bank_account || t.reference) && (
                                     <div style={{ fontSize: "11px", color: COLOURS.INK_400, marginTop: 2 }}>
                                       {[t.category, t.bank_account, t.reference].filter(Boolean).join(" · ")}
                                     </div>
