@@ -24,17 +24,31 @@ import {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 /**
- * FlowHCM returns dates as MM/DD/YYYY — convert to YYYY-MM-DD for Postgres.
+ * FlowHCM returns dates as MM/DD/YYYY in requests — convert to YYYY-MM-DD for Postgres.
  * If the string is already YYYY-MM-DD, return it as-is.
  */
 function parseFlwDate(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  // Already ISO format
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
-  // MM/DD/YYYY
   const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
   if (m) return `${m[3]}-${m[1]}-${m[2]}`;
   return raw.slice(0, 10);
+}
+
+/** Parse leave date format: "29-June-2026" → "2026-06-29" */
+const MONTH_MAP: Record<string, string> = {
+  January:"01", February:"02", March:"03",    April:"04",
+  May:"05",     June:"06",     July:"07",      August:"08",
+  September:"09", October:"10", November:"11", December:"12",
+};
+function parseLeaveDate(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const m = raw.match(/^(\d{1,2})-([A-Za-z]+)-(\d{4})$/);
+  if (m) {
+    const mon = MONTH_MAP[m[2]] ?? "01";
+    return `${m[3]}-${mon}-${m[1].padStart(2, "0")}`;
+  }
+  return parseFlwDate(raw);
 }
 
 async function logSync(
@@ -99,15 +113,14 @@ async function syncAttendance(db: ReturnType<typeof createServiceClient>) {
   const records = await flowhcm.getAttendance(fromDate, toDate);
 
   const rows = records.map(r => ({
-    employee_code:   r.employeeCode,
-    employee_name:   r.employeeName,
-    // API returns dates as MM/DD/YYYY — parse to YYYY-MM-DD for storage
-    attendance_date: parseFlwDate(r.attendanceDate) ?? toDate,
-    status:          r.status,
-    check_in:        r.inTime   ?? null,
-    check_out:       r.outTime  ?? null,
-    department:      r.department  ?? null,
-    station:         r.designation ?? null,   // use designation as fallback for station
+    employee_code:   String(r.EmployeeRefNo),
+    employee_name:   null,   // not provided by FlowHCM attendance API
+    attendance_date: r.ActualInDate ?? toDate,   // already YYYY-MM-DD
+    status:          r.SignIn ? "Present" : "Absent",
+    check_in:        r.ActualInTime  ?? null,
+    check_out:       r.ActualOutTime ?? null,
+    department:      null,
+    station:         r.Station ?? null,
     synced_at:       new Date().toISOString(),
   }));
 
@@ -133,31 +146,19 @@ async function syncLeave(db: ReturnType<typeof createServiceClient>) {
   const requests = await flowhcm.getLeaveRequests(fromDate, toDate);
 
   const rows = requests.map(r => {
-    // FlowHCM may use different field names for the record ID — cast to probe
-    const raw = r as Record<string, unknown>;
-    const rawId =
-      raw.id          ??
-      raw.leaveId     ??
-      raw.requestId   ??
-      raw.LeaveRequestId ??
-      raw.leaveRequestId ??
-      null;
-
-    // If no ID at all, build a stable composite key
-    const flw_id = rawId
-      ? String(rawId)
-      : `${r.employeeCode ?? "?"}_${r.fromDate ?? "?"}_${r.leaveType ?? "?"}`;
+    // No ID field in FlowHCM leave response — use stable composite key
+    const flw_id = `${r.EmployeeCode ?? "?"}_${r.FromDate ?? "?"}_${r.LeaveType ?? "?"}`;
 
     return {
       flw_id,
-      employee_code: r.employeeCode,
-      employee_name: r.employeeName,
-      leave_type:    r.leaveType,
-      from_date:     parseFlwDate(r.fromDate) ?? r.fromDate?.slice(0, 10),
-      to_date:       parseFlwDate(r.toDate)   ?? r.toDate?.slice(0, 10),
-      days:          r.days,
-      status:        r.status,
-      department:    r.department ?? null,
+      employee_code: r.EmployeeCode,
+      employee_name: null,   // not provided by FlowHCM leave API
+      leave_type:    r.LeaveType,
+      from_date:     parseLeaveDate(r.FromDate),   // "29-June-2026" → "2026-06-29"
+      to_date:       parseLeaveDate(r.ToDate),
+      days:          r.LeaveDays,
+      status:        r.Status,
+      department:    null,
       station:       null,
       synced_at:     new Date().toISOString(),
     };

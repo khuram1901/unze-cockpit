@@ -32,30 +32,31 @@ const GROUP        = process.env.FLOWHCM_GROUP        ?? "";   // e.g. "Head Gro
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type FlwAttendanceRecord = {
-  // Field names as returned by GetEmployeeAttendance — update if API differs
-  employeeCode:   string;
-  employeeName:   string;
-  attendanceDate: string;   // raw string from API (likely MM/DD/YYYY or YYYY-MM-DD)
-  inTime:         string | null;
-  outTime:        string | null;
-  status:         string;   // Present | Absent | Late | HalfDay | Leave | OFF
-  department:     string | null;
-  designation:    string | null;
-  shift:          string | null;
+  // Confirmed field names from live API response (GetEmployeeAttendance)
+  EmployeeRefNo:    number;
+  ShiftCode:        string | null;
+  ActualInDate:     string | null;   // YYYY-MM-DD
+  ActualOutDate:    string | null;   // YYYY-MM-DD
+  ActualInTime:     string | null;   // HH:MM:SS
+  ActualOutTime:    string | null;   // HH:MM:SS
+  ScheduleInDate:   string | null;
+  ScheduleOutDate:  string | null;
+  GazzettedHoliday: string | null;   // "Yes" | "No"
+  Station:          string | null;
+  SignIn:           string | null;   // "YYYY-MM-DD HH:MM:SS"
+  SignOut:          string | null;
+  TimeZone:         string | null;
+  StationCode:      string | null;
 };
 
 export type FlwLeaveRequest = {
-  // Field names as returned by GetLeaveRequest — update if API differs
-  id:           string;
-  employeeCode: string;
-  employeeName: string;
-  leaveType:    string;
-  fromDate:     string;
-  toDate:       string;
-  days:         number;
-  status:       string;   // Approved | Pending | Rejected
-  department:   string | null;
-  remarks:      string | null;
+  // Confirmed field names from live API response (GetLeaveRequest)
+  EmployeeCode: string;
+  FromDate:     string;   // "DD-Month-YYYY" e.g. "29-June-2026"
+  ToDate:       string;
+  LeaveDays:    number;
+  LeaveType:    string;
+  Status:       string;   // Approved | Rejected
 };
 
 // Placeholder types for future endpoints (recruitment, payroll, etc.)
@@ -161,9 +162,15 @@ async function flwPost<T>(
 
   const json = await res.json();
 
-  // FlowHCM wraps data in APIResponeData (their typo) as a nested array: [[{...},{...}]]
+  // Attendance: { "APIResponeData": [[{...}]] }  (their typo: "Respone" not "Response")
   if (Array.isArray(json?.APIResponeData)) {
     const inner = json.APIResponeData[0];
+    if (Array.isArray(inner)) return inner as T[];
+  }
+
+  // Leave: { "employeeLeaveRequest": [[{...}]] }
+  if (Array.isArray(json?.employeeLeaveRequest)) {
+    const inner = json.employeeLeaveRequest[0];
     if (Array.isArray(inner)) return inner as T[];
   }
 
@@ -199,7 +206,7 @@ export const flowhcm = {
       employeecode:  employeeCode,
       startdate:     toFlwDate(startDate),
       enddate:       toFlwDate(endDate),
-      employeegroup: GROUP,
+      employeegroup: "",   // "Head Group" returns empty — fetch all employees
     });
   },
 
@@ -218,7 +225,7 @@ export const flowhcm = {
       employeecode:  employeeCode,
       startdate:     toFlwDate(startDate),
       enddate:       toFlwDate(endDate),
-      employeegroup: GROUP,
+      employeegroup: "",   // fetch all employees
     });
   },
 
