@@ -6,20 +6,32 @@ export async function GET(request: Request) {
   if (auth instanceof Response) return auth;
   try {
     const supabase = createServiceClient();
-    const { data } = await supabase
+
+    // Mirror the same logic as send-email.ts: prefer NOTIFICATION_GMAIL if set
+    const notificationEmail = process.env.NOTIFICATION_GMAIL?.toLowerCase();
+    const query = supabase
+      .from("google_oauth_tokens")
+      .select("user_email, updated_at");
+
+    const { data: notifRow } = notificationEmail
+      ? await query.ilike("user_email", notificationEmail).limit(1).single()
+      : await query.order("updated_at", { ascending: false }).limit(1).single();
+
+    // Also return all accounts for reference
+    const { data: allData } = await supabase
       .from("google_oauth_tokens")
       .select("user_email, updated_at")
-      .order("created_at", { ascending: false });
+      .order("updated_at", { ascending: false });
 
-    const accounts = (data || []).map((a) => ({
+    const accounts = (allData || []).map((a) => ({
       email: a.user_email,
       lastUpdated: a.updated_at,
     }));
 
     return Response.json({
-      connected: accounts.length > 0,
-      email: accounts[0]?.email || null,
-      lastUpdated: accounts[0]?.lastUpdated || null,
+      connected: !!notifRow,
+      email: notifRow?.user_email || null,
+      lastUpdated: notifRow?.updated_at || null,
       accounts,
     });
   } catch {
