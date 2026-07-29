@@ -4,6 +4,18 @@ Most recent entry at the top. **Append-only — never delete or edit old entries
 
 ---
 
+## 2026-07-29 (later) — Forecast calculation checks + permanent upload record
+
+Khuram: "tests the calculations, to ensure the correct sums are done and then records the figures on the records." The forecast parser now recomputes every summary in the file per month — total inflow = sum of inflow lines, total outflow = sum of outflow lines, net = inflow − outflow, closing = opening + net, and month-chaining (closing → next opening, warning tier) — against the file's own TOTAL/NET/CLOSING rows (captured for validation, never stored as categories). Blank summary rows warn ("fill the formula"); filled ones that disagree with their parts are BLOCKING: the upload is rejected with exact figures and nothing reaches `monthly_budgets`. Every upload attempt is permanently recorded (migration 153: `forecast_uploads` + `forecast_upload_checks`, RLS, anon-revoked `get_forecast_upload_log` RPC) with who uploaded, when, and every check result. The Finance page shows the full ✓/✗/⚠ check list under the upload button. Verified against Sania's real Jul-26 file (all 4 checks pass — her formulas were right) and a deliberately corrupted copy (rejected: "total outflow should be 60.06m, file shows 65.06m"). tsc + eslint clean.
+
+---
+
+## 2026-07-29 — Cash flow forecast upload fixes (Sania's Jul-26 file) + build unblock
+
+Sania's single-month Jul-26 forecast (correctly built from the new template) was rejected with "could not find month headers": the parser demanded ≥2 month serials in the header row before recognising it. Fixed to accept ≥1 — a one-month forecast is legitimate. Testing her real file also caught a second pre-existing bug: the **NET CASH FLOW summary row was being ingested as an outflow category** (would have double-counted 21.67m of outflows in `monthly_budgets`); the skip list now covers NET CASH alongside TOTAL/CLOSING. Verified: her file parses to 12 clean categories (inflows 38.39m, outflows 60.06m incl. Pole/Meter project sections, net −21.67m matching the sheet's own figure). Also fixed a build-blocking TS error in MemberDrawer.tsx (`setPerms` Partial-spread widening, from the parallel members-page work) with a minimal cast. tsc + eslint clean.
+
+---
+
 ## 2026-07-28 — Restaurants cash sheet support + Restaurants Finance page
 
 Extended the Banking Cash Sheet tab and backend to support all three restaurant companies (Baranh, Haute Dolci, K&K Jhang), and built a new Finance page for their daily cash positions.

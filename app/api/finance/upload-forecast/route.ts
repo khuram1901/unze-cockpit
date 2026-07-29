@@ -27,6 +27,48 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient();
 
+    // ── Record the upload + its calculation checks (permanent log) ──
+    const checksPassed = parsed.checks.filter((c) => c.passed).length;
+    const checksFailed = parsed.checks.filter((c) => !c.passed && c.blocking).length;
+    const warnings = parsed.checks.filter((c) => !c.passed && !c.blocking).length;
+    const { data: uploadLog } = await supabase
+      .from("forecast_uploads")
+      .insert({
+        company_id: companyId,
+        file_name: file.name.slice(0, 200),
+        status: parsed.accepted ? "accepted" : "rejected",
+        months: parsed.months.length,
+        categories: parsed.rows.length,
+        checks_passed: checksPassed,
+        checks_failed: checksFailed,
+        warnings,
+        uploaded_by: auth.email,
+      })
+      .select("id")
+      .single();
+    if (uploadLog) {
+      await supabase.from("forecast_upload_checks").insert(
+        parsed.checks.map((c) => ({
+          upload_id: uploadLog.id,
+          check_name: c.name.slice(0, 200),
+          expected: Number.isFinite(c.expected) ? c.expected : null,
+          reported: Number.isFinite(c.reported) ? c.reported : null,
+          diff: Number.isFinite(c.diff) ? c.diff : null,
+          passed: c.passed,
+          blocking: c.blocking,
+        })),
+      );
+    }
+
+    // An internally inconsistent file never reaches the dashboard: if the
+    // file's own totals disagree with the sum of their lines, reject.
+    if (!parsed.accepted) {
+      return Response.json({
+        error: `The file's own calculations don't add up — ${checksFailed} check${checksFailed > 1 ? "s" : ""} failed. Nothing was saved.`,
+        checks: parsed.checks,
+      }, { status: 422 });
+    }
+
     // Flatten into monthly_budgets rows
     const upsertRows = parsed.rows.flatMap((row) =>
       row.months.map((m) => ({
@@ -88,6 +130,7 @@ export async function POST(request: NextRequest) {
       categories: parsed.rows.length,
       totalRows: upsertRows.length,
       quarterRows: quarterRows.length,
+      checks: parsed.checks,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

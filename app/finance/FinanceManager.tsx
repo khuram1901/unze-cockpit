@@ -161,6 +161,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
     categories?: number;
     totalRows?: number;
     error?: string;
+    checks?: { name: string; expected: number; reported: number; diff: number; passed: boolean; blocking: boolean }[];
   } | null>(null);
 
   // Manual forecast entry state
@@ -199,7 +200,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
       });
       const data = await res.json();
       if (!res.ok) {
-        setForecastResult({ success: false, error: data.error });
+        setForecastResult({ success: false, error: data.error, checks: data.checks });
         showMsg("Error: " + (data.error || "Upload failed"));
       } else {
         setForecastResult({
@@ -207,6 +208,7 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
           months: data.months,
           categories: data.categories,
           totalRows: data.totalRows,
+          checks: data.checks,
         });
         showMsg("Cash flow forecast uploaded — " + data.categories + " categories across " + data.months.length + " months.");
         setForecastFile(null);
@@ -881,6 +883,18 @@ export default function FinanceManager({ companyId, companyName }: { companyId: 
               {forecastResult && (
                 <div style={{ marginTop: "6px", fontSize: "12px", color: forecastResult.success ? GREEN : RED, fontWeight: 600 }}>
                   {forecastResult.success ? `Saved: ${forecastResult.categories} categories, ${forecastResult.totalRows} rows` : forecastResult.error}
+                </div>
+              )}
+              {forecastResult && (forecastResult.checks || []).length > 0 && (
+                <div style={{ marginTop: "4px", fontSize: "12px", lineHeight: 1.6 }}>
+                  {(forecastResult.checks || []).map((c, i) => (
+                    <div key={i} style={{ color: c.passed ? GREEN : c.blocking ? RED : AMBER }}>
+                      {c.passed ? "✓" : c.blocking ? "✗" : "⚠"} {c.name}
+                      {!c.passed && (c.expected !== 0 || c.reported !== 0)
+                        ? ` — should be ${(c.expected / 1e6).toFixed(2)}m, file shows ${(c.reported / 1e6).toFixed(2)}m`
+                        : ""}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
