@@ -416,6 +416,22 @@ function SidebarContent({
           )}
         </div>
 
+        {/* Collapse toggle — desktop only */}
+        {!isMobile && (
+          <button
+            onClick={() => setCollapsed((v) => !v)}
+            style={sideItemStyle(false)}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>
+              {collapsed ? "»" : "«"}
+            </span>
+            {!collapsed && <span style={{ color: "var(--text-muted)" }}>Collapse</span>}
+          </button>
+        )}
+
         {/* Sign out */}
         <button
           onClick={onSignOut}
@@ -481,9 +497,7 @@ export default function SidebarLayout({
   const { theme, toggleTheme } = useTheme();
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  // Hover-to-expand: sidebar is always icon-only (collapsed) at rest.
-  // Hovering over it instantly reveals the full panel overlaying the content.
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   // ── Collapsible sidebar groups ────────────────────────────────────
   // Default: only Overview pinned open. User's choices saved to localStorage.
@@ -522,7 +536,10 @@ export default function SidebarLayout({
 
   useEffect(() => {
     function check() {
-      setIsMobile(window.innerWidth < 768);
+      const w = window.innerWidth;
+      setIsMobile(w < 768);
+      if (w < 768) setCollapsed(false);
+      else if (w < 1024) setCollapsed(true);
     }
     check();
     window.addEventListener("resize", check);
@@ -561,9 +578,7 @@ export default function SidebarLayout({
     alwaysItems.push({ permKey: "_pa", title: "PA Dashboard", subtitle: "", href: "/pa", icon: "⚡", group: "_top" });
   }
 
-  // Content always reserves space for the icon column only.
-  // The sidebar overlays on top when expanded — content never shifts.
-  const sidebarW = (isMobile || entryOnly) ? 0 : SIDEBAR_COLLAPSED_W;
+  const sidebarW = (isMobile || entryOnly) ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;
 
   const initials = userName
     .split(" ")
@@ -588,21 +603,16 @@ export default function SidebarLayout({
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-page)" }}>
       {/* ── Desktop sidebar (hidden for daily-entry-only users) ── */}
       {!isMobile && !entryOnly && (
-        <aside
-          style={{
-            position: "fixed", top: 0, left: 0, bottom: 0,
-            width: `${sidebarExpanded ? SIDEBAR_W : SIDEBAR_COLLAPSED_W}px`,
-            zIndex: 30,
-            overflow: "hidden",
-            borderRight: "1px solid var(--sidebar-border)",
-            boxShadow: sidebarExpanded ? "4px 0 20px rgba(0,0,0,0.12)" : "none",
-          }}
-          onMouseEnter={() => setSidebarExpanded(true)}
-          onMouseLeave={() => setSidebarExpanded(false)}
-        >
+        <aside style={{
+          position: "fixed", top: 0, left: 0, bottom: 0,
+          width: `${sidebarW}px`,
+          zIndex: 30,
+          overflow: "hidden",
+          borderRight: "1px solid var(--sidebar-border)",
+        }}>
           <SidebarContent
-            collapsed={!sidebarExpanded}
-            setCollapsed={() => {}}
+            collapsed={collapsed}
+            setCollapsed={setCollapsed}
             isMobile={isMobile}
             entryOnly={entryOnly}
             alwaysItems={alwaysItems}
@@ -639,7 +649,7 @@ export default function SidebarLayout({
           }}>
             <SidebarContent
               collapsed={false}
-              setCollapsed={() => {}}
+              setCollapsed={setCollapsed}
               isMobile={isMobile}
               entryOnly={entryOnly}
               alwaysItems={alwaysItems}
