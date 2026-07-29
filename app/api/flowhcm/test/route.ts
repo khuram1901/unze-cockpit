@@ -118,7 +118,7 @@ export async function GET() {
         const lj = JSON.parse(leaveRaw);
         const arr = Array.isArray(lj?.APIResponeData?.[0]) ? lj.APIResponeData[0] : [];
         leaveParsed = arr.slice(0, 2);
-      } catch { /* ignore */ }
+      } catch (_e) { /* ignore parse error */ }
       leaveResult = { endpoint: "GetLeaveRequest", status: r.status, first2Records: leaveParsed, rawSlice: leaveRaw.slice(0, 1000) };
     } catch (e) { leaveError = String(e); }
 
