@@ -100,6 +100,11 @@ function currentYM(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function todayISO(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
 function prevYM(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
   return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
@@ -122,7 +127,7 @@ function netColour(net: number): string {
 }
 
 function shortDate(dateStr: string): string {
-  // "2026-07-07" ⁒ "7 Jul"
+  // "2026-07-07" → "7 Jul"
   return formatDateUK(dateStr).slice(0, 6).trim().replace(/^0/, "");
 }
 
@@ -151,7 +156,7 @@ export default function CashSheetTab() {
   // Upload modal
   const [showUpload, setShowUpload] = useState(false);
   const [uploadForm, setUploadForm] = useState({
-    sheet_date: "", opening_balance_pkr: "", closing_balance_pkr: "", notes: "",
+    sheet_date: todayISO(), opening_balance_pkr: "", closing_balance_pkr: "", notes: "",
   });
   const [draftTxns, setDraftTxns] = useState<DraftTxn[]>([]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -325,7 +330,7 @@ export default function CashSheetTab() {
     setShowUpload(false);
     setDragOver(false);
     setSaving(false);
-    setUploadForm({ sheet_date: "", opening_balance_pkr: "", closing_balance_pkr: "", notes: "" });
+    setUploadForm({ sheet_date: todayISO(), opening_balance_pkr: "", closing_balance_pkr: "", notes: "" });
     setDraftTxns([]);
     setUploadFile(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -920,8 +925,7 @@ export default function CashSheetTab() {
                 </div>
               </div>
 
-              {/* PDF upload
-— drag & drop zone */}
+              {/* PDF upload — drag & drop zone */}
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>Cash Sheet PDF (optional)</label>
                 <div
