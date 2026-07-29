@@ -42,6 +42,8 @@ type CashSheetDetail = Omit<CashSheetSummary, "cash_sheet_transactions"> & {
   receipts: Transaction[];
   payments: Transaction[];
   pdf_signed_url: string | null;
+  receipts_pkr: number | null;
+  payments_pkr: number | null;
 };
 
 type DraftTxn = {
@@ -81,7 +83,10 @@ const PAYMENT_CATEGORIES = [
 
 function pkr(amount: number | null | undefined): string {
   if (amount == null) return "—";
-  return "PKR " + Math.round(amount).toLocaleString("en-PK");
+  const rounded = Math.round(amount);
+  const abs = Math.abs(rounded);
+  const sign = rounded < 0 ? "-" : "";
+  return sign + "PKR " + abs.toLocaleString("en-PK");
 }
 
 function monthLabel(ym: string): string {
@@ -117,7 +122,7 @@ function netColour(net: number): string {
 }
 
 function shortDate(dateStr: string): string {
-  // "2026-07-07" → "7 Jul"
+  // "2026-07-07" ⁒ "7 Jul"
   return formatDateUK(dateStr).slice(0, 6).trim().replace(/^0/, "");
 }
 
@@ -746,34 +751,40 @@ export default function CashSheetTab() {
                 <div style={{ overflowY: "auto", padding: "16px 20px", flex: 1 }}>
 
                   {/* Balance summary */}
-                  {(detail.opening_balance_pkr != null || detail.closing_balance_pkr != null) && (
-                    <div style={{
-                      display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-                      gap: "10px", marginBottom: "18px",
-                    }}>
-                      {[
-                        { label: "Opening Balance", value: detail.opening_balance_pkr, color: COLOURS.SLATE },
-                        { label: "Closing Balance", value: detail.closing_balance_pkr, color: COLOURS.SLATE },
-                        {
-                          label: "Balance Change",
-                          value: (detail.closing_balance_pkr ?? 0) - (detail.opening_balance_pkr ?? 0),
-                          color: netColour((detail.closing_balance_pkr ?? 0) - (detail.opening_balance_pkr ?? 0)),
-                        },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} style={{
-                          padding: "10px 12px", borderRadius: "8px",
-                          backgroundColor: "#FAFBFD", border: `1px solid ${COLOURS.HAIRLINE}`,
-                        }}>
-                          <div style={{ fontSize: "10px", color: COLOURS.SLATE, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                            {label}
+                  {(detail.opening_balance_pkr != null || detail.closing_balance_pkr != null || detail.receipts_pkr != null || detail.payments_pkr != null) && (() => {
+                    const hasParsed = detail.receipts_pkr != null || detail.payments_pkr != null;
+                    const tiles = [
+                      { label: "Opening Balance", value: detail.opening_balance_pkr, color: COLOURS.SLATE },
+                      ...(hasParsed ? [
+                        { label: "Receipts", value: detail.receipts_pkr, color: COLOURS.GREEN },
+                        { label: "Payments", value: detail.payments_pkr, color: COLOURS.RED },
+                      ] : []),
+                      { label: "Closing Balance", value: detail.closing_balance_pkr, color: COLOURS.SLATE },
+                      {
+                        label: "Net Change",
+                        value: (detail.closing_balance_pkr ?? 0) - (detail.opening_balance_pkr ?? 0),
+                        color: netColour((detail.closing_balance_pkr ?? 0) - (detail.opening_balance_pkr ?? 0)),
+                      },
+                    ];
+                    const cols = tiles.length === 5 ? "1fr 1fr 1fr 1fr 1fr" : "1fr 1fr 1fr";
+                    return (
+                      <div style={{ display: "grid", gridTemplateColumns: cols, gap: "10px", marginBottom: "18px" }}>
+                        {tiles.map(({ label, value, color }) => (
+                          <div key={label} style={{
+                            padding: "10px 12px", borderRadius: "8px",
+                            backgroundColor: "#FAFBFD", border: `1px solid ${COLOURS.HAIRLINE}`,
+                          }}>
+                            <div style={{ fontSize: "10px", color: COLOURS.SLATE, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                              {label}
+                            </div>
+                            <div style={{ fontSize: "15px", fontWeight: 700, color, marginTop: "4px" }}>
+                              {pkr(value)}
+                            </div>
                           </div>
-                          <div style={{ fontSize: "15px", fontWeight: 700, color, marginTop: "4px" }}>
-                            {pkr(value)}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {/* Receipts */}
                   <SectionHeader
@@ -909,7 +920,8 @@ export default function CashSheetTab() {
                 </div>
               </div>
 
-              {/* PDF upload — drag & drop zone */}
+              {/* PDF upload
+— drag & drop zone */}
               <div style={{ marginBottom: "14px" }}>
                 <label style={labelStyle}>Cash Sheet PDF (optional)</label>
                 <div
