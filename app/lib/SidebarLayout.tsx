@@ -178,12 +178,13 @@ function MobileSidebarContent({
 }) {
   const mobileItemStyle = (active: boolean): React.CSSProperties => ({
     display: "flex", alignItems: "center", gap: "10px",
-    padding: "9px 16px",
+    padding: "12px 16px",          // 44px touch target (12+12+~20 line height)
+    minHeight: "44px",
     backgroundColor: active ? COLOURS.NAVY : "transparent",
     borderLeft: `3px solid ${active ? COLOURS.BLUE : "transparent"}`,
     color: active ? "#fff" : "var(--text-sidebar)",
     textDecoration: "none",
-    fontSize: "14px",
+    fontSize: "15px",
     fontWeight: active ? 500 : 400,
   });
 
@@ -193,10 +194,13 @@ function MobileSidebarContent({
       backgroundColor: "var(--bg-sidebar)",
       display: "flex", flexDirection: "column",
       overflowY: "auto",
+      // iOS momentum scrolling + prevent background scroll
+      WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"],
+      overscrollBehavior: "contain",
     }}>
-      {/* Header */}
+      {/* Header — pad top for notch/Dynamic Island */}
       <div style={{
-        padding: "20px 16px 14px",
+        padding: "max(20px, calc(env(safe-area-inset-top) + 12px)) 16px 14px",
         borderBottom: "1px solid var(--sidebar-border)",
         display: "flex", alignItems: "center", gap: "10px",
       }}>
@@ -261,24 +265,28 @@ function MobileSidebarContent({
         })}
       </nav>
 
-      {/* Footer */}
-      <div style={{ borderTop: "1px solid var(--sidebar-border)", padding: "8px 0" }}>
+      {/* Footer — pad bottom for iPhone home indicator */}
+      <div style={{
+        borderTop: "1px solid var(--sidebar-border)",
+        padding: "4px 0",
+        paddingBottom: "max(8px, env(safe-area-inset-bottom))",
+      }}>
         <button onClick={toggleTheme} style={{
-          display: "flex", alignItems: "center", gap: "10px", padding: "9px 16px",
-          width: "100%", background: "none", border: "none", cursor: "pointer",
-          color: "var(--text-sidebar)", fontSize: "14px",
+          display: "flex", alignItems: "center", gap: "10px", padding: "12px 16px",
+          minHeight: "44px", width: "100%", background: "none", border: "none",
+          cursor: "pointer", color: "var(--text-sidebar)", fontSize: "15px",
         }}>
-          <span style={{ fontSize: "16px", width: "20px", textAlign: "center" }}>
+          <span style={{ fontSize: "18px", width: "20px", textAlign: "center" }}>
             {theme === "light" ? "🌙" : "☀️"}
           </span>
           <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>
         </button>
         <button onClick={onSignOut} style={{
-          display: "flex", alignItems: "center", gap: "10px", padding: "9px 16px",
-          width: "100%", background: "none", border: "none", cursor: "pointer",
-          color: COLOURS.RED, fontSize: "14px",
+          display: "flex", alignItems: "center", gap: "10px", padding: "12px 16px",
+          minHeight: "44px", width: "100%", background: "none", border: "none",
+          cursor: "pointer", color: COLOURS.RED, fontSize: "15px",
         }}>
-          <span style={{ fontSize: "16px", width: "20px", textAlign: "center" }}>↪</span>
+          <span style={{ fontSize: "18px", width: "20px", textAlign: "center" }}>↪</span>
           <span>Sign Out</span>
         </button>
       </div>
@@ -353,6 +361,16 @@ export default function SidebarLayout({
   }, []);
 
   useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
+
+  // Lock body scroll when mobile menu is open (prevents background scroll on iOS)
+  useEffect(() => {
+    if (isMobile && mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [isMobile, mobileMenuOpen]);
 
   // Build visible pages from registry + permissions
   const visibleCards = userCtx ? PAGE_REGISTRY.filter((card) => isCardVisible(card, userCtx)) : [];
@@ -575,7 +593,7 @@ export default function SidebarLayout({
           />
           <aside style={{
             position: "fixed", top: 0, left: 0, bottom: 0,
-            width: "280px", zIndex: 50,
+            width: "min(280px, 85vw)", zIndex: 50,
             boxShadow: "4px 0 20px rgba(0,0,0,0.3)",
           }}>
             <MobileSidebarContent
@@ -633,7 +651,7 @@ export default function SidebarLayout({
               }}>
                 {pageTitle}
               </h1>
-              {pageSubtitle && (
+              {pageSubtitle && !isMobile && (
                 <p style={{
                   fontSize: "15px", color: "var(--text-secondary)",
                   margin: "2px 0 0", lineHeight: 1.3,
@@ -672,7 +690,9 @@ export default function SidebarLayout({
               {searchOpen && searchResults.length > 0 && (
                 <div style={{
                   position: "absolute", top: "calc(100% + 6px)", right: 0,
-                  minWidth: "280px", maxWidth: "380px",
+                  width: isMobile ? "calc(100vw - 32px)" : undefined,
+                  minWidth: isMobile ? undefined : "280px",
+                  maxWidth: isMobile ? undefined : "380px",
                   backgroundColor: "var(--bg-card)",
                   border: "1px solid var(--border-color)", borderRadius: "12px",
                   boxShadow: "var(--shadow-md)", zIndex: 30, overflow: "hidden",
