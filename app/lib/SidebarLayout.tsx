@@ -362,10 +362,6 @@ export default function SidebarLayout({
   const alwaysItems: PageCard[] = [
     { permKey: "_home", title: "Home", subtitle: "Your daily brief", href: "/welcome", icon: "🏠", group: "_top" },
   ];
-  const canSeeExecDash = userCtx && !isPAUser && !entryOnly && canViewExecutiveDashboard(userCtx);
-  if (canSeeExecDash) {
-    alwaysItems.push({ permKey: "_exec", title: "Executive Dashboard", subtitle: "", href: "/home", icon: "📊", group: "_top" });
-  }
   if (isPAUser) {
     alwaysItems.push({ permKey: "_pa", title: "PA Dashboard", subtitle: "", href: "/pa", icon: "⚡", group: "_top" });
   }
