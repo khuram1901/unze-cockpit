@@ -214,11 +214,19 @@ const PERM_SECTIONS: PermSection[] = [
   },
 ];
 
+/* ── Permission sections — sorted A–Z by title, items A–Z within each ── */
+
+const SORTED_PERM_SECTIONS: PermSection[] = [...PERM_SECTIONS]
+  .sort((a, b) => a.title.localeCompare(b.title))
+  .map((s) => ({ ...s, items: [...s.items].sort((a, b) => a.label.localeCompare(b.label)) }));
+
 /* ── Widget registry helpers ──────────────────────────────────────────── */
 
-const PER_COMPANY_WIDGETS = WIDGET_REGISTRY.filter((w) => w.perCompany);
+const PER_COMPANY_WIDGETS = WIDGET_REGISTRY
+  .filter((w) => w.perCompany)
+  .sort((a, b) => a.label.localeCompare(b.label));
 const PLAIN_WIDGETS = WIDGET_REGISTRY.filter((w) => !w.perCompany);
-const PLAIN_WIDGET_PAGES = [...new Set(PLAIN_WIDGETS.map((w) => w.page))];
+const PLAIN_WIDGET_PAGES = [...new Set(PLAIN_WIDGETS.map((w) => w.page))].sort();
 
 /* ── Department / BU helpers ──────────────────────────────────────────── */
 
@@ -802,7 +810,7 @@ export default function MemberDrawer({
             )}
 
             {/* ── Permission sections ───────────────────────────────── */}
-            {!isAdminRole && PERM_SECTIONS.map((section) => {
+            {!isAdminRole && SORTED_PERM_SECTIONS.map((section) => {
               const count = onCount(section.items);
               const isOpen = openSections.has(section.title);
               return (
@@ -924,7 +932,9 @@ export default function MemberDrawer({
                         }
                         return true;
                       }).map((page) => {
-                        const pageWidgets = PLAIN_WIDGETS.filter((w) => w.page === page);
+                        const pageWidgets = PLAIN_WIDGETS
+                          .filter((w) => w.page === page)
+                          .sort((a, b) => a.label.localeCompare(b.label));
                         const isPageOpen = openWidgetPages.has(page);
                         const overrideHere = pageWidgets.filter((w) => w.key in widgetOverrides).length;
                         return (
