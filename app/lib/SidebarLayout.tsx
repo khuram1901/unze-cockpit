@@ -100,10 +100,10 @@ const SIDEBAR_W  = ACTIVITY_W + PANEL_W; // 228px total
 
 // ── Groups shown in the activity bar (in display order) ─────────
 const SIDEBAR_GROUPS = [
-  "Operations",
   "Departments",
   "Finance",
   "My Workspace",
+  "Operations",
   "Settings",
 ] as const;
 type SidebarGroup = typeof SIDEBAR_GROUPS[number];
@@ -231,7 +231,9 @@ function MobileSidebarContent({
 
         {/* Groups */}
         {SIDEBAR_GROUPS.map((groupName) => {
-          const groupCards = visibleCards.filter((c) => c.group === groupName);
+          const groupCards = visibleCards
+            .filter((c) => c.group === groupName)
+            .sort((a, b) => a.title.localeCompare(b.title));
           if (groupCards.length === 0) return null;
           return (
             <div key={groupName}>
@@ -376,8 +378,10 @@ export default function SidebarLayout({
     ? activeGroup
     : (visibleGroups[0] ?? "Finance");
 
-  // Pages in the current panel
-  const panelPages = visibleCards.filter((c) => c.group === effectiveGroup);
+  // Pages in the current panel — sorted A–Z
+  const panelPages = visibleCards
+    .filter((c) => c.group === effectiveGroup)
+    .sort((a, b) => a.title.localeCompare(b.title));
 
   const initials = userName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "U";
   function isActive(href: string) { return pathname === href; }
