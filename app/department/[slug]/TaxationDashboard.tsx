@@ -181,6 +181,7 @@ export default function TaxationDashboard() {
   const [editForm, setEditForm] = useState<EditForm | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(false);
+  const [incompleteBannerOpen, setIncompleteBannerOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [formData, setFormData] = useState<Record<string, string>>({});
   const { ctx: widgetCtx } = useUserCtx();
@@ -319,6 +320,21 @@ export default function TaxationDashboard() {
   const highExposure = pending.filter((i) => (i.financial_exposure || 0) > 500000);
   const resolved = items.filter((i) => i.resolution_status !== "pending").length;
 
+  // ── Incomplete notices (active + pending notices missing required fields) ──
+  function getMissingFields(n: Notice): string[] {
+    const missing: string[] = [];
+    if (!n.notice_status)      missing.push("Status (Order / Notice / Show Cause)");
+    if (!n.hearing_deadline)   missing.push("Hearing deadline");
+    if (!n.received_date)      missing.push("Received date");
+    if (!n.consultant_name)    missing.push("Consultant");
+    if (!n.financial_exposure) missing.push("Financial exposure");
+    if (!n.legal_stage)        missing.push("Legal stage");
+    return missing;
+  }
+  const incompleteNotices = items.filter(
+    (n) => n.is_active && n.resolution_status === "pending" && getMissingFields(n).length > 0
+  );
+
   // ── Active filter ──
   const filteredItems = items.filter((i) => {
     if (activeFilter === "active") return i.is_active;
@@ -385,6 +401,58 @@ export default function TaxationDashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Incomplete Notices Banner */}
+      {wv("dept_tax.attention_banner", true) && !loading && canManage && incompleteNotices.length > 0 && (
+        <div style={{ ...WARNING_BANNER_STYLE, borderColor: COLOURS.AMBER, marginTop: "10px" }}>
+          <div
+            onClick={() => setIncompleteBannerOpen(!incompleteBannerOpen)}
+            style={{ padding: "12px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "20px" }}>📋</span>
+              <div>
+                <div style={{ fontSize: "14px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>
+                  {incompleteNotices.length} notice{incompleteNotices.length > 1 ? "s" : ""} with incomplete details
+                </div>
+                <div style={{ fontSize: "12px", color: WARNING_TITLE_COLOR, marginTop: "1px" }}>
+                  These notices are missing required fields — please open each one and fill in the details
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: WARNING_TITLE_COLOR }}>{incompleteBannerOpen ? "▲" : "▼"}</span>
+          </div>
+          {incompleteBannerOpen && (
+            <div style={WARNING_BANNER_INNER}>
+              {incompleteNotices.map((n) => {
+                const missing = getMissingFields(n);
+                return (
+                  <div
+                    key={n.id}
+                    onClick={() => { setExpandedId(n.id); setIncompleteBannerOpen(false); }}
+                    style={{ padding: "10px 16px 10px 48px", borderBottom: `1px solid ${COLOURS.TRACK}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "14px", fontWeight: 600, color: COLOURS.NAVY, marginBottom: "3px" }}>{n.title}</div>
+                      <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginBottom: "4px" }}>{n.company_name || "—"}</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                        {missing.map((f) => (
+                          <span key={f} style={{ fontSize: "11px", fontWeight: 600, padding: "2px 7px", borderRadius: RADII.XS, backgroundColor: COLOURS.DANGER_SOFT, color: COLOURS.RED, whiteSpace: "nowrap" }}>
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: COLOURS.AMBER, whiteSpace: "nowrap", marginTop: "2px" }}>
+                      {missing.length} field{missing.length > 1 ? "s" : ""} missing →
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
