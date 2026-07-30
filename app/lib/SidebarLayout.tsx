@@ -6,11 +6,11 @@ import { usePathname } from "next/navigation";
 import { useTheme } from "./ThemeProvider";
 import { COLOURS } from "./SharedUI";
 import {
-  PAGE_REGISTRY, GROUP_ORDER,
+  PAGE_REGISTRY,
   type PageCard,
 } from "./pageRegistry";
 import {
-  isAdminTier, canViewFinance, canEditFinance, financeCompanies,
+  canViewFinance, canEditFinance, financeCompanies,
   canViewExecutiveDashboard, canViewOperations, canViewReceivables,
   canSeeAllTasks, canCreateAssignments, canReviewTasks,
   canManageRecurringTasks, canManageCalendarRequests, canSeeAllMinutes,
@@ -20,11 +20,11 @@ import {
   canViewPADashboard, canViewInvestments,
   canViewStock, canManageStock, canViewGuarantees, canViewTaxAccounts,
   canViewIfplPnl, canViewRestaurantsPnl,
-  isMainAdmin, isCEO, isSecondaryCEO, isDailyEntryOnly,
+  isMainAdmin, isSecondaryCEO, isDailyEntryOnly,
   type UserCtx,
 } from "./permissions";
 
-// ── Permission check (mirrors home page logic exactly) ──────────
+// ── Permission map (mirrors home page logic exactly) ─────────────
 const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_view_executive_dashboard: canViewExecutiveDashboard,
   can_view_operations_dashboard: canViewOperations,
@@ -47,7 +47,6 @@ const PERM_FUNC: Record<string, (ctx: UserCtx) => boolean> = {
   can_view_members: canManageMembers,
   can_add_members: canAddMembers,
   can_view_audit_log: canViewAuditLog,
-
   can_import_export: canImportExport,
   can_access_daily_entry: canAccessDailyEntry,
   can_access_admin_ops: canAccessAdminOps,
@@ -69,18 +68,10 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   if (card.permKey === "_admin_settings") return isMainAdmin(ctx);
   if (card.permKey === "_backups") return ["khuram1901@gmail.com", "k.saleem@unzegroup.com"].includes((ctx.email || "").toLowerCase());
   if (card.permKey.startsWith("_")) return true;
-  const isPACtx = ctx.role === "Executive" || (ctx.email || "").toLowerCase() === "pa.ceo@unze.co.uk";
-  // PA dashboard + executive dashboard are added manually via alwaysItems; hide from registry to avoid duplicates
+  // PA dashboard + exec dashboard added via alwaysItems — hide from registry to avoid duplicates
   if (card.permKey === "can_view_pa_dashboard") return false;
   if (card.permKey === "can_view_executive_dashboard") return false;
-  // Opening Balances reuses the "can_edit_finance" permKey (it has no
-  // permission key of its own yet) and isn't scoped by company like the
-  // Finance pages are, so it can't be handled by the scope check below —
-  // Kamran is hardcoded out of it specifically. Everything else that used
-  // to be hardcoded to his email here (hiding Unze Trading finance) is now
-  // handled by the scope check below instead, driven by his
-  // finance_company_scope matrix setting (16 Jul 2026) rather than his
-  // identity — so it works for anyone scoped to one company, not just him.
+  // Opening Balances: secondary CEO (Kamran) can't edit finance
   if (isSecondaryCEO(ctx) && card.permKey === "can_edit_finance") return false;
   if (card.permKey === "can_view_finance_utpl") {
     if (!canViewFinance(ctx)) return false;
@@ -102,86 +93,67 @@ function isCardVisible(card: PageCard, ctx: UserCtx): boolean {
   return false;
 }
 
-// ── Sidebar nav groups ────────────────────────────────────────────
+// ── Layout constants ─────────────────────────────────────────────
+const ACTIVITY_W = 52;   // icon strip
+const PANEL_W    = 176;  // pages list
+const SIDEBAR_W  = ACTIVITY_W + PANEL_W; // 228px total
+
+// ── Groups shown in the activity bar (in display order) ─────────
 const SIDEBAR_GROUPS = [
-  "Overview",
   "Operations",
   "Departments",
   "Finance",
   "My Workspace",
   "Settings",
 ] as const;
+type SidebarGroup = typeof SIDEBAR_GROUPS[number];
 
-// ── Sidebar width ────────────────────────────────────────────────
-const SIDEBAR_W = 256;
-const SIDEBAR_COLLAPSED_W = 68;
+const GROUP_META: Record<SidebarGroup, { icon: string }> = {
+  Operations:     { icon: "🏗️" },
+  Departments:    { icon: "🏛️" },
+  Finance:        { icon: "💰" },
+  "My Workspace": { icon: "📋" },
+  Settings:       { icon: "⚙️" },
+};
 
-// ── NavItem (module-level — must NOT be defined inside SidebarLayout) ──
-// Defining components inside another component creates a new function reference
-// on every render, causing React to unmount/remount the child (resetting scroll).
-function NavItem({ item, active, collapsed: isCollapsed }: { item: PageCard; active: boolean; collapsed: boolean }) {
+// ── Page link inside the panel ───────────────────────────────────
+function PanelItem({ item, active }: { item: PageCard; active: boolean }) {
   return (
     <Link
       href={item.href}
-      title={isCollapsed ? item.title : undefined}
-      onClick={item.permKey === "_exec" ? () => { if (typeof window !== "undefined") sessionStorage.setItem("exec_nav", "1"); } : undefined}
+      onClick={item.permKey === "_exec"
+        ? () => { if (typeof window !== "undefined") sessionStorage.setItem("exec_nav", "1"); }
+        : undefined}
       style={{
-        display: "flex", alignItems: "center", gap: "10px",
-        justifyContent: isCollapsed ? "center" : "flex-start",
-        padding: isCollapsed ? "8px" : "8px 10px 8px 7px",
-        borderRadius: "8px",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        padding: "7px 10px 7px 9px",
+        marginBottom: "1px",
+        borderRadius: "7px",
+        borderLeft: `3px solid ${active ? COLOURS.BLUE : "transparent"}`,
         backgroundColor: active ? COLOURS.NAVY : "transparent",
-        borderLeft: active && !isCollapsed ? `3px solid ${COLOURS.BLUE}` : "3px solid transparent",
-        color: active ? "#FFFFFF" : "var(--text-sidebar)",
+        color: active ? "#ffffff" : "var(--text-sidebar)",
         textDecoration: "none",
-        fontSize: "13.5px",
+        fontSize: "13px",
         fontWeight: active ? 500 : 400,
-        fontFamily: "var(--font-sans, Inter, sans-serif)",
-        transition: "background-color 0.15s ease",
-        marginBottom: "2px",
+        lineHeight: 1.3,
       }}
       onMouseEnter={(e) => { if (!active) e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
       onMouseLeave={(e) => { if (!active) e.currentTarget.style.backgroundColor = "transparent"; }}
     >
-      {!isCollapsed && (
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {item.title}
-        </span>
-      )}
-      {isCollapsed && (
-        <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>
-          {item.icon}
-        </span>
-      )}
+      <span style={{ fontSize: "13px", width: "16px", textAlign: "center", flexShrink: 0 }}>
+        {item.icon}
+      </span>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {item.title}
+      </span>
     </Link>
   );
 }
 
-type SidebarContentProps = {
-  collapsed: boolean;
-  setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
-  isMobile: boolean;
-  entryOnly: boolean;
-  alwaysItems: PageCard[];
-  visibleCards: PageCard[];
-  isActive: (href: string) => boolean;
-  toggleTheme: () => void;
-  theme: string;
-  initials: string;
-  userName: string;
-  userRole: string;
-  userPhotoUrl?: string | null;
-  onSignOut: () => void;
-  openGroups: Set<string>;
-  toggleGroup: (group: string) => void;
-};
-
-// ── SidebarContent (module-level — must NOT be defined inside SidebarLayout) ──
-function SidebarContent({
-  collapsed,
-  setCollapsed,
-  isMobile,
-  entryOnly,
+// ── Mobile sidebar — flat list with group sections ───────────────
+function MobileSidebarContent({
   alwaysItems,
   visibleCards,
   isActive,
@@ -192,241 +164,127 @@ function SidebarContent({
   userRole,
   userPhotoUrl,
   onSignOut,
-  openGroups,
-  toggleGroup,
-}: SidebarContentProps) {
-
-  const sideItemStyle = (active: boolean): React.CSSProperties => ({
-    display: "flex", alignItems: "center",
-    gap: "10px",
-    justifyContent: collapsed ? "center" : "flex-start",
-    padding: collapsed ? "8px" : "8px 10px",
-    borderRadius: "8px",
+}: {
+  alwaysItems: PageCard[];
+  visibleCards: PageCard[];
+  isActive: (href: string) => boolean;
+  toggleTheme: () => void;
+  theme: string;
+  initials: string;
+  userName: string;
+  userRole: string;
+  userPhotoUrl?: string | null;
+  onSignOut: () => void;
+}) {
+  const mobileItemStyle = (active: boolean): React.CSSProperties => ({
+    display: "flex", alignItems: "center", gap: "10px",
+    padding: "9px 16px",
     backgroundColor: active ? COLOURS.NAVY : "transparent",
-    color: active ? "#FFFFFF" : "var(--text-sidebar)",
+    borderLeft: `3px solid ${active ? COLOURS.BLUE : "transparent"}`,
+    color: active ? "#fff" : "var(--text-sidebar)",
     textDecoration: "none",
-    fontSize: "13.5px",
+    fontSize: "14px",
     fontWeight: active ? 500 : 400,
-    fontFamily: "var(--font-sans, Inter, sans-serif)",
-    transition: "background-color 0.15s ease",
-    marginBottom: "2px",
-    cursor: "pointer",
-    border: "none",
-    width: "100%",
-    textAlign: "left" as const,
   });
 
   return (
     <div style={{
-      display: "flex", flexDirection: "column", height: "100vh",
+      height: "100%",
       backgroundColor: "var(--bg-sidebar)",
-      color: "var(--text-sidebar)",
+      display: "flex", flexDirection: "column",
+      overflowY: "auto",
     }}>
-      {/* ── Brand ── */}
+      {/* Header */}
       <div style={{
-        padding: collapsed ? "20px 10px 20px" : "20px 16px 20px",
-        borderBottom: `1px solid var(--sidebar-border)`,
+        padding: "20px 16px 14px",
+        borderBottom: "1px solid var(--sidebar-border)",
         display: "flex", alignItems: "center", gap: "10px",
-        justifyContent: collapsed ? "center" : "flex-start",
-        flexShrink: 0,
       }}>
-        {/* Brand mark — dark square with "U" */}
         <div style={{
-          width: "28px", height: "28px", borderRadius: "8px",
-          backgroundColor: COLOURS.NAVY, color: "#fff",
-          display: "grid", placeItems: "center",
-          fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
-          fontWeight: 700, fontSize: "14px", letterSpacing: "-0.02em",
-          flexShrink: 0,
-        }}>U</div>
-        {!collapsed && (
-          <div>
-            <div style={{
-              fontFamily: "var(--font-display, 'Inter Tight', sans-serif)",
-              fontWeight: 600, fontSize: "15px", letterSpacing: "-0.01em",
-              color: "var(--text-sidebar-active)", lineHeight: 1.2,
-            }}>Unze Group</div>
-            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "1px" }}>Operations</div>
-          </div>
-        )}
+          width: "32px", height: "32px", borderRadius: "50%",
+          background: "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#fff", fontSize: "13px", fontWeight: 600, flexShrink: 0,
+          overflow: "hidden", position: "relative",
+        }}>
+          {userPhotoUrl
+            ? <img src={userPhotoUrl} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+            : initials}
+        </div>
+        <div>
+          <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-sidebar-active)", lineHeight: 1.2 }}>{userName}</div>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "1px" }}>{userRole}</div>
+        </div>
       </div>
 
-      {/* ── Nav sections ── */}
-      <nav style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: collapsed ? "8px 6px" : "8px 12px" }}>
-        {/* Daily-entry-only users: no navigation links at all */}
-        {!entryOnly && <>
-        {/* OVERVIEW group — always pinned, never collapsible */}
-        <div style={{ marginBottom: "4px" }}>
-          {collapsed && <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />}
-          {!collapsed && (
-            <div style={{
-              fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
-              textTransform: "uppercase", letterSpacing: "0.12em",
-              padding: "16px 10px 6px",
-            }}>Overview</div>
-          )}
-          {alwaysItems.map((item) => (
-            <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
-          ))}
-          {visibleCards
-            .filter((c) => c.group === "Overview")
-            .sort((a, b) => a.title.localeCompare(b.title))
-            .map((card) => (
-              <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
-            ))}
-        </div>
+      <nav style={{ flex: 1, padding: "8px 0" }}>
+        {/* Always items */}
+        {alwaysItems.map((item) => (
+          <Link key={item.href} href={item.href} style={mobileItemStyle(isActive(item.href))}
+            onMouseEnter={(e) => { if (!isActive(item.href)) e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+            onMouseLeave={(e) => { if (!isActive(item.href)) e.currentTarget.style.backgroundColor = "transparent"; }}
+          >
+            <span style={{ fontSize: "16px", width: "20px", textAlign: "center" }}>{item.icon}</span>
+            <span>{item.title}</span>
+          </Link>
+        ))}
 
-        {/* Permission-gated groups — collapsible when sidebar is expanded */}
-        {SIDEBAR_GROUPS.filter((g) => g !== "Overview").map((groupName) => {
-          const groupCards = visibleCards
-            .filter((c) => c.group === groupName)
-            .sort((a, b) => a.title.trim().toLowerCase().localeCompare(b.title.trim().toLowerCase()));
+        {/* Groups */}
+        {SIDEBAR_GROUPS.map((groupName) => {
+          const groupCards = visibleCards.filter((c) => c.group === groupName);
           if (groupCards.length === 0) return null;
-          const isVisible = openGroups.has(groupName);
-          const hasActive = groupCards.some((c) => isActive(c.href));
-
-          if (collapsed) {
-            // Icon-only mode: show all icons with a divider, no group headers
-            return (
-              <div key={groupName} style={{ marginBottom: "4px" }}>
-                <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />
-                {groupCards.map((card) => (
-                  <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
-                ))}
-              </div>
-            );
-          }
-
           return (
-            <div key={groupName} style={{ marginBottom: "4px" }}>
-              {/* Group header — click to expand/collapse */}
-              <button
-                onClick={() => toggleGroup(groupName)}
-                title={isVisible ? `Collapse ${groupName}` : `Expand ${groupName}`}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  width: "100%", padding: "16px 10px 6px 10px",
-                  background: "none", border: "none", cursor: "pointer",
-                }}
-              >
-                <span style={{
-                  fontSize: "10.5px", fontWeight: hasActive ? 700 : 500,
-                  textTransform: "uppercase", letterSpacing: "0.12em",
-                  color: hasActive || isVisible ? "var(--text-sidebar)" : "var(--text-muted)",
-                }}>
-                  {groupName}
-                </span>
-                {/* ▼ when open (click to collapse), ▲ when closed (click to expand) */}
-                <span style={{
-                  fontSize: "9px", color: "var(--text-muted)", marginLeft: "4px",
-                  display: "inline-block",
-                  transform: isVisible ? "rotate(0deg)" : "rotate(180deg)",
-                }}>▼</span>
-              </button>
-              {isVisible && groupCards.map((card) => (
-                <NavItem key={card.href} item={card} active={isActive(card.href)} collapsed={collapsed} />
+            <div key={groupName}>
+              <div style={{
+                padding: "14px 16px 4px",
+                fontSize: "10px", fontWeight: 600,
+                textTransform: "uppercase", letterSpacing: "0.1em",
+                color: "var(--text-muted)",
+                display: "flex", alignItems: "center", gap: "6px",
+              }}>
+                <span>{GROUP_META[groupName].icon}</span>
+                {groupName}
+              </div>
+              {groupCards.map((card) => (
+                <Link key={card.href} href={card.href} style={mobileItemStyle(isActive(card.href))}
+                  onMouseEnter={(e) => { if (!isActive(card.href)) e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+                  onMouseLeave={(e) => { if (!isActive(card.href)) e.currentTarget.style.backgroundColor = "transparent"; }}
+                >
+                  <span style={{ fontSize: "16px", width: "20px", textAlign: "center" }}>{card.icon}</span>
+                  <span>{card.title}</span>
+                </Link>
               ))}
             </div>
           );
         })}
-
-        {/* PREFERENCES — dark mode */}
-        <div style={{ marginBottom: "4px" }}>
-          {!collapsed && (
-            <div style={{
-              fontSize: "10.5px", fontWeight: 500, color: "var(--text-muted)",
-              textTransform: "uppercase", letterSpacing: "0.12em",
-              padding: "16px 10px 6px",
-            }}>Preferences</div>
-          )}
-          {collapsed && <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "10px auto 6px" }} />}
-          <button
-            onClick={toggleTheme}
-            style={sideItemStyle(false)}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-          >
-            <span style={{ fontSize: "16px", flexShrink: 0, width: "18px", textAlign: "center" }}>
-              {theme === "light" ? "🌙" : "☀️"}
-            </span>
-            {!collapsed && <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>}
-          </button>
-        </div>
-        </> /* end !entryOnly nav */}
       </nav>
 
-      {/* ── User card + bottom controls ── */}
-      <div style={{
-        borderTop: "1px solid var(--sidebar-border)",
-        padding: collapsed ? "12px 6px" : "12px 12px",
-        display: "flex", flexDirection: "column", gap: "2px",
-        flexShrink: 0,
-      }}>
-        {/* User card */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: "10px",
-          padding: collapsed ? "8px" : "8px 10px",
-          justifyContent: collapsed ? "center" : "flex-start",
+      {/* Footer */}
+      <div style={{ borderTop: "1px solid var(--sidebar-border)", padding: "8px 0" }}>
+        <button onClick={toggleTheme} style={{
+          display: "flex", alignItems: "center", gap: "10px", padding: "9px 16px",
+          width: "100%", background: "none", border: "none", cursor: "pointer",
+          color: "var(--text-sidebar)", fontSize: "14px",
         }}>
-          <div style={{
-            width: "32px", height: "32px", borderRadius: "50%", flexShrink: 0,
-            background: userPhotoUrl ? "none" : "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
-            color: "#fff", display: "grid", placeItems: "center",
-            fontSize: "12px", fontWeight: 600,
-            overflow: "hidden", position: "relative",
-          }}>
-            {userPhotoUrl
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={userPhotoUrl} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
-              : initials}
-          </div>
-          {!collapsed && (
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{
-                fontSize: "13px", fontWeight: 600, color: "var(--text-sidebar-active)",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>{userName}</div>
-              <div style={{
-                fontSize: "11px", color: "var(--text-muted)",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>{userRole}</div>
-            </div>
-          )}
-        </div>
-
-        {/* Collapse toggle — desktop only */}
-        {!isMobile && (
-          <button
-            onClick={() => setCollapsed((v) => !v)}
-            style={sideItemStyle(false)}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>
-              {collapsed ? "»" : "«"}
-            </span>
-            {!collapsed && <span style={{ color: "var(--text-muted)" }}>Collapse</span>}
-          </button>
-        )}
-
-        {/* Sign out */}
-        <button
-          onClick={onSignOut}
-          style={{ ...sideItemStyle(false), color: COLOURS.RED }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = COLOURS.DANGER_SOFT; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-          title="Sign out"
-        >
-          <span style={{ fontSize: "14px", flexShrink: 0, width: "18px", textAlign: "center" }}>↪</span>
-          {!collapsed && <span>Sign Out</span>}
+          <span style={{ fontSize: "16px", width: "20px", textAlign: "center" }}>
+            {theme === "light" ? "🌙" : "☀️"}
+          </span>
+          <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>
+        </button>
+        <button onClick={onSignOut} style={{
+          display: "flex", alignItems: "center", gap: "10px", padding: "9px 16px",
+          width: "100%", background: "none", border: "none", cursor: "pointer",
+          color: COLOURS.RED, fontSize: "14px",
+        }}>
+          <span style={{ fontSize: "16px", width: "20px", textAlign: "center" }}>↪</span>
+          <span>Sign Out</span>
         </button>
       </div>
     </div>
   );
 }
 
+// ── SidebarLayout types ──────────────────────────────────────────
 type SidebarLayoutProps = {
   children: React.ReactNode;
   userCtx: UserCtx | null;
@@ -450,13 +308,12 @@ type SidebarLayoutProps = {
   onSignOut: () => void;
 };
 
+// ── Main layout ──────────────────────────────────────────────────
 export default function SidebarLayout({
   children,
   userCtx,
   userName,
-  userEmail,
   userRole,
-  roleColor,
   notifCount,
   notifItems,
   searchOpen,
@@ -476,161 +333,252 @@ export default function SidebarLayout({
   const { theme, toggleTheme } = useTheme();
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [activeGroup, setActiveGroup] = useState<SidebarGroup>("Finance");
 
-  // ── Collapsible sidebar groups ────────────────────────────────────
-  // Default: only Overview pinned open. User's choices saved to localStorage.
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set(["Overview"]));
-
-  // Restore saved state on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sidebar_open_groups");
-      if (saved) setOpenGroups(new Set(JSON.parse(saved)));
-    } catch {}
-  }, []);
-
-  function toggleGroup(groupName: string) {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      next.has(groupName) ? next.delete(groupName) : next.add(groupName);
-      try { localStorage.setItem("sidebar_open_groups", JSON.stringify([...next])); } catch {}
-      return next;
-    });
-  }
-
-  // Auto-expand the group containing the current page
+  // Auto-select the group that contains the current page
   useEffect(() => {
     const currentCard = PAGE_REGISTRY.find((c) => c.href === pathname);
-    if (currentCard?.group) {
-      setOpenGroups((prev) => {
-        if (prev.has(currentCard.group)) return prev;
-        const next = new Set(prev);
-        next.add(currentCard.group);
-        try { localStorage.setItem("sidebar_open_groups", JSON.stringify([...next])); } catch {}
-        return next;
-      });
+    if (currentCard?.group && SIDEBAR_GROUPS.includes(currentCard.group as SidebarGroup)) {
+      setActiveGroup(currentCard.group as SidebarGroup);
     }
   }, [pathname]);
 
   useEffect(() => {
-    function check() {
-      const w = window.innerWidth;
-      setIsMobile(w < 768);
-      if (w < 768) setCollapsed(false);
-      else if (w < 1024) setCollapsed(true);
-    }
+    function check() { setIsMobile(window.innerWidth < 768); }
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [pathname]);
+  useEffect(() => { setMobileMenuOpen(false); }, [pathname]);
 
-  // Build visible nav items from registry + permissions
+  // Build visible pages from registry + permissions
   const visibleCards = userCtx ? PAGE_REGISTRY.filter((card) => isCardVisible(card, userCtx)) : [];
-
-  // Restricted users: daily-entry access only, no broader app navigation
   const entryOnly = userCtx ? isDailyEntryOnly(userCtx) : false;
+  const isPAUser = userCtx
+    ? (userCtx.role === "Executive" || (userCtx.email || "").toLowerCase() === "pa.ceo@unze.co.uk")
+    : false;
 
-  const isPAUser = userCtx ? (userCtx.role === "Executive" || (userCtx.email || "").toLowerCase() === "pa.ceo@unze.co.uk") : false;
-  // Everyone lands on the same /home — it self-scopes by company (via
-  // financeCompanies()) and role/widget overrides instead of each senior
-  // person getting their own hand-built dashboard page. Retired the
-  // dedicated /ceo-kamran page on 16 Jul 2026 for exactly this reason: two
-  // near-identical pages meant every change had to be made twice, and
-  // toggles built for one silently didn't affect the other.
-  // Welcome page is the universal home for all users
   const alwaysItems: PageCard[] = [
     { permKey: "_home", title: "Home", subtitle: "Your daily brief", href: "/welcome", icon: "🏠", group: "_top" },
   ];
-
-  // Executive Dashboard shortcut — shown for CEO/admin users below the Home link
   const canSeeExecDash = userCtx && !isPAUser && !entryOnly && canViewExecutiveDashboard(userCtx);
   if (canSeeExecDash) {
     alwaysItems.push({ permKey: "_exec", title: "Executive Dashboard", subtitle: "", href: "/home", icon: "📊", group: "_top" });
   }
-  // PA users keep their own dashboard shortcut
   if (isPAUser) {
     alwaysItems.push({ permKey: "_pa", title: "PA Dashboard", subtitle: "", href: "/pa", icon: "⚡", group: "_top" });
   }
 
-  const sidebarW = (isMobile || entryOnly) ? 0 : collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;
+  // Groups that have at least one visible page
+  const visibleGroups = SIDEBAR_GROUPS.filter((g) =>
+    visibleCards.some((c) => c.group === g)
+  );
 
-  const initials = userName
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || "U";
+  // Ensure activeGroup is always a visible one
+  const effectiveGroup: SidebarGroup = visibleGroups.includes(activeGroup)
+    ? activeGroup
+    : (visibleGroups[0] ?? "Finance");
 
-  function isActive(href: string) {
-    return pathname === href;
-  }
+  // Pages in the current panel
+  const panelPages = visibleCards.filter((c) => c.group === effectiveGroup);
 
-  // Derive page title from current path
-  const extraPages = [
-    { href: "/welcome", title: "Home", subtitle: "Your daily brief" },
-  ];
+  const initials = userName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "U";
+  function isActive(href: string) { return pathname === href; }
+
+  const sidebarW = (isMobile || entryOnly) ? 0 : SIDEBAR_W;
+
+  // Page title for the top bar
+  const extraPages = [{ href: "/welcome", title: "Home", subtitle: "Your daily brief" }];
   const currentPage = [...alwaysItems, ...extraPages, ...PAGE_REGISTRY].find((p) => isActive(p.href));
   const pageTitle = currentPage?.title || "Dashboard";
   const pageSubtitle = currentPage?.subtitle || "";
 
+  // ── Activity bar icon button ──
+  const iconBtnBase: React.CSSProperties = {
+    display: "flex", alignItems: "center", justifyContent: "center",
+    width: "36px", height: "36px", borderRadius: "9px",
+    background: "none", border: "none", cursor: "pointer",
+    margin: "2px auto", fontSize: "17px",
+    flexShrink: 0,
+  };
+
   return (
     <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-page)" }}>
-      {/* ── Desktop sidebar (hidden for daily-entry-only users) ── */}
+
+      {/* ── Desktop sidebar ── */}
       {!isMobile && !entryOnly && (
         <aside style={{
           position: "fixed", top: 0, left: 0, bottom: 0,
-          width: `${sidebarW}px`,
+          width: `${SIDEBAR_W}px`,
           zIndex: 30,
-          overflow: "hidden",
+          display: "flex", flexDirection: "row",
           borderRight: "1px solid var(--sidebar-border)",
         }}>
-          <SidebarContent
-            collapsed={collapsed}
-            setCollapsed={setCollapsed}
-            isMobile={isMobile}
-            entryOnly={entryOnly}
-            alwaysItems={alwaysItems}
-            visibleCards={visibleCards}
-            isActive={isActive}
-            toggleTheme={toggleTheme}
-            theme={theme}
-            initials={initials}
-            userName={userName}
-            userRole={userRole}
-            userPhotoUrl={userPhotoUrl}
-            onSignOut={onSignOut}
-            openGroups={openGroups}
-            toggleGroup={toggleGroup}
-          />
+
+          {/* ── Activity bar (52px) ── */}
+          <div style={{
+            width: `${ACTIVITY_W}px`,
+            flexShrink: 0,
+            backgroundColor: "var(--bg-sidebar)",
+            borderRight: "1px solid var(--sidebar-border)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center",
+            padding: "10px 0",
+          }}>
+            {/* Always items at top */}
+            {alwaysItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={item.title}
+                onClick={item.permKey === "_exec"
+                  ? () => { if (typeof window !== "undefined") sessionStorage.setItem("exec_nav", "1"); }
+                  : undefined}
+                style={{
+                  ...iconBtnBase,
+                  backgroundColor: isActive(item.href) ? COLOURS.NAVY : "transparent",
+                  color: isActive(item.href) ? "#fff" : "var(--text-sidebar)",
+                  textDecoration: "none",
+                }}
+                onMouseEnter={(e) => { if (!isActive(item.href)) e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+                onMouseLeave={(e) => { if (!isActive(item.href)) e.currentTarget.style.backgroundColor = isActive(item.href) ? COLOURS.NAVY : "transparent"; }}
+              >
+                {item.icon}
+              </Link>
+            ))}
+
+            {/* Divider */}
+            <div style={{ width: "24px", height: "1px", backgroundColor: "var(--sidebar-border)", margin: "8px 0" }} />
+
+            {/* Group icons */}
+            {visibleGroups.map((g) => {
+              const isGroupActive = effectiveGroup === g;
+              return (
+                <button
+                  key={g}
+                  onClick={() => setActiveGroup(g)}
+                  title={g}
+                  style={{
+                    ...iconBtnBase,
+                    backgroundColor: isGroupActive ? COLOURS.NAVY : "transparent",
+                    color: "var(--text-sidebar)",
+                    position: "relative",
+                  }}
+                  onMouseEnter={(e) => { if (!isGroupActive) e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isGroupActive ? COLOURS.NAVY : "transparent"; }}
+                >
+                  {GROUP_META[g].icon}
+                  {/* Active indicator dot */}
+                  {isGroupActive && (
+                    <span style={{
+                      position: "absolute", right: "3px", top: "50%",
+                      transform: "translateY(-50%)",
+                      width: "3px", height: "16px",
+                      backgroundColor: COLOURS.BLUE,
+                      borderRadius: "2px",
+                    }} />
+                  )}
+                </button>
+              );
+            })}
+
+            {/* Spacer */}
+            <div style={{ flex: 1 }} />
+
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              title={theme === "light" ? "Dark mode" : "Light mode"}
+              style={{ ...iconBtnBase }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            >
+              {theme === "light" ? "🌙" : "☀️"}
+            </button>
+
+            {/* Profile avatar — links to profile page */}
+            <Link
+              href="/profile"
+              title={`${userName} · Profile`}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: "32px", height: "32px", borderRadius: "50%",
+                background: isActive("/profile") ? COLOURS.NAVY : "linear-gradient(135deg, #3B4CCA, #6E7AE0)",
+                color: "#fff", fontSize: "12px", fontWeight: 600,
+                textDecoration: "none", margin: "4px auto",
+                overflow: "hidden", position: "relative", flexShrink: 0,
+              }}
+            >
+              {userPhotoUrl
+                ? <img src={userPhotoUrl} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                : initials}
+            </Link>
+
+            {/* Sign out */}
+            <button
+              onClick={onSignOut}
+              title="Sign out"
+              style={{ ...iconBtnBase, color: COLOURS.RED, marginBottom: "4px" }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--sidebar-hover-bg)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            >
+              ↪
+            </button>
+          </div>
+
+          {/* ── Pages panel (176px) ── */}
+          <div style={{
+            width: `${PANEL_W}px`,
+            flexShrink: 0,
+            backgroundColor: "var(--bg-sidebar)",
+            display: "flex", flexDirection: "column",
+            overflowY: "auto",
+          }}>
+            {/* Group title */}
+            <div style={{
+              padding: "16px 12px 10px",
+              borderBottom: "1px solid var(--sidebar-border)",
+              display: "flex", alignItems: "center", gap: "7px",
+            }}>
+              <span style={{ fontSize: "14px" }}>{GROUP_META[effectiveGroup]?.icon}</span>
+              <span style={{
+                fontSize: "12px", fontWeight: 600,
+                textTransform: "uppercase", letterSpacing: "0.06em",
+                color: "var(--text-sidebar-active)",
+              }}>
+                {effectiveGroup}
+              </span>
+            </div>
+
+            {/* Page list */}
+            <nav style={{ flex: 1, padding: "8px 6px" }}>
+              {panelPages.map((card) => (
+                <PanelItem key={card.href} item={card} active={isActive(card.href)} />
+              ))}
+              {panelPages.length === 0 && (
+                <div style={{ padding: "12px", fontSize: "12px", color: "var(--text-muted)" }}>
+                  No pages available
+                </div>
+              )}
+            </nav>
+          </div>
         </aside>
       )}
 
-      {/* ── Mobile overlay (hidden for daily-entry-only users) ── */}
+      {/* ── Mobile overlay ── */}
       {isMobile && mobileMenuOpen && !entryOnly && (
         <>
           <div
             onClick={() => setMobileMenuOpen(false)}
-            style={{
-              position: "fixed", inset: 0, zIndex: 40,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              transition: "opacity 0.2s",
-            }}
+            style={{ position: "fixed", inset: 0, zIndex: 40, backgroundColor: "rgba(0,0,0,0.5)" }}
           />
           <aside style={{
             position: "fixed", top: 0, left: 0, bottom: 0,
-            width: `${SIDEBAR_W}px`, zIndex: 50,
+            width: "280px", zIndex: 50,
             boxShadow: "4px 0 20px rgba(0,0,0,0.3)",
           }}>
-            <SidebarContent
-              collapsed={false}
-              setCollapsed={setCollapsed}
-              isMobile={isMobile}
-              entryOnly={entryOnly}
+            <MobileSidebarContent
               alwaysItems={alwaysItems}
               visibleCards={visibleCards}
               isActive={isActive}
@@ -641,29 +589,17 @@ export default function SidebarLayout({
               userRole={userRole}
               userPhotoUrl={userPhotoUrl}
               onSignOut={onSignOut}
-              openGroups={openGroups}
-              toggleGroup={toggleGroup}
             />
           </aside>
         </>
       )}
 
-      {/* ── Main content ──
-          The sidebar above is position:fixed, so it's out of normal flow —
-          this div is really the ONLY flex child of the root row, meaning
-          flex:1 alone resolves it to the FULL viewport width, and then
-          marginLeft pushes it sidebarW px further right, hanging exactly
-          that much content off the right edge of the screen on every page
-          (this is what Khuram saw: KPI tiles/columns clipped, nothing
-          wrapping, on Bank Facilities/Executive/Operations/Tasks alike).
-          Giving it an explicit width of "the rest of the viewport" fixes
-          it at the source instead of per-page. */}
+      {/* ── Main content area ── */}
       <div style={{
         flex: 1,
         minWidth: 0,
         width: isMobile ? "100%" : `calc(100% - ${sidebarW}px)`,
         marginLeft: isMobile ? 0 : `${sidebarW}px`,
-        transition: "margin-left 0.2s ease, width 0.2s ease",
         display: "flex", flexDirection: "column", minHeight: "100vh",
       }}>
         {/* Content header */}
@@ -746,9 +682,8 @@ export default function SidebarLayout({
                       onClick={() => { setSearchOpen(false); setSearchQuery(""); }}
                       style={{
                         display: "block", padding: "8px 14px",
-                        borderBottom: `1px solid var(--border-light)`,
+                        borderBottom: "1px solid var(--border-light)",
                         textDecoration: "none", color: "inherit",
-                        transition: "background-color 0.1s",
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
@@ -816,11 +751,12 @@ export default function SidebarLayout({
                     </div>
                   ) : (
                     notifItems.map((item) => (
-                      <a key={item.label} href={item.href} onClick={(e) => { if (item.action) { e.preventDefault(); item.action(); } setNotifOpen(false); }}
+                      <a key={item.label} href={item.href}
+                        onClick={(e) => { if (item.action) { e.preventDefault(); item.action(); } setNotifOpen(false); }}
                         style={{
                           display: "flex", justifyContent: "space-between", alignItems: "center",
                           padding: "10px 14px", borderBottom: "1px solid var(--border-light)",
-                          textDecoration: "none", color: "inherit", transition: "background-color 0.1s",
+                          textDecoration: "none", color: "inherit",
                         }}
                         onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-card-hover)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
@@ -840,11 +776,7 @@ export default function SidebarLayout({
         </header>
 
         {/* Page content */}
-        <div style={{
-          flex: 1,
-          minWidth: 0,
-          overflowX: "auto",
-        }}>
+        <div style={{ flex: 1, minWidth: 0, overflowX: "auto" }}>
           {children}
         </div>
 
