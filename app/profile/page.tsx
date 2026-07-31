@@ -444,7 +444,7 @@ export default function ProfilePage() {
                 }}>
                 {currentPhotoSrc
                   // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={currentPhotoSrc} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block", borderRadius: "50%" }} />
+                  ? <img src={currentPhotoSrc} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block", borderRadius: "50%" }} />
                   : initials}
                 {/* hover overlay */}
                 <div style={{
@@ -561,7 +561,7 @@ export default function ProfilePage() {
                 }}>
                   {currentPhotoSrc
                     // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={currentPhotoSrc} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block", borderRadius: "50%" }} />
+                    ? <img src={currentPhotoSrc} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block", borderRadius: "50%" }} />
                     : initials}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>

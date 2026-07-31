@@ -185,7 +185,7 @@ function AvatarRing({ photoUrl, initials, role, size = 88 }: { photoUrl: string 
         {photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={photoUrl} alt={initials} style={{
-            width: "100%", height: "100%", objectFit: "cover", display: "block",
+            width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block",
           }} />
         ) : (
           <div style={{

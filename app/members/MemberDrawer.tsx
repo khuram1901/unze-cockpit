@@ -375,7 +375,7 @@ function PhotoUpload({ member, onSaved, onRemoved }: {
         }}>
           {currentSrc
             // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={currentSrc} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+            ? <img src={currentSrc} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
             : <span style={{ fontSize: 18, fontWeight: 700, color: COLOURS.SLATE }}>{initials}</span>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1 }}>
@@ -638,7 +638,7 @@ export default function MemberDrawer({
         }}>
           {member.photo_url
             // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={member.photo_url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
+            ? <img src={member.photo_url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
             : ((member.first_name?.[0] || "") + (member.last_name?.[0] || "")).toUpperCase() || (member.name?.slice(0, 2) || "?").toUpperCase()}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>

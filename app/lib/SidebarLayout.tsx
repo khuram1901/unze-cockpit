@@ -212,7 +212,7 @@ function MobileSidebarContent({
           overflow: "hidden", position: "relative",
         }}>
           {userPhotoUrl
-            ? <img src={userPhotoUrl} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+            ? <img src={userPhotoUrl} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
             : initials}
         </div>
         <div>
@@ -529,7 +529,7 @@ export default function SidebarLayout({
               }}
             >
               {userPhotoUrl
-                ? <img src={userPhotoUrl} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                ? <img src={userPhotoUrl} alt={initials} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
                 : initials}
             </Link>
 

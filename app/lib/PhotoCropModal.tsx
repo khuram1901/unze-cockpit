@@ -40,24 +40,29 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
 
       const base = CROP_DISP / Math.min(img.naturalWidth, img.naturalHeight);
 
+      // coverZoom: image exactly fills the circle (no gap, no extra crop)
       const coverZoom = Math.max(
         CROP_DISP / (img.naturalWidth  * base),
         CROP_DISP / (img.naturalHeight * base),
       );
 
-      // fitZoom: entire image visible in the container
+      // fitZoom: entire image visible in the 340px container
       const fitZoom = Math.min(
         CONTAINER / (img.naturalWidth  * base),
         CONTAINER / (img.naturalHeight * base),
       );
 
-      const initialZoom = coverZoom * 1.3;
+      // Start at coverZoom so the circle is filled but not over-zoomed.
+      // This keeps the full face visible. Users can zoom out to fitZoom
+      // (whole image) and drag to reposition.
+      const initialZoom = coverZoom;
 
       setMinZoom(fitZoom);
       setMaxZoom(coverZoom * 3);
       setZoom(initialZoom);
       zoomRef.current = initialZoom;
 
+      // Centre the image in the container
       const dw = img.naturalWidth  * base * initialZoom;
       const dh = img.naturalHeight * base * initialZoom;
       setOffset({ x: (CONTAINER - dw) / 2, y: (CONTAINER - dh) / 2 });
@@ -192,8 +197,8 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
             <div style={{ fontSize: "16px", fontWeight: 700, color: "#0F1720", marginBottom: "4px" }}>
               Position your photo
             </div>
-            <div style={{ fontSize: "12px", color: "#64748B" }}>
-              Drag to reposition · slide to zoom
+            <div style={{ fontSize: "12px", color: "#64748B", lineHeight: 1.5 }}>
+              Drag to reposition · zoom out to see the full photo · face should fill the circle
             </div>
           </div>
           {/* Change photo button */}
@@ -269,6 +274,29 @@ export default function PhotoCropModal({ file, maxKb, onDone, onCancel }: Props)
             style={{ flex: 1, accentColor: "#0F7B5F" }}
           />
           <span style={{ fontSize: "14px", color: "#64748B", flexShrink: 0 }}>+</span>
+          <button
+            onClick={() => {
+              // Reset to coverZoom — image fills circle exactly, centred
+              if (!imgEl) return;
+              const base = CROP_DISP / Math.min(imgEl.naturalWidth, imgEl.naturalHeight);
+              const cz = Math.max(
+                CROP_DISP / (imgEl.naturalWidth  * base),
+                CROP_DISP / (imgEl.naturalHeight * base),
+              );
+              handleZoom(cz);
+              const dw = imgEl.naturalWidth  * base * cz;
+              const dh = imgEl.naturalHeight * base * cz;
+              setOffset({ x: (CONTAINER - dw) / 2, y: (CONTAINER - dh) / 2 });
+            }}
+            title="Reset zoom to fit face in circle"
+            style={{
+              padding: "4px 8px", borderRadius: "5px", fontSize: "11px", fontWeight: 600,
+              border: "1px solid #EEF0F3", background: "#F7F5F1", color: "#0F1720",
+              cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap",
+            }}
+          >
+            Reset
+          </button>
         </div>
 
         {error && (
