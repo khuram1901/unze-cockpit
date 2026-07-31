@@ -917,6 +917,7 @@ function KamranHero({ data, tick, weather, fx }: {
   data: WelcomeData; tick: number; weather: Weather | null; fx: FxRates | null;
 }) {
   void tick;
+  const isMobile = useMobile();
   const fullName = data.name || data.firstName;
   const initials = (fullName || "KS").slice(0, 2).toUpperCase();
   return (
@@ -1044,6 +1045,7 @@ function KamranHero({ data, tick, weather, fx }: {
               </div>
             )}
           </div>
+        )}
         </div>
       </div>
     </div>
