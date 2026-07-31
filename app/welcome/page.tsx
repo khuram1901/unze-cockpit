@@ -205,10 +205,11 @@ function AvatarRing({ photoUrl, initials, role, size = 88 }: { photoUrl: string 
 
 /* ─── Purpose banner ─────────────────────────────────────────── */
 function PurposeBanner() {
+  const isMobile = useMobile();
   return (
     <div style={{
       background: "#fff", borderBottom: `1px solid ${HAIRLINE}`,
-      padding: "10px 40px", display: "flex", alignItems: "center", gap: 12,
+      padding: isMobile ? "8px 16px" : "10px 40px", display: "flex", alignItems: "center", gap: 12,
     }}>
       <div style={{
         width: 3, height: 28, borderRadius: 2, flexShrink: 0,
@@ -228,6 +229,7 @@ type TaskBannerProps = {
   teamOverdue?: number; teamToday?: number;
 };
 function TaskBanner({ myOverdue, myToday, myTomorrow, myWeek, teamOverdue, teamToday }: TaskBannerProps) {
+  const isMobile = useMobile();
   const pill = (num: number, label: string, cls: CSSProperties): ReactNode => (
     <Link href="/tasks" style={{
       display: "flex", alignItems: "center", gap: 6,
@@ -246,7 +248,7 @@ function TaskBanner({ myOverdue, myToday, myTomorrow, myWeek, teamOverdue, teamT
   return (
     <div style={{
       background: "#fff", borderBottom: `1px solid ${HAIRLINE}`,
-      padding: "12px 40px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+      padding: isMobile ? "8px 16px" : "12px 40px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
     }}>
       {lbl("My tasks")}
       {pill(myOverdue,  "Overdue",    { background: DANGER_SOFT,  color: RED,   border: `1px solid #EAC4C2` })}
@@ -576,6 +578,7 @@ function TeamOverdueCard({ data }: { data: WelcomeData }) {
 
 /* ─── HOD dark stat strip ────────────────────────────────────── */
 function HodStatStrip({ data }: { data: WelcomeData }) {
+  const isMobile = useMobile();
   const stats = [
     { label: "Team size",             value: data.teamSize ?? 0,            color: "#fff"    },
     { label: "Team overdue",          value: data.teamOverdueCount ?? 0,    color: "#F8E4E2" },
@@ -587,7 +590,7 @@ function HodStatStrip({ data }: { data: WelcomeData }) {
     <div style={{
       background: "linear-gradient(90deg, #0c1520 0%, #111d2e 100%)",
       borderBottom: "1px solid rgba(255,255,255,0.06)",
-      padding: "14px 40px", display: "flex", gap: 40, alignItems: "center",
+      padding: isMobile ? "10px 16px" : "14px 40px", display: "flex", gap: isMobile ? 20 : 40, alignItems: "center", flexWrap: "wrap" as any,
     }}>
       {stats.map((s, i) => (
         <>
@@ -604,11 +607,12 @@ function HodStatStrip({ data }: { data: WelcomeData }) {
 
 /* ─── CEO dark stat strip ────────────────────────────────────── */
 function CeoStatStrip({ data }: { data: WelcomeData }) {
+  const isMobile = useMobile();
   return (
     <div style={{
       background: "linear-gradient(90deg, #0a1118 0%, #0f1820 100%)",
       borderBottom: "1px solid rgba(255,255,255,0.06)",
-      padding: "14px 40px", display: "flex", gap: 0, alignItems: "center",
+      padding: isMobile ? "10px 16px" : "14px 40px", display: "flex", gap: 0, alignItems: "center", flexWrap: "wrap" as any,
     }}>
       {[
         {
@@ -744,12 +748,13 @@ type HeroProps = {
 };
 function Hero({ data, tick, weather, fx, email }: HeroProps) {
   void tick;
+  const isMobile = useMobile();
   const initials = avatarInitials(data.firstName);
   const deptLabel = data.department ? `${data.department}` : "Unze Group";
   return (
     <div style={{
       background: "linear-gradient(135deg, #0F1720 0%, #162232 60%, #1a2a42 100%)",
-      position: "relative", overflow: "hidden", padding: "40px 40px 36px",
+      position: "relative", overflow: "hidden", padding: isMobile ? "20px 16px 20px" : "40px 40px 36px",
     }}>
       {/* Radial glow accents */}
       <div style={{
@@ -796,8 +801,7 @@ function Hero({ data, tick, weather, fx, email }: HeroProps) {
             {" "}— Service, growth, and opportunity for all.
           </p>
         </div>
-        {/* Right: clocks + weather + fx (CEO) */}
-        <div style={{ marginLeft: "auto", flexShrink: 0, display: "flex", flexDirection: "column", gap: 14, alignItems: "flex-end" }}>
+        {!isMobile && (<div style={{ marginLeft: "auto", flexShrink: 0, display: "flex", flexDirection: "column", gap: 14, alignItems: "flex-end" }}>
           {/* World clocks */}
           <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
             {[
@@ -830,7 +834,7 @@ function Hero({ data, tick, weather, fx, email }: HeroProps) {
           )}
           {/* FX strip (CEO only) */}
           {fx && <FxStrip fx={fx} />}
-        </div>
+        </div>)}
       </div>
     </div>
   );
@@ -838,12 +842,13 @@ function Hero({ data, tick, weather, fx, email }: HeroProps) {
 
 /* ─── Layout: Member ─────────────────────────────────────────── */
 function MemberLayout({ data, tick, weather, email }: { data: WelcomeData; tick: number; weather: Weather | null; email?: string }) {
+  const isMobile = useMobile();
   return (
     <>
       <Hero data={data} tick={tick} weather={weather} email={email} />
       <PurposeBanner />
       <TaskBanner myOverdue={data.myOverdueCount} myToday={data.myTodayCount} myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, padding: "24px 40px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 340px", gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
         <MyTasksCard tasks={data.myTasks} />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
@@ -857,6 +862,7 @@ function MemberLayout({ data, tick, weather, email }: { data: WelcomeData; tick:
 
 /* ─── Layout: Manager ────────────────────────────────────────── */
 function ManagerLayout({ data, tick, weather, email }: { data: WelcomeData; tick: number; weather: Weather | null; email?: string }) {
+  const isMobile = useMobile();
   const hasTeam = (data.teamMemberStatus ?? []).length > 0;
   return (
     <>
@@ -867,7 +873,7 @@ function ManagerLayout({ data, tick, weather, email }: { data: WelcomeData; tick
         myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
         teamOverdue={data.teamOverdueCount} teamToday={data.teamTodayCount}
       />
-      <div style={{ display: "grid", gridTemplateColumns: hasTeam ? "1fr 1fr 320px" : "1fr 320px", gap: 20, padding: "24px 40px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : hasTeam ? "1fr 1fr 320px" : "1fr 320px", gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
         <MyTasksCard tasks={data.myTasks} />
         {hasTeam && <TeamStatusCard data={data} />}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -881,6 +887,7 @@ function ManagerLayout({ data, tick, weather, email }: { data: WelcomeData; tick
 
 /* ─── Layout: HOD (Manager with team overdue list) ───────────── */
 function HodLayout({ data, tick, weather, email }: { data: WelcomeData; tick: number; weather: Weather | null; email?: string }) {
+  const isMobile = useMobile();
   return (
     <>
       <Hero data={data} tick={tick} weather={weather} email={email} />
@@ -891,7 +898,7 @@ function HodLayout({ data, tick, weather, email }: { data: WelcomeData; tick: nu
         myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
         teamOverdue={data.teamOverdueCount} teamToday={data.teamTodayCount}
       />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 320px", gap: 20, padding: "24px 40px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 320px", gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
         <TeamOverdueCard data={data} />
         <MyTasksCard tasks={data.myTasks} />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -934,7 +941,7 @@ function KamranHero({ data, tick, weather, fx }: {
 
       <div style={{ position: "relative", zIndex: 1 }}>
         {/* Top row: Avatar + Name + Clocks */}
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 28 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 12 : 28, flexWrap: "wrap" }}>
           {/* Large Avatar */}
           <AvatarRing photoUrl={data.photoUrl} initials={initials} role={data.role} size={108} />
 
@@ -974,7 +981,7 @@ function KamranHero({ data, tick, weather, fx }: {
             </p>
           </div>
 
-          {/* Right column: Clocks + weather + FX */}
+          {!isMobile && (
           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-end" }}>
             {/* 3-city clocks */}
             <div style={{
@@ -1052,6 +1059,7 @@ function KhuramHero({ data, tick, weather, fx }: {
   data: WelcomeData; tick: number; weather: Weather | null; fx: FxRates | null;
 }) {
   void tick;
+  const isMobile = useMobile();
   const fullName = data.name || data.firstName;
   const initials = fullName.slice(0, 2).toUpperCase();
   return (
@@ -1080,8 +1088,8 @@ function KhuramHero({ data, tick, weather, fx }: {
       }} />
 
       {/* Content */}
-      <div style={{ position: "relative", zIndex: 2, padding: "44px 44px 40px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 28 }}>
+      <div style={{ position: "relative", zIndex: 2, padding: isMobile ? "20px 16px 20px" : "44px 44px 40px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: isMobile ? 12 : 28, flexWrap: "wrap" }}>
           {/* Avatar */}
           <AvatarRing photoUrl={data.photoUrl} initials={initials} role={data.role} size={108} />
 
@@ -1122,7 +1130,7 @@ function KhuramHero({ data, tick, weather, fx }: {
             </p>
           </div>
 
-          {/* Right column: Clocks + weather + FX */}
+          {!isMobile && (
           <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-end" }}>
             {/* 4-city clocks: Pacific / Eastern / GMT / Shanghai */}
             <div style={{
@@ -1198,6 +1206,7 @@ function KhuramHero({ data, tick, weather, fx }: {
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
     </div>
@@ -1208,10 +1217,11 @@ function KhuramHero({ data, tick, weather, fx }: {
 const CAL_COLORS = [BLUE, GREEN, AMBER];
 
 function ThreeDayCalendar({ calEvents }: { calEvents: CalEvent[] }) {
+  const isMobile = useMobile();
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
   const PREVIEW = 3;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, padding: "0 40px 4px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr", gap: 16, padding: isMobile ? "0 16px 4px" : "0 40px 4px" }}>
       {[0, 1, 2].map(offset => {
         const dateStr  = dayOffset(offset);
         const events   = calEvents.filter(e => e.start.slice(0, 10) === dateStr);
@@ -1284,8 +1294,9 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal, pensi
   data: WelcomeData; tick: number; weather: Weather | null;
   fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null; pensionGbp: number | null; calEvents: CalEvent[];
 }) {
+  const isMobile = useMobile();
   const showPortfolio = holdings.length > 0 || portfolioTotal !== null;
-  const cols = showPortfolio ? "1fr 1fr 420px 300px" : "1fr 1fr 300px";
+  const cols = isMobile ? "1fr" : showPortfolio ? "1fr 1fr 420px 300px" : "1fr 1fr 300px";
   return (
     <>
       <KhuramHero data={data} tick={tick} weather={weather} fx={fx} />
@@ -1293,7 +1304,7 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal, pensi
       <PurposeBanner />
       <TaskBanner myOverdue={data.myOverdueCount} myToday={data.myTodayCount} myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount} />
       <ThreeDayCalendar calEvents={calEvents} />
-      <div style={{ display: "grid", gridTemplateColumns: cols, gap: 20, padding: "24px 40px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: cols, gap: isMobile ? 16 : 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
         <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal CEO assignments" />
         <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
           <div style={{ padding: "14px 20px 10px", borderBottom: `1px solid ${HAIRLINE}` }}>
@@ -1342,6 +1353,7 @@ function KhuramLayout({ data, tick, weather, fx, holdings, portfolioTotal, pensi
 function KamranLayout({ data, tick, weather, fx }: {
   data: WelcomeData; tick: number; weather: Weather | null; fx: FxRates | null;
 }) {
+  const isMobile = useMobile();
   return (
     <>
       <KamranHero data={data} tick={tick} weather={weather} fx={fx} />
@@ -1350,7 +1362,7 @@ function KamranLayout({ data, tick, weather, fx }: {
         myOverdue={data.myOverdueCount} myToday={data.myTodayCount}
         myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount}
       />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 356px", gap: 20, padding: "24px 44px 44px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 356px", gap: 20, padding: isMobile ? "16px 16px 24px" : "24px 44px 44px" }}>
         <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal assignments" />
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <QuoteCard />
@@ -1387,8 +1399,9 @@ function CeoLayout({ data, tick, weather, fx, holdings, portfolioTotal, email }:
   data: WelcomeData; tick: number; weather: Weather | null;
   fx: FxRates | null; holdings: Holding[]; portfolioTotal: number | null; email?: string;
 }) {
+  const isMobile = useMobile();
   const showPortfolio = holdings.length > 0 || portfolioTotal !== null;
-  const cols = showPortfolio
+  const cols = isMobile ? "1fr" : showPortfolio
     ? "1fr 1fr 1fr 300px"
     : "1fr 1fr 300px";
   return (
@@ -1397,7 +1410,7 @@ function CeoLayout({ data, tick, weather, fx, holdings, portfolioTotal, email }:
       <CeoStatStrip data={data} />
       <PurposeBanner />
       <TaskBanner myOverdue={data.myOverdueCount} myToday={data.myTodayCount} myTomorrow={data.myTomorrowCount} myWeek={data.myWeekCount} />
-      <div style={{ display: "grid", gridTemplateColumns: cols, gap: 20, padding: "24px 40px 40px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: cols, gap: isMobile ? 16 : 20, padding: isMobile ? "16px 16px 24px" : "24px 40px 40px" }}>
         <MyTasksCard tasks={data.myTasks} title="My Tasks" subtitle="Personal CEO assignments" />
         {/* Group task health card */}
         <div style={{ background: CARD_ALT, border: `1px solid ${HAIRLINE}`, borderRadius: RADII.CARD, overflow: "hidden" }}>
