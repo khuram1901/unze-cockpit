@@ -24,10 +24,16 @@ const STAGE_LABELS: Record<number, string> = {
   1: "Audit Planning",
   2: "Data Collection",
   3: "Data Verification",
-  4: "Draft Audit Findings",
-  5: "Review of IA Report",
-  6: "Communication to Process Owner",
-  7: "Submission to Senior Management",
+  4: "Composition of audit findings",
+  5: "Draft Internal audit report",
+  6: "Review audit report",
+  7: "Communication of audit report to process owner",
+  8: "Submission to senior management",
+};
+
+// Stage weights for completion % (must match migration 194 SQL)
+const STAGE_WEIGHTS: Record<number, number> = {
+  1: 5, 2: 10, 3: 40, 4: 20, 5: 10, 6: 9, 7: 5, 8: 1,
 };
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -282,7 +288,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
     const postMember = team?.members[0]?.name.split(" ")[0] || null;
     const rows = Object.entries(STAGE_LABELS).map(([no, label], i) => ({
       process_id: data.id, stage_no: Number(no), stage_label: label,
-      responsible: Number(no) === 1 || Number(no) >= 5 ? "Shahid" : postMember,
+      responsible: Number(no) === 1 || Number(no) >= 6 ? "Shahid" : postMember,
       sort_order: i + 1, status: "Not Started",
     }));
     await supabase.from("audit_stage_tasks").insert(rows);
@@ -455,10 +461,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
             {stuck.slice(0, 6).map((s, i) => (
               <div key={i} onClick={() => { const t = teams.find((x) => x.id === s.team_id); if (t) setSelectedTeamId(t.id); toggleExpand(s.process_id); }}
                 style={{ fontSize: "13px", color: WARNING_TITLE_COLOR, padding: "3px 0", cursor: "pointer" }}>
-                {teamName(s.team_id)} · {s.process_name} ({shortCode(s.company_id)}) · {s.sub_task || s.stage_label} — {" "}
-                {s.over_days > 0
-                  ? <>{s.days_in} days in, budget was {s.total_days ?? 0} <strong>({s.over_days} over)</strong></>
-                  : <>no update for {s.idle_days} days</>}
+                {teamName(s.team_id)} · {s.process_name} ({shortCode(s.company_id)}) · {s.sub_task || s.stage_label} — no update for {s.idle_days} days
               </div>
             ))}
           </div>
@@ -660,7 +663,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                     <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
                       <span style={{ fontSize: "10px", fontWeight: 600, padding: "1px 6px", borderRadius: RADII.PILL, backgroundColor: (FREQ_BADGE[p.frequency] || FREQ_BADGE.Monthly).bg, color: (FREQ_BADGE[p.frequency] || FREQ_BADGE.Monthly).text }}>{p.frequency}</span>
                       {p.started_on && <span>started {formatDateUK(p.started_on)}</span>}
-                      {p.status !== "Completed" && p.total_days > 0 && <span>{p.done_days} of {p.total_days} days</span>}
+                      {p.completion_pct > 0 && p.completion_pct < 100 && <span>{p.completion_pct}% complete</span>}
                       {p.target_date && (
                         <span style={{ color: isOverdue ? COLOURS.RED : COLOURS.SLATE, fontWeight: isOverdue ? 600 : 400 }}>
                           target {formatDateUK(p.target_date)}{isOverdue ? ` (${od}d late)` : ""}
@@ -717,7 +720,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                       const allDone = stageTasks.every((t) => t.status === "Completed");
                       const anyStarted = stageTasks.some((t) => t.status !== "Not Started");
                       const isCurrent = !allDone && (anyStarted || stageNos.filter((n) => n < sn).every((n) => tasks.filter((t) => t.stage_no === n).every((t) => t.status === "Completed")));
-                      const stageDays = stageTasks.reduce((s, t) => s + (Number(t.total_days) || 0), 0);
+                      const stageWeight = STAGE_WEIGHTS[sn] ?? 0;
                       const doneDate = allDone ? stageTasks.map((t) => t.completed_at).filter(Boolean).sort().slice(-1)[0] : null;
                       const circle = (bg: string, fg: string, content: React.ReactNode) => (
                         <span style={{ width: "20px", height: "20px", borderRadius: "50%", backgroundColor: bg, color: fg, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>{content}</span>
@@ -725,9 +728,6 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
 
                       const renderTaskRow = (t: StageTask) => {
                         const who = [t.responsible, t.responsible_2].filter(Boolean).join(" + ") || "Unassigned";
-                        const budget = Number(t.total_days) || 0;
-                        const daysIn = t.status === "In Progress" && t.started_at ? daysBetween(t.started_at) : 0;
-                        const over = daysIn > budget && budget > 0 ? daysIn - budget : 0;
                         if (editSteps) {
                           return (
                             <div key={t.id} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 0 6px 28px", borderTop: `1px solid ${COLOURS.TRACK}`, flexWrap: "wrap" }}>
@@ -735,8 +735,6 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                                 onBlur={(e) => { if (e.target.value.trim() !== (t.sub_task || "")) updateTaskField(t, "sub_task", e.target.value.trim() || null); }} />
                               <input style={{ ...inpSm, width: "110px" }} defaultValue={t.responsible || ""} placeholder="Responsible"
                                 onBlur={(e) => { if (e.target.value.trim() !== (t.responsible || "")) updateTaskField(t, "responsible", e.target.value.trim() || null); }} />
-                              <input style={{ ...inpSm, width: "60px", textAlign: "center" }} type="number" min={0} defaultValue={budget || ""} placeholder="Days"
-                                onBlur={(e) => { const v = e.target.value === "" ? null : Number(e.target.value); if (v !== (t.total_days ?? null)) updateTaskField(t, "days", v); }} />
                               {t.status === "Not Started" && <button onClick={() => deleteStep(t)} style={{ ...btnGhost, color: COLOURS.RED, borderColor: `${COLOURS.RED}44` }}>Delete</button>}
                             </div>
                           );
@@ -745,11 +743,10 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                           <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "6px 0 6px 28px", borderTop: `1px solid ${COLOURS.TRACK}` }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{t.sub_task || STAGE_LABELS[t.stage_no]}</div>
-                              <div style={{ fontSize: "12px", color: over > 0 ? COLOURS.RED : COLOURS.SLATE, marginTop: "1px", fontWeight: over > 0 ? 600 : 400 }}>
+                              <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "1px" }}>
                                 {who}
                                 {t.status === "Completed" && t.completed_at && <> · done {formatDateUK(t.completed_at.slice(0, 10))}</>}
-                                {t.status === "In Progress" && t.started_at && <> · started {formatDateUK(t.started_at.slice(0, 10))} · {daysIn} day{daysIn !== 1 ? "s" : ""} in{budget > 0 ? `, budget ${budget}` : ""}{over > 0 ? ` — ${over} over` : ""}</>}
-                                {t.status === "Not Started" && budget > 0 && <> · {budget} day{budget !== 1 ? "s" : ""} budgeted</>}
+                                {t.status === "In Progress" && t.started_at && <> · started {formatDateUK(t.started_at.slice(0, 10))}</>}
                               </div>
                             </div>
                             {canUpdate ? (
@@ -773,7 +770,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                           <div key={sn} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0" }}>
                             {circle(COLOURS.SUCCESS_SOFT, COLOURS.GREEN, "✓")}
                             <span style={{ fontSize: "13px", color: COLOURS.NAVY, flex: 1 }}>{sn} · {STAGE_LABELS[sn]}</span>
-                            <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{doneDate ? `done ${formatDateUK(doneDate.slice(0, 10))} · ` : ""}{stageDays > 0 ? `${stageDays}d` : ""}</span>
+                            <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{doneDate ? `done ${formatDateUK(doneDate.slice(0, 10))} · ` : ""}{stageWeight}%</span>
                           </div>
                         );
                       }
@@ -782,7 +779,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                           <div key={sn} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "5px 0" }}>
                             {circle(COLOURS.TRACK, COLOURS.SLATE, sn)}
                             <span style={{ fontSize: "13px", color: COLOURS.SLATE, flex: 1 }}>{sn} · {STAGE_LABELS[sn]}</span>
-                            <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{stageDays > 0 ? `${stageDays}d · waiting` : "waiting"}</span>
+                            <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{stageWeight}% · waiting</span>
                           </div>
                         );
                       }
@@ -791,7 +788,7 @@ export default function AnnualAuditPlan({ userCtx, showMsg }: { userCtx: UserCtx
                           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
                             {circle(editSteps ? COLOURS.TRACK : COLOURS.WARNING_SOFT, editSteps ? COLOURS.SLATE : COLOURS.AMBER, sn)}
                             <span style={{ fontSize: "13px", fontWeight: 600, color: COLOURS.NAVY, flex: 1 }}>{STAGE_LABELS[sn]}</span>
-                            <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{stageDays > 0 ? `${stageDays} days budgeted` : ""}</span>
+                            <span style={{ fontSize: "12px", color: COLOURS.SLATE }}>{stageWeight}%</span>
                             {editSteps && <button onClick={() => addStep(p.id, sn, tasks)} style={btnGhost}>+ Add step</button>}
                           </div>
                           {stageTasks.map(renderTaskRow)}
