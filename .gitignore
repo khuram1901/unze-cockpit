@@ -47,3 +47,6 @@ next-env.d.ts
 # Claude Code session data (local only)
 sessions/
 .blueprint-daily.log
+
+# local helper script (not part of the app)
+push.command
