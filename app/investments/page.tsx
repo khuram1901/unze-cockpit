@@ -127,6 +127,21 @@ type HistoryRow = {
   as_of_date: string;
 };
 
+type RealisedSummary = {
+  total_realised_gain: number;
+  transaction_count: number;
+};
+
+type RealisedByTicker = {
+  ticker: string;
+  company_name: string | null;
+  qty_sold: number;
+  avg_sell_price: number;
+  avg_buy_price: number;
+  realised_gain: number;
+  last_sold: string | null;
+};
+
 type PortfolioStock = {
   ticker: string;
   company: string;
@@ -254,8 +269,24 @@ export default function InvestmentsPage() {
   const [showSellModal, setShowSellModal] = useState(false);
   const [sellLot, setSellLot] = useState<Holding | null>(null);
   const [sellQty, setSellQty] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
   const [sellSaving, setSellSaving] = useState(false);
   const [sellError, setSellError] = useState<string | null>(null);
+
+  // Realised gains state
+  const [realisedSummary, setRealisedSummary] = useState<RealisedSummary | null>(null);
+  const [realisedByTicker, setRealisedByTicker] = useState<RealisedByTicker[]>([]);
+  const [realisedOpen, setRealisedOpen] = useState(false);
+
+  const loadRealisedGains = useCallback(async () => {
+    const [summaryRes, byTickerRes] = await Promise.all([
+      supabase.rpc("get_realised_gains_summary"),
+      supabase.rpc("get_realised_gains_by_ticker"),
+    ]);
+    const rows = (summaryRes.data as RealisedSummary[] | null) ?? [];
+    setRealisedSummary(rows[0] ?? { total_realised_gain: 0, transaction_count: 0 });
+    setRealisedByTicker((byTickerRes.data as RealisedByTicker[] | null) ?? []);
+  }, []);
 
   const loadDividends = useCallback(async () => {
     try {
@@ -381,6 +412,7 @@ export default function InvestmentsPage() {
     load(selectedDate);
     loadDividends();
     loadPensionData();
+    loadRealisedGains();
     (async () => {
       const { data: userData } = await supabase.auth.getUser();
       const email = userData.user?.email;
@@ -393,7 +425,7 @@ export default function InvestmentsPage() {
       setCanEdit(canEditInvestments(ctx));
       setCanRefresh(canRefreshInvestmentPrices(ctx));
     })();
-  }, [checking, load, loadPensionData, selectedDate]);
+  }, [checking, load, loadPensionData, loadRealisedGains, selectedDate]);
 
   const stocks: PortfolioStock[] = (() => {
     // portfolioPrices from the RPC already has one aggregated row per ticker
@@ -661,6 +693,7 @@ export default function InvestmentsPage() {
   function openSellModal(lot: Holding) {
     setSellLot(lot);
     setSellQty("");
+    setSellPrice("");
     setSellError(null);
     setShowSellModal(true);
   }
@@ -671,8 +704,14 @@ export default function InvestmentsPage() {
     setSellError(null);
     setSellSaving(true);
     const qty = parseFloat(sellQty);
+    const sp = parseFloat(sellPrice);
     if (isNaN(qty) || qty <= 0) {
       setSellError("Enter a valid quantity.");
+      setSellSaving(false);
+      return;
+    }
+    if (isNaN(sp) || sp <= 0) {
+      setSellError("Enter the sell price per share.");
       setSellSaving(false);
       return;
     }
@@ -681,16 +720,30 @@ export default function InvestmentsPage() {
       setSellSaving(false);
       return;
     }
-    if (qty === sellLot.quantity) {
+
+    // Record the sale — this preserves realised P&L history
+    await supabase.from("sell_transactions").insert({
+      ticker: sellLot.ticker,
+      company_name: sellLot.company_name,
+      quantity: qty,
+      sell_price: sp,
+      buy_price: sellLot.buy_price,
+      sell_date: new Date().toISOString().slice(0, 10),
+    });
+
+    // Reduce or remove the holding
+    if (qty >= sellLot.quantity) {
       await supabase.from("holdings").delete().eq("id", sellLot.id);
     } else {
       await supabase.from("holdings").update({ quantity: sellLot.quantity - qty }).eq("id", sellLot.id);
     }
+
     setShowSellModal(false);
     setSellLot(null);
     setSellQty("");
+    setSellPrice("");
     setSellSaving(false);
-    await load(selectedDate);
+    await Promise.all([load(selectedDate), loadRealisedGains()]);
   }
 
   const confirmedDivs = dividends.filter((d) => d.confirmed);
@@ -767,10 +820,24 @@ export default function InvestmentsPage() {
               <SummaryCard label="Total Invested" value={fmtRs(totalCost)} color={NAVY} />
               <SummaryCard label="Current Value" value={fmtRs(totalValue)} color={COLOURS.BLUE} />
               <SummaryCard
-                label="Total Gain/Loss"
+                label="Unrealised Gain/Loss"
                 value={fmtRs(totalGL)}
                 sub={fmtPct(totalGLPct)}
                 color={glColor(totalGL)}
+              />
+              {realisedSummary && realisedSummary.transaction_count > 0 && (
+                <SummaryCard
+                  label="Realised Gains (Sold)"
+                  value={fmtRs(realisedSummary.total_realised_gain)}
+                  sub={`${realisedSummary.transaction_count} sale${realisedSummary.transaction_count !== 1 ? "s" : ""}`}
+                  color={glColor(realisedSummary.total_realised_gain)}
+                />
+              )}
+              <SummaryCard
+                label="Total Return"
+                value={fmtRs(totalGL + (realisedSummary?.total_realised_gain ?? 0))}
+                sub="Unrealised + Realised"
+                color={glColor(totalGL + (realisedSummary?.total_realised_gain ?? 0))}
               />
               {dayChange !== null ? (
                 <SummaryCard
@@ -896,24 +963,45 @@ export default function InvestmentsPage() {
                     {sellLot.buy_price ? ` at ${fmtPrice(sellLot.buy_price)}` : ""}
                   </div>
                   <form onSubmit={handleSell} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div>
-                      <label style={{ fontSize: "13px", color: SLATE, display: "block", marginBottom: "4px" }}>
-                        Shares to sell *
-                      </label>
-                      <input
-                        type="number" step="1" min="1" max={sellLot.quantity}
-                        placeholder={`Max ${sellLot.quantity.toLocaleString()}`}
-                        value={sellQty}
-                        onChange={(e) => setSellQty(e.target.value)}
-                        required
-                        autoFocus
-                        style={{ ...inputStyle, width: "100%" }}
-                      />
-                      {sellQty && !isNaN(parseFloat(sellQty)) && parseFloat(sellQty) >= sellLot.quantity && (
-                        <div style={{ fontSize: "12px", color: AMBER, marginTop: "4px" }}>
-                          Selling all shares — this lot will be removed.
-                        </div>
-                      )}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <div>
+                        <label style={{ fontSize: "13px", color: SLATE, display: "block", marginBottom: "4px" }}>
+                          Shares to sell *
+                        </label>
+                        <input
+                          type="number" step="1" min="1" max={sellLot.quantity}
+                          placeholder={`Max ${sellLot.quantity.toLocaleString()}`}
+                          value={sellQty}
+                          onChange={(e) => setSellQty(e.target.value)}
+                          required
+                          autoFocus
+                          style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                        />
+                        {sellQty && !isNaN(parseFloat(sellQty)) && parseFloat(sellQty) >= sellLot.quantity && (
+                          <div style={{ fontSize: "12px", color: AMBER, marginTop: "4px" }}>
+                            Selling all — lot will be removed.
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "13px", color: SLATE, display: "block", marginBottom: "4px" }}>
+                          Sell price per share (Rs) *
+                        </label>
+                        <input
+                          type="number" step="0.01" min="0"
+                          placeholder="e.g. 85.00"
+                          value={sellPrice}
+                          onChange={(e) => setSellPrice(e.target.value)}
+                          required
+                          style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+                        />
+                        {sellQty && sellPrice && !isNaN(parseFloat(sellQty)) && !isNaN(parseFloat(sellPrice)) && (
+                          <div style={{ fontSize: "12px", color: glColor((parseFloat(sellPrice) - sellLot.buy_price) * parseFloat(sellQty)), marginTop: "4px", fontWeight: 600 }}>
+                            {(parseFloat(sellPrice) - sellLot.buy_price) >= 0 ? "Profit" : "Loss"}:{" "}
+                            {fmtRs((parseFloat(sellPrice) - sellLot.buy_price) * parseFloat(sellQty))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     {sellError && (
                       <div style={{ fontSize: "13px", color: RED, background: "#fff0f0", padding: "8px 10px", borderRadius: "6px" }}>
@@ -1216,6 +1304,70 @@ export default function InvestmentsPage() {
                   ))}
                 </div>
               </>
+            )}
+
+            {/* ── Realised Gains / Sell History ── */}
+            {realisedByTicker.length > 0 && (
+              <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: "8px", paddingTop: "4px" }}>
+                <div
+                  onClick={() => setRealisedOpen((o) => !o)}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "10px 0" }}
+                >
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: NAVY }}>
+                    Realised Gains — Sold Positions
+                    <span style={{
+                      marginLeft: "10px", fontSize: "13px", fontWeight: 700,
+                      color: glColor(realisedSummary?.total_realised_gain ?? 0),
+                    }}>
+                      {fmtRs(realisedSummary?.total_realised_gain ?? 0)}
+                    </span>
+                  </span>
+                  <span style={{ fontSize: "13px", color: SLATE }}>{realisedOpen ? "▲ Hide" : "▼ Show"}</span>
+                </div>
+                {realisedOpen && (
+                  <div style={{ overflowX: "auto", marginBottom: "16px" }}>
+                    <table style={{ borderCollapse: "collapse", width: "100%", minWidth: "600px" }}>
+                      <thead>
+                        <tr style={{ backgroundColor: "var(--bg-card-hover, #f8fafc)" }}>
+                          <Th>Ticker</Th>
+                          <Th>Company</Th>
+                          <Th align="right">Qty Sold</Th>
+                          <Th align="right">Avg Buy</Th>
+                          <Th align="right">Avg Sell</Th>
+                          <Th align="right">Realised Gain/Loss</Th>
+                          <Th>Last Sold</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {realisedByTicker.map((r) => (
+                          <tr key={r.ticker} style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)" }}>
+                            <td style={{ ...td, fontWeight: 700, color: NAVY }}>{r.ticker}</td>
+                            <td style={{ ...td, color: SLATE, fontSize: "14px" }}>{r.company_name ?? "—"}</td>
+                            <td style={{ ...td, textAlign: "right" }}>{Number(r.qty_sold).toLocaleString()}</td>
+                            <td style={{ ...td, textAlign: "right", color: SLATE }}>{fmtPrice(r.avg_buy_price)}</td>
+                            <td style={{ ...td, textAlign: "right" }}>{fmtPrice(r.avg_sell_price)}</td>
+                            <td style={{ ...td, textAlign: "right", fontWeight: 700, color: glColor(r.realised_gain) }}>
+                              {fmtRs(r.realised_gain)}
+                            </td>
+                            <td style={{ ...td, color: SLATE, fontSize: "14px" }}>
+                              {r.last_sold ? formatDateUK(r.last_sold) : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ borderTop: `2px solid ${NAVY}`, fontWeight: 700 }}>
+                          <td style={td} colSpan={5}>TOTAL REALISED</td>
+                          <td style={{ ...td, textAlign: "right", color: glColor(realisedSummary?.total_realised_gain ?? 0) }}>
+                            {fmtRs(realisedSummary?.total_realised_gain ?? 0)}
+                          </td>
+                          <td style={td} />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* ── Dividends ── */}
