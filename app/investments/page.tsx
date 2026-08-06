@@ -249,6 +249,14 @@ export default function InvestmentsPage() {
   const [divError, setDivError] = useState<string | null>(null);
   const [divSaving, setDivSaving] = useState(false);
 
+  // Sell & lot expansion state
+  const [expandedTickers, setExpandedTickers] = useState<Set<string>>(new Set());
+  const [showSellModal, setShowSellModal] = useState(false);
+  const [sellLot, setSellLot] = useState<Holding | null>(null);
+  const [sellQty, setSellQty] = useState("");
+  const [sellSaving, setSellSaving] = useState(false);
+  const [sellError, setSellError] = useState<string | null>(null);
+
   const loadDividends = useCallback(async () => {
     try {
       // 2 weeks back + 2 weeks ahead, so recently-paid dividends stay visible
@@ -634,6 +642,57 @@ export default function InvestmentsPage() {
     await loadDividends();
   }
 
+  function toggleExpand(ticker: string) {
+    setExpandedTickers((prev) => {
+      const next = new Set(prev);
+      if (next.has(ticker)) next.delete(ticker); else next.add(ticker);
+      return next;
+    });
+  }
+
+  function startBuyMore(s: PortfolioStock) {
+    resetForm();
+    setFormTicker(s.ticker);
+    setFormCompany(s.company);
+    setShowAddForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openSellModal(lot: Holding) {
+    setSellLot(lot);
+    setSellQty("");
+    setSellError(null);
+    setShowSellModal(true);
+  }
+
+  async function handleSell(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canEdit || !sellLot) return;
+    setSellError(null);
+    setSellSaving(true);
+    const qty = parseFloat(sellQty);
+    if (isNaN(qty) || qty <= 0) {
+      setSellError("Enter a valid quantity.");
+      setSellSaving(false);
+      return;
+    }
+    if (qty > sellLot.quantity) {
+      setSellError(`Cannot sell more than you hold (${sellLot.quantity.toLocaleString()} shares).`);
+      setSellSaving(false);
+      return;
+    }
+    if (qty === sellLot.quantity) {
+      await supabase.from("holdings").delete().eq("id", sellLot.id);
+    } else {
+      await supabase.from("holdings").update({ quantity: sellLot.quantity - qty }).eq("id", sellLot.id);
+    }
+    setShowSellModal(false);
+    setSellLot(null);
+    setSellQty("");
+    setSellSaving(false);
+    await load(selectedDate);
+  }
+
   const confirmedDivs = dividends.filter((d) => d.confirmed);
   const unconfirmedDivs = dividends.filter((d) => !d.confirmed);
 
@@ -816,6 +875,72 @@ export default function InvestmentsPage() {
               </div>
             )}
 
+            {/* Sell Modal */}
+            {canEdit && showSellModal && sellLot && (
+              <div style={{
+                position: "fixed", inset: 0, zIndex: 9999,
+                background: "rgba(0,0,0,0.55)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: "16px",
+              }}>
+                <div style={{
+                  background: "#fff", borderRadius: "14px", padding: "24px",
+                  width: "min(380px, 100%)", boxShadow: "0 16px 48px rgba(0,0,0,0.3)",
+                }}>
+                  <div style={{ fontSize: "17px", fontWeight: 700, color: NAVY, marginBottom: "4px" }}>
+                    Sell {sellLot.ticker}
+                  </div>
+                  <div style={{ fontSize: "14px", color: SLATE, marginBottom: "16px" }}>
+                    You hold <strong>{sellLot.quantity.toLocaleString()}</strong> shares
+                    {sellLot.buy_date ? ` (bought ${formatDateUK(sellLot.buy_date)})` : ""}
+                    {sellLot.buy_price ? ` at ${fmtPrice(sellLot.buy_price)}` : ""}
+                  </div>
+                  <form onSubmit={handleSell} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    <div>
+                      <label style={{ fontSize: "13px", color: SLATE, display: "block", marginBottom: "4px" }}>
+                        Shares to sell *
+                      </label>
+                      <input
+                        type="number" step="1" min="1" max={sellLot.quantity}
+                        placeholder={`Max ${sellLot.quantity.toLocaleString()}`}
+                        value={sellQty}
+                        onChange={(e) => setSellQty(e.target.value)}
+                        required
+                        autoFocus
+                        style={{ ...inputStyle, width: "100%" }}
+                      />
+                      {sellQty && !isNaN(parseFloat(sellQty)) && parseFloat(sellQty) >= sellLot.quantity && (
+                        <div style={{ fontSize: "12px", color: AMBER, marginTop: "4px" }}>
+                          Selling all shares — this lot will be removed.
+                        </div>
+                      )}
+                    </div>
+                    {sellError && (
+                      <div style={{ fontSize: "13px", color: RED, background: "#fff0f0", padding: "8px 10px", borderRadius: "6px" }}>
+                        {sellError}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        type="submit"
+                        disabled={sellSaving}
+                        style={{ ...btnStyle, backgroundColor: AMBER, flex: 1 }}
+                      >
+                        {sellSaving ? "Selling…" : "Confirm Sell"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowSellModal(false); setSellLot(null); setSellQty(""); setSellError(null); }}
+                        style={{ ...btnStyle, backgroundColor: SLATE, flex: 1 }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
             {/* Holdings Table */}
             <SectionTitle title="Holdings" />
             <div style={{ overflowX: "auto", marginBottom: "20px" }}>
@@ -838,7 +963,8 @@ export default function InvestmentsPage() {
                 </thead>
                 <tbody>
                   {stocks.map((s) => (
-                    <tr key={s.ticker} style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)" }}
+                    <React.Fragment key={s.ticker}>
+                    <tr style={{ borderBottom: "1px solid var(--border-light, #f1f5f9)" }}
                       onClick={() => setSelectedTicker(s.ticker)}
                     >
                       <td style={{ ...td, fontWeight: 700, color: `var(--text-primary, ${COLOURS.NAVY})`, cursor: "pointer" }}>{s.ticker}</td>
@@ -894,11 +1020,25 @@ export default function InvestmentsPage() {
                       </td>
                       {canEdit && (
                         <td style={{ ...td, whiteSpace: "nowrap" }}>
-                          <button onClick={(e) => { e.stopPropagation(); setManualPriceModal(s.ticker); }} style={miniBtn} title="Set price">
+                          <button onClick={(e) => { e.stopPropagation(); setManualPriceModal(s.ticker); }} style={miniBtn} title="Set manual price">
                             Rs
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); startBuyMore(s); }}
+                            style={{ ...miniBtn, color: GREEN, fontWeight: 700, fontSize: "13px" }}
+                            title="Buy more shares"
+                          >
+                            Buy
                           </button>
                           {s.lots.length === 1 && (
                             <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openSellModal(s.lots[0]); }}
+                                style={{ ...miniBtn, color: AMBER, fontWeight: 700, fontSize: "13px" }}
+                                title="Sell shares"
+                              >
+                                Sell
+                              </button>
                               <button onClick={(e) => { e.stopPropagation(); startEdit(s.lots[0]); }} style={miniBtn} title="Edit">
                                 ✏️
                               </button>
@@ -908,11 +1048,50 @@ export default function InvestmentsPage() {
                             </>
                           )}
                           {s.lots.length > 1 && (
-                            <span style={{ fontSize: "13px", color: `var(--text-secondary, ${COLOURS.SLATE})` }}>{s.lots.length} lots</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleExpand(s.ticker); }}
+                              style={{ ...miniBtn, fontSize: "13px", color: NAVY, fontWeight: 600 }}
+                              title="View individual lots"
+                            >
+                              {expandedTickers.has(s.ticker) ? "▲" : "▼"} {s.lots.length} lots
+                            </button>
                           )}
                         </td>
                       )}
                     </tr>
+                    {/* Expanded lot rows for multi-lot stocks */}
+                    {canEdit && expandedTickers.has(s.ticker) && s.lots.map((lot) => (
+                      <tr key={lot.id} style={{ backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                        <td colSpan={2} style={{ ...td, paddingLeft: "28px", color: SLATE, fontSize: "13px" }}>
+                          └ {lot.buy_date ? formatDateUK(lot.buy_date) : "No date"}
+                        </td>
+                        <td style={{ ...td, textAlign: "right", fontSize: "13px", color: NAVY, fontWeight: 600 }}>
+                          {lot.quantity.toLocaleString()}
+                        </td>
+                        <td style={{ ...td, textAlign: "right", fontSize: "13px", color: SLATE }}>
+                          {fmtPrice(lot.buy_price)}
+                        </td>
+                        <td colSpan={7} style={{ ...td, fontSize: "13px", color: SLATE }}>
+                          {lot.notes || ""}
+                        </td>
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openSellModal(lot); }}
+                            style={{ ...miniBtn, color: AMBER, fontWeight: 700, fontSize: "13px" }}
+                            title="Sell this lot"
+                          >
+                            Sell
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); startEdit(lot); }} style={miniBtn} title="Edit lot">
+                            ✏️
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(lot.id); }} style={{ ...miniBtn, color: RED }} title="Delete lot">
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
                 <tfoot>
