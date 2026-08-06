@@ -279,13 +279,17 @@ export default function InvestmentsPage() {
   const [realisedOpen, setRealisedOpen] = useState(false);
 
   const loadRealisedGains = useCallback(async () => {
-    const [summaryRes, byTickerRes] = await Promise.all([
-      supabase.rpc("get_realised_gains_summary"),
-      supabase.rpc("get_realised_gains_by_ticker"),
-    ]);
-    const rows = (summaryRes.data as RealisedSummary[] | null) ?? [];
-    setRealisedSummary(rows[0] ?? { total_realised_gain: 0, transaction_count: 0 });
-    setRealisedByTicker((byTickerRes.data as RealisedByTicker[] | null) ?? []);
+    try {
+      const [summaryRes, byTickerRes] = await Promise.all([
+        supabase.rpc("get_realised_gains_summary"),
+        supabase.rpc("get_realised_gains_by_ticker"),
+      ]);
+      // If the migration hasn't been applied yet, data will be null — fail silently
+      if (summaryRes.error || byTickerRes.error) return;
+      const rows = (summaryRes.data as RealisedSummary[] | null) ?? [];
+      setRealisedSummary(rows[0] ?? { total_realised_gain: 0, transaction_count: 0 });
+      setRealisedByTicker((byTickerRes.data as RealisedByTicker[] | null) ?? []);
+    } catch { /* non-fatal — migration may not be applied yet */ }
   }, []);
 
   const loadDividends = useCallback(async () => {
@@ -833,12 +837,14 @@ export default function InvestmentsPage() {
                   color={glColor(realisedSummary.total_realised_gain)}
                 />
               )}
-              <SummaryCard
-                label="Total Return"
-                value={fmtRs(totalGL + (realisedSummary?.total_realised_gain ?? 0))}
-                sub="Unrealised + Realised"
-                color={glColor(totalGL + (realisedSummary?.total_realised_gain ?? 0))}
-              />
+              {realisedSummary && realisedSummary.transaction_count > 0 && (
+                <SummaryCard
+                  label="Total Return"
+                  value={fmtRs(totalGL + realisedSummary.total_realised_gain)}
+                  sub="Unrealised + Realised"
+                  color={glColor(totalGL + realisedSummary.total_realised_gain)}
+                />
+              )}
               {dayChange !== null ? (
                 <SummaryCard
                   label="Today's Change"
@@ -1018,7 +1024,7 @@ export default function InvestmentsPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setShowSellModal(false); setSellLot(null); setSellQty(""); setSellError(null); }}
+                        onClick={() => { setShowSellModal(false); setSellLot(null); setSellQty(""); setSellPrice(""); setSellError(null); }}
                         style={{ ...btnStyle, backgroundColor: SLATE, flex: 1 }}
                       >
                         Cancel
