@@ -338,9 +338,39 @@ export default function TaskStatus({
     // via routeSubmittedTask/handBackIfLeaving — that caused a race condition
     // where app + trigger both modified task_assignees in sequence, leaving
     // it out of sync (migration 194).
+    // Khuram (10/08/2026): "status should define where the task sits."
+    // If a submitted task (with the HOD) is moved back to In Progress,
+    // it must also return to the person who submitted it — otherwise the
+    // task stays stuck with the HOD showing a confusing "In Progress" state
+    // with no way to return it. Status and ownership must move together.
+    const isRevertingToDoer =
+      newStatus === "In Progress" &&
+      task.status === "Submitted" &&
+      task.submitted_by_email &&
+      task.submitted_by_name;
+
+    let extraFields: Record<string, unknown> = {};
+    if (isRevertingToDoer) {
+      const { data: submitter } = await supabase
+        .from("members")
+        .select("id, name, email, department, business_unit")
+        .ilike("email", task.submitted_by_email!)
+        .maybeSingle();
+      if (submitter?.email) {
+        extraFields = {
+          assigned_to: submitter.name,
+          assigned_to_email: submitter.email,
+          assigned_to_department: submitter.department,
+          assigned_to_business_unit: submitter.business_unit,
+          submitted_by_name: null,
+          submitted_by_email: null,
+        };
+      }
+    }
+
     const { error } = await supabase
       .from("tasks")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .update({ status: newStatus, updated_at: new Date().toISOString(), ...extraFields })
       .eq("id", task.id);
 
     setSaving(false);
@@ -348,6 +378,24 @@ export default function TaskStatus({
     if (error) {
       toast.show("Error updating status: " + error.message, "error");
       return;
+    }
+
+    // If we routed back to the submitter, sync task_assignees too
+    if (isRevertingToDoer && extraFields.assigned_to_email) {
+      const { data: submitterMember } = await supabase
+        .from("members")
+        .select("id, name, email")
+        .ilike("email", extraFields.assigned_to_email as string)
+        .maybeSingle();
+      if (submitterMember?.id) {
+        await supabase.from("task_assignees").delete().eq("task_id", task.id);
+        await supabase.from("task_assignees").insert({
+          task_id: task.id,
+          member_id: submitterMember.id,
+          member_name: submitterMember.name,
+          member_email: submitterMember.email,
+        });
+      }
     }
 
     logAction("Updated", "tasks", `Status → ${newStatus}: ${task.id}`, task.id);
