@@ -439,7 +439,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   // meeting titles and stray labels in as fake departments — Khuram:
   // "our departments are getting bigger and bigger... we need to stop
   // this addition" (24/07/2026). Only Khuram edits department_owners.
-  const departmentOptions = [...Array.from(new Set(allDepartments)).sort(), "Unassigned"];
+  const departmentOptions = Array.from(new Set(allDepartments)).sort();
   const ownerOptions = Array.from(new Set(tasks.map((t) => normName(t.assigned_to)).filter((n) => !!n))).sort();
   // Counts every filter, including Company (left out of the old boolean
   // check by oversight) — drives the badge on the single "Filters" button.
@@ -775,7 +775,7 @@ export default function TasksList({ currentRole, canSeeAll, canReview, canDelete
   type DeptNode = { dept: string; tasks: Task[]; open: number; overdue: number };
   const deptMap = new Map<string, Task[]>();
   for (const t of scopedTasks) {
-    const dept = t.assigned_to_department || t.project || "Unassigned";
+    const dept = t.assigned_to_department || t.project || "Other";
     if (!deptMap.has(dept)) deptMap.set(dept, []);
     deptMap.get(dept)!.push(t);
   }
