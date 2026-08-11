@@ -8,6 +8,7 @@ import { canCompleteSubmittedTask, canReopenCompletedTask, isPrivileged } from "
 import { routeWaitingReplyTask, returnFromWaitingReply } from "../lib/taskRouting";
 import { authFetch } from "../lib/supabase";
 import { formatDateUK } from "../lib/dateUtils";
+import { renderWithLinks } from "../lib/textUtils";
 import DateInput from "../lib/DateInput";
 import DateInputWithCalendar from "../lib/DateInputWithCalendar";
 
@@ -889,7 +890,7 @@ export default function TaskStatus({
                 marginBottom: "10px", fontStyle: "italic",
                 borderLeft: "3px solid #93C5FD", paddingLeft: "10px",
               }}>
-                &quot;{task.waiting_reply_note}&quot;
+                &quot;{renderWithLinks(task.waiting_reply_note)}&quot;
               </div>
             )}
             <label style={{ fontSize: "12px", color: COLOURS.SLATE, display: "block", marginBottom: "4px" }}>
@@ -944,13 +945,13 @@ export default function TaskStatus({
             </div>
             {task.waiting_reply_note && (
               <div style={{ fontSize: "12.5px", color: COLOURS.NAVY, fontStyle: "italic" }}>
-                You asked: &quot;{task.waiting_reply_note}&quot;
+                You asked: &quot;{renderWithLinks(task.waiting_reply_note)}&quot;
               </div>
             )}
             {task.manager_reply_text && (
               <div style={{ marginTop: "8px", padding: "8px 10px", background: COLOURS.CARD, borderRadius: RADII.SM, border: `1px solid ${COLOURS.HAIRLINE}` }}>
                 <div style={{ fontSize: "11px", color: COLOURS.SLATE, marginBottom: "3px" }}>Reply received:</div>
-                <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{task.manager_reply_text}</div>
+                <div style={{ fontSize: "13px", color: COLOURS.NAVY }}>{renderWithLinks(task.manager_reply_text)}</div>
               </div>
             )}
           </div>
@@ -1104,8 +1105,8 @@ export default function TaskStatus({
         </div>
 
         {task.notes && (
-          <div style={{ fontSize: "12px", color: COLOURS.SLATE, whiteSpace: "pre-line", marginTop: "10px", padding: "8px 10px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, maxHeight: "120px", overflowY: "auto" }}>
-            {task.notes}
+          <div style={{ fontSize: "12px", color: COLOURS.SLATE, marginTop: "10px", padding: "8px 10px", backgroundColor: COLOURS.CARD_ALT, borderRadius: RADII.SM, maxHeight: "120px", overflowY: "auto" }}>
+            {renderWithLinks(task.notes)}
           </div>
         )}
 

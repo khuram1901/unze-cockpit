@@ -6,6 +6,7 @@ import { formatDateUK } from "../lib/dateUtils";
 import { whatsappLink, taskReminderMessage } from "../lib/whatsapp";
 import { COLOURS, RADII, useConfirm, TASK_DESCRIPTION_LIMIT, TASK_COMPANY_CODES } from "../lib/SharedUI";
 import { canDeleteTask, canEditTask, canReopenCompletedTask, isTaskProtected, filterAssignableMembers } from "../lib/permissions";
+import { renderWithLinks } from "../lib/textUtils";
 import TaskStatus from "./TaskStatus";
 
 type Comment = {
@@ -384,7 +385,7 @@ export default function TaskDetailPanel({
                   <span style={{ fontSize: "12.5px", fontWeight: 600, color: COLOURS.NAVY }}>{c.commented_by || "Unknown"}</span>
                   <span style={{ fontSize: "11px", color: COLOURS.INK_400 }}>{formatDateUK(c.created_at)}</span>
                 </div>
-                <div style={{ fontSize: "13px", color: COLOURS.NAVY, lineHeight: 1.5 }}>{c.comment_text}</div>
+                <div style={{ fontSize: "13px", color: COLOURS.NAVY, lineHeight: 1.5 }}>{renderWithLinks(c.comment_text)}</div>
               </div>
             ))}
             {comments.length === 0 && (
